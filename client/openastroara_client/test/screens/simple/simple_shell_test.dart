@@ -813,25 +813,31 @@ void main() {
     expect(find.text("Tonight's plan"), findsNothing);
   });
 
-  testWidgets("Plan's sheet and the mode panels (Guided Run's steps) start on one line, 8 pt under the status pill",
-      (tester) async {
-    // User, 2026-11-04: they should align at the same top, a little higher than Plan's was (16 pt under).
+  testWidgets("Plan's sheet and Guided Run's step panels start on one line, 8 pt under the status pill; other "
+      'panels stay level with the rail', (tester) async {
+    // User, 2026-11-04: Plan and Guided Run align at one top; the modes menu and the other panels stay by the rail.
     const top = kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight + 8;
-    await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(_GuiderUp.new)]);
+    await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-mode-guide')));
+    await tester.tap(find.byKey(const Key('simple-mode-autopilot')));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.getRect(find.byType(SimpleRunSheet)).top, top, reason: "Guided Run's Plan step");
+    await tester.tap(find.byKey(const Key('autopilot-skip')));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(_panelOf(tester, find.text('Fit the mask, then Start')).top, top, reason: "Guided Run's Focus step");
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
+    expect(tester.getRect(find.byKey(const Key('simple-mode-preview'))).top, greaterThan(top + 50),
+        reason: 'the modes menu stays by the rail');
+    await tester.tap(find.byKey(const Key('simple-mode-focus')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
-    expect(tester.getRect(find.byKey(const Key('simple-guide-panel'))).top, top);
-    await tester.tap(find.byKey(const Key('simple-mode')));
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-mode-plan')));
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-settings')));
-    await tester.pump();
-    expect(tester.getRect(find.byType(SimpleRunSheet)).top, top);
+    expect(_panelOf(tester, find.text('Fit the mask, then Start')).top, rail.top, reason: 'Focus on its own: by the rail');
   });
 
   testWidgets('with the histogram showing, a mode panel still fits without scrolling (iPad, 2026-11-04)', (tester) async {
@@ -894,7 +900,7 @@ void main() {
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
     final panel = _panelOf(tester, find.text('Fit the mask, then Start'));
     expect(panel.right, rail.left - kSimpleInset, reason: 'left of the rail');
-    expect(panel.top, kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight + 8, reason: 'on the rail panels\' line, 8 pt under the status pill (user, 2026-11-04)');
+    expect(panel.top, rail.top, reason: 'level with its top');
 
     // The chip speaks for the mode: Focus's summary, not Preview's exposure.
     final chip = find.byKey(const Key('simple-settings'));
@@ -934,7 +940,7 @@ void main() {
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
     final panel = _panelOf(tester, find.byKey(const Key('simple-polar-exposure')));
     expect(panel.right, rail.left - kSimpleInset);
-    expect(panel.top, kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight + 8);
+    expect(panel.top, rail.top);
     await tester.tap(chip);
     await tester.pump();
     expect(find.byKey(const Key('simple-polar-exposure')), findsNothing);
@@ -1051,7 +1057,7 @@ void main() {
     await tester.pump();
     expect(rail(), before, reason: 'settings open');
     final popover = tester.getRect(find.byType(SimpleSettingsPopover));
-    expect(popover.top, kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight + 8, reason: 'on the rail panels\' line, 8 pt under the status pill (user, 2026-11-04)');
+    expect(popover.top, before.top, reason: 'level with the rail top');
     expect(popover.right, before.left - kSimpleInset, reason: 'beside it');
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();

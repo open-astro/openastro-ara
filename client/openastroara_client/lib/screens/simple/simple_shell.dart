@@ -670,11 +670,18 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final leftRailTop = _leftRailHeight == 0
         ? height
         : railTop + (height - railTop * 2 - _leftRailHeight) / 2;
-    // The rail's popovers (a mode's panel, the modes, the queue) and Plan's
-    // sheet start on one line, 8 pt under the status pill (user, 2026-11-04),
-    // and take the room down to the screen's inset, over the bottom row while
-    // open (they sit left of the rail, clear of Stop), above the plan squares.
+    final rightRailTop =
+        railTop +
+        (height - railTop - kSimpleInset * 2 - stopSize - _rightRailHeight) / 2;
+    // The rail's popovers (a mode's panel, the modes, the queue) take the room
+    // from under the status pill down to the screen's inset, over the bottom
+    // row while open (they sit left of the rail, clear of Stop), above the
+    // plan squares. Plan's sheet and Guided Run's step panels start at its
+    // top, 8 pt under the status pill; the rest sit level with the rail and
+    // move up only when they don't fit (user, 2026-11-04).
     final popoverTop = railTop + kSimpleStatusHeight + AraSpace.s8;
+    final guidedStep =
+        _mode == SimpleModeScreen.autopilot && _popover == _Popover.settings;
     final popoverBottom = planSquares
         ? aboveStop +
               kSimplePlanSquareHeight * simpleRailScale(context) +
@@ -964,7 +971,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   top: popoverTop,
                                   bottom: popoverBottom,
                                   child: CustomSingleChildLayout(
-                                    delegate: const _BesideRail(),
+                                    delegate: _BesideRail(
+                                      preferredTop: guidedStep
+                                          ? 0
+                                          : math.max(
+                                              0,
+                                              rightRailTop - popoverTop,
+                                            ),
+                                    ),
                                     child: SingleChildScrollView(
                                         child: _popover == _Popover.queue
                                             ? queuePanel
@@ -1290,9 +1304,12 @@ Widget simpleFrost(Widget child) => ClipRRect(
 );
 
 /// Device dots (connected gear only), then Night mode and the Settings menu.
-/// A rail popover in its room: right-aligned, at its top.
+/// A rail popover in its room: right-aligned, at [preferredTop] (level with
+/// the rail) when it fits below, moved up as much as it needs when it doesn't.
 class _BesideRail extends SingleChildLayoutDelegate {
-  const _BesideRail();
+  const _BesideRail({required this.preferredTop});
+
+  final double preferredTop;
 
   // Height only: a panel wider than a phone-width window runs off its left
   // edge, as before (phone layout: ALP-4865).
@@ -1301,11 +1318,13 @@ class _BesideRail extends SingleChildLayoutDelegate {
       BoxConstraints(maxHeight: constraints.maxHeight);
 
   @override
-  Offset getPositionForChild(Size size, Size childSize) =>
-      Offset(size.width - childSize.width, 0);
+  Offset getPositionForChild(Size size, Size childSize) => Offset(
+    size.width - childSize.width,
+    preferredTop.clamp(0, math.max(0, size.height - childSize.height)),
+  );
 
   @override
-  bool shouldRelayout(_BesideRail old) => false;
+  bool shouldRelayout(_BesideRail old) => old.preferredTop != preferredTop;
 }
 
 /// Whether any top-bar chip shows: a device not disconnected, or a standing
