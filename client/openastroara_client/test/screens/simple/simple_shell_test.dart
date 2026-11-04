@@ -284,6 +284,22 @@ class _GuideOpticsApi extends ProfileApi {
   Future<OpticsSettings> getOptics() async => const OpticsSettings();
 }
 
+/// The rig's guider section as a store: reads return it, saves replace it.
+class _Phd2StoreApi extends ProfileApi {
+  _Phd2StoreApi() : super(const AraServer(hostname: 'test', port: 1));
+  Phd2Settings stored = const Phd2Settings();
+  final saved = <Phd2Settings>[];
+  @override
+  Future<Phd2Settings> getPhd2Settings() async => stored;
+  @override
+  Future<Phd2Settings> putPhd2Settings(Phd2Settings s) async {
+    saved.add(s);
+    return stored = s;
+  }
+  @override
+  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+}
+
 /// The rig's answer once the guider is disconnected: no guider (404).
 class _GuiderGone extends _GuiderCalls {
   @override
@@ -1775,6 +1791,33 @@ void main() {
     final sheet = tester.getRect(find.byType(SimpleRunSheet));
     final rail = tester.getRect(find.byKey(const Key('simple-mode')));
     expect(sheet.right, closeTo(rail.left - kSimpleInset, 8));
+  });
+
+  testWidgets("saving the guide focal length keeps the pixel size the rig filled since Rig's read (ALP-4982)",
+      (tester) async {
+    // #1486 review: the save sent the whole client-side section, so a pixel size of 0 read before the
+    // rig's fill went back over the filled 3.75 µm.
+    final api = _Phd2StoreApi();
+    await _pump(tester, const Size(1024, 768), linkUp: true,
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      guiderStatusProvider.overrideWith(_GuiderGone.new),
+      profileApiProvider.overrideWithValue(api),
+    ]);
+    await _openSection(tester, 'Rig');
+    await tester.pump();
+    expect(find.text('Not set'), findsWidgets, reason: 'precondition: Rig read the section unset');
+    api.stored = const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75); // the rig's fill
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-rig-guidefocal')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal-wheel-1')));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byKey(const Key('simple-rig-guidefocal-wheel-1')), const Offset(0, -44.0));
+    await tester.pumpAndSettle();
+    expect(api.saved, isNotEmpty);
+    expect(api.saved.last.guidePixelSize, 3.75, reason: 'the filled pixel size stays');
+    expect(api.stored.guideFocalLength, isNot(128), reason: "the user's focal length is saved");
   });
 
   testWidgets('Preview settings opens with no title: the chip says what it is', (tester) async {

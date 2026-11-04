@@ -2744,8 +2744,15 @@ class _ThisRig extends ConsumerWidget {
               () => ref
                   .read(phd2SettingsProvider.notifier)
                   .setGuideFocalLength(v.round()),
-              (api) =>
-                  ref.read(phd2SettingsProvider.notifier).persistToServer(api),
+              // The save sends the whole section: re-read it first so a
+              // pixel size the rig filled since Rig's read isn't sent back
+              // as 0 (ALP-4982).
+              (api) async {
+                final guider = ref.read(phd2SettingsProvider.notifier);
+                await guider.hydrateFromServer(api);
+                guider.setGuideFocalLength(v.round());
+                return guider.persistToServer(api);
+              },
             ),
           ),
         ),
