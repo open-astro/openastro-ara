@@ -115,4 +115,5 @@ class CiSolveCheck(unittest.TestCase):
         job[1] = re.split(r"\n  [A-Za-z0-9_-]+:\n", job[1], maxsplit=1)[0]  # this job only
         self.assertIn(url[1], job[1], "astap-solve must download the daemon's D05 package")
         self.assertIn(f"echo \"{sha[1]}  ", job[1], "astap-solve must verify the daemon's D05 checksum")
+        self.assertIn(f"key: astap-d05-{sha[1]}", job[1], "the D05 cache key must follow the checksum")
         self.assertIn("scripts/ci-astap-solve.sh", job[1])

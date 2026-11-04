@@ -563,7 +563,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/astap-d05
-          key: astap-d05-2026.10
+          key: astap-d05-7936db10c8478612d952620b7f368f1a3cb261e1750ba9f082fba657fd53a977  # the package checksum below: a new sky-data release is a new cache entry
 
       - name: Download D05 star database
         if: steps.d05.outputs.cache-hit != 'true'

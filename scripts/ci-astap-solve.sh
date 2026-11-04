@@ -35,14 +35,22 @@ cd "$WORK"
 HINT=(-fov 2.01 -r 10)   # the frame has RA/DEC of the mount in its header
 BLIND=(-fov 2.01 -r 180 -ra 10 -spd 90)
 
-solve() { # name, then astap_cli options
+solve() { # name, then astap_cli options. Writes <name>.cpu: CPU seconds / wall seconds.
     local name=$1; shift
     rm -f "$name.ini" "$name.wcs" "$name.log"
-    local t0 t1
-    t0=$(date +%s.%N)
-    "$ASTAP" -f frame.fits -d "$DB" -log -o "$name" "$@" > "$name.out" 2>&1 || true
-    t1=$(date +%s.%N)
-    printf '%-12s %6.2f s  %s\n' "$name" "$(echo "$t1 - $t0" | bc)" "$(stars "$name")"
+    python3 - "$name" "$ASTAP" -f frame.fits -d "$DB" -log -o "$name" "$@" <<'EOF'
+import resource, subprocess, sys, time
+name, cmd = sys.argv[1], sys.argv[2:]
+t0 = time.monotonic()
+with open(f"{name}.out", "wb") as out:
+    subprocess.run(cmd, stdout=out, stderr=subprocess.STDOUT)
+wall = time.monotonic() - t0
+r = resource.getrusage(resource.RUSAGE_CHILDREN)
+ratio = (r.ru_utime + r.ru_stime) / wall
+open(f"{name}.cpu", "w").write(f"{ratio:.2f}\n")
+print(f"{name:<12} {wall:6.2f} s  cpu/wall {ratio:4.2f}  ", end="")
+EOF
+    stars "$name"; echo
 }
 stars() { /usr/bin/grep -aoE '[0-9]+ stars, [0-9]+ quads' "$1.log" 2>/dev/null | tr '\n' ' ' || true; }
 solution() { /usr/bin/grep -aE '^(PLTSOLVD|CRPIX|CRVAL|CD[12]_|A_|B_|AP_|BP_)' "$1.ini" 2>/dev/null || true; }
@@ -96,6 +104,21 @@ solve blind_1 -z 0 "${BLIND[@]}" -threads 1
 solve blind_n -z 0 "${BLIND[@]}"
 check_answer blind_n
 same_as blind_1 blind_n solution
+
+# ASTAP_THREADS (what the daemon's service environment can set) caps the cores as -threads
+# does. No log line names the thread count, so read it off the CPU time: one thread keeps
+# CPU time near the wall time, every core puts it well above.
+ASTAP_THREADS=1 solve blind_env1 -z 0 "${BLIND[@]}"
+same_as blind_1 blind_env1 solution
+python3 - "$(cat blind_n.cpu)" "$(cat blind_env1.cpu)" <<'EOF' || FAILED=1
+import sys
+n, one = map(float, sys.argv[1:])
+if n < 1.8:
+    print(f"✗ blind_n: cpu/wall {n:.2f}, the default does not use several cores"); sys.exit(1)
+if one > 1.3:
+    print(f"✗ blind_env1: cpu/wall {one:.2f}, ASTAP_THREADS=1 is ignored"); sys.exit(1)
+print(f"✓ ASTAP_THREADS=1 runs on one core (cpu/wall {one:.2f}, default {n:.2f})")
+EOF
 
 # 2x2 binning in astap_cli (threaded in `ara`): too coarse to solve this frame, but the stars
 # and quads it finds must not depend on the thread count.
