@@ -13,6 +13,9 @@ import '../screens/simple/simple_polar_panel.dart' show simplePolarActive;
 import '../util/friendly_error.dart';
 import 'app_locale_state.dart';
 import 'guider/guider_state.dart';
+import 'imaging/capture_progress_state.dart';
+import 'imaging/live_view_state.dart';
+import 'sequencer/sequence_list_state.dart';
 import 'polar_align/polar_align_state.dart';
 import 'setup/setup_readiness.dart';
 import 'simple_messages_state.dart';
@@ -136,6 +139,12 @@ NightSetupStep? nightSetupNext({
   return null;
 }
 
+/// The main camera is taking frames (simpleMainCameraBusy, read once).
+bool _mainCameraBusy(Ref ref) =>
+    ref.read(captureProgressProvider).isCapturing ||
+    ref.read(liveViewControllerProvider) ||
+    (ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false);
+
 /// The guide step has nothing to do: guiding already, or no guider to guide
 /// with (an unguided rig images without it).
 bool _guided(Ref ref) {
@@ -211,9 +220,12 @@ class NightSetupNotifier extends Notifier<NightSetupStep?> {
       if (api != null) unawaited(_stepAction(api.start, (l) => l.polarActionStart));
     }
     // Entering guide starts the guider's routine, the same exception; leaving
-    // the step keeps it guiding (imaging wants it).
+    // the step keeps it guiding (imaging wants it). Not while the main camera
+    // is busy (a shot, a loop, a plan's exposure): calibration turns the
+    // mount, the same gate as the Guide shutter, which then says why.
     if (step == NightSetupStep.guide &&
-        !simpleGuideActive(ref.read(guiderStatusProvider).value)) {
+        !simpleGuideActive(ref.read(guiderStatusProvider).value) &&
+        !_mainCameraBusy(ref)) {
       unawaited(
         _stepAction(
           ref.read(guiderStatusProvider.notifier).startGuiding,

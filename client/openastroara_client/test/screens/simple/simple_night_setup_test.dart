@@ -7,6 +7,7 @@ import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
+import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
@@ -132,6 +133,24 @@ void main() {
         isNull, reason: 'already guiding (or no guider): imaging is next');
     expect(nightSetupNext(after: NightSetupStep.guide, focused: false, aligned: false, permanentPier: false, guided: false),
         isNull, reason: 'the last step');
+  });
+
+  test('the Guide step does not start guiding while the main camera is busy: calibration turns the mount '
+      '(review, #1490: Night Setup can run over an imaging queue)', () async {
+    final guider = _Guider();
+    final (c, _) = await _container(guider: guider);
+    final plan = c.read(simpleRunProvider.notifier) as _Plan;
+    final pilot = c.read(nightSetupProvider.notifier);
+    pilot.start();
+    plan.queued();
+    c.read(_focus.notifier).set(SetupStepState.done);
+    c.read(_aligned.notifier).set(SetupStepState.done);
+    c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
+    pilot.next(); // the plan's Next: focus and polar align done, so Guide
+    expect(c.read(nightSetupProvider), NightSetupStep.guide, reason: 'the step is held, not skipped');
+    await Future<void>.value();
+    expect(guider.calls, isEmpty, reason: 'no calibration under a frame; the shutter says why');
+    c.read(captureProgressProvider.notifier).reset();
   });
 
   test('with a guider connected, polar align hands over to Guide, which starts guiding on entry', () async {
