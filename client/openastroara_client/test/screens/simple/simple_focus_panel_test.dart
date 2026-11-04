@@ -257,6 +257,29 @@ void main() {
     expect(pilot.nexts, 1);
   });
 
+  testWidgets('Guided Run on a permanent pier, focused by hand: Manual has the Done too (ALP-4982)', (tester) async {
+    // #1486 review: the Done only showed in Auto, so a Bahtinov focus could only Skip.
+    final pilot = _Pilot();
+    _c = ProviderContainer(overrides: [
+      focuserProvider.overrideWith(() => _Focuser(null)),
+      mainFocusMethodProvider.overrideWith(() => _Pick(MainFocusMethod.bahtinov)),
+      setupFocusStateProvider.overrideWithValue(SetupStepState.done),
+      setupPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
+      simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
+      autopilotProvider.overrideWith(() => pilot),
+    ]);
+    addTearDown(_c.dispose);
+    await _c.read(simplePermanentPierProvider.future);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: _c,
+      child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
+    ));
+    await tester.pump();
+    expect(_c.read(mainFocusMethodProvider), MainFocusMethod.bahtinov, reason: 'precondition: Manual');
+    await tester.tap(find.text('Done · Start imaging'));
+    expect(pilot.nexts, 1);
+  });
+
   group('the shutter follows the chip', () {
     Future<_Live> shutter(WidgetTester tester, MainFocusMethod pick,
         {FocuserStatus? focuser, AutofocusRun run = AutofocusRun.idle}) async {

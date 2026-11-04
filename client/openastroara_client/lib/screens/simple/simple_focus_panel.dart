@@ -251,6 +251,29 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
       selected: starsShown,
       onPick: (on) => ref.read(simpleFocusStarsShownProvider.notifier).set(on),
     );
+    // Guided Run with focus the last step (a permanent pier, or aligned
+    // already): its Done starts imaging, never the run's end on its own.
+    // Auto or Manual, whichever focused.
+    final guidedDone =
+        ref.watch(autopilotProvider) == AutopilotStep.focus &&
+            ref.watch(setupFocusStateProvider) == SetupStepState.done &&
+            autopilotNext(
+                  after: AutopilotStep.focus,
+                  focused: true,
+                  aligned:
+                      ref.watch(setupPolarAlignStateProvider) ==
+                      SetupStepState.done,
+                  permanentPier:
+                      ref.watch(simplePermanentPierProvider).value ?? false,
+                ) ==
+                null
+        ? FilledButton(
+            key: const Key('simple-focus-guided-done'),
+            style: kSimpleGoStyle,
+            onPressed: ref.read(autopilotProvider.notifier).next,
+            child: Text(l10n.guidedDoneStartImaging),
+          )
+        : null;
     return SimplePanel(
       // 12 above and below, and 4 between rows (6 before 2026-11-04): with
       // the Auto / Manual row under Main / Guide it still fits an iPad.
@@ -311,9 +334,10 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
               ..._guide(l10n, guide)
             else if (_askMask)
               ..._maskQuestion(l10n)
-            else if (method == MainFocusMethod.bahtinov)
-              ..._bahtinov(l10n, bahtinov, connected ? focuser : null)
-            else ...[
+            else if (method == MainFocusMethod.bahtinov) ...[
+              ..._bahtinov(l10n, bahtinov, connected ? focuser : null),
+              ?guidedDone,
+            ] else ...[
               // The headline shares its row with Measured stars when there is
               // room, so the panel still fits an iPad under its two choice rows.
               if (live.frame != null && !simpleStackText(context))
@@ -358,28 +382,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                     fontWeight: FontWeight.w300,
                   ),
                 ),
-              // Guided Run with focus the last step (a permanent pier, or
-              // aligned already): its Done starts imaging, never the run's
-              // end on its own.
-              if (ref.watch(autopilotProvider) == AutopilotStep.focus &&
-                  ref.watch(setupFocusStateProvider) == SetupStepState.done &&
-                  autopilotNext(
-                        after: AutopilotStep.focus,
-                        focused: true,
-                        aligned:
-                            ref.watch(setupPolarAlignStateProvider) ==
-                            SetupStepState.done,
-                        permanentPier:
-                            ref.watch(simplePermanentPierProvider).value ??
-                            false,
-                      ) ==
-                      null)
-                FilledButton(
-                  key: const Key('simple-focus-guided-done'),
-                  style: kSimpleGoStyle,
-                  onPressed: ref.read(autopilotProvider.notifier).next,
-                  child: Text(l10n.guidedDoneStartImaging),
-                ),
+              ?guidedDone,
               // A finished run's figures, all on view (Simple Mode folds
               // nothing away).
               if (run.isComplete)
