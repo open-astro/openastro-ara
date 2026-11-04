@@ -1973,6 +1973,12 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get shellNoDevices => 'No devices connected';
+
+  @override
+  String get guideStarting => 'Starting…';
+
+  @override
+  String get guideStopping => 'Stopping…';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -3956,4 +3962,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get shellNoDevices => 'Nenhum dispositivo conectado';
+
+  @override
+  String get guideStarting => 'Iniciando…';
+
+  @override
+  String get guideStopping => 'Parando…';
 }

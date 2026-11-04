@@ -565,5 +565,7 @@
   "guideTapShutter": "Toque no obturador para iniciar a guiagem. Ele calibra antes, quando preciso.",
   "guideConnectFirst": "Conecte o guia em Configurações › Dispositivos.",
   "deviceGuiderCamera": "Câmera de guiagem",
-  "shellNoDevices": "Nenhum dispositivo conectado"
+  "shellNoDevices": "Nenhum dispositivo conectado",
+  "guideStarting": "Iniciando…",
+  "guideStopping": "Parando…"
 }

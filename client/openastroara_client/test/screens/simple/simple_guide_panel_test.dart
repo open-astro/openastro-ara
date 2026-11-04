@@ -3,19 +3,30 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/screens/simple/simple_guide_panel.dart';
+import 'package:openastroara/services/guider_api.dart' show GuiderClient;
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
+import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
+import 'package:openastroara/widgets/status_indicator.dart' show StatusLevel;
 
 class _Guider extends GuiderStatusNotifier {
-  _Guider(this.json);
+  _Guider(this.json, {this.lag = false});
   final Map<String, dynamic> json;
   final calls = <String>[];
+
+  /// The rig acts a moment after the ask: the state doesn't change yet.
+  final bool lag;
+
+  // No server here: a read keeps what the rig last said.
+  @override
+  Future<void> refresh([GuiderClient? client]) async {}
   @override
   Future<GuiderStatus?> build() async => GuiderStatus.fromJson(json);
   // As the rig: the routine starts (or stops) and the next read shows it.
   @override
   Future<void> startGuiding() async {
     calls.add('start');
+    if (lag) return;
     state = AsyncData(GuiderStatus.fromJson({...json, 'runtime': <String, dynamic>{...json['runtime'] as Map<String, dynamic>, 'state': 'looping'}}));
   }
   @override
@@ -41,8 +52,8 @@ Map<String, dynamic> _wire({String state = 'connected', String runtime = 'guidin
 late _Guider _g;
 
 Future<ProviderContainer> _pump(WidgetTester tester, Map<String, dynamic> wire,
-    {Widget child = const SimpleGuidePanel()}) async {
-  _g = _Guider(wire);
+    {Widget child = const SimpleGuidePanel(), bool lag = false}) async {
+  _g = _Guider(wire, lag: lag);
   final c = ProviderContainer(overrides: [guiderStatusProvider.overrideWith(() => _g)]);
   addTearDown(c.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
@@ -103,6 +114,31 @@ void main() {
     await tester.tap(find.byType(SimpleGuideShutter));
     await tester.pump();
     expect(_g.calls, ['stop']);
+  });
+
+  testWidgets('a lost star is red in the panel, as in the top bar and the pill (iPad, 2026-11-04: it was amber)',
+      (tester) async {
+    await _pump(tester, _wire(runtime: 'star_lost'));
+    final dot = find.descendant(of: find.byKey(const Key('simple-guide-panel')), matching: find.byType(Container)).evaluate()
+        .map((e) => (e.widget as Container).decoration)
+        .whereType<BoxDecoration>()
+        .where((d) => d.shape == BoxShape.circle)
+        .single;
+    expect(dot.color, guiderStatusLevel(GuiderStatus.fromJson(_wire(runtime: 'star_lost'))).color);
+    expect(dot.color, StatusLevel.error.color);
+  });
+
+  testWidgets('a tap says Starting… at once, before the guider answers (iPad, 2026-11-04: feedback was slow)',
+      (tester) async {
+    await _pump(tester, _wire(runtime: 'stopped'), lag: true,
+        child: const Column(mainAxisSize: MainAxisSize.min, children: [SimpleGuidePanel(), SimpleGuideShutter()]));
+    await tester.tap(find.byType(SimpleGuideShutter));
+    await tester.pump();
+    expect(find.text('Starting…'), findsOneWidget);
+    expect(find.bySemanticsLabel('Stop guiding'), findsNothing, reason: 'no second tap while the ask is out');
+    await tester.pump(const Duration(seconds: 11)); // the guider never answered: back to what it says
+    expect(find.text('Starting…'), findsNothing);
+    expect(find.text('Not guiding'), findsOneWidget);
   });
 
   testWidgets('Dither every: frames up and down, Off below 1, kept in the profile', (tester) async {

@@ -2781,5 +2781,13 @@
   "shellNoDevices": "No devices connected",
   "@shellNoDevices": {
     "description": "Top bar note when no device is connected; opens Settings › Devices"
+  },
+  "guideStarting": "Starting…",
+  "@guideStarting": {
+    "description": "Guide panel, pill and shutter while a start is on its way to the guider"
+  },
+  "guideStopping": "Stopping…",
+  "@guideStopping": {
+    "description": "While a stop is on its way (the guider finishes its frame first)"
   }
 }

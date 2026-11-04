@@ -24,7 +24,12 @@ import '../../state/equipment/camera_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
-import 'simple_guide_panel.dart' show simpleGuideActive, simpleGuiding;
+import 'simple_guide_panel.dart'
+    show
+        simpleGuideActive,
+        simpleGuiderColour,
+        simpleGuiderPendingProvider,
+        simpleGuiding;
 import 'simple_plan_panel.dart' show simpleRunProvider;
 import 'simple_device_windows.dart'
     show SimpleGainSlider, simpleCelsius, simpleMountMotionProvider;
@@ -816,6 +821,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final guider = ref.watch(guiderStatusProvider).value;
     final guiding = simpleGuiding(guider);
     final guiderOn = simpleGuideActive(guider);
+    final guiderAsk = ref.watch(simpleGuiderPendingProvider);
     final planActive = run?.state?.isActive ?? false;
     final exposing = !stopping && p.phase == CapturePhase.exposing;
     final (String? label, String? detail, Color dot) = stopping
@@ -871,6 +877,12 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
                       '${simpleCelsius(ccd)} → ${simpleCelsius(target)}',
                       AraColors.accentInfo,
                     )
+                  : guiderAsk != null
+                  ? (
+                      l10n.deviceGuider,
+                      guiderAsk ? l10n.guideStarting : l10n.guideStopping,
+                      AraColors.accentBusy,
+                    )
                   : guiding
                   ? (
                       l10n.shellGuiding,
@@ -878,15 +890,13 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
                         final r? => '${r.toStringAsFixed(2)}″',
                         null => null,
                       },
-                      AraColors.accentConnected,
+                      simpleGuiderColour(guider),
                     )
                   : guiderOn
                   ? (
                       l10n.deviceGuider,
                       guider!.runtimeSummary(l10n),
-                      guider.runtimeState == GuiderRuntimeState.starLost
-                          ? AraColors.accentError
-                          : AraColors.accentBusy,
+                      simpleGuiderColour(guider),
                     )
                   : (null, null, AraColors.textSecondary),
           };

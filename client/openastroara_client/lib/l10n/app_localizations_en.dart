@@ -1973,4 +1973,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shellNoDevices => 'No devices connected';
+
+  @override
+  String get guideStarting => 'Starting…';
+
+  @override
+  String get guideStopping => 'Stopping…';
 }

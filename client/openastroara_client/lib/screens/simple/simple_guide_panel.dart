@@ -13,6 +13,7 @@ import '../../state/settings/phd2_settings_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import '../../util/friendly_error.dart';
 import 'simple_autopilot.dart'
     show AutopilotStep, autopilotProvider, simpleAutopilotNext;
@@ -46,6 +47,23 @@ bool simpleGuiding(GuiderStatus? g) =>
 
 String _arcsec(double v) => '${v.toStringAsFixed(2)}″';
 
+/// A Start (true) or Stop (false) asked for and not shown by the guider yet:
+/// said at once, since the guider takes seconds (a stop waits out its frame).
+class SimpleGuiderPending extends Notifier<bool?> {
+  @override
+  bool? build() => null;
+  void set(bool? v) => state = v;
+}
+
+final simpleGuiderPendingProvider =
+    NotifierProvider<SimpleGuiderPending, bool?>(SimpleGuiderPending.new);
+
+/// The guider's dot: the top bar's colour (a lost star red, settling amber),
+/// grey without a guider.
+Color simpleGuiderColour(GuiderStatus? g) => g == null || !g.isConnected
+    ? AraColors.textDisabled
+    : guiderStatusLevel(g).color;
+
 
 /// The rail chip in Guide mode: the RMS while it guides, else Off.
 String simpleGuideSummary(WidgetRef ref) {
@@ -62,13 +80,19 @@ class SimpleGuideShutter extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final g = ref.watch(guiderStatusProvider).value;
-    final active = simpleGuideActive(g);
+    final pending = ref.watch(simpleGuiderPendingProvider);
+    // An ask in flight shows as done already, and takes no second tap.
+    final active = pending ?? simpleGuideActive(g);
     final l10n = context.l10n;
     return SimpleShutterButton(
       start: true,
       running: active,
-      label: active ? l10n.guideStop : l10n.guideStart,
-      onPressed: g == null || !g.isConnected
+      label: pending != null
+          ? (pending ? l10n.guideStarting : l10n.guideStopping)
+          : active
+          ? l10n.guideStop
+          : l10n.guideStart,
+      onPressed: g == null || !g.isConnected || pending != null
           ? null
           : () => simpleGuideRun(context, ref, start: !active),
     );
@@ -84,15 +108,17 @@ Future<void> simpleGuideRun(
   final notify = userNotifier(context);
   final l10n = context.l10n;
   final guider = ref.read(guiderStatusProvider.notifier);
+  final pending = ref.read(simpleGuiderPendingProvider.notifier);
+  pending.set(start);
   try {
     await (start ? guider.startGuiding() : guider.stopGuiding());
     // The guider answers the ask at once and acts a moment later: read again
-    // until it shows (a start from idle isn't running yet at the first read).
-    for (var i = 0; i < 10; i++) {
+    // every half second until it shows, 10 s at most.
+    for (var i = 0; i < 20; i++) {
       if (simpleGuideActive(ref.read(guiderStatusProvider).value) == start) {
         break;
       }
-      await Future<void>.delayed(const Duration(seconds: 1));
+      await Future<void>.delayed(const Duration(milliseconds: 500));
       if (!context.mounted) return;
       await guider.refresh();
     }
@@ -106,6 +132,8 @@ Future<void> simpleGuideRun(
       error: true,
       snackBarRed: false,
     );
+  } finally {
+    if (context.mounted) pending.set(null);
   }
 }
 
@@ -121,13 +149,10 @@ class SimpleGuidePanel extends ConsumerWidget {
     final connected = g != null && g.isConnected;
     final active = simpleGuideActive(g);
     final guiding = simpleGuiding(g);
-    final colour = !connected
-        ? AraColors.textDisabled
-        : guiding
-        ? AraColors.accentConnected
-        : active
+    final pending = ref.watch(simpleGuiderPendingProvider);
+    final colour = pending != null
         ? AraColors.accentBusy
-        : AraColors.textSecondary;
+        : simpleGuiderColour(g);
     final phd2 = ref.watch(phd2SettingsProvider);
     final every = phd2.ditherEnabled ? math.max(1, phd2.ditherEveryNFrames) : 0;
     final px = phd2.ditherPixels;
@@ -165,17 +190,19 @@ class SimpleGuidePanel extends ConsumerWidget {
                 ),
                 Expanded(
                   child: Text(
-                    connected
-                        ? (active
-                              ? g.runtimeSummary(l10n)
-                              : l10n.guideNotGuiding)
-                        : l10n.guideNoGuider,
+                    !connected
+                        ? l10n.guideNoGuider
+                        : pending != null
+                        ? (pending ? l10n.guideStarting : l10n.guideStopping)
+                        : active
+                        ? g.runtimeSummary(l10n)
+                        : l10n.guideNotGuiding,
                     style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
             ),
-            if (connected && !active)
+            if (connected && !active && pending == null)
               Text(l10n.guideTapShutter, style: AraText.caption),
             if (!connected)
               Text(l10n.guideConnectFirst, style: AraText.caption),

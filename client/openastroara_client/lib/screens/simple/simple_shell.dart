@@ -1746,7 +1746,9 @@ class _GuidingBar extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(context.l10n.shellGuiding, style: kSimpleText),
+                // "Guider", not "Guiding": it shows while the guider
+                // loops or calibrates too (user, 2026-11-04).
+                Text(context.l10n.deviceGuider, style: kSimpleText),
                 Text(
                   guiding
                       ? context.l10n.shellGuidingRms(

@@ -3494,6 +3494,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No devices connected'**
   String get shellNoDevices;
+
+  /// Guide panel, pill and shutter while a start is on its way to the guider
+  ///
+  /// In en, this message translates to:
+  /// **'Starting…'**
+  String get guideStarting;
+
+  /// While a stop is on its way (the guider finishes its frame first)
+  ///
+  /// In en, this message translates to:
+  /// **'Stopping…'**
+  String get guideStopping;
 }
 
 class _AppLocalizationsDelegate

@@ -2331,6 +2331,8 @@ void main() {
       final trace = find.ancestor(of: find.byKey(const Key('simple-guide-trace')), matching: find.byType(Row)).first;
       expect(find.descendant(of: trace, matching: find.text('RA')), findsOneWidget);
       expect(find.descendant(of: trace, matching: find.text('Dec')), findsOneWidget);
+      expect(find.descendant(of: trace, matching: find.text('Guider')), findsOneWidget,
+          reason: 'Guider, not Guiding: it shows while looping or calibrating too (user, 2026-11-04)');
       expect(guiding(tester), Rect.fromLTRB(kSimpleInset, size.height - kSimpleInset - kSimpleBarHeight,
           end(tester), size.height - kSimpleInset));
     });
