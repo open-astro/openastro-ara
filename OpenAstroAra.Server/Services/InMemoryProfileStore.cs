@@ -305,6 +305,21 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    public Phd2SettingsDto UpdatePhd2Settings(Func<Phd2SettingsDto, Phd2SettingsDto?> update) {
+        Phd2SettingsDto next;
+        lock (_lock) {
+            var current = _phd2;
+            var candidate = update(current);
+            if (candidate is null || candidate == current) {
+                return current; // no change — no event
+            }
+            next = candidate;
+            _phd2 = next;
+        }
+        RaiseChanged();
+        return next;
+    }
+
     // §36 imaging-train optics. 0s mean "not yet configured — populated by
     // the wizard, Settings, or first camera connect"; ReducerFactor starts
     // at 1.0 so it's never a zero multiplier in the framing math.

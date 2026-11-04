@@ -495,7 +495,7 @@ class _StateChip extends StatelessWidget {
         AraColors.accentConnected,
         'Connected',
       ),
-      SwitchConnectionState.connecting => (AraColors.accentBusy, 'Connecting'),
+      SwitchConnectionState.connecting => (AraColors.accentInfo, 'Connecting'),
       SwitchConnectionState.error => (AraColors.accentError, 'Error'),
       SwitchConnectionState.disconnected => (
         AraColors.textSecondary,

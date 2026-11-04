@@ -132,6 +132,22 @@ public sealed partial class FileProfileStore : IProfileStore {
     public Phd2SettingsDto GetPhd2Settings() { lock (_lock) { return _snapshot.Phd2; } }
     public void PutPhd2Settings(Phd2SettingsDto value) => UpdateAndPersist(s => s with { Phd2 = value });
 
+    public Phd2SettingsDto UpdatePhd2Settings(Func<Phd2SettingsDto, Phd2SettingsDto?> update) {
+        Phd2SettingsDto next;
+        lock (_lock) {
+            var current = _snapshot.Phd2;
+            var candidate = update(current);
+            if (candidate is null || candidate == current) {
+                return current; // no change — no persist, no event
+            }
+            next = candidate;
+            _snapshot = _snapshot with { Phd2 = next };
+            Persist(_snapshot);
+        }
+        Changed?.Invoke(this, EventArgs.Empty);
+        return next;
+    }
+
     public EquipmentConnectionDto GetEquipmentConnection() { lock (_lock) { return _snapshot.EquipmentConnection; } }
     public void PutEquipmentConnection(EquipmentConnectionDto value) => UpdateAndPersist(s => s with { EquipmentConnection = value });
 

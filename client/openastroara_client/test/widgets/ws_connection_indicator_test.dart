@@ -10,7 +10,7 @@ void main() {
     test('maps each link state to a status level + label', () {
       expect(describeWsConnection(WsConnectionState.connecting), (StatusLevel.info, 'Server connecting…'));
       expect(describeWsConnection(WsConnectionState.connected), (StatusLevel.connected, 'Server connected'));
-      expect(describeWsConnection(WsConnectionState.reconnecting), (StatusLevel.busy, 'Server reconnecting…'));
+      expect(describeWsConnection(WsConnectionState.reconnecting), (StatusLevel.changing, 'Server reconnecting…')); // DESIGN.md status rule: on its way (blue)
       expect(describeWsConnection(WsConnectionState.disconnected), (StatusLevel.disconnected, 'Server disconnected'));
     });
   });

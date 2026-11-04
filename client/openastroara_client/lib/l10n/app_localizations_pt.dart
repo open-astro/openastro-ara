@@ -34,6 +34,17 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String statusMoreSemantics(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more statuses',
+      one: '1 more status',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get pillsDismiss => 'Dismiss';
 
   @override
@@ -55,7 +66,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get safetySilence => 'Silence alarm';
 
   @override
-  String get deviceCamera => 'Camera';
+  String get deviceCamera => 'Main Camera';
 
   @override
   String get deviceMount => 'Mount';
@@ -73,7 +84,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceNotConnected => 'Not connected';
 
   @override
-  String get deviceCurrentTemperature => 'Temperature';
+  String get deviceCurrentTemperature => 'Sensor temperature';
 
   @override
   String get deviceCooler => 'Cooler';
@@ -166,6 +177,13 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get deviceGain => 'Gain';
+
+  @override
+  String get deviceBusy => 'Still busy';
+
+  @override
+  String get deviceBusyDetail =>
+      'The last command hasn\'t finished. Try again in a moment.';
 
   @override
   String get deviceCouldntMoveFocuser => 'Couldn\'t move the focuser';
@@ -472,7 +490,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get searchSectionDevices => 'Devices';
 
   @override
-  String get searchSectionCamera => 'Camera';
+  String get searchSectionCamera => 'Main Camera';
 
   @override
   String get searchSectionMount => 'Mount';
@@ -481,7 +499,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get searchSectionFocuser => 'Focuser';
 
   @override
-  String get searchSectionGuider => 'Guider';
+  String get searchSectionGuider => 'Guider Camera';
 
   @override
   String get searchSettingAperture => 'Main scope aperture';
@@ -628,6 +646,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get nightSetupStepPlan => 'Plan';
 
   @override
+  String get nightSetupStepGuide => 'Guide';
+
+  @override
   String nightSetupStepDone(String step) {
     return '$step, done';
   }
@@ -652,15 +673,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get nightSetupSkip => 'Skip';
-
-  @override
-  String get nightSetupNothingDone => 'Nothing done yet tonight';
-
-  @override
-  String get nightSetupStart => 'Start Night Setup';
-
-  @override
-  String get nightSetupNotNow => 'Not now';
 
   @override
   String get shellModeNightSetup => 'Night Setup';
@@ -755,7 +767,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellSectionDevices => 'Devices';
 
   @override
-  String get shellSectionCamera => 'Camera';
+  String get shellSectionCamera => 'Main Camera';
 
   @override
   String get shellSectionMount => 'Mount';
@@ -764,7 +776,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellSectionFocuser => 'Focuser';
 
   @override
-  String get shellSectionGuider => 'Guider';
+  String get shellSectionGuider => 'Guider Camera';
 
   @override
   String get shellRigNotConnected => 'Rig not connected';
@@ -896,7 +908,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellThisApp => 'This app';
 
   @override
-  String get shellAraServer => 'OpenAstro Ara server';
+  String get shellAraServer => 'Ara server';
 
   @override
   String get shellStarDatabase => 'Star database';
@@ -1017,9 +1029,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get planTonightsBest => 'TONIGHT\'S BEST';
-
-  @override
-  String get planTonightsPlan => 'Tonight\'s plan';
 
   @override
   String planEditTarget(String name) {
@@ -1960,6 +1969,60 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get searchWordsGuideScope =>
       'guide scope guider camera pixel focal polar';
+
+  @override
+  String get shellModeGuide => 'Guide';
+
+  @override
+  String get guidedNextGuide => 'Next: Guide';
+
+  @override
+  String get guideStart => 'Start guiding';
+
+  @override
+  String get guideStop => 'Stop guiding';
+
+  @override
+  String get guideActionStart => 'start guiding';
+
+  @override
+  String get guideActionStop => 'stop guiding';
+
+  @override
+  String get guideIdle => 'Idle';
+
+  @override
+  String get guideNoGuider => 'Guider not connected';
+
+  @override
+  String get guideTapShutter =>
+      'Tap the shutter to start guiding. It calibrates first when needed.';
+
+  @override
+  String get guideConnectFirst => 'Connect the guider in Settings › Devices.';
+
+  @override
+  String get deviceGuiderCamera => 'Guider Camera';
+
+  @override
+  String get shellNoDevices => 'No devices connected';
+
+  @override
+  String get guideStarting => 'Starting…';
+
+  @override
+  String get guideStopping => 'Stopping…';
+
+  @override
+  String get guideExposureOwn => 'The guider\'s own';
+
+  @override
+  String get focusNeedsFocuser =>
+      'Connect a focuser to autofocus, or focus by hand on Manual.';
+
+  @override
+  String get shellMainCameraBusy =>
+      'The main camera is busy: wait for its frame, or stop it.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -1991,6 +2054,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String statusMoreSemantics(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Mais $count status',
+      one: 'Mais 1 status',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get pillsDismiss => 'Dispensar';
 
   @override
@@ -2012,7 +2086,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get safetySilence => 'Silenciar alarme';
 
   @override
-  String get deviceCamera => 'Câmera';
+  String get deviceCamera => 'Câmera principal';
 
   @override
   String get deviceMount => 'Montagem';
@@ -2030,7 +2104,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get deviceNotConnected => 'Não conectado';
 
   @override
-  String get deviceCurrentTemperature => 'Temperatura';
+  String get deviceCurrentTemperature => 'Temperatura do sensor';
 
   @override
   String get deviceCooler => 'Refrigeração';
@@ -2125,6 +2199,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get deviceGain => 'Ganho';
+
+  @override
+  String get deviceBusy => 'Ainda ocupado';
+
+  @override
+  String get deviceBusyDetail =>
+      'O último comando ainda não terminou. Tente de novo em instantes.';
 
   @override
   String get deviceCouldntMoveFocuser => 'Não foi possível mover o focalizador';
@@ -2431,7 +2512,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get searchSectionDevices => 'Dispositivos';
 
   @override
-  String get searchSectionCamera => 'Câmera';
+  String get searchSectionCamera => 'Câmera principal';
 
   @override
   String get searchSectionMount => 'Montagem';
@@ -2440,7 +2521,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get searchSectionFocuser => 'Focalizador';
 
   @override
-  String get searchSectionGuider => 'Guia';
+  String get searchSectionGuider => 'Câmera de guiagem';
 
   @override
   String get searchSettingAperture => 'Abertura do telescópio principal';
@@ -2589,6 +2670,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get nightSetupStepPlan => 'Plano';
 
   @override
+  String get nightSetupStepGuide => 'Guiagem';
+
+  @override
   String nightSetupStepDone(String step) {
     return '$step, concluído';
   }
@@ -2613,15 +2697,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get nightSetupSkip => 'Pular';
-
-  @override
-  String get nightSetupNothingDone => 'Nada feito ainda esta noite';
-
-  @override
-  String get nightSetupStart => 'Iniciar sessão guiada';
-
-  @override
-  String get nightSetupNotNow => 'Agora não';
 
   @override
   String get shellModeNightSetup => 'Preparar a noite';
@@ -2716,7 +2791,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get shellSectionDevices => 'Dispositivos';
 
   @override
-  String get shellSectionCamera => 'Câmera';
+  String get shellSectionCamera => 'Câmera principal';
 
   @override
   String get shellSectionMount => 'Montagem';
@@ -2725,7 +2800,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get shellSectionFocuser => 'Focalizador';
 
   @override
-  String get shellSectionGuider => 'Guia';
+  String get shellSectionGuider => 'Câmera de guiagem';
 
   @override
   String get shellRigNotConnected => 'Setup não conectado';
@@ -2858,7 +2933,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get shellThisApp => 'Este app';
 
   @override
-  String get shellAraServer => 'Servidor OpenAstro Ara';
+  String get shellAraServer => 'Servidor Ara';
 
   @override
   String get shellStarDatabase => 'Banco de estrelas';
@@ -2980,9 +3055,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get planTonightsBest => 'MELHORES DA NOITE';
-
-  @override
-  String get planTonightsPlan => 'Plano da noite';
 
   @override
   String planEditTarget(String name) {
@@ -3929,4 +4001,59 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get searchWordsGuideScope =>
       'luneta guia guiagem câmera pixel distância focal polar guide scope';
+
+  @override
+  String get shellModeGuide => 'Guiagem';
+
+  @override
+  String get guidedNextGuide => 'Próximo: Guiagem';
+
+  @override
+  String get guideStart => 'Iniciar guiagem';
+
+  @override
+  String get guideStop => 'Parar guiagem';
+
+  @override
+  String get guideActionStart => 'iniciar a guiagem';
+
+  @override
+  String get guideActionStop => 'parar a guiagem';
+
+  @override
+  String get guideIdle => 'Parado';
+
+  @override
+  String get guideNoGuider => 'Guia não conectado';
+
+  @override
+  String get guideTapShutter =>
+      'Toque no obturador para iniciar a guiagem. Ele calibra antes, quando preciso.';
+
+  @override
+  String get guideConnectFirst =>
+      'Conecte o guia em Configurações › Dispositivos.';
+
+  @override
+  String get deviceGuiderCamera => 'Câmera de guiagem';
+
+  @override
+  String get shellNoDevices => 'Nenhum dispositivo conectado';
+
+  @override
+  String get guideStarting => 'Iniciando…';
+
+  @override
+  String get guideStopping => 'Parando…';
+
+  @override
+  String get guideExposureOwn => 'O do guia';
+
+  @override
+  String get focusNeedsFocuser =>
+      'Conecte um focalizador para o foco automático, ou foque à mão no Manual.';
+
+  @override
+  String get shellMainCameraBusy =>
+      'A câmera principal está ocupada: espere o quadro terminar, ou pare-o.';
 }

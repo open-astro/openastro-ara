@@ -114,6 +114,20 @@ void main() {
     expect(_b.calls, ['stop']);
   });
 
+  testWidgets('switching to Guide before Finish asks for the mask first too, then switches (ALP-4982)', (tester) async {
+    // #1486 review: only the switch to Auto asked.
+    await _pump(tester, BahtinovFocusLive(status: _running([1.0], active: false)));
+    final c = ProviderScope.containerOf(tester.element(find.byType(SimpleFocusPanel)));
+    await tester.tap(find.byKey(const Key('simple-focus-scope-guide')));
+    await tester.pump();
+    expect(find.text('Take the Bahtinov mask off'), findsOneWidget);
+    expect(c.read(simpleFocusScopeProvider), SimpleFocusScope.main, reason: 'not before the answer');
+    await tester.tap(find.text('Mask removed'));
+    await tester.pumpAndSettle();
+    expect(_b.calls, ['finish']);
+    expect(c.read(simpleFocusScopeProvider), SimpleFocusScope.guide);
+  });
+
   testWidgets('leaving Manual before Finish asks for the mask first, then switches', (tester) async {
     await _pump(tester, BahtinovFocusLive(status: _running([1.0], active: false)));
     await tester.tap(find.byKey(const Key('simple-focus-method-auto')));

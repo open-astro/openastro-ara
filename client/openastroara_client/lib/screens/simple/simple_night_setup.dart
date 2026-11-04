@@ -5,14 +5,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/l10n.dart';
 import '../../state/setup/setup_readiness.dart';
 import '../../state/simple_mode_state.dart';
+import '../../state/guider/guider_state.dart';
 import '../../state/simple_night_setup_state.dart';
+import 'simple_guide_panel.dart' show simpleGuiding;
 import 'simple_plan_panel.dart' show simpleRunProvider;
 export '../../state/simple_night_setup_state.dart'
-    show NightSetupStep, NightSetupStepLabel, nightSetupNext, NightSetupNotifier, nightSetupProvider;
+    show
+        NightSetupStep,
+        NightSetupStepLabel,
+        nightSetupNext,
+        simpleNightSetupNext,
+        NightSetupNotifier,
+        nightSetupProvider;
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import 'simple_preview_panel.dart' show kSimpleText;
-import 'simple_shell.dart' show SimplePanel, kSimpleGoStyle, simpleFrost;
+import 'simple_shell.dart' show SimplePanel;
 
 
 /// Night Setup's step strip, centred under the status strip: the steps behind
@@ -61,6 +69,9 @@ class NightSetupStrip extends ConsumerWidget {
                     NightSetupStep.polarAlign => aligned,
                     NightSetupStep.plan =>
                       ref.watch(simpleRunProvider).sequenceId != null,
+                    NightSetupStep.guide => simpleGuiding(
+                      ref.watch(guiderStatusProvider).value,
+                    ),
                   },
                 ),
               ],
@@ -165,60 +176,4 @@ class _Step extends StatelessWidget {
       ),
     );
   }
-}
-
-/// Whether to offer Night Setup: nothing done yet tonight (no focus, no polar
-/// alignment unless the pier is permanent, no plan started).
-// shortcut: doesn't check that it's night; gate on the site's twilight once
-// the client has it at hand.
-bool nightSetupOffered(WidgetRef ref) =>
-    ref.watch(nightSetupProvider) == null &&
-    ref.watch(setupFocusStateProvider) != SetupStepState.done &&
-    ref.watch(setupPolarAlignStateProvider) != SetupStepState.done &&
-    !ref.watch(simpleRunProvider).started;
-
-/// The offer under the status strip: "Nothing done yet tonight", Start
-/// Night Setup, and × to dismiss it.
-class NightSetupOffer extends StatelessWidget {
-  const NightSetupOffer({
-    super.key,
-    required this.onStart,
-    required this.onDismiss,
-  });
-
-  final VoidCallback onStart;
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) => simpleFrost(
-    Container(
-      key: const Key('night-setup-offer'),
-      padding: const EdgeInsets.fromLTRB(16, 6, 4, 6),
-      decoration: BoxDecoration(
-        color: AraColors.overlayScrim,
-        border: Border.all(color: AraColors.accentConnected),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      // On a narrow window the buttons drop under the words, rather than the
-      // words squeezing into a column tall enough to cover the rails.
-      child: Wrap(
-        spacing: AraSpace.s12,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          Text(context.l10n.nightSetupNothingDone, style: kSimpleText),
-          FilledButton(
-            key: const Key('night-setup-start'),
-            style: kSimpleGoStyle,
-            onPressed: onStart,
-            child: Text(context.l10n.nightSetupStart),
-          ),
-          IconButton(
-            tooltip: context.l10n.nightSetupNotNow,
-            icon: const Icon(Icons.close, size: 18),
-            onPressed: onDismiss,
-          ),
-        ],
-      ),
-    ),
-  );
 }

@@ -5,6 +5,7 @@ import '../../models/guider_status.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/ws/ws_providers.dart';
+import '../../l10n/l10n.dart';
 import '../equipment_chip.dart';
 import '../status_indicator.dart';
 
@@ -21,15 +22,17 @@ StatusLevel guiderChipLevel(AsyncValue<GuiderStatus?> async) {
 }
 
 /// The status dot for a resolved [GuiderStatus]: the link state, with the
-/// runtime phase overriding it when connected (a lost star is an error; an
-/// active calibrate/dither is busy).
+/// runtime phase overriding it when connected (a lost star is a warning,
+/// amber; calibrating, settling or dithering is changing, blue).
 StatusLevel guiderStatusLevel(GuiderStatus? status) {
   if (status == null) return StatusLevel.disconnected;
   switch (status.connectionState) {
     case GuiderConnectionState.connected:
       switch (status.runtimeState) {
         case GuiderRuntimeState.starLost:
-          return StatusLevel.error;
+          // A warning: the guider is still looking, and a cloud passing often
+          // brings the star back (DESIGN.md status rule).
+          return StatusLevel.busy;
         case GuiderRuntimeState.calibrating:
         case GuiderRuntimeState.dithering:
         case GuiderRuntimeState.settling:
@@ -37,10 +40,12 @@ StatusLevel guiderStatusLevel(GuiderStatus? status) {
         case GuiderRuntimeState.starSelected:
         case GuiderRuntimeState.assistant:
         case GuiderRuntimeState.paused:
-          // Not actively correcting — amber so a paused guider (e.g. during a
-          // plate-solve/flip) is visually distinct from a healthy green guide.
-          return StatusLevel.busy;
+          // On its way, or paused by Ara (a solve, a flip): blue, distinct
+          // from a healthy green guide (DESIGN.md status rule).
+          return StatusLevel.changing;
         case GuiderRuntimeState.guiding:
+          // Working normally: blinking green.
+          return StatusLevel.active;
         case GuiderRuntimeState.stopped:
           return StatusLevel.connected;
         case GuiderRuntimeState.unknown:
@@ -68,9 +73,11 @@ class GuiderChip extends ConsumerWidget {
     final level = ref.watch(serverLinkUpProvider)
         ? guiderChipLevel(ref.watch(guiderStatusProvider))
         : StatusLevel.disconnected;
+    // Simple Mode's strip names the guide camera (its Guide mode has the target).
+    final simple = EquipmentChipHideDisconnected.of(context);
     return EquipmentChip(
-      icon: EquipmentChipHideDisconnected.of(context) ? Icons.track_changes : Icons.gps_fixed,
-      label: 'Guider',
+      icon: simple ? Icons.videocam_outlined : Icons.gps_fixed,
+      label: simple ? context.l10n.deviceGuiderCamera : 'Guider',
       status: level,
       onTap: () => openSettingsPanel(ref, 'eq.guider'),
     );

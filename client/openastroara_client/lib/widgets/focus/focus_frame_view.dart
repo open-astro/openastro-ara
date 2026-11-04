@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../status_indicator.dart' show StatusBlink;
 import '../../theme/ara_colors.dart';
 
 /// A rendered focus frame (JPEG from the daemon, auto-stretched with star
@@ -20,7 +21,7 @@ class FocusFrameView extends StatelessWidget {
     required this.frame,
     this.caption,
     this.badge,
-    this.badgeColor = AraColors.accentBusy,
+    this.badgeColor = AraColors.accentConnected,
     this.emptyText = 'No frame yet.',
     this.height = 220,
   });
@@ -62,7 +63,10 @@ class FocusFrameView extends StatelessWidget {
               Positioned(
                 top: 8,
                 left: 8,
-                child: Container(
+                // LIVE is the camera working: it blinks (DESIGN.md status rule).
+                child: StatusBlink(
+                  on: badge == 'LIVE',
+                  child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: badgeColor,
@@ -76,6 +80,7 @@ class FocusFrameView extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                ),
                 ),
               ),
             if (caption != null && jpeg != null)

@@ -155,7 +155,7 @@ class GuideCalibrationPanel extends StatelessWidget {
       return ('No guider', AraColors.accentDisconnected, Icons.link_off);
     }
     if (v.isRunning) {
-      return ('Calibrating…', AraColors.accentBusy, Icons.timelapse);
+      return ('Calibrating…', AraColors.accentInfo, Icons.timelapse);
     }
     return switch (v.verdict) {
       'good' => ('Good', AraColors.accentConnected, Icons.check_circle_outline),

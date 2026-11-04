@@ -7,15 +7,21 @@ import '../screens/simple/simple_plan_panel.dart'
         simpleDarkStartProvider,
         simpleRunProvider,
         simpleScheduleAllowedProvider;
+import '../screens/simple/simple_guide_panel.dart'
+    show simpleGuideActive, simpleGuiding;
 import '../screens/simple/simple_polar_panel.dart' show simplePolarActive;
 import '../util/friendly_error.dart';
 import 'app_locale_state.dart';
+import 'guider/guider_state.dart';
+import 'imaging/capture_progress_state.dart';
+import 'imaging/live_view_state.dart';
+import 'sequencer/sequence_list_state.dart';
 import 'polar_align/polar_align_state.dart';
 import 'setup/setup_readiness.dart';
 import 'simple_messages_state.dart';
 import 'simple_mode_state.dart';
 
-enum SimpleModeScreen { nightSetup, preview, focus, polarAlign, plan }
+enum SimpleModeScreen { nightSetup, preview, focus, polarAlign, guide, plan }
 
 extension SimpleModeScreenLabels on SimpleModeScreen {
   String labelOf(AppLocalizations l10n) => switch (this) {
@@ -23,6 +29,7 @@ extension SimpleModeScreenLabels on SimpleModeScreen {
     SimpleModeScreen.preview => l10n.shellModePreview,
     SimpleModeScreen.polarAlign => l10n.shellModePolarAlign,
     SimpleModeScreen.focus => l10n.shellModeFocus,
+    SimpleModeScreen.guide => l10n.shellModeGuide,
     SimpleModeScreen.plan => l10n.shellModePlan,
   };
 
@@ -38,6 +45,7 @@ extension SimpleModeScreenLabels on SimpleModeScreen {
     SimpleModeScreen.preview => Icons.visibility_outlined,
     SimpleModeScreen.focus => Icons.center_focus_strong,
     SimpleModeScreen.polarAlign => Icons.explore_outlined,
+    SimpleModeScreen.guide => Icons.track_changes,
     SimpleModeScreen.plan => Icons.playlist_play,
   };
 }
@@ -89,14 +97,16 @@ final simpleShowingProvider =
 
 /// Night Setup's steps, in the night's order: tonight's targets first, then
 /// focus (polar alignment plate-solves and fails on a soft focus), then polar
-/// align; the last one's Done starts imaging.
-enum NightSetupStep { plan, focus, polarAlign }
+/// align, then guide (user, 2026-11-04); the last one's Done starts
+/// imaging.
+enum NightSetupStep { plan, focus, polarAlign, guide }
 
 extension NightSetupStepLabel on NightSetupStep {
   String label(AppLocalizations l10n) => switch (this) {
     NightSetupStep.focus => l10n.nightSetupStepFocus,
     NightSetupStep.polarAlign => l10n.nightSetupStepPolarAlign,
     NightSetupStep.plan => l10n.nightSetupStepPlan,
+    NightSetupStep.guide => l10n.nightSetupStepGuide,
   };
 
   /// The mode each step runs on.
@@ -104,25 +114,57 @@ extension NightSetupStepLabel on NightSetupStep {
     NightSetupStep.plan => SimpleModeScreen.plan,
     NightSetupStep.focus => SimpleModeScreen.focus,
     NightSetupStep.polarAlign => SimpleModeScreen.polarAlign,
+    NightSetupStep.guide => SimpleModeScreen.guide,
   };
 }
 
 /// The step to start on (always the plan), or go to next from [after]: the
 /// first setup step not done tonight, polar align skipped on a permanent
-/// pier; null when none is left, which starts imaging. Pure — unit-tested.
+/// pier, guide skipped when already guiding or with no guider ([guided]);
+/// null when none is left, which starts imaging. Pure — unit-tested.
 NightSetupStep? nightSetupNext({
   NightSetupStep? after,
   required bool focused,
   required bool aligned,
   required bool permanentPier,
+  required bool guided,
 }) {
   for (final s in NightSetupStep.values) {
     if (after != null && s.index <= after.index) continue;
     if (s == NightSetupStep.focus && focused) continue;
     if (s == NightSetupStep.polarAlign && (aligned || permanentPier)) continue;
+    if (s == NightSetupStep.guide && guided) continue;
     return s;
   }
   return null;
+}
+
+/// The main camera is taking frames (simpleMainCameraBusy, read once).
+bool _mainCameraBusy(Ref ref) =>
+    ref.read(captureProgressProvider).isCapturing ||
+    ref.read(liveViewControllerProvider) ||
+    (ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false);
+
+/// The guide step has nothing to do: guiding already, or no guider to guide
+/// with (an unguided rig images without it).
+bool _guided(Ref ref) {
+  final g = ref.read(guiderStatusProvider).value;
+  return g == null || !g.isConnected || simpleGuiding(g);
+}
+
+/// [nightSetupNext] from the rig's state now, watched: the step after [after].
+NightSetupStep? simpleNightSetupNext(
+  WidgetRef ref, {
+  required NightSetupStep after,
+}) {
+  final g = ref.watch(guiderStatusProvider).value;
+  return nightSetupNext(
+    after: after,
+    focused: ref.watch(setupFocusStateProvider) == SetupStepState.done,
+    aligned: ref.watch(setupPolarAlignStateProvider) == SetupStepState.done,
+    permanentPier: ref.watch(simplePermanentPierProvider).value ?? false,
+    guided: g == null || !g.isConnected || simpleGuiding(g),
+  );
 }
 
 /// Simple Mode's Night Setup: the night's steps in order, each handing over to
@@ -143,7 +185,8 @@ class NightSetupNotifier extends Notifier<NightSetupStep?> {
     ref.listen(simpleRunProvider, (prev, next) {
       // Imaging started (the last Done, or by hand): Night Setup is done. The
       // last Done already ended its polar routine; this stops nothing again.
-      if (state != null && next.started) {
+      // Not a run's updates while it images (ALP-4982).
+      if (state != null && next.started && !(prev?.started ?? false)) {
         state = null;
         ref.read(simpleShowingProvider.notifier)._show(SimpleModeScreen.plan);
       }
@@ -156,6 +199,7 @@ class NightSetupNotifier extends Notifier<NightSetupStep?> {
     focused: ref.read(setupFocusStateProvider) == SetupStepState.done,
     aligned: ref.read(setupPolarAlignStateProvider) == SetupStepState.done,
     permanentPier: ref.read(simplePermanentPierProvider).value ?? false,
+    guided: _guided(ref),
   );
 
   /// The polar step's Done completed its routine: leaving stops nothing.
@@ -173,16 +217,32 @@ class NightSetupNotifier extends Notifier<NightSetupStep?> {
     if (step == NightSetupStep.polarAlign &&
         !simplePolarActive(ref.read(polarAlignLiveProvider))) {
       final api = ref.read(polarAlignApiProvider);
-      if (api != null) unawaited(_polar(api.start, (l) => l.polarActionStart));
+      if (api != null) unawaited(_stepAction(api.start, (l) => l.polarActionStart));
+    }
+    // Entering guide starts the guider's routine, the same exception; leaving
+    // the step keeps it guiding (imaging wants it). Not while the main camera
+    // is busy (a shot, a loop, a plan's exposure): calibration turns the
+    // mount, the same gate as the Guide shutter, which then says why.
+    if (step == NightSetupStep.guide &&
+        !simpleGuideActive(ref.read(guiderStatusProvider).value) &&
+        !_mainCameraBusy(ref)) {
+      unawaited(
+        _stepAction(
+          ref.read(guiderStatusProvider.notifier).startGuiding,
+          (l) => l.guideActionStart,
+          origin: SimpleStatusOrigin.guide,
+        ),
+      );
     }
   }
 
-  /// A polar start or stop; one that fails says why in a pill (a step whose
-  /// routine never started, or a mount still moving).
-  Future<void> _polar(
+  /// A step's start or stop (polar align, guiding); one that fails says why
+  /// in a pill (a step whose routine never started, or a mount still moving).
+  Future<void> _stepAction(
     Future<void> Function() op,
-    String Function(AppLocalizations l10n) action,
-  ) async {
+    String Function(AppLocalizations l10n) action, {
+    SimpleStatusOrigin origin = SimpleStatusOrigin.polar,
+  }) async {
     try {
       await op();
     } catch (e) {
@@ -193,6 +253,7 @@ class NightSetupNotifier extends Notifier<NightSetupStep?> {
           .show(
             SimpleMessageKind.error,
             friendlyError(l10n, e, action: action(l10n)),
+            origin: origin,
           );
     }
   }
@@ -215,6 +276,11 @@ class NightSetupNotifier extends Notifier<NightSetupStep?> {
       return;
     }
     if (s == NightSetupStep.polarAlign) _endPolar();
+    // Already imaging (Night Setup started over a running queue): done.
+    if (ref.read(simpleRunProvider).started) {
+      state = null;
+      return;
+    }
     final startAt = ref.read(simpleScheduleAllowedProvider)
         ? ref.read(simpleDarkStartProvider)
         : null;
@@ -255,7 +321,7 @@ class NightSetupNotifier extends Notifier<NightSetupStep?> {
       return;
     }
     final api = ref.read(polarAlignApiProvider);
-    if (api != null) unawaited(_polar(api.stop, (l) => l.polarActionStop));
+    if (api != null) unawaited(_stepAction(api.stop, (l) => l.polarActionStop));
   }
 }
 

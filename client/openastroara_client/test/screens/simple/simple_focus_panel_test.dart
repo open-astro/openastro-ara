@@ -9,6 +9,8 @@ import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/screens/simple/simple_night_setup.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/state/imaging/capture_progress_state.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
 import 'package:openastroara/theme/ara_colors.dart';
@@ -257,6 +259,29 @@ void main() {
     expect(pilot.nexts, 1);
   });
 
+  testWidgets('Guided Run on a permanent pier, focused by hand: Manual has the Done too (ALP-4982)', (tester) async {
+    // #1486 review: the Done only showed in Auto, so a Bahtinov focus could only Skip.
+    final pilot = _Pilot();
+    _c = ProviderContainer(overrides: [
+      focuserProvider.overrideWith(() => _Focuser(null)),
+      mainFocusMethodProvider.overrideWith(() => _Pick(MainFocusMethod.bahtinov)),
+      setupFocusStateProvider.overrideWithValue(SetupStepState.done),
+      setupPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
+      simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
+      nightSetupProvider.overrideWith(() => pilot),
+    ]);
+    addTearDown(_c.dispose);
+    await _c.read(simplePermanentPierProvider.future);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: _c,
+      child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
+    ));
+    await tester.pump();
+    expect(_c.read(mainFocusMethodProvider), MainFocusMethod.bahtinov, reason: 'precondition: Manual');
+    await tester.tap(find.text('Done · Start imaging'));
+    expect(pilot.nexts, 1);
+  });
+
   group('the shutter follows the chip', () {
     Future<_Live> shutter(WidgetTester tester, MainFocusMethod pick,
         {FocuserStatus? focuser, AutofocusRun run = AutofocusRun.idle}) async {
@@ -291,10 +316,35 @@ void main() {
       expect(l.cancels, 1);
     });
 
-    testWidgets('Auto with no focuser: the shutter is off', (tester) async {
+    testWidgets('Auto or Manual with the main camera busy: off, and a tap says why (user, 2026-11-04)', (tester) async {
+      for (final pick in [MainFocusMethod.autofocus, MainFocusMethod.bahtinov]) {
+        final l = await shutter(tester, pick, focuser: _focuser());
+        final c = ProviderScope.containerOf(tester.element(find.byType(SimpleFocusShutter)));
+        c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('simple-shutter')));
+        await tester.pump();
+        expect(l.starts, 0, reason: '$pick');
+        expect(c.read(simpleMessagesProvider).single.title, 'The main camera is busy: wait for its frame, or stop it.',
+            reason: '$pick');
+        c.read(captureProgressProvider.notifier).reset();
+        await tester.pump(const Duration(seconds: 11));
+      }
+    });
+
+    testWidgets('Auto with no focuser: the shutter is off, and a tap says why (user, 2026-11-04)', (tester) async {
       final l = await shutter(tester, MainFocusMethod.autofocus);
+      final c = ProviderScope.containerOf(tester.element(find.byType(SimpleFocusShutter)));
       await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pump();
       expect(l.starts, 0);
+      expect(c.read(simpleMessagesProvider).single.title, 'Connect a focuser to autofocus, or focus by hand on Manual.');
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider), hasLength(1), reason: 'once, not a pill per tap');
+      expect(tester.getSemantics(find.byKey(const Key('simple-shutter'))),
+          isSemantics(hint: 'Connect a focuser to autofocus, or focus by hand on Manual.'));
+      await tester.pump(const Duration(seconds: 11));
     });
 
     testWidgets('Manual: the shutter starts the Bahtinov readout (no longer Preview\'s frames)', (tester) async {

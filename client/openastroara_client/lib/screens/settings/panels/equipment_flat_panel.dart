@@ -144,7 +144,7 @@ class _FlatControlsState extends ConsumerState<_FlatControls> {
                 coverIcon,
                 size: 20,
                 color: s.isMoving
-                    ? AraColors.accentBusy
+                    ? AraColors.accentInfo
                     : AraColors.textSecondary,
               ),
               const SizedBox(width: 8),
@@ -193,7 +193,7 @@ class _FlatControlsState extends ConsumerState<_FlatControls> {
                       ? 'Light on · brightness ${s.brightness}'
                       : 'Light off',
                   style: _pendingLight != null
-                      ? const TextStyle(color: AraColors.accentBusy)
+                      ? const TextStyle(color: AraColors.accentInfo)
                       : null,
                 ),
               ),

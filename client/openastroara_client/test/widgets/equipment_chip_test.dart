@@ -63,13 +63,24 @@ void main() {
     expect(widths, hasLength(1));
   });
 
+  testWidgets('a changing device (connecting, parking) shows a ring, not a filled dot (Night mode, user 2026-11-04)',
+      (tester) async {
+    await _pumpAt(tester, 1400,
+        const EquipmentChip(icon: Icons.camera_alt, label: 'Camera', status: StatusLevel.changing));
+    expect(find.descendant(of: find.byKey(const ValueKey('equipment-chip-dot')), matching: find.byType(StatusDot)),
+        findsOneWidget);
+  });
+
   test('active is green: amber is kept for issues', () {
     expect(StatusLevel.active.color, StatusLevel.connected.color);
     expect(StatusLevel.active.color, isNot(StatusLevel.busy.color));
   });
 
   testWidgets('an active device blinks its green dot; a merely connected one is steady', (tester) async {
-    double dotOpacity() => tester.widget<FadeTransition>(find.byKey(const ValueKey('equipment-chip-dot'))).opacity.value;
+    double dotOpacity() => tester
+        .widget<FadeTransition>(find.descendant(of: find.byKey(const ValueKey('equipment-chip-dot')), matching: find.byType(FadeTransition)))
+        .opacity
+        .value;
     await _pumpAt(tester, 1400,
         const EquipmentChip(icon: Icons.camera_alt, label: 'Camera', status: StatusLevel.active));
     final seen = <double>{};

@@ -101,8 +101,9 @@ namespace OpenAstroAra.Test {
 
             public static async Task<Rig> StartAsync(string pinnedId, double pixelSize, Func<JsonNode?, JsonNode?>? pixelRpc,
                     IReadOnlyDictionary<string, AlpacaConfiguredDevice>? devices,
-                    DiscoveredDeviceDto? mainCamera = null) {
+                    DiscoveredDeviceDto? mainCamera = null, Action<FakeGuider>? setup = null) {
                 var rig = new Rig { Fake = FakeGuider.Start() };
+                setup?.Invoke(rig.Fake);
                 rig.Fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
                 rig.Fake.OnRpc("get_alpaca_camera_pixelsize", req => pixelRpc is null
                     ? throw new InvalidOperationException("simulated daemon rejection")
@@ -282,6 +283,87 @@ namespace OpenAstroAra.Test {
             Assert.That(rig.Stored.GuidePixelSize, Is.EqualTo(3.75));
             Assert.That(rig.Stored.GuiderCameraAlpacaUniqueId, Is.EqualTo(""));
             Assert.That(rig.Log.Reconcile(), Is.Empty);
+        }
+
+        // ALP-4982: the fill and the camera update write through one locked read-modify-write, so a PHD2
+        // save from another thread between their read and their write isn't lost.
+        [Test]
+        public void UpdatePhd2Settings_applies_a_change_under_the_lock_keeping_the_other_fields() {
+            var store = new InMemoryProfileStore();
+            store.PutPhd2Settings(store.GetPhd2Settings() with { GuideFocalLength = 240 });
+            var result = store.UpdatePhd2Settings(cur => cur with { GuidePixelSize = 2.9 });
+            Assert.That(result.GuidePixelSize, Is.EqualTo(2.9));
+            Assert.That(store.GetPhd2Settings().GuideFocalLength, Is.EqualTo(240), "untouched fields kept");
+        }
+
+        [Test]
+        public void UpdatePhd2Settings_returning_null_writes_nothing() {
+            var store = new InMemoryProfileStore();
+            var changed = false;
+            store.Changed += (_, _) => changed = true;
+            store.UpdatePhd2Settings(_ => null);
+            Assert.That(changed, Is.False, "no write means no change event");
+        }
+
+        [Test]
+        public void FileProfileStore_UpdatePhd2Settings_persists_to_disk() {
+            var dir = Path.Combine(Path.GetTempPath(), "ara-phd2-" + Path.GetRandomFileName());
+            Directory.CreateDirectory(dir);
+            try {
+                var store = new FileProfileStore(dir);
+                store.PutPhd2Settings(store.GetPhd2Settings() with { GuideFocalLength = 240 });
+                store.UpdatePhd2Settings(cur => cur with { GuidePixelSize = 2.9 });
+                var reopened = new FileProfileStore(dir);
+                Assert.That(reopened.GetPhd2Settings().GuidePixelSize, Is.EqualTo(2.9), "persisted to disk");
+                Assert.That(reopened.GetPhd2Settings().GuideFocalLength, Is.EqualTo(240));
+                Assert.That(store.UpdatePhd2Settings(_ => null).GuidePixelSize, Is.EqualTo(2.9));
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        // ALP-4982 (#1486 review): the guide-optics fill ran before the pin checks, so a guider holding the
+        // main imaging camera (a renumber) had that camera's pixel size kept as the guide camera's.
+        private static Action<FakeGuider> GuiderOpens(string selection) => f => {
+            f.OnRpc("get_pixel_scale", JsonValue.Create(1.5));
+            f.OnRpc("get_connected", JsonValue.Create(true));
+            f.OnRpc("get_profile", _ => new JsonObject { ["id"] = 1, ["name"] = "My Equipment" });
+            f.OnRpc("get_current_equipment", _ => new JsonObject {
+                ["camera"] = new JsonObject { ["name"] = selection + " - Test Camera", ["connected"] = true },
+            });
+        };
+
+        private static async Task ReconcileWithScaleAsync(Rig rig) {
+            // The scale arrives after the connect's own reconcile may have run: run it again once it's there.
+            var until = DateTime.UtcNow.AddSeconds(15);
+            while (!(rig.Svc.GetInfo().PixelScale > 0)) {
+                if (DateTime.UtcNow >= until) {
+                    Assert.Fail("precondition: the guider reported its pixel scale");
+                }
+                await Task.Delay(10).ConfigureAwait(false);
+            }
+            await rig.Svc.ReconcileGuideCameraIfConnectedAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task Connect_fills_no_guide_optics_from_the_main_imaging_camera() {
+            var main = new DiscoveredDeviceDto("TEST_MAIN_0001", "Test Imaging Camera", DeviceType.Camera,
+                "192.0.2.10", "192.0.2.10", 6800, 1, false);
+            await using var rig = await Rig.StartAsync("", 0, _ => Size(5.9), Slot("TEST_MAIN_0001"), main,
+                GuiderOpens(Selection)).ConfigureAwait(false);
+            await ReconcileWithScaleAsync(rig).ConfigureAwait(false);
+            Assert.That(rig.Stored.GuidePixelSize, Is.EqualTo(0), "the main camera's 5.9 µm is not the guide camera's");
+            Assert.That(rig.Stored.GuideFocalLength, Is.EqualTo(0));
+            Assert.That(rig.Fake.ReceivedMethods, Does.Not.Contain("get_current_equipment"), "the fill never asked");
+        }
+
+        [Test]
+        public async Task Connect_fills_an_unset_focal_length_once_the_slot_is_the_guide_camera() {
+            await using var rig = await Rig.StartAsync("TEST_GUIDE_0001", 3.75, _ => Size(3.75), Slot("TEST_GUIDE_0001"), null,
+                GuiderOpens(Selection)).ConfigureAwait(false);
+            await ReconcileWithScaleAsync(rig).ConfigureAwait(false);
+            Assert.That(rig.Stored.GuidePixelSize, Is.EqualTo(3.75).Within(1e-9));
+            Assert.That(rig.Stored.GuideFocalLength, Is.EqualTo(516), "206.265 × 3.75 / 1.5, whole mm");
         }
     }
 }

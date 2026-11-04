@@ -250,6 +250,7 @@ class DiagnosticsAccumulator {
       case StatusLevel.busy:
         return 'Diagnostics: $n issue$plural — warning';
       case StatusLevel.info:
+      case StatusLevel.changing:
         // Worst open issue had an unknown/absent severity — still name it so the
         // a11y text isn't blank for exactly the malformed-payload case.
         return 'Diagnostics: $n issue$plural — info';
@@ -274,6 +275,7 @@ class DiagnosticsAccumulator {
       case StatusLevel.busy:
         return 3;
       case StatusLevel.info:
+      case StatusLevel.changing:
         return 2;
       case StatusLevel.connected:
       case StatusLevel.active:

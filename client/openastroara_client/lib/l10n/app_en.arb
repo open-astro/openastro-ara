@@ -31,6 +31,15 @@
       }
     }
   },
+  "statusMoreSemantics": "{count, plural, =1{1 more status} other{{count} more statuses}}",
+  "@statusMoreSemantics": {
+    "description": "Simple Mode status pills: screen reader label for the +N fold past three pills; a tap opens the first one folded",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "pillsDismiss": "Dismiss",
   "@pillsDismiss": {
     "description": "Simple Mode message pills: tooltip of the close button on an error message"
@@ -59,7 +68,7 @@
   "@safetySilence": {
     "description": "Simple Mode safety alarm: the button that stops the sound and closes the warning"
   },
-  "deviceCamera": "Camera",
+  "deviceCamera": "Main Camera",
   "@deviceCamera": {
     "description": "Camera window title, before the camera's name"
   },
@@ -83,7 +92,7 @@
   "@deviceNotConnected": {
     "description": "Device window caption when the device is not connected"
   },
-  "deviceCurrentTemperature": "Temperature",
+  "deviceCurrentTemperature": "Sensor temperature",
   "@deviceCurrentTemperature": {
     "description": "Camera window row: what the sensor reads now"
   },
@@ -206,6 +215,14 @@
   "deviceGain": "Gain",
   "@deviceGain": {
     "description": "Camera and guider window row: the camera's gain"
+  },
+  "deviceBusy": "Still busy",
+  "@deviceBusy": {
+    "description": "Pill title when a device tap was dropped because its last command hasn't finished"
+  },
+  "deviceBusyDetail": "The last command hasn't finished. Try again in a moment.",
+  "@deviceBusyDetail": {
+    "description": "Pill detail under deviceBusy"
   },
   "deviceCouldntMoveFocuser": "Couldn't move the focuser",
   "@deviceCouldntMoveFocuser": {
@@ -637,7 +654,7 @@
   "@searchSectionDevices": {
     "description": "Simple Mode search panel: name of the Settings sheet's Devices section, shown beside a setting result (and the result for the section itself)"
   },
-  "searchSectionCamera": "Camera",
+  "searchSectionCamera": "Main Camera",
   "@searchSectionCamera": {
     "description": "Simple Mode search panel: name of the Settings sheet's Camera section, shown beside a setting result (and the result for the section itself)"
   },
@@ -649,7 +666,7 @@
   "@searchSectionFocuser": {
     "description": "Simple Mode search panel: name of the Settings sheet's Focuser section, shown beside a setting result (and the result for the section itself)"
   },
-  "searchSectionGuider": "Guider",
+  "searchSectionGuider": "Guider Camera",
   "@searchSectionGuider": {
     "description": "Simple Mode search panel: name of the Settings sheet's Guider section, shown beside a setting result (and the result for the section itself)"
   },
@@ -845,6 +862,10 @@
   "@nightSetupStepPlan": {
     "description": "Simple Mode Night Setup strip: step name: the imaging plan"
   },
+  "nightSetupStepGuide": "Guide",
+  "@nightSetupStepGuide": {
+    "description": "Night Setup's step that starts guiding"
+  },
   "nightSetupStepDone": "{step}, done",
   "@nightSetupStepDone": {
     "description": "Simple Mode Night Setup strip: screen-reader label of a step done tonight",
@@ -892,18 +913,6 @@
   "nightSetupSkip": "Skip",
   "@nightSetupSkip": {
     "description": "Simple Mode Night Setup strip: button that skips the current step"
-  },
-  "nightSetupNothingDone": "Nothing done yet tonight",
-  "@nightSetupNothingDone": {
-    "description": "Simple Mode Night Setup offer under the status strip: why Night Setup is offered"
-  },
-  "nightSetupStart": "Start Night Setup",
-  "@nightSetupStart": {
-    "description": "Simple Mode Night Setup offer: button that starts Night Setup"
-  },
-  "nightSetupNotNow": "Not now",
-  "@nightSetupNotNow": {
-    "description": "Simple Mode Night Setup offer: tooltip of the × that dismisses it"
   },
   "shellModeNightSetup": "Night Setup",
   "@shellModeNightSetup": {
@@ -1037,7 +1046,7 @@
   "@shellSectionDevices": {
     "description": "Simple Mode Settings section: the list of devices"
   },
-  "shellSectionCamera": "Camera",
+  "shellSectionCamera": "Main Camera",
   "@shellSectionCamera": {
     "description": "Simple Mode Settings section and device row: the camera"
   },
@@ -1049,7 +1058,7 @@
   "@shellSectionFocuser": {
     "description": "Simple Mode Settings section and device row: the focuser"
   },
-  "shellSectionGuider": "Guider",
+  "shellSectionGuider": "Guider Camera",
   "@shellSectionGuider": {
     "description": "Simple Mode Settings section and device row: the guider"
   },
@@ -1239,7 +1248,7 @@
   "@shellThisApp": {
     "description": "Simple Mode Settings › Rig versions list: this app's version"
   },
-  "shellAraServer": "OpenAstro Ara server",
+  "shellAraServer": "Ara server",
   "@shellAraServer": {
     "description": "Simple Mode Settings › Rig versions list: the rig's server (OpenAstro Ara is the product name)"
   },
@@ -1423,10 +1432,6 @@
   "planTonightsBest": "TONIGHT'S BEST",
   "@planTonightsBest": {
     "description": "Plan sheet caption above tonight's suggested targets (uppercase)"
-  },
-  "planTonightsPlan": "Tonight's plan",
-  "@planTonightsPlan": {
-    "description": "Plan sheet heading"
   },
   "planEditTarget": "Edit {name}",
   "@planEditTarget": {
@@ -2765,5 +2770,73 @@
   "searchWordsGuideScope": "guide scope guider camera pixel focal polar",
   "@searchWordsGuideScope": {
     "description": "Simple search: other words that find the guide scope rows (not shown)"
+  },
+  "shellModeGuide": "Guide",
+  "@shellModeGuide": {
+    "description": "Guide mode: guiding with the guide camera, started by the shutter"
+  },
+  "guidedNextGuide": "Next: Guide",
+  "@guidedNextGuide": {
+    "description": "Guided Run button moving on to the Guide step"
+  },
+  "guideStart": "Start guiding",
+  "@guideStart": {
+    "description": "Shutter label in Guide mode: starts the guider's routine (calibrating when needed)"
+  },
+  "guideStop": "Stop guiding",
+  "@guideStop": {
+    "description": "Shutter label in Guide mode while the guider runs"
+  },
+  "guideActionStart": "start guiding",
+  "@guideActionStart": {
+    "description": "Action named in an error: the guider refused to start"
+  },
+  "guideActionStop": "stop guiding",
+  "@guideActionStop": {
+    "description": "Action named in an error: the guider refused to stop"
+  },
+  "guideIdle": "Idle",
+  "@guideIdle": {
+    "description": "Guide panel headline while the guider is connected and not running (not \"Not guiding\": it read as a failure)"
+  },
+  "guideNoGuider": "Guider not connected",
+  "@guideNoGuider": {
+    "description": "Guide panel headline with no guider"
+  },
+  "guideTapShutter": "Tap the shutter to start guiding. It calibrates first when needed.",
+  "@guideTapShutter": {
+    "description": "Guide panel hint while idle"
+  },
+  "guideConnectFirst": "Connect the guider in Settings › Devices.",
+  "@guideConnectFirst": {
+    "description": "Guide panel hint with no guider"
+  },
+  "deviceGuiderCamera": "Guider Camera",
+  "@deviceGuiderCamera": {
+    "description": "The guide camera's device window title"
+  },
+  "shellNoDevices": "No devices connected",
+  "@shellNoDevices": {
+    "description": "Top bar note when no device is connected; opens Settings › Devices"
+  },
+  "guideStarting": "Starting…",
+  "@guideStarting": {
+    "description": "Guide panel, pill and shutter while a start is on its way to the guider"
+  },
+  "guideStopping": "Stopping…",
+  "@guideStopping": {
+    "description": "While a stop is on its way (the guider finishes its frame first)"
+  },
+  "guideExposureOwn": "The guider's own",
+  "@guideExposureOwn": {
+    "description": "Guide exposure picker value when the profile leaves it to the guider"
+  },
+  "focusNeedsFocuser": "Connect a focuser to autofocus, or focus by hand on Manual.",
+  "@focusNeedsFocuser": {
+    "description": "Why Focus's shutter is greyed out on Auto with no focuser"
+  },
+  "shellMainCameraBusy": "The main camera is busy: wait for its frame, or stop it.",
+  "@shellMainCameraBusy": {
+    "description": "Why a greyed shutter can't start autofocus, the Bahtinov readout or polar alignment"
   }
 }

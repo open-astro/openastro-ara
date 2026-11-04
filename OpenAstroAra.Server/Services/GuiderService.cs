@@ -358,7 +358,19 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     public Task<OperationAcceptedDto> StopGuidingAsync(string? idempotencyKey, CancellationToken ct) {
         var guider = RequireConnectedGuider();
         var accepted = Accepted("guider.stop", idempotencyKey);
-        _ = RunAndReportAsync(accepted, () => guider.StopGuiding(CancellationToken.None), ditherGuider: null);
+        // StopGuiding acts only while guiding, calibrating or lost: a start still looping or on its star
+        // (the routine's first steps) was skipped, so Stop and Emergency Stop did nothing. The guider's
+        // own Stop (stop_capture) ends those; a guider already idle still reports the refusal (#1156).
+        _ = RunAndReportAsync(accepted, async () => {
+            if (await guider.StopGuiding(CancellationToken.None).ConfigureAwait(false)) {
+                return true;
+            }
+            if (guider.State != PhdAppState.LOOPING && guider.State != PhdAppState.SELECTED) {
+                return false;
+            }
+            await guider.StopCaptureAsync(CancellationToken.None).ConfigureAwait(false);
+            return true;
+        }, ditherGuider: null);
         return Task.FromResult(accepted);
     }
 

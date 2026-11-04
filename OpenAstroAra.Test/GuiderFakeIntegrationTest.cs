@@ -685,6 +685,49 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_guiders_own_answer_corrects_a_state_no_event_updated() {
+            // Rig, 2026-11-04: a stop while settling with the star lost made PHD2 send only SettleDone, no
+            // AppState or LoopingExposuresStopped, so the daemon said star_lost for good while PHD2's own
+            // get_app_state (pinged every few seconds) said Stopped.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("LostLock"));
+            fake.OnRpc("get_app_state", JsonValue.Create("Stopped"));
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.Runtime?.State == "star_lost").ConfigureAwait(false), Is.Not.Null,
+                "precondition: the event said the star was lost");
+
+            Assert.That(await svc.RequireConnectedGuider().PingAsync().ConfigureAwait(false), Is.True);
+
+            Assert.That(await PollAsync(svc, d => d.Runtime?.State == "stopped").ConfigureAwait(false), Is.Not.Null,
+                "the guider's own Stopped wins over the stale star_lost");
+        }
+
+        [TestCase("Looping")]
+        [TestCase("Selected")]
+        public async Task Stop_stops_a_guider_still_looping_or_on_a_star_not_only_one_guiding(string appState) {
+            // iPad, 2026-11-04: Stop in Guide mode (and Emergency Stop, which calls the same stop) did nothing
+            // while the guide routine was still looping or had picked its star: StopGuiding skips every state
+            // but Guiding, Calibrating and LostLock.
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState(appState));
+            fake.OnRpc("get_app_state", JsonValue.Create(appState));
+            using var svc = new GuiderService(new HeadlessProfileService(), NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null,
+                "precondition: connected");
+
+            await svc.StopGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => fake.ReceivedMethods.Contains("stop_capture")).ConfigureAwait(false), Is.True,
+                $"Stop sent the guider stop_capture while it was {appState}");
+        }
+
+        [Test]
         public async Task Reaches_Connected_and_reflects_live_guiding_events() {
             await using var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));

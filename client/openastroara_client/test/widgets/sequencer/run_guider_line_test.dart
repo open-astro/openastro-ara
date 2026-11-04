@@ -53,15 +53,16 @@ void main() {
     await t.pumpWidget(const SizedBox());
   });
 
-  testWidgets('the line is coloured by phase: green guiding, red lost, amber busy, grey idle', (t) async {
+  testWidgets('the line follows the DESIGN.md status rule: green guiding or idle, amber lost, blue changing',
+      (t) async {
     final expected = {
       GuiderRuntimeState.guiding: AraColors.accentConnected,
-      GuiderRuntimeState.starLost: AraColors.accentError,
-      GuiderRuntimeState.settling: AraColors.accentBusy,
-      GuiderRuntimeState.calibrating: AraColors.accentBusy,
-      GuiderRuntimeState.looping: AraColors.accentBusy,
-      GuiderRuntimeState.stopped: AraColors.textSecondary,
-      GuiderRuntimeState.paused: AraColors.textSecondary,
+      GuiderRuntimeState.starLost: AraColors.accentBusy,
+      GuiderRuntimeState.settling: AraColors.accentInfo,
+      GuiderRuntimeState.calibrating: AraColors.accentInfo,
+      GuiderRuntimeState.looping: AraColors.accentInfo,
+      GuiderRuntimeState.stopped: AraColors.accentConnected,
+      GuiderRuntimeState.paused: AraColors.accentInfo,
     };
     for (final e in expected.entries) {
       await _pump(

@@ -6,8 +6,9 @@ import '../../theme/ara_colors.dart';
 /// Small coloured chip for a sequence's current run state; nothing for
 /// idle/none. Promoted from the Load dialog (Run-redesign S1) — the run
 /// SURFACE is where state colour matters most, so the mapping lives in one
-/// shared widget: running/starting amber, paused blue, needs-attention /
-/// failed / aborting red, stopped/completed neutral.
+/// shared widget, per the DESIGN.md status rule: running green, starting and
+/// paused blue, needs-attention amber, failed / aborting red,
+/// stopped/completed neutral.
 class RunStateBadge extends StatelessWidget {
   const RunStateBadge(this.state, {super.key});
   final SequenceRunState? state;
@@ -17,13 +18,14 @@ class RunStateBadge extends StatelessWidget {
   /// new SequenceRunState forces a compile error rather than silently
   /// defaulting — matching SequenceRunState.isActive.
   static Color colorFor(SequenceRunState s) => switch (s) {
-        SequenceRunState.running ||
-        SequenceRunState.starting =>
-          AraColors.accentBusy,
+        // DESIGN.md status rule: running is working (green), starting is on
+        // its way (blue).
+        SequenceRunState.running => AraColors.accentConnected,
+        SequenceRunState.starting => AraColors.accentInfo,
         SequenceRunState.paused => AraColors.accentInfo,
-        // §58.12 awaiting-user reads as urgent (the rig needs a human), not as
-        // a leisurely operator pause — error red, though the run is resumable.
-        SequenceRunState.pausedAwaitingUser ||
+        // DESIGN.md status rule: awaiting the user needs a look, nothing has
+        // failed (the run resumes): amber, as Simple Mode's plan pill.
+        SequenceRunState.pausedAwaitingUser => AraColors.accentBusy,
         SequenceRunState.failed ||
         SequenceRunState.aborting =>
           AraColors.accentError,

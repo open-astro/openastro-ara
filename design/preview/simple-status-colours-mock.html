@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guider Status Colours</title>
+<style>
+  :root { --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+          --green: #4CAF50; --amber: #FFB300; --red: #E53935; --blue: #42A5F5; --grey: #606060;
+          --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0E0E0E; color: var(--text); font: 14px/1.45 var(--sys); }
+  .page { max-width: 1000px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  h2 { font-size: 16px; font-weight: 600; margin: 28px 0 6px; }
+  p { color: var(--text2); max-width: 90ch; margin: 0 0 12px; }
+  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 4px 10px; border-radius: 12px; border: 1px solid var(--amber); color: var(--amber); margin-left: 6px; vertical-align: 2px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 10px 0 4px; }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; }
+  i.d { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: -1px; }
+  i.blink { animation: b 1.2s infinite; }
+  @keyframes b { 50% { opacity: .25; } }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  th { color: var(--text2); font-weight: 500; }
+  td.chg { color: var(--amber); }
+  .pill { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 10px; background: var(--bg); }
+  .pill em { color: var(--text2); font-style: normal; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Guider status colours <span class="tag">review</span></h1>
+  <p>What DESIGN.md says today, what the guider shows today, and the model you described (green good, blue changing, amber warning, red error). The dots blink where a state is "working".</p>
+
+  <h2>The rules</h2>
+  <table>
+    <tr><th>Colour</th><th>DESIGN.md today</th><th>Your model</th></tr>
+    <tr><td><i class="d" style="background:var(--green)"></i> Green</td><td>Connected, step done, healthy. Blinking green = connected and working (exposing, slewing)</td><td>Good</td></tr>
+    <tr><td><i class="d" style="background:var(--blue)"></i> Blue</td><td>Informational (and connecting, unknown)</td><td>Changing / intermediate</td></tr>
+    <tr><td><i class="d" style="background:var(--amber)"></i> Amber</td><td>"Busy, working, <b>needs a look</b>": two meanings in one colour</td><td>Warning</td></tr>
+    <tr><td><i class="d" style="background:var(--red)"></i> Red</td><td>Faults, failures, Emergency Stop</td><td>Error</td></tr>
+    <tr><td><i class="d" style="background:var(--grey)"></i> Grey</td><td>Disconnected</td><td>(not mentioned: off)</td></tr>
+  </table>
+
+  <h2>The guider, state by state</h2>
+  <p>"Today" is the top bar, Guide panel and status pill (one rule since 2026-11-04). "Your model" applies your four colours; changed rows are in amber text.</p>
+  <table>
+    <tr><th>Guider state</th><th>Pill / panel words</th><th>Today</th><th>Your model</th></tr>
+    <tr><td>Not connected</td><td>Guider not connected</td><td><i class="d" style="background:var(--grey)"></i> grey</td><td><i class="d" style="background:var(--grey)"></i> grey</td></tr>
+    <tr><td>Connecting</td><td>Connecting…</td><td><i class="d" style="background:var(--blue)"></i> blue</td><td><i class="d" style="background:var(--blue)"></i> blue</td></tr>
+    <tr><td>Idle</td><td>Idle</td><td><i class="d" style="background:var(--green)"></i> green</td><td><i class="d" style="background:var(--green)"></i> green</td></tr>
+    <tr><td>Starting… / Stopping…</td><td>Guider · Starting…</td><td><i class="d" style="background:var(--amber)"></i> amber</td><td class="chg"><i class="d" style="background:var(--blue)"></i> blue</td></tr>
+    <tr><td>Looping, star selected</td><td>Guider · Looping</td><td><i class="d" style="background:var(--amber)"></i> amber</td><td class="chg"><i class="d" style="background:var(--blue)"></i> blue</td></tr>
+    <tr><td>Calibrating</td><td>Guider · Calibrating · West step 3</td><td><i class="d" style="background:var(--amber)"></i> amber</td><td class="chg"><i class="d" style="background:var(--blue)"></i> blue</td></tr>
+    <tr><td>Settling (after a start or dither), dithering</td><td>Guiding · 0.62″</td><td><i class="d" style="background:var(--amber)"></i> amber</td><td class="chg"><i class="d" style="background:var(--blue)"></i> blue</td></tr>
+    <tr><td>Guiding</td><td>Guiding · 0.62″</td><td><i class="d" style="background:var(--green)"></i> green</td><td><i class="d blink" style="background:var(--green)"></i> green, blinking (working)</td></tr>
+    <tr><td>Paused (by a flip or a solve)</td><td>Guider · Paused</td><td><i class="d" style="background:var(--amber)"></i> amber</td><td class="chg"><i class="d" style="background:var(--blue)"></i> blue (Ara paused it on purpose)</td></tr>
+    <tr><td>Star lost (still searching)</td><td>Guider · Star lost</td><td><i class="d" style="background:var(--red)"></i> red</td><td class="chg"><i class="d" style="background:var(--amber)"></i> amber: a warning, it often comes back (clouds)</td></tr>
+    <tr><td>Guider fault (link down, crashed)</td><td>Guider · error</td><td><i class="d" style="background:var(--red)"></i> red</td><td><i class="d" style="background:var(--red)"></i> red</td></tr>
+  </table>
+
+  <h2>In the pill</h2>
+  <div style="display:flex;flex-wrap:wrap;gap:10px">
+    <span class="pill"><i class="d" style="background:var(--blue)"></i>Guider <em>Calibrating · West step 3</em></span>
+    <span class="pill"><i class="d blink" style="background:var(--green)"></i>Guiding <em>0.62″</em></span>
+    <span class="pill"><i class="d" style="background:var(--amber)"></i>Guider <em>Star lost</em></span>
+    <span class="pill"><i class="d" style="background:var(--red)"></i>Guider <em>Disconnected unexpectedly</em></span>
+  </div>
+</div>
+</body>
+</html>

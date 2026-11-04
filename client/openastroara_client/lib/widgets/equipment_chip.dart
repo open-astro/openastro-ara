@@ -137,62 +137,14 @@ class EquipmentChip extends StatelessWidget {
 
 /// The chip's status dot: steady, or blinking while the device is
 /// [StatusLevel.active] (working in a good state).
-class _StatusDot extends StatefulWidget {
+class _StatusDot extends StatelessWidget {
   final StatusLevel status;
   const _StatusDot({required this.status});
 
   @override
-  State<_StatusDot> createState() => _StatusDotState();
-}
-
-class _StatusDotState extends State<_StatusDot>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _blink = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 700),
-    lowerBound: 0.25,
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    _sync();
-  }
-
-  @override
-  void didUpdateWidget(_StatusDot old) {
-    super.didUpdateWidget(old);
-    _sync();
-  }
-
-  void _sync() {
-    if (widget.status == StatusLevel.active) {
-      if (!_blink.isAnimating) _blink.repeat(reverse: true);
-    } else {
-      _blink
-        ..stop()
-        ..value = 1;
-    }
-  }
-
-  @override
-  void dispose() {
-    _blink.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => FadeTransition(
+  Widget build(BuildContext context) => StatusBlink(
     key: const ValueKey('equipment-chip-dot'),
-    opacity: _blink,
-    child: Container(
-      width: 10,
-      height: 10,
-      decoration: BoxDecoration(
-        color: widget.status.color,
-        shape: BoxShape.circle,
-        border: Border.all(color: AraColors.bgPanel, width: 2),
-      ),
-    ),
+    on: status == StatusLevel.active,
+    child: StatusDot.of(status, outline: AraColors.bgPanel),
   );
 }

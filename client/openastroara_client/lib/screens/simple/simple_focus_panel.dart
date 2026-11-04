@@ -20,10 +20,10 @@ import '../../widgets/focus/guide_focus_card.dart'
     show GuideFocusCard, TurnAdvice, guideFocusBlocker, guideFocusHint;
 import '../../widgets/focus/v_curve_chart.dart';
 import '../../state/setup/setup_readiness.dart';
-import '../../state/simple_mode_state.dart';
 import 'simple_night_setup.dart'
-    show NightSetupStep, nightSetupNext, nightSetupProvider;
-import 'simple_preview_panel.dart' show SimpleShutterButton, kSimpleText;
+    show NightSetupStep, nightSetupProvider, simpleNightSetupNext;
+import 'simple_preview_panel.dart'
+    show SimpleShutterButton, kSimpleText, simpleMainCameraBusy;
 import 'simple_device_windows.dart' show simpleCelsius;
 import 'simple_shell.dart'
     show SimplePanel, SimpleSegments, kSimpleGoStyle, simpleStackText;
@@ -123,6 +123,7 @@ class SimpleFocusShutter extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final cameraBusy = simpleMainCameraBusy(ref);
     if (ref.watch(simpleFocusScopeProvider) == SimpleFocusScope.guide) {
       // The guide camera: starts and stops its live focus, once it can.
       final guide = ref.watch(guideFocusProvider);
@@ -146,6 +147,15 @@ class SimpleFocusShutter extends ConsumerWidget {
         label: active
             ? context.l10n.focusStopGuide
             : context.l10n.focusStartGuide,
+        whyOff: guide.busy
+            ? null
+            : gated
+            ? context.l10n.guideFocusWaitingMain
+            : guideFocusBlocker(
+                context.l10n,
+                ref.watch(guiderStatusProvider).asData?.value,
+                active: active,
+              ),
         onPressed: guide.busy || (!active && (blocked || gated))
             ? null
             : active
@@ -166,7 +176,8 @@ class SimpleFocusShutter extends ConsumerWidget {
         label: active
             ? context.l10n.focusStopBahtinov
             : context.l10n.focusStartBahtinov,
-        onPressed: bahtinov.busy
+        whyOff: bahtinov.busy ? null : context.l10n.shellMainCameraBusy,
+        onPressed: bahtinov.busy || (!active && cameraBusy)
             ? null
             : active
             ? notifier.stop
@@ -187,11 +198,16 @@ class SimpleFocusShutter extends ConsumerWidget {
       label: running
           ? context.l10n.focusCancelAutofocus
           : context.l10n.focusAutofocus,
-      onPressed: live.busy || !(running || connected)
+      onPressed: live.busy || !(running || connected) || (!running && cameraBusy)
           ? null
           : running
           ? notifier.cancel
           : notifier.start,
+      whyOff: live.busy
+          ? null
+          : !connected
+          ? context.l10n.focusNeedsFocuser
+          : context.l10n.shellMainCameraBusy,
     );
   }
 }
@@ -208,9 +224,22 @@ class SimpleFocusPanel extends ConsumerStatefulWidget {
 
 class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
   // The mask-off question, asked in the panel (Simple Mode has no popups):
-  // by Finish, or by leaving Manual before finishing ([_thenAuto]).
+  // by Finish, or by leaving Manual before finishing ([_then] switches once
+  // the mask is off).
   bool _askMask = false;
-  bool _thenAuto = false;
+  VoidCallback? _then;
+
+  /// Leaving Manual with a measurement not finished asks first.
+  void _leaveManual(BahtinovFocusLive bahtinov, VoidCallback leave) {
+    if (bahtinov.status.hasMeasurement && !bahtinov.finished) {
+      setState(() {
+        _askMask = true;
+        _then = leave;
+      });
+    } else {
+      leave();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -251,6 +280,20 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
       selected: starsShown,
       onPick: (on) => ref.read(simpleFocusStarsShownProvider.notifier).set(on),
     );
+    // Guided Run with focus the last step (a permanent pier, or aligned
+    // already): its Done starts imaging, never the run's end on its own.
+    // Auto or Manual, whichever focused.
+    final guidedDone =
+        ref.watch(nightSetupProvider) == NightSetupStep.focus &&
+            ref.watch(setupFocusStateProvider) == SetupStepState.done &&
+            simpleNightSetupNext(ref, after: NightSetupStep.focus) == null
+        ? FilledButton(
+            key: const Key('simple-focus-guided-done'),
+            style: kSimpleGoStyle,
+            onPressed: ref.read(nightSetupProvider.notifier).next,
+            child: Text(l10n.guidedDoneStartImaging),
+          )
+        : null;
     return SimplePanel(
       // 12 above and below, and 4 between rows (6 before 2026-11-04): with
       // the Auto / Manual row under Main / Guide it still fits an iPad.
@@ -280,8 +323,15 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   selected: scope,
                   onPick: anyRunning
                       ? null
-                      : (sc) =>
-                            ref.read(simpleFocusScopeProvider.notifier).set(sc),
+                      : (sc) {
+                          void pick() => ref
+                              .read(simpleFocusScopeProvider.notifier)
+                              .set(sc);
+                          sc == SimpleFocusScope.guide &&
+                                  method == MainFocusMethod.bahtinov
+                              ? _leaveManual(bahtinov, pick)
+                              : pick();
+                        },
                 ),
                 // The method: Smart Focus with the focuser, or by hand with a
                 // Bahtinov mask. Locked while a run goes.
@@ -296,13 +346,12 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                     onPick: locked
                         ? null
                         : (m) {
-                            if (m == MainFocusMethod.autofocus &&
-                                bahtinov.status.hasMeasurement &&
-                                !bahtinov.finished) {
-                              setState(() => _askMask = _thenAuto = true);
-                              return;
-                            }
-                            ref.read(mainFocusMethodProvider.notifier).pick(m);
+                            void pick() => ref
+                                .read(mainFocusMethodProvider.notifier)
+                                .pick(m);
+                            m == MainFocusMethod.autofocus
+                                ? _leaveManual(bahtinov, pick)
+                                : pick();
                           },
                   ),
               ],
@@ -311,9 +360,10 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
               ..._guide(l10n, guide)
             else if (_askMask)
               ..._maskQuestion(l10n)
-            else if (method == MainFocusMethod.bahtinov)
-              ..._bahtinov(l10n, bahtinov, connected ? focuser : null)
-            else ...[
+            else if (method == MainFocusMethod.bahtinov) ...[
+              ..._bahtinov(l10n, bahtinov, connected ? focuser : null),
+              ?guidedDone,
+            ] else ...[
               // The headline shares its row with Measured stars when there is
               // room, so the panel still fits an iPad under its two choice rows.
               if (live.frame != null && !simpleStackText(context))
@@ -358,28 +408,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                     fontWeight: FontWeight.w300,
                   ),
                 ),
-              // Night Setup with focus the last step (a permanent pier, or
-              // aligned already): its Done starts imaging, never the run's
-              // end on its own.
-              if (ref.watch(nightSetupProvider) == NightSetupStep.focus &&
-                  ref.watch(setupFocusStateProvider) == SetupStepState.done &&
-                  nightSetupNext(
-                        after: NightSetupStep.focus,
-                        focused: true,
-                        aligned:
-                            ref.watch(setupPolarAlignStateProvider) ==
-                            SetupStepState.done,
-                        permanentPier:
-                            ref.watch(simplePermanentPierProvider).value ??
-                            false,
-                      ) ==
-                      null)
-                FilledButton(
-                  key: const Key('simple-focus-guided-done'),
-                  style: kSimpleGoStyle,
-                  onPressed: ref.read(nightSetupProvider.notifier).next,
-                  child: Text(l10n.guidedDoneStartImaging),
-                ),
+              ?guidedDone,
               // A finished run's figures, all on view (Simple Mode folds
               // nothing away).
               if (run.isComplete)
@@ -472,7 +501,10 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
       children: [
         Expanded(
           child: OutlinedButton(
-            onPressed: () => setState(() => _askMask = _thenAuto = false),
+            onPressed: () => setState(() {
+              _askMask = false;
+              _then = null;
+            }),
             child: Text(l10n.bahtinovNotYet),
           ),
         ),
@@ -480,14 +512,13 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
           child: FilledButton(
             style: kSimpleGoStyle,
             onPressed: () async {
-              final thenAuto = _thenAuto;
-              setState(() => _askMask = _thenAuto = false);
+              final then = _then;
+              setState(() {
+                _askMask = false;
+                _then = null;
+              });
               await ref.read(bahtinovFocusProvider.notifier).finish();
-              if (thenAuto && mounted) {
-                ref
-                    .read(mainFocusMethodProvider.notifier)
-                    .pick(MainFocusMethod.autofocus);
-              }
+              if (mounted) then?.call();
             },
             child: Text(l10n.bahtinovMaskRemoved),
           ),

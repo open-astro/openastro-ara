@@ -6,6 +6,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../status_indicator.dart' show StatusBlink;
 import '../../l10n/l10n.dart';
 
 import '../../models/bahtinov_focus.dart';
@@ -750,19 +751,23 @@ class BahtinovFrameView extends StatelessWidget {
               Positioned(
                 top: 12,
                 left: 12,
-                child: Container(
+                // LIVE is the camera working: blinking green (DESIGN.md status rule).
+                child: StatusBlink(
+                  on: live,
+                  child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: (live ? AraColors.accentBusy : AraColors.textSecondary).withValues(alpha: 0.18),
+                    color: (live ? AraColors.accentConnected : AraColors.textSecondary).withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(live ? 'LIVE' : 'LAST',
                       style: TextStyle(
-                        color: live ? AraColors.accentBusy : AraColors.textSecondary,
+                        color: live ? AraColors.accentConnected : AraColors.textSecondary,
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1,
                       )),
+                ),
                 ),
               ),
             if (overlay != null)

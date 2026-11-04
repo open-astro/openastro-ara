@@ -76,6 +76,9 @@ Future<void> _wideSurface(WidgetTester tester) async {
 }
 
 Future<_FakeDomeApi> _pump(WidgetTester tester, DomeStatus? status) async {
+  // A working device's status blinks (DESIGN.md status rule) and never settles: Reduce Motion holds it.
+  tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(disableAnimations: true);
+  addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
   await _wideSurface(tester);
   final api = _FakeDomeApi(status);
   await tester.pumpWidget(ProviderScope(

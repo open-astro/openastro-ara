@@ -5,6 +5,9 @@ import 'package:openastroara/screens/simple/simple_night_setup.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
+import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/state/guider/guider_state.dart';
+import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
@@ -64,6 +67,23 @@ class _Plan extends SimpleRunNotifier {
   }
 }
 
+/// A connected guider, stopped until [startGuiding]; records the asks.
+class _Guider extends GuiderStatusNotifier {
+  final calls = <String>[];
+  static GuiderStatus _at(String runtime) => GuiderStatus.fromJson(
+      {'device_id': 'g', 'name': 'PHD2', 'state': 'connected', 'runtime': {'state': runtime}});
+  @override
+  Future<GuiderStatus?> build() async => _at('stopped');
+  @override
+  Future<void> startGuiding() async {
+    calls.add('start');
+    state = AsyncData(_at('calibrating'));
+  }
+  @override
+  Future<void> stopGuiding() async => calls.add('stop');
+  void guiding() => state = AsyncData(_at('guiding'));
+}
+
 /// The polar routine as the rig reports it; [run] makes it active.
 class _Live extends PolarAlignLiveNotifier {
   @override
@@ -71,9 +91,10 @@ class _Live extends PolarAlignLiveNotifier {
   void run() => state = const PolarAlignLive(phase: PolarAlignStates.adjusting);
 }
 
-Future<(ProviderContainer, _PolarApi)> _container({bool permanent = false}) async {
+Future<(ProviderContainer, _PolarApi)> _container({bool permanent = false, _Guider? guider}) async {
   final api = _PolarApi();
   final c = ProviderContainer(overrides: [
+    if (guider != null) guiderStatusProvider.overrideWith(() => guider),
     polarAlignLiveProvider.overrideWith(_Live.new),
     setupFocusStateProvider.overrideWith((ref) => ref.watch(_focus)),
     setupPolarAlignStateProvider.overrideWith((ref) => ref.watch(_aligned)),
@@ -83,22 +104,74 @@ Future<(ProviderContainer, _PolarApi)> _container({bool permanent = false}) asyn
   ]);
   addTearDown(c.dispose);
   await c.read(simplePermanentPierProvider.future);
+  if (guider != null) await c.read(guiderStatusProvider.future);
   c.listen(nightSetupProvider, (_, _) {});
   return (c, api);
 }
 
 void main() {
   test('Plan first, then the first setup step not done; nothing left means start imaging', () {
-    expect(nightSetupNext(focused: true, aligned: true, permanentPier: false), NightSetupStep.plan,
+    expect(nightSetupNext(focused: true, aligned: true, permanentPier: false, guided: true), NightSetupStep.plan,
         reason: 'the plan is never done beforehand: Night Setup starts on it');
-    expect(nightSetupNext(after: NightSetupStep.plan, focused: false, aligned: false, permanentPier: false),
+    expect(nightSetupNext(after: NightSetupStep.plan, focused: false, aligned: false, permanentPier: false, guided: true),
         NightSetupStep.focus);
-    expect(nightSetupNext(after: NightSetupStep.plan, focused: true, aligned: false, permanentPier: false),
+    expect(nightSetupNext(after: NightSetupStep.plan, focused: true, aligned: false, permanentPier: false, guided: true),
         NightSetupStep.polarAlign);
-    expect(nightSetupNext(after: NightSetupStep.plan, focused: true, aligned: false, permanentPier: true), isNull);
-    expect(nightSetupNext(after: NightSetupStep.focus, focused: false, aligned: false, permanentPier: false),
+    expect(nightSetupNext(after: NightSetupStep.plan, focused: true, aligned: false, permanentPier: true, guided: true), isNull);
+    expect(nightSetupNext(after: NightSetupStep.focus, focused: false, aligned: false, permanentPier: false, guided: true),
         NightSetupStep.polarAlign, reason: 'Skip from Focus');
-    expect(nightSetupNext(after: NightSetupStep.polarAlign, focused: false, aligned: false, permanentPier: false), isNull);
+    expect(nightSetupNext(after: NightSetupStep.polarAlign, focused: false, aligned: false, permanentPier: false, guided: true), isNull);
+  });
+
+  test('Guide comes after polar align; skipped when guiding already or with no guider', () {
+    // User, 2026-11-04: the guide routine is part of Night Setup, after Polar align.
+    expect(nightSetupNext(after: NightSetupStep.polarAlign, focused: true, aligned: true, permanentPier: false, guided: false),
+        NightSetupStep.guide);
+    expect(nightSetupNext(after: NightSetupStep.plan, focused: true, aligned: false, permanentPier: true, guided: false),
+        NightSetupStep.guide, reason: 'a permanent pier skips polar align, not guiding');
+    expect(nightSetupNext(after: NightSetupStep.polarAlign, focused: true, aligned: true, permanentPier: false, guided: true),
+        isNull, reason: 'already guiding (or no guider): imaging is next');
+    expect(nightSetupNext(after: NightSetupStep.guide, focused: false, aligned: false, permanentPier: false, guided: false),
+        isNull, reason: 'the last step');
+  });
+
+  test('the Guide step does not start guiding while the main camera is busy: calibration turns the mount '
+      '(review, #1490: Night Setup can run over an imaging queue)', () async {
+    final guider = _Guider();
+    final (c, _) = await _container(guider: guider);
+    final plan = c.read(simpleRunProvider.notifier) as _Plan;
+    final pilot = c.read(nightSetupProvider.notifier);
+    pilot.start();
+    plan.queued();
+    c.read(_focus.notifier).set(SetupStepState.done);
+    c.read(_aligned.notifier).set(SetupStepState.done);
+    c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
+    pilot.next(); // the plan's Next: focus and polar align done, so Guide
+    expect(c.read(nightSetupProvider), NightSetupStep.guide, reason: 'the step is held, not skipped');
+    await Future<void>.value();
+    expect(guider.calls, isEmpty, reason: 'no calibration under a frame; the shutter says why');
+    c.read(captureProgressProvider.notifier).reset();
+  });
+
+  test('with a guider connected, polar align hands over to Guide, which starts guiding on entry', () async {
+    final guider = _Guider();
+    final (c, _) = await _container(guider: guider);
+    final plan = c.read(simpleRunProvider.notifier) as _Plan;
+    final pilot = c.read(nightSetupProvider.notifier);
+    pilot.start();
+    plan.queued();
+    c.read(_focus.notifier).set(SetupStepState.done);
+    pilot.next(); // the plan's Next: focus is done, so polar align
+    expect(c.read(nightSetupProvider), NightSetupStep.polarAlign);
+    pilot.next(); // polar align's Done (or Skip)
+    expect(c.read(nightSetupProvider), NightSetupStep.guide);
+    await Future<void>.value();
+    expect(guider.calls, ['start'], reason: 'entering Guide starts the routine (calibrating when needed)');
+    guider.guiding();
+    pilot.next(); // Guide's Done · Start imaging
+    await Future<void>.value();
+    expect(plan.starts, hasLength(1), reason: 'imaging starts');
+    expect(guider.calls, ['start'], reason: 'leaving Guide keeps it guiding for imaging');
   });
 
   test('Night Setup opens on the plan; its Next goes to Focus', () async {
@@ -145,6 +218,26 @@ void main() {
     await Future<void>.value();
     expect(plan.starts, hasLength(1));
     expect(c.read(nightSetupProvider), isNull, reason: 'imaging: Night Setup is done');
+  });
+
+  test('a Guided Run started while a queue images stays open through its updates (ALP-4982)', () async {
+    // #1486 review: any run update with started set ended Guided Run, not only imaging starting.
+    final (c, _) = await _container();
+    final plan = c.read(simpleRunProvider.notifier) as _Plan;
+    plan.started();
+    c.read(nightSetupProvider.notifier).start();
+    final step = c.read(nightSetupProvider);
+    expect(step, isNotNull, reason: 'precondition: running');
+    plan.state = const SimpleRun(sequenceId: 'seq-1', started: true, busy: true); // an update
+    await Future<void>.value();
+    expect(c.read(nightSetupProvider), step);
+    // Its last Done ends it without starting the running queue again.
+    c.read(_focus.notifier).set(SetupStepState.done);
+    c.read(_aligned.notifier).set(SetupStepState.done);
+    while (c.read(nightSetupProvider) != null) {
+      c.read(nightSetupProvider.notifier).next();
+    }
+    expect(plan.starts, isEmpty);
   });
 
   test('with nothing queued the last Done goes back to the plan instead of doing nothing', () async {
@@ -249,25 +342,5 @@ void main() {
     await tester.tap(find.byKey(const Key('night-setup-back')));
     await tester.pump();
     expect(c.read(nightSetupProvider), NightSetupStep.focus);
-  });
-
-  testWidgets('offered only while nothing is done tonight', (tester) async {
-    final (c, _) = await _container();
-    bool? offered;
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: c,
-      child: MaterialApp(home: Consumer(builder: (_, ref, _) {
-        offered = nightSetupOffered(ref);
-        return const SizedBox();
-      })),
-    ));
-    expect(offered, isTrue);
-    c.read(_focus.notifier).set(SetupStepState.done);
-    await tester.pump();
-    expect(offered, isFalse, reason: 'focused already');
-    c.read(_focus.notifier).set(SetupStepState.pending);
-    c.read(nightSetupProvider.notifier).start();
-    await tester.pump();
-    expect(offered, isFalse, reason: 'Night Setup is running');
   });
 }

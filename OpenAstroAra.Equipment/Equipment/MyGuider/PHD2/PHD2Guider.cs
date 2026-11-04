@@ -767,7 +767,17 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             var appStateResponse = await SendMessage(
                 msg,
                 receiveTimeout);
-            return appStateResponse?.result?.ToString();
+            var state = appStateResponse?.result?.ToString();
+            // The guider's own answer wins over the event-fed state: some transitions send no event
+            // that sets it (a stop while settling with the star lost sends only SettleDone, and the
+            // state said LostLock for good, rig 2026-11-04). The liveness ping asks every few seconds.
+            if (!string.IsNullOrEmpty(state) && state != AppState?.State) {
+                if (state == PhdAppState.STOPPED) {
+                    _starSelectedWhileLooping = false;
+                }
+                AppState = new PhdEventAppState() { State = state };
+            }
+            return state;
         }
 
         /// <summary>

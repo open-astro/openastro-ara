@@ -123,6 +123,12 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 more message} other{{count} more messages}}'**
   String pillsMoreSemantics(int count);
 
+  /// Simple Mode status pills: screen reader label for the +N fold past three pills; a tap opens the first one folded
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 more status} other{{count} more statuses}}'**
+  String statusMoreSemantics(int count);
+
   /// Simple Mode message pills: tooltip of the close button on an error message
   ///
   /// In en, this message translates to:
@@ -168,7 +174,7 @@ abstract class AppLocalizations {
   /// Camera window title, before the camera's name
   ///
   /// In en, this message translates to:
-  /// **'Camera'**
+  /// **'Main Camera'**
   String get deviceCamera;
 
   /// Mount window title, before the mount's name
@@ -204,7 +210,7 @@ abstract class AppLocalizations {
   /// Camera window row: what the sensor reads now
   ///
   /// In en, this message translates to:
-  /// **'Temperature'**
+  /// **'Sensor temperature'**
   String get deviceCurrentTemperature;
 
   /// Camera window row: the cooler's On / Off
@@ -386,6 +392,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Gain'**
   String get deviceGain;
+
+  /// Pill title when a device tap was dropped because its last command hasn't finished
+  ///
+  /// In en, this message translates to:
+  /// **'Still busy'**
+  String get deviceBusy;
+
+  /// Pill detail under deviceBusy
+  ///
+  /// In en, this message translates to:
+  /// **'The last command hasn\'t finished. Try again in a moment.'**
+  String get deviceBusyDetail;
 
   /// Error message when the focuser refused a move
   ///
@@ -918,7 +936,7 @@ abstract class AppLocalizations {
   /// Simple Mode search panel: name of the Settings sheet's Camera section, shown beside a setting result (and the result for the section itself)
   ///
   /// In en, this message translates to:
-  /// **'Camera'**
+  /// **'Main Camera'**
   String get searchSectionCamera;
 
   /// Simple Mode search panel: name of the Settings sheet's Mount section, shown beside a setting result (and the result for the section itself)
@@ -936,7 +954,7 @@ abstract class AppLocalizations {
   /// Simple Mode search panel: name of the Settings sheet's Guider section, shown beside a setting result (and the result for the section itself)
   ///
   /// In en, this message translates to:
-  /// **'Guider'**
+  /// **'Guider Camera'**
   String get searchSectionGuider;
 
   /// Simple Mode search panel: a setting's name as a result; should match its name in Settings
@@ -1227,6 +1245,12 @@ abstract class AppLocalizations {
   /// **'Plan'**
   String get nightSetupStepPlan;
 
+  /// Night Setup's step that starts guiding
+  ///
+  /// In en, this message translates to:
+  /// **'Guide'**
+  String get nightSetupStepGuide;
+
   /// Simple Mode Night Setup strip: screen-reader label of a step done tonight
   ///
   /// In en, this message translates to:
@@ -1262,24 +1286,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Skip'**
   String get nightSetupSkip;
-
-  /// Simple Mode Night Setup offer under the status strip: why Night Setup is offered
-  ///
-  /// In en, this message translates to:
-  /// **'Nothing done yet tonight'**
-  String get nightSetupNothingDone;
-
-  /// Simple Mode Night Setup offer: button that starts Night Setup
-  ///
-  /// In en, this message translates to:
-  /// **'Start Night Setup'**
-  String get nightSetupStart;
-
-  /// Simple Mode Night Setup offer: tooltip of the × that dismisses it
-  ///
-  /// In en, this message translates to:
-  /// **'Not now'**
-  String get nightSetupNotNow;
 
   /// Simple Mode mode name (mode grid, Mode: label for screen readers)
   ///
@@ -1452,7 +1458,7 @@ abstract class AppLocalizations {
   /// Simple Mode Settings section and device row: the camera
   ///
   /// In en, this message translates to:
-  /// **'Camera'**
+  /// **'Main Camera'**
   String get shellSectionCamera;
 
   /// Simple Mode Settings section and device row: the mount
@@ -1470,7 +1476,7 @@ abstract class AppLocalizations {
   /// Simple Mode Settings section and device row: the guider
   ///
   /// In en, this message translates to:
-  /// **'Guider'**
+  /// **'Guider Camera'**
   String get shellSectionGuider;
 
   /// Simple Mode Settings › Devices when the app has no link to the rig
@@ -1716,7 +1722,7 @@ abstract class AppLocalizations {
   /// Simple Mode Settings › Rig versions list: the rig's server (OpenAstro Ara is the product name)
   ///
   /// In en, this message translates to:
-  /// **'OpenAstro Ara server'**
+  /// **'Ara server'**
   String get shellAraServer;
 
   /// Simple Mode Settings › Rig versions list: the plate solving star databases
@@ -1916,12 +1922,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'TONIGHT\'S BEST'**
   String get planTonightsBest;
-
-  /// Plan sheet heading
-  ///
-  /// In en, this message translates to:
-  /// **'Tonight\'s plan'**
-  String get planTonightsPlan;
 
   /// Plan sheet heading when editing a queued target
   ///
@@ -3470,6 +3470,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'guide scope guider camera pixel focal polar'**
   String get searchWordsGuideScope;
+
+  /// Guide mode: guiding with the guide camera, started by the shutter
+  ///
+  /// In en, this message translates to:
+  /// **'Guide'**
+  String get shellModeGuide;
+
+  /// Guided Run button moving on to the Guide step
+  ///
+  /// In en, this message translates to:
+  /// **'Next: Guide'**
+  String get guidedNextGuide;
+
+  /// Shutter label in Guide mode: starts the guider's routine (calibrating when needed)
+  ///
+  /// In en, this message translates to:
+  /// **'Start guiding'**
+  String get guideStart;
+
+  /// Shutter label in Guide mode while the guider runs
+  ///
+  /// In en, this message translates to:
+  /// **'Stop guiding'**
+  String get guideStop;
+
+  /// Action named in an error: the guider refused to start
+  ///
+  /// In en, this message translates to:
+  /// **'start guiding'**
+  String get guideActionStart;
+
+  /// Action named in an error: the guider refused to stop
+  ///
+  /// In en, this message translates to:
+  /// **'stop guiding'**
+  String get guideActionStop;
+
+  /// Guide panel headline while the guider is connected and not running (not "Not guiding": it read as a failure)
+  ///
+  /// In en, this message translates to:
+  /// **'Idle'**
+  String get guideIdle;
+
+  /// Guide panel headline with no guider
+  ///
+  /// In en, this message translates to:
+  /// **'Guider not connected'**
+  String get guideNoGuider;
+
+  /// Guide panel hint while idle
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the shutter to start guiding. It calibrates first when needed.'**
+  String get guideTapShutter;
+
+  /// Guide panel hint with no guider
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the guider in Settings › Devices.'**
+  String get guideConnectFirst;
+
+  /// The guide camera's device window title
+  ///
+  /// In en, this message translates to:
+  /// **'Guider Camera'**
+  String get deviceGuiderCamera;
+
+  /// Top bar note when no device is connected; opens Settings › Devices
+  ///
+  /// In en, this message translates to:
+  /// **'No devices connected'**
+  String get shellNoDevices;
+
+  /// Guide panel, pill and shutter while a start is on its way to the guider
+  ///
+  /// In en, this message translates to:
+  /// **'Starting…'**
+  String get guideStarting;
+
+  /// While a stop is on its way (the guider finishes its frame first)
+  ///
+  /// In en, this message translates to:
+  /// **'Stopping…'**
+  String get guideStopping;
+
+  /// Guide exposure picker value when the profile leaves it to the guider
+  ///
+  /// In en, this message translates to:
+  /// **'The guider\'s own'**
+  String get guideExposureOwn;
+
+  /// Why Focus's shutter is greyed out on Auto with no focuser
+  ///
+  /// In en, this message translates to:
+  /// **'Connect a focuser to autofocus, or focus by hand on Manual.'**
+  String get focusNeedsFocuser;
+
+  /// Why a greyed shutter can't start autofocus, the Bahtinov readout or polar alignment
+  ///
+  /// In en, this message translates to:
+  /// **'The main camera is busy: wait for its frame, or stop it.'**
+  String get shellMainCameraBusy;
 }
 
 class _AppLocalizationsDelegate

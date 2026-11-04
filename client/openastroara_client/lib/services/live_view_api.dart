@@ -21,6 +21,8 @@ abstract interface class LiveViewClient {
   Future<void> start({required double exposureSec, int? gain, int binX, int binY});
   Future<void> stop();
   Future<LiveFrame?> fetchFrame();
+  /// Whether the daemon's loop is running (a loop a dead app left behind).
+  Future<bool> isActive();
   void close();
 }
 
@@ -57,6 +59,12 @@ class LiveViewApi implements LiveViewClient {
         'bin_y': binY,
       },
     );
+  }
+
+  @override
+  Future<bool> isActive() async {
+    final res = await _dio.get<Map<String, dynamic>>('/api/v1/equipment/camera/liveview');
+    return res.data?['active'] == true;
   }
 
   /// Stop the loop. The daemon returns 204 only after the loop fully drains.

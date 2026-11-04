@@ -12,14 +12,16 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../widgets/imaging/polar_align_panel.dart';
-import 'simple_night_setup.dart' show NightSetupStep, nightSetupProvider;
+import 'simple_night_setup.dart'
+    show NightSetupStep, nightSetupProvider, simpleNightSetupNext;
 import 'simple_preview_panel.dart'
     show
         SimplePresetTile,
         SimpleShutterButton,
         exposurePresets,
         formatExposure,
-        kSimpleText;
+        kSimpleText,
+        simpleMainCameraBusy;
 import 'simple_shell.dart'
     show SimplePanel, SimpleSegments, kSimpleGoStyle, simpleStackText;
 import '../../state/simple_messages_state.dart';
@@ -85,7 +87,7 @@ class SimplePolarShutter extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final api = ref.watch(polarAlignApiProvider);
     final active = simplePolarActive(ref.watch(polarAlignLiveProvider));
-    final notify = userNotifier(context);
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.polar);
     final l10n = context.l10n;
     Future<void> run(String action, Future<void> Function() op) async {
       try {
@@ -103,7 +105,9 @@ class SimplePolarShutter extends ConsumerWidget {
       start: true,
       running: active,
       label: active ? l10n.polarStop : l10n.polarStart,
-      onPressed: api == null
+      whyOff: api == null ? l10n.shellRigNotConnected : l10n.shellMainCameraBusy,
+      // It turns the mount: never under the main camera's frame.
+      onPressed: api == null || (!active && simpleMainCameraBusy(ref))
           ? null
           : active
           ? () => run(l10n.polarActionStop, api.stop)
@@ -454,9 +458,15 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                             }
                           : null,
                       child: Text(
-                        inNightSetup
-                            ? l10n.guidedDoneStartImaging
-                            : l10n.polarDone,
+                        !inNightSetup
+                            ? l10n.polarDone
+                            : simpleNightSetupNext(
+                                    ref,
+                                    after: NightSetupStep.polarAlign,
+                                  ) ==
+                                  NightSetupStep.guide
+                            ? l10n.guidedNextGuide
+                            : l10n.guidedDoneStartImaging,
                       ),
                     ),
                   ),

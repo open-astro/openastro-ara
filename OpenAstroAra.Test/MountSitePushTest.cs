@@ -16,6 +16,7 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using OpenAstroAra.TestHarness.Alpaca;
 using System;
 using System.Collections.Generic;
 using System.Threading;
@@ -163,6 +164,38 @@ namespace OpenAstroAra.Test {
                 mount.Latitude = 0; // another mount, or one that forgot
                 svc.PushProfileSite(force: true);
                 Assert.That(mount.Writes, Is.EqualTo(AllThreeThenLat));
+            }
+        }
+
+        [Test]
+        [Category("IO")] // loopback Alpaca stub
+        public async Task A_push_that_lands_after_a_reconnect_forgot_the_site_still_leaves_the_new_mount_pushed() {
+            // ALP-4982 (#1486 review): a push begun for the old mount can mark the site pushed after the
+            // reconnect's ForgetPushedSite(); that is safe only because every connect forces its push. This
+            // fails if the connect stops forcing it.
+            await using var stub = ScriptedAlpacaDevice.Start(_ => null);
+            var (svc, oldMount, store) = Following(Site(-36.85, 174.76, 120));
+            using (svc) {
+                svc.RunSitePush = push => Task.Run(push);
+                using var hold = new ManualResetEventSlim();
+                oldMount.OnWrite = () => hold.Wait(TimeSpan.FromSeconds(10));
+                store.Raise(s => s.Changed += null, EventArgs.Empty); // the old mount's push, held mid-write
+                var newMount = new FakeMount { Latitude = 0, Longitude = 0, Elevation = 0 };
+                svc.MountSiteSource = () => newMount;
+                var device = new DiscoveredDeviceDto("mount-under-test", "Bench mount", DeviceType.Telescope,
+                    stub.BaseUri.Host, stub.BaseUri.Host, stub.BaseUri.Port, 0, false);
+                await svc.ConnectAsync(new ConnectRequestDto(device), null, CancellationToken.None).ConfigureAwait(false);
+                var until = DateTime.UtcNow.AddSeconds(5);
+                while (svc.GetAsync(CancellationToken.None).GetAwaiter().GetResult()?.State != EquipmentConnectionState.Connected) {
+                    Assert.That(DateTime.UtcNow, Is.LessThan(until), "precondition: connected");
+                    await Task.Delay(10).ConfigureAwait(false);
+                }
+                hold.Set(); // the old push ends now, after the connect forgot the site
+                until = DateTime.UtcNow.AddSeconds(5);
+                while (newMount.Writes.Count < 3 && DateTime.UtcNow < until) {
+                    await Task.Delay(10).ConfigureAwait(false);
+                }
+                Assert.That(newMount.Writes, Is.EqualTo(AllThree), "the new mount got the site");
             }
         }
 
