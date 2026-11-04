@@ -634,9 +634,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final bottomRow = kSimpleBarHeight * simpleRailScale(context);
     // What sits above the bottom row drops to the inset while it is empty
     // (ALP-4935).
-    final aboveRow = _statsShown(ref)
-        ? kSimpleInset * 2 + bottomRow
-        : kSimpleInset;
+    final statsShown = _statsShown(ref);
+    final aboveRow = statsShown ? kSimpleInset * 2 + bottomRow : kSimpleInset;
     // What reaches the right edge stays clear of Stop, which sits over
     // everything (iPad, 2026-11-04: Settings ran under it).
     final aboveStop = math.max(aboveRow, kSimpleInset * 2 + stopSize);
@@ -682,6 +681,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final popoverTop = railTop + kSimpleStatusHeight + AraSpace.s8;
     final guidedStep =
         _mode == SimpleModeScreen.autopilot && _popover == _Popover.settings;
+    // Plan's sheet and Guided Run's step panels: centred, content-high, in the
+    // space between the status pill and the bottom row's top (the screen's
+    // inset without it), at least 8 pt from each (user, 2026-11-04).
+    final betweenBottom =
+        (statsShown ? kSimpleInset + bottomRow : kSimpleInset) + AraSpace.s8;
     final popoverBottom = planSquares
         ? aboveStop +
               kSimplePlanSquareHeight * simpleRailScale(context) +
@@ -949,12 +953,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   // it was centred over the image).
                                   left: kSimpleInset,
                                   right: kSimpleInset * 2 + railWidth,
-                                  // The rail panels' line; down to the inset,
-                                  // over the bottom row while it's open.
+                                  // Centred between the status pill and the
+                                  // bottom row (user, 2026-11-04).
                                   top: popoverTop,
-                                  bottom: kSimpleInset,
+                                  bottom: betweenBottom,
                                   child: Align(
-                                    alignment: Alignment.topRight,
+                                    alignment: Alignment.centerRight,
                                     child: sheet,
                                   ),
                                 )
@@ -969,15 +973,16 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   left: 0,
                                   right: kSimpleInset * 2 + railWidth,
                                   top: popoverTop,
-                                  bottom: popoverBottom,
+                                  bottom: guidedStep
+                                      ? betweenBottom
+                                      : popoverBottom,
                                   child: CustomSingleChildLayout(
                                     delegate: _BesideRail(
-                                      preferredTop: guidedStep
-                                          ? 0
-                                          : math.max(
-                                              0,
-                                              rightRailTop - popoverTop,
-                                            ),
+                                      centre: guidedStep,
+                                      preferredTop: math.max(
+                                        0,
+                                        rightRailTop - popoverTop,
+                                      ),
                                     ),
                                     child: SingleChildScrollView(
                                         child: _popover == _Popover.queue
@@ -1305,11 +1310,13 @@ Widget simpleFrost(Widget child) => ClipRRect(
 
 /// Device dots (connected gear only), then Night mode and the Settings menu.
 /// A rail popover in its room: right-aligned, at [preferredTop] (level with
-/// the rail) when it fits below, moved up as much as it needs when it doesn't.
+/// the rail) when it fits below, moved up as much as it needs when it doesn't;
+/// or, with [centre], centred in the room (Guided Run's step panels).
 class _BesideRail extends SingleChildLayoutDelegate {
-  const _BesideRail({required this.preferredTop});
+  const _BesideRail({required this.preferredTop, this.centre = false});
 
   final double preferredTop;
+  final bool centre;
 
   // Height only: a panel wider than a phone-width window runs off its left
   // edge, as before (phone layout: ALP-4865).
@@ -1318,13 +1325,17 @@ class _BesideRail extends SingleChildLayoutDelegate {
       BoxConstraints(maxHeight: constraints.maxHeight);
 
   @override
-  Offset getPositionForChild(Size size, Size childSize) => Offset(
-    size.width - childSize.width,
-    preferredTop.clamp(0, math.max(0, size.height - childSize.height)),
-  );
+  Offset getPositionForChild(Size size, Size childSize) {
+    final room = math.max(0.0, size.height - childSize.height);
+    return Offset(
+      size.width - childSize.width,
+      centre ? room / 2 : preferredTop.clamp(0, room),
+    );
+  }
 
   @override
-  bool shouldRelayout(_BesideRail old) => old.preferredTop != preferredTop;
+  bool shouldRelayout(_BesideRail old) =>
+      old.preferredTop != preferredTop || old.centre != centre;
 }
 
 /// Whether any top-bar chip shows: a device not disconnected, or a standing

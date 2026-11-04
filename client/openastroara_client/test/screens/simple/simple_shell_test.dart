@@ -813,25 +813,30 @@ void main() {
     expect(find.text("Tonight's plan"), findsNothing);
   });
 
-  testWidgets("Plan's sheet and Guided Run's step panels start on one line, 8 pt under the status pill; other "
-      'panels stay level with the rail', (tester) async {
-    // User, 2026-11-04: Plan and Guided Run align at one top; the modes menu and the other panels stay by the rail.
-    const top = kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight + 8;
+  testWidgets("Plan's sheet and Guided Run's step panels sit centred between the status pill and the bottom row; "
+      'other panels stay level with the rail', (tester) async {
+    // User, 2026-11-04: their spacing follows the pill's bottom and the histogram's top, equal above and below.
+    const pillBottom = kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight;
+    const roomBottom = 768 - kSimpleInset; // no bottom row: the screen's inset
+    const centre = (pillBottom + roomBottom) / 2;
     await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mode-autopilot')));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
-    expect(tester.getRect(find.byType(SimpleRunSheet)).top, top, reason: "Guided Run's Plan step");
+    final plan = tester.getRect(find.byType(SimpleRunSheet));
+    expect(plan.center.dy, closeTo(centre, 1), reason: "Guided Run's Plan step: centred");
+    expect(plan.top, greaterThanOrEqualTo(pillBottom + 8));
     await tester.tap(find.byKey(const Key('autopilot-skip')));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
-    expect(_panelOf(tester, find.text('Fit the mask, then Start')).top, top, reason: "Guided Run's Focus step");
+    expect(_panelOf(tester, find.text('Fit the mask, then Start')).center.dy, closeTo(centre, 1),
+        reason: "Guided Run's Focus step: centred");
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
-    expect(tester.getRect(find.byKey(const Key('simple-mode-preview'))).top, greaterThan(top + 50),
+    expect(tester.getRect(find.byKey(const Key('simple-mode-preview'))).top, greaterThan(pillBottom + 58),
         reason: 'the modes menu stays by the rail');
     await tester.tap(find.byKey(const Key('simple-mode-focus')));
     await tester.pump();
@@ -1376,8 +1381,8 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-settings')));
       await tester.pump();
       final sheet = tester.getRect(find.byType(SimpleRunSheet));
-      expect(sheet.top, kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight + 8,
-          reason: 'on the rail panels\' line, 8 pt under the status pill (user, 2026-11-04)');
+      expect(sheet.top, greaterThanOrEqualTo(kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight + 8),
+          reason: 'under the status pill');
       expect(sheet.bottom, lessThanOrEqualTo(size.height - kSimpleInset),
           reason: 'no guiding or histogram: down to the inset (ALP-4935)');
       expect(find.byKey(const Key('simple-run-tracker')), findsNothing, reason: 'the squares step aside');
