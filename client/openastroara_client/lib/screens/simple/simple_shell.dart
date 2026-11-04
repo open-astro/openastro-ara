@@ -600,6 +600,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final aboveRow = _statsShown(ref)
         ? kSimpleInset * 2 + bottomRow
         : kSimpleInset;
+    // What reaches the right edge stays clear of Stop, which sits over
+    // everything (iPad, 2026-11-04: Settings ran under it).
+    final aboveStop = math.max(aboveRow, kSimpleInset * 2 + stopSize);
+    // Beside Stop: as far as the bottom row reaches.
+    final besideStop = kSimpleInset * 2 + (railWidth + stopSize) / 2;
     final width = MediaQuery.sizeOf(context).width;
     // Guided Run's step strip, under the status strip; its offer sits at the
     // bottom (user, 2026-11-03).
@@ -637,11 +642,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         ? double.infinity
         : height -
               kSimpleInset -
-              aboveRow -
               (planSquares
-                  ? kSimplePlanSquareHeight * simpleRailScale(context) +
+                  ? aboveStop +
+                        kSimplePlanSquareHeight * simpleRailScale(context) +
                         kSimpleInset
-                  : 0) -
+                  : aboveRow) -
               rightRailTop;
     final queuePanel = SimpleRunPanel(
       onAdd: () => _openSheet(),
@@ -823,6 +828,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // above the bottom row.
                               if (_info)
                                 AnimatedPositioned(
+                                  // Keyed: each slides only from its own place.
+                                  key: const ValueKey('info'),
                                   left: kSimpleInset,
                                   bottom: aboveRow,
                                   duration: motion,
@@ -976,8 +983,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // a narrow window.
                               if (autopilotOffer)
                                 AnimatedPositioned(
-                                  left: kSimpleInset,
-                                  right: kSimpleInset,
+                                  key: const ValueKey('offer'),
+                                  // Even margins keep it centred.
+                                  left: besideStop,
+                                  right: besideStop,
                                   bottom: aboveRow,
                                   duration: motion,
                                   curve: Curves.easeOut,
@@ -995,9 +1004,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // half (the Info tiles have the left).
                               if (shown == SimpleModeScreen.plan && !runSheet)
                                 AnimatedPositioned(
+                                  key: const ValueKey('plan-squares'),
                                   left: width / 2,
                                   right: kSimpleInset,
-                                  bottom: aboveRow,
+                                  bottom: aboveStop,
                                   duration: motion,
                                   curve: Curves.easeOut,
                                   child: Align(
@@ -1085,7 +1095,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   left: kSimpleInset,
                                   right: kSimpleInset,
                                   top: railTop,
-                                  bottom: aboveRow,
+                                  bottom: aboveStop,
                                   // Under the gear, as wide as its content
                                   // needs (user, 2026-11-04: window-wide was
                                   // mostly empty space).

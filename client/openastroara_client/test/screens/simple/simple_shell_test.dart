@@ -1104,6 +1104,8 @@ void main() {
       expect(pills.top, lessThan(offer.top), reason: 'the offer moved to the bottom (user, 2026-11-03)');
       expect(offer.bottom, size.height - kSimpleInset, reason: 'the bottom row is empty: at the inset (ALP-4935)');
       expect(offer.center.dx, closeTo(size.width / 2, 1), reason: 'centred');
+      expect(offer.right, lessThanOrEqualTo(tester.getRect(find.byType(EmergencyStopButton)).left - kSimpleInset),
+          reason: 'clear of Stop beside it');
       expect(pills.right, lessThanOrEqualTo(status.left), reason: 'beside the status pill, never under it');
       expect(pills.bottom, lessThanOrEqualTo(rail.top), reason: 'above the left rail');
       expect(find.byKey(const Key('simple-messages-more')), findsOneWidget, reason: 'six don\'t fit: the rest fold');
@@ -1186,7 +1188,7 @@ void main() {
     expect(find.byType(SimpleRunSheet), findsNothing, reason: 'the chip closes the sheet it would open');
   });
 
-  testWidgets('the plan square hugs the bottom-right corner (no bottom row: at the inset)', (tester) async {
+  testWidgets('the plan square hugs the bottom-right corner, above Stop (no bottom row)', (tester) async {
     await _pump(tester, const Size(1024, 768),
         plan: const SimpleRun(sequenceId: 'seq-1', targets: [
           SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
@@ -1196,8 +1198,9 @@ void main() {
     await tester.tap(find.text('Plan').first);
     await tester.pump();
     final square = tester.getRect(find.byKey(const Key('simple-run-tracker')));
-    expect(square.right, 1024 - kSimpleInset, reason: 'in the corner');
-    expect(square.bottom, 768 - kSimpleInset, reason: 'the bottom row is empty: down at the inset (ALP-4935)');
+    expect(square.right, 1024 - kSimpleInset, reason: 'in the corner, from the first frame (no slide from the offer)');
+    final stop = tester.getRect(find.byType(EmergencyStopButton));
+    expect(square.bottom, stop.top - kSimpleInset, reason: 'the bottom row is empty: just above Stop, not under it');
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
     expect(square.top, greaterThan(rail.bottom), reason: 'below the right rail');
     expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('0 / 30')), findsOneWidget);
@@ -1323,6 +1326,9 @@ void main() {
     // window-wide sheet was mostly empty space).
     expect(rect.right, size.width - kSimpleInset, reason: 'hugs the right edge, under the gear');
     expect(rect.width, kSimpleSettingsMaxWidth);
+    final stop = tester.getRect(find.byType(EmergencyStopButton));
+    expect(rect.bottom, lessThanOrEqualTo(stop.top - kSimpleInset),
+        reason: 'clear of Stop, which sits over the veil (iPad, 2026-11-04: the sheet ran under it)');
     final blur = tester.widget<BackdropFilter>(find.descendant(of: sheet, matching: find.byType(BackdropFilter)));
     expect(blur.filter, ImageFilter.blur(sigmaX: 5, sigmaY: 5));
     final box = tester.widget<Container>(find.descendant(of: sheet, matching: find.byKey(const Key('simple-frosted-surface'))));
