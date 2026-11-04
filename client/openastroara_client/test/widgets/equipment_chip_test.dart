@@ -69,7 +69,10 @@ void main() {
   });
 
   testWidgets('an active device blinks its green dot; a merely connected one is steady', (tester) async {
-    double dotOpacity() => tester.widget<FadeTransition>(find.byKey(const ValueKey('equipment-chip-dot'))).opacity.value;
+    double dotOpacity() => tester
+        .widget<FadeTransition>(find.descendant(of: find.byKey(const ValueKey('equipment-chip-dot')), matching: find.byType(FadeTransition)))
+        .opacity
+        .value;
     await _pumpAt(tester, 1400,
         const EquipmentChip(icon: Icons.camera_alt, label: 'Camera', status: StatusLevel.active));
     final seen = <double>{};

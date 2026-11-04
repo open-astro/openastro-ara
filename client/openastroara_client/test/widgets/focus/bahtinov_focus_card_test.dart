@@ -314,6 +314,9 @@ void main() {
   });
 
   testWidgets('Finish asks for the mask, then marks the scope focused', (t) async {
+  // A working device's status blinks (DESIGN.md status rule) and never settles: Reduce Motion holds it.
+  t.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(disableAnimations: true);
+  addTearDown(t.platformDispatcher.clearAccessibilityFeaturesTestValue);
     final calls = <String>[];
     late WidgetRef ref;
     await t.pumpWidget(ProviderScope(

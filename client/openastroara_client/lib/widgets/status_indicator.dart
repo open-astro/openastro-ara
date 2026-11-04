@@ -73,3 +73,58 @@ enum StatusLevel {
   final Color color;
   const StatusLevel(this.color);
 }
+
+/// Blinks its child while [on]: a device working normally (exposing,
+/// slewing, moving, guiding) blinks its green status (DESIGN.md status
+/// rule). Steady with Reduce Motion on.
+class StatusBlink extends StatefulWidget {
+  const StatusBlink({super.key, required this.on, required this.child});
+
+  final bool on;
+  final Widget child;
+
+  @override
+  State<StatusBlink> createState() => _StatusBlinkState();
+}
+
+class _StatusBlinkState extends State<StatusBlink>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _blink = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 700),
+    lowerBound: 0.25,
+    value: 1,
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(StatusBlink old) {
+    super.didUpdateWidget(old);
+    _sync();
+  }
+
+  void _sync() {
+    if (widget.on && !MediaQuery.disableAnimationsOf(context)) {
+      if (!_blink.isAnimating) _blink.repeat(reverse: true);
+    } else {
+      _blink
+        ..stop()
+        ..value = 1;
+    }
+  }
+
+  @override
+  void dispose() {
+    _blink.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      FadeTransition(opacity: _blink, child: widget.child);
+}

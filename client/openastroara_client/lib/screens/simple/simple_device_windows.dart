@@ -29,6 +29,7 @@ import '../../state/app_locale_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../widgets/status_indicator.dart' show StatusBlink;
 import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment, simpleRailScale;
 
@@ -980,7 +981,10 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
           ),
         SizedBox(
           height: 18,
-          child: Text(
+          // Moving is working: blinking green (DESIGN.md status rule).
+          child: StatusBlink(
+            on: _target == null && s.isMoving,
+            child: Text(
             _target != null
                 ? context.l10n.deviceLetGoToMoveTo(simpleSteps(_target!))
                 : s.isMoving
@@ -990,6 +994,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
                 : '',
             textAlign: TextAlign.center,
             style: AraText.caption.copyWith(color: AraColors.accentConnected),
+          ),
           ),
         ),
         LayoutBuilder(

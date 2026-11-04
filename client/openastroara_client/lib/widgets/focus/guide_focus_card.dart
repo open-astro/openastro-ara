@@ -174,7 +174,7 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
               Widget frame(double h) => FocusFrameView(
                 frame: live.frame,
                 badge: active ? 'LIVE' : 'LAST',
-                badgeColor: active ? AraColors.accentBusy : AraColors.textSecondary,
+                badgeColor: active ? AraColors.accentConnected : AraColors.textSecondary,
                 caption: latest == null ? null : 'frame ${latest.seq}',
                 emptyText: 'Waiting for the first guide frame…',
                 height: h,

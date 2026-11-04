@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../status_indicator.dart' show StatusBlink;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -223,7 +224,11 @@ class _Row extends StatelessWidget {
             child: CircularProgressIndicator(strokeWidth: 2),
           )
         else
-          Icon(icon, size: 18, color: iconColor ?? AraColors.accentConnected),
+          // The exposing row (no colour of its own) is working: blinking green.
+          StatusBlink(
+            on: iconColor == null,
+            child: Icon(icon, size: 18, color: iconColor ?? AraColors.accentConnected),
+          ),
         const SizedBox(width: 8),
         Expanded(
           child: Column(

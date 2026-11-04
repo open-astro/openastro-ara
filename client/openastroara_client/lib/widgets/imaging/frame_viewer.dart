@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../status_indicator.dart' show StatusBlink;
 import '../../state/imaging/last_frame_state.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
@@ -202,19 +203,24 @@ class _LiveView extends StatelessWidget {
           Positioned(
             top: 8,
             left: 8,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: AraColors.accentBusy,
-                borderRadius: BorderRadius.circular(4),
+            // A live feed is the camera working: blinking green (DESIGN.md
+            // status rule).
+            child: StatusBlink(
+              on: true,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AraColors.accentConnected,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text('LIVE',
+                    style: TextStyle(
+                        // Pinned to black for legibility on the green badge,
+                        // independent of the theme's default foreground.
+                        color: Colors.black,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold)),
               ),
-              child: const Text('LIVE',
-                  style: TextStyle(
-                      // Pin to black for legibility on the amber accentBusy badge,
-                      // independent of the theme's default foreground.
-                      color: Colors.black,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold)),
             ),
           ),
           if (state.error != null)

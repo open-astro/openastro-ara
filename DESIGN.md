@@ -163,9 +163,9 @@ A near-black neutral ramp carries everything; saturated status accents carry mea
 
 | Colour | Means | Examples |
 | --- | --- | --- |
-| Green | Good: connected and healthy, done. **Blinks** while a device works normally | Idle guider, connected camera, step done; exposing, slewing, guiding (blinking) |
-| Blue | Changing: on its way between two states | Connecting, starting, stopping, calibrating, settling, cooling to target, parking, downloading, paused on purpose by Ara |
-| Amber | Warning: needs a look, nothing has failed | A lost guide star still being searched for, a weak fit, low disk, a stale reading, a refused action |
+| Green | Good: connected and healthy, done. **Blinks** while a device works normally | Idle guider, connected camera, step done; exposing, slewing, moving, guiding, a plan running, a LIVE feed (blinking) |
+| Blue | Changing (in progress): on its way between two states | Connecting, starting, stopping, calibrating, settling, cooling to target, parking, downloading, a target not up yet, a plan paused by Ara (it resumes on its own) |
+| Amber | Warning or not ideal: needs a look, nothing has failed | A lost guide star still being searched for, a weak fit, focus not at best yet, low disk, a stale reading, a refused action, a plan paused waiting for you |
 | Red | Error: something failed or a fault stands | A device that dropped, a failed capture, a crashed guider; also destructive actions and Emergency Stop |
 | Grey | Off: not connected or not there | A disconnected device |
 

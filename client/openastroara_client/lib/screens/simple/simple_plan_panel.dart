@@ -514,6 +514,18 @@ class SimpleRun {
 /// What Plan's shutter, tracker and sheet show.
 enum SimpleRunPhase { none, ready, imaging, pausing, paused, done }
 
+/// A paused plan's colour (DESIGN.md status rule): paused by Ara (a star
+/// lost, safety, a flip) is on its way back, blue; paused waiting for the
+/// user needs a look, amber.
+Color simplePausedColour(WidgetRef ref) =>
+    ref.watch(
+      sequenceRunStateProvider.select(
+        (s) => s.value?.state == SequenceRunState.pausedAwaitingUser,
+      ),
+    )
+    ? AraColors.accentBusy
+    : AraColors.accentInfo;
+
 bool _paused(SequenceRunState? s) =>
     s == SequenceRunState.paused || s == SequenceRunState.pausedAwaitingUser;
 
@@ -1054,7 +1066,7 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
         run.targets.isNotEmpty && (ours || phase == SimpleRunPhase.ready);
     final active = switch (phase) {
       SimpleRunPhase.ready || SimpleRunPhase.done => AraColors.accentConnected,
-      SimpleRunPhase.paused => AraColors.accentBusy,
+      SimpleRunPhase.paused => simplePausedColour(ref),
       _ => AraColors.selectionBg,
     };
     String? stateWord() => switch (phase) {
@@ -1248,7 +1260,7 @@ class _PlanSquare extends StatelessWidget {
                           (
                             last,
                             paused
-                                ? small.copyWith(color: AraColors.accentBusy)
+                                ? small.copyWith(color: color)
                                 : small,
                           ),
                         ])
@@ -1376,9 +1388,9 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
     final tap = run.busy ? null : _tap(phase);
     final ring = switch (phase) {
       _ when idle => AraColors.textDisabled,
-      // White like every mode's ring; amber only while paused.
+      // White like every mode's ring; the paused colour while paused.
       SimpleRunPhase.ready || SimpleRunPhase.none => AraColors.textPrimary,
-      SimpleRunPhase.paused => AraColors.accentBusy,
+      SimpleRunPhase.paused => simplePausedColour(ref),
       _ => AraColors.textPrimary.withValues(alpha: 0.25),
     };
     final pauseBars =

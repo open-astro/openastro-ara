@@ -20,6 +20,7 @@ import '../../models/sequence/sequence_summary.dart';
 import '../../state/stats/server_internal_state_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../widgets/status_indicator.dart' show StatusBlink;
 import '../../state/equipment/camera_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
@@ -837,10 +838,11 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
                     ),
               AraColors.accentConnected,
             ),
+            // On its way from the camera: blue (DESIGN.md status rule).
             CapturePhase.downloading => (
               l10n.previewDownloading,
               null,
-              AraColors.accentConnected,
+              AraColors.accentInfo,
             ),
             CapturePhase.done => (
               l10n.previewFrameReady,
@@ -863,7 +865,14 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
                   ? (
                       paused ? l10n.previewPlanPaused : l10n.previewPlan,
                       step,
-                      paused ? AraColors.accentBusy : AraColors.accentInfo,
+                      // DESIGN.md status rule: running is working (green);
+                      // paused by Ara is on its way back (blue); paused
+                      // waiting for the user needs a look (amber).
+                      run!.state == SequenceRunState.pausedAwaitingUser
+                          ? AraColors.accentBusy
+                          : paused
+                          ? AraColors.accentInfo
+                          : AraColors.accentConnected,
                     )
                   : parking != null
                   ? (
@@ -901,6 +910,14 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
                   : (null, null, AraColors.textSecondary),
           };
     if (label == null) return const SizedBox.shrink();
+    // Working normally (a frame, a loop, a running plan, guiding): the dot
+    // blinks (DESIGN.md status rule).
+    final working =
+        dot == AraColors.accentConnected &&
+        !stopping &&
+        (p.phase == CapturePhase.exposing ||
+            (p.phase == CapturePhase.idle &&
+                (looping || (planActive && !paused) || guiding)));
     if (label != _widthLabel) {
       _widthLabel = label;
       _width = 0;
@@ -948,7 +965,11 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.circle, size: 10, color: dot),
+                    // A device working normally blinks its green dot.
+                    StatusBlink(
+                      on: working,
+                      child: Icon(Icons.circle, size: 10, color: dot),
+                    ),
                     const SizedBox(width: AraSpace.s8),
                     // One text, so the label keeps its room and only the detail's
                     // tail is cut (two Flexibles halved the space: "Taking a fr…").

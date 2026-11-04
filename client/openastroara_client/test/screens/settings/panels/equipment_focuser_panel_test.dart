@@ -111,6 +111,9 @@ Future<void> _wideSurface(WidgetTester tester) async {
 
 Future<_FakeFocuserApi> _pump(WidgetTester tester, FocuserStatus? status,
     {_FakeAutofocusApi? autofocus}) async {
+  // A working device's status blinks (DESIGN.md status rule) and never settles: Reduce Motion holds it.
+  tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(disableAnimations: true);
+  addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
   await _wideSurface(tester);
   final api = _FakeFocuserApi(status);
   await tester.pumpWidget(ProviderScope(

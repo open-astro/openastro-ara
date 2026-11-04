@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../widgets/status_indicator.dart' show StatusBlink;
 import '../../../models/dome_status.dart';
 import '../../../models/equipment_device_status.dart';
 import '../../../services/equipment_device_api.dart';
@@ -114,14 +115,17 @@ class _DomeBodyState extends ConsumerState<_DomeBody> {
         if (s.isBusy)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text(
-              s.runtimeState == 'slewing' ? 'Slewing…' : 'Shutter moving…',
-              // DESIGN.md status rule: slewing is working (green), the shutter
-              // is on its way between open and closed (blue).
-              style: TextStyle(
-                color: s.runtimeState == 'slewing'
-                    ? AraColors.accentConnected
-                    : AraColors.accentInfo,
+            // DESIGN.md status rule: slewing is working (blinking green), the
+            // shutter is on its way between open and closed (blue).
+            child: StatusBlink(
+              on: s.runtimeState == 'slewing',
+              child: Text(
+                s.runtimeState == 'slewing' ? 'Slewing…' : 'Shutter moving…',
+                style: TextStyle(
+                  color: s.runtimeState == 'slewing'
+                      ? AraColors.accentConnected
+                      : AraColors.accentInfo,
+                ),
               ),
             ),
           ),
