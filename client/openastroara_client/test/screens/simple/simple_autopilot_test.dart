@@ -5,6 +5,8 @@ import 'package:openastroara/screens/simple/simple_autopilot.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
+import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
@@ -64,6 +66,23 @@ class _Plan extends SimpleRunNotifier {
   }
 }
 
+/// A connected guider, stopped until [startGuiding]; records the asks.
+class _Guider extends GuiderStatusNotifier {
+  final calls = <String>[];
+  static GuiderStatus _at(String runtime) => GuiderStatus.fromJson(
+      {'device_id': 'g', 'name': 'PHD2', 'state': 'connected', 'runtime': {'state': runtime}});
+  @override
+  Future<GuiderStatus?> build() async => _at('stopped');
+  @override
+  Future<void> startGuiding() async {
+    calls.add('start');
+    state = AsyncData(_at('calibrating'));
+  }
+  @override
+  Future<void> stopGuiding() async => calls.add('stop');
+  void guiding() => state = AsyncData(_at('guiding'));
+}
+
 /// The polar routine as the rig reports it; [run] makes it active.
 class _Live extends PolarAlignLiveNotifier {
   @override
@@ -71,9 +90,10 @@ class _Live extends PolarAlignLiveNotifier {
   void run() => state = const PolarAlignLive(phase: PolarAlignStates.adjusting);
 }
 
-Future<(ProviderContainer, _PolarApi)> _container({bool permanent = false}) async {
+Future<(ProviderContainer, _PolarApi)> _container({bool permanent = false, _Guider? guider}) async {
   final api = _PolarApi();
   final c = ProviderContainer(overrides: [
+    if (guider != null) guiderStatusProvider.overrideWith(() => guider),
     polarAlignLiveProvider.overrideWith(_Live.new),
     setupFocusStateProvider.overrideWith((ref) => ref.watch(_focus)),
     setupPolarAlignStateProvider.overrideWith((ref) => ref.watch(_aligned)),
@@ -83,22 +103,56 @@ Future<(ProviderContainer, _PolarApi)> _container({bool permanent = false}) asyn
   ]);
   addTearDown(c.dispose);
   await c.read(simplePermanentPierProvider.future);
+  if (guider != null) await c.read(guiderStatusProvider.future);
   c.listen(autopilotProvider, (_, _) {});
   return (c, api);
 }
 
 void main() {
   test('Plan first, then the first setup step not done; nothing left means start imaging', () {
-    expect(autopilotNext(focused: true, aligned: true, permanentPier: false), AutopilotStep.plan,
+    expect(autopilotNext(focused: true, aligned: true, permanentPier: false, guided: true), AutopilotStep.plan,
         reason: 'the plan is never done beforehand: Guided Run starts on it');
-    expect(autopilotNext(after: AutopilotStep.plan, focused: false, aligned: false, permanentPier: false),
+    expect(autopilotNext(after: AutopilotStep.plan, focused: false, aligned: false, permanentPier: false, guided: true),
         AutopilotStep.focus);
-    expect(autopilotNext(after: AutopilotStep.plan, focused: true, aligned: false, permanentPier: false),
+    expect(autopilotNext(after: AutopilotStep.plan, focused: true, aligned: false, permanentPier: false, guided: true),
         AutopilotStep.polarAlign);
-    expect(autopilotNext(after: AutopilotStep.plan, focused: true, aligned: false, permanentPier: true), isNull);
-    expect(autopilotNext(after: AutopilotStep.focus, focused: false, aligned: false, permanentPier: false),
+    expect(autopilotNext(after: AutopilotStep.plan, focused: true, aligned: false, permanentPier: true, guided: true), isNull);
+    expect(autopilotNext(after: AutopilotStep.focus, focused: false, aligned: false, permanentPier: false, guided: true),
         AutopilotStep.polarAlign, reason: 'Skip from Focus');
-    expect(autopilotNext(after: AutopilotStep.polarAlign, focused: false, aligned: false, permanentPier: false), isNull);
+    expect(autopilotNext(after: AutopilotStep.polarAlign, focused: false, aligned: false, permanentPier: false, guided: true), isNull);
+  });
+
+  test('Guide comes after polar align; skipped when guiding already or with no guider', () {
+    // User, 2026-11-04: the guide routine is part of Guided Run, after Polar align.
+    expect(autopilotNext(after: AutopilotStep.polarAlign, focused: true, aligned: true, permanentPier: false, guided: false),
+        AutopilotStep.guide);
+    expect(autopilotNext(after: AutopilotStep.plan, focused: true, aligned: false, permanentPier: true, guided: false),
+        AutopilotStep.guide, reason: 'a permanent pier skips polar align, not guiding');
+    expect(autopilotNext(after: AutopilotStep.polarAlign, focused: true, aligned: true, permanentPier: false, guided: true),
+        isNull, reason: 'already guiding (or no guider): imaging is next');
+    expect(autopilotNext(after: AutopilotStep.guide, focused: false, aligned: false, permanentPier: false, guided: false),
+        isNull, reason: 'the last step');
+  });
+
+  test('with a guider connected, polar align hands over to Guide, which starts guiding on entry', () async {
+    final guider = _Guider();
+    final (c, _) = await _container(guider: guider);
+    final plan = c.read(simpleRunProvider.notifier) as _Plan;
+    final pilot = c.read(autopilotProvider.notifier);
+    pilot.start();
+    plan.queued();
+    c.read(_focus.notifier).set(SetupStepState.done);
+    pilot.next(); // the plan's Next: focus is done, so polar align
+    expect(c.read(autopilotProvider), AutopilotStep.polarAlign);
+    pilot.next(); // polar align's Done (or Skip)
+    expect(c.read(autopilotProvider), AutopilotStep.guide);
+    await Future<void>.value();
+    expect(guider.calls, ['start'], reason: 'entering Guide starts the routine (calibrating when needed)');
+    guider.guiding();
+    pilot.next(); // Guide's Done · Start imaging
+    await Future<void>.value();
+    expect(plan.starts, hasLength(1), reason: 'imaging starts');
+    expect(guider.calls, ['start'], reason: 'leaving Guide keeps it guiding for imaging');
   });
 
   test('Guided Run opens on the plan; its Next goes to Focus', () async {

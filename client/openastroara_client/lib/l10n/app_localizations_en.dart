@@ -55,7 +55,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get safetySilence => 'Silence alarm';
 
   @override
-  String get deviceCamera => 'Camera';
+  String get deviceCamera => 'Main Camera';
 
   @override
   String get deviceMount => 'Mount';
@@ -479,7 +479,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchSectionDevices => 'Devices';
 
   @override
-  String get searchSectionCamera => 'Camera';
+  String get searchSectionCamera => 'Main Camera';
 
   @override
   String get searchSectionMount => 'Mount';
@@ -488,7 +488,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchSectionFocuser => 'Focuser';
 
   @override
-  String get searchSectionGuider => 'Guider';
+  String get searchSectionGuider => 'Guider Camera';
 
   @override
   String get searchSettingAperture => 'Main scope aperture';
@@ -762,7 +762,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellSectionDevices => 'Devices';
 
   @override
-  String get shellSectionCamera => 'Camera';
+  String get shellSectionCamera => 'Main Camera';
 
   @override
   String get shellSectionMount => 'Mount';
@@ -771,7 +771,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellSectionFocuser => 'Focuser';
 
   @override
-  String get shellSectionGuider => 'Guider';
+  String get shellSectionGuider => 'Guider Camera';
 
   @override
   String get shellRigNotConnected => 'Rig not connected';
@@ -1933,4 +1933,41 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get searchWordsGuideScope =>
       'guide scope guider camera pixel focal polar';
+
+  @override
+  String get shellModeGuide => 'Guide';
+
+  @override
+  String get autopilotStepGuide => 'Guide';
+
+  @override
+  String get guidedNextGuide => 'Next: Guide';
+
+  @override
+  String get guideStart => 'Start guiding';
+
+  @override
+  String get guideStop => 'Stop guiding';
+
+  @override
+  String get guideActionStart => 'start guiding';
+
+  @override
+  String get guideActionStop => 'stop guiding';
+
+  @override
+  String get guideNotGuiding => 'Not guiding';
+
+  @override
+  String get guideNoGuider => 'Guider not connected';
+
+  @override
+  String get guideTapShutter =>
+      'Tap the shutter to start guiding. It calibrates first when needed.';
+
+  @override
+  String get guideConnectFirst => 'Connect the guider in Settings › Devices.';
+
+  @override
+  String get deviceGuiderCamera => 'Guider Camera';
 }

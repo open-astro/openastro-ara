@@ -20,9 +20,8 @@ import '../../widgets/focus/guide_focus_card.dart'
     show GuideFocusCard, TurnAdvice, guideFocusBlocker, guideFocusHint;
 import '../../widgets/focus/v_curve_chart.dart';
 import '../../state/setup/setup_readiness.dart';
-import '../../state/simple_mode_state.dart';
 import 'simple_autopilot.dart'
-    show AutopilotStep, autopilotNext, autopilotProvider;
+    show AutopilotStep, autopilotProvider, simpleAutopilotNext;
 import 'simple_preview_panel.dart' show SimpleShutterButton, kSimpleText;
 import 'simple_device_windows.dart' show simpleCelsius;
 import 'simple_shell.dart'
@@ -270,16 +269,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     final guidedDone =
         ref.watch(autopilotProvider) == AutopilotStep.focus &&
             ref.watch(setupFocusStateProvider) == SetupStepState.done &&
-            autopilotNext(
-                  after: AutopilotStep.focus,
-                  focused: true,
-                  aligned:
-                      ref.watch(setupPolarAlignStateProvider) ==
-                      SetupStepState.done,
-                  permanentPier:
-                      ref.watch(simplePermanentPierProvider).value ?? false,
-                ) ==
-                null
+            simpleAutopilotNext(ref, after: AutopilotStep.focus) == null
         ? FilledButton(
             key: const Key('simple-focus-guided-done'),
             style: kSimpleGoStyle,

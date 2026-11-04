@@ -168,7 +168,7 @@ abstract class AppLocalizations {
   /// Camera window title, before the camera's name
   ///
   /// In en, this message translates to:
-  /// **'Camera'**
+  /// **'Main Camera'**
   String get deviceCamera;
 
   /// Mount window title, before the mount's name
@@ -930,7 +930,7 @@ abstract class AppLocalizations {
   /// Simple Mode search panel: name of the Settings sheet's Camera section, shown beside a setting result (and the result for the section itself)
   ///
   /// In en, this message translates to:
-  /// **'Camera'**
+  /// **'Main Camera'**
   String get searchSectionCamera;
 
   /// Simple Mode search panel: name of the Settings sheet's Mount section, shown beside a setting result (and the result for the section itself)
@@ -948,7 +948,7 @@ abstract class AppLocalizations {
   /// Simple Mode search panel: name of the Settings sheet's Guider section, shown beside a setting result (and the result for the section itself)
   ///
   /// In en, this message translates to:
-  /// **'Guider'**
+  /// **'Guider Camera'**
   String get searchSectionGuider;
 
   /// Simple Mode search panel: a setting's name as a result; should match its name in Settings
@@ -1464,7 +1464,7 @@ abstract class AppLocalizations {
   /// Simple Mode Settings section and device row: the camera
   ///
   /// In en, this message translates to:
-  /// **'Camera'**
+  /// **'Main Camera'**
   String get shellSectionCamera;
 
   /// Simple Mode Settings section and device row: the mount
@@ -1482,7 +1482,7 @@ abstract class AppLocalizations {
   /// Simple Mode Settings section and device row: the guider
   ///
   /// In en, this message translates to:
-  /// **'Guider'**
+  /// **'Guider Camera'**
   String get shellSectionGuider;
 
   /// Simple Mode Settings › Devices when the app has no link to the rig
@@ -3416,6 +3416,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'guide scope guider camera pixel focal polar'**
   String get searchWordsGuideScope;
+
+  /// Guide mode: guiding with the guide camera, started by the shutter
+  ///
+  /// In en, this message translates to:
+  /// **'Guide'**
+  String get shellModeGuide;
+
+  /// Guided Run's step that starts guiding
+  ///
+  /// In en, this message translates to:
+  /// **'Guide'**
+  String get autopilotStepGuide;
+
+  /// Guided Run button moving on to the Guide step
+  ///
+  /// In en, this message translates to:
+  /// **'Next: Guide'**
+  String get guidedNextGuide;
+
+  /// Shutter label in Guide mode: starts the guider's routine (calibrating when needed)
+  ///
+  /// In en, this message translates to:
+  /// **'Start guiding'**
+  String get guideStart;
+
+  /// Shutter label in Guide mode while the guider runs
+  ///
+  /// In en, this message translates to:
+  /// **'Stop guiding'**
+  String get guideStop;
+
+  /// Action named in an error: the guider refused to start
+  ///
+  /// In en, this message translates to:
+  /// **'start guiding'**
+  String get guideActionStart;
+
+  /// Action named in an error: the guider refused to stop
+  ///
+  /// In en, this message translates to:
+  /// **'stop guiding'**
+  String get guideActionStop;
+
+  /// Guide panel headline while the guider is idle
+  ///
+  /// In en, this message translates to:
+  /// **'Not guiding'**
+  String get guideNotGuiding;
+
+  /// Guide panel headline with no guider
+  ///
+  /// In en, this message translates to:
+  /// **'Guider not connected'**
+  String get guideNoGuider;
+
+  /// Guide panel hint while idle
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the shutter to start guiding. It calibrates first when needed.'**
+  String get guideTapShutter;
+
+  /// Guide panel hint with no guider
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the guider in Settings › Devices.'**
+  String get guideConnectFirst;
+
+  /// The guide camera's device window title
+  ///
+  /// In en, this message translates to:
+  /// **'Guider Camera'**
+  String get deviceGuiderCamera;
 }
 
 class _AppLocalizationsDelegate

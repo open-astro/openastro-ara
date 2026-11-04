@@ -1355,8 +1355,6 @@ class SimpleGuiderWindow extends ConsumerStatefulWidget {
 class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
   double? _dragGain;
 
-  static String _arcsec(double v) => '${v.toStringAsFixed(2)}″';
-
   @override
   Widget build(BuildContext context) {
     final g = ref.watch(guiderStatusProvider).value;
@@ -1379,8 +1377,8 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
           Expanded(
             child: Text(
               camera?.name == null
-                  ? context.l10n.deviceGuider
-                  : '${context.l10n.deviceGuider} · ${camera!.name}',
+                  ? context.l10n.deviceGuiderCamera
+                  : '${context.l10n.deviceGuiderCamera} · ${camera!.name}',
               style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
@@ -1396,36 +1394,6 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
           style: AraText.caption,
         ),
       );
-    } else {
-      children.add(
-        simpleWindowRow(
-          context.l10n.deviceState,
-          id: 'State',
-          Text(g.runtimeSummary(context.l10n), style: kSimpleText),
-        ),
-      );
-      if (g.rmsTotalArcsec != null) {
-        children.add(
-          simpleWindowRow(
-            context.l10n.deviceRms,
-            id: 'RMS',
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(_arcsec(g.rmsTotalArcsec!), style: kSimpleText),
-                if (g.rmsRaArcsec != null && g.rmsDecArcsec != null)
-                  Text(
-                    context.l10n.deviceRmsRaDec(
-                      _arcsec(g.rmsRaArcsec!),
-                      _arcsec(g.rmsDecArcsec!),
-                    ),
-                    style: AraText.caption,
-                  ),
-              ],
-            ),
-          ),
-        );
-      }
     }
     final phd2 = ref.watch(phd2SettingsProvider);
     // The guider's own gain scale: percent of the camera's range.
@@ -1450,39 +1418,6 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
         },
       ),
     ]);
-    final every = phd2.ditherEnabled ? math.max(1, phd2.ditherEveryNFrames) : 0;
-    children.add(
-      simpleWindowRow(
-        context.l10n.deviceDither,
-        id: 'Dither',
-        simpleWindowStepper(
-          id: 'simple-guider-dither',
-          text: switch (every) {
-            0 => context.l10n.deviceOff,
-            _ => context.l10n.deviceDitherEveryFrames(every),
-          },
-          onLess: () => _setDither(every - 1),
-          onMore: () => _setDither(every + 1),
-        ),
-      ),
-    );
-    if (every > 0) {
-      final px = phd2.ditherPixels;
-      children.add(
-        simpleWindowRow(
-          context.l10n.deviceDitherBy,
-          id: 'Dither by',
-          simpleWindowStepper(
-            id: 'simple-guider-dither-px',
-            text: '${px == px.roundToDouble() ? px.round() : px} px',
-            onLess: () =>
-                px > 1 ? _save((p) => p.setDitherPixels(px - 1)) : null,
-            onMore: () =>
-                px < 30 ? _save((p) => p.setDitherPixels(px + 1)) : null,
-          ),
-        ),
-      );
-    }
     if (widget.inSettings) children.addAll(_versions(context, camera));
     return Column(
       key: const Key('simple-device-guider'),
@@ -1490,15 +1425,6 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
       spacing: AraSpace.s4,
       children: children,
     );
-  }
-
-  /// 0 turns dithering off; 1 and up dithers every that many frames.
-  void _setDither(int n) {
-    if (n < 0 || n > 20) return;
-    _save((p) {
-      p.setDitherEnabled(n > 0);
-      if (n > 0) p.setDitherEveryNFrames(n);
-    });
   }
 
   /// Changes the guider settings and saves them to the profile.

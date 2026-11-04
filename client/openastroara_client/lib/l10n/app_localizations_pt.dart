@@ -55,7 +55,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get safetySilence => 'Silence alarm';
 
   @override
-  String get deviceCamera => 'Camera';
+  String get deviceCamera => 'Main Camera';
 
   @override
   String get deviceMount => 'Mount';
@@ -479,7 +479,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get searchSectionDevices => 'Devices';
 
   @override
-  String get searchSectionCamera => 'Camera';
+  String get searchSectionCamera => 'Main Camera';
 
   @override
   String get searchSectionMount => 'Mount';
@@ -488,7 +488,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get searchSectionFocuser => 'Focuser';
 
   @override
-  String get searchSectionGuider => 'Guider';
+  String get searchSectionGuider => 'Guider Camera';
 
   @override
   String get searchSettingAperture => 'Main scope aperture';
@@ -762,7 +762,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellSectionDevices => 'Devices';
 
   @override
-  String get shellSectionCamera => 'Camera';
+  String get shellSectionCamera => 'Main Camera';
 
   @override
   String get shellSectionMount => 'Mount';
@@ -771,7 +771,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellSectionFocuser => 'Focuser';
 
   @override
-  String get shellSectionGuider => 'Guider';
+  String get shellSectionGuider => 'Guider Camera';
 
   @override
   String get shellRigNotConnected => 'Rig not connected';
@@ -1933,6 +1933,43 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get searchWordsGuideScope =>
       'guide scope guider camera pixel focal polar';
+
+  @override
+  String get shellModeGuide => 'Guide';
+
+  @override
+  String get autopilotStepGuide => 'Guide';
+
+  @override
+  String get guidedNextGuide => 'Next: Guide';
+
+  @override
+  String get guideStart => 'Start guiding';
+
+  @override
+  String get guideStop => 'Stop guiding';
+
+  @override
+  String get guideActionStart => 'start guiding';
+
+  @override
+  String get guideActionStop => 'stop guiding';
+
+  @override
+  String get guideNotGuiding => 'Not guiding';
+
+  @override
+  String get guideNoGuider => 'Guider not connected';
+
+  @override
+  String get guideTapShutter =>
+      'Tap the shutter to start guiding. It calibrates first when needed.';
+
+  @override
+  String get guideConnectFirst => 'Connect the guider in Settings › Devices.';
+
+  @override
+  String get deviceGuiderCamera => 'Guider Camera';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -1985,7 +2022,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get safetySilence => 'Silenciar alarme';
 
   @override
-  String get deviceCamera => 'Câmera';
+  String get deviceCamera => 'Câmera principal';
 
   @override
   String get deviceMount => 'Montagem';
@@ -2411,7 +2448,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get searchSectionDevices => 'Dispositivos';
 
   @override
-  String get searchSectionCamera => 'Câmera';
+  String get searchSectionCamera => 'Câmera principal';
 
   @override
   String get searchSectionMount => 'Montagem';
@@ -2420,7 +2457,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get searchSectionFocuser => 'Focalizador';
 
   @override
-  String get searchSectionGuider => 'Guia';
+  String get searchSectionGuider => 'Câmera de guiagem';
 
   @override
   String get searchSettingAperture => 'Abertura do telescópio principal';
@@ -2696,7 +2733,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get shellSectionDevices => 'Dispositivos';
 
   @override
-  String get shellSectionCamera => 'Câmera';
+  String get shellSectionCamera => 'Câmera principal';
 
   @override
   String get shellSectionMount => 'Montagem';
@@ -2705,7 +2742,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get shellSectionFocuser => 'Focalizador';
 
   @override
-  String get shellSectionGuider => 'Guia';
+  String get shellSectionGuider => 'Câmera de guiagem';
 
   @override
   String get shellRigNotConnected => 'Setup não conectado';
@@ -3875,4 +3912,42 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get searchWordsGuideScope =>
       'luneta guia guiagem câmera pixel distância focal polar guide scope';
+
+  @override
+  String get shellModeGuide => 'Guiagem';
+
+  @override
+  String get autopilotStepGuide => 'Guiagem';
+
+  @override
+  String get guidedNextGuide => 'Próximo: Guiagem';
+
+  @override
+  String get guideStart => 'Iniciar guiagem';
+
+  @override
+  String get guideStop => 'Parar guiagem';
+
+  @override
+  String get guideActionStart => 'iniciar a guiagem';
+
+  @override
+  String get guideActionStop => 'parar a guiagem';
+
+  @override
+  String get guideNotGuiding => 'Sem guiagem';
+
+  @override
+  String get guideNoGuider => 'Guia não conectado';
+
+  @override
+  String get guideTapShutter =>
+      'Toque no obturador para iniciar a guiagem. Ele calibra antes, quando preciso.';
+
+  @override
+  String get guideConnectFirst =>
+      'Conecte o guia em Configurações › Dispositivos.';
+
+  @override
+  String get deviceGuiderCamera => 'Câmera de guiagem';
 }

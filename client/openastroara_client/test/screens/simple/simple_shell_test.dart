@@ -45,6 +45,7 @@ import 'package:openastroara/state/stats/server_internal_state_state.dart';
 import 'package:openastroara/screens/app_shell.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
+import 'package:openastroara/screens/simple/simple_guide_panel.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart';
@@ -728,6 +729,24 @@ void main() {
     expect((pill.kind, pill.title), (SimpleMessageKind.question, 'Take the Bahtinov mask off'));
     pill.actions.last.onPressed(); // Mask removed
     expect(b.finishes, 1);
+  });
+
+  testWidgets('Guide is a mode: its shutter starts guiding, its chip shows the RMS and opens the Guide panel',
+      (tester) async {
+    // User, 2026-11-04: guiding moves from the guider's window to a mode on the rail.
+    await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(_GuiderUp.new)]);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-guide')));
+    await tester.pump();
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Guide')), findsOneWidget);
+    expect(find.byType(SimpleGuideShutter), findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    expect(find.byType(SimpleGuidePanel), findsOneWidget);
+    final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
+    expect(tester.getRect(find.byKey(const Key('simple-guide-panel'))).right, rail.left - kSimpleInset,
+        reason: 'left of the rail, like every mode panel');
   });
 
   testWidgets('Focus stays in Simple Mode: the rail reads Focus, its panel opens left of the rail; the chip is the Focus chip',
@@ -1956,11 +1975,11 @@ void main() {
     ]);
     await _openSection(tester, 'Devices');
     final page = find.byKey(const Key('simple-gear'));
-    expect(find.descendant(of: page, matching: find.text('Guider · ZWO ASI120MM Mini')), findsOneWidget);
+    expect(find.descendant(of: page, matching: find.text('Guider Camera · ZWO ASI120MM Mini')), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-gear-guider-disconnect')));
     await tester.pump();
     expect(guider.calls, ['disconnect']);
-    await tester.tap(find.descendant(of: page, matching: find.text('Guider · ZWO ASI120MM Mini')));
+    await tester.tap(find.descendant(of: page, matching: find.text('Guider Camera · ZWO ASI120MM Mini')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('simple-gear')), findsNothing, reason: 'the Guider section is open');
   });
@@ -2006,7 +2025,7 @@ void main() {
     ]);
     await _openSection(tester, 'Devices');
     final page = find.byKey(const Key('simple-gear'));
-    expect(find.descendant(of: page, matching: find.text('Guider')), findsOneWidget);
+    expect(find.descendant(of: page, matching: find.text('Guider Camera')), findsOneWidget);
     expect(find.descendant(of: page, matching: find.text('Not connected')), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-gear-guider-connect')));
     await tester.pump();

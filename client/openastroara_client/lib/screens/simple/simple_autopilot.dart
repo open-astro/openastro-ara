@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../state/app_locale_state.dart';
+import '../../state/guider/guider_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../state/setup/setup_readiness.dart';
 import '../../state/simple_messages_state.dart';
@@ -17,39 +18,67 @@ import 'simple_plan_panel.dart'
         simpleDarkStartProvider,
         simpleRunProvider,
         simpleScheduleAllowedProvider;
+import 'simple_guide_panel.dart' show simpleGuideActive, simpleGuiding;
 import 'simple_polar_panel.dart' show simplePolarActive;
 import 'simple_preview_panel.dart' show kSimpleText;
 import 'simple_shell.dart' show SimplePanel, kSimpleGoStyle, simpleFrost;
 
 /// Guided Run's steps, in the night's order: tonight's targets first, then
 /// focus (polar alignment plate-solves and fails on a soft focus), then polar
-/// align; the last one's Done starts imaging.
-enum AutopilotStep { plan, focus, polarAlign }
+/// align, then guide (user, 2026-11-04); the last one's Done starts
+/// imaging.
+enum AutopilotStep { plan, focus, polarAlign, guide }
 
 extension AutopilotStepLabel on AutopilotStep {
   String label(AppLocalizations l10n) => switch (this) {
     AutopilotStep.focus => l10n.autopilotStepFocus,
     AutopilotStep.polarAlign => l10n.autopilotStepPolarAlign,
     AutopilotStep.plan => l10n.autopilotStepPlan,
+    AutopilotStep.guide => l10n.autopilotStepGuide,
   };
 }
 
 /// The step to start on (always the plan), or go to next from [after]: the
 /// first setup step not done tonight, polar align skipped on a permanent
-/// pier; null when none is left, which starts imaging. Pure — unit-tested.
+/// pier, guide skipped when already guiding or with no guider ([guided]);
+/// null when none is left, which starts imaging. Pure — unit-tested.
 AutopilotStep? autopilotNext({
   AutopilotStep? after,
   required bool focused,
   required bool aligned,
   required bool permanentPier,
+  required bool guided,
 }) {
   for (final s in AutopilotStep.values) {
     if (after != null && s.index <= after.index) continue;
     if (s == AutopilotStep.focus && focused) continue;
     if (s == AutopilotStep.polarAlign && (aligned || permanentPier)) continue;
+    if (s == AutopilotStep.guide && guided) continue;
     return s;
   }
   return null;
+}
+
+/// The guide step has nothing to do: guiding already, or no guider to guide
+/// with (an unguided rig images without it).
+bool _guided(Ref ref) {
+  final g = ref.read(guiderStatusProvider).value;
+  return g == null || !g.isConnected || simpleGuiding(g);
+}
+
+/// [autopilotNext] from the rig's state now, watched: the step after [after].
+AutopilotStep? simpleAutopilotNext(
+  WidgetRef ref, {
+  required AutopilotStep after,
+}) {
+  final g = ref.watch(guiderStatusProvider).value;
+  return autopilotNext(
+    after: after,
+    focused: ref.watch(setupFocusStateProvider) == SetupStepState.done,
+    aligned: ref.watch(setupPolarAlignStateProvider) == SetupStepState.done,
+    permanentPier: ref.watch(simplePermanentPierProvider).value ?? false,
+    guided: g == null || !g.isConnected || simpleGuiding(g),
+  );
 }
 
 /// Simple Mode's Guided Run: the night's steps in order, each handing over to
@@ -82,6 +111,7 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
     focused: ref.read(setupFocusStateProvider) == SetupStepState.done,
     aligned: ref.read(setupPolarAlignStateProvider) == SetupStepState.done,
     permanentPier: ref.read(simplePermanentPierProvider).value ?? false,
+    guided: _guided(ref),
   );
 
   /// The polar step's Done completed its routine: leaving stops nothing.
@@ -98,13 +128,24 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
     if (step == AutopilotStep.polarAlign &&
         !simplePolarActive(ref.read(polarAlignLiveProvider))) {
       final api = ref.read(polarAlignApiProvider);
-      if (api != null) unawaited(_polar(api.start, (l) => l.polarActionStart));
+      if (api != null) unawaited(_stepAction(api.start, (l) => l.polarActionStart));
+    }
+    // Entering guide starts the guider's routine, the same exception; leaving
+    // the step keeps it guiding (imaging wants it).
+    if (step == AutopilotStep.guide &&
+        !simpleGuideActive(ref.read(guiderStatusProvider).value)) {
+      unawaited(
+        _stepAction(
+          ref.read(guiderStatusProvider.notifier).startGuiding,
+          (l) => l.guideActionStart,
+        ),
+      );
     }
   }
 
-  /// A polar start or stop; one that fails says why in a pill (a step whose
-  /// routine never started, or a mount still moving).
-  Future<void> _polar(
+  /// A step's start or stop (polar align, guiding); one that fails says why
+  /// in a pill (a step whose routine never started, or a mount still moving).
+  Future<void> _stepAction(
     Future<void> Function() op,
     String Function(AppLocalizations l10n) action,
   ) async {
@@ -178,7 +219,7 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
       return;
     }
     final api = ref.read(polarAlignApiProvider);
-    if (api != null) unawaited(_polar(api.stop, (l) => l.polarActionStop));
+    if (api != null) unawaited(_stepAction(api.stop, (l) => l.polarActionStop));
   }
 }
 
@@ -232,6 +273,9 @@ class AutopilotStrip extends ConsumerWidget {
                     AutopilotStep.polarAlign => aligned,
                     AutopilotStep.plan =>
                       ref.watch(simpleRunProvider).sequenceId != null,
+                    AutopilotStep.guide => simpleGuiding(
+                      ref.watch(guiderStatusProvider).value,
+                    ),
                   },
                 ),
               ],

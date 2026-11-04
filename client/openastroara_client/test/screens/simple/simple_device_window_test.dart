@@ -90,7 +90,7 @@ void main() {
     'the camera window: its name and dot, the cooler, the target and what it reads now',
     (tester) async {
       await _pump(tester, _wire());
-      expect(find.text('Camera · ASI2600MM'), findsOneWidget);
+      expect(find.text('Main Camera · ASI2600MM'), findsOneWidget);
       expect(find.text('Cooler'), findsOneWidget);
       expect(find.text('Temperature'), findsOneWidget, reason: 'what the sensor reads');
       expect(find.text('Target temperature'), findsOneWidget);

@@ -47,7 +47,7 @@ import '../../widgets/stop_mount_overlay.dart' show SlewWsEvents;
 import '../../widgets/sequencer/run_completion_sheet.dart'
     show runFramesPerFilter;
 import 'simple_autopilot.dart'
-    show AutopilotStep, autopilotNext, autopilotProvider;
+    show AutopilotStep, autopilotProvider, simpleAutopilotNext;
 import 'simple_device_windows.dart' show SimpleGainSlider;
 import 'simple_preview_panel.dart'
     show
@@ -1694,14 +1694,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     // focus and polar alignment done, starts imaging).
     final guided = ref.watch(autopilotProvider) == AutopilotStep.plan;
     final guidedNext = guided
-        ? autopilotNext(
-            after: AutopilotStep.plan,
-            focused: ref.watch(setupFocusStateProvider) == SetupStepState.done,
-            aligned:
-                ref.watch(setupPolarAlignStateProvider) == SetupStepState.done,
-            permanentPier:
-                ref.watch(simplePermanentPierProvider).value ?? false,
-          )
+        ? simpleAutopilotNext(ref, after: AutopilotStep.plan)
         : null;
     final now = ref.watch(clockProvider)();
     final dark = ref.watch(simpleDarkStartProvider);
@@ -2159,6 +2152,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                             AutopilotStep.focus => context.l10n.guidedNextFocus,
                             AutopilotStep.polarAlign =>
                               context.l10n.guidedNextPolarAlign,
+                            AutopilotStep.guide => context.l10n.guidedNextGuide,
                             _ => context.l10n.guidedStartImaging,
                           }
                         : run.busy

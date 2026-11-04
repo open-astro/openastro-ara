@@ -85,6 +85,8 @@ import '../../state/settings/phd2_settings_state.dart'
 import '../../state/focus/bahtinov_focus_state.dart'
     show MainFocusMethod, bahtinovFocusProvider;
 import 'simple_message_pills.dart';
+import 'simple_guide_panel.dart'
+    show SimpleGuidePanel, SimpleGuideShutter, simpleGuideSummary;
 import 'simple_polar_panel.dart';
 import 'simple_plan_panel.dart';
 import 'simple_preview_panel.dart';
@@ -117,7 +119,7 @@ const double kSimpleAutopilotRowHeight = 56;
 const double kSimpleStopSize = 60;
 
 /// The modes, in the decided order.
-enum SimpleModeScreen { autopilot, preview, focus, polarAlign, plan }
+enum SimpleModeScreen { autopilot, preview, focus, polarAlign, guide, plan }
 
 extension SimpleModeScreenLabels on SimpleModeScreen {
   String labelOf(AppLocalizations l10n) => switch (this) {
@@ -125,6 +127,7 @@ extension SimpleModeScreenLabels on SimpleModeScreen {
     SimpleModeScreen.preview => l10n.shellModePreview,
     SimpleModeScreen.polarAlign => l10n.shellModePolarAlign,
     SimpleModeScreen.focus => l10n.shellModeFocus,
+    SimpleModeScreen.guide => l10n.shellModeGuide,
     SimpleModeScreen.plan => l10n.shellModePlan,
   };
 
@@ -140,6 +143,7 @@ extension SimpleModeScreenLabels on SimpleModeScreen {
     SimpleModeScreen.preview => Icons.visibility_outlined,
     SimpleModeScreen.focus => Icons.center_focus_strong,
     SimpleModeScreen.polarAlign => Icons.explore_outlined,
+    SimpleModeScreen.guide => Icons.track_changes,
     SimpleModeScreen.plan => Icons.playlist_play,
   };
 }
@@ -245,6 +249,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
           AutopilotStep.focus => SimpleModeScreen.focus,
           AutopilotStep.polarAlign => SimpleModeScreen.polarAlign,
           AutopilotStep.plan => SimpleModeScreen.plan,
+          AutopilotStep.guide => SimpleModeScreen.guide,
           null => SimpleModeScreen.preview,
         };
 
@@ -952,6 +957,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                                   const SimpleFocusPanel(),
                                                 SimpleModeScreen.polarAlign =>
                                                   const SimplePolarPanel(),
+                                                SimpleModeScreen.guide =>
+                                                  const SimpleGuidePanel(),
                                                 SimpleModeScreen.plan =>
                                                   queuePanel,
                                                 _ => const SizedBox(
@@ -1533,6 +1540,7 @@ class _RightRail extends ConsumerWidget {
           switch (mode) {
             SimpleModeScreen.focus => const SimpleFocusShutter(),
             SimpleModeScreen.polarAlign => const SimplePolarShutter(),
+            SimpleModeScreen.guide => const SimpleGuideShutter(),
             SimpleModeScreen.plan => const SimpleRunShutter(),
             _ => const SimpleShutter(),
           },
@@ -1554,6 +1562,7 @@ class _RightRail extends ConsumerWidget {
   String _chipLabel(BuildContext context, WidgetRef ref) {
     final label = switch (mode) {
       SimpleModeScreen.focus => simpleFocusSummary(ref),
+      SimpleModeScreen.guide => simpleGuideSummary(ref),
       SimpleModeScreen.plan => simpleRunChip(
         ref.watch(simpleRunProvider),
         ref.watch(simpleRunPlanProvider),
@@ -1602,6 +1611,7 @@ class _ModeGrid extends ConsumerWidget {
                       : AraColors.tileFill,
                   borderRadius: BorderRadius.circular(10),
                   child: InkWell(
+                    key: Key('simple-mode-${m.name}'),
                     borderRadius: BorderRadius.circular(10),
                     onTap: () => onPicked(m),
                     child: Padding(
@@ -2121,7 +2131,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
         (
           'Guider',
           l10n.shellSectionGuider,
-          (c) => glyph(Icons.track_changes, c),
+          (c) => glyph(Icons.videocam_outlined, c),
           true,
         ),
     ];

@@ -12,7 +12,8 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../widgets/imaging/polar_align_panel.dart';
-import 'simple_autopilot.dart' show AutopilotStep, autopilotProvider;
+import 'simple_autopilot.dart'
+    show AutopilotStep, autopilotProvider, simpleAutopilotNext;
 import 'simple_preview_panel.dart'
     show
         SimplePresetTile,
@@ -454,9 +455,15 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                             }
                           : null,
                       child: Text(
-                        autopilot
-                            ? l10n.guidedDoneStartImaging
-                            : l10n.polarDone,
+                        !autopilot
+                            ? l10n.polarDone
+                            : simpleAutopilotNext(
+                                    ref,
+                                    after: AutopilotStep.polarAlign,
+                                  ) ==
+                                  AutopilotStep.guide
+                            ? l10n.guidedNextGuide
+                            : l10n.guidedDoneStartImaging,
                       ),
                     ),
                   ),
