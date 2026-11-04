@@ -783,10 +783,11 @@ jobs:
         with:
           platforms: arm64
 
-      # The bundled ASTAP solver (third_party/astap submodule, OpenAstro's multi-core fork of
-      # astap_cli) ships next to the daemon; the profile's default solver path points at it. Free
-      # Pascal has no arm64 cross units in the distro packages, so build it natively inside an
-      # arm64 Debian container under qemu. build-deb.sh and the Dockerfile refuse a publish dir
+      # The bundled ASTAP solver (third_party/astap submodule: open-astro/astap branch `ara`,
+      # Han Kleijn's multi-core astap_cli plus OpenAstro's front-end threading) ships next to
+      # the daemon; the profile's default solver path points at it. Free Pascal has no arm64
+      # cross units in the distro packages, so build it natively inside an arm64 Debian
+      # container under qemu. build-deb.sh and the Dockerfile refuse a publish dir
       # without it.
       - name: Build astap_cli (ASTAP solver) for linux-arm64
         run: |
