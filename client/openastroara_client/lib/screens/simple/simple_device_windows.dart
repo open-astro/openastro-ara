@@ -249,7 +249,7 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
     final notify = userNotifier(context);
     final l10n = context.l10n;
     try {
-      await action();
+      if (!await action()) _sayBusy(ref, l10n);
     } catch (e) {
       notify(
         l10n.deviceCouldntChangeCooler,
@@ -261,6 +261,21 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
 
   static Widget _row(String id, String label, Widget value) =>
       simpleWindowRow(label, value, id: id);
+}
+
+/// A tap the device's notifier dropped (its last command still running)
+/// says so: one pill at a time, fading like a result (ALP-4982).
+void _sayBusy(WidgetRef ref, AppLocalizations l10n) {
+  final messages = ref.read(simpleMessagesProvider.notifier);
+  if (ref.read(simpleMessagesProvider).any((m) => m.title == l10n.deviceBusy)) {
+    return;
+  }
+  final id = messages.show(
+    SimpleMessageKind.error,
+    l10n.deviceBusy,
+    detail: l10n.deviceBusyDetail,
+  );
+  Timer(kSimpleResultLife, () => messages.dismiss(id));
 }
 
 /// What the rig reports of a device's versions, set out like Rig's (only in
@@ -727,7 +742,9 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     final notify = userNotifier(context);
     final l10n = context.l10n;
     try {
-      return await action();
+      final performed = await action();
+      if (!performed) _sayBusy(ref, l10n);
+      return performed;
     } catch (e) {
       notify(
         l10n.deviceCouldntMoveMount,
@@ -865,9 +882,10 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     final notify = userNotifier(context);
     final l10n = context.l10n;
     try {
-      await ref
+      final performed = await ref
           .read(focuserProvider.notifier)
           .move(absolute ? target : target - from);
+      if (!performed) _sayBusy(ref, l10n);
     } catch (e) {
       notify(
         l10n.deviceCouldntMoveFocuser,

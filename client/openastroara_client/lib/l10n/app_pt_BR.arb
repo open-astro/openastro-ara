@@ -48,6 +48,8 @@
   "deviceCouldntSaveMeridianFlip": "Não foi possível salvar a virada de meridiano",
   "deviceCouldntMoveMount": "Não foi possível mover a montagem",
   "deviceGain": "Ganho",
+  "deviceBusy": "Ainda ocupado",
+  "deviceBusyDetail": "O último comando ainda não terminou. Tente de novo em instantes.",
   "deviceCouldntMoveFocuser": "Não foi possível mover o focalizador",
   "deviceCouldntSaveThat": "Não foi possível salvar",
   "deviceNever": "Nunca",

@@ -168,6 +168,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceGain => 'Gain';
 
   @override
+  String get deviceBusy => 'Still busy';
+
+  @override
+  String get deviceBusyDetail =>
+      'The last command hasn\'t finished. Try again in a moment.';
+
+  @override
   String get deviceCouldntMoveFocuser => 'Couldn\'t move the focuser';
 
   @override

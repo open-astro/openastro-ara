@@ -168,6 +168,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceGain => 'Gain';
 
   @override
+  String get deviceBusy => 'Still busy';
+
+  @override
+  String get deviceBusyDetail =>
+      'The last command hasn\'t finished. Try again in a moment.';
+
+  @override
   String get deviceCouldntMoveFocuser => 'Couldn\'t move the focuser';
 
   @override
@@ -2091,6 +2098,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get deviceGain => 'Ganho';
+
+  @override
+  String get deviceBusy => 'Ainda ocupado';
+
+  @override
+  String get deviceBusyDetail =>
+      'O último comando ainda não terminou. Tente de novo em instantes.';
 
   @override
   String get deviceCouldntMoveFocuser => 'Não foi possível mover o focalizador';

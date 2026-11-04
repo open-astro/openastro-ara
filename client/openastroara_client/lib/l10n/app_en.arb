@@ -207,6 +207,14 @@
   "@deviceGain": {
     "description": "Camera and guider window row: the camera's gain"
   },
+  "deviceBusy": "Still busy",
+  "@deviceBusy": {
+    "description": "Pill title when a device tap was dropped because its last command hasn't finished"
+  },
+  "deviceBusyDetail": "The last command hasn't finished. Try again in a moment.",
+  "@deviceBusyDetail": {
+    "description": "Pill detail under deviceBusy"
+  },
   "deviceCouldntMoveFocuser": "Couldn't move the focuser",
   "@deviceCouldntMoveFocuser": {
     "description": "Error message when the focuser refused a move"

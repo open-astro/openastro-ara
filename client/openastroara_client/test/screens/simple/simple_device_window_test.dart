@@ -7,6 +7,7 @@ import 'package:openastroara/screens/simple/simple_device_windows.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
 
 /// A camera with a cooler; records the cooler commands instead of sending them.
 class _Camera extends CameraStatusNotifier {
@@ -20,8 +21,10 @@ class _Camera extends CameraStatusNotifier {
   @override
   Future<bool> setCooler(bool enabled, {double? targetTemperatureC}) async {
     calls.add((enabled, targetTemperatureC));
-    return true;
+    return !busy;
   }
+
+  bool busy = false;
 }
 
 Map<String, dynamic> _wire({
@@ -74,6 +77,15 @@ Future<(ProviderContainer, _Camera)> _pump(
 }
 
 void main() {
+  testWidgets('a cooler tap dropped while the last command runs says so in a pill (ALP-4982)', (tester) async {
+    final (c, camera) = await _pump(tester, _wire());
+    camera.busy = true;
+    await tester.tap(find.byKey(const Key('simple-camera-cooler-off')));
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider).single.title, 'Still busy');
+    await tester.pump(const Duration(seconds: 11));
+  });
+
   testWidgets(
     'the camera window: its name and dot, the cooler, the target and what it reads now',
     (tester) async {

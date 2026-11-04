@@ -387,6 +387,18 @@ abstract class AppLocalizations {
   /// **'Gain'**
   String get deviceGain;
 
+  /// Pill title when a device tap was dropped because its last command hasn't finished
+  ///
+  /// In en, this message translates to:
+  /// **'Still busy'**
+  String get deviceBusy;
+
+  /// Pill detail under deviceBusy
+  ///
+  /// In en, this message translates to:
+  /// **'The last command hasn\'t finished. Try again in a moment.'**
+  String get deviceBusyDetail;
+
   /// Error message when the focuser refused a move
   ///
   /// In en, this message translates to:
