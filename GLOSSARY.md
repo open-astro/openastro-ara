@@ -14,6 +14,10 @@ _Avoid_: imaging night, client session (for a client's connection)
 The sky object an imaging plan points the telescope at. Setpoints such as Target ADU or Cooler Target use the word only inside their full control name, never on its own.
 _Avoid_: object (when the imaging subject is meant), bare "target" for a setpoint
 
+**Queue**:
+Simple Mode's ordered list of Targets to image in the Session, kept as one sequence on the rig.
+_Avoid_: run, plan (for the list itself)
+
 **Guiding**:
 Keeping the mount locked on a star with a separate guide camera and guide optics while the main camera exposes. The bare word "guide" belongs to guiding alone.
 _Avoid_: "the guide" for the User Guide
