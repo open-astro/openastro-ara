@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../widgets/status_indicator.dart' show StatusBlink;
 import '../../../models/equipment_device_status.dart';
 import '../../../models/mount_status.dart';
 import '../../../services/equipment_device_api.dart';
@@ -139,9 +140,18 @@ class _MountBody extends ConsumerWidget {
         if (s.isBusy)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text(
-              s.runtimeState == 'unparking' ? 'Unparking…' : 'Slewing…',
-              style: const TextStyle(color: AraColors.accentBusy),
+            // DESIGN.md status rule: slewing is working (blinking green),
+            // unparking is on its way between two states (blue).
+            child: StatusBlink(
+              on: s.runtimeState != 'unparking',
+              child: Text(
+                s.runtimeState == 'unparking' ? 'Unparking…' : 'Slewing…',
+                style: TextStyle(
+                  color: s.runtimeState == 'unparking'
+                      ? AraColors.accentInfo
+                      : AraColors.accentConnected,
+                ),
+              ),
             ),
           ),
         if (caps?.canSetTracking ?? false)

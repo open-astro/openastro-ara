@@ -34,6 +34,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String statusMoreSemantics(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count more statuses',
+      one: '1 more status',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get pillsDismiss => 'Dismiss';
 
   @override
@@ -55,7 +66,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get safetySilence => 'Silence alarm';
 
   @override
-  String get deviceCamera => 'Camera';
+  String get deviceCamera => 'Main Camera';
 
   @override
   String get deviceMount => 'Mount';
@@ -73,7 +84,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceNotConnected => 'Not connected';
 
   @override
-  String get deviceCurrentTemperature => 'Temperature';
+  String get deviceCurrentTemperature => 'Sensor temperature';
 
   @override
   String get deviceCooler => 'Cooler';
@@ -166,6 +177,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deviceGain => 'Gain';
+
+  @override
+  String get deviceBusy => 'Still busy';
+
+  @override
+  String get deviceBusyDetail =>
+      'The last command hasn\'t finished. Try again in a moment.';
 
   @override
   String get deviceCouldntMoveFocuser => 'Couldn\'t move the focuser';
@@ -472,7 +490,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchSectionDevices => 'Devices';
 
   @override
-  String get searchSectionCamera => 'Camera';
+  String get searchSectionCamera => 'Main Camera';
 
   @override
   String get searchSectionMount => 'Mount';
@@ -481,7 +499,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchSectionFocuser => 'Focuser';
 
   @override
-  String get searchSectionGuider => 'Guider';
+  String get searchSectionGuider => 'Guider Camera';
 
   @override
   String get searchSettingAperture => 'Main scope aperture';
@@ -619,51 +637,45 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchWordsDither => 'guiding dithering';
 
   @override
-  String get autopilotStepFocus => 'Focus';
+  String get nightSetupStepFocus => 'Focus';
 
   @override
-  String get autopilotStepPolarAlign => 'Polar align';
+  String get nightSetupStepPolarAlign => 'Polar align';
 
   @override
-  String get autopilotStepPlan => 'Plan';
+  String get nightSetupStepPlan => 'Plan';
 
   @override
-  String autopilotStepDone(String step) {
+  String get nightSetupStepGuide => 'Guide';
+
+  @override
+  String nightSetupStepDone(String step) {
     return '$step, done';
   }
 
   @override
-  String autopilotStepSkipped(String step) {
+  String nightSetupStepSkipped(String step) {
     return '$step, skipped';
   }
 
   @override
-  String autopilotStepCurrent(String step) {
+  String nightSetupStepCurrent(String step) {
     return '$step, current step';
   }
 
   @override
-  String autopilotStepNext(String step) {
+  String nightSetupStepNext(String step) {
     return '$step, next';
   }
 
   @override
-  String get autopilotBack => 'Back';
+  String get nightSetupBack => 'Back';
 
   @override
-  String get autopilotSkip => 'Skip';
+  String get nightSetupSkip => 'Skip';
 
   @override
-  String get autopilotNothingDone => 'Nothing done yet tonight';
-
-  @override
-  String get autopilotStart => 'Start Guided Run';
-
-  @override
-  String get autopilotNotNow => 'Not now';
-
-  @override
-  String get shellModeAutopilot => 'Guided Run';
+  String get shellModeNightSetup => 'Night Setup';
 
   @override
   String get shellModePreview => 'Preview';
@@ -681,7 +693,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellRailPolarAlign => 'P.A.';
 
   @override
-  String get shellRailAutopilot => 'Guided';
+  String get shellRailNightSetup => 'Setup';
 
   @override
   String shellStopAgain(String shortcut) {
@@ -755,7 +767,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellSectionDevices => 'Devices';
 
   @override
-  String get shellSectionCamera => 'Camera';
+  String get shellSectionCamera => 'Main Camera';
 
   @override
   String get shellSectionMount => 'Mount';
@@ -764,7 +776,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellSectionFocuser => 'Focuser';
 
   @override
-  String get shellSectionGuider => 'Guider';
+  String get shellSectionGuider => 'Guider Camera';
 
   @override
   String get shellRigNotConnected => 'Rig not connected';
@@ -896,7 +908,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellThisApp => 'This app';
 
   @override
-  String get shellAraServer => 'OpenAstro Ara server';
+  String get shellAraServer => 'Ara server';
 
   @override
   String get shellStarDatabase => 'Star database';
@@ -1017,9 +1029,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get planTonightsBest => 'TONIGHT\'S BEST';
-
-  @override
-  String get planTonightsPlan => 'Tonight\'s plan';
 
   @override
   String planEditTarget(String name) {
@@ -1960,4 +1969,58 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get searchWordsGuideScope =>
       'guide scope guider camera pixel focal polar';
+
+  @override
+  String get shellModeGuide => 'Guide';
+
+  @override
+  String get guidedNextGuide => 'Next: Guide';
+
+  @override
+  String get guideStart => 'Start guiding';
+
+  @override
+  String get guideStop => 'Stop guiding';
+
+  @override
+  String get guideActionStart => 'start guiding';
+
+  @override
+  String get guideActionStop => 'stop guiding';
+
+  @override
+  String get guideIdle => 'Idle';
+
+  @override
+  String get guideNoGuider => 'Guider not connected';
+
+  @override
+  String get guideTapShutter =>
+      'Tap the shutter to start guiding. It calibrates first when needed.';
+
+  @override
+  String get guideConnectFirst => 'Connect the guider in Settings › Devices.';
+
+  @override
+  String get deviceGuiderCamera => 'Guider Camera';
+
+  @override
+  String get shellNoDevices => 'No devices connected';
+
+  @override
+  String get guideStarting => 'Starting…';
+
+  @override
+  String get guideStopping => 'Stopping…';
+
+  @override
+  String get guideExposureOwn => 'The guider\'s own';
+
+  @override
+  String get focusNeedsFocuser =>
+      'Connect a focuser to autofocus, or focus by hand on Manual.';
+
+  @override
+  String get shellMainCameraBusy =>
+      'The main camera is busy: wait for its frame, or stop it.';
 }

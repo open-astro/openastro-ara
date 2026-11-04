@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Guided Run Order</title>
+<title>Night Setup Order</title>
 <style>
   /* DESIGN.md tokens (lib/theme/ara_colors.dart + ara_metrics.dart) */
   :root {
@@ -105,7 +105,7 @@
 </head>
 <body>
 <div class="page">
-  <h1>Guided Run: Plan first</h1>
+  <h1>Night Setup: Plan first</h1>
   <p class="note">The order becomes <b>Plan → Focus → Polar align → Start</b>: pick tonight's targets first, then focus and polar-align, then imaging starts. Step through it with the buttons. Pick <b>how imaging starts</b> at the end: A, a last <b>Start</b> step whose shutter starts the queue; B, the last setup step's green Done starts it ("Done · Start imaging"). <span class="tag">proposed</span></p>
   <div class="controls">
     <div class="ctl"><span class="lbl">Step</span><span class="seg" id="step"><button data-v="plan" aria-pressed="true">1 · Plan</button><button data-v="focus">2 · Focus</button><button data-v="pa">3 · Polar align</button><button data-v="start">4 · Start (A)</button></span></div>
@@ -127,7 +127,7 @@
   <h2>Notes for the decision</h2>
   <p class="note">• <b>Plan</b> is the plan sheet as today, but it only queues: Add to queue, then a green <b>Next: Focus</b> once one target is in. Nothing starts imaging here.<br>
   • <b>Focus</b> and <b>Polar align</b> work as today (a finished autofocus moves on; Polar align starts its routine on entry). Steps already done tonight are skipped, Polar align too on a permanent pier.<br>
-  • <b>A:</b> a fourth step, Start: the queue squares show, the rail's shutter is the plan's ▶, and one tap starts imaging; Guided Run ends there. One more tap, but nothing starts by surprise, and the last check (clouds, the mask, the dew heater) happens before it.<br>
+  • <b>A:</b> a fourth step, Start: the queue squares show, the rail's shutter is the plan's ▶, and one tap starts imaging; Night Setup ends there. One more tap, but nothing starts by surprise, and the last check (clouds, the mask, the dew heater) happens before it.<br>
   • <b>B:</b> no fourth step: the last setup step's Done reads "Done · Start imaging" (Polar align's, or on a permanent pier the focus step's). One tap fewer.<br>
   • A scheduled start (Start at dark) still applies: the start waits on the rig as today.</p>
 </div>

@@ -6,11 +6,13 @@ import 'package:openastroara/widgets/sequencer/run_state_badge.dart';
 
 void main() {
   test('state→color mapping is the canonical run palette', () {
-    expect(RunStateBadge.colorFor(SequenceRunState.running), AraColors.accentBusy);
-    expect(RunStateBadge.colorFor(SequenceRunState.starting), AraColors.accentBusy);
+    expect(RunStateBadge.colorFor(SequenceRunState.running), AraColors.accentConnected); // working: green (DESIGN.md status rule)
+    expect(RunStateBadge.colorFor(SequenceRunState.starting), AraColors.accentInfo); // on its way: blue
     expect(RunStateBadge.colorFor(SequenceRunState.paused), AraColors.accentInfo);
+    // DESIGN.md status rule: a plan paused waiting for you needs a look, nothing
+    // failed: amber, as Simple Mode's plan pill.
     expect(RunStateBadge.colorFor(SequenceRunState.pausedAwaitingUser),
-        AraColors.accentError);
+        AraColors.accentBusy);
     expect(RunStateBadge.colorFor(SequenceRunState.failed), AraColors.accentError);
     expect(RunStateBadge.colorFor(SequenceRunState.aborting), AraColors.accentError);
     expect(RunStateBadge.colorFor(SequenceRunState.completed),

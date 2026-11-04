@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
+import 'package:openastroara/screens/simple/simple_guide_panel.dart' show SimpleGuidePanel;
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
@@ -138,7 +139,7 @@ void main() {
   final lang = locale.toLanguageTag();
   final l = lookupAppLocalizations(locale);
   for (final (scale, size) in cases) {
-    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Settings Focuser', 'Search', 'Wheels lat', 'Wheels lng', 'Wheels aperture', 'Wheels focal', 'Settings Guider', 'Guiding', 'Focus Auto', 'Focus Manual', 'Focus Guide', 'Polar adjusting', 'Guided Run']) {
+    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Settings Focuser', 'Search', 'Wheels lat', 'Wheels lng', 'Wheels aperture', 'Wheels focal', 'Settings Guider', 'Guiding', 'Focus Auto', 'Focus Manual', 'Focus Guide', 'Polar adjusting', 'Guide', 'Night Setup']) {
       testWidgets('$lang text ${scale}x at ${size.width.toInt()}x${size.height.toInt()}, $open: nothing overflows',
           skip: !hasFonts, (tester) async {
         tester.view.physicalSize = size;
@@ -151,7 +152,7 @@ void main() {
           if (open == 'Camera') cameraStatusProvider.overrideWith(_Camera.new),
           if (open == 'Settings Focuser') focuserProvider.overrideWith(_Focuser.new),
           if (open == 'Search') liveLibrarySessionsProvider.overrideWith(_Sessions.new),
-          if (open == 'Settings Guider' || open == 'Guiding' || open == 'Focus Guide')
+          if (open == 'Settings Guider' || open == 'Guiding' || open == 'Focus Guide' || open == 'Guide')
             guiderStatusProvider.overrideWith(_Guiding.new),
           if (open.startsWith('Focus')) focuserProvider.overrideWith(_Focuser.new),
           if (open == 'Polar adjusting') polarAlignLiveProvider.overrideWith(_Adjusting.new),
@@ -164,7 +165,7 @@ void main() {
         addTearDown(c.dispose);
         await c.read(simpleModeProvider.future);
         if (open == 'Settings Focuser') await c.read(focuserProvider.future);
-        if (open == 'Settings Guider' || open == 'Guiding' || open == 'Focus Guide') {
+        if (open == 'Settings Guider' || open == 'Guiding' || open == 'Focus Guide' || open == 'Guide') {
           await c.read(guiderStatusProvider.future);
         }
         if (open.startsWith('Focus')) await c.read(focuserProvider.future);
@@ -203,7 +204,7 @@ void main() {
           await tester.tap(find.byKey(const Key('simple-mode')), warnIfMissed: false);
           await tester.pump();
           // Every mode name whole, on the rail and in the grid: no "Previ…".
-          for (final name in [l.shellModeAutopilot, l.shellModePreview, l.shellModeFocus, l.shellModePolarAlign, l.shellModePlan]) {
+          for (final name in [l.shellModeNightSetup, l.shellModePreview, l.shellModeFocus, l.shellModePolarAlign, l.shellModePlan]) {
             for (final p in tester.renderObjectList<RenderParagraph>(find.text(name))) {
               expect(p.didExceedMaxLines, isFalse, reason: '"$name" is cut off');
             }
@@ -274,30 +275,37 @@ void main() {
           await tester.pump();
           await tester.pump();
           expect(find.byKey(const Key('simple-search-image-0')), findsOneWidget);
-        } else if (open == 'Guided Run') {
-          // The offer first (nothing done tonight), then the step strip once it runs.
+        } else if (open == 'Night Setup') {
+          // The step strip once it runs.
           void whole(Finder of) {
             for (final p in tester.renderObjectList<RenderParagraph>(find.descendant(of: of, matching: find.byType(RichText)))) {
               expect(p.didExceedMaxLines, isFalse, reason: '"${p.text.toPlainText()}" is cut off');
             }
           }
-          final offer = find.byKey(const Key('autopilot-offer'));
-          if (offer.evaluate().isNotEmpty) whole(offer);
-          await tester.tap(find.byKey(const Key('autopilot-start')), warnIfMissed: false);
-          await tester.pump();
-          final strip = find.byKey(const Key('autopilot-strip'));
-          if (size.width >= 768) expect(strip, findsOneWidget);
-          whole(strip);
-        } else if (open.startsWith('Focus') || open == 'Polar adjusting') {
-          // A mode panel: the mode from the grid, then its chip shows the panel.
-          final focus = open.startsWith('Focus');
+          // Started from the modes (the Start banner went, user 2026-11-04).
           await tester.tap(find.byKey(const Key('simple-mode')), warnIfMissed: false);
           await tester.pump();
-          await tester.tap(find.text(focus ? l.shellModeFocus : l.shellModePolarAlign).first, warnIfMissed: false);
+          await tester.tap(find.byKey(const Key('simple-mode-nightSetup')), warnIfMissed: false);
+          await tester.pump();
+          final strip = find.byKey(const Key('night-setup-strip'));
+          if (size.width >= 768) expect(strip, findsOneWidget);
+          whole(strip);
+        } else if (open.startsWith('Focus') || open == 'Polar adjusting' || open == 'Guide') {
+          // A mode panel: the mode from the grid, then its chip shows the panel.
+          final focus = open.startsWith('Focus');
+          final guide = open == 'Guide';
+          await tester.tap(find.byKey(const Key('simple-mode')), warnIfMissed: false);
+          await tester.pump();
+          await tester.tap(
+              guide
+                  // pt-BR's guiding bar reads Guiagem too: the tile by its key.
+                  ? find.byKey(const Key('simple-mode-guide'))
+                  : find.text(focus ? l.shellModeFocus : l.shellModePolarAlign).first,
+              warnIfMissed: false);
           await tester.pump();
           await tester.tap(find.byKey(const Key('simple-settings')), warnIfMissed: false);
           await tester.pump();
-          final panel = find.byType(focus ? SimpleFocusPanel : SimplePolarPanel);
+          final panel = find.byType(focus ? SimpleFocusPanel : guide ? SimpleGuidePanel : SimplePolarPanel);
           // (The one-third width has no panel layout yet: phone layout, ALP-4865.)
           if (size.width >= 768) expect(panel, findsOneWidget);
           if (size.width < 768) {
@@ -309,7 +317,7 @@ void main() {
             await tester.tap(find.byKey(const Key('simple-focus-scope-guide')), warnIfMissed: false);
             await tester.pump();
           }
-          if (!focus && size.width >= 768) expect(find.byKey(const Key('simple-polar-bullseye')), findsOneWidget);
+          if (!focus && !guide && size.width >= 768) expect(find.byKey(const Key('simple-polar-bullseye')), findsOneWidget);
           // Every label whole: "Principal", "Manual", "Contínuo" were cut at 1.3x-2x.
           for (final p in tester.renderObjectList<RenderParagraph>(find.descendant(of: panel, matching: find.byType(RichText)))) {
             expect(p.didExceedMaxLines, isFalse, reason: '"${p.text.toPlainText()}" is cut off');

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -7,21 +8,39 @@ import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
+import '../../models/guider_status.dart';
 import '../../services/storage_space_api.dart';
+import '../../state/guider/guider_state.dart';
 import '../../state/imaging/capture_progress_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
+import '../../state/simple_messages_state.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../state/stats/server_internal_state_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../state/focus/autofocus_live_state.dart';
+import '../../state/focus/bahtinov_focus_state.dart';
+import '../../state/focus/guide_focus_state.dart';
+import '../../state/polar_align/polar_align_state.dart';
+import '../../widgets/equipment/guider_chip.dart' show guiderStatusLevel;
+import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
+import '../../widgets/status_indicator.dart'
+    show StatusBlink, StatusDot, StatusLevel;
 import '../../state/equipment/camera_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
+import 'simple_guide_panel.dart'
+    show
+        simpleGuideActive,
+        simpleGuiderColour,
+        simpleGuiderPendingProvider,
+        simpleGuiding;
 import 'simple_plan_panel.dart' show simpleRunProvider;
+import 'simple_polar_panel.dart' show simplePolarActive, simplePolarPhase;
 import 'simple_device_windows.dart'
     show SimpleGainSlider, simpleCelsius, simpleMountMotionProvider;
 import 'simple_shell.dart'
@@ -387,8 +406,12 @@ class SimpleShutter extends ConsumerWidget {
       running: (looping || capturing) && !stopping,
       onPressed: stopping
           ? null
+          // A loop adopted from the daemon runs under either shot pick: the
+          // square stops it (DESIGN.md: whatever starts something stops it).
+          : looping
+          ? () => toggleLiveView(context, ref, false)
           : switch (shot) {
-              PreviewShot.loop => () => toggleLiveView(context, ref, !looping),
+              PreviewShot.loop => () => toggleLiveView(context, ref, true),
               // The square stops the shot in flight, like a loop.
               PreviewShot.single =>
                 capturing
@@ -487,6 +510,51 @@ class _SimpleWheelKeysState extends State<SimpleWheelKeys> {
         borderRadius: BorderRadius.circular(8),
       ),
       child: widget.child,
+    ),
+  );
+}
+
+/// A pill's tap that a keyboard reaches too: Tab focuses it, with the
+/// [SimpleWheelKeys] ring, and Enter or Space taps it (DESIGN.md: keyboard
+/// reach with visible focus).
+class SimpleTapTarget extends StatefulWidget {
+  const SimpleTapTarget({super.key, required this.onTap, required this.child});
+
+  final VoidCallback? onTap;
+  final Widget child;
+
+  @override
+  State<SimpleTapTarget> createState() => _SimpleTapTargetState();
+}
+
+class _SimpleTapTargetState extends State<SimpleTapTarget> {
+  bool _ring = false;
+
+  @override
+  Widget build(BuildContext context) => FocusableActionDetector(
+    enabled: widget.onTap != null,
+    onShowFocusHighlight: (v) => setState(() => _ring = v),
+    mouseCursor: widget.onTap == null
+        ? MouseCursor.defer
+        : SystemMouseCursors.click,
+    actions: {
+      ActivateIntent: CallbackAction<ActivateIntent>(
+        onInvoke: (_) => widget.onTap?.call(),
+      ),
+    },
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.onTap,
+      child: DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          border: _ring
+              ? Border.all(color: AraColors.accentInfo, width: 2)
+              : null,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: widget.child,
+      ),
     ),
   );
 }
@@ -654,9 +722,14 @@ class SimpleShutterButton extends StatelessWidget {
     required this.onPressed,
     this.label,
     this.start = false,
+    this.whyOff,
   });
 
   final bool running;
+
+  /// Why the shutter is greyed out, when it is: said in a pill on a tap
+  /// and to screen readers as a hint (user, 2026-11-04).
+  final String? whyOff;
 
   /// A play triangle at rest instead of the filled circle: only Preview's
   /// shutter takes a picture; every other mode's starts its routine.
@@ -670,14 +743,16 @@ class SimpleShutterButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final enabled = onPressed != null;
     final fg = enabled ? AraColors.textPrimary : AraColors.textDisabled;
+    final why = enabled ? null : whyOff;
     return Semantics(
       button: true,
       label:
           label ??
           (running ? context.l10n.previewStop : context.l10n.previewTakeFrame),
+      hint: why,
       child: InkResponse(
         key: const Key('simple-shutter'),
-        onTap: onPressed,
+        onTap: onPressed ?? (why == null ? null : () => simpleSayWhy(context, why)),
         radius: 36,
         child: Container(
           width: 60,
@@ -700,6 +775,27 @@ class SimpleShutterButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The main camera is taking frames: a shot, Preview's loop or a running
+/// plan. Routines that need it, or that move the mount under it (autofocus,
+/// the Bahtinov readout, polar alignment), wait (user, 2026-11-04).
+bool simpleMainCameraBusy(WidgetRef ref) =>
+    ref.watch(captureProgressProvider.select((p) => p.isCapturing)) ||
+    ref.watch(liveViewControllerProvider) ||
+    ref.watch(
+      sequenceRunStateProvider.select((s) => s.value?.state?.isActive ?? false),
+    );
+
+/// A greyed shutter's reason, as a pill: once at a time, fading like a result.
+void simpleSayWhy(BuildContext context, String why) {
+  final container = ProviderScope.containerOf(context, listen: false);
+  final messages = container.read(simpleMessagesProvider.notifier);
+  if (container.read(simpleMessagesProvider).any((m) => m.title == why)) {
+    return;
+  }
+  final id = messages.show(SimpleMessageKind.warning, why);
+  Timer(kSimpleResultLife, () => messages.dismiss(id));
 }
 
 /// What the camera is doing, as a small pill on the image (like a camera's
@@ -731,8 +827,183 @@ class SimpleStopSquare extends StatelessWidget {
 /// The status pill's height (Plan's sheet starts below it).
 const double kSimpleStatusHeight = 48;
 
+/// One status pill's content.
+class _PillData {
+  const _PillData(
+    this.origin,
+    this.label,
+    this.detail,
+    this.dot, {
+    this.ring = false,
+    this.working = false,
+    this.shotProgress,
+    this.footProgress,
+    this.spoken,
+  });
+
+  final SimpleStatusOrigin origin;
+  final String label;
+  final String? detail;
+
+  /// Changing: the dot is a ring (DESIGN.md status rule).
+  final bool ring;
+  final Color dot;
+
+  /// Working normally: the dot blinks (DESIGN.md status rule).
+  final bool working;
+
+  /// A shot's bar, beside the words.
+  final double? shotProgress;
+
+  /// A step's progress (a plan step, cooling), along the pill's foot.
+  final double? footProgress;
+
+  /// What screen readers hear when it changes (label and detail otherwise).
+  final String? spoken;
+}
+
+/// One pill: tapping it opens what it's about. Within one state (its label)
+/// it keeps the widest it has been, so a countdown or a falling temperature
+/// doesn't make it jitter (ALP-4937).
+class _StatusPill extends StatefulWidget {
+  const _StatusPill({super.key, required this.data, this.onOpen});
+
+  final _PillData data;
+  final ValueChanged<SimpleStatusOrigin>? onOpen;
+
+  @override
+  State<_StatusPill> createState() => _StatusPillState();
+}
+
+class _StatusPillState extends State<_StatusPill> {
+  final _panelKey = GlobalKey();
+  String? _widthLabel;
+  double _width = 0;
+
+  void _keepWidth() {
+    final w = _panelKey.currentContext?.size?.width ?? 0;
+    if (mounted && w > _width) setState(() => _width = w);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final d = widget.data;
+    final l10n = context.l10n;
+    if (d.label != _widthLabel) {
+      _widthLabel = d.label;
+      _width = 0;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) => _keepWidth());
+    final open = widget.onOpen == null ? null : () => widget.onOpen!(d.origin);
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label:
+          d.spoken ??
+          (d.detail == null
+              ? d.label
+              : l10n.previewStatusSpoken(d.label, d.detail!)),
+      excludeSemantics: true,
+      button: open != null,
+      onTap: open,
+      child: SimpleTapTarget(
+        key: const Key('simple-status-pill'),
+        onTap: open,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: math.min(_width, kSimpleStatusMaxWidth),
+            maxWidth: kSimpleStatusMaxWidth,
+          ),
+          child: SimplePanel(
+            key: _panelKey,
+            padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
+            child: Stack(
+              children: [
+                Container(
+                  height: kSimpleStatusHeight,
+                  // With the bar, the words move up so the two sit together.
+                  padding: EdgeInsets.only(
+                    bottom: d.footProgress == null ? 0 : 9,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      StatusBlink(
+                        on: d.working,
+                        child: StatusDot(color: d.dot, ring: d.ring),
+                      ),
+                      const SizedBox(width: AraSpace.s8),
+                      // One text, so the label keeps its room and only the
+                      // detail's tail is cut (two Flexibles halved the space).
+                      Flexible(
+                        child: Text.rich(
+                          TextSpan(
+                            text: d.label,
+                            children: [
+                              if (d.detail != null) ...[
+                                const WidgetSpan(
+                                  child: SizedBox(width: AraSpace.s8),
+                                ),
+                                TextSpan(
+                                  text: d.detail,
+                                  style: const TextStyle(
+                                    color: AraColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          style: kSimpleText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (d.shotProgress != null) ...[
+                        const SizedBox(width: AraSpace.s12),
+                        SizedBox(
+                          width: 60,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(2),
+                            child: LinearProgressIndicator(
+                              value: d.shotProgress,
+                              minHeight: 4,
+                              backgroundColor: AraColors.tileFill,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                if (d.footProgress != null)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 10,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: d.footProgress,
+                        minHeight: 3,
+                        backgroundColor: AraColors.tileFill,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
 class SimpleStatusPill extends ConsumerStatefulWidget {
-  const SimpleStatusPill({super.key});
+  const SimpleStatusPill({super.key, this.onOpen});
+
+  /// Opens what the pill is about (its mode's panel, or a device window).
+  final ValueChanged<SimpleStatusOrigin>? onOpen;
 
   @override
   ConsumerState<SimpleStatusPill> createState() => _SimpleStatusPillState();
@@ -797,158 +1068,215 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     _coolStart = cooling ? (_coolStart ?? ccd) : null;
     // A park or unpark asked for in Simple Mode, until the mount gets there.
     final parking = ref.watch(simpleMountMotionProvider);
+    // The guider's routine, or Guiding with its RMS, when nothing else is on.
+    final guider = ref.watch(guiderStatusProvider).value;
+    final guiding = simpleGuiding(guider);
+    final guiderOn = simpleGuideActive(guider);
+    final guiderAsk = ref.watch(simpleGuiderPendingProvider);
     final planActive = run?.state?.isActive ?? false;
-    final exposing = !stopping && p.phase == CapturePhase.exposing;
-    final (String? label, String? detail, Color dot) = stopping
-        ? (l10n.previewStopping, null, AraColors.textSecondary)
-        : switch (p.phase) {
-            CapturePhase.exposing => (
-              l10n.previewTakingFrame,
-              p.exposureRemaining == null
-                  ? l10n.previewStarting
-                  // Whole seconds, rounded up: "1 s left" until it's done.
-                  : l10n.previewSecondsLeft(
-                      (p.exposureRemaining!.inMilliseconds / 1000).ceil(),
-                    ),
-              AraColors.accentConnected,
-            ),
-            CapturePhase.downloading => (
-              l10n.previewDownloading,
-              null,
-              AraColors.accentConnected,
-            ),
-            CapturePhase.done => (
-              l10n.previewFrameReady,
-              null,
-              AraColors.accentConnected,
-            ),
-            CapturePhase.failed => (
-              l10n.previewCaptureFailed,
-              p.error,
-              AraColors.accentError,
-            ),
-            CapturePhase.idle =>
-              looping
-                  ? (l10n.previewLooping, null, AraColors.accentConnected)
-                  // Between frames a running plan says what it's doing
-                  // (cooling, slewing, centring, focusing).
-                  : (run?.state?.isActive ?? false) &&
-                        step != null &&
-                        step.isNotEmpty
-                  ? (
-                      paused ? l10n.previewPlanPaused : l10n.previewPlan,
-                      step,
-                      paused ? AraColors.accentBusy : AraColors.accentInfo,
-                    )
-                  : parking != null
-                  ? (
-                      parking ? l10n.previewParking : l10n.previewUnparking,
-                      null,
-                      AraColors.accentBusy,
-                    )
-                  : cooling
-                  ? (
-                      l10n.previewCooling,
-                      '${simpleCelsius(ccd)} → ${simpleCelsius(target)}',
-                      AraColors.accentInfo,
-                    )
-                  : (null, null, AraColors.textSecondary),
-          };
-    if (label == null) return const SizedBox.shrink();
-    // The plan's step shows how far it has got (cooling, a wait, autofocus)
-    // as a line along the pill's foot.
-    final idle = !stopping && !looping && p.phase == CapturePhase.idle;
-    final stepProgress = idle && planActive
-        ? run?.currentInstructionProgress
-        : idle && cooling
-        ? (_coolStart! - target) <= 0
+    final polar = ref.watch(polarAlignLiveProvider);
+    final af = ref.watch(autofocusLiveProvider).run;
+    final bahtinov = ref.watch(bahtinovFocusProvider.select((b) => b.status.active));
+    final guideFocus = ref.watch(guideFocusProvider.select((g) => g.status.active));
+    // One pill per thing happening, stacked in this order (user, 2026-11-04:
+    // a frame hid the guider). Each says it once when it changes, not each
+    // second of a countdown, a calibration step or an RMS update.
+    final pills = <_PillData>[
+      if (stopping)
+        _PillData(SimpleStatusOrigin.preview, l10n.previewStopping, null, AraColors.textSecondary)
+      else if (p.phase != CapturePhase.idle)
+        switch (p.phase) {
+          CapturePhase.exposing => _PillData(
+            SimpleStatusOrigin.preview,
+            l10n.previewTakingFrame,
+            p.exposureRemaining == null
+                ? l10n.previewStarting
+                // Whole seconds, rounded up: "1 s left" until it's done.
+                : l10n.previewSecondsLeft(
+                    (p.exposureRemaining!.inMilliseconds / 1000).ceil(),
+                  ),
+            AraColors.accentConnected,
+            working: true,
+            shotProgress: (p.displayProgressPct ?? 0) / 100,
+            spoken: l10n.previewTakingFrame,
+          ),
+          // On its way from the camera: blue (DESIGN.md status rule).
+          CapturePhase.downloading => _PillData(
+            SimpleStatusOrigin.preview,
+            l10n.previewDownloading,
+            null,
+            AraColors.accentInfo,
+            ring: true,
+          ),
+          CapturePhase.done => _PillData(
+            SimpleStatusOrigin.preview,
+            l10n.previewFrameReady,
+            null,
+            AraColors.accentConnected,
+          ),
+          _ => _PillData(
+            SimpleStatusOrigin.preview,
+            l10n.previewCaptureFailed,
+            p.error,
+            AraColors.accentError,
+          ),
+        }
+      else if (looping)
+        _PillData(
+          SimpleStatusOrigin.preview,
+          l10n.previewLooping,
+          null,
+          AraColors.accentConnected,
+          working: true,
+        ),
+      // A running plan says what it's doing (cooling, slewing, centring,
+      // focusing), with how far the step has got along the pill's foot.
+      if (planActive && step != null && step.isNotEmpty)
+        _PillData(
+          SimpleStatusOrigin.plan,
+          paused ? l10n.previewPlanPaused : l10n.previewPlan,
+          step,
+          // DESIGN.md status rule: running is working (green); paused by Ara
+          // is on its way back (blue); paused waiting for the user needs a
+          // look (amber).
+          run!.state == SequenceRunState.pausedAwaitingUser
+              ? AraColors.accentBusy
+              : paused
+              ? AraColors.accentInfo
+              : AraColors.accentConnected,
+          ring: paused && run.state != SequenceRunState.pausedAwaitingUser,
+          working: !paused,
+          footProgress: run.currentInstructionProgress,
+        ),
+      if (parking != null)
+        _PillData(
+          SimpleStatusOrigin.mount,
+          parking ? l10n.previewParking : l10n.previewUnparking,
+          null,
+          AraColors.accentInfo,
+          ring: true,
+        ),
+      // A cooler turned on by hand (a plan's own cooling shows as its step).
+      if (cooling && !planActive)
+        _PillData(
+          SimpleStatusOrigin.camera,
+          l10n.previewCooling,
+          '${simpleCelsius(ccd)} → ${simpleCelsius(target)}',
+          AraColors.accentInfo,
+          ring: true,
+          footProgress: (_coolStart! - target) <= 0
               ? 0.0
-              : ((_coolStart! - ccd) / (_coolStart! - target)).clamp(0.0, 1.0)
-        : null;
-    // Announced when it changes: the label and the plan's step, not each
-    // second of an exposure's countdown.
-    return Semantics(
-      container: true,
-      liveRegion: true,
-      label: exposing || detail == null
-          ? label
-          : l10n.previewStatusSpoken(label, detail),
-      excludeSemantics: true,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: kSimpleStatusMaxWidth),
-        child: SimplePanel(
-          padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
-          child: Stack(
-            children: [
-              Container(
-                height: kSimpleStatusHeight,
-                // With the bar, the words move up so the two sit together.
-                padding: EdgeInsets.only(bottom: stepProgress == null ? 0 : 9),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.circle, size: 10, color: dot),
-                    const SizedBox(width: AraSpace.s8),
-                    // One text, so the label keeps its room and only the detail's
-                    // tail is cut (two Flexibles halved the space: "Taking a fr…").
-                    Flexible(
-                      child: Text.rich(
-                        TextSpan(
-                          text: label,
-                          children: [
-                            if (detail != null) ...[
-                              const WidgetSpan(
-                                child: SizedBox(width: AraSpace.s8),
-                              ),
-                              TextSpan(
-                                text: detail,
-                                style: const TextStyle(
-                                  color: AraColors.textSecondary,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        style: kSimpleText,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (exposing) ...[
-                      const SizedBox(width: AraSpace.s12),
-                      SizedBox(
-                        width: 60,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(2),
-                          child: LinearProgressIndicator(
-                            value: (p.displayProgressPct ?? 0) / 100,
-                            minHeight: 4,
-                            backgroundColor: AraColors.tileFill,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              if (stepProgress != null)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 10,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: LinearProgressIndicator(
-                      value: stepProgress,
-                      minHeight: 3,
-                      backgroundColor: AraColors.tileFill,
+              : ((_coolStart! - ccd) / (_coolStart! - target)).clamp(0.0, 1.0),
+          spoken: l10n.previewCooling,
+        ),
+      // Every mode's routine has a pill while it runs; a failure is a message
+      // on the left that fades, posted by the shell (user, 2026-11-04).
+      if (af.isRunning)
+        _PillData(
+          SimpleStatusOrigin.focus,
+          l10n.shellModeFocus,
+          MainFocusCard.phaseText(l10n, af),
+          AraColors.accentInfo,
+          ring: true,
+          spoken: l10n.shellModeFocus,
+        )
+      else if (bahtinov)
+        _PillData(
+          SimpleStatusOrigin.focus,
+          l10n.shellModeFocus,
+          l10n.focusManual,
+          AraColors.accentConnected,
+          working: true,
+        )
+      else if (guideFocus)
+        _PillData(
+          SimpleStatusOrigin.focus,
+          l10n.shellModeFocus,
+          l10n.focusScopeGuide,
+          AraColors.accentConnected,
+          working: true,
+        ),
+      if (simplePolarActive(polar))
+        _PillData(
+          SimpleStatusOrigin.polar,
+          l10n.shellModePolarAlign,
+          simplePolarPhase(polar, l10n),
+          AraColors.accentInfo,
+          ring: true,
+        ),
+      if (guiderAsk != null)
+        _PillData(
+          SimpleStatusOrigin.guide,
+          l10n.deviceGuider,
+          guiderAsk ? l10n.guideStarting : l10n.guideStopping,
+          AraColors.accentInfo,
+          ring: true,
+        )
+      else if (guiding)
+        _PillData(
+          SimpleStatusOrigin.guide,
+          l10n.shellGuiding,
+          switch (guider!.rmsTotalArcsec) {
+            final r? => '${r.toStringAsFixed(2)}″',
+            null => null,
+          },
+          simpleGuiderColour(guider),
+          ring: guiderStatusLevel(guider) == StatusLevel.changing,
+          working: guiderStatusLevel(guider) == StatusLevel.active,
+          spoken: l10n.shellGuiding,
+        )
+      else if (guiderOn)
+        _PillData(
+          SimpleStatusOrigin.guide,
+          l10n.deviceGuider,
+          guider!.runtimeSummary(l10n),
+          simpleGuiderColour(guider),
+          spoken: l10n.previewStatusSpoken(
+            l10n.deviceGuider,
+            guiderRuntimeText(l10n, guider.runtimeState),
+          ),
+        ),
+    ];
+    if (pills.isEmpty) return const SizedBox.shrink();
+    // Three at most; the rest fold into "+n", which opens the first one left.
+    final shown = pills.take(3).toList();
+    final more = pills.length - shown.length;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      spacing: AraSpace.s8,
+      children: [
+        for (final d in shown)
+          _StatusPill(
+            key: ValueKey(d.origin),
+            data: d,
+            onOpen: widget.onOpen,
+          ),
+        if (more > 0)
+          Semantics(
+            button: widget.onOpen != null,
+            child: SimpleTapTarget(
+              onTap: widget.onOpen == null
+                  ? null
+                  : () => widget.onOpen!(pills[3].origin),
+              child: SimplePanel(
+                padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+                  child: Center(
+                    widthFactor: 1,
+                    heightFactor: 1,
+                    child: Text(
+                      '+$more',
+                      semanticsLabel: l10n.statusMoreSemantics(more),
+                      style: kSimpleText,
                     ),
                   ),
                 ),
-            ],
+              ),
+            ),
           ),
-        ),
-      ),
+      ],
     );
   }
 }

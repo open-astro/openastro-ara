@@ -7,6 +7,7 @@ import 'package:openastroara/screens/simple/simple_device_windows.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
 
 /// A camera with a cooler; records the cooler commands instead of sending them.
 class _Camera extends CameraStatusNotifier {
@@ -20,8 +21,10 @@ class _Camera extends CameraStatusNotifier {
   @override
   Future<bool> setCooler(bool enabled, {double? targetTemperatureC}) async {
     calls.add((enabled, targetTemperatureC));
-    return true;
+    return !busy;
   }
+
+  bool busy = false;
 }
 
 Map<String, dynamic> _wire({
@@ -74,13 +77,22 @@ Future<(ProviderContainer, _Camera)> _pump(
 }
 
 void main() {
+  testWidgets('a cooler tap dropped while the last command runs says so in a pill (ALP-4982)', (tester) async {
+    final (c, camera) = await _pump(tester, _wire());
+    camera.busy = true;
+    await tester.tap(find.byKey(const Key('simple-camera-cooler-off')));
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider).single.title, 'Still busy');
+    await tester.pump(const Duration(seconds: 11));
+  });
+
   testWidgets(
     'the camera window: its name and dot, the cooler, the target and what it reads now',
     (tester) async {
       await _pump(tester, _wire());
-      expect(find.text('Camera · ASI2600MM'), findsOneWidget);
+      expect(find.text('Main Camera · ASI2600MM'), findsOneWidget);
       expect(find.text('Cooler'), findsOneWidget);
-      expect(find.text('Temperature'), findsOneWidget, reason: 'what the sensor reads');
+      expect(find.text('Sensor temperature'), findsOneWidget, reason: 'what the sensor reads (user, 2026-11-04)');
       expect(find.text('Target temperature'), findsOneWidget);
       expect(find.text('Current temperature'), findsNothing);
       expect(find.text('−10 °C'), findsOneWidget, reason: 'the target');

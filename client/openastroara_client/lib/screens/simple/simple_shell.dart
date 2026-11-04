@@ -27,6 +27,7 @@ import '../../state/saved_server_state.dart';
 import '../../state/guider/guide_step_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/imaging/last_frame_state.dart';
+import '../../state/imaging/live_view_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../state/night_mode_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
@@ -35,6 +36,8 @@ import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
+import '../../state/simple_night_setup_state.dart';
+export '../../state/simple_night_setup_state.dart' show SimpleModeScreen, SimpleModeScreenLabels;
 
 import 'dart:ui' show ImageFilter;
 
@@ -64,8 +67,13 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../widgets/emergency_stop_button.dart';
 import '../../widgets/equipment/equipment_glyphs.dart';
+import '../../state/equipment/safety_monitor_state.dart';
+import '../../state/equipment/switch_state.dart';
+import '../../state/faults/faults_state.dart';
+import '../../widgets/status_indicator.dart' show StatusDot, StatusLevel;
 import '../../widgets/equipment/equipment_status_chip.dart';
-import '../../widgets/equipment/guider_chip.dart' show guiderStatusLevel;
+import '../../widgets/equipment/guider_chip.dart'
+    show guiderChipLevel, guiderStatusLevel;
 import '../../widgets/equipment_chip.dart'
     show EquipmentChipCompact, EquipmentChipHideDisconnected;
 import '../../widgets/imaging/frame_viewer.dart';
@@ -75,16 +83,23 @@ import '../../widgets/sky_atlas/stellarium_view.dart';
 import '../library/image_library_screen.dart';
 import '../settings/settings_shell.dart';
 import '../shell_listeners.dart';
-import 'simple_autopilot.dart';
+import 'simple_night_setup.dart';
 import 'simple_device_windows.dart';
 import 'simple_focus_panel.dart';
 import '../../state/focus/autofocus_live_state.dart' show autofocusLiveProvider;
+import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
 import '../../state/focus/guide_focus_state.dart' show guideFocusProvider;
 import '../../state/settings/phd2_settings_state.dart'
     show phd2SettingsProvider;
 import '../../state/focus/bahtinov_focus_state.dart'
     show MainFocusMethod, bahtinovFocusProvider;
 import 'simple_message_pills.dart';
+import 'simple_guide_panel.dart'
+    show
+        SimpleGuidePanel,
+        SimpleGuideShutter,
+        simpleGuideActive,
+        simpleGuideSummary;
 import 'simple_polar_panel.dart';
 import 'simple_plan_panel.dart';
 import 'simple_preview_panel.dart';
@@ -110,39 +125,13 @@ const double kSimpleStatusMaxWidth = 300;
 /// The message pills' widest (they share the top row with the status pill).
 const double kSimpleMessagesMaxWidth = 420;
 
-/// The Autopilot strip's or offer's row before it is measured.
-const double kSimpleAutopilotRowHeight = 56;
+/// The Night Setup strip's or offer's row before it is measured.
+const double kSimpleNightSetupRowHeight = 56;
 
 /// Side of the compact Stop at the bottom right.
 const double kSimpleStopSize = 60;
 
 /// The modes, in the decided order.
-enum SimpleModeScreen { autopilot, preview, focus, polarAlign, plan }
-
-extension SimpleModeScreenLabels on SimpleModeScreen {
-  String labelOf(AppLocalizations l10n) => switch (this) {
-    SimpleModeScreen.autopilot => l10n.shellModeAutopilot,
-    SimpleModeScreen.preview => l10n.shellModePreview,
-    SimpleModeScreen.polarAlign => l10n.shellModePolarAlign,
-    SimpleModeScreen.focus => l10n.shellModeFocus,
-    SimpleModeScreen.plan => l10n.shellModePlan,
-  };
-
-  /// The name on the 60 px rail, where "Polar align" doesn't fit.
-  String railLabelOf(AppLocalizations l10n) => switch (this) {
-    SimpleModeScreen.polarAlign => l10n.shellRailPolarAlign,
-    SimpleModeScreen.autopilot => l10n.shellRailAutopilot,
-    _ => labelOf(l10n),
-  };
-
-  IconData get icon => switch (this) {
-    SimpleModeScreen.autopilot => Icons.rocket_launch_outlined,
-    SimpleModeScreen.preview => Icons.visibility_outlined,
-    SimpleModeScreen.focus => Icons.center_focus_strong,
-    SimpleModeScreen.polarAlign => Icons.explore_outlined,
-    SimpleModeScreen.plan => Icons.playlist_play,
-  };
-}
 
 /// The one popover open beside a rail, if any. [settings] is the chip's: the
 /// current mode's options (Preview's exposure, Focus's panel).
@@ -181,7 +170,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// The planetarium on demand (the left rail's Sky), over any frame.
   bool _sky = false;
   _Popover _popover = _Popover.none;
-  SimpleModeScreen _mode = SimpleModeScreen.preview;
 
   /// Plan's sheet open from the queue panel: to add a target (also over a
   /// run in progress), or on queued target [_editing]'s rows.
@@ -207,53 +195,36 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     _adding = false;
   }
 
-  /// The rails' and the Autopilot row's heights, measured after each frame:
-  /// the message pills start under the Autopilot row (its words wrap on a
+  /// The rails' and the Night Setup row's heights, measured after each frame:
+  /// the message pills start under the Night Setup row (its words wrap on a
   /// narrow window) and stop above the left rail; the right rail's panels
   /// hang from its top and stop above the plan squares.
   double _leftRailHeight = 0;
   double _rightRailHeight = 0;
-  double _autopilotRowHeight = kSimpleAutopilotRowHeight;
+  double _nightSetupRowHeight = kSimpleNightSetupRowHeight;
   final _leftRailKey = GlobalKey();
   final _rightRailKey = GlobalKey();
-  final _autopilotRowKey = GlobalKey();
+  final _nightSetupRowKey = GlobalKey();
 
   void _measure() => WidgetsBinding.instance.addPostFrameCallback((_) {
     final rail = _leftRailKey.currentContext?.size?.height;
     final right = _rightRailKey.currentContext?.size?.height;
-    final row = _autopilotRowKey.currentContext?.size?.height;
+    final row = _nightSetupRowKey.currentContext?.size?.height;
     if (!mounted) return;
     if ((rail != null && rail != _leftRailHeight) ||
         (right != null && right != _rightRailHeight) ||
-        (row != null && row != _autopilotRowHeight)) {
+        (row != null && row != _nightSetupRowHeight)) {
       setState(() {
         _leftRailHeight = rail ?? _leftRailHeight;
         _rightRailHeight = right ?? _rightRailHeight;
-        _autopilotRowHeight = row ?? _autopilotRowHeight;
+        _nightSetupRowHeight = row ?? _nightSetupRowHeight;
       });
     }
   });
 
-  /// The Autopilot offer was dismissed (until Simple Mode opens again).
-  bool _offerDismissed = false;
-
-  /// What shows: the picked mode, or Autopilot's current step.
-  SimpleModeScreen _shown(AutopilotStep? step) =>
-      _mode != SimpleModeScreen.autopilot
-      ? _mode
-      : switch (step) {
-          AutopilotStep.focus => SimpleModeScreen.focus,
-          AutopilotStep.polarAlign => SimpleModeScreen.polarAlign,
-          AutopilotStep.plan => SimpleModeScreen.plan,
-          null => SimpleModeScreen.preview,
-        };
-
-  void _startAutopilot() {
-    setState(() {
-      _mode = SimpleModeScreen.autopilot;
-      _popover = _Popover.settings;
-    });
-    ref.read(autopilotProvider.notifier).start();
+  void _startNightSetup() {
+    setState(() => _popover = _Popover.settings);
+    ref.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.nightSetup);
   }
 
   /// Ties the popovers to the right rail's top-left corner.
@@ -271,6 +242,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   void initState() {
     super.initState();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    // Brings the live view notifier up, so a loop the daemon still runs is
+    // adopted (the Loop shows as running and its square stops it).
+    ref.read(liveViewFrameProvider);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focus.requestFocus();
     });
@@ -316,6 +290,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     _stopDisarm?.cancel();
     _focus.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    _guiderPoll?.cancel();
     super.dispose();
   }
 
@@ -365,7 +340,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   Timer? _stopDisarm;
 
   void _stopRun() {
-    if (_shown(ref.read(autopilotProvider)) != SimpleModeScreen.plan) return;
+    if (ref.read(simpleShowingProvider) != SimpleModeScreen.plan) return;
     final phase = simpleRunPhase(
       ref.read(simpleRunProvider),
       ref.read(sequenceRunStateProvider).value,
@@ -397,14 +372,86 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     });
   }
 
-  void _pickMode(SimpleModeScreen m) {
-    if (m == SimpleModeScreen.autopilot) return _startAutopilot();
+  SimpleModeScreen? _lastShown;
+
+  // Simple Mode re-reads the guider every 2 s while it is doing anything:
+  // nothing else polls it here, and some changes (a stop that lands seconds
+  // after the ask) push nothing (rig, 2026-11-04).
+  Timer? _guiderPoll;
+
+  void _syncGuiderPoll(bool active) {
+    if (active) {
+      _guiderPoll ??= Timer.periodic(
+        const Duration(seconds: 2),
+        (_) => ref.read(guiderStatusProvider.notifier).refresh(),
+      );
+    } else {
+      _guiderPoll?.cancel();
+      _guiderPoll = null;
+    }
+  }
+
+  /// Leaving Manual before Finish asks for the mask to come off (DESIGN.md
+  /// Focus; ALP-4982), here once Focus has gone.
+  void _askMaskOff() {
+    if (!mounted) return;
+    final bahtinov = ref.read(bahtinovFocusProvider);
+    if (!bahtinov.status.hasMeasurement || bahtinov.finished) return;
+    final l10n = context.l10n;
+    ref
+        .read(simpleMessagesProvider.notifier)
+        .show(
+          SimpleMessageKind.question,
+          l10n.bahtinovMaskQuestion,
+          detail: l10n.bahtinovMaskQuestionDetail,
+          actions: [
+            SimpleMessageAction(l10n.bahtinovNotYet, () {}),
+            SimpleMessageAction(
+              l10n.bahtinovMaskRemoved,
+              () =>
+                  unawaited(ref.read(bahtinovFocusProvider.notifier).finish()),
+            ),
+          ],
+        );
+  }
+
+  /// A tap on the status pill: what it is about, open (user, 2026-11-04).
+  void _openFromPill(SimpleStatusOrigin origin) {
+    final window = switch (origin) {
+      SimpleStatusOrigin.mount => 'eq.mount',
+      SimpleStatusOrigin.camera => 'eq.camera',
+      SimpleStatusOrigin.focuser => 'eq.focuser',
+      SimpleStatusOrigin.guiderCamera => 'eq.guider',
+      _ => null,
+    };
+    if (window != null) {
+      setState(() {
+        _clean = false;
+        _device = window;
+        if (!_sideBySide(context)) _popover = _Popover.none;
+      });
+      return;
+    }
+    final mode = switch (origin) {
+      SimpleStatusOrigin.plan => SimpleModeScreen.plan,
+      SimpleStatusOrigin.guide => SimpleModeScreen.guide,
+      SimpleStatusOrigin.focus => SimpleModeScreen.focus,
+      SimpleStatusOrigin.polar => SimpleModeScreen.polarAlign,
+      _ => SimpleModeScreen.preview,
+    };
+    // A Night Setup on that step keeps going; anything else switches mode.
+    if (ref.read(simpleShowingProvider) != mode) _pickMode(mode);
     setState(() {
-      _mode = m;
-      _popover = _Popover.none;
+      _clean = false;
+      _popover = _Popover.settings;
     });
-    // Picking a mode leaves Autopilot.
-    ref.read(autopilotProvider.notifier).stop();
+  }
+
+  void _pickMode(SimpleModeScreen m) {
+    if (m == SimpleModeScreen.nightSetup) return _startNightSetup();
+    setState(() => _popover = _Popover.none);
+    // Picking a mode leaves Night Setup.
+    ref.read(simpleShowingProvider.notifier).pick(m);
   }
 
   /// The Settings sheet's section to open on (a search hit names one).
@@ -507,16 +554,53 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       }
       ref.read(simpleModeProvider.notifier).set(false);
     });
-    // Autopilot opens each step on its panel, and ends on the plan.
-    ref.listen(autopilotProvider, (previous, next) {
-      if (_mode != SimpleModeScreen.autopilot) return;
+    // Night Setup opens each step on its panel, and ends on the plan.
+    ref.listen(nightSetupProvider, (previous, next) {
+      if (previous == null && next == null) return;
       setState(() {
-        if (next == null) _mode = SimpleModeScreen.plan;
         _popover = next == null ? _Popover.none : _Popover.settings;
       });
     });
-    final pilot = ref.watch(autopilotProvider);
-    final shown = _shown(pilot);
+    // A routine that fails says why on the left, fading like any error
+    // (user, 2026-11-04: not a sticky status pill).
+    ref.listen(polarAlignLiveProvider, (prev, next) {
+      if (prev?.phase == PolarAlignStates.failed ||
+          next.phase != PolarAlignStates.failed) {
+        return;
+      }
+      ref
+          .read(simpleMessagesProvider.notifier)
+          .show(
+            SimpleMessageKind.error,
+            context.l10n.polarPhaseFailed,
+            detail: next.errorMessage ?? next.errorReason,
+            origin: SimpleStatusOrigin.polar,
+          );
+    });
+    ref.listen(autofocusLiveProvider.select((l) => l.run), (prev, next) {
+      if ((prev?.isFailed ?? false) || !next.isFailed) return;
+      ref
+          .read(simpleMessagesProvider.notifier)
+          .show(
+            SimpleMessageKind.error,
+            context.l10n.focusCardFailed,
+            detail: MainFocusCard.failureText(context.l10n, next),
+            origin: SimpleStatusOrigin.focus,
+          );
+    });
+    final pilot = ref.watch(nightSetupProvider);
+    final shown = ref.watch(simpleShowingProvider);
+    _syncGuiderPoll(
+      ref.watch(
+        guiderStatusProvider.select((s) => simpleGuideActive(s.value)),
+      ),
+    );
+    // Leaving Focus takes its panel's mask question away: a pill asks.
+    if (_lastShown == SimpleModeScreen.focus &&
+        shown != SimpleModeScreen.focus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _askMaskOff());
+    }
+    _lastShown = shown;
     // Polar align shows its own camera's frames while the routine runs.
     final polarFrame =
         shown == SimpleModeScreen.polarAlign &&
@@ -563,16 +647,19 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // The bottom row (guiding, histogram) grows with the text like the
     // rails, so its two lines of labels fit at the user's size.
     final bottomRow = kSimpleBarHeight * simpleRailScale(context);
+    // What sits above the bottom row drops to the inset while it is empty
+    // (ALP-4935).
+    final statsShown = _statsShown(ref);
+    final aboveRow = statsShown ? kSimpleInset * 2 + bottomRow : kSimpleInset;
+    // What reaches the right edge stays clear of Stop, which sits over
+    // everything (iPad, 2026-11-04: Settings ran under it).
+    final aboveStop = math.max(aboveRow, kSimpleInset * 2 + stopSize);
     final width = MediaQuery.sizeOf(context).width;
-    // Guided Run's step strip, under the status strip; its offer sits at the
+    // Night Setup's step strip, under the status strip; its offer sits at the
     // bottom (user, 2026-11-03).
-    final autopilotRow = _mode == SimpleModeScreen.autopilot;
-    final autopilotOffer =
-        !_offerDismissed &&
-        _mode == SimpleModeScreen.preview &&
-        autopilotOffered(ref);
+    final nightSetupRow = pilot != null;
     // Messages share the top row with the status pill, which keeps at most
-    // half of it; they start under the Guided Run strip when it shows.
+    // half of it; they start under the Night Setup strip when it shows.
     final statusRoom = math.min(
       kSimpleStatusMaxWidth,
       (width - kSimpleInset * 3) / 2,
@@ -581,8 +668,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       kSimpleMessagesMaxWidth,
       width - kSimpleInset * 3 - statusRoom,
     );
-    final messagesTop = autopilotRow
-        ? railTop + _autopilotRowHeight + AraSpace.s12
+    final messagesTop = nightSetupRow
+        ? railTop + _nightSetupRowHeight + AraSpace.s12
         : railTop;
     _measure();
     final height =
@@ -591,21 +678,27 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final leftRailTop = _leftRailHeight == 0
         ? height
         : railTop + (height - railTop * 2 - _leftRailHeight) / 2;
-    // The right rail's panels run from its top down to the plan squares (or
-    // the bottom row), scrolling inside when taller.
     final rightRailTop =
         railTop +
         (height - railTop - kSimpleInset * 2 - stopSize - _rightRailHeight) / 2;
-    final popoverMaxHeight = _rightRailHeight == 0
-        ? double.infinity
-        : height -
-              kSimpleInset * 3 -
-              bottomRow -
-              (planSquares
-                  ? kSimplePlanSquareHeight * simpleRailScale(context) +
-                        kSimpleInset
-                  : 0) -
-              rightRailTop;
+    // The rail's popovers (a mode's panel, the modes, the queue) take the room
+    // from under the status pill down to the screen's inset, over the bottom
+    // row while open (they sit left of the rail, clear of Stop), above the
+    // plan squares. Plan's sheet and Guided Run's step panels start at its
+    // top, 8 pt under the status pill; the rest sit level with the rail and
+    // move up only when they don't fit (user, 2026-11-04).
+    final popoverTop = railTop + kSimpleStatusHeight + AraSpace.s8;
+    final guidedStep = pilot != null && _popover == _Popover.settings;
+    // Plan's sheet and Guided Run's step panels: centred, content-high, in the
+    // space between the status pill and the bottom row's top (the screen's
+    // inset without it), at least 8 pt from each (user, 2026-11-04).
+    final betweenBottom =
+        (statsShown ? kSimpleInset + bottomRow : kSimpleInset) + AraSpace.s8;
+    final popoverBottom = planSquares
+        ? aboveStop +
+              kSimplePlanSquareHeight * simpleRailScale(context) +
+              kSimpleInset
+        : kSimpleInset;
     final queuePanel = SimpleRunPanel(
       onAdd: () => _openSheet(),
       onEdit: (i) => _openSheet(edit: i),
@@ -670,6 +763,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                 child: Focus(
                   focusNode: _focus,
                   child: SafeArea(
+                    // One shared blur for every frosted panel over the image
+                    // (iPad 6, 2026-11-05: one filter each cost ~30 ms a frame
+                    // against 4 ms with none; see simpleFrost).
+                    child: BackdropGroup(
                     child: Stack(
                       children: [
                         Positioned.fill(
@@ -739,7 +836,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             ),
                           ),
                         // The message pills, top-left under the strip (under the
-                        // Autopilot strip when it shows), down to the left rail;
+                        // Night Setup strip when it shows), down to the left rail;
                         // they stay in the immersive view.
                         AnimatedPositioned(
                           left: kSimpleInset,
@@ -748,6 +845,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                           duration: motion,
                           curve: Curves.easeOut,
                           child: SimpleMessagePills(
+                            onOpen: _openFromPill,
                             maxHeight: panels
                                 ? leftRailTop - messagesTop - kSimpleInset
                                 : double.infinity,
@@ -765,7 +863,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             constraints: BoxConstraints(
                               maxWidth: (width - kSimpleInset * 3) / 2,
                             ),
-                            child: const SimpleStatusPill(),
+                            child: SimpleStatusPill(onOpen: _openFromPill),
                           ),
                         ),
                         _Fade(
@@ -780,14 +878,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 child: _StatusStrip(
                                   onSearch: () => _toggle(_Popover.search),
                                   onSettings: () => _openMenu(),
+                                  onDevices: () =>
+                                      _openMenu(section: 'Devices'),
                                 ),
                               ),
                               // Info: fact tiles hugging the bottom-left corner,
                               // above the bottom row.
                               if (_info)
-                                Positioned(
+                                AnimatedPositioned(
+                                  // Keyed: each slides only from its own place.
+                                  key: const ValueKey('info'),
                                   left: kSimpleInset,
-                                  bottom: kSimpleInset * 2 + bottomRow,
+                                  bottom: aboveRow,
+                                  duration: motion,
+                                  curve: Curves.easeOut,
                                   child: const SimpleInfoPanel(),
                                 ),
                               // Guiding and the histogram along the bottom, each
@@ -838,8 +942,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     child: _RightRail(
                                       key: _rightRailKey,
                                       mode: shown,
-                                      named: _mode == SimpleModeScreen.autopilot
-                                          ? SimpleModeScreen.autopilot
+                                      named: pilot != null
+                                          ? SimpleModeScreen.nightSetup
                                           : null,
                                       popover: _popover,
                                       onModes: () => _toggle(_Popover.modes),
@@ -862,11 +966,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   // it was centred over the image).
                                   left: kSimpleInset,
                                   right: kSimpleInset * 2 + railWidth,
-                                  top:
-                                      railTop +
-                                      kSimpleStatusHeight +
-                                      kSimpleInset,
-                                  bottom: kSimpleInset * 2 + bottomRow,
+                                  // Centred between the status pill and the
+                                  // bottom row (user, 2026-11-04).
+                                  top: popoverTop,
+                                  bottom: betweenBottom,
                                   child: Align(
                                     alignment: Alignment.centerRight,
                                     child: sheet,
@@ -881,22 +984,27 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               }.contains(_popover))
                                 Positioned(
                                   left: 0,
-                                  top: 0,
-                                  child: CompositedTransformFollower(
-                                    link: _railLink,
-                                    targetAnchor: Alignment.topLeft,
-                                    followerAnchor: Alignment.topRight,
-                                    offset: const Offset(-kSimpleInset, 0),
-                                    child: ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        maxHeight: popoverMaxHeight,
+                                  right: kSimpleInset * 2 + railWidth,
+                                  top: popoverTop,
+                                  bottom: guidedStep
+                                      ? betweenBottom
+                                      : popoverBottom,
+                                  child: CustomSingleChildLayout(
+                                    delegate: _BesideRail(
+                                      centre: guidedStep,
+                                      preferredTop: math.max(
+                                        0,
+                                        rightRailTop - popoverTop,
                                       ),
-                                      child: SingleChildScrollView(
+                                    ),
+                                    child: SingleChildScrollView(
                                         child: _popover == _Popover.queue
                                             ? queuePanel
                                             : _popover == _Popover.modes
                                             ? _ModeGrid(
-                                                current: _mode,
+                                                current: pilot != null
+                                                    ? SimpleModeScreen.nightSetup
+                                                    : shown,
                                                 // Picking a mode only switches it; the
                                                 // chip opens its panel (user, 2026-11-02).
                                                 onPicked: _pickMode,
@@ -906,6 +1014,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                                   const SimpleFocusPanel(),
                                                 SimpleModeScreen.polarAlign =>
                                                   const SimplePolarPanel(),
+                                                SimpleModeScreen.guide =>
+                                                  const SimpleGuidePanel(),
                                                 SimpleModeScreen.plan =>
                                                   queuePanel,
                                                 _ => const SizedBox(
@@ -914,38 +1024,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                                       SimpleSettingsPopover(),
                                                 ),
                                               },
-                                      ),
                                     ),
                                   ),
                                 ),
-                              // Autopilot's steps, or the offer to start it, centred
+                              // Night Setup's steps, or the offer to start it, centred
                               // under the strip.
-                              if (autopilotRow)
+                              if (nightSetupRow)
                                 Positioned(
                                   left: 0,
                                   right: 0,
                                   top: railTop,
                                   child: Center(
                                     child: KeyedSubtree(
-                                      key: _autopilotRowKey,
-                                      child: const AutopilotStrip(),
-                                    ),
-                                  ),
-                                ),
-                              // The offer, centred just above the bottom row,
-                              // under the rails (centred higher up); it wraps on
-                              // a narrow window.
-                              if (autopilotOffer)
-                                Positioned(
-                                  left: kSimpleInset,
-                                  right: kSimpleInset,
-                                  bottom: kSimpleInset * 2 + kSimpleBarHeight,
-                                  child: Center(
-                                    child: AutopilotOffer(
-                                      onStart: _startAutopilot,
-                                      onDismiss: () => setState(
-                                        () => _offerDismissed = true,
-                                      ),
+                                      key: _nightSetupRowKey,
+                                      child: const NightSetupStrip(),
                                     ),
                                   ),
                                 ),
@@ -953,10 +1045,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // above the bottom row, growing left over the right
                               // half (the Info tiles have the left).
                               if (shown == SimpleModeScreen.plan && !runSheet)
-                                Positioned(
+                                AnimatedPositioned(
+                                  key: const ValueKey('plan-squares'),
                                   left: width / 2,
                                   right: kSimpleInset,
-                                  bottom: kSimpleInset * 2 + bottomRow,
+                                  bottom: aboveStop,
+                                  duration: motion,
+                                  curve: Curves.easeOut,
                                   child: Align(
                                     alignment: Alignment.bottomRight,
                                     child: SimpleRunTracker(
@@ -974,7 +1069,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     child: _SkyPick(
                                       selection: sel,
                                       onImage: () => setState(() {
-                                        _mode = SimpleModeScreen.plan;
+                                        // Plan shows already in Night Setup's plan step; from any
+                                        // other screen the pick goes to Plan and leaves Night Setup.
+                                        if (shown != SimpleModeScreen.plan) {
+                                          ref
+                                              .read(simpleShowingProvider.notifier)
+                                              .pick(SimpleModeScreen.plan);
+                                        }
                                         // Over a run, the sheet adds to its queue.
                                         _popover = runActive
                                             ? _Popover.none
@@ -1007,7 +1108,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   top: railTop,
                                   left: 0,
                                   right: 0,
-                                  bottom: kSimpleInset * 2 + bottomRow,
+                                  bottom: aboveRow,
                                   child: Align(
                                     alignment: Alignment.topCenter,
                                     child: SizedBox(
@@ -1042,7 +1143,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   left: kSimpleInset,
                                   right: kSimpleInset,
                                   top: railTop,
-                                  bottom: kSimpleInset * 2 + bottomRow,
+                                  bottom: aboveStop,
                                   // Under the gear, as wide as its content
                                   // needs (user, 2026-11-04: window-wide was
                                   // mostly empty space).
@@ -1088,6 +1189,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                           ),
                         ),
                       ],
+                    ),
                     ),
                   ),
                 ),
@@ -1199,17 +1301,82 @@ class SimplePanel extends StatelessWidget {
 
 /// The panel blur under [child], clipped to the panels' 10 px corners: for
 /// the surfaces that draw their own scrim (pills, tiles, plan squares).
+/// Grouped: the shell's [BackdropGroup] blurs the image once for all of them.
 Widget simpleFrost(Widget child) => ClipRRect(
   borderRadius: BorderRadius.circular(10),
-  child: BackdropFilter(
-    filter: ImageFilter.blur(sigmaX: AraBlur.panel, sigmaY: AraBlur.panel),
-    child: child,
-  ),
+  child: AraBlur.panel == 0
+      ? child
+      : BackdropFilter.grouped(
+          filter: ImageFilter.blur(
+            sigmaX: AraBlur.panel,
+            sigmaY: AraBlur.panel,
+          ),
+          child: child,
+        ),
 );
 
 /// Device dots (connected gear only), then Night mode and the Settings menu.
+/// A rail popover in its room: right-aligned, at [preferredTop] (level with
+/// the rail) when it fits below, moved up as much as it needs when it doesn't;
+/// or, with [centre], centred in the room (Guided Run's step panels).
+class _BesideRail extends SingleChildLayoutDelegate {
+  const _BesideRail({required this.preferredTop, this.centre = false});
+
+  final double preferredTop;
+  final bool centre;
+
+  // Height only: a panel wider than a phone-width window runs off its left
+  // edge, as before (phone layout: ALP-4865).
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
+      BoxConstraints(maxHeight: constraints.maxHeight);
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final room = math.max(0.0, size.height - childSize.height);
+    return Offset(
+      size.width - childSize.width,
+      centre ? room / 2 : preferredTop.clamp(0, room),
+    );
+  }
+
+  @override
+  bool shouldRelayout(_BesideRail old) =>
+      old.preferredTop != preferredTop || old.centre != centre;
+}
+
+/// Whether any top-bar chip shows: a device not disconnected, or a standing
+/// fault (the chips' own rule).
+bool _anyDeviceShown(WidgetRef ref) {
+  if (!ref.watch(serverLinkUpProvider)) return false;
+  if (ref.watch(activeFaultsProvider).byDeviceType.isNotEmpty) return true;
+  return [
+    equipmentChipLevel(ref.watch(cameraStatusProvider)),
+    equipmentChipLevel(ref.watch(mountProvider)),
+    equipmentChipLevel(ref.watch(focuserProvider)),
+    equipmentChipLevel(ref.watch(filterWheelProvider)),
+    equipmentChipLevel(ref.watch(rotatorProvider)),
+    equipmentChipLevel(ref.watch(flatPanelProvider)),
+    equipmentChipLevel(ref.watch(weatherProvider)),
+    equipmentChipLevel(ref.watch(safetyMonitorProvider)),
+    equipmentChipLevel(ref.watch(domeProvider)),
+    guiderChipLevel(ref.watch(guiderStatusProvider)),
+    switchChipLevel(
+      ref.watch(switchListProvider),
+      acting: ref.watch(switchActingProvider),
+    ),
+  ].any((l) => l != StatusLevel.disconnected);
+}
+
 class _StatusStrip extends ConsumerWidget {
-  const _StatusStrip({required this.onSearch, required this.onSettings});
+  const _StatusStrip({
+    required this.onSearch,
+    required this.onSettings,
+    required this.onDevices,
+  });
+
+  /// Opens Settings › Devices (the no-devices note).
+  final VoidCallback onDevices;
 
   final VoidCallback onSearch;
   final VoidCallback onSettings;
@@ -1224,19 +1391,30 @@ class _StatusStrip extends ConsumerWidget {
       padding: const EdgeInsets.only(left: 8, right: 4),
       child: Row(
         children: [
-          // Only gear that's connected; a fault still shows.
-          const Expanded(
+          // Only gear that's connected; a fault still shows. With none of it
+          // showing, a note says so and opens Devices.
+          Expanded(
             child: Align(
               alignment: Alignment.centerLeft,
-              child: EquipmentChipCompact(
-                compact: true,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: EquipmentChipHideDisconnected(
-                    child: TopEquipmentChips(),
-                  ),
-                ),
-              ),
+              child: _anyDeviceShown(ref)
+                  ? const EquipmentChipCompact(
+                      compact: true,
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: EquipmentChipHideDisconnected(
+                          child: TopEquipmentChips(),
+                        ),
+                      ),
+                    )
+                  : TextButton(
+                      key: const Key('simple-no-devices'),
+                      onPressed: onDevices,
+                      child: Text(
+                        ref.watch(serverLinkUpProvider)
+                            ? context.l10n.shellNoDevices
+                            : context.l10n.shellRigNotConnected,
+                      ),
+                    ),
             ),
           ),
           // Simple Mode's own search: the sky, its settings, its modes and
@@ -1425,7 +1603,7 @@ class _RightRail extends ConsumerWidget {
 
   final SimpleModeScreen mode;
 
-  /// Overrides the mode named on the rail (Autopilot shows its own).
+  /// Overrides the mode named on the rail (Night Setup shows its own).
   final SimpleModeScreen? named;
   final _Popover popover;
   final VoidCallback onModes;
@@ -1480,6 +1658,7 @@ class _RightRail extends ConsumerWidget {
           switch (mode) {
             SimpleModeScreen.focus => const SimpleFocusShutter(),
             SimpleModeScreen.polarAlign => const SimplePolarShutter(),
+            SimpleModeScreen.guide => const SimpleGuideShutter(),
             SimpleModeScreen.plan => const SimpleRunShutter(),
             _ => const SimpleShutter(),
           },
@@ -1496,11 +1675,12 @@ class _RightRail extends ConsumerWidget {
     );
   }
 
-  // In Autopilot the chip names the step whose settings it shows ("Focus"
+  // In Night Setup the chip names the step whose settings it shows ("Focus"
   // over "Auto"), so they don't read as random.
   String _chipLabel(BuildContext context, WidgetRef ref) {
     final label = switch (mode) {
       SimpleModeScreen.focus => simpleFocusSummary(ref),
+      SimpleModeScreen.guide => simpleGuideSummary(ref),
       SimpleModeScreen.plan => simpleRunChip(
         ref.watch(simpleRunProvider),
         ref.watch(simpleRunPlanProvider),
@@ -1549,6 +1729,7 @@ class _ModeGrid extends ConsumerWidget {
                       : AraColors.tileFill,
                   borderRadius: BorderRadius.circular(10),
                   child: InkWell(
+                    key: Key('simple-mode-${m.name}'),
                     borderRadius: BorderRadius.circular(10),
                     onTap: () => onPicked(m),
                     child: Padding(
@@ -1600,15 +1781,26 @@ class _GuidingBar extends ConsumerWidget {
     // Nothing to show until the guider has produced a step or is guiding.
     if (!guiding && steps.isEmpty) return const SizedBox.shrink();
     return SimplePanel(
-      padding: const EdgeInsets.symmetric(horizontal: AraSpace.s16),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AraSpace.s16,
+        vertical: AraSpace.s4,
+      ),
       child: Row(
         children: [
-          Flexible(
+          // The labels take what they need (a third at most); the graph fills
+          // the rest of the panel, its whole height (iPad, 2026-11-04: it had
+          // half the width and 32 pt).
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.sizeOf(context).width / 3,
+            ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(context.l10n.shellGuiding, style: kSimpleText),
+                // "Guider", not "Guiding": it shows while the guider
+                // loops or calibrates too (user, 2026-11-04).
+                Text(context.l10n.deviceGuider, style: kSimpleText),
                 Text(
                   guiding
                       ? context.l10n.shellGuidingRms(
@@ -1624,12 +1816,10 @@ class _GuidingBar extends ConsumerWidget {
           ),
           const SizedBox(width: 14),
           Expanded(
-            child: SizedBox(
-              height: 32,
-              child: CustomPaint(
-                key: const Key('simple-guide-trace'),
-                painter: _TracePainter(steps),
-              ),
+            child: CustomPaint(
+              key: const Key('simple-guide-trace'),
+              painter: _TracePainter(steps),
+              size: Size.infinite,
             ),
           ),
           const SizedBox(width: 10),
@@ -1715,6 +1905,27 @@ class _TracePainter extends CustomPainter {
   bool shouldRepaint(_TracePainter old) => old._steps != _steps;
 }
 
+// The guiding graph shows while the guider runs, never once it is stopped,
+// whatever steps are left from before (user, 2026-11-04).
+bool _guidingShown(WidgetRef ref) => ref.watch(
+  guiderStatusProvider.select((s) => simpleGuideActive(s.asData?.value)),
+);
+
+// The histogram is for saved frames (the daemon analyses those).
+String? _histogramFrame(WidgetRef ref) => ref.watch(liveViewControllerProvider)
+    ? null
+    : ref.watch(lastCapturedFrameIdProvider);
+
+/// Whether the bottom row has anything to show.
+bool _statsShown(WidgetRef ref) {
+  if (_guidingShown(ref)) return true;
+  final id = _histogramFrame(ref);
+  return id != null &&
+      ref.watch(
+        frameHistogramProvider(id).select((h) => h.asData?.value != null),
+      );
+}
+
 /// Guiding and the histogram along the bottom. Each panel waits for data, and
 /// whichever shows takes the row (both: guiding gets the larger share).
 class _StatsRow extends ConsumerWidget {
@@ -1722,14 +1933,8 @@ class _StatsRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final status = ref.watch(guiderStatusProvider).asData?.value;
-    final guiding =
-        status?.runtimeState == GuiderRuntimeState.guiding ||
-        ref.watch(guideStepsProvider).isNotEmpty;
-    // The histogram is for saved frames (the daemon analyses those).
-    final id = ref.watch(liveViewControllerProvider)
-        ? null
-        : ref.watch(lastCapturedFrameIdProvider);
+    final guiding = _guidingShown(ref);
+    final id = _histogramFrame(ref);
     final histogram = id == null
         ? null
         : ref.watch(frameHistogramProvider(id)).asData?.value;
@@ -1929,7 +2134,7 @@ class SimpleSegments<T> extends StatelessWidget {
 /// Simple Mode's density (DESIGN.md "Two Densities"): 10 px corners on
 /// buttons and fields instead of Material's pills, 44 px minimum targets,
 /// fields as borderless tiles.
-/// Simple Mode's green go buttons (Start Autopilot, Done, Create and start):
+/// Simple Mode's green go buttons (Start Night Setup, Done, Create and start):
 /// dark text on the green, 6.3:1 (white is 2.8:1).
 final kSimpleGoStyle = FilledButton.styleFrom(
   backgroundColor: AraColors.accentConnected,
@@ -2051,7 +2256,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
         (
           'Guider',
           l10n.shellSectionGuider,
-          (c) => glyph(Icons.track_changes, c),
+          (c) => glyph(Icons.videocam_outlined, c),
           true,
         ),
     ];
@@ -2243,7 +2448,7 @@ class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
     final notifier = ref.read(provider.notifier);
     final l10n = context.l10n;
     // The dot is the top bar chip's, so the two always agree.
-    final dot = equipmentStatusLevel(status).color;
+    final dot = equipmentStatusLevel(status);
     final word = switch (status.connectionState) {
       EquipmentConnectionState.connected => l10n.shellConnected,
       EquipmentConnectionState.connecting => l10n.shellConnecting,
@@ -2297,7 +2502,7 @@ class _GuiderGearRow extends ConsumerWidget {
     final camera = ref.watch(deviceDriverProvider('guidecamera')).value?.name;
     final l10n = context.l10n;
     // The dot is the top bar chip's, so the two always agree.
-    final dot = guiderStatusLevel(status).color;
+    final dot = guiderStatusLevel(status);
     final (word, verb, label, action) = switch (status?.connectionState) {
       GuiderConnectionState.connected => (
         l10n.shellConnected,
@@ -2342,7 +2547,7 @@ class _GuiderGearRow extends ConsumerWidget {
 Widget _gearTile({
   required String id,
   required String title,
-  required Color dot,
+  required StatusLevel dot,
   required String word,
   // The button's English verb, for its key; [label] is what it shows.
   required String? verb,
@@ -2363,11 +2568,7 @@ Widget _gearTile({
     child: Row(
       spacing: AraSpace.s12,
       children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-        ),
+        StatusDot.of(dot),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2716,8 +2917,15 @@ class _ThisRig extends ConsumerWidget {
               () => ref
                   .read(phd2SettingsProvider.notifier)
                   .setGuideFocalLength(v.round()),
-              (api) =>
-                  ref.read(phd2SettingsProvider.notifier).persistToServer(api),
+              // The save sends the whole section: re-read it first so a
+              // pixel size the rig filled since Rig's read isn't sent back
+              // as 0 (ALP-4982).
+              (api) async {
+                final guider = ref.read(phd2SettingsProvider.notifier);
+                await guider.hydrateFromServer(api);
+                guider.setGuideFocalLength(v.round());
+                return guider.persistToServer(api);
+              },
             ),
           ),
         ),
@@ -2862,7 +3070,7 @@ class _ThisRig extends ConsumerWidget {
               (l10n.shellThisApp, version),
               (l10n.shellAraServer, rig?.daemonVersion),
               if (rig?.guiderVersion != null)
-                ('OpenAstro Guider', rig!.guiderVersion),
+                (l10n.deviceGuider, rig!.guiderVersion),
               for (final a in servers)
                 (
                   servers.length > 1

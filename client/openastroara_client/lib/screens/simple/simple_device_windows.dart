@@ -14,6 +14,7 @@ import '../../models/focuser_status.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../models/guider_status.dart';
 import '../../state/equipment/focuser_state.dart';
+import '../../state/guider/guider_equipment_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../state/focus/autofocus_live_state.dart';
@@ -28,6 +29,7 @@ import '../../state/app_locale_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot;
 import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment, simpleRailScale;
 
@@ -48,17 +50,16 @@ class SimpleDeviceHeader extends StatelessWidget {
     final s = status;
     final color = switch (s?.connectionState) {
       EquipmentConnectionState.connected => AraColors.accentConnected,
-      EquipmentConnectionState.connecting => AraColors.accentBusy,
+      EquipmentConnectionState.connecting => AraColors.accentInfo,
       EquipmentConnectionState.error => AraColors.accentError,
       _ => AraColors.textDisabled,
     };
     return Row(
       spacing: AraSpace.s8,
       children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        StatusDot(
+          color: color,
+          ring: s?.connectionState == EquipmentConnectionState.connecting,
         ),
         Expanded(
           child: Text(
@@ -217,7 +218,7 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
     final before = ref.read(imagingDefaultsProvider).coolerTargetC;
     defaults.setCoolerTargetC(celsius);
     if (ref.read(imagingDefaultsProvider).coolerTargetC == before) return;
-    final notify = userNotifier(context);
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.camera);
     final l10n = context.l10n;
     final api = ref.read(profileApiProvider);
     if (api != null) {
@@ -246,10 +247,10 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
       ref.read(exposureControllerProvider.notifier).setGain(gain);
 
   Future<void> _run(Future<bool> Function() action) async {
-    final notify = userNotifier(context);
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.camera);
     final l10n = context.l10n;
     try {
-      await action();
+      if (!await action()) _sayBusy(ref, l10n);
     } catch (e) {
       notify(
         l10n.deviceCouldntChangeCooler,
@@ -261,6 +262,21 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
 
   static Widget _row(String id, String label, Widget value) =>
       simpleWindowRow(label, value, id: id);
+}
+
+/// A tap the device's notifier dropped (its last command still running)
+/// says so: one pill at a time, fading like a result (ALP-4982).
+void _sayBusy(WidgetRef ref, AppLocalizations l10n) {
+  final messages = ref.read(simpleMessagesProvider.notifier);
+  if (ref.read(simpleMessagesProvider).any((m) => m.title == l10n.deviceBusy)) {
+    return;
+  }
+  final id = messages.show(
+    SimpleMessageKind.error,
+    l10n.deviceBusy,
+    detail: l10n.deviceBusyDetail,
+  );
+  Timer(kSimpleResultLife, () => messages.dismiss(id));
 }
 
 /// What the rig reports of a device's versions, set out like Rig's (only in
@@ -465,6 +481,7 @@ class SimpleMountMotionNotifier extends Notifier<bool?> {
         .show(
           SimpleMessageKind.error,
           asked ? l10n.deviceParkUnfinished : l10n.deviceUnparkUnfinished,
+          origin: SimpleStatusOrigin.mount,
         );
   }
 
@@ -615,7 +632,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                       (parking ?? !m.parked)
                           ? context.l10n.deviceParking
                           : context.l10n.deviceUnparking,
-                      style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                      style: kSimpleText.copyWith(color: AraColors.accentInfo),
                     ),
                   ),
                 )
@@ -704,7 +721,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
   Future<void> _setFlip(BuildContext context, bool on) async {
     final policies = ref.read(safetyPoliciesProvider.notifier);
     policies.setMeridianFlipAuto(on);
-    final notify = userNotifier(context);
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.mount);
     final l10n = context.l10n;
     final api = ref.read(profileApiProvider);
     if (api == null) return;
@@ -724,10 +741,12 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     BuildContext context,
     Future<bool> Function() action,
   ) async {
-    final notify = userNotifier(context);
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.mount);
     final l10n = context.l10n;
     try {
-      return await action();
+      final performed = await action();
+      if (!performed) _sayBusy(ref, l10n);
+      return performed;
     } catch (e) {
       notify(
         l10n.deviceCouldntMoveMount,
@@ -862,12 +881,13 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     setState(() => _sent = target);
     // A relative focuser takes the change, not a position.
     final absolute = s.capabilities?.absoluteFocuser ?? true;
-    final notify = userNotifier(context);
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.focuser);
     final l10n = context.l10n;
     try {
-      await ref
+      final performed = await ref
           .read(focuserProvider.notifier)
           .move(absolute ? target : target - from);
+      if (!performed) _sayBusy(ref, l10n);
     } catch (e) {
       notify(
         l10n.deviceCouldntMoveFocuser,
@@ -916,7 +936,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     af.setTriggerTempDeltaC(c.clamp(0, 10).toDouble());
     final api = ref.read(profileApiProvider);
     if (api == null) return;
-    final notify = userNotifier(context);
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.focuser);
     final l10n = context.l10n;
     try {
       await af.persistToServer(api);
@@ -961,7 +981,10 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
           ),
         SizedBox(
           height: 18,
-          child: Text(
+          // Moving is working: blinking green (DESIGN.md status rule).
+          child: StatusBlink(
+            on: _target == null && s.isMoving,
+            child: Text(
             _target != null
                 ? context.l10n.deviceLetGoToMoveTo(simpleSteps(_target!))
                 : s.isMoving
@@ -970,7 +993,8 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
                       : context.l10n.deviceMoving)
                 : '',
             textAlign: TextAlign.center,
-            style: AraText.caption.copyWith(color: AraColors.accentBusy),
+            style: AraText.caption.copyWith(color: AraColors.accentConnected),
+          ),
           ),
         ),
         LayoutBuilder(
@@ -1335,17 +1359,13 @@ class SimpleGuiderWindow extends ConsumerStatefulWidget {
 }
 
 class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
-  double? _dragGain;
-
-  static String _arcsec(double v) => '${v.toStringAsFixed(2)}″';
-
   @override
   Widget build(BuildContext context) {
     final g = ref.watch(guiderStatusProvider).value;
     final camera = ref.watch(deviceDriverProvider('guidecamera')).value;
     final colour = switch (g?.connectionState) {
       GuiderConnectionState.connected => AraColors.accentConnected,
-      GuiderConnectionState.connecting => AraColors.accentBusy,
+      GuiderConnectionState.connecting => AraColors.accentInfo,
       GuiderConnectionState.error => AraColors.accentError,
       _ => AraColors.textDisabled,
     };
@@ -1353,16 +1373,15 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
       Row(
         spacing: AraSpace.s8,
         children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: colour, shape: BoxShape.circle),
+          StatusDot(
+            color: colour,
+            ring: g?.connectionState == GuiderConnectionState.connecting,
           ),
           Expanded(
             child: Text(
               camera?.name == null
-                  ? context.l10n.deviceGuider
-                  : '${context.l10n.deviceGuider} · ${camera!.name}',
+                  ? context.l10n.deviceGuiderCamera
+                  : '${context.l10n.deviceGuiderCamera} · ${camera!.name}',
               style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
             ),
           ),
@@ -1378,93 +1397,9 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
           style: AraText.caption,
         ),
       );
-    } else {
-      children.add(
-        simpleWindowRow(
-          context.l10n.deviceState,
-          id: 'State',
-          Text(g.runtimeSummary(context.l10n), style: kSimpleText),
-        ),
-      );
-      if (g.rmsTotalArcsec != null) {
-        children.add(
-          simpleWindowRow(
-            context.l10n.deviceRms,
-            id: 'RMS',
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(_arcsec(g.rmsTotalArcsec!), style: kSimpleText),
-                if (g.rmsRaArcsec != null && g.rmsDecArcsec != null)
-                  Text(
-                    context.l10n.deviceRmsRaDec(
-                      _arcsec(g.rmsRaArcsec!),
-                      _arcsec(g.rmsDecArcsec!),
-                    ),
-                    style: AraText.caption,
-                  ),
-              ],
-            ),
-          ),
-        );
-      }
     }
-    final phd2 = ref.watch(phd2SettingsProvider);
-    // The guider's own gain scale: percent of the camera's range.
-    final gain = _dragGain ?? phd2.guideCameraGain.toDouble();
-    children.addAll([
-      simpleWindowRow(
-        context.l10n.deviceGain,
-        id: 'Gain',
-        Text('${gain.round()} %', style: kSimpleText),
-      ),
-      Slider(
-        key: const Key('simple-guider-gain'),
-        min: 0,
-        max: 100,
-        divisions: 20,
-        value: gain.clamp(0, 100),
-        label: '${gain.round()} %',
-        onChanged: (v) => setState(() => _dragGain = v),
-        onChangeEnd: (v) {
-          setState(() => _dragGain = null);
-          _save((p) => p.setGuideCameraGain(v.round()));
-        },
-      ),
-    ]);
-    final every = phd2.ditherEnabled ? math.max(1, phd2.ditherEveryNFrames) : 0;
-    children.add(
-      simpleWindowRow(
-        context.l10n.deviceDither,
-        id: 'Dither',
-        simpleWindowStepper(
-          id: 'simple-guider-dither',
-          text: switch (every) {
-            0 => context.l10n.deviceOff,
-            _ => context.l10n.deviceDitherEveryFrames(every),
-          },
-          onLess: () => _setDither(every - 1),
-          onMore: () => _setDither(every + 1),
-        ),
-      ),
-    );
-    if (every > 0) {
-      final px = phd2.ditherPixels;
-      children.add(
-        simpleWindowRow(
-          context.l10n.deviceDitherBy,
-          id: 'Dither by',
-          simpleWindowStepper(
-            id: 'simple-guider-dither-px',
-            text: '${px == px.roundToDouble() ? px.round() : px} px',
-            onLess: () =>
-                px > 1 ? _save((p) => p.setDitherPixels(px - 1)) : null,
-            onMore: () =>
-                px < 30 ? _save((p) => p.setDitherPixels(px + 1)) : null,
-          ),
-        ),
-      );
-    }
+    // The guide camera's gain, the same slider and value as Guide mode's.
+    children.add(const SimpleGuideGainSlider());
     if (widget.inSettings) children.addAll(_versions(context, camera));
     return Column(
       key: const Key('simple-device-guider'),
@@ -1473,32 +1408,88 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
       children: children,
     );
   }
+}
 
-  /// 0 turns dithering off; 1 and up dithers every that many frames.
-  void _setDither(int n) {
-    if (n < 0 || n > 20) return;
-    _save((p) {
-      p.setDitherEnabled(n > 0);
-      if (n > 0) p.setDitherEveryNFrames(n);
-    });
-  }
-
-  /// Changes the guider settings and saves them to the profile.
-  Future<void> _save(void Function(Phd2SettingsNotifier) change) async {
-    final p = ref.read(phd2SettingsProvider.notifier);
-    change(p);
-    final api = ref.read(profileApiProvider);
-    if (api == null) return;
-    final notify = userNotifier(context);
-    final l10n = context.l10n;
-    try {
-      await p.persistToServer(api);
-    } catch (e) {
-      notify(
-        l10n.deviceCouldntSaveThat,
-        detail: describeEquipmentError(e),
-        error: true,
-      );
+/// Changes the guider settings and saves them to the profile; [live] also
+/// sends the guider its tuning (exposure, gain) without stopping guiding.
+Future<void> simpleSaveGuider(
+  BuildContext context,
+  WidgetRef ref,
+  void Function(Phd2SettingsNotifier) change, {
+  bool live = false,
+}) async {
+  // The container, not ref: a mode change can unmount the panel while the
+  // save is out, and a disposed ref would turn a saved setting into
+  // "Couldn't save that" (review, #1490).
+  final container = ProviderScope.containerOf(context, listen: false);
+  final p = container.read(phd2SettingsProvider.notifier);
+  change(p);
+  final api = container.read(profileApiProvider);
+  if (api == null) return;
+  final notify = userNotifier(context);
+  final l10n = context.l10n;
+  try {
+    await p.persistToServer(api);
+    if (live &&
+        container.read(guiderStatusProvider).value?.isConnected == true) {
+      await container
+          .read(guiderEquipmentProvider.notifier)
+          .pushProfile(tuningOnly: true);
     }
+  } catch (e) {
+    notify(
+      l10n.deviceCouldntSaveThat,
+      detail: describeEquipmentError(e),
+      error: true,
+    );
+  }
+}
+
+/// The guide camera's gain: the guider's own scale, percent of the camera's
+/// range, set when the thumb is let go (Guide mode and the Guider Camera
+/// window share it).
+class SimpleGuideGainSlider extends ConsumerStatefulWidget {
+  const SimpleGuideGainSlider({super.key});
+
+  @override
+  ConsumerState<SimpleGuideGainSlider> createState() =>
+      _SimpleGuideGainSliderState();
+}
+
+class _SimpleGuideGainSliderState extends ConsumerState<SimpleGuideGainSlider> {
+  double? _drag;
+
+  @override
+  Widget build(BuildContext context) {
+    final gain =
+        _drag ?? ref.watch(phd2SettingsProvider).guideCameraGain.toDouble();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        simpleWindowRow(
+          context.l10n.deviceGain,
+          id: 'Gain',
+          Text('${gain.round()} %', style: kSimpleText),
+        ),
+        Slider(
+          key: const Key('simple-guider-gain'),
+          min: 0,
+          max: 100,
+          divisions: 20,
+          value: gain.clamp(0, 100),
+          label: '${gain.round()} %',
+          onChanged: (v) => setState(() => _drag = v),
+          onChangeEnd: (v) {
+            setState(() => _drag = null);
+            simpleSaveGuider(
+              context,
+              ref,
+              (p) => p.setGuideCameraGain(v.round()),
+              live: true,
+            );
+          },
+        ),
+      ],
+    );
   }
 }

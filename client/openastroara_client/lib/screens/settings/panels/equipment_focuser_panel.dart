@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../widgets/status_indicator.dart' show StatusBlink;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -134,9 +135,12 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
         if (s.isMoving)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 4),
-            child: Text(
-              'Moving…',
-              style: TextStyle(color: AraColors.accentBusy),
+            child: StatusBlink(
+              on: true,
+              child: Text(
+                'Moving…',
+                style: TextStyle(color: AraColors.accentConnected),
+              ),
             ),
           ),
         const SizedBox(height: 8),

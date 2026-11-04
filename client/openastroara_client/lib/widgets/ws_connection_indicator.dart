@@ -30,7 +30,7 @@ class WsConnectionIndicator extends ConsumerWidget {
 ) => switch (state) {
   WsConnectionState.connecting => (StatusLevel.info, 'Server connecting…'),
   WsConnectionState.connected => (StatusLevel.connected, 'Server connected'),
-  WsConnectionState.reconnecting => (StatusLevel.busy, 'Server reconnecting…'),
+  WsConnectionState.reconnecting => (StatusLevel.changing, 'Server reconnecting…'),
   WsConnectionState.disconnected => (
     StatusLevel.disconnected,
     'Server disconnected',

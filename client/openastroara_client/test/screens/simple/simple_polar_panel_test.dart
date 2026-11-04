@@ -3,11 +3,12 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/screens/simple/simple_autopilot.dart';
+import 'package:openastroara/screens/simple/simple_night_setup.dart';
 import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
 import 'package:openastroara/services/polar_align_api.dart';
+import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
@@ -154,7 +155,7 @@ void main() {
     expect(api!.calls, ['complete']);
   });
 
-  testWidgets('in Guided Run, polar align is the last step: Done reads Done · Start imaging', (tester) async {
+  testWidgets('in Night Setup, polar align is the last step: Done reads Done · Start imaging', (tester) async {
     final api = _Api()..settings = PolarAlignSettings();
     final c = ProviderContainer(overrides: [
       polarAlignApiProvider.overrideWithValue(api),
@@ -162,18 +163,18 @@ void main() {
           phase: PolarAlignStates.adjusting, altErrorArcmin: 0.3, azErrorArcmin: -0.5, totalErrorArcmin: 0.6))),
     ]);
     addTearDown(c.dispose);
-    c.read(autopilotProvider.notifier).back(); // no-op outside Autopilot
+    c.read(nightSetupProvider.notifier).back(); // no-op outside Night Setup
     await tester.pumpWidget(UncontrolledProviderScope(
       container: c,
       child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarPanel()))),
     ));
     await tester.pumpAndSettle();
-    expect(find.text('Done'), findsOneWidget, reason: 'outside Autopilot');
-    c.read(autopilotProvider.notifier).start();
-    c.read(autopilotProvider.notifier).next(); // past the plan, to Focus
-    c.read(autopilotProvider.notifier).next(); // past Focus, to polar align
+    expect(find.text('Done'), findsOneWidget, reason: 'outside Night Setup');
+    c.read(nightSetupProvider.notifier).start();
+    c.read(nightSetupProvider.notifier).next(); // past the plan, to Focus
+    c.read(nightSetupProvider.notifier).next(); // past Focus, to polar align
     await tester.pumpAndSettle();
-    expect(c.read(autopilotProvider), AutopilotStep.polarAlign);
+    expect(c.read(nightSetupProvider), NightSetupStep.polarAlign);
     expect(find.text('Done · Start imaging'), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-polar-done')));
     await tester.pumpAndSettle();
@@ -271,10 +272,26 @@ void main() {
               .color,
           AraColors.textPrimary);
     });
-    testWidgets('no server: off', (tester) async {
+    testWidgets('the main camera busy: off, and a tap says why (user, 2026-11-04: it turns the mount)', (tester) async {
+      final api = await shutter(tester, const PolarAlignLive());
+      final c = ProviderScope.containerOf(tester.element(find.byKey(const Key('simple-shutter'))));
+      c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pump();
+      expect(api!.calls, isEmpty, reason: 'no start under a frame');
+      expect(c.read(simpleMessagesProvider).single.title, 'The main camera is busy: wait for its frame, or stop it.');
+      c.read(captureProgressProvider.notifier).reset();
+      await tester.pump(const Duration(seconds: 11));
+    });
+
+    testWidgets('no server: off, and a tap says why (user, 2026-11-04)', (tester) async {
       await shutter(tester, const PolarAlignLive(), server: false);
-      final ink = tester.widget<InkResponse>(find.byKey(const Key('simple-shutter')));
-      expect(ink.onTap, isNull);
+      final c = ProviderScope.containerOf(tester.element(find.byKey(const Key('simple-shutter'))));
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider).single.title, 'Rig not connected');
+      await tester.pump(const Duration(seconds: 11));
     });
   });
 }

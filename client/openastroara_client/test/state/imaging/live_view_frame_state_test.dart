@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:fake_async/fake_async.dart';
@@ -7,6 +8,7 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/live_view_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/imaging/live_view_frame_state.dart';
+import 'package:openastroara/state/imaging/live_view_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 
 class _FakeSavedServerService implements SavedServerService {
@@ -41,6 +43,15 @@ class _FakeLiveViewClient implements LiveViewClient {
   }
   @override
   void close() => calls.add('close');
+  /// What the daemon says when asked: a loop a dead app left running.
+  bool activeOnServer = false;
+  /// When set, the daemon answers only once it completes.
+  Completer<bool>? activeAnswer;
+  @override
+  Future<bool> isActive() async {
+    calls.add('isActive');
+    return activeAnswer?.future ?? activeOnServer;
+  }
 }
 
 ProviderContainer _container(SavedServerService servers, LiveViewClient client) =>
@@ -62,6 +73,56 @@ void main() {
     expect(s.active, isFalse);
     expect(s.error, isNotNull);
     expect(client.calls, isEmpty); // never built a client / called start
+  });
+
+  test("a loop the daemon still runs (the app died mid-Loop, rig 2026-11-05) is adopted on connect: "
+      "active, polling, the toggle on, no second start", () {
+    fakeAsync((async) {
+      final client = _FakeLiveViewClient([LiveFrame(jpegA, 1, 7)])..activeOnServer = true;
+      final c = _container(
+          _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]), client);
+      addTearDown(c.dispose);
+      c.read(savedServersProvider);
+      async.flushMicrotasks();
+      c.read(liveViewFrameProvider); // the notifier comes up with the server
+      async.flushMicrotasks();
+      expect(c.read(liveViewFrameProvider).active, isTrue);
+      expect(c.read(liveViewControllerProvider), isTrue, reason: 'the shutter shows Stop');
+      async.elapse(const Duration(milliseconds: 300));
+      expect(c.read(liveViewFrameProvider).seq, 1, reason: 'polling the frame');
+      expect(client.calls.where((x) => x.startsWith('start')), isEmpty);
+    });
+  });
+
+  test('disposed while the daemon is still answering: no throw, the client it built is closed (review, #1490)',
+      () async {
+    final client = _FakeLiveViewClient(const [])..activeAnswer = Completer<bool>();
+    final c = _container(_FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]), client);
+    c.read(savedServersProvider);
+    await Future<void>.delayed(Duration.zero);
+    c.read(liveViewFrameProvider);
+    await Future<void>.delayed(Duration.zero);
+    expect(client.calls, ['isActive'], reason: 'the ask is out');
+    c.dispose();
+    client.activeAnswer!.complete(true);
+    await Future<void>.delayed(Duration.zero);
+    expect(client.calls, ['isActive', 'close']);
+  });
+
+  test('nothing running on the daemon: connect changes nothing', () {
+    fakeAsync((async) {
+      final client = _FakeLiveViewClient(const []);
+      final c = _container(
+          _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]), client);
+      addTearDown(c.dispose);
+      c.read(savedServersProvider);
+      async.flushMicrotasks();
+      c.read(liveViewFrameProvider);
+      async.flushMicrotasks();
+      expect(c.read(liveViewFrameProvider).active, isFalse);
+      expect(c.read(liveViewControllerProvider), isFalse);
+      expect(client.calls, ['isActive', 'close']);
+    });
   });
 
   test('start activates and polls a frame; change-detect ignores a repeat', () {

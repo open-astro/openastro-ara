@@ -65,7 +65,8 @@ void main() {
     expect(find.byType(SnackBar), findsOneWidget);
   });
 
-  testWidgets('a result fades after 6 s; an error stays until ×', (tester) async {
+  testWidgets('a result fades after 10 s; an error stays longer, then fades too (user, 2026-11-04); × closes it',
+      (tester) async {
     final c = await _pump(tester);
     final n = c.read(simpleMessagesProvider.notifier);
     n.show(SimpleMessageKind.result, 'Frame saved', detail: 'M 42 · 5 s');
@@ -74,7 +75,25 @@ void main() {
     expect(find.textContaining('Frame saved'), findsOneWidget);
     await tester.pump(kSimpleResultLife + const Duration(milliseconds: 100));
     expect(find.textContaining('Frame saved'), findsNothing, reason: 'the result faded');
-    expect(find.textContaining("Couldn't start live view"), findsOneWidget, reason: 'the error stays');
+    expect(find.textContaining("Couldn't start live view"), findsOneWidget, reason: 'the error stays longer');
+    await tester.pump(kSimpleErrorLife);
+    expect(c.read(simpleMessagesProvider), isEmpty, reason: 'then it fades too, not a sticky pill');
+    n.show(SimpleMessageKind.error, "Couldn't start live view");
+    await tester.pump();
+    await tester.tap(find.byTooltip('Dismiss'));
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider), isEmpty, reason: '× closes it at once');
+    await tester.pump(kSimpleErrorLife);
+  });
+
+  testWidgets("an Emergency Stop's failed rung is a sticky error: red, and it stays until × (DESIGN.md; review, #1490)",
+      (tester) async {
+    final c = await _pump(tester);
+    final n = c.read(simpleMessagesProvider.notifier);
+    n.show(SimpleMessageKind.error, 'Emergency Stop: park failed', sticky: true);
+    await tester.pump();
+    await tester.pump(kSimpleErrorLife + const Duration(seconds: 1));
+    expect(find.textContaining('park failed'), findsOneWidget, reason: 'it waits to be read');
     await tester.tap(find.byTooltip('Dismiss'));
     await tester.pump();
     expect(c.read(simpleMessagesProvider), isEmpty);

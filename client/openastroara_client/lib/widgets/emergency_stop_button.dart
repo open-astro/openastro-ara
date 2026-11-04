@@ -199,6 +199,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
         // Red when a rung failed; else amber, done but the rig needs a look.
         // Either way it waits to be read (user, 2026-11-04).
         warning: true,
+        sticky: true,
       );
     } catch (e) {
       notify(
@@ -206,6 +207,8 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
         error: true,
         snackBarRed: false,
         snackBarDuration: const Duration(seconds: 10),
+        // The stop did NOT happen: it waits to be read (ALP-5016).
+        sticky: true,
       );
     } finally {
       if (mounted) setState(() => _inFlight = false);

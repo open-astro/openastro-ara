@@ -1073,7 +1073,7 @@ void main() {
         [(SimpleMessageKind.error, 'The run is between targets.')]);
   });
 
-  testWidgets("a scheduled start the rig refuses says so in a pill too (Guided Run's last Done has no sheet open)",
+  testWidgets("a scheduled start the rig refuses says so in a pill too (Night Setup's last Done has no sheet open)",
       (tester) async {
     final (c, seq) = await run(tester);
     await create(tester);
@@ -1084,7 +1084,7 @@ void main() {
     expect(seq.calls.where((call) => call.startsWith('start ')), isEmpty);
   });
 
-  testWidgets("Guided Run's last Done while the queue is still updating says so instead of doing nothing",
+  testWidgets("Night Setup's last Done while the queue is still updating says so instead of doing nothing",
       (tester) async {
     // Review of #1486: _op returned quietly while busy, so startQueue reported true and nothing started.
     final (c, seq) = await run(tester);
@@ -1448,7 +1448,7 @@ void main() {
   });
 
   group('the tracker and the shutter', () {
-    testWidgets('nothing picked: no tracker, and the shutter does nothing', (tester) async {
+    testWidgets('nothing picked: no tracker, and the shutter does nothing but say why', (tester) async {
       final (_, seq) = await run(tester, sel: null);
       expect(find.byKey(const Key('simple-run-tracker')), findsNothing);
       expect(tester.getSemantics(find.byKey(const Key('simple-shutter'))), isSemantics(hasEnabledState: true, isEnabled: false),
@@ -1456,6 +1456,9 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pump();
       expect(seq.calls, isEmpty);
+      final c = ProviderScope.containerOf(tester.element(find.byKey(const Key('simple-shutter'))));
+      expect(c.read(simpleMessagesProvider).single.title, 'Pick a target first', reason: 'user, 2026-11-04');
+      await tester.pump(const Duration(seconds: 11));
     });
 
     testWidgets('a target picked, no plan yet: the shutter creates and starts it', (tester) async {
@@ -1496,6 +1499,9 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pumpAndSettle();
       expect(seq.calls, ['create M31'], reason: 'the shutter waits for the rise');
+      final c = ProviderScope.containerOf(tester.element(find.byKey(const Key('simple-shutter'))));
+      expect(c.read(simpleMessagesProvider).single.title, startsWith('Rises'), reason: 'and says so (user, 2026-11-04)');
+      await tester.pump(const Duration(seconds: 11));
     });
 
     testWidgets('a target that never rises here can\'t be queued', (tester) async {

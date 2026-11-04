@@ -39,8 +39,9 @@ class AraColors {
   static const linkText = Color(0xFF64B5F6);
 
   /// The tile fill behind Simple Mode's fields, presets and mode tiles
-  /// (DESIGN.md `tile-fill`): dark enough that [textSecondary] on it reads
-  /// at 4.5:1 over a white frame.
+  /// (DESIGN.md `tile-fill`). Tiles always sit on a panel's 90 % scrim
+  /// ([overlayScrim]), and that is what makes [textSecondary] on them read at
+  /// 4.5:1 over a white frame (4.7:1); the tile alone over white is 1.2:1.
   static const tileFill = Color(0x8C383838);
 
   /// Simple Mode's full-screen safety alarm: a deep red over everything, so it
@@ -72,7 +73,7 @@ class AraColors {
   static const selectionBg = Color(0xFF1976D2);
 
   /// [selectionBg] at 25 %: a selected or current item on a translucent
-  /// panel (Simple Mode's rail buttons, Autopilot's step in hand).
+  /// panel (Simple Mode's rail buttons, Night Setup's step in hand).
   static const selectionTint = Color(0x401976D2);
   static const selectionFg = Color(0xFFFFFFFF);
   static const buttonPrimary = Color(0xFF1565C0);

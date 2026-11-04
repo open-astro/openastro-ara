@@ -46,8 +46,8 @@ import '../../widgets/emergency_stop_button.dart' show kEmergencyStopHold;
 import '../../widgets/stop_mount_overlay.dart' show SlewWsEvents;
 import '../../widgets/sequencer/run_completion_sheet.dart'
     show runFramesPerFilter;
-import 'simple_autopilot.dart'
-    show AutopilotStep, autopilotNext, autopilotProvider;
+import 'simple_night_setup.dart'
+    show NightSetupStep, nightSetupProvider, simpleNightSetupNext;
 import 'simple_device_windows.dart' show SimpleGainSlider;
 import 'simple_preview_panel.dart'
     show
@@ -55,6 +55,7 @@ import 'simple_preview_panel.dart'
         SimpleWheelKeys,
         exposurePresets,
         formatExposure,
+        simpleSayWhy,
         kSimpleText;
 import 'simple_shell.dart'
     show
@@ -514,6 +515,18 @@ class SimpleRun {
 /// What Plan's shutter, tracker and sheet show.
 enum SimpleRunPhase { none, ready, imaging, pausing, paused, done }
 
+/// A paused plan's colour (DESIGN.md status rule): paused by Ara (a star
+/// lost, safety, a flip) is on its way back, blue; paused waiting for the
+/// user needs a look, amber.
+Color simplePausedColour(WidgetRef ref) =>
+    ref.watch(
+      sequenceRunStateProvider.select(
+        (s) => s.value?.state == SequenceRunState.pausedAwaitingUser,
+      ),
+    )
+    ? AraColors.accentBusy
+    : AraColors.accentInfo;
+
 bool _paused(SequenceRunState? s) =>
     s == SequenceRunState.paused || s == SequenceRunState.pausedAwaitingUser;
 
@@ -862,7 +875,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     return startQueue(startAt: startAt);
   }
 
-  /// Starts the queue as it stands (Guided Run's last Done). With [startAt]
+  /// Starts the queue as it stands (Night Setup's last Done). With [startAt]
   /// the run starts at once but waits on the rig until then.
   Future<bool> startQueue({DateTime? startAt}) async {
     // An edit or reorder still on its way: _op would skip the start quietly
@@ -873,6 +886,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
           .show(
             SimpleMessageKind.error,
             l10nFor(ref.read(appLocaleProvider)).planQueueBusy,
+            origin: SimpleStatusOrigin.plan,
           );
       return false;
     }
@@ -963,7 +977,10 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   /// (already queued, run ending) set [SimpleRun.error] instead.
   void _fail(String why, {SimpleRun? undo, bool noStorage = false}) {
     state = (undo ?? state).copyWith(busy: false, noStorage: noStorage);
-    ref.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, why);
+    // From Plan: a tap on the pill opens it (#1490).
+    ref
+        .read(simpleMessagesProvider.notifier)
+        .show(SimpleMessageKind.error, why, origin: SimpleStatusOrigin.plan);
   }
 
   // The daemon's own words when it sent them.
@@ -1053,7 +1070,7 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
         run.targets.isNotEmpty && (ours || phase == SimpleRunPhase.ready);
     final active = switch (phase) {
       SimpleRunPhase.ready || SimpleRunPhase.done => AraColors.accentConnected,
-      SimpleRunPhase.paused => AraColors.accentBusy,
+      SimpleRunPhase.paused => simplePausedColour(ref),
       _ => AraColors.selectionBg,
     };
     String? stateWord() => switch (phase) {
@@ -1247,7 +1264,7 @@ class _PlanSquare extends StatelessWidget {
                           (
                             last,
                             paused
-                                ? small.copyWith(color: AraColors.accentBusy)
+                                ? small.copyWith(color: color)
                                 : small,
                           ),
                         ])
@@ -1375,9 +1392,9 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
     final tap = run.busy ? null : _tap(phase);
     final ring = switch (phase) {
       _ when idle => AraColors.textDisabled,
-      // White like every mode's ring; amber only while paused.
+      // White like every mode's ring; the paused colour while paused.
       SimpleRunPhase.ready || SimpleRunPhase.none => AraColors.textPrimary,
-      SimpleRunPhase.paused => AraColors.accentBusy,
+      SimpleRunPhase.paused => simplePausedColour(ref),
       _ => AraColors.textPrimary.withValues(alpha: 0.25),
     };
     final pauseBars =
@@ -1424,7 +1441,19 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
           // cancels the hold.
           final quick = _hold.value < 0.4;
           _hold.value = 0;
-          if (!_held && (quick || !holdable)) tap?.call();
+          if (!_held && (quick || !holdable)) {
+            // Greyed out: a tap says why (user, 2026-11-04).
+            tap == null && (idle || waiting)
+                ? simpleSayWhy(
+                    context,
+                    waiting
+                        ? context.l10n.planRisesAtCap(
+                            _hhmm(run.targets.first.rise!.toLocal()),
+                          )
+                        : context.l10n.planPickTargetFirst,
+                  )
+                : tap?.call();
+          }
         },
         onPointerCancel: (_) {
           scheduleMicrotask(() => _viaPointer = false);
@@ -1689,18 +1718,11 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final imaging =
         ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
     final off = sel == null || sel.belowHorizon || run.busy || imaging;
-    // Guided Run's plan step only queues; its green button moves on (or, with
+    // Night Setup's plan step only queues; its green button moves on (or, with
     // focus and polar alignment done, starts imaging).
-    final guided = ref.watch(autopilotProvider) == AutopilotStep.plan;
+    final guided = ref.watch(nightSetupProvider) == NightSetupStep.plan;
     final guidedNext = guided
-        ? autopilotNext(
-            after: AutopilotStep.plan,
-            focused: ref.watch(setupFocusStateProvider) == SetupStepState.done,
-            aligned:
-                ref.watch(setupPolarAlignStateProvider) == SetupStepState.done,
-            permanentPier:
-                ref.watch(simplePermanentPierProvider).value ?? false,
-          )
+        ? simpleNightSetupNext(ref, after: NightSetupStep.plan)
         : null;
     final now = ref.watch(clockProvider)();
     final dark = ref.watch(simpleDarkStartProvider);
@@ -1793,12 +1815,11 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        // Guided Run's step strip already names the step (user, 2026-11-04).
-        if (!guided || editing != null)
+        // No title: the chip (or Night Setup's step strip) already says Plan
+        // (user, 2026-11-04); editing names the target.
+        if (editing != null)
           Text(
-            editing == null
-                ? context.l10n.planTonightsPlan
-                : context.l10n.planEditTarget(run.targets[editing].name),
+            context.l10n.planEditTarget(run.targets[editing].name),
             style: _head,
           ),
         if (!wide && editing == null) ...lists,
@@ -2139,7 +2160,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                   onPressed: guided
                       ? (run.sequenceId == null || run.busy
                             ? null
-                            : ref.read(autopilotProvider.notifier).next)
+                            : ref.read(nightSetupProvider.notifier).next)
                       : off
                       ? null
                       : () async {
@@ -2153,9 +2174,10 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                   child: Text(
                     guided
                         ? switch (guidedNext) {
-                            AutopilotStep.focus => context.l10n.guidedNextFocus,
-                            AutopilotStep.polarAlign =>
+                            NightSetupStep.focus => context.l10n.guidedNextFocus,
+                            NightSetupStep.polarAlign =>
                               context.l10n.guidedNextPolarAlign,
+                            NightSetupStep.guide => context.l10n.guidedNextGuide,
                             _ => context.l10n.guidedStartImaging,
                           }
                         : run.busy

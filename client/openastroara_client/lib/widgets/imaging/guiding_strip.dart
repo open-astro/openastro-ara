@@ -226,16 +226,17 @@ class GuidingStrip extends ConsumerWidget {
       case GuiderRuntimeState.guiding:
         return AraColors.accentConnected;
       case GuiderRuntimeState.starLost:
-        return AraColors.accentError;
+        return AraColors.accentBusy; // a warning: still looking (DESIGN.md status rule)
       case GuiderRuntimeState.calibrating:
       case GuiderRuntimeState.dithering:
       case GuiderRuntimeState.settling:
       case GuiderRuntimeState.looping:
       case GuiderRuntimeState.starSelected:
       case GuiderRuntimeState.assistant:
-        return AraColors.accentBusy;
-      case GuiderRuntimeState.stopped:
       case GuiderRuntimeState.paused:
+        return AraColors.accentInfo;
+      case GuiderRuntimeState.stopped:
+        return AraColors.accentConnected; // idle and healthy
       case GuiderRuntimeState.unknown:
         return AraColors.textSecondary;
     }

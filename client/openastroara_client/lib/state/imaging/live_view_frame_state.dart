@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/server.dart';
 import '../../services/live_view_api.dart';
 import '../saved_server_state.dart';
+import 'live_view_state.dart';
 
 /// The live frame the §64 viewer renders, plus the loop's run state. [jpeg] is
 /// null until the first frame of the current session arrives; gate "live" on
@@ -72,10 +73,41 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
   @override
   LiveFrameState build() {
     ref.onDispose(_teardown);
+    // The daemon keeps a loop running when the app dies mid-Loop (rig,
+    // 2026-11-05: the camera stayed busy and every shutter tap was refused
+    // with nothing on screen to stop); on connect, adopt it instead.
+    ref.listen(activeServerProvider, fireImmediately: true, (_, server) {
+      if (server != null) Future.microtask(() => _adopt(server));
+    });
     return LiveFrameState.idle;
   }
 
+  Future<void> _adopt(AraServer server) async {
+    if (_api != null || state.active) return;
+    final api = ref.read(liveViewApiFactoryProvider)(server);
+    bool active;
+    try {
+      active = await api.isActive();
+    } catch (_) {
+      active = false;
+    }
+    // Disposed while the ask was out (a server switch, teardown): a read of
+    // state or ref would throw, and the client it built would leak.
+    if (_disposed || !active || _api != null || state.active) {
+      api.close();
+      return;
+    }
+    _api = api;
+    _consecutiveErrors = 0;
+    state = const LiveFrameState(active: true);
+    ref.read(liveViewControllerProvider.notifier).set(true);
+    _scheduleNext();
+  }
+
+  bool _disposed = false;
+
   void _teardown() {
+    _disposed = true;
     _timer?.cancel();
     _timer = null;
     _api?.close();

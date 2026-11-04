@@ -78,41 +78,41 @@ void main() {
       );
     });
 
-    test('connected + guiding → connected', () {
+    test('connected + guiding → active (working: blinking green, DESIGN.md status rule)', () {
       expect(
         guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.guiding)),
-        StatusLevel.connected,
+        StatusLevel.active,
       );
     });
 
-    test('connected + star lost → error (runtime overrides link)', () {
+    test('connected + star lost → busy, a warning: still searching (runtime overrides link)', () {
       expect(
         guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.starLost)),
-        StatusLevel.error,
+        StatusLevel.busy,
       );
     });
 
-    test('connected + calibrating/dithering/paused → busy (not actively guiding)', () {
+    test('connected + calibrating/dithering/paused → changing (blue: on its way, or paused by Ara)', () {
       expect(
         guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.calibrating)),
-        StatusLevel.busy,
+        StatusLevel.changing,
       );
       expect(
         guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.dithering)),
-        StatusLevel.busy,
+        StatusLevel.changing,
       );
       expect(
         guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.paused)),
-        StatusLevel.busy,
+        StatusLevel.changing,
         reason: 'a paused guider must not read as a healthy green guide',
       );
     });
 
-    test('connected + settling/looping/star selected → busy (#1364: the guide camera is in use)', () {
+    test('connected + settling/looping/star selected → changing (#1364: the guide camera is in use)', () {
       for (final r in [GuiderRuntimeState.settling, GuiderRuntimeState.looping, GuiderRuntimeState.starSelected]) {
         expect(
           guiderStatusLevel(_status(GuiderConnectionState.connected, r)),
-          StatusLevel.busy,
+          StatusLevel.changing,
           reason: '$r is not a healthy idle or a steady guide',
         );
       }
@@ -151,7 +151,7 @@ void main() {
       expect(
         guiderChipLevel(AsyncValue<GuiderStatus?>.data(
             _status(GuiderConnectionState.connected, GuiderRuntimeState.guiding))),
-        StatusLevel.connected,
+        StatusLevel.active,
       );
     });
   });

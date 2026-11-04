@@ -29,8 +29,11 @@ class _Mount extends MountNotifier {
       refuseTracking--;
       throw StateError('Mount is slewing');
     }
-    return true;
+    return !busy;
   }
+
+  /// Another command still in flight: asks are dropped (the notifier's re-entrancy guard).
+  bool busy = false;
 
   /// How many tracking asks to refuse first (a mount still settling).
   int refuseTracking = 0;
@@ -82,6 +85,21 @@ Future<(ProviderContainer, _Mount)> _pump(WidgetTester tester, Map<String, dynam
 }
 
 void main() {
+  testWidgets('a tap dropped while the last command runs says so in a pill, once (ALP-4982)', (tester) async {
+    // #1486 review: Tracking Off then Parked before the first answer dropped the second with no word.
+    final (c, mount) = await _pump(tester, _wire());
+    mount.busy = true;
+    await tester.tap(find.byKey(const Key('simple-mount-tracking-off')));
+    await tester.pump();
+    final pill = c.read(simpleMessagesProvider).single;
+    expect((pill.kind, pill.title), (SimpleMessageKind.error, 'Still busy'));
+    await tester.tap(find.byKey(const Key('simple-mount-tracking-off')));
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider), hasLength(1), reason: 'one pill, not one per tap');
+    await tester.pump(const Duration(seconds: 11));
+    expect(c.read(simpleMessagesProvider), isEmpty, reason: 'it fades like a result');
+  });
+
   testWidgets('the mount window: tracking, park and meridian flip, rows of one height', (tester) async {
     final (c, mount) = await _pump(tester, _wire());
     expect(find.text('Mount · EQM-35 Pro'), findsOneWidget);

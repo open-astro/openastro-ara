@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guide Mode</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Icons+Outlined&family=Material+Icons">
+<style>
+  /* DESIGN.md tokens (lib/theme/ara_colors.dart + ara_metrics.dart) */
+  :root {
+    --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0; --link: #64B5F6;
+    --ok: #4CAF50; --busy: #FFB300; --info: #42A5F5; --err: #FF8A80; --sel: #1976D2;
+    --tile: #383838; --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0E0E0E; color: var(--text); font: 14px/1.45 var(--sys); }
+  .page { max-width: 1120px; margin: 0 auto; padding: 32px 16px 80px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+  p.note { color: var(--text2); margin: 0 0 14px; max-width: 92ch; }
+  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 2px 8px; border-radius: 10px; border: 1px solid var(--busy); color: var(--busy); margin-left: 6px; vertical-align: 2px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; margin: 18px 0 14px; }
+  .lbl { color: var(--text2); font-size: 13px; margin-right: 6px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; vertical-align: middle; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+
+  .ipad { width: 1024px; height: 768px; max-width: 100%; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 45% 45%, #2a2f3a 0, #101217 55%, #07080b 100%); }
+  .p { position: absolute; background: rgba(26,26,26,.9); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); border-radius: 10px; }
+  .strip { left: 16px; right: 16px; top: 16px; height: 56px; display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 13px; color: var(--text2); }
+  .strip .d { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+  .strip .d i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .strip .d.new { outline: 1.5px dashed var(--busy); outline-offset: 2px; color: var(--text); }
+  .strip .sp { flex: 1; }
+  .rail { right: 16px; top: 214px; width: 72px; padding: 8px 6px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .chip { width: 60px; min-height: 52px; border-radius: 8px; background: var(--tile); display: grid; place-items: center; text-align: center; font-size: 12px; line-height: 1.2; padding: 8px; cursor: pointer; }
+  .chip small { color: var(--text2); display: block; }
+  .shutter { width: 60px; height: 60px; border-radius: 50%; border: 3px solid #fff; display: grid; place-items: center; cursor: pointer; }
+  .shutter b { width: 46px; height: 46px; border-radius: 50%; background: #fff; transition: all .15s; }
+  .shutter.on b { width: 22px; height: 22px; border-radius: 4px; background: #E53935; }
+  .stop { right: 22px; bottom: 16px; width: 60px; height: 60px; border-radius: 50%; background: #C62828; display: grid; place-items: center; font-size: 11px; font-weight: 700; position: absolute; }
+  .panel { right: 104px; top: 214px; width: 340px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .r { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+  .r .l { flex: 1; } .v { font-variant-numeric: tabular-nums; }
+  .dim { color: var(--text2); font-size: 12px; }
+  .head { display: flex; align-items: center; gap: 8px; font-weight: 600; min-height: 32px; }
+  .head i { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
+  .big { font-size: 30px; font-weight: 300; font-variant-numeric: tabular-nums; }
+  .go { min-height: 44px; border: 0; border-radius: 8px; background: #2E7D32; color: #fff; font: 600 14px var(--sys); cursor: pointer; }
+  .go.stopit { background: #C62828; }
+  .stepper { display: inline-flex; align-items: center; background: var(--tile); border-radius: 8px; }
+  .stepper button { width: 44px; height: 44px; border: 0; background: transparent; color: var(--text); font: 20px var(--sys); }
+  .stepper output { min-width: 84px; text-align: center; font-variant-numeric: tabular-nums; }
+  .slider { height: 4px; background: var(--tile); border-radius: 2px; position: relative; margin: 6px 0 12px; }
+  .slider b { position: absolute; left: 0; top: 0; bottom: 0; width: 40%; background: var(--info); border-radius: 2px; }
+  .slider i { position: absolute; left: 40%; top: -8px; width: 20px; height: 20px; margin-left: -10px; border-radius: 50%; background: var(--info); }
+  .win { left: 16px; top: 88px; width: 360px; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+  .graph { left: 16px; right: 104px; bottom: 16px; height: 56px; padding: 6px 14px; display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--text2); }
+  .graph svg { flex: 1; height: 40px; }
+  .proposed { outline: 1.5px dashed var(--busy); outline-offset: 3px; border-radius: 8px; }
+  .head.proposed { padding: 0 8px; }
+  .gone { text-decoration: line-through; color: var(--text2); }
+  .hide { display: none !important; }
+  .pillbox { display: flex; flex-direction: column; gap: 6px; width: 250px; }
+  .pillbox small { color: var(--text2); }
+  .pill { display: inline-flex; align-items: center; gap: 8px; height: 48px; padding: 0 16px; border-radius: 10px; background: rgba(26,26,26,.9); border: 1px dashed var(--busy); width: max-content; }
+  .pill i { width: 10px; height: 10px; border-radius: 50%; }
+  .pill .pd { color: var(--text2); }
+  .icard { width: 250px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .icard small { color: var(--text2); }
+  .ipair { display: flex; align-items: center; gap: 10px; min-height: 32px; } .ipair i { font-size: 22px; width: 24px; } .ipair span { font-size: 13px; }
+  .modes { right: 104px; top: 214px; width: 300px; padding: 12px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .modes div { min-height: 64px; border-radius: 8px; background: var(--tile); display: grid; place-items: center; font-size: 13px; text-align: center; padding: 8px; }
+  .modes .cur { background: rgba(66,165,245,.16); color: var(--link); }
+  table.inv { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 18px; }
+  table.inv th, table.inv td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.inv th { color: var(--text2); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Guide mode, Guider Camera, Main Camera <span class="tag">proposed</span></h1>
+  <p class="note">Guiding becomes a mode on the right rail, next to Preview, Focus, Polar align and Plan. Its panel shows how guiding goes; the guider's device window becomes <b>Guider Camera</b> (no State, no dither) and Camera becomes <b>Main Camera</b>. Dashed outlines mark what's new. Tap the shutter to start and stop guiding.</p>
+
+  <div class="controls">
+    <span><span class="lbl">Show</span><span class="seg" id="view">
+      <button aria-pressed="true" data-v="guide">Guide mode</button><button data-v="modes">Mode picker</button><button data-v="guidecam">Guider Camera window</button><button data-v="maincam">Main Camera window</button>
+    </span></span>
+    <span><span class="lbl">Start guiding</span><span class="seg" id="start">
+      <button aria-pressed="true" data-v="shutter">A · the shutter</button><button data-v="button">B · a button in the panel too</button>
+    </span></span>
+    <span><span class="lbl">Dither</span><span class="seg" id="dither">
+      <button aria-pressed="true" data-v="panel">1 · in the Guide panel</button><button data-v="none">2 · not in Simple Mode</button>
+    </span></span>
+  </div>
+
+  <div class="ipad">
+    <div class="p strip">
+      <span class="d new" data-open="maincam"><i></i>Main Camera</span>
+      <span class="d"><i></i>Mount</span>
+      <span class="d"><i></i>Focuser</span>
+      <span class="d new" data-open="guidecam"><i></i>Guider Camera</span>
+      <span class="sp"></span><span>⌕</span><span>⚙</span>
+    </div>
+
+    <!-- right rail -->
+    <div class="p rail">
+      <div class="chip proposed" data-open="modes">Guide</div>
+      <div class="chip">Guide<small>1.2″</small></div>
+      <div class="shutter" id="shutter"><b></b></div>
+    </div>
+    <div class="stop">STOP</div>
+
+    <!-- Guide panel -->
+    <div class="p panel proposed" id="guidePanel">
+      <div class="head"><i id="gdot" style="background:var(--text2)"></i><span id="gstate">Not guiding</span></div>
+      <div class="dim" id="ghint">Tap the shutter to start guiding.</div>
+      <div class="r"><span class="l">RMS</span><span><span class="big" id="rms">—</span><div class="dim v" id="rmsrd">RA — · Dec —</div></span></div>
+      <button class="go hide" id="goBtn">Start guiding</button>
+      <div id="ditherRows">
+        <div class="r"><span class="l">Dither</span><span class="stepper"><button>−</button><output>Every 3 frames</output><button>+</button></span></div>
+        <div class="r"><span class="l">Dither by</span><span class="stepper"><button>−</button><output>5 px</output><button>+</button></span></div>
+      </div>
+    </div>
+
+    <!-- mode picker -->
+    <div class="p modes hide" id="modes">
+      <div>Guided Run</div><div>Preview</div><div>Focus</div><div>Polar align</div><div class="cur proposed">Guide</div><div>Plan</div>
+    </div>
+
+    <!-- Guider Camera window -->
+    <div class="p win hide" id="guidecam">
+      <div class="head proposed"><i></i>Guider Camera · ASI120MM Mini</div>
+      <div class="r gone"><span class="l">State</span><span>Guiding</span></div>
+      <div class="r"><span class="l">RMS</span><span class="v">1.21″</span></div>
+      <div class="r"><span class="l">Gain</span><span class="v">40 %</span></div>
+      <div class="slider"><b></b><i></i></div>
+      <div class="r gone"><span class="l">Dither</span><span>Every 3 frames</span></div>
+      <div class="r gone"><span class="l">Dither by</span><span>5 px</span></div>
+      <div class="dim">Struck through: removed. RMS stays here as a reading; the Guide panel has it too.</div>
+    </div>
+
+    <!-- Main Camera window -->
+    <div class="p win hide" id="maincam">
+      <div class="head proposed"><i></i>Main Camera · ASI2600MM</div>
+      <div class="r"><span class="l">Temperature</span><span class="v">−9.8 °C · 34 % power</span></div>
+      <div class="r"><span class="l">Cooler</span><span class="v">On</span></div>
+      <div class="r"><span class="l">Target temperature</span><span class="v">−10 °C</span></div>
+      <div class="r"><span class="l">Gain</span><span class="v">100</span></div>
+      <div class="dim">Only the title changes: "Camera" becomes "Main Camera" (also in Settings › Devices).</div>
+    </div>
+
+    <!-- guiding graph, as today -->
+    <div class="p graph" id="graph"><span>RA</span><svg viewBox="0 0 400 40" preserveAspectRatio="none"><polyline id="trace" fill="none" stroke="#42A5F5" stroke-width="1.5" points="0,20 400,20"/><polyline id="trace2" fill="none" stroke="#EF5350" stroke-width="1.5" points="0,20 400,20"/></svg><span>Dec</span></div>
+  </div>
+
+  <h2 style="margin:28px 0 6px;font-size:16px">Guiding in the status pill <span class="tag">proposed</span></h2>
+  <p class="note">Today the status pill (top right) never mentions guiding: you see it only in the guiding graph along the bottom (once corrections arrive), the Guide panel when it's open, and the guider's dot colour. During calibration nothing on screen says it's happening. Proposed: the pill reports the guider's routine, and when nothing else is going on it says "Guiding" with the RMS. A frame, a plan step, cooling or a park still take the pill first.</p>
+  <div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:8px">
+    <div class="pillbox"><span class="pill"><i style="background:var(--busy)"></i>Guider<span class="pd">Calibrating · west 3/12</span></span><small>While it calibrates (with its bar along the foot, as cooling has)</small></div>
+    <div class="pillbox"><span class="pill"><i style="background:var(--busy)"></i>Guider<span class="pd">Settling</span></span><small>After a start or a dither</small></div>
+    <div class="pillbox"><span class="pill"><i style="background:var(--ok)"></i>Guiding<span class="pd">0.62″</span></span><small>Guiding, nothing else going on</small></div>
+    <div class="pillbox"><span class="pill"><i style="background:var(--ok)"></i>Taking a frame<span class="pd">42 s left</span></span><small>A frame (or a plan step) still comes first; the graph shows guiding</small></div>
+  </div>
+
+  <h2 style="margin:28px 0 6px;font-size:16px">Icons <span class="tag">proposed</span></h2>
+  <p class="note">Today Settings › Devices shows the guider with a target (<i class="material-icons-outlined" style="font-size:16px;vertical-align:-3px">track_changes</i>). With guiding now a mode, the target suits the <b>Guide</b> mode, and the Guider Camera wants a camera of its own, told apart from the Main Camera's.</p>
+  <div style="display:flex;flex-wrap:wrap;gap:12px">
+    <div class="icard"><div class="ipair"><i class="material-icons">camera_alt</i><span>Main Camera</span></div><div class="ipair"><i class="material-icons-outlined">videocam</i><span>Guider Camera</span></div><div class="ipair"><i class="material-icons-outlined">track_changes</i><span>Guide mode</span></div><b>A · video camera</b><small>It shoots frames non-stop, like a video; same family, clearly a different camera. Recommended.</small></div>
+    <div class="icard"><div class="ipair"><i class="material-icons">camera_alt</i><span>Main Camera</span></div><div class="ipair"><i class="material-icons-outlined">camera</i><span>Guider Camera</span></div><div class="ipair"><i class="material-icons-outlined">track_changes</i><span>Guide mode</span></div><b>B · lens (aperture)</b><small>A lens ring: reads "camera", but less obviously than A.</small></div>
+    <div class="icard"><div class="ipair"><i class="material-icons">camera_alt</i><span>Main Camera</span></div><div class="ipair"><i class="material-icons-outlined">gps_fixed</i><span>Guider Camera</span></div><div class="ipair"><i class="material-icons-outlined">track_changes</i><span>Guide mode</span></div><b>C · crosshair</b><small>Says "guiding", but looks a lot like the Guide mode's target.</small></div>
+    <div class="icard"><div class="ipair"><i class="material-icons">camera_alt</i><span>Main Camera</span></div><div class="ipair"><i class="material-icons-outlined">track_changes</i><span>Guider Camera</span></div><div class="ipair"><i class="material-icons-outlined">my_location</i><span>Guide mode</span></div><b>D · keep today's target</b><small>The device keeps its target; the mode takes another.</small></div>
+  </div>
+
+  <table class="inv">
+    <tr><th>Today</th><th>Proposed</th></tr>
+    <tr><td>Guider device window: State, RMS, Gain, Dither, Dither by</td><td><b>Guider Camera</b> window: RMS, Gain (Settings adds its versions). State and dither leave it.</td></tr>
+    <tr><td>Guiding starts only inside a plan, or in the full UI</td><td><b>Guide</b> mode: A · the shutter starts guiding, its red square stops it (as every mode's shutter) · B · also a Start guiding button in the panel</td></tr>
+    <tr><td>Camera device</td><td><b>Main Camera</b> (top bar, window title, Settings › Devices)</td></tr>
+    <tr><td>Dither in the guider window</td><td>1 · in the Guide panel · 2 · gone from Simple Mode (the profile keeps its setting; plans still dither by it)</td></tr>
+  </table>
+</div>
+<script>
+  const $ = (s) => document.querySelector(s);
+  const pick = (id, f) => document.querySelectorAll(`#${id} button`).forEach((b) => b.onclick = () => {
+    document.querySelectorAll(`#${id} button`).forEach((x) => x.setAttribute('aria-pressed', x === b));
+    f(b.dataset.v);
+  });
+  let guiding = false, timer = null, t = 0;
+  function view(v) {
+    $('#guidePanel').classList.toggle('hide', v !== 'guide');
+    $('#modes').classList.toggle('hide', v !== 'modes');
+    $('#guidecam').classList.toggle('hide', v !== 'guidecam');
+    $('#maincam').classList.toggle('hide', v !== 'maincam');
+  }
+  function render() {
+    $('#shutter').classList.toggle('on', guiding);
+    if (!guiding) { $('#gstate').textContent = 'Not guiding'; $('#gdot').style.background = 'var(--text2)'; }
+    const btn = $('#goBtn').classList.contains('hide');
+    if (!guiding) $('#ghint').textContent = btn ? 'Tap the shutter to start guiding: it calibrates first when needed.' : 'Tap Start guiding, or the shutter: it calibrates first when needed.';
+    $('#goBtn').textContent = guiding ? 'Stop guiding' : 'Start guiding';
+    $('#goBtn').classList.toggle('stopit', guiding);
+    if (!guiding) { $('#rms').textContent = '—'; $('#rmsrd').textContent = 'RA — · Dec —'; }
+  }
+  // Start guiding runs the guider's whole routine: loop, pick a star, calibrate (when needed), settle, guide.
+  const steps = [['Looping', 'Taking guide frames…'], ['Picking a star', 'The brightest unsaturated star'],
+                 ['Calibrating', 'Moving the mount to learn its directions (only when needed)'], ['Settling', 'Waiting for the star to steady']];
+  let stepTimers = [];
+  function toggle() {
+    guiding = !guiding; render();
+    clearInterval(timer); stepTimers.forEach(clearTimeout); stepTimers = [];
+    if (!guiding) return;
+    steps.forEach(([s, h], i) => stepTimers.push(setTimeout(() => {
+      $('#gstate').textContent = s; $('#ghint').textContent = h; $('#gdot').style.background = 'var(--busy)';
+    }, i * 1200)));
+    stepTimers.push(setTimeout(() => {
+      $('#gstate').textContent = 'Guiding'; $('#ghint').textContent = 'The red square stops it.'; $('#gdot').style.background = 'var(--ok)';
+      startTrace();
+    }, steps.length * 1200));
+  }
+  function startTrace() {
+    timer = setInterval(() => {
+      t++;
+      const pts = (ph, a) => Array.from({ length: 41 }, (_, i) => `${i * 10},${20 + Math.sin((i + t) * ph) * a + (Math.random() - .5) * 6}`).join(' ');
+      $('#trace').setAttribute('points', pts(.5, 6)); $('#trace2').setAttribute('points', pts(.3, 4));
+      const ra = .7 + Math.random() * .3, dec = .6 + Math.random() * .3;
+      $('#rms').textContent = Math.hypot(ra, dec).toFixed(2) + '″';
+      $('#rmsrd').textContent = `RA ${ra.toFixed(2)}″ · Dec ${dec.toFixed(2)}″`;
+    }, 600);
+  }
+  $('#shutter').onclick = toggle; $('#goBtn').onclick = toggle;
+  document.querySelectorAll('[data-open]').forEach((e) => e.onclick = () => {
+    const v = e.dataset.open; view(v);
+    document.querySelectorAll('#view button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.v === v));
+  });
+  pick('view', view);
+  pick('start', (v) => { $('#goBtn').classList.toggle('hide', v !== 'button'); render(); });
+  pick('dither', (v) => $('#ditherRows').classList.toggle('hide', v !== 'panel'));
+  render();
+</script>
+</body>
+</html>

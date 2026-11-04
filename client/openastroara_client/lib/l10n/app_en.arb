@@ -31,6 +31,15 @@
       }
     }
   },
+  "statusMoreSemantics": "{count, plural, =1{1 more status} other{{count} more statuses}}",
+  "@statusMoreSemantics": {
+    "description": "Simple Mode status pills: screen reader label for the +N fold past three pills; a tap opens the first one folded",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "pillsDismiss": "Dismiss",
   "@pillsDismiss": {
     "description": "Simple Mode message pills: tooltip of the close button on an error message"
@@ -59,7 +68,7 @@
   "@safetySilence": {
     "description": "Simple Mode safety alarm: the button that stops the sound and closes the warning"
   },
-  "deviceCamera": "Camera",
+  "deviceCamera": "Main Camera",
   "@deviceCamera": {
     "description": "Camera window title, before the camera's name"
   },
@@ -83,7 +92,7 @@
   "@deviceNotConnected": {
     "description": "Device window caption when the device is not connected"
   },
-  "deviceCurrentTemperature": "Temperature",
+  "deviceCurrentTemperature": "Sensor temperature",
   "@deviceCurrentTemperature": {
     "description": "Camera window row: what the sensor reads now"
   },
@@ -206,6 +215,14 @@
   "deviceGain": "Gain",
   "@deviceGain": {
     "description": "Camera and guider window row: the camera's gain"
+  },
+  "deviceBusy": "Still busy",
+  "@deviceBusy": {
+    "description": "Pill title when a device tap was dropped because its last command hasn't finished"
+  },
+  "deviceBusyDetail": "The last command hasn't finished. Try again in a moment.",
+  "@deviceBusyDetail": {
+    "description": "Pill detail under deviceBusy"
   },
   "deviceCouldntMoveFocuser": "Couldn't move the focuser",
   "@deviceCouldntMoveFocuser": {
@@ -637,7 +654,7 @@
   "@searchSectionDevices": {
     "description": "Simple Mode search panel: name of the Settings sheet's Devices section, shown beside a setting result (and the result for the section itself)"
   },
-  "searchSectionCamera": "Camera",
+  "searchSectionCamera": "Main Camera",
   "@searchSectionCamera": {
     "description": "Simple Mode search panel: name of the Settings sheet's Camera section, shown beside a setting result (and the result for the section itself)"
   },
@@ -649,7 +666,7 @@
   "@searchSectionFocuser": {
     "description": "Simple Mode search panel: name of the Settings sheet's Focuser section, shown beside a setting result (and the result for the section itself)"
   },
-  "searchSectionGuider": "Guider",
+  "searchSectionGuider": "Guider Camera",
   "@searchSectionGuider": {
     "description": "Simple Mode search panel: name of the Settings sheet's Guider section, shown beside a setting result (and the result for the section itself)"
   },
@@ -833,21 +850,25 @@
   "@searchWordsDither": {
     "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
   },
-  "autopilotStepFocus": "Focus",
-  "@autopilotStepFocus": {
-    "description": "Simple Mode Guided Run strip: step name: autofocus"
+  "nightSetupStepFocus": "Focus",
+  "@nightSetupStepFocus": {
+    "description": "Simple Mode Night Setup strip: step name: autofocus"
   },
-  "autopilotStepPolarAlign": "Polar align",
-  "@autopilotStepPolarAlign": {
-    "description": "Simple Mode Guided Run strip: step name: polar alignment"
+  "nightSetupStepPolarAlign": "Polar align",
+  "@nightSetupStepPolarAlign": {
+    "description": "Simple Mode Night Setup strip: step name: polar alignment"
   },
-  "autopilotStepPlan": "Plan",
-  "@autopilotStepPlan": {
-    "description": "Simple Mode Guided Run strip: step name: the imaging plan"
+  "nightSetupStepPlan": "Plan",
+  "@nightSetupStepPlan": {
+    "description": "Simple Mode Night Setup strip: step name: the imaging plan"
   },
-  "autopilotStepDone": "{step}, done",
-  "@autopilotStepDone": {
-    "description": "Simple Mode Guided Run strip: screen-reader label of a step done tonight",
+  "nightSetupStepGuide": "Guide",
+  "@nightSetupStepGuide": {
+    "description": "Night Setup's step that starts guiding"
+  },
+  "nightSetupStepDone": "{step}, done",
+  "@nightSetupStepDone": {
+    "description": "Simple Mode Night Setup strip: screen-reader label of a step done tonight",
     "placeholders": {
       "step": {
         "type": "String",
@@ -855,9 +876,9 @@
       }
     }
   },
-  "autopilotStepSkipped": "{step}, skipped",
-  "@autopilotStepSkipped": {
-    "description": "Simple Mode Guided Run strip: screen-reader label of a skipped step",
+  "nightSetupStepSkipped": "{step}, skipped",
+  "@nightSetupStepSkipped": {
+    "description": "Simple Mode Night Setup strip: screen-reader label of a skipped step",
     "placeholders": {
       "step": {
         "type": "String",
@@ -865,9 +886,9 @@
       }
     }
   },
-  "autopilotStepCurrent": "{step}, current step",
-  "@autopilotStepCurrent": {
-    "description": "Simple Mode Guided Run strip: screen-reader label of the current step",
+  "nightSetupStepCurrent": "{step}, current step",
+  "@nightSetupStepCurrent": {
+    "description": "Simple Mode Night Setup strip: screen-reader label of the current step",
     "placeholders": {
       "step": {
         "type": "String",
@@ -875,9 +896,9 @@
       }
     }
   },
-  "autopilotStepNext": "{step}, next",
-  "@autopilotStepNext": {
-    "description": "Simple Mode Guided Run strip: screen-reader label of a step still ahead",
+  "nightSetupStepNext": "{step}, next",
+  "@nightSetupStepNext": {
+    "description": "Simple Mode Night Setup strip: screen-reader label of a step still ahead",
     "placeholders": {
       "step": {
         "type": "String",
@@ -885,28 +906,16 @@
       }
     }
   },
-  "autopilotBack": "Back",
-  "@autopilotBack": {
-    "description": "Simple Mode Guided Run strip: button that goes back one step"
+  "nightSetupBack": "Back",
+  "@nightSetupBack": {
+    "description": "Simple Mode Night Setup strip: button that goes back one step"
   },
-  "autopilotSkip": "Skip",
-  "@autopilotSkip": {
-    "description": "Simple Mode Guided Run strip: button that skips the current step"
+  "nightSetupSkip": "Skip",
+  "@nightSetupSkip": {
+    "description": "Simple Mode Night Setup strip: button that skips the current step"
   },
-  "autopilotNothingDone": "Nothing done yet tonight",
-  "@autopilotNothingDone": {
-    "description": "Simple Mode Guided Run offer under the status strip: why Guided Run is offered"
-  },
-  "autopilotStart": "Start Guided Run",
-  "@autopilotStart": {
-    "description": "Simple Mode Guided Run offer: button that starts Guided Run"
-  },
-  "autopilotNotNow": "Not now",
-  "@autopilotNotNow": {
-    "description": "Simple Mode Guided Run offer: tooltip of the × that dismisses it"
-  },
-  "shellModeAutopilot": "Guided Run",
-  "@shellModeAutopilot": {
+  "shellModeNightSetup": "Night Setup",
+  "@shellModeNightSetup": {
     "description": "Simple Mode mode name (mode grid, Mode: label for screen readers)"
   },
   "shellModePreview": "Preview",
@@ -929,9 +938,9 @@
   "@shellRailPolarAlign": {
     "description": "Simple Mode right rail: short name of Polar align (60 px wide rail, keep very short)"
   },
-  "shellRailAutopilot": "Guided",
-  "@shellRailAutopilot": {
-    "description": "Simple Mode right rail: short name of Guided Run (60 px wide rail, keep very short)"
+  "shellRailNightSetup": "Setup",
+  "@shellRailNightSetup": {
+    "description": "Simple Mode right rail: short name of Night Setup (60 px wide rail, keep very short)"
   },
   "shellStopAgain": "Press {shortcut} again to stop the run",
   "@shellStopAgain": {
@@ -1037,7 +1046,7 @@
   "@shellSectionDevices": {
     "description": "Simple Mode Settings section: the list of devices"
   },
-  "shellSectionCamera": "Camera",
+  "shellSectionCamera": "Main Camera",
   "@shellSectionCamera": {
     "description": "Simple Mode Settings section and device row: the camera"
   },
@@ -1049,7 +1058,7 @@
   "@shellSectionFocuser": {
     "description": "Simple Mode Settings section and device row: the focuser"
   },
-  "shellSectionGuider": "Guider",
+  "shellSectionGuider": "Guider Camera",
   "@shellSectionGuider": {
     "description": "Simple Mode Settings section and device row: the guider"
   },
@@ -1239,7 +1248,7 @@
   "@shellThisApp": {
     "description": "Simple Mode Settings › Rig versions list: this app's version"
   },
-  "shellAraServer": "OpenAstro Ara server",
+  "shellAraServer": "Ara server",
   "@shellAraServer": {
     "description": "Simple Mode Settings › Rig versions list: the rig's server (OpenAstro Ara is the product name)"
   },
@@ -1423,10 +1432,6 @@
   "planTonightsBest": "TONIGHT'S BEST",
   "@planTonightsBest": {
     "description": "Plan sheet caption above tonight's suggested targets (uppercase)"
-  },
-  "planTonightsPlan": "Tonight's plan",
-  "@planTonightsPlan": {
-    "description": "Plan sheet heading"
   },
   "planEditTarget": "Edit {name}",
   "@planEditTarget": {
@@ -1777,7 +1782,7 @@
   },
   "planQueueBusy": "The queue is still updating on the rig. Try again in a moment.",
   "@planQueueBusy": {
-    "description": "Message pill: Start (Guided Run's last Done) while an edit or reorder of the queue is still on its way"
+    "description": "Message pill: Start (Night Setup's last Done) while an edit or reorder of the queue is still on its way"
   },
   "shellLanguage": "Language",
   "shellLanguageSystem": "System",
@@ -2736,23 +2741,23 @@
   },
   "guidedNextFocus": "Next: Focus",
   "@guidedNextFocus": {
-    "description": "Guided Run plan step: green button, on to focusing"
+    "description": "Night Setup plan step: green button, on to focusing"
   },
   "guidedNextPolarAlign": "Next: Polar align",
   "@guidedNextPolarAlign": {
-    "description": "Guided Run plan step: green button, on to polar alignment"
+    "description": "Night Setup plan step: green button, on to polar alignment"
   },
   "guidedStartImaging": "Start imaging",
   "@guidedStartImaging": {
-    "description": "Guided Run plan step: green button when focus and polar alignment are done already"
+    "description": "Night Setup plan step: green button when focus and polar alignment are done already"
   },
   "guidedImagingStartsAfter": "Imaging starts after focus and polar alignment.",
   "@guidedImagingStartsAfter": {
-    "description": "Guided Run plan step: line above the buttons"
+    "description": "Night Setup plan step: line above the buttons"
   },
   "guidedDoneStartImaging": "Done · Start imaging",
   "@guidedDoneStartImaging": {
-    "description": "Guided Run: the last setup step's green Done, which starts imaging"
+    "description": "Night Setup: the last setup step's green Done, which starts imaging"
   },
   "shellGuideFocalLength": "Guide scope focal length",
   "shellGuidePixelSize": "Guide camera pixel size",
@@ -2765,5 +2770,73 @@
   "searchWordsGuideScope": "guide scope guider camera pixel focal polar",
   "@searchWordsGuideScope": {
     "description": "Simple search: other words that find the guide scope rows (not shown)"
+  },
+  "shellModeGuide": "Guide",
+  "@shellModeGuide": {
+    "description": "Guide mode: guiding with the guide camera, started by the shutter"
+  },
+  "guidedNextGuide": "Next: Guide",
+  "@guidedNextGuide": {
+    "description": "Guided Run button moving on to the Guide step"
+  },
+  "guideStart": "Start guiding",
+  "@guideStart": {
+    "description": "Shutter label in Guide mode: starts the guider's routine (calibrating when needed)"
+  },
+  "guideStop": "Stop guiding",
+  "@guideStop": {
+    "description": "Shutter label in Guide mode while the guider runs"
+  },
+  "guideActionStart": "start guiding",
+  "@guideActionStart": {
+    "description": "Action named in an error: the guider refused to start"
+  },
+  "guideActionStop": "stop guiding",
+  "@guideActionStop": {
+    "description": "Action named in an error: the guider refused to stop"
+  },
+  "guideIdle": "Idle",
+  "@guideIdle": {
+    "description": "Guide panel headline while the guider is connected and not running (not \"Not guiding\": it read as a failure)"
+  },
+  "guideNoGuider": "Guider not connected",
+  "@guideNoGuider": {
+    "description": "Guide panel headline with no guider"
+  },
+  "guideTapShutter": "Tap the shutter to start guiding. It calibrates first when needed.",
+  "@guideTapShutter": {
+    "description": "Guide panel hint while idle"
+  },
+  "guideConnectFirst": "Connect the guider in Settings › Devices.",
+  "@guideConnectFirst": {
+    "description": "Guide panel hint with no guider"
+  },
+  "deviceGuiderCamera": "Guider Camera",
+  "@deviceGuiderCamera": {
+    "description": "The guide camera's device window title"
+  },
+  "shellNoDevices": "No devices connected",
+  "@shellNoDevices": {
+    "description": "Top bar note when no device is connected; opens Settings › Devices"
+  },
+  "guideStarting": "Starting…",
+  "@guideStarting": {
+    "description": "Guide panel, pill and shutter while a start is on its way to the guider"
+  },
+  "guideStopping": "Stopping…",
+  "@guideStopping": {
+    "description": "While a stop is on its way (the guider finishes its frame first)"
+  },
+  "guideExposureOwn": "The guider's own",
+  "@guideExposureOwn": {
+    "description": "Guide exposure picker value when the profile leaves it to the guider"
+  },
+  "focusNeedsFocuser": "Connect a focuser to autofocus, or focus by hand on Manual.",
+  "@focusNeedsFocuser": {
+    "description": "Why Focus's shutter is greyed out on Auto with no focuser"
+  },
+  "shellMainCameraBusy": "The main camera is busy: wait for its frame, or stop it.",
+  "@shellMainCameraBusy": {
+    "description": "Why a greyed shutter can't start autofocus, the Bahtinov readout or polar alignment"
   }
 }

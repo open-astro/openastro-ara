@@ -303,7 +303,7 @@ class MainFocusCard extends ConsumerWidget {
                 badge: run.isComplete ? 'FOCUSED' : run.isRunning ? 'PROBE' : null,
                 badgeColor: run.isComplete
                     ? AraColors.accentConnected
-                    : AraColors.accentBusy,
+                    : AraColors.accentInfo,
                 caption: run.framePosition == null
                     ? null
                     : 'at ${run.framePosition}${run.frameHfr != null && run.frameHfr! > 0 ? ' · HFR ${run.frameHfr!.toStringAsFixed(2)}' : ''}',
@@ -357,7 +357,7 @@ class MainFocusCard extends ConsumerWidget {
   static (String, Color?) headlineFor(AppLocalizations l, AutofocusRun run) {
     switch (run.state) {
       case AutofocusRunStates.running:
-        return (phaseText(l, run), AraColors.accentBusy);
+        return (phaseText(l, run), AraColors.accentInfo);
       case AutofocusRunStates.complete:
         final hfr = run.finalHfr;
         return (

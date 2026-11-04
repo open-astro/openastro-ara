@@ -241,7 +241,7 @@ class _StepGlyph extends StatelessWidget {
       SetupStepState.inProgress => const Icon(
         Icons.timelapse,
         size: 20,
-        color: AraColors.accentBusy,
+        color: AraColors.accentInfo,
       ),
       SetupStepState.problem => const Icon(
         Icons.error_outline,
@@ -406,7 +406,7 @@ class _DeviceRow extends StatelessWidget {
         detail == null || detail!.isEmpty ? 'Connected' : detail!,
       ),
       EquipmentConnectionState.connecting => (
-        AraColors.accentBusy,
+        AraColors.accentInfo,
         'Connecting…',
       ),
       EquipmentConnectionState.error => (AraColors.accentError, 'Error'),

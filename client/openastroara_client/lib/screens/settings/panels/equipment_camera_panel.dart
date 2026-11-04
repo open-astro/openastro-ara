@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../widgets/status_indicator.dart' show StatusBlink;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/camera_status.dart';
@@ -92,11 +93,15 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
         if (s.isExposing)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Text(
-              s.exposureProgressPct == null
-                  ? 'Exposing…'
-                  : 'Exposing… ${s.exposureProgressPct!.toStringAsFixed(0)}%',
-              style: const TextStyle(color: AraColors.accentBusy),
+            // Working normally: blinking green (DESIGN.md status rule).
+            child: StatusBlink(
+              on: true,
+              child: Text(
+                s.exposureProgressPct == null
+                    ? 'Exposing…'
+                    : 'Exposing… ${s.exposureProgressPct!.toStringAsFixed(0)}%',
+                style: const TextStyle(color: AraColors.accentConnected),
+              ),
             ),
           ),
         // §25.5.5 — cooler on/off + target presets (−10/−5/0/+5 °C) + custom

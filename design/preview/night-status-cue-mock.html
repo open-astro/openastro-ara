@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Night status cue</title>
+<style>
+  :root {
+    --bg: #121212; --panel: #262626; --scrim: rgba(18,18,18,.9);
+    --text: #ffffff; --text2: #b3b3b3;
+    --green: #4CAF50; --blue: #42A5F5; --blue-b: #64B5F6; --amber: #FFB300; --red: #E53935; --grey: #606060;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px 16px 48px; background: var(--bg); color: var(--text);
+         font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.lead { color: var(--text2); margin: 0 0 24px; max-width: 70ch; }
+  .opt { background: var(--panel); border-radius: 10px; padding: 16px; margin-bottom: 16px; max-width: 980px; }
+  .opt h2 { font-size: 16px; margin: 0 0 4px; }
+  .opt .why { color: var(--text2); margin: 0 0 12px; max-width: 70ch; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 640px) { .pair { grid-template-columns: 1fr; } }
+  .scene { background: #000; border-radius: 10px; padding: 12px; }
+  .scene.night { filter: url(#night); }
+  .tag { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+  .scene.night .tag { color: #fff; }
+  .strip { display: flex; gap: 14px; align-items: center; background: var(--scrim); border-radius: 10px;
+           padding: 10px 14px; margin-bottom: 10px; flex-wrap: wrap; }
+  .dev { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+  .ring { background: transparent !important; border: 2.5px solid currentColor; }
+  .pills { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+  .pill { display: flex; align-items: center; gap: 10px; background: var(--scrim); border-radius: 10px;
+          min-height: 40px; padding: 10px 14px; font-size: 14px; }
+  .pill .d { color: var(--text2); }
+  .lum { font: 12px/1.4 ui-monospace, Menlo, monospace; color: var(--text2); margin-top: 10px; }
+  .rec { color: var(--green); font-size: 13px; font-weight: 600; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <!-- The app's kNightColorFilter: every pixel's luminance into red. -->
+  <filter id="night" color-interpolation-filters="sRGB">
+    <feColorMatrix type="matrix" values="0.30 0.59 0.11 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/>
+  </filter>
+</svg>
+
+<h1>Night mode: telling Changing (blue) from Good (green)</h1>
+<p class="lead">Each option shows the status strip and three pills, as normal (left) and through the app's own Night filter (right, the same 0.30 / 0.59 / 0.11 matrix). The states: Off, Error, Good, Changing, Warning.</p>
+
+<template id="row">
+  <div class="strip">
+    <span class="dev"><span class="dot" data-s="grey"></span>Rotator</span>
+    <span class="dev"><span class="dot" data-s="red"></span>Focuser</span>
+    <span class="dev"><span class="dot" data-s="green"></span>Camera</span>
+    <span class="dev"><span class="dot" data-s="blue"></span>Mount</span>
+    <span class="dev"><span class="dot" data-s="amber"></span>Guider</span>
+  </div>
+  <div class="pills">
+    <div class="pill"><span class="dot" data-s="green"></span>Camera <span class="d">· Connected</span></div>
+    <div class="pill"><span class="dot" data-s="blue"></span>Mount <span class="d">· Parking…</span></div>
+    <div class="pill"><span class="dot" data-s="amber"></span>Guider <span class="d">· Star lost</span></div>
+  </div>
+</template>
+
+<section class="opt" data-blue="#42A5F5" data-ring="0">
+  <h2>Now</h2>
+  <p class="why">Blue and green land at 144 and 135 of 255 in Night mode: Parking… and Connected read as the same dot.</p>
+  <div class="pair"><div class="scene"><div class="tag">Normal</div></div><div class="scene night"><div class="tag">Night</div></div></div>
+  <div class="lum">night brightness: grey 96 · red 108 · green 135 · blue 144 · amber 182</div>
+</section>
+
+<section class="opt" data-blue="#64B5F6" data-ring="0">
+  <h2>A · A lighter blue for status (the link blue, #64B5F6)</h2>
+  <p class="why">One token for the Changing dot. Blue moves to 164: 29 above green, but now only 18 below amber, so Changing and Warning crowd instead. Five states don't fit in one brightness ladder without moving grey, red and green too.</p>
+  <div class="pair"><div class="scene"><div class="tag">Normal</div></div><div class="scene night"><div class="tag">Night</div></div></div>
+  <div class="lum">night brightness: grey 96 · red 108 · green 135 · blue 164 · amber 182</div>
+</section>
+
+<section class="opt" data-blue="#42A5F5" data-ring="1">
+  <h2>B · A ring for Changing <span class="rec">· recommended</span></h2>
+  <p class="why">Blue stays; a Changing dot is drawn as a ring, not a filled dot: something on its way, not there yet. Shape tells it apart in Night mode and for colour-blind eyes, whatever the brightness. Pills already say the state in words.</p>
+  <div class="pair"><div class="scene"><div class="tag">Normal</div></div><div class="scene night"><div class="tag">Night</div></div></div>
+  <div class="lum">night brightness unchanged; the shape carries Changing</div>
+</section>
+
+<script>
+  const tpl = document.getElementById('row');
+  const base = { grey: '#606060', red: '#E53935', green: '#4CAF50', amber: '#FFB300' };
+  document.querySelectorAll('.opt').forEach(opt => {
+    const blue = opt.dataset.blue, ring = opt.dataset.ring === '1';
+    opt.querySelectorAll('.scene').forEach(scene => {
+      scene.appendChild(tpl.content.cloneNode(true));
+      scene.querySelectorAll('.dot').forEach(d => {
+        const s = d.dataset.s, c = s === 'blue' ? blue : base[s];
+        d.style.background = c; d.style.color = c;
+        if (ring && s === 'blue') d.classList.add('ring');
+      });
+    });
+  });
+</script>
+</body>
+</html>

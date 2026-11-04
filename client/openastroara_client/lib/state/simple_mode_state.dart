@@ -75,7 +75,7 @@ final simplePermanentPierPrefsProvider = Provider<SimpleModePrefsService>(
 );
 
 /// The mount stays polar aligned (a permanent pier), so Simple Mode's
-/// Autopilot skips polar alignment. Off by default.
+/// Night Setup skips polar alignment. Off by default.
 // shortcut: saved on this client, not in the rig's profile; move it to the
 // profile once the daemon carries the setting (it belongs to the rig).
 class SimplePermanentPierController extends AsyncNotifier<bool> {
