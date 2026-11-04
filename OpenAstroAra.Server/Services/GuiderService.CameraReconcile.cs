@@ -52,91 +52,106 @@ public sealed partial class GuiderService {
         Justification = "Best-effort boundary after a successful connect: a camera that is unreachable, an Alpaca error or a store failure must leave the profile as it is and never fail the connect. Log-and-recover.")]
     internal async Task ReconcileGuideCameraAsync(PHD2Guider guider, CancellationToken ct) {
         try {
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(ReconcileTimeout);
-            await FillUnsetGuideOpticsAsync(cts.Token).ConfigureAwait(false);
-            var settings = _profileService.ActiveProfile.GuiderSettings;
-            var camera = settings.GuiderCamera;
-            var pinnedId = settings.GuiderCameraAlpacaUniqueId;
-            var oldPixelSize = settings.GuidePixelSize;
-            if (GuiderCameraPinCheck.CameraEndpoint(settings) is not { } ep) {
-                return;
+            bool guideCamera;
+            using (var cts = CancellationTokenSource.CreateLinkedTokenSource(ct)) {
+                cts.CancelAfter(ReconcileTimeout);
+                guideCamera = await CheckGuideCameraAsync(guider, cts.Token).ConfigureAwait(false);
             }
-            IReadOnlyDictionary<string, AlpacaConfiguredDevice> devices = new Dictionary<string, AlpacaConfiguredDevice>();
-            try {
-                if (_alpaca is not null) {
-                    devices = await _alpaca.GetConfiguredDevicesAsync(ep.Host, ep.Port, cts.Token).ConfigureAwait(false);
-                }
-            } catch (Exception ex) when (ex is not OperationCanceledException) {
-                // The client already maps failures to an empty map; a throwing stand-in means the same: unknown.
+            // Unset guide optics are filled only once the pin checks agree the guider holds the guide camera
+            // (not the main one after a renumber), on a budget of their own (ALP-4982).
+            if (guideCamera) {
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                cts.CancelAfter(ReconcileTimeout);
+                await FillUnsetGuideOpticsAsync(cts.Token).ConfigureAwait(false);
             }
-            var endpoint = $"{GuiderCameraReconcile.ForLog(ep.Host)}:{ep.Port.ToString(CultureInfo.InvariantCulture)}/{ep.Device.ToString(CultureInfo.InvariantCulture)}";
-            devices.TryGetValue(GuiderCameraReconcile.SlotKey(ep.Device), out var atSlot);
-            // Identity first. The slot resolving to the main imaging camera (a renumber) is never learned
-            // from: its id and pixel size are not the guide camera's, and the push refuses it (#1308).
-            var isMain = _mainCameraResolver?.Invoke() is { } main
-                && GuiderCameraPinCheck.IsMainCamera(settings, devices, main);
-            var mismatch = GuiderCameraReconcile.Decide(pinnedId, oldPixelSize, ep.Device, devices, readPixelSize: null).Outcome
-                == GuiderCameraReconcileOutcome.PinMismatch;
-            if (mismatch && isMain) {
-                LogGuideCameraPinMismatch(endpoint, GuiderCameraReconcile.ForLog(atSlot?.UniqueId), GuiderCameraReconcile.ForLog(pinnedId));
-                return;
-            }
-            if (isMain) {
-                return;
-            }
-            if (mismatch && GuiderCameraPinCheck.MovedTo(pinnedId, devices) is { } movedTo) {
-                // The pinned camera is still on the server at another number (a bridge renumber): #1308's
-                // "has moved" case. The push refuses it and the user picks again; re-pinning whatever sits at
-                // the old number would follow the wrong camera and silence that refusal for good.
-                LogGuideCameraMoved(endpoint, GuiderCameraReconcile.ForLog(pinnedId), movedTo, GuiderCameraReconcile.ForLog(atSlot?.UniqueId));
-                return;
-            }
-            if (mismatch && string.IsNullOrWhiteSpace(atSlot?.UniqueId)) {
-                // The pinned camera is gone and nothing answers at its number, or the server stopped reporting
-                // ids: nothing safe to learn (a blank id must not re-pin, nor move the pixel size under the old pin).
-                return;
-            }
-            if (mismatch) {
-                // #1362 — a different camera answers in the slot and it is not the imaging camera: the gear was
-                // swapped behind the same connection. The slot is now the guide camera, so its id is pinned and
-                // its pixel size read; the identity reconciler tells the user and clears the darks and calibration.
-                LogGuideCameraSwapped(endpoint, GuiderCameraReconcile.ForLog(atSlot!.UniqueId), GuiderCameraReconcile.ForLog(pinnedId));
-            }
-            double? read = null;
-            try {
-                read = await guider.GetAlpacaCameraPixelSizeAsync(ep.Host, ep.Port, ep.Device, cts.Token).ConfigureAwait(false);
-            } catch (Exception ex) when (ex is InvalidOperationException or GuiderRpcException) {
-                // Unreadable: no size to learn; an id can still be filled below.
-            }
-
-            // A swap decides as if unpinned (the old pin is the previous camera's); the apply below still
-            // demands the stored pin is the one this reconcile started from.
-            var decision = GuiderCameraReconcile.Decide(mismatch ? string.Empty : pinnedId,
-                oldPixelSize, ep.Device, devices, read);
-            if (decision.Outcome == GuiderCameraReconcileOutcome.Update
-                    && !TryApplyGuideCameraProfile(camera, pinnedId, decision)) {
-                return; // the selection or the pin changed while we read: do not overwrite the newer edit
-            }
-            if (_identity is not null && atSlot is not null) {
-                // On a swap the old pin is the previous camera's identity: a pre-#1362 profile has no stored
-                // guidecamera entry, and the notice and invalidation must not be lost to a "first sighting".
-                var previous = mismatch ? new DeviceIdentityDto(pinnedId, string.Empty, DateTimeOffset.MinValue) : null;
-                await _identity.ObserveAsync(GearSlot.GuideCamera, atSlot, cts.Token, previous).ConfigureAwait(false);
-            }
-            if (decision.Outcome != GuiderCameraReconcileOutcome.Update) {
-                return;
-            }
-            var oldSizeText = oldPixelSize.ToString("R", CultureInfo.InvariantCulture);
-            var newSizeText = (decision.NewPixelSize ?? oldPixelSize).ToString("R", CultureInfo.InvariantCulture);
-            var oldIdText = GuiderCameraReconcile.ForLog(pinnedId);
-            var newIdText = GuiderCameraReconcile.ForLog(decision.NewUniqueId ?? pinnedId);
-            LogGuideCameraReconciled(endpoint, oldSizeText, newSizeText, oldIdText, newIdText);
         } catch (OperationCanceledException) {
             // Superseded or timed out: leave the profile as it is.
         } catch (Exception ex) {
             LogGuideCameraReconcileFailed(ex);
         }
+    }
+
+    /// <summary>The pin checks and the re-read; true when the guider's camera is the guide camera (or the
+    /// profile names no Alpaca camera to check it against). Throws on cancel, like the reads it makes.</summary>
+    private async Task<bool> CheckGuideCameraAsync(PHD2Guider guider, CancellationToken token) {
+        var settings = _profileService.ActiveProfile.GuiderSettings;
+        var camera = settings.GuiderCamera;
+        var pinnedId = settings.GuiderCameraAlpacaUniqueId;
+        var oldPixelSize = settings.GuidePixelSize;
+        if (GuiderCameraPinCheck.CameraEndpoint(settings) is not { } ep) {
+            return true;
+        }
+        IReadOnlyDictionary<string, AlpacaConfiguredDevice> devices = new Dictionary<string, AlpacaConfiguredDevice>();
+        try {
+            if (_alpaca is not null) {
+                devices = await _alpaca.GetConfiguredDevicesAsync(ep.Host, ep.Port, token).ConfigureAwait(false);
+            }
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            // The client already maps failures to an empty map; a throwing stand-in means the same: unknown.
+        }
+        var endpoint = $"{GuiderCameraReconcile.ForLog(ep.Host)}:{ep.Port.ToString(CultureInfo.InvariantCulture)}/{ep.Device.ToString(CultureInfo.InvariantCulture)}";
+        devices.TryGetValue(GuiderCameraReconcile.SlotKey(ep.Device), out var atSlot);
+        // Identity first. The slot resolving to the main imaging camera (a renumber) is never learned
+        // from: its id and pixel size are not the guide camera's, and the push refuses it (#1308).
+        var isMain = _mainCameraResolver?.Invoke() is { } main
+            && GuiderCameraPinCheck.IsMainCamera(settings, devices, main);
+        var mismatch = GuiderCameraReconcile.Decide(pinnedId, oldPixelSize, ep.Device, devices, readPixelSize: null).Outcome
+            == GuiderCameraReconcileOutcome.PinMismatch;
+        if (mismatch && isMain) {
+            LogGuideCameraPinMismatch(endpoint, GuiderCameraReconcile.ForLog(atSlot?.UniqueId), GuiderCameraReconcile.ForLog(pinnedId));
+            return false;
+        }
+        if (isMain) {
+            return false;
+        }
+        if (mismatch && GuiderCameraPinCheck.MovedTo(pinnedId, devices) is { } movedTo) {
+            // The pinned camera is still on the server at another number (a bridge renumber): #1308's
+            // "has moved" case. The push refuses it and the user picks again; re-pinning whatever sits at
+            // the old number would follow the wrong camera and silence that refusal for good.
+            LogGuideCameraMoved(endpoint, GuiderCameraReconcile.ForLog(pinnedId), movedTo, GuiderCameraReconcile.ForLog(atSlot?.UniqueId));
+            return false;
+        }
+        if (mismatch && string.IsNullOrWhiteSpace(atSlot?.UniqueId)) {
+            // The pinned camera is gone and nothing answers at its number, or the server stopped reporting
+            // ids: nothing safe to learn (a blank id must not re-pin, nor move the pixel size under the old pin).
+            return false;
+        }
+        if (mismatch) {
+            // #1362 — a different camera answers in the slot and it is not the imaging camera: the gear was
+            // swapped behind the same connection. The slot is now the guide camera, so its id is pinned and
+            // its pixel size read; the identity reconciler tells the user and clears the darks and calibration.
+            LogGuideCameraSwapped(endpoint, GuiderCameraReconcile.ForLog(atSlot!.UniqueId), GuiderCameraReconcile.ForLog(pinnedId));
+        }
+        double? read = null;
+        try {
+            read = await guider.GetAlpacaCameraPixelSizeAsync(ep.Host, ep.Port, ep.Device, token).ConfigureAwait(false);
+        } catch (Exception ex) when (ex is InvalidOperationException or GuiderRpcException) {
+            // Unreadable: no size to learn; an id can still be filled below.
+        }
+
+        // A swap decides as if unpinned (the old pin is the previous camera's); the apply below still
+        // demands the stored pin is the one this reconcile started from.
+        var decision = GuiderCameraReconcile.Decide(mismatch ? string.Empty : pinnedId,
+            oldPixelSize, ep.Device, devices, read);
+        if (decision.Outcome == GuiderCameraReconcileOutcome.Update
+                && !TryApplyGuideCameraProfile(camera, pinnedId, decision)) {
+            return false; // the selection or the pin changed while we read: do not overwrite the newer edit
+        }
+        if (_identity is not null && atSlot is not null) {
+            // On a swap the old pin is the previous camera's identity: a pre-#1362 profile has no stored
+            // guidecamera entry, and the notice and invalidation must not be lost to a "first sighting".
+            var previous = mismatch ? new DeviceIdentityDto(pinnedId, string.Empty, DateTimeOffset.MinValue) : null;
+            await _identity.ObserveAsync(GearSlot.GuideCamera, atSlot, token, previous).ConfigureAwait(false);
+        }
+        if (decision.Outcome != GuiderCameraReconcileOutcome.Update) {
+            return true;
+        }
+        var oldSizeText = oldPixelSize.ToString("R", CultureInfo.InvariantCulture);
+        var newSizeText = (decision.NewPixelSize ?? oldPixelSize).ToString("R", CultureInfo.InvariantCulture);
+        var oldIdText = GuiderCameraReconcile.ForLog(pinnedId);
+        var newIdText = GuiderCameraReconcile.ForLog(decision.NewUniqueId ?? pinnedId);
+        LogGuideCameraReconciled(endpoint, oldSizeText, newSizeText, oldIdText, newIdText);
+        return true;
     }
 
     /// <summary>A profile that leaves the guide pixel size or focal length unset gets them from the guider:
