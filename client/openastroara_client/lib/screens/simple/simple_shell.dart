@@ -471,6 +471,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final mode = switch (origin) {
       SimpleStatusOrigin.plan => SimpleModeScreen.plan,
       SimpleStatusOrigin.guide => SimpleModeScreen.guide,
+      SimpleStatusOrigin.focus => SimpleModeScreen.focus,
+      SimpleStatusOrigin.polar => SimpleModeScreen.polarAlign,
       _ => SimpleModeScreen.preview,
     };
     // A Guided Run on that step keeps going; anything else switches mode.

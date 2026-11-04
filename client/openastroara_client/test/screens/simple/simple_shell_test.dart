@@ -46,6 +46,7 @@ import 'package:openastroara/services/storage_space_api.dart';
 import 'package:openastroara/state/stats/server_internal_state_state.dart';
 import 'package:openastroara/screens/app_shell.dart';
 import 'package:openastroara/models/polar_align.dart';
+import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
 import 'package:openastroara/screens/simple/simple_guide_panel.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
@@ -260,6 +261,13 @@ class _GuiderUp extends GuiderStatusNotifier {
   // No server here: Simple Mode's 2 s re-read keeps what the rig last said.
   @override
   Future<void> refresh([GuiderClient? client]) async {}
+}
+
+/// A polar alignment that failed, and why.
+class _PolarFailed extends PolarAlignLiveNotifier {
+  @override
+  PolarAlignLive build() =>
+      const PolarAlignLive(phase: PolarAlignStates.failed, errorMessage: 'no stars found');
 }
 
 /// A connected guider in [runtime], with a calibration leg and an RMS; [at] moves it on.
@@ -2531,6 +2539,30 @@ void main() {
     expect(guider.refreshes, idle, reason: 'idle: no more polling');
   });
 
+  testWidgets('concurrent things each get a pill, stacked: a frame and the guider both show (user, 2026-11-04)',
+      (tester) async {
+    final guider = _GuiderAt('guiding');
+    final c = await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => guider)]);
+    c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+    await tester.pump();
+    final pills = find.byKey(const Key('simple-status-pill'));
+    expect(pills, findsNWidgets(2), reason: 'the frame and the guider, not one hiding the other');
+    final frame = tester.getRect(find.ancestor(of: find.textContaining('Taking a frame'), matching: pills));
+    final guiding = tester.getRect(find.ancestor(of: find.textContaining('Guiding'), matching: pills));
+    expect(frame.bottom, lessThanOrEqualTo(guiding.top), reason: 'the frame first, the guider under it');
+    expect(frame.right, guiding.right, reason: 'right-aligned under the strip');
+    c.read(captureProgressProvider.notifier).reset();
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('a failed polar alignment says so in its own pill, with why (user, 2026-11-04)', (tester) async {
+    await _pump(tester, const Size(1024, 768), gear: [polarAlignLiveProvider.overrideWith(_PolarFailed.new)]);
+    await tester.pump();
+    final pill = find.byKey(const Key('simple-status-pill'));
+    expect(find.descendant(of: pill, matching: find.textContaining('Polar align')), findsOneWidget);
+    expect(find.descendant(of: pill, matching: find.textContaining('no stars found')), findsOneWidget);
+  });
+
   testWidgets('a tap on the status pill opens what it is about (user, 2026-11-04)', (tester) async {
     final guider = _GuiderAt('calibrating');
     final c = await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => guider)]);
@@ -2539,13 +2571,14 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-mode-focus')));
     await tester.pump();
     // The guider's routine: Guide mode, its panel open.
-    await tester.tap(find.byType(SimpleStatusPill));
+    await tester.tap(find.byKey(const Key('simple-status-pill')).first);
     await tester.pump();
     expect(find.byType(SimpleGuidePanel), findsOneWidget);
     // A frame: Preview, its panel open.
     c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
-    await tester.tap(find.byType(SimpleStatusPill));
+    // The frame's pill comes first, above the guider's.
+    await tester.tap(find.byKey(const Key('simple-status-pill')).first);
     await tester.pump();
     expect(find.byKey(const Key('simple-exposure')), findsOneWidget, reason: "Preview's panel");
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Preview')), findsOneWidget);
@@ -2564,14 +2597,14 @@ void main() {
         .map((t) => t.text.toPlainText())
         .join(' ');
     expect(pill(), allOf(contains('Guider'), contains('Calibrating'), contains('West step 3')));
-    expect(tester.getSemantics(find.byType(SimpleStatusPill)), matchesSemantics(label: 'Guider, Calibrating', isLiveRegion: true, isButton: true, hasTapAction: true),
+    expect(tester.getSemantics(find.byKey(const Key('simple-status-pill')).first), matchesSemantics(label: 'Guider, Calibrating', isLiveRegion: true, isButton: true, hasTapAction: true),
         reason: 'each step is not read out');
     guider.at('guiding');
     await tester.pump();
     expect(pill(), allOf(contains('Guiding'), contains('0.62″')));
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
-    expect(pill(), contains('Taking a frame'), reason: 'a frame takes the pill first; the graph shows guiding');
+    expect(pill(), contains('Taking a frame'), reason: 'the frame\'s pill first, the guider\'s under it (user, 2026-11-04)');
     container.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 1));
   });
@@ -2632,13 +2665,14 @@ void main() {
     expect(pill(), contains('Plan'));
     expect(pill(), contains('Cooling camera to -10 °C'));
     // Screen readers hear the step when it changes.
-    expect(tester.getSemantics(find.byType(SimpleStatusPill)), matchesSemantics(
+    expect(tester.getSemantics(find.byKey(const Key('simple-status-pill')).first), matchesSemantics(
         label: 'Plan, Cooling camera to -10 °C', isLiveRegion: true, isButton: true, hasTapAction: true),
         reason: 'and a tap opens Plan (user, 2026-11-04)');
-    // A frame in hand: the camera's own countdown wins.
+    // A frame in hand: its own pill, first, the plan's step still under it (user, 2026-11-04).
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
     expect(pill(), contains('Taking a frame'));
+    expect(pill(), contains('Cooling camera to -10 °C'));
     container.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 1));
   });
