@@ -68,8 +68,11 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
       }
     });
     ref.listen(simpleRunProvider, (prev, next) {
-      // Imaging started (the last Done, or by hand): Guided Run is done.
-      if (state != null && next.started) state = null;
+      // Imaging started (the last Done, or by hand): Guided Run is done. Not
+      // a run's updates while it images (ALP-4982).
+      if (state != null && next.started && !(prev?.started ?? false)) {
+        state = null;
+      }
     });
     return null;
   }
@@ -137,6 +140,11 @@ class AutopilotNotifier extends Notifier<AutopilotStep?> {
       return;
     }
     if (s == AutopilotStep.polarAlign) _endPolar();
+    // Already imaging (Guided Run started over a running queue): done.
+    if (ref.read(simpleRunProvider).started) {
+      state = null;
+      return;
+    }
     final startAt = ref.read(simpleScheduleAllowedProvider)
         ? ref.read(simpleDarkStartProvider)
         : null;

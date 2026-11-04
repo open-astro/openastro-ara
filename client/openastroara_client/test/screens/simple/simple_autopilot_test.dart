@@ -147,6 +147,26 @@ void main() {
     expect(c.read(autopilotProvider), isNull, reason: 'imaging: Guided Run is done');
   });
 
+  test('a Guided Run started while a queue images stays open through its updates (ALP-4982)', () async {
+    // #1486 review: any run update with started set ended Guided Run, not only imaging starting.
+    final (c, _) = await _container();
+    final plan = c.read(simpleRunProvider.notifier) as _Plan;
+    plan.started();
+    c.read(autopilotProvider.notifier).start();
+    final step = c.read(autopilotProvider);
+    expect(step, isNotNull, reason: 'precondition: running');
+    plan.state = const SimpleRun(sequenceId: 'seq-1', started: true, busy: true); // an update
+    await Future<void>.value();
+    expect(c.read(autopilotProvider), step);
+    // Its last Done ends it without starting the running queue again.
+    c.read(_focus.notifier).set(SetupStepState.done);
+    c.read(_aligned.notifier).set(SetupStepState.done);
+    while (c.read(autopilotProvider) != null) {
+      c.read(autopilotProvider.notifier).next();
+    }
+    expect(plan.starts, isEmpty);
+  });
+
   test('with nothing queued the last Done goes back to the plan instead of doing nothing', () async {
     // PR #1486 review: Skip on the plan with nothing queued, then the last Done reached startQueue, which
     // returns silently without a queue.
