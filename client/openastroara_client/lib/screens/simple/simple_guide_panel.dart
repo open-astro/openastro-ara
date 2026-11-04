@@ -23,7 +23,12 @@ import 'simple_device_windows.dart'
         simpleWindowRow,
         simpleWindowStepper;
 import 'simple_preview_panel.dart'
-    show SimplePresetTile, SimpleShutterButton, formatExposure, kSimpleText;
+    show
+        SimplePresetTile,
+        SimpleShutterButton,
+        formatExposure,
+        kSimpleText,
+        simpleMainCameraBusy;
 import 'simple_shell.dart' show SimplePanel, kSimpleGoStyle;
 
 /// Guide mode: the guider's routine (loop, pick a star, calibrate when
@@ -88,6 +93,7 @@ class SimpleGuideShutter extends ConsumerWidget {
     final pending = ref.watch(simpleGuiderPendingProvider);
     // An ask in flight shows as done already, and takes no second tap.
     final active = pending ?? simpleGuideActive(g);
+    final cameraBusy = simpleMainCameraBusy(ref);
     final l10n = context.l10n;
     return SimpleShutterButton(
       start: true,
@@ -97,8 +103,17 @@ class SimpleGuideShutter extends ConsumerWidget {
           : active
           ? l10n.guideStop
           : l10n.guideStart,
-      whyOff: pending != null ? null : l10n.guideConnectFirst,
-      onPressed: g == null || !g.isConnected || pending != null
+      whyOff: pending != null
+          ? null
+          : g == null || !g.isConnected
+          ? l10n.guideConnectFirst
+          : l10n.shellMainCameraBusy,
+      // Calibration turns the mount: no start under a main-camera frame.
+      onPressed:
+          g == null ||
+              !g.isConnected ||
+              pending != null ||
+              (!active && cameraBusy)
           ? null
           : () => simpleGuideRun(context, ref, start: !active),
     );

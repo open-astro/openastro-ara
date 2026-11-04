@@ -5,6 +5,7 @@ import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/screens/simple/simple_guide_panel.dart';
 import 'package:openastroara/services/guider_api.dart' show GuiderClient;
 import 'package:openastroara/state/guider/guider_state.dart';
+import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
@@ -123,12 +124,17 @@ void main() {
     expect(find.text('Guider not connected'), findsOneWidget);
   });
 
-  testWidgets("Guide's shutter starts the guider's routine; while it runs, the square stops it", (tester) async {
+  testWidgets("Guide's shutter starts the guider's routine", (tester) async {
     await _pump(tester, _wire(runtime: 'stopped'), child: const SimpleGuideShutter());
     expect(find.bySemanticsLabel('Start guiding'), findsOneWidget);
     await tester.tap(find.byType(SimpleGuideShutter));
     await tester.pump();
     expect(_g.calls, ['start']);
+  });
+
+  // One pump per test: a second container leaves the first's autoDispose
+  // run-state read pending as a timer.
+  testWidgets("while the guider's routine runs, the square stops it", (tester) async {
     await _pump(tester, _wire(runtime: 'calibrating'), child: const SimpleGuideShutter());
     expect(find.bySemanticsLabel('Stop guiding'), findsOneWidget);
     await tester.tap(find.byType(SimpleGuideShutter));
@@ -181,6 +187,30 @@ void main() {
     await tester.pump();
     expect(_g.calls, isEmpty);
     expect(c.read(simpleMessagesProvider).single.title, 'Connect the guider in Settings › Devices.');
+    await tester.pump(const Duration(seconds: 11));
+  });
+
+  testWidgets('the main camera busy: Start is off and a tap says why (user, 2026-11-04: '
+      'calibration turns the mount under the frame)', (tester) async {
+    final c = await _pump(tester, _wire(runtime: 'stopped'), child: const SimpleGuideShutter());
+    c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-shutter')));
+    await tester.pump();
+    expect(_g.calls, isEmpty, reason: 'no start under a frame');
+    expect(c.read(simpleMessagesProvider).single.title, 'The main camera is busy: wait for its frame, or stop it.');
+    c.read(captureProgressProvider.notifier).reset();
+    await tester.pump(const Duration(seconds: 11));
+  });
+
+  testWidgets('the main camera busy: Stop still works', (tester) async {
+    final c = await _pump(tester, _wire(runtime: 'guiding'), child: const SimpleGuideShutter());
+    c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-shutter')));
+    await tester.pump();
+    expect(_g.calls, ['stop']);
+    c.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 11));
   });
 
