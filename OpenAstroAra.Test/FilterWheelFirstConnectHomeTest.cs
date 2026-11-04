@@ -140,6 +140,10 @@ namespace OpenAstroAra.Test {
                         ctx.Response.Close();
                     } catch (HttpListenerException) {
                     } catch (ObjectDisposedException) {
+                    } catch (InvalidOperationException) {
+                        // listener closed under a pending response (Linux's managed listener marks it
+                        // submitted, so the next header write throws): teardown, not a device answer, as
+                        // in ScriptedAlpacaDevice (#1269).
                     }
                 }
             }
