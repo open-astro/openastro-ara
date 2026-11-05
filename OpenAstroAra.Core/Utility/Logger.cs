@@ -27,10 +27,24 @@ using System.Text;
 
 namespace OpenAstroAra.Core.Utility {
 
+    /// <summary>
+    /// Separate from <see cref="Logger"/> so a host can claim logging without running its static
+    /// constructor, which would otherwise replace the host's Serilog logger on first use.
+    /// </summary>
+    public static class LoggerHost {
+        public static LoggingLevelSwitch LevelSwitch { get; } = new LoggingLevelSwitch { MinimumLevel = LogEventLevel.Information };
+        public static bool OwnsLogging { get; set; }
+    }
+
     public static class Logger {
-        private static readonly LoggingLevelSwitch levelSwitch = new LoggingLevelSwitch { MinimumLevel = LogEventLevel.Information };
+        private static LoggingLevelSwitch levelSwitch => LoggerHost.LevelSwitch;
 
         static Logger() {
+            // #1591: Log.Logger has one owner. A host that configured it keeps it.
+            if (LoggerHost.OwnsLogging) {
+                return;
+            }
+
             var logDate = DateTime.Now.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
             var logDir = Path.Combine(CoreUtil.APPLICATIONTEMPPATH, "Logs");
             var processId = Environment.ProcessId;
@@ -129,8 +143,8 @@ namespace OpenAstroAra.Core.Utility {
             Log.CloseAndFlush();
         }
 
-        private const string ErrorTemplate = "{source}|{member}|{line}";
-        private const string MessageTemplate = "{source}|{member}|{line}|{message}";
+        private const string ErrorTemplate = "{source:l}|{member:l}|{line}";
+        private const string MessageTemplate = "{source:l}|{member:l}|{line}|{message:l}";
 
         public static void Error(
                 Exception ex,
