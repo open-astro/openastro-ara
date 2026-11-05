@@ -178,23 +178,10 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         private DateTime CalculateRemainingTime() {
             var now = DateTime.Now;
-            var then = new DateTime(now.Year, now.Month, now.Day, Hours, Minutes, Seconds);
-
             // #1155 — read the provider's rollover for THIS calculation; a remaining-time query
             // must not write the bound RolloverTime (an observable property) as a side effect.
             var rollover = SelectedProvider?.GetRolloverTime(this) ?? RolloverTime;
-            var timeOnlyNow = TimeOnly.FromDateTime(now);
-            var timeOnlyThen = TimeOnly.FromDateTime(then);
-
-            if (timeOnlyNow < rollover && timeOnlyThen >= rollover) {
-                then = then.AddDays(-1);
-            }
-
-            if (timeOnlyNow >= rollover && timeOnlyThen < rollover) {
-                then = then.AddDays(1);
-            }
-
-            return then;
+            return WallClockTarget.Resolve(now, Hours, Minutes, Seconds, rollover, HasFixedTimeProvider);
         }
 
         private void Tick() {

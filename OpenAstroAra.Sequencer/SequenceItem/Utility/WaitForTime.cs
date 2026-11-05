@@ -192,22 +192,11 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
         public override TimeSpan GetEstimatedDuration() {
             var now = DateTime.Now;
-            var then = new DateTime(now.Year, now.Month, now.Day, Hours, Minutes, Seconds);
-
             // #1080 — an estimate is read from the run-state / WS publish / checkpoint paths as well
             // as by the engine, so it must not write the live tree: the provider's rollover is used
             // locally here; UpdateTime() is where RolloverTime (an observable property) is assigned.
             var rollover = SelectedProvider?.GetRolloverTime(this) ?? RolloverTime;
-            var timeOnlyNow = TimeOnly.FromDateTime(now);
-            var timeOnlyThen = TimeOnly.FromDateTime(then);
-
-            if (timeOnlyNow < rollover && timeOnlyThen >= rollover) {
-                then = then.AddDays(-1);
-            }
-
-            if (timeOnlyNow >= rollover && timeOnlyThen < rollover) {
-                then = then.AddDays(1);
-            }
+            var then = WallClockTarget.Resolve(now, Hours, Minutes, Seconds, rollover, HasFixedTimeProvider);
 
             var diff = then - DateTime.Now;
             if (diff < TimeSpan.Zero) {
