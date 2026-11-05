@@ -99,8 +99,9 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
             final e => l.albumLoadFailed(friendlyError(l, e)),
           };
     final noLights = frames?.value?.isEmpty ?? false;
-    // Without rows every card looks missing, so a shelf would offer collected cards.
-    final shelf = (frames?.hasValue ?? false) && _filter != AlbumFilter.collected
+    // Without rows, or before the Book is matched against them, every card looks missing,
+    // so a shelf would offer collected cards.
+    final shelf = (frames?.hasValue ?? false) && view != null && _filter != AlbumFilter.collected
         ? _shelf(objects, stats)
         : const <PlanningDso>[];
     final shown = switch (_filter) {
