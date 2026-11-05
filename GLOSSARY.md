@@ -22,6 +22,14 @@ _Avoid_: run, plan (for the list itself)
 Keeping the mount locked on a star with a separate guide camera and guide optics while the main camera exposes. The bare word "guide" belongs to guiding alone.
 _Avoid_: "the guide" for the User Guide
 
+**Guide Camera**:
+The small camera on the guide scope or off-axis guider that watches a guide star. It belongs to Guiding, not to the Guider.
+_Avoid_: guider camera, guiding camera
+
+**Guider**:
+The guiding program that reads the Guide Camera and corrects the mount: PHD2 or openastro-guider, reached through the daemon. The device chip, the status pill ("Guider · Calibrating") and the guider window name the program.
+_Avoid_: guide (for the program), guider camera
+
 ### Connection
 
 **Control Slot**:
