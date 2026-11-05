@@ -610,7 +610,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         var ran = false;
         Walk(root);
         return names.Count > 0 && !ran
-            ? ("target_skipped", $"Skipped, nothing was imaged: {string.Join(", ", names)} did not run (its start conditions were not met).")
+            ? ("target_skipped", $"Skipped, nothing was imaged: {string.Join(", ", names)} did not run ({(names.Count == 1 ? "its" : "their")} start conditions were not met).")
             : null;
 
         void Walk(ISequenceContainer container) {
@@ -709,6 +709,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // here — the losing writer returns false and isn't counted (no inflated "Sequence halted" tally). A
         // run heading to a terminal state via Aborting still terminates; re-labelling it adds nothing.
         if (!_runs.TryGetValue(id, out var run) || IsTerminal(run.State) || run.State == SequenceRunState.Aborting) return false;
+        run.SetReason(null, null); // #1596 - before the state, so a Stopped status never carries it
         run.State = desired;
         try {
             await run.Cts.CancelAsync();
@@ -1018,6 +1019,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // it returns normally on cancel). No discrete "Aborted" state — the
             // DTO enum folds abort + stop into Stopped; the WS event type carries
             // the distinction.
+            run.SetReason(null, null); // #1596 - a run that is over is not waiting on the meridian
             if (run.State == SequenceRunState.Aborting) {
                 run.State = SequenceRunState.Stopped;
                 await EmitAsync("sequence.aborted", sequenceId, run);
@@ -1050,6 +1052,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             if (drainFailureReports is not null) {
                 await drainFailureReports();
             }
+            run.SetReason(null, null);
             run.State = SequenceRunState.Stopped;
             await EmitAsync("sequence.stopped", sequenceId, run);
         } catch (Exception ex) {
@@ -1060,6 +1063,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             if (drainFailureReports is not null) {
                 await drainFailureReports();
             }
+            run.SetReason(null, null);
             run.State = SequenceRunState.Failed;
             await EmitAsync("sequence.failed", sequenceId, run);
         } finally {
