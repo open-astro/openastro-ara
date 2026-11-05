@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/launch_gate_state.dart';
-import '../theme/ara_colors.dart';
 
 /// Confirm, then re-arm the session gates so the root router drops back to
 /// the launchpad. Shared by the status-bar button and its overflow menu.
@@ -35,26 +34,4 @@ Future<void> backToLaunchpad(BuildContext context, WidgetRef ref) async {
   // profile box (with servers saved the router would otherwise
   // resume the flow one step in).
   ref.read(serverChooserRequestedProvider.notifier).request();
-}
-
-/// "Launchpad" — leave the shell and re-run the §30 launch flow (server
-/// connect skipped when unambiguous, profile box, offline picker). Re-arms
-/// the session gates; the root router then swaps the shell out and the
-/// window drops back to its compact launchpad size. Confirmation keeps a
-/// mis-click from yanking the user out of a planning session.
-class LaunchpadButton extends ConsumerWidget {
-  const LaunchpadButton({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return TextButton.icon(
-      onPressed: () => backToLaunchpad(context, ref),
-      icon: const Icon(Icons.rocket_launch_outlined, size: 16),
-      label: const Text('Launchpad'),
-      style: TextButton.styleFrom(
-        foregroundColor: AraColors.textSecondary,
-        textStyle: Theme.of(context).textTheme.bodySmall,
-      ),
-    );
-  }
 }

@@ -478,10 +478,14 @@ final _launchers = <_Launcher>[
   ),
 ];
 
-// Room the labelled form needs beyond the text: button padding (2 x 12), icon
-// (16) and the icon-label gap (8). An icon-only button is 40 wide.
-const double _labelExtra = 48;
+// Room the labelled form needs beyond the text: Material 3 button padding
+// (12 left, 16 right), icon (16) and the icon-label gap
+// (8). An icon-only compact button is 40 wide; the More button is a default
+// 48 wide IconButton. The sweep test in app_shell_status_bar_test.dart fails
+// if any of these drift from the real widgets.
+const double _labelExtra = 52;
 const double _iconSlot = 40;
+const double _moreWidth = 48;
 // Notification bell + help button (48 each) + the trailing 4 px.
 const double _tailWidth = 100;
 
@@ -530,14 +534,19 @@ class _BottomStatusBar extends ConsumerWidget {
         textDirection: TextDirection.ltr,
         textScaler: MediaQuery.textScalerOf(context),
       )..layout();
-      return sum + painter.width + _labelExtra;
+      final width = painter.width;
+      painter.dispose();
+      return sum + width + _labelExtra;
     });
     final labelled = labelsWidth + _tailWidth <= width;
     final iconSlots = ((width - _tailWidth) / _iconSlot).floor();
     // Every launcher as an icon, or as many as fit plus a More button.
     final shown = labelled || iconSlots >= _launchers.length
         ? _launchers.length
-        : (iconSlots - 1).clamp(0, _launchers.length);
+        : ((width - _tailWidth - _moreWidth) / _iconSlot).floor().clamp(
+            0,
+            _launchers.length,
+          );
     final overflow = _launchers.sublist(shown);
 
     return Row(
