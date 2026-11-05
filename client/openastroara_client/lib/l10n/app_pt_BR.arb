@@ -603,5 +603,8 @@
   "albumAddTime": "Adicionar mais tempo",
   "albumLoadFailed": "Não foi possível carregar o álbum: {reason}",
   "albumNoServer": "Conecte-se a um equipamento para preencher o álbum",
-  "albumCardSemantics": "{label} {name}, {state}"
+  "albumCardSemantics": "{label} {name}, {state}",
+  "albumFilterAll": "Todos",
+  "albumFilterCollected": "Coletados",
+  "albumFilterMissing": "Faltando"
 }

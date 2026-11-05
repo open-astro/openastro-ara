@@ -2991,5 +2991,17 @@
         "type": "String"
       }
     }
+  },
+  "albumFilterAll": "All",
+  "@albumFilterAll": {
+    "description": "Sky Album: filter segment showing every card of the Book"
+  },
+  "albumFilterCollected": "Collected",
+  "@albumFilterCollected": {
+    "description": "Sky Album: filter segment showing only collected cards (bronze or better)"
+  },
+  "albumFilterMissing": "Missing",
+  "@albumFilterMissing": {
+    "description": "Sky Album: filter segment showing only cards not collected yet"
   }
 }

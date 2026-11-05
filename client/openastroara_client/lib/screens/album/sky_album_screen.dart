@@ -22,6 +22,12 @@ import '../../widgets/album/album_card.dart';
 /// The shelf shows at most this many missing cards.
 const int albumShelfCap = 8;
 
+/// The album's icon, shared by its title and its menu entry.
+const IconData albumIcon = Icons.style_outlined;
+
+/// Which of the Book's cards the grid shows.
+enum AlbumFilter { all, collected, missing }
+
 class SkyAlbumScreen extends ConsumerStatefulWidget {
   const SkyAlbumScreen({super.key, required this.onImageTarget});
 
@@ -36,6 +42,7 @@ class SkyAlbumScreen extends ConsumerStatefulWidget {
 
 class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
   AlbumBook _book = AlbumBook.messier;
+  AlbumFilter _filter = AlbumFilter.all;
   Object? _refreshError;
 
   @override
@@ -93,7 +100,14 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
           };
     final noLights = frames?.value?.isEmpty ?? false;
     // Without rows every card looks missing, so a shelf would offer collected cards.
-    final shelf = frames?.hasValue ?? false ? _shelf(objects, stats) : const <PlanningDso>[];
+    final shelf = (frames?.hasValue ?? false) && _filter != AlbumFilter.collected
+        ? _shelf(objects, stats)
+        : const <PlanningDso>[];
+    final shown = switch (_filter) {
+      AlbumFilter.all => objects,
+      AlbumFilter.collected => [for (final d in objects) if (stats.containsKey(d.id)) d],
+      AlbumFilter.missing => [for (final d in objects) if (!stats.containsKey(d.id)) d],
+    };
     final tiers = {for (final t in AlbumTier.values) t: stats.values.where((s) => s.tier == t).length};
 
     Widget card(PlanningDso d) => AlbumCard(cardFor(d), onAction: () => widget.onImageTarget(d));
@@ -101,7 +115,11 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
     return Scaffold(
       backgroundColor: AraColors.bgPrimary,
       appBar: AppBar(
-        title: Text(l.albumTitle),
+        title: Row(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(albumIcon),
+          const SizedBox(width: 8),
+          Text(l.albumTitle),
+        ]),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
@@ -126,6 +144,16 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
               for (final t in AlbumTier.values.reversed)
                 Text(l.albumTierCount(albumTierName(context, t), tiers[t]!),
                     style: TextStyle(color: albumTierColor(t))),
+              SegmentedButton<AlbumFilter>(
+                segments: [
+                  ButtonSegment(value: AlbumFilter.all, label: Text(l.albumFilterAll)),
+                  ButtonSegment(value: AlbumFilter.collected, label: Text(l.albumFilterCollected)),
+                  ButtonSegment(value: AlbumFilter.missing, label: Text(l.albumFilterMissing)),
+                ],
+                selected: {_filter},
+                showSelectedIcon: false,
+                onSelectionChanged: (s) => setState(() => _filter = s.single),
+              ),
             ]),
           ),
         ),
@@ -186,7 +214,7 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,
             ),
-            delegate: SliverChildBuilderDelegate((_, i) => card(objects[i]), childCount: objects.length),
+            delegate: SliverChildBuilderDelegate((_, i) => card(shown[i]), childCount: shown.length),
           ),
         ),
       ]),

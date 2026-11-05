@@ -179,4 +179,31 @@ void main() {
     expect(find.text('0.0 h · 1 light'), findsOneWidget, reason: 'singular light');
     expect(find.text('—'), findsNWidgets(3), reason: 'no filter, no profile, no score');
   });
+
+  testWidgets('the filter shows only collected or only missing cards', (tester) async {
+    await _pump(tester, frames: _m31Frames, tonight: [_m42]);
+    Finder inGrid(String t) => find.descendant(of: find.byType(SliverGrid), matching: find.text(t));
+
+    await tester.tap(find.text('Collected'));
+    await tester.pumpAndSettle();
+    expect(inGrid('Andromeda Galaxy'), findsOneWidget);
+    expect(inGrid('Crab Nebula'), findsNothing);
+    expect(find.textContaining('well placed tonight'), findsNothing, reason: 'the shelf is missing cards');
+    expect(find.text('1 / 3 collected'), findsOneWidget, reason: 'the count is the Book, not the filter');
+
+    await tester.tap(find.text('Missing'));
+    await tester.pumpAndSettle();
+    expect(inGrid('Andromeda Galaxy'), findsNothing);
+    expect(inGrid('Crab Nebula'), findsOneWidget);
+    expect(inGrid('Orion Nebula'), findsOneWidget);
+
+    await tester.tap(find.text('All'));
+    await tester.pumpAndSettle();
+    expect(inGrid('Andromeda Galaxy'), findsOneWidget);
+  });
+
+  testWidgets('the title carries the album icon', (tester) async {
+    await _pump(tester, frames: const []);
+    expect(find.descendant(of: find.byType(AppBar), matching: find.byIcon(Icons.style_outlined)), findsOneWidget);
+  });
 }

@@ -104,7 +104,8 @@ A provider family keyed by the active connection caches the album rows. On album
 
 Files: `screens/album/`, `state/album/`, `widgets/album/`. Nothing imported from `screens/simple/`; the only shell-specific behaviour arrives as the callback below.
 
-- App bar: "Sky Album", a segmented Book switch (Messier / Caldwell).
+- App bar: the album icon and "Sky Album", a segmented Book switch (Messier / Caldwell).
+- A filter beside the header counts: All / Collected / Missing (decided 2026-11-05). It narrows the grid only; the counts stay the Book's, and the shelf hides under Collected.
 - Header line: `n / total collected` with per-tier counts.
 - Tonight shelf (see tie-in) above the grid when it has cards.
 - Binder grid: cards at 2.5:3.5, max about 130 px wide. Card front: best-frame thumbnail (via the existing frame thumbnail endpoint) or a grey silhouette icon per object type; catalog label (`M 31`, `C 14`); name. Border colour per tier, a subtle glow on gold, grey text on missing cards.

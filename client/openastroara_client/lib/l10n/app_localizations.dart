@@ -3722,6 +3722,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{label} {name}, {state}'**
   String albumCardSemantics(String label, String name, String state);
+
+  /// Sky Album: filter segment showing every card of the Book
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get albumFilterAll;
+
+  /// Sky Album: filter segment showing only collected cards (bronze or better)
+  ///
+  /// In en, this message translates to:
+  /// **'Collected'**
+  String get albumFilterCollected;
+
+  /// Sky Album: filter segment showing only cards not collected yet
+  ///
+  /// In en, this message translates to:
+  /// **'Missing'**
+  String get albumFilterMissing;
 }
 
 class _AppLocalizationsDelegate

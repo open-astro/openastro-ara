@@ -2124,4 +2124,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String albumCardSemantics(String label, String name, String state) {
     return '$label $name, $state';
   }
+
+  @override
+  String get albumFilterAll => 'All';
+
+  @override
+  String get albumFilterCollected => 'Collected';
+
+  @override
+  String get albumFilterMissing => 'Missing';
 }

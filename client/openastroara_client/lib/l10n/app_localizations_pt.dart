@@ -2124,6 +2124,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String albumCardSemantics(String label, String name, String state) {
     return '$label $name, $state';
   }
+
+  @override
+  String get albumFilterAll => 'All';
+
+  @override
+  String get albumFilterCollected => 'Collected';
+
+  @override
+  String get albumFilterMissing => 'Missing';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -4259,4 +4268,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String albumCardSemantics(String label, String name, String state) {
     return '$label $name, $state';
   }
+
+  @override
+  String get albumFilterAll => 'Todos';
+
+  @override
+  String get albumFilterCollected => 'Coletados';
+
+  @override
+  String get albumFilterMissing => 'Faltando';
 }
