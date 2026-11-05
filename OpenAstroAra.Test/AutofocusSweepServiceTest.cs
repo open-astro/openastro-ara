@@ -144,6 +144,39 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Coarse_search_probes_the_direction_with_one_step_size_not_the_full_half_width() {
+            // #1540 — Steps 4 × StepSize 100: the first move used to be the whole half-width (400) and the
+            // expansion doubled from there; a wide default step on a focuser with no µm/step jumped far past focus.
+            const int best = StartPosition + 3000;
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => Result(0, 0),
+                coarseMetric: (_, _) => 2.0 + Math.Abs(Current() - best) / 50.0);
+
+            await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(moves[1] - moves[0], Is.EqualTo(100));
+        }
+
+        [Test]
+        public async Task Coarse_search_expansion_is_capped_to_a_quarter_of_the_focusers_travel() {
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100, restore: true)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => Result(1.5, 42),
+                coarseMetric: (_, _) => 1e6 + Current(),
+                travelRange: _ => Task.FromResult<(int Min, int Max)?>((0, 12000)));
+
+            await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            var coarseMoves = moves.Take(8).ToList();
+            Assert.That(coarseMoves.Zip(coarseMoves.Skip(1), (a, b) => Math.Abs(b - a)).Max(), Is.LessThanOrEqualTo(3000));
+        }
+
+        [Test]
         public async Task Coarse_search_that_never_brackets_focus_fails_after_its_probe_budget_and_restores() {
             // HFR keeps improving upward forever: the walk must stop at CoarseMaxProbes, fail, and
             // restore, without ever starting the fine sweep.
@@ -168,13 +201,13 @@ namespace OpenAstroAra.Test {
             Assert.That(moves[^1], Is.EqualTo(StartPosition), "restore-on-failure returns to the starting position");
         }
 
-        private static readonly int[] TravelStopMoves = { 500, 900, 100, 900 };
+        private static readonly int[] TravelStopMoves = { 500, 600, 400, 200, 900 };
 
         [Test]
         public async Task Coarse_search_treats_the_travel_stop_at_zero_as_the_bracket() {
-            // Start at 500 with HFR improving toward 0: the walk reaches 100 and the next doubled step
-            // would pass 0, so 0 is the far side of the bracket. The fine sweep around 100 would probe
-            // down to -300, so its centre is lifted to 400 (lowest probe 0) and no move goes below 0.
+            // Start at 500 with HFR improving toward 0: the walk reaches 200 and the next doubled step
+            // would pass 0, so 0 is the far side of the bracket. The fine sweep around 200 would probe
+            // down to -200, so its centre is lifted to 400 (lowest probe 0) and no move goes below 0.
             var position = 500;
             var moves = new List<int>();
             var focuser = new Mock<IFocuserMediator>();
@@ -189,9 +222,9 @@ namespace OpenAstroAra.Test {
             var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
-            // Coarse: start, +400 (worse), -400 (better, at 100); refinement re-uses 500 and skips -300.
+            // Coarse: start, +100 (worse), -100 (better), then the doubled step -200; the next (-400) leaves the travel.
             // Then the fine overshoot above the clamped centre: 400 + 500.
-            Assert.That(moves.GetRange(0, 4), Is.EqualTo(TravelStopMoves));
+            Assert.That(moves.GetRange(0, 5), Is.EqualTo(TravelStopMoves));
             Assert.That(moves.Min(), Is.GreaterThanOrEqualTo(0));
             Assert.That(position, Is.EqualTo(100).Within(30));
         }
@@ -375,16 +408,16 @@ namespace OpenAstroAra.Test {
             int Current() => moves.Count == 0 ? StartPosition : moves[^1];
             using var svc = new AutofocusSweepService(
                 Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
-                metric: VCurveMetric(Current, StartPosition - 150),
-                coarseMetric: (_, _) => 2.0 + Math.Abs(Current() - (StartPosition - 150)) / 50.0);
+                metric: VCurveMetric(Current, StartPosition - 50),
+                coarseMetric: (_, _) => 2.0 + Math.Abs(Current() - (StartPosition - 50)) / 50.0);
 
             var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
             // Three coarse probes (start, +400, −400), then the overshoot + nine fine probes around the start.
-            Assert.That(moves.GetRange(0, 3), Is.EqualTo(new[] { StartPosition, StartPosition + 400, StartPosition - 400 }));
+            Assert.That(moves.GetRange(0, 3), Is.EqualTo(new[] { StartPosition, StartPosition + 100, StartPosition - 100 }));
             Assert.That(moves[3], Is.EqualTo(StartPosition + 500));
-            Assert.That(Current(), Is.EqualTo(StartPosition - 150).Within(30));
+            Assert.That(Current(), Is.EqualTo(StartPosition - 50).Within(30));
         }
 
         [Test]
@@ -398,7 +431,7 @@ namespace OpenAstroAra.Test {
             var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.False);
-            Assert.That(moves, Has.Count.EqualTo(4), "three coarse probes, then the restore");
+            Assert.That(moves, Has.Count.EqualTo(6), "start, ±one step, ±the half-width, then the restore");
             Assert.That(moves[^1], Is.EqualTo(StartPosition));
         }
 
@@ -619,7 +652,7 @@ namespace OpenAstroAra.Test {
                 Profiles(Settings(steps: 4, stepSize: 100, restore: true)).Object, focuser.Object, Frames().Object);
             var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
             Assert.That(ok, Is.False);
-            Assert.That(moves.Take(3), Is.EqualTo(new[] { StartPosition, StartPosition + 400, StartPosition - 400 }));
+            Assert.That(moves.Take(3), Is.EqualTo(new[] { StartPosition, StartPosition + 100, StartPosition - 100 }));
             Assert.That(moves[^1], Is.EqualTo(StartPosition));
         }
 
@@ -1421,7 +1454,7 @@ namespace OpenAstroAra.Test {
         }
 
         private static readonly int[] PlateauDropped = { 796, 760, 724, 688, 652, 616 };
-        private static readonly int[] SharpStartMoves = { StartPosition, StartPosition + 400, StartPosition - 400, StartPosition + 500 };
+        private static readonly int[] SharpStartMoves = { StartPosition, StartPosition + 100, StartPosition - 100, StartPosition + 500 };
 
         [Test]
         public void FalsePlateauProbes_drops_the_plateau_but_keeps_genuine_wings_from_the_2026_10_17_runs() {
@@ -1574,7 +1607,7 @@ namespace OpenAstroAra.Test {
             Assert.That(position, Is.EqualTo(best).Within(30));
         }
 
-        private static readonly int[] SharpStartAtStopMoves = { 120, 520, 0 };
+        private static readonly int[] SharpStartAtStopMoves = { 120, 220, 20 };
 
         [Test]
         public void FalsePlateauProbes_spares_a_near_focus_probe_whose_binned_reading_spiked() {
