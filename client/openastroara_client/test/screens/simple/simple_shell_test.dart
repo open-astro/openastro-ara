@@ -569,6 +569,22 @@ class _RunState extends SequenceRunStateNotifier {
   Future<SequenceRunStateInfo?> build() async => value;
 }
 
+const _queuedM31 = SimpleRun(sequenceId: 'seq-1', targets: [
+  SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+]);
+
+/// Plan screen, queue panel, then the edit sheet on the queued M31.
+Future<void> _openEditOfM31(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('simple-mode')));
+  await tester.pump();
+  await tester.tap(find.text('Plan').first);
+  await tester.pump();
+  await tester.tap(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('M31')));
+  await tester.pump();
+  await tester.tap(find.byKey(const Key('simple-run-edit-0')));
+  await tester.pump();
+}
+
 Future<void> _frame(WidgetTester tester, ProviderContainer c) async {
   c.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
   await tester.pump();
@@ -1458,6 +1474,28 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
     expect(find.byType(SimpleRunSheet), findsNothing, reason: 'the chip closes the sheet it would open');
+  });
+
+  // #1571: the sheet reopened on the old target when Image this came after an edit left _editing set.
+  testWidgets('Image this after an edit opens the sheet on the new pick, not the edited target (#1571)', (tester) async {
+    final container = await _pump(tester, const Size(1024, 768), plan: _queuedM31);
+    await _frame(tester, container);
+    await _openEditOfM31(tester);
+    expect(find.byKey(const Key('simple-run-save')), findsOneWidget, reason: 'the edit sheet');
+    // The status pill (and Night Setup) switch screen without closing the sheet.
+    container.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preview);
+    await tester.pump();
+    await tester.tap(find.text('Sky'));
+    await tester.pump();
+    container.read(planetariumSelectionProvider.notifier).set(const PlanetariumSelection(
+        name: 'M42', kind: 'Nebula', raHours: 5.58, decDeg: -5.4, raJ2000Hours: 5.58, decJ2000Deg: -5.4,
+        altDeg: 50, maxAltDeg: 60));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-sky-image-this')));
+    await tester.pump();
+    expect(find.byType(SimpleRunSheet), findsOneWidget);
+    expect(find.byKey(const Key('simple-run-save')), findsNothing, reason: 'not the edit of M31');
+    expect(find.text('Edit M31'), findsNothing);
   });
 
   testWidgets('the plan square hugs the bottom-right corner, above Stop (no bottom row)', (tester) async {

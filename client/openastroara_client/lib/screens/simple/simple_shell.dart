@@ -1081,6 +1081,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                               .read(simpleShowingProvider.notifier)
                                               .pick(SimpleModeScreen.plan);
                                         }
+                                        // An edit left open is over: the sheet plans the pick.
+                                        _closeSheet();
                                         // Over a run, the sheet adds to its queue.
                                         _popover = runActive
                                             ? _Popover.none
