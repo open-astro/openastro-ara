@@ -135,7 +135,7 @@ public sealed partial class FocuserService : IFocuserMediator {
         }
         lock (_gate) {
             if (absolute) {
-                _backlashOffset = offset + move.Extra;
+                _backlashOffset = move.Offset;
             }
             if (move.Direction != 0) {
                 _lastDirection = move.Direction;

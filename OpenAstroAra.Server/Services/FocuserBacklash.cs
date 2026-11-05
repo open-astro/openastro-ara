@@ -54,24 +54,30 @@ internal static class FocuserBacklash {
     }
 
     /// <summary>One planned move: the position (or, for a relative focuser, offset) to send the hardware, the
-    /// backlash steps included in it, and the direction the move travels (0 = unknown or no motion).</summary>
-    internal readonly record struct Move(int HardwareTarget, int Extra, int Direction);
+    /// backlash steps included in it, the direction the move travels (0 = unknown or no motion) and the standing
+    /// offset after the move (absolute focusers: hardware minus logical target).</summary>
+    internal readonly record struct Move(int HardwareTarget, int Extra, int Direction, int Offset);
 
     /// <summary>NINA's Absolute method: on a direction change the move goes <c>backlash</c> steps further in the
     /// NEW direction and stops there, with no return leg. <paramref name="offset"/> is the sum of the extra steps
     /// already added, so the hardware sits at <c>logical + offset</c> and the user's target scale never shifts.
     /// A relative focuser (<paramref name="absolute"/> false) takes the offset as it is.
-    /// Extra steps that would leave the travel are skipped.</summary>
+    /// Extra steps that would leave the travel are skipped, and the standing offset is clamped to the travel:
+    /// a logical target at a travel stop pulls the offset back (hardware = the stop), so the reported position
+    /// stays equal to the requested target and the hardware never gets an out-of-range move.</summary>
     internal static Move Plan(
             bool absolute, int? from, int target, int lastDirection, Func<int, int> backlashFor, int offset, int minPosition, int maxPosition) {
         var direction = absolute ? (from is int f ? Math.Sign((long)target - f) : 0) : Math.Sign(target);
         var plain = absolute ? (long)target + offset : target;
+        if (absolute && maxPosition > 0) {
+            plain = Math.Clamp(plain, minPosition, maxPosition);
+        }
         var steps = direction != 0 && lastDirection != 0 && direction != lastDirection ? backlashFor(direction) : 0;
         var hardware = plain + direction * steps;
         if (steps <= 0 || (absolute && maxPosition > 0 && (hardware < minPosition || hardware > maxPosition)) || hardware > int.MaxValue || hardware < int.MinValue) {
-            return new Move((int)plain, 0, direction);
+            return new Move((int)plain, 0, direction, absolute ? (int)plain - target : offset);
         }
-        return new Move((int)hardware, direction * steps, direction);
+        return new Move((int)hardware, direction * steps, direction, absolute ? (int)hardware - target : offset);
     }
 
     /// <summary>The runtime as clients see it: <c>backlash_compensating</c> for the whole compensated move.</summary>

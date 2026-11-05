@@ -103,6 +103,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_standing_in_offset_never_sends_the_hardware_below_the_travel_start() {
+            // 2000 -> 1000 (in, -50) left offset -50; logical 0 is valid but 0 + (-50) is not.
+            var plan = Plan(true, 950, 0, last: -1, Settings(backlashIn: 50), offset: -50);
+
+            Assert.That(plan.HardwareTarget, Is.EqualTo(0));
+            Assert.That(plan.Offset, Is.EqualTo(0), "the offset gives back what the stop took, so reported == logical");
+        }
+
+        [Test]
+        public void A_standing_out_offset_never_sends_the_hardware_past_the_travel_end() {
+            var plan = Plan(true, 9100, 10000, last: 1, Settings(backlashOut: 100), offset: 100);
+
+            Assert.That(plan.HardwareTarget, Is.EqualTo(10000));
+            Assert.That(plan.Offset, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void An_offset_that_fits_the_travel_is_kept() {
+            var plan = Plan(true, 1050, 1200, last: 1, Settings(backlashOut: 50), offset: 50);
+
+            Assert.That(plan.HardwareTarget, Is.EqualTo(1250));
+            Assert.That(plan.Offset, Is.EqualTo(50));
+        }
+
+        [Test]
         public void A_relative_focuser_adds_the_extra_steps_to_the_offset() {
             var plan = Plan(false, null, 200, last: -1, Settings(backlashOut: 50), min: -10000);
 
