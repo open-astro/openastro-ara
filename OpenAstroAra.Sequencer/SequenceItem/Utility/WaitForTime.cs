@@ -182,32 +182,36 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
 
         public ICustomDateTime DateTime { get; set; }
 
+        // #1576: the plain-time target this wait resolved when it started. Held so a finished or
+        // ending wait estimates 0, not the next day's 24 h. Overwritten by each Execute, cleared by
+        // ResetProgress. Ticks, 0 = unset, Volatile: the run-state readers are on other threads.
+        private long heldTargetTicks;
+
         public override Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
+            Volatile.Write(ref heldTargetTicks, HasFixedTimeProvider ? 0 : ResolveTarget(DateTime.Now).Ticks);
             return OpenAstroAra.Core.Utility.CoreUtil.Wait(GetEstimatedDuration(), true, progress, "", token);
+        }
+
+        public override void ResetProgress() {
+            Volatile.Write(ref heldTargetTicks, 0);
+            base.ResetProgress();
         }
 
         /// <summary>The estimate below is target minus now: it already shrinks while running, so the
         /// ETA must not subtract the elapsed time a second time (#1155).</summary>
         public bool EstimateIsRemaining => true;
 
-        public override TimeSpan GetEstimatedDuration() {
-            var now = DateTime.Now;
-            var then = new DateTime(now.Year, now.Month, now.Day, Hours, Minutes, Seconds);
-
+        private DateTime ResolveTarget(DateTime now) {
             // #1080 — an estimate is read from the run-state / WS publish / checkpoint paths as well
             // as by the engine, so it must not write the live tree: the provider's rollover is used
             // locally here; UpdateTime() is where RolloverTime (an observable property) is assigned.
             var rollover = SelectedProvider?.GetRolloverTime(this) ?? RolloverTime;
-            var timeOnlyNow = TimeOnly.FromDateTime(now);
-            var timeOnlyThen = TimeOnly.FromDateTime(then);
+            return WallClockTarget.Resolve(now, Hours, Minutes, Seconds, rollover, HasFixedTimeProvider);
+        }
 
-            if (timeOnlyNow < rollover && timeOnlyThen >= rollover) {
-                then = then.AddDays(-1);
-            }
-
-            if (timeOnlyNow >= rollover && timeOnlyThen < rollover) {
-                then = then.AddDays(1);
-            }
+        public override TimeSpan GetEstimatedDuration() {
+            var held = HasFixedTimeProvider ? 0 : Volatile.Read(ref heldTargetTicks);
+            var then = held != 0 ? new DateTime(held) : ResolveTarget(DateTime.Now);
 
             var diff = then - DateTime.Now;
             if (diff < TimeSpan.Zero) {

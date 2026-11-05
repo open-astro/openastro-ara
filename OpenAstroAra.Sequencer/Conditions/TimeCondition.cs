@@ -25,6 +25,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.Conditions {
@@ -108,11 +109,18 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         private DateTime lastCutOffTime;
 
+        // #1576: the plain-time target resolved when the run starts (SequenceBlockInitialize, or the
+        // first read while the parent runs: a parallel block never initializes). Held so the condition
+        // expires at that time instead of rolling over to tomorrow. Cleared by ResetProgress and by any
+        // edit of the time. Ticks, 0 = unset, Volatile: the 1 s watchdog thread reads it.
+        private long heldTargetTicks;
+
         [JsonProperty]
         public int Hours {
             get => hours;
             set {
                 hours = value;
+                Volatile.Write(ref heldTargetTicks, 0);
                 RaisePropertyChanged();
                 RaisePropertyChanged(nameof(RemainingTime));
             }
@@ -123,6 +131,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             get => minutes;
             set {
                 minutes = value;
+                Volatile.Write(ref heldTargetTicks, 0);
                 RaisePropertyChanged();
                 RaisePropertyChanged(nameof(RemainingTime));
             }
@@ -133,6 +142,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             get => minutesOffset;
             set {
                 minutesOffset = value;
+                Volatile.Write(ref heldTargetTicks, 0);
                 UpdateTime();
                 RaisePropertyChanged();
             }
@@ -151,6 +161,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             get => seconds;
             set {
                 seconds = value;
+                Volatile.Write(ref heldTargetTicks, 0);
                 RaisePropertyChanged();
                 RaisePropertyChanged(nameof(RemainingTime));
             }
@@ -161,6 +172,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             get => selectedProvider;
             set {
                 selectedProvider = value;
+                Volatile.Write(ref heldTargetTicks, 0);
                 if (selectedProvider != null) {
                     UpdateTime();
                     RaisePropertyChanged();
@@ -178,23 +190,21 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         private DateTime CalculateRemainingTime() {
             var now = DateTime.Now;
-            var then = new DateTime(now.Year, now.Month, now.Day, Hours, Minutes, Seconds);
-
             // #1155 — read the provider's rollover for THIS calculation; a remaining-time query
             // must not write the bound RolloverTime (an observable property) as a side effect.
             var rollover = SelectedProvider?.GetRolloverTime(this) ?? RolloverTime;
-            var timeOnlyNow = TimeOnly.FromDateTime(now);
-            var timeOnlyThen = TimeOnly.FromDateTime(then);
-
-            if (timeOnlyNow < rollover && timeOnlyThen >= rollover) {
-                then = then.AddDays(-1);
+            if (HasFixedTimeProvider) {
+                return WallClockTarget.Resolve(now, Hours, Minutes, Seconds, rollover, true);
             }
-
-            if (timeOnlyNow >= rollover && timeOnlyThen < rollover) {
-                then = then.AddDays(1);
+            var held = Volatile.Read(ref heldTargetTicks);
+            if (held != 0) {
+                return new DateTime(held);
             }
-
-            return then;
+            var target = WallClockTarget.Resolve(now, Hours, Minutes, Seconds, rollover, false);
+            if (Parent?.Status == SequenceEntityStatus.RUNNING) {
+                Volatile.Write(ref heldTargetTicks, target.Ticks);
+            }
+            return target;
         }
 
         private void Tick() {
@@ -245,7 +255,9 @@ namespace OpenAstroAra.Sequencer.Conditions {
                 if (nextItem != null) {
                     Logger.Info($"No more time remaining. Remaining: {remainingTime - DateTime.Now}, Next Item {nextItem.Name ?? ""}, Next Item Estimated Duration {nextItemDuration}, Next Item Attempts: {nextItem.Attempts}");
                     // There is no time remaining due to the next instruction taking longer - mark the stop time so that all following checks are marked as finished until we exceed the set time
-                    lastCutOffTime = (new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, Hours, Minutes, Seconds)).AddSeconds(10);
+                    lastCutOffTime = HasFixedTimeProvider
+                        ? (new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, Hours, Minutes, Seconds)).AddSeconds(10)
+                        : remainingTime.AddSeconds(10);
                 }
             }
             if (!hasTimeRemaining && IsActive()) {
@@ -254,12 +266,21 @@ namespace OpenAstroAra.Sequencer.Conditions {
             return hasTimeRemaining;
         }
 
+        public override void SequenceBlockInitialize() {
+            base.SequenceBlockInitialize();
+            if (!HasFixedTimeProvider) {
+                var rollover = SelectedProvider?.GetRolloverTime(this) ?? RolloverTime;
+                Volatile.Write(ref heldTargetTicks, WallClockTarget.Resolve(DateTime.Now, Hours, Minutes, Seconds, rollover, false).Ticks);
+            }
+        }
+
         public override string ToString() {
             return $"Condition: {nameof(TimeCondition)}, Time: {Hours}:{Minutes}:{Seconds}h";
         }
 
         public override void ResetProgress() {
             lastCutOffTime = System.DateTime.MinValue;
+            Volatile.Write(ref heldTargetTicks, 0);
             base.ResetProgress();
         }
     }
