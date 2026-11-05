@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderFlex;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/screens/app_shell.dart';
@@ -32,11 +33,15 @@ const _launchers = [
 /// The test font is about twice as wide as the real one, so 0.5 matches the
 /// real glyph width (the board's report at 1100 pt). The status bar is the
 /// only thing asserted; tab bodies may still overflow at narrow widths.
-Future<List<String>> _pumpAt(WidgetTester tester, double width) async {
+Future<List<String>> _pumpAt(
+  WidgetTester tester,
+  double width, {
+  double scale = 0.5,
+}) async {
   tester.view.physicalSize = Size(width, 800);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  tester.platformDispatcher.textScaleFactorTestValue = 0.5;
+  tester.platformDispatcher.textScaleFactorTestValue = scale;
   addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
   final barOverflows = <String>[];
   final onError = FlutterError.onError;
@@ -137,21 +142,54 @@ void main() {
     );
   }
 
-  testWidgets('status bar at 1470 pt keeps the seven labelled launchers', (
-    tester,
-  ) async {
-    await _pumpAt(tester, 1470);
-    for (final label in [
-      'Image Library',
-      'Calibration',
-      'Stats',
-      'Launchpad',
-      'Run profile wizard',
-    ]) {
-      expect(find.text(label), findsOneWidget, reason: label);
-    }
-    expect(find.byTooltip('Notifications'), findsOneWidget);
-    expect(find.byTooltip('Help & report a bug'), findsOneWidget);
-    expect(find.byTooltip('More'), findsNothing);
-  });
+  testWidgets(
+    'status bar at 1470 pt keeps the five labelled launchers and the two icon buttons',
+    (tester) async {
+      await _pumpAt(tester, 1470);
+      for (final label in [
+        'Image Library',
+        'Calibration',
+        'Stats',
+        'Launchpad',
+        'Run profile wizard',
+      ]) {
+        expect(find.text(label), findsOneWidget, reason: label);
+      }
+      expect(find.byTooltip('Notifications'), findsOneWidget);
+      expect(find.byTooltip('Help & report a bug'), findsOneWidget);
+      expect(find.byTooltip('More'), findsNothing);
+    },
+  );
+
+  for (final scale in [0.5, 1.0]) {
+    testWidgets(
+      'launcher row never overflows, 1500 down to 700, scale $scale',
+      (tester) async {
+        await _pumpAt(tester, 1500, scale: scale);
+        final bad = <String>[];
+        for (var w = 1500; w >= 700; w--) {
+          tester.view.physicalSize = Size(w.toDouble(), 800);
+          await tester.pump();
+          final row = find
+              .ancestor(
+                of: find.byTooltip('Help & report a bug'),
+                matching: find.byType(Row),
+              )
+              .first;
+          final flex = tester.renderObject<RenderFlex>(row);
+          var sum = 0.0;
+          flex.visitChildren((c) => sum += (c as RenderBox).size.width);
+          // Below 148 px not even More + bell + help fit (the left group took
+          // the width), which no launcher form can fix.
+          if (flex.constraints.maxWidth >= 148 &&
+              sum > flex.constraints.maxWidth + 0.01) {
+            bad.add(
+              '$w (+${(sum - flex.constraints.maxWidth).toStringAsFixed(1)})',
+            );
+          }
+        }
+        expect(bad, isEmpty, reason: 'row wider than its space at: $bad');
+      },
+    );
+  }
 }
