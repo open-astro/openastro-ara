@@ -8067,6 +8067,19 @@ WILMA opens https://github.com/open-astro/openastro-ara/issues/new?template=bug_
 
 User attaches the zip manually in GitHub — ARA cannot upload directly via API (would require auth + would feel sneaky for a public issue tracker).
 
+**What Ara ships (2026-10-29): the whole-rig bundle.** Support → *Send me a bug report* → **Covers** picks the range: *Last night (whole rig)* (24 h, the default), *Last 3 days*, *Last 7 days*, or *Ara logs only* (the daemon's newest 3 logs, the original bundle). With a range the daemon packs, from every file written in it:
+
+| ZIP folder | Source on the rig |
+|---|---|
+| `logs/` | Ara's daemon logs (`/var/lib/openastroara/logs`) |
+| `ara-nina-logs/` | Ara's NINA-layer logs (`/var/lib/openastroara/NINA/Logs`) |
+| `alpacabridge/` | AlpacaBridge's daily logs (`/var/log/AlpacaBridge`) |
+| `guider/` | openastro-guider's PHD2 debug and guide logs (`/var/lib/openastro-guider/PHD2`) |
+| `system/` | package history (`/var/log/apt/history.log`, `/var/log/dpkg.log`) and the kernel ring buffer (`dmesg`, since boot) |
+| `journal/` | `journalctl --since` for Ara, AlpacaBridge, the guider, `power-watch` (the under-voltage / throttle monitor, where a rig runs it) and the kernel, plus `--list-boots` |
+
+plus `profile.json`, `system-info.json` and a `manifest.json` that lists every file included, cut or skipped and why. Each file keeps its newest 128 MB (a PHD2 debug log reaches 245 MB a night) and the bundle stops at 1 GB of text (~100 MB zipped); every text file passes the §54.3 sharing-mode scrub. The bundle packs in the background (`POST /api/v1/bugreport/prepare` with `since_utc` → `preparing`; the app polls `GET /api/v1/bugreport/{id}` and lists each source's files and size in the disclosure). The service unit carries `SupplementaryGroups=systemd-journal` so `journalctl` can read the journal; `apt/term.log` (root:adm) is left out rather than widening that further. On the CM4, a night packs in ~14 s: 115 MB of logs → a 6 MB ZIP.
+
 ### 54.3 Review modal
 
 ```

@@ -12,6 +12,9 @@ Wants=network-online.target
 Type=simple
 User=openastroara
 Group=openastroara
+# The bug report's whole-rig bundle exports the journal (Ara, AlpacaBridge, the guider, the kernel)
+# with journalctl, which reads /run/log/journal only for this group. Read-only; nothing else uses it.
+SupplementaryGroups=systemd-journal
 ExecStart=/opt/openastroara/OpenAstroAra.Server
 EnvironmentFile=-/etc/openastroara/server.env
 WorkingDirectory=/var/lib/openastroara

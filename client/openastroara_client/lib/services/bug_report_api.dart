@@ -14,7 +14,15 @@ abstract interface class BugReportClient {
   /// `full` (default), `coarse_gps` (site rounded to ~111 km) or `redacted`
   /// (coordinates, serials, hostnames, usernames in paths, private IPs and
   /// tokens scrubbed before the ZIP is written).
-  Future<BugReportPreparation> prepare({String mode = 'full'});
+  ///
+  /// With [since] the bundle is the whole rig's logs written since then (Ara,
+  /// its NINA layer, AlpacaBridge, the guider, package history, the journal),
+  /// packed in the background: the result is `preparing`; poll [status].
+  Future<BugReportPreparation> prepare({String mode = 'full', DateTime? since});
+
+  /// `GET /api/v1/bugreport/{id}` — a preparation's state: `preparing` (bytes
+  /// read so far), `ready` or `failed`.
+  Future<BugReportPreparation> status(String preparationId);
 
   /// `GET /api/v1/bugreport/download?preparationId=…&acknowledge=pii` — stream
   /// the ZIP straight to [savePath], chunk by chunk, never buffering it whole
@@ -46,14 +54,29 @@ class BugReportApi implements BugReportClient {
         ));
 
   @override
-  Future<BugReportPreparation> prepare({String mode = 'full'}) async {
+  Future<BugReportPreparation> prepare(
+      {String mode = 'full', DateTime? since}) async {
     final res = await _dio.post<Map<String, dynamic>>(
       '/api/v1/bugreport/prepare',
-      data: <String, dynamic>{'mode': mode},
+      data: <String, dynamic>{
+        'mode': mode,
+        if (since != null) 'since_utc': since.toUtc().toIso8601String(),
+      },
     );
     final data = res.data;
     if (data == null) {
       throw StateError('Bug-report prepare returned an empty response.');
+    }
+    return BugReportPreparation.fromJson(data);
+  }
+
+  @override
+  Future<BugReportPreparation> status(String preparationId) async {
+    final res = await _dio.get<Map<String, dynamic>>(
+        '/api/v1/bugreport/${Uri.encodeComponent(preparationId)}');
+    final data = res.data;
+    if (data == null) {
+      throw StateError('Bug-report status returned an empty response.');
     }
     return BugReportPreparation.fromJson(data);
   }

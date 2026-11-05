@@ -4895,6 +4895,32 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  '/api/v1/bugreport/{preparationId}':
+    get:
+      tags:
+        - BugReport
+      summary: 'A bug-report preparation''s state: preparing (bytes read so far), ready (size, what went in) or failed.'
+      operationId: GetBugReportPreparation
+      parameters:
+        - name: preparationId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BugReportPreparationDto'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/bugreport/download:
     get:
       tags:
@@ -7978,10 +8004,59 @@ components:
         sharing_mode:
           type: string
           default: full
+        sources:
+          type:
+            - 'null'
+            - array
+          items:
+            $ref: '#/components/schemas/BugReportSourceSummaryDto'
+        since_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        error:
+          type:
+            - 'null'
+            - string
     BugReportPrepareRequestDto:
       type: object
       properties:
         mode:
+          type:
+            - 'null'
+            - string
+        since_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+    BugReportSourceSummaryDto:
+      required:
+        - source
+        - files
+        - bytes
+        - truncated
+        - note
+      type: object
+      properties:
+        source:
+          type: string
+        files:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        bytes:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int64
+        truncated:
+          type: boolean
+        note:
           type:
             - 'null'
             - string
