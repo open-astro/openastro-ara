@@ -942,9 +942,12 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 var progress = new Progress<ApplicationStatus>(status => {
                     // Tree-derived status first, so the instruction's own report wins.
                     RefreshLiveStatus(run);
-                    // #1596 — the flip executor's status is the meridian wait; its empty report ends it.
-                    if (status.Source == "MeridianFlip") {
-                        run.SetReason(string.IsNullOrEmpty(status.Status) ? null : "meridian", status.Status);
+                    // #1596 — only the executor's wait / refusal report is a reason; any other flip report
+                    // (the flip proper, its closing empty one) ends it.
+                    if (status.Source == MeridianFlipExecutor.WaitSource) {
+                        run.SetReason("meridian", status.Status);
+                    } else if (status.Source == "MeridianFlip") {
+                        run.SetReason(null, null);
                     }
                     run.SetDescription(DescribeStatus(status));
                     run.SetProgress(ProgressOf(status));
