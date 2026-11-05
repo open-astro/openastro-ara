@@ -257,7 +257,7 @@ namespace OpenAstroAra.Sequencer.Trigger.Platesolving {
                 Status = string.Create(CultureInfo.InvariantCulture, $"Target drifted {drift:0.#}′ — re-centering"),
             });
             Logger.Info(string.Create(CultureInfo.InvariantCulture, $"Center after drift: {drift:0.##}′ from {target} — re-centering"));
-            var converged = await centeringExecutor.CenterAsync(target, progress ?? new Progress<ApplicationStatus>(), token);
+            var converged = (await centeringExecutor.CenterAsync(target, progress ?? new Progress<ApplicationStatus>(), token)).Success;
             // Whatever the outcome the stale measurement is gone: the next solve decides again. The
             // generation bump also orphans a solve still running for the frame taken BEFORE this
             // re-centre (AfterExposures = 1 starts one on the same boundary that fired); landing late
