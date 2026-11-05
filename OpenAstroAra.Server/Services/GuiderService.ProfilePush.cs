@@ -50,7 +50,7 @@ public sealed partial class GuiderService {
         return PushTuningAsync(guider, idempotencyKey, ct);
     }
 
-    /// <summary>#1592 - see <see cref="IGuiderService.ApplyGuiderMultiStarAsync"/>.</summary>
+    /// <summary>#1592 — see <see cref="IGuiderService.ApplyGuiderMultiStarAsync"/>.</summary>
     public Task ApplyGuiderMultiStarAsync(CancellationToken ct) => RequireConnectedGuider().ApplyMultiStarFromProfileAsync(ct);
 
     private async Task<OperationAcceptedDto> PushTuningAsync(

@@ -182,7 +182,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         }
 
         /// <summary>
-        /// #1592 - multi-star lives in <c>set_profile_setup</c>, which the guider only takes with its equipment
+        /// #1592 — multi-star lives in <c>set_profile_setup</c>, which the guider only takes with its equipment
         /// disconnected, so a save while connected would drop a guide session. Refused (<see cref="GuiderBusyException"/>)
         /// while guiding, calibrating or paused; otherwise the equipment is released, the flag written from
         /// the profile (<see cref="AdvancedSettings"/>, on when unset) and the equipment reconnected.
@@ -309,7 +309,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         }
     }
 
-    /// <summary>#1592 - the guider is mid-session, so the change cannot be applied now; the message says what to do.</summary>
+    /// <summary>#1592 — the guider is mid-session, so the change cannot be applied now; the message says what to do.</summary>
     public sealed class GuiderBusyException : InvalidOperationException {
         public GuiderBusyException() { }
         public GuiderBusyException(string message) : base(message) { }

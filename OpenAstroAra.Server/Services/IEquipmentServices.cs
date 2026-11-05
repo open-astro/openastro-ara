@@ -326,7 +326,7 @@ public interface IGuiderService {
     /// InvalidOperationException when disconnected (→ 409, typed).</summary>
     Task<OperationAcceptedDto> PushGuiderTuningAsync(string? idempotencyKey, CancellationToken ct);
 
-    /// <summary>#1592 - write the profile's multi-star setting to the connected guider (needs its equipment
+    /// <summary>#1592 — write the profile's multi-star setting to the connected guider (needs its equipment
     /// disconnected for a moment). Throws GuiderBusyException while guiding (409), InvalidOperationException
     /// when disconnected (409, typed), GuiderRpcException when the guider refuses (422).</summary>
     Task ApplyGuiderMultiStarAsync(CancellationToken ct);

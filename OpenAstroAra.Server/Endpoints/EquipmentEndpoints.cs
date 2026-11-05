@@ -710,7 +710,7 @@ public static partial class EquipmentEndpoints {
                     + "continues. Any other value is a 400.")] string? scope, [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
             await PushGuiderAsync(scope, key, svc, ct))
             .ProducesProblem(StatusCodes.Status400BadRequest); // unknown ?scope
-        // #1592 - write the profile's multi-star setting to the connected guider. 204; 409 not connected
+        // #1592 — write the profile's multi-star setting to the connected guider. 204; 409 not connected
         // (typed) or guiding (stop guiding first); 422 the guider refused.
         guider.MapPost("/multi-star/apply", async (IGuiderService svc, CancellationToken ct) => await ApplyGuiderMultiStarAsync(svc, ct))
             .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)

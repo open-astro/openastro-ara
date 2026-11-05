@@ -709,7 +709,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // here — the losing writer returns false and isn't counted (no inflated "Sequence halted" tally). A
         // run heading to a terminal state via Aborting still terminates; re-labelling it adds nothing.
         if (!_runs.TryGetValue(id, out var run) || IsTerminal(run.State) || run.State == SequenceRunState.Aborting) return false;
-        run.SetReason(null, null); // #1596 - before the state, so a Stopped status never carries it
+        run.SetReason(null, null); // #1596 — before the state, so a Stopped status never carries it
         run.State = desired;
         try {
             await run.Cts.CancelAsync();
@@ -1019,7 +1019,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // it returns normally on cancel). No discrete "Aborted" state — the
             // DTO enum folds abort + stop into Stopped; the WS event type carries
             // the distinction.
-            run.SetReason(null, null); // #1596 - a run that is over is not waiting on the meridian
+            run.SetReason(null, null); // #1596 — a run that is over is not waiting on the meridian
             if (run.State == SequenceRunState.Aborting) {
                 run.State = SequenceRunState.Stopped;
                 await EmitAsync("sequence.aborted", sequenceId, run);

@@ -29,7 +29,7 @@ public static class GuiderAdvancedSettingsMapping {
     public static readonly IReadOnlyList<string> NoiseReductionMethods = ["None", "2x2 Mean", "3x3 Median"];
 
     public static GuiderAdvancedSettings ToEngine(GuiderAdvancedSettingsDto d) => new() {
-        // #1592 - on unless the profile explicitly says off (new and older profiles hold null).
+        // #1592 — on unless the profile explicitly says off (new and older profiles hold null).
         MultiStarEnabled = d.MultiStarEnabled ?? true,
         FastRecenter = d.FastRecenter,
         TolerateJumps = d.TolerateJumps,

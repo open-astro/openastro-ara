@@ -192,7 +192,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Saving_multi_star_while_connected_sends_set_profile_setup_with_the_flag() {
-            // #1592 - the flag used to ride only the connect-time push, so a save never reached a connected guider.
+            // #1592 — the flag used to ride only the connect-time push, so a save never reached a connected guider.
             var current = Advanced with { MultiStarEnabled = true };
             var (fake, svc, sent) = await ConnectedAsync(advanced: () => current).ConfigureAwait(false);
             await using var _f = fake;
