@@ -249,6 +249,66 @@ public sealed partial class CaptureScanService : IDisposable {
         return paths;
     }
 
+    /// <summary>
+    /// Sky Album (#1517): one idempotent pass over light rows no pass has read yet, filling J2000
+    /// pointing, pixel scale and provenance from each file's header. A row whose file cannot be read
+    /// (drive not mounted, file gone) stays unprobed and is tried again next boot. Runs at startup
+    /// after the orphan scan, never through rebuild-catalog (that deletes and re-inserts every row).
+    /// </summary>
+    public async Task BackfillAlbumFieldsAsync(CancellationToken ct) {
+        await _scanLock.WaitAsync(ct).ConfigureAwait(false);
+        try {
+            var rows = new List<(string Id, string Path)>();
+            await using (var conn = _db.OpenConnection()) {
+                await using var select = conn.CreateCommand();
+                select.CommandText = "SELECT id, file_path FROM frames WHERE frame_type = 'light' AND pointing_probed_utc IS NULL;";
+                await using var reader = await select.ExecuteReaderAsync(ct).ConfigureAwait(false);
+                while (await reader.ReadAsync(ct).ConfigureAwait(false)) {
+                    rows.Add((reader.GetString(0), reader.GetString(1)));
+                }
+            }
+            var probed = 0;
+            foreach (var (id, path) in rows) {
+                FrameAlbumFields album;
+                try {
+                    if (!File.Exists(path)) continue;
+                    album = FrameAlbumFields.FromHeaders(FrameFileReader.ReadHeaderInfo(path).Headers);
+                } catch (Exception ex) when (FrameFileReader.IsReadFault(ex) || ex is NotSupportedException) {
+                    LogBackfillReadFailed(ex, path);
+                    continue;
+                }
+                await using var conn = _db.OpenConnection();
+                await using var update = conn.CreateCommand();
+                // SET expressions see the old row, so the CASE compares old values with the new ones.
+                update.CommandText = """
+                    UPDATE frames SET
+                        updated_utc = CASE WHEN ra_deg IS NOT COALESCE($ra, ra_deg)
+                                            OR dec_deg IS NOT COALESCE($dec, dec_deg)
+                                            OR pixel_scale_arcsec IS NOT COALESCE($scale, pixel_scale_arcsec)
+                                            OR captured_by_ara IS NOT $ara
+                                           THEN $now ELSE updated_utc END,
+                        ra_deg = COALESCE($ra, ra_deg),
+                        dec_deg = COALESCE($dec, dec_deg),
+                        pixel_scale_arcsec = COALESCE($scale, pixel_scale_arcsec),
+                        captured_by_ara = $ara,
+                        pointing_probed_utc = $now
+                    WHERE id = $id;
+                    """;
+                update.Parameters.AddWithValue("$id", id);
+                update.Parameters.AddWithValue("$ra", DbValue(album.RaDeg));
+                update.Parameters.AddWithValue("$dec", DbValue(album.DecDeg));
+                update.Parameters.AddWithValue("$scale", DbValue(album.PixelScaleArcsec));
+                update.Parameters.AddWithValue("$ara", album.CapturedByAra ? 1 : 0);
+                update.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
+                await update.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+                probed++;
+            }
+            if (rows.Count > 0) LogBackfillDone(probed, rows.Count);
+        } finally {
+            _scanLock.Release();
+        }
+    }
+
     private async Task<bool> TryRecoverAsync(string fitsPath, HashSet<string> knownPaths, CancellationToken ct) {
         if (knownPaths.Contains(fitsPath)) return false;  // already cataloged
 
@@ -298,6 +358,9 @@ public sealed partial class CaptureScanService : IDisposable {
         // recovered session still rotate back. No cooler set-point: SET-TEMP alone can't say the
         // cooler was on.
         var rotatorDeg = ParseDouble(LookupHeader(headers, "ROTATOR"));
+        // Sky Album (#1517): the header was just read, so the row is born probed.
+        var album = FrameAlbumFields.FromHeaders(headers);
+        var now = DateTimeOffset.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture);
 
         // Synthetic recovered session per (target, night) — a single global
         // bucket lumps a whole archive into one "session" whose display name
@@ -317,13 +380,15 @@ public sealed partial class CaptureScanService : IDisposable {
                  exposure_seconds, gain, "offset", temperature_c, captured_utc,
                  file_path, file_size_bytes, width, height, bit_depth,
                  hfr, star_count, eccentricity, guiding_rms_arcsec, snr_estimate,
-                 quality_score_json, rating, tags_json, focuser_position, rotator_mechanical_deg)
+                 quality_score_json, rating, tags_json, focuser_position, rotator_mechanical_deg,
+                 ra_deg, dec_deg, pixel_scale_arcsec, captured_by_ara, updated_utc, pointing_probed_utc)
             VALUES
                 ($id, $session_id, $target, $frame_type, $filter,
                  $exposure, $gain, $offset, $temp, $captured_utc,
                  $file_path, $file_size, $width, $height, $bit_depth,
                  $hfr, $stars, NULL, NULL, NULL,
-                 NULL, 0, '[]', $focuser_position, $rotator_mechanical_deg);
+                 NULL, 0, '[]', $focuser_position, $rotator_mechanical_deg,
+                 $ra_deg, $dec_deg, $pixel_scale_arcsec, $captured_by_ara, $now, $now);
             """;
         insert.Parameters.AddWithValue("$id", frameId.ToString());
         insert.Parameters.AddWithValue("$session_id", sessionId.ToString());
@@ -344,6 +409,11 @@ public sealed partial class CaptureScanService : IDisposable {
         insert.Parameters.AddWithValue("$stars", DbValue(stars));
         insert.Parameters.AddWithValue("$focuser_position", DbValue(focuserPos));
         insert.Parameters.AddWithValue("$rotator_mechanical_deg", DbValue(rotatorDeg));
+        insert.Parameters.AddWithValue("$ra_deg", DbValue(album.RaDeg));
+        insert.Parameters.AddWithValue("$dec_deg", DbValue(album.DecDeg));
+        insert.Parameters.AddWithValue("$pixel_scale_arcsec", DbValue(album.PixelScaleArcsec));
+        insert.Parameters.AddWithValue("$captured_by_ara", album.CapturedByAra ? 1 : 0);
+        insert.Parameters.AddWithValue("$now", now);
         await insert.ExecuteNonQueryAsync(ct);
 
         LogRecoveredOrphan(fitsPath, target, frameType, exposureSec);
@@ -536,6 +606,12 @@ public sealed partial class CaptureScanService : IDisposable {
         };
 
     #region LoggerMessage delegates (CA1848)
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Sky Album backfill: header unreadable, retried next boot: {Path}")]
+    private partial void LogBackfillReadFailed(Exception ex, string path);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Sky Album backfill: probed {Probed} of {Pending} light frames")]
+    private partial void LogBackfillDone(int probed, int pending);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "§28.8 scan skipped: save path empty")]
     private partial void LogScanSkippedEmptyPath();
