@@ -373,6 +373,16 @@ class _LiveFrame extends AutofocusLiveNotifier {
       run: const AutofocusRun(state: AutofocusRunStates.complete, finalHfr: 1.01), frame: Uint8List.fromList(_png));
 }
 
+/// The daemon's run record as the real notifier folds it: idle until the
+/// first read, then each snapshot through [applyRunSnapshot].
+class _LiveSnapshots extends AutofocusLiveNotifier {
+  @override
+  AutofocusLive build() => AutofocusLive.idle;
+  @override
+  Future<void> refresh() async {}
+  void snapshot(AutofocusRun run) => state = applyRunSnapshot(state, run);
+}
+
 /// A finished Smart Focus with a weak fit and its frame: the tallest Auto panel.
 class _LiveWeak extends AutofocusLiveNotifier {
   @override
@@ -807,6 +817,29 @@ void main() {
     await tester.tap(note);
     await tester.pump();
     expect(find.byKey(const Key('simple-gear')), findsOneWidget, reason: 'Settings opens on Devices');
+  });
+
+  // ALP-4998: Ara keeps its last run until it restarts, so a launch (or a
+  // reconnect) reads an old failure as if it had just happened.
+  testWidgets("an autofocus that failed before this launch posts no pill, so × and a restart clear it (ALP-4998)",
+      (tester) async {
+    final live = _LiveSnapshots();
+    final container = await _pump(tester, const Size(1024, 768), gear: [autofocusLiveProvider.overrideWith(() => live)]);
+    live.snapshot(const AutofocusRun(state: AutofocusRunStates.failed, reason: 'focuser error'));
+    await tester.pump();
+    expect(container.read(simpleMessagesProvider), isEmpty);
+  });
+
+  testWidgets('an autofocus that fails while the app watches still says so in a pill', (tester) async {
+    final live = _LiveSnapshots();
+    final container = await _pump(tester, const Size(1024, 768), gear: [autofocusLiveProvider.overrideWith(() => live)]);
+    live.snapshot(const AutofocusRun(state: AutofocusRunStates.idle));
+    await tester.pump();
+    live.snapshot(const AutofocusRun(state: AutofocusRunStates.running));
+    await tester.pump();
+    live.snapshot(const AutofocusRun(state: AutofocusRunStates.failed, reason: 'focuser error'));
+    await tester.pump();
+    expect(container.read(simpleMessagesProvider).single.detail, 'Focuser error.');
   });
 
   testWidgets('the rig offline: the top bar says Rig not connected', (tester) async {
