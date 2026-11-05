@@ -132,6 +132,34 @@ namespace OpenAstroAra.Test {
             Assert.That((result as Accepted<ExposureResponseDto>)?.Value, Is.SameAs(response));
         }
 
+        /// <summary>#1584 — a start while one is in flight (or no camera) is a state conflict, not a 500.</summary>
+        [Test]
+        public async Task Take_one_while_an_exposure_is_in_flight_is_a_409_with_the_message() {
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.StoreRefusal()).Returns((string?)null);
+            camera.Setup(c => c.StartExposureAsync(It.IsAny<ExposureRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("an exposure is already in progress"));
+
+            var result = await EquipmentEndpoints.StartExposureAsync(new ExposureRequestDto(1.0, Gain: null), null,
+                camera.Object, CancellationToken.None);
+
+            var problem = result as ProblemHttpResult;
+            Assert.That(problem, Is.Not.Null);
+            Assert.That(problem!.StatusCode, Is.EqualTo(StatusCodes.Status409Conflict));
+            Assert.That(problem.ProblemDetails.Detail, Is.EqualTo("an exposure is already in progress"));
+        }
+
+        [Test]
+        public async Task Take_one_on_a_disposed_service_stays_a_server_error() {
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.StoreRefusal()).Returns((string?)null);
+            camera.Setup(c => c.StartExposureAsync(It.IsAny<ExposureRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new ObjectDisposedException("camera"));
+
+            await Assert.ThatAsync(() => EquipmentEndpoints.StartExposureAsync(
+                new ExposureRequestDto(1.0, Gain: null), null, camera.Object, CancellationToken.None), Throws.TypeOf<ObjectDisposedException>());
+        }
+
         [Test]
         public void An_ejected_store_is_a_refusal_naming_the_mount_point() {
             using var camera = new CameraService(profileStore: StoreAt()) { StoreMountedProbe = () => false };

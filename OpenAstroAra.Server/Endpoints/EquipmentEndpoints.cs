@@ -111,7 +111,12 @@ public static partial class EquipmentEndpoints {
         if (svc.StoreRefusal() is { } noStore) {
             return Results.Problem(title: SequenceEndpoints.NoStoreProblemTitle, detail: noStore, statusCode: StatusCodes.Status409Conflict);
         }
-        return Results.Accepted(value: await svc.StartExposureAsync(request, key, ct));
+        try {
+            return Results.Accepted(value: await svc.StartExposureAsync(request, key, ct));
+        } catch (InvalidOperationException ex) when (ex is not ObjectDisposedException) {
+            // #1584: camera not connected / an exposure already in flight is a state conflict, not a 500.
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
     }
 
     /// <summary>#1298 — POST /equipment/filterwheel/installed: the user reports the filter now in
