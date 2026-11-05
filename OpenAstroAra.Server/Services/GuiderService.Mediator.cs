@@ -77,9 +77,10 @@ public sealed partial class GuiderService : IGuiderMediator {
     /// </summary>
     public Func<Task>? ReleaseGuideCameraAsync { get; set; }
 
-    /// <summary>True while this daemon's polar alignment runs — its lease is real, not stale: a guide
-    /// request ends that alignment first (<see cref="EndPolarAlignAsync"/>) rather than pulling the lease
-    /// from under it. Program.cs wires it to <see cref="PolarAlignService.IsActive"/>; null means none.</summary>
+    /// <summary>True while this daemon's polar alignment runs (the guider's Static PA tool, #1611 — it
+    /// holds the guide camera but no PA-session lease): a guide request ends that alignment first
+    /// (<see cref="EndPolarAlignAsync"/>). Program.cs wires it to <see cref="PolarAlignService.IsActive"/>;
+    /// null means none.</summary>
     public Func<bool>? PolarAlignActive { get; set; }
 
     /// <summary>#1364 — the profile's guider-advanced block for every push; handed to each new guider
@@ -88,7 +89,7 @@ public sealed partial class GuiderService : IGuiderMediator {
 
     /// <summary>Ends this daemon's polar alignment (stop, not complete — an abandoned session is not a
     /// result). Program.cs wires it to <see cref="PolarAlignService.StopAsync"/>; null means a running
-    /// polar alignment keeps its lease and guiding is refused, as before.</summary>
+    /// polar alignment stays open and the guider refuses to guide until the user ends it.</summary>
     public Func<CancellationToken, Task>? EndPolarAlignAsync { get; set; }
 
     /// <summary>What to do with the guider's polar-align lease before guiding.</summary>
