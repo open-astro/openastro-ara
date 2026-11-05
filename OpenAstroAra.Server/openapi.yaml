@@ -1497,6 +1497,31 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/guider/live/find_star:
+    post:
+      tags:
+        - Equipment
+      summary: Let the guider pick its best star in the current frame (422 with its reason when there is no image or no usable star); answers the lock position.
+      operationId: GuiderLiveFindStar
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuiderLiveLockDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/guider/live/calibration:
     get:
       tags:
@@ -1827,6 +1852,27 @@ paths:
       responses:
         '400':
           description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/guider/multi-star/apply:
+    post:
+      tags:
+        - Equipment
+      summary: Apply the profile's multi-star setting to the connected guider; refused while guiding.
+      operationId: ApplyGuiderMultiStar
+      responses:
+        '204':
+          description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
           content:
             application/problem+json:
               schema:
@@ -10924,6 +10970,24 @@ components:
             $ref: '#/components/schemas/GuiderLiveStarDto'
         has_frame:
           type: boolean
+    GuiderLiveLockDto:
+      required:
+        - x
+        - y
+      type: object
+      properties:
+        x:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        y:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
     GuiderLiveSelectRequestDto:
       required:
         - x
