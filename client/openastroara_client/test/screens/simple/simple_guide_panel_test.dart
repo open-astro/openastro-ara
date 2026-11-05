@@ -15,6 +15,7 @@ import 'package:openastroara/state/profile_management_state.dart' show profileAp
 import 'package:openastroara/screens/simple/simple_device_windows.dart' show SimpleGuideGainSlider;
 import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimplePresetTile;
 import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/state/simple_mode_state.dart' show simpleModeActiveProvider;
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusLevel;
@@ -42,6 +43,7 @@ class _Guider extends GuiderStatusNotifier {
   @override
   Future<void> stopGuiding() async {
     calls.add('stop');
+    if (lag) return;
     state = AsyncData(GuiderStatus.fromJson({...json, 'runtime': <String, dynamic>{...json['runtime'] as Map<String, dynamic>, 'state': 'stopped'}}));
   }
 }
@@ -239,6 +241,17 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(off.pushes, isEmpty, reason: 'saved to the profile only: nothing to push to');
+  });
+
+  testWidgets("a Stop the guider doesn't act on says so in a pill, not a silent flip back (ALP-5018)",
+      (tester) async {
+    final c = await _pump(tester, _wire(runtime: 'paused'), lag: true, child: const SimpleGuideShutter(),
+        rig: [simpleModeActiveProvider.overrideWithValue(true)]);
+    await tester.tap(find.byType(SimpleGuideShutter));
+    await tester.pump();
+    expect(_g.calls, ['stop']);
+    await tester.pump(const Duration(seconds: 11)); // still paused after 10 s of reads
+    expect(c.read(simpleMessagesProvider).single.title, "The guider didn't stop: it is still paused. Try Stop again.");
   });
 
   testWidgets('no guider: the greyed shutter says why when tapped (user, 2026-11-04)', (tester) async {
