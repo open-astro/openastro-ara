@@ -7930,7 +7930,7 @@ ARA commits to a **targeted accessibility baseline** that benefits many user gro
 | Color + symbol on status indicators | Per §53.2 below |
 | Font scaling honored | Flutter's `MediaQuery.textScaleFactor` respected automatically by `Text` widgets; ARA does not override |
 | High-contrast theme variant | Per §53.3 below — opt-in via Settings → Display |
-| Reduce-motion OS setting honored | Wrap animations in a check on `MediaQuery.disableAnimations`; transitions become instant when user has reduced motion enabled |
+| Reduce-motion OS setting honored | Wrap animations in a check on `reduceMotionOf(context)` (`lib/util/reduce_motion.dart`; covers iOS `AccessibilityFeatures.reduceMotion` plus the Android `disableAnimations` flag, with `ReduceMotionScope` at the app root); transitions become instant when user has reduced motion enabled |
 | Keyboard navigation on desktop | Flutter Material widgets handle this by default; ARA verifies tab order on every screen |
 | Visible focus indicators | Flutter Material default (focus ring on focused element); ARA does not strip them |
 | Touch targets ≥ 44pt | Flutter Material default for most controls; verified on custom controls |
@@ -7983,7 +7983,7 @@ No light-theme variant in the initial release — observatory astrophotography i
 - `MergeSemantics` to combine related controls into logical units (e.g., the equipment chip's icon + label + status)
 - `ExcludeSemantics` for purely decorative elements (e.g., logo placeholder)
 - `MediaQuery.of(context).textScaleFactor` — auto-applied by `Text` widgets; ARA doesn't override
-- `MediaQuery.of(context).disableAnimations` — wrap animation builders in a check; default to instant when true
+- `reduceMotionOf(context)` (`lib/util/reduce_motion.dart`) — wrap animation builders in a check; default to instant when true. Covers iOS `AccessibilityFeatures.reduceMotion` plus the Android `disableAnimations` flag, with `ReduceMotionScope` at the app root
 - `Focus` + `FocusableActionDetector` for keyboard-navigable custom widgets
 
 **Per-screen review during Phase 12:** every screen the AI builds is verified for:

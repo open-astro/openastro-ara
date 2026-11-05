@@ -65,6 +65,7 @@ import '../../util/friendly_error.dart';
 import '../../services/profile_api.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../util/reduce_motion.dart';
 import '../../widgets/ara_mark.dart';
 import '../../widgets/emergency_stop_button.dart';
 import '../../widgets/equipment/equipment_glyphs.dart';
@@ -794,7 +795,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       ),
     );
     final sel = ref.watch(planetariumSelectionProvider);
-    final motion = MediaQuery.disableAnimationsOf(context)
+    final motion = reduceMotionOf(context)
         ? Duration.zero
         : const Duration(milliseconds: 220);
     return Theme(
@@ -1343,7 +1344,7 @@ class _Fade extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reduce = MediaQuery.disableAnimationsOf(context);
+    final reduce = reduceMotionOf(context);
     return Positioned.fill(
       child: IgnorePointer(
         ignoring: !visible,

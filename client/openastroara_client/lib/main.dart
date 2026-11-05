@@ -15,6 +15,7 @@ import 'state/simple_mode_state.dart';
 import 'screens/first_run_screen.dart';
 import 'screens/launch_profile_screen.dart';
 import 'screens/offline_launch_screen.dart';
+import 'util/reduce_motion.dart';
 import 'widgets/plan_offline_button.dart';
 import 'services/client_error_handlers.dart';
 import 'services/client_error_log.dart';
@@ -100,13 +101,15 @@ class OpenAstroAraApp extends StatelessWidget {
       // NightFilter for why the Navigator's parent must never change.
       // The language pick overrides below MaterialApp, so a change never
       // rebuilds the root; with no pick the override keeps the device's.
-      builder: (context, child) => NightFilter(
-        child: Consumer(
-          builder: (context, ref, _) => Localizations.override(
-            context: context,
-            locale: ref.watch(appLocaleProvider),
-            // Simple Mode's alarm, over every screen (the one popup kept).
-            child: SimpleSafetyAlarmLayer(child: child ?? const SizedBox.shrink()),
+      builder: (context, child) => ReduceMotionScope(
+        child: NightFilter(
+          child: Consumer(
+            builder: (context, ref, _) => Localizations.override(
+              context: context,
+              locale: ref.watch(appLocaleProvider),
+              // Simple Mode's alarm, over every screen (the one popup kept).
+              child: SimpleSafetyAlarmLayer(child: child ?? const SizedBox.shrink()),
+            ),
           ),
         ),
       ),

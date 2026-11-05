@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/ara_colors.dart';
+import '../util/reduce_motion.dart';
 
 /// Health pill per playbook §51 + §53 a11y — always visible somewhere in the
 /// app shell, summarizes overall daemon state with a single colored dot +
@@ -145,7 +146,7 @@ class _StatusBlinkState extends State<StatusBlink>
   }
 
   void _sync() {
-    if (widget.on && !MediaQuery.disableAnimationsOf(context)) {
+    if (widget.on && !reduceMotionOf(context)) {
       if (!_blink.isAnimating) _blink.repeat(reverse: true);
     } else {
       _blink
