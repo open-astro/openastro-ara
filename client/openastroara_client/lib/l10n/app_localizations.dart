@@ -690,7 +690,7 @@ abstract class AppLocalizations {
   /// Simple Mode status pill: a finished plan imaged nothing because its target never started (#1596). Keep it short: the pill is one line, max 300 px, after the 'Plan' label, and the cause must survive the ellipsis.
   ///
   /// In en, this message translates to:
-  /// **'Skipped: start conditions not met'**
+  /// **'Skipped: conditions not met'**
   String get previewPlanSkipped;
 
   /// Simple Mode status pill: the mount is parking

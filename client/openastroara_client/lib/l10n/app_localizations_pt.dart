@@ -349,7 +349,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get previewPlan => 'Plan';
 
   @override
-  String get previewPlanSkipped => 'Skipped: start conditions not met';
+  String get previewPlanSkipped => 'Skipped: conditions not met';
 
   @override
   String get previewParking => 'Parking';
@@ -2500,7 +2500,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get previewPlan => 'Plano';
 
   @override
-  String get previewPlanSkipped => 'Pulado: condições de início não atendidas';
+  String get previewPlanSkipped => 'Pulado: fora das condições';
 
   @override
   String get previewParking => 'Estacionando';

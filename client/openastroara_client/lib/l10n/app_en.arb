@@ -452,7 +452,7 @@
     "description": "Simple Mode status pill: the imaging plan is paused (its step follows)"
   },
   "previewPlan": "Plan",
-  "previewPlanSkipped": "Skipped: start conditions not met",
+  "previewPlanSkipped": "Skipped: conditions not met",
   "@previewPlanSkipped": {
     "description": "Simple Mode status pill: a finished plan imaged nothing because its target never started (#1596). Keep it short: the pill is one line, max 300 px, after the 'Plan' label, and the cause must survive the ellipsis."
   },

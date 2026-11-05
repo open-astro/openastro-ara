@@ -349,7 +349,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get previewPlan => 'Plan';
 
   @override
-  String get previewPlanSkipped => 'Skipped: start conditions not met';
+  String get previewPlanSkipped => 'Skipped: conditions not met';
 
   @override
   String get previewParking => 'Parking';
