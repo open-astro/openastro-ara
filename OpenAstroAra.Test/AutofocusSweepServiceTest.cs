@@ -177,6 +177,54 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Coarse_search_does_not_take_a_flat_wing_for_focus_when_the_one_step_neighbours_differ_only_by_noise() {
+            // #1540 review — rig nights show HFR flat near 4 on the V's wings. Start 1500 out: both neighbours one
+            // step away read a hair worse by noise (+1.3 % / +0.8 %), which used to return the start as "at focus".
+            const int best = StartPosition + 1500;
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => {
+                    var delta = (Current() - best) / 100.0;
+                    return Math.Abs(Current() - best) > 600 ? Result(0, 0) : Result(1.5 + 0.2 * delta * delta, 42);
+                },
+                coarseMetric: (_, _) => {
+                    var d = Math.Abs(Current() - best);
+                    if (d > 1200) {
+                        return Current() == StartPosition ? 4.0 : Current() == StartPosition + 100 ? 4.05 : Current() == StartPosition - 100 ? 4.03 : 4.0;
+                    }
+                    return 1.0 + 3.0 * d / 1200.0;
+                });
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(Current(), Is.EqualTo(best).Within(30));
+        }
+
+        [Test]
+        public async Task Coarse_search_brackets_a_start_far_from_focus_within_its_probe_budget() {
+            // #1540 review — the expansion now doubles from one step (100), not the half-width (400): a start 2500
+            // steps out on a rig-like V (0.0185 HFR/step) must still bracket focus inside CoarseMaxProbes.
+            const int best = StartPosition + 2500;
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 100)).Object, focuser.Object, Frames().Object,
+                metric: (_, _) => {
+                    var delta = (Current() - best) / 100.0;
+                    return Math.Abs(Current() - best) > 600 ? Result(0, 0) : Result(1.5 + 0.2 * delta * delta, 42);
+                },
+                coarseMetric: (_, _) => 4.0 + 0.0185 * Math.Abs(Current() - best));
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(Current(), Is.EqualTo(best).Within(30));
+        }
+
+        [Test]
         public async Task Coarse_search_that_never_brackets_focus_fails_after_its_probe_budget_and_restores() {
             // HFR keeps improving upward forever: the walk must stop at CoarseMaxProbes, fail, and
             // restore, without ever starting the fine sweep.

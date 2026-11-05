@@ -44,6 +44,11 @@ public sealed partial class AutofocusSweepService {
     /// <summary>The expanding step stops growing at this multiple of the sweep half-width.</summary>
     internal const int CoarseMaxStepMultiplier = 8;
 
+    /// <summary>A one-step coarse probe whose HFR differs from the start's by no more than this fraction is
+    /// indistinguishable from noise. Real V slopes move HFR 30-45 % per 100 steps in the fixtures (2.0 + |d|/50,
+    /// 0.0185/step on the 2026-10-17 rig), flat wings sit within a few percent.</summary>
+    internal const double CoarseNoiseBand = 0.05;
+
     /// <summary>How many times the fine sweep may re-centre on an edge minimum before failing.</summary>
     internal const int MaxSweepRecentres = 2;
 
@@ -178,6 +183,11 @@ public sealed partial class AutofocusSweepService {
                     pos = down;
                     h = hDown;
                 } else if (double.IsFinite(h)) {
+                    if (probeStep < baseStep && Math.Abs(hUp - h) <= CoarseNoiseBand * h && Math.Abs(hDown - h) <= CoarseNoiseBand * h) {
+                        // Both neighbours one step out read the same as the start within noise: a flat wing, not focus.
+                        probeStep = baseStep;
+                        continue;
+                    }
                     LogCoarseResult(start, h);
                     return start;
                 } else {
