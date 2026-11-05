@@ -126,6 +126,12 @@ void main() {
       expect(s82.integrationHours, 1.0);
     });
 
+    test('equal capture times and scores pick the same best frame whatever the reply order', () {
+      AlbumFrame f(String id) => _frame(id, ra: null, target: 'M81', score: 0.5);
+      expect(aggregateBook([f('b'), f('a')], [m81])['NGC3031']!.bestFrameId, 'b');
+      expect(aggregateBook([f('a'), f('b')], [m81])['NGC3031']!.bestFrameId, 'b');
+    });
+
     test('a frame whose stored scale or size is unusable falls back to its target name', () {
       final frames = [_frame('zero', scale: 0, target: 'M81'), _frame('flat', width: 0, target: 'M81')];
       expect(aggregateBook(frames, [m81])['NGC3031']!.frameCount, 2);
