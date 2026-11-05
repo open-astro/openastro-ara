@@ -204,6 +204,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Coarse_search_keeps_a_start_already_at_focus_when_a_small_step_reads_flat_there() {
+            // #1540 review — step 20, half-width 80: at the bottom of the V both one-step neighbours are within the
+            // noise band of the start. That is focus, not a flat wing, so no jump out to the half-width probes.
+            var (focuser, moves) = Focuser();
+            int Current() => moves.Count == 0 ? StartPosition : moves[^1];
+            using var svc = new AutofocusSweepService(
+                Profiles(Settings(steps: 4, stepSize: 20, stepSizeAuto: false)).Object, focuser.Object, Frames().Object,
+                metric: VCurveMetric(Current, StartPosition),
+                coarseMetric: (_, _) => 4.0 + 0.001 * Math.Abs(Current() - StartPosition));
+
+            var ok = await svc.RunAutofocusAsync(NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(moves.GetRange(0, 4), Is.EqualTo(Legs(StartPosition, StartPosition + 20, StartPosition - 20, StartPosition + 100)),
+                "start, both neighbours, then the fine sweep's overshoot around the start: no +80 half-width probe");
+        }
+
+        [Test]
         public async Task Coarse_search_brackets_a_start_far_from_focus_within_its_probe_budget() {
             // #1540 review — the expansion now doubles from one step (100), not the half-width (400): a start 2500
             // steps out on a rig-like V (0.0185 HFR/step) must still bracket focus inside CoarseMaxProbes.
@@ -223,6 +241,8 @@ namespace OpenAstroAra.Test {
             Assert.That(ok, Is.True);
             Assert.That(Current(), Is.EqualTo(best).Within(30));
         }
+
+        private static int[] Legs(params int[] legs) => legs;
 
         [Test]
         public async Task Coarse_search_that_never_brackets_focus_fails_after_its_probe_budget_and_restores() {

@@ -49,6 +49,11 @@ public sealed partial class AutofocusSweepService {
     /// 0.0185/step on the 2026-10-17 rig), flat wings sit within a few percent.</summary>
     internal const double CoarseNoiseBand = 0.05;
 
+    /// <summary>Without a stored in-focus HFR, a start whose full-resolution HFR is above this (px) is clearly
+    /// defocused: about twice the 1.2-1.5 px the rigs measure at focus, where the fine-sweep fixtures put the
+    /// V's HFR-doubling point (2.5-3).</summary>
+    internal const double CoarseDefocusedHfr = 3.0;
+
     /// <summary>How many times the fine sweep may re-centre on an edge minimum before failing.</summary>
     internal const int MaxSweepRecentres = 2;
 
@@ -124,6 +129,7 @@ public sealed partial class AutofocusSweepService {
         var measured = new Dictionary<int, double>();
         // Positions where the binned frame lost every star but full resolution still measured enough of them.
         var sharpUnbinned = new HashSet<int>();
+        var sharpReads = new Dictionary<int, (int Stars, double Hfr, bool Flooded)>();
         _lastCoarseFailure = null;
 
         async Task<double> Measure(int position) {
@@ -140,6 +146,7 @@ public sealed partial class AutofocusSweepService {
             // ratio swings with defocus, so no rule is drawn from it until real runs show the pattern.
             var sharp = _metric(frame, token);
             LogCoarseProbe(reached, hfr, sharp.AverageHFR, sharp.DetectedStars);
+            sharpReads[position] = (sharp.DetectedStars, sharp.AverageHFR, sharp.NoiseFlooded);
             measured[position] = hfr;
             // +∞ has two causes: discs too big even for the binned frame, or stars so sharp and faint
             // (a narrowband filter) that binning averages them into the noise. Full resolution tells
@@ -156,6 +163,16 @@ public sealed partial class AutofocusSweepService {
         var pos = start;
         var h = await Measure(pos).ConfigureAwait(false);
         int dir;
+        // A flat one-step probe is a wing only when the start is clearly defocused at full resolution: nothing
+        // measurable there, or an HFR over twice the stored in-focus HFR (else CoarseDefocusedHfr). At the V's
+        // bottom a small step reads flat too, and that must stay put.
+        bool StartClearlyDefocused() {
+            if (!sharpReads.TryGetValue(start, out var read) || read.Flooded || read.Stars < MinStarsPerProbe || !(read.Hfr > 0) || !double.IsFinite(read.Hfr)) {
+                return true;
+            }
+            var inFocus = _profiles.GetFocusCalibration()?.InFocusHfr;
+            return read.Hfr > (inFocus > 0 ? 2 * inFocus.Value : CoarseDefocusedHfr);
+        }
         bool InTravel(int position) => position >= travel.Min && position <= travel.Max;
         while (true) {
             var up = start + probeStep;
@@ -183,8 +200,8 @@ public sealed partial class AutofocusSweepService {
                     pos = down;
                     h = hDown;
                 } else if (double.IsFinite(h)) {
-                    if (probeStep < baseStep && Math.Abs(hUp - h) <= CoarseNoiseBand * h && Math.Abs(hDown - h) <= CoarseNoiseBand * h) {
-                        // Both neighbours one step out read the same as the start within noise: a flat wing, not focus.
+                    if (probeStep < baseStep && Math.Abs(hUp - h) <= CoarseNoiseBand * h && Math.Abs(hDown - h) <= CoarseNoiseBand * h && StartClearlyDefocused()) {
+                        // Both neighbours one step out read the same as the start within noise, and the start is far out: a flat wing.
                         probeStep = baseStep;
                         continue;
                     }
