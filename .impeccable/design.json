@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-03T00:00:00+13:00",
+  "generatedAt": "2026-11-05T21:49:30+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -244,6 +244,120 @@
           "oklch(95% 0.000 90)"
         ]
       },
+      "overlay-scrim": {
+        "role": "neutral",
+        "displayName": "Overlay Scrim",
+        "canonical": "rgba(26, 26, 26, 0.90)",
+        "tonalRamp": []
+      },
+      "error-text": {
+        "role": "error",
+        "displayName": "Error Text",
+        "canonical": "#FF8A80",
+        "tonalRamp": [
+          "oklch(15% 0.054 26)",
+          "oklch(26% 0.081 26)",
+          "oklch(38% 0.104 26)",
+          "oklch(49% 0.125 26)",
+          "oklch(61% 0.142 26)",
+          "oklch(72% 0.123 26)",
+          "oklch(84% 0.101 26)",
+          "oklch(95% 0.078 26)"
+        ]
+      },
+      "link-text": {
+        "role": "secondary",
+        "displayName": "Link Blue",
+        "canonical": "#64B5F6",
+        "tonalRamp": [
+          "oklch(15% 0.047 245)",
+          "oklch(26% 0.070 245)",
+          "oklch(38% 0.089 245)",
+          "oklch(49% 0.108 245)",
+          "oklch(61% 0.122 245)",
+          "oklch(72% 0.105 245)",
+          "oklch(84% 0.087 245)",
+          "oklch(95% 0.067 245)"
+        ]
+      },
+      "selection-tint": {
+        "role": "primary",
+        "displayName": "Selection Tint",
+        "canonical": "rgba(25, 118, 210, 0.25)",
+        "tonalRamp": []
+      },
+      "tile-fill": {
+        "role": "neutral",
+        "displayName": "Tile Fill",
+        "canonical": "rgba(56, 56, 56, 0.55)",
+        "tonalRamp": []
+      },
+      "alarm-scrim": {
+        "role": "error",
+        "displayName": "Alarm Scrim",
+        "canonical": "rgba(60, 8, 8, 0.88)",
+        "tonalRamp": []
+      },
+      "emergency-stop": {
+        "role": "error",
+        "displayName": "Stop Red",
+        "canonical": "#D32F2F",
+        "tonalRamp": [
+          "oklch(15% 0.076 26)",
+          "oklch(26% 0.113 26)",
+          "oklch(38% 0.145 26)",
+          "oklch(49% 0.174 26)",
+          "oklch(61% 0.199 26)",
+          "oklch(72% 0.171 26)",
+          "oklch(84% 0.141 26)",
+          "oklch(95% 0.108 26)"
+        ]
+      },
+      "tier-bronze": {
+        "role": "category",
+        "displayName": "Bronze Tier",
+        "canonical": "#CD853F",
+        "tonalRamp": [
+          "oklch(15% 0.047 62)",
+          "oklch(26% 0.069 62)",
+          "oklch(38% 0.089 62)",
+          "oklch(49% 0.107 62)",
+          "oklch(61% 0.122 62)",
+          "oklch(72% 0.105 62)",
+          "oklch(84% 0.087 62)",
+          "oklch(95% 0.067 62)"
+        ]
+      },
+      "tier-silver": {
+        "role": "category",
+        "displayName": "Silver Tier",
+        "canonical": "#C0C0C0",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(26% 0.000 90)",
+          "oklch(38% 0.000 90)",
+          "oklch(49% 0.000 90)",
+          "oklch(61% 0.000 90)",
+          "oklch(72% 0.000 90)",
+          "oklch(84% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "tier-gold": {
+        "role": "category",
+        "displayName": "Gold Tier",
+        "canonical": "#FFD54F",
+        "tonalRamp": [
+          "oklch(15% 0.058 91)",
+          "oklch(26% 0.087 91)",
+          "oklch(38% 0.111 91)",
+          "oklch(49% 0.134 91)",
+          "oklch(61% 0.153 91)",
+          "oklch(72% 0.131 91)",
+          "oklch(84% 0.109 91)",
+          "oklch(95% 0.083 91)"
+        ]
+      },
       "button-primary": {
         "role": "primary",
         "displayName": "Console Blue",
@@ -273,36 +387,6 @@
           "oklch(84% 0.000 90)",
           "oklch(95% 0.000 90)"
         ]
-      },
-      "overlay-scrim": {
-        "role": "neutral",
-        "displayName": "Overlay Scrim",
-        "canonical": "rgba(26, 26, 26, 0.90)",
-        "tonalRamp": []
-      },
-      "error-text": {
-        "role": "error",
-        "displayName": "Error Text",
-        "canonical": "#FF8A80",
-        "tonalRamp": []
-      },
-      "tile-fill": {
-        "role": "neutral",
-        "displayName": "Tile Fill",
-        "canonical": "rgba(56, 56, 56, 0.55)",
-        "tonalRamp": []
-      },
-      "alarm-scrim": {
-        "role": "error",
-        "displayName": "Alarm Scrim",
-        "canonical": "rgba(60, 8, 8, 0.88)",
-        "tonalRamp": []
-      },
-      "emergency-stop": {
-        "role": "error",
-        "displayName": "Simple Stop Red",
-        "canonical": "#D32F2F",
-        "tonalRamp": []
       }
     },
     "typographyMeta": {
@@ -337,10 +421,38 @@
       "body-simple": {
         "displayName": "Body (Simple Mode)",
         "purpose": "Default text in Simple Mode."
+      },
+      "readout-simple": {
+        "displayName": "Readout (Simple Mode)",
+        "purpose": "The one number a mode is about: HFR in Focus, the polar error, Night done's frame count."
+      },
+      "heading-simple": {
+        "displayName": "Heading (Simple Mode)",
+        "purpose": "The sheet's and panels' titles (\"Edit M42\", \"Night done\")."
+      },
+      "hint-simple": {
+        "displayName": "Hint (Simple Mode)",
+        "purpose": "The \"Tap the shutter to take a frame\" line over the empty sky."
       }
     },
     "shadows": [],
-    "motion": [],
+    "motion": [
+      {
+        "name": "status-blink",
+        "value": "700ms ease-in-out, alternate",
+        "purpose": "A device or routine working normally blinks its green dot."
+      },
+      {
+        "name": "hold-to-confirm",
+        "value": "2s linear",
+        "purpose": "Emergency Stop's and the plan shutter's hold; letting go early sends nothing."
+      },
+      {
+        "name": "immersive-fade",
+        "value": "220ms ease-out",
+        "purpose": "Simple Mode panels fading out for the immersive view; instant with reduced motion."
+      }
+    ],
     "breakpoints": [
       {
         "name": "short-height",
@@ -358,7 +470,14 @@
     "nightMode": {
       "filter": "luminance (0.30R+0.59G+0.11B) into red; green and blue zeroed",
       "source": "client/openastroara_client/lib/widgets/night_filter.dart"
-    }
+    },
+    "blur": [
+      {
+        "name": "panel-simple",
+        "value": "5px",
+        "purpose": "Simple Mode's panels blur the image behind their 90 % scrim; one shared BackdropGroup for all panels (AraBlur.panel in code)."
+      }
+    ]
   },
   "components": [
     {
@@ -381,9 +500,9 @@
       "name": "Emergency Stop",
       "kind": "button",
       "refersTo": "button-emergency-stop",
-      "description": "Filled red stop in the bottom status bar on every tab; the heaviest control on screen.",
+      "description": "Filled Fault Red stop in the full UI bottom status bar on every tab; hold 2 s to fire, a lighter sweep fills while held.",
       "html": "<button class=\"ds-estop\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M15.73 3H8.27L3 8.27v7.46L8.27 21h7.46L21 15.73V8.27L15.73 3zM12 17.3a1.3 1.3 0 1 1 0-2.6 1.3 1.3 0 0 1 0 2.6zm1-4.3h-2V7h2v6z\"/></svg>Emergency Stop</button>",
-      "css": ".ds-estop{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;display:inline-flex;align-items:center;gap:8px;background:#E53935;color:#FFFFFF;border:0;border-radius:20px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:filter .15s} .ds-estop:hover{filter:brightness(1.1)} .ds-estop:focus-visible{outline:2px solid #FFFFFF;outline-offset:2px}"
+      "css": ".ds-estop{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;position:relative;overflow:hidden;display:inline-flex;align-items:center;gap:8px;background:#E53935;color:#FFFFFF;border:0;border-radius:16px;padding:7px 18px;font-size:13px;font-weight:600;cursor:pointer} .ds-estop::after{content:'';position:absolute;inset:0;width:0;background:rgba(255,255,255,.25);transition:width 2s linear} .ds-estop:active::after{width:100%} .ds-estop:focus-visible{outline:2px solid #FFFFFF;outline-offset:2px}"
     },
     {
       "name": "Equipment Chip",
@@ -437,9 +556,33 @@
       "name": "Simple Mode Overlay",
       "kind": "custom",
       "refersTo": "button-primary-simple",
-      "description": "Translucent panel floating over the full-bleed frame in Simple Mode (two-rail layout: 16 px inset, 10 px corners).",
+      "description": "Translucent panel floating over the full-bleed frame in Simple Mode: overlay-scrim (90 %) over a 5 px shared blur, 10 px corners, no border, 16 px from the edge.",
       "html": "<div class=\"ds-ov-wrap\"><div class=\"ds-ov\"><span class=\"ds-ov-num\">02:14</span><span class=\"ds-ov-sub\">Frame 47 of 120</span><button class=\"ds-ov-btn\">Pause</button></div></div>",
-      "css": ".ds-ov-wrap{background:radial-gradient(ellipse at 50% 45%,#3a3a3a 0,#1a1a1a 40%,#0d0d0d 75%);padding:40px;border-radius:10px} .ds-ov{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;display:inline-flex;flex-direction:column;gap:8px;background:rgba(26,26,26,.72);border-radius:10px;padding:14px 16px;color:#E0E0E0;font-size:14px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)} .ds-ov-num{font-size:32px;font-weight:300;font-variant-numeric:tabular-nums} .ds-ov-sub{color:#A0A0A0} .ds-ov-btn{min-height:44px;border:0;border-radius:10px;background:#1565C0;color:#fff;font:500 14px system-ui;cursor:pointer} .ds-ov-btn:hover{background:#1976D2} .ds-ov-btn:focus-visible{outline:2px solid #42A5F5;outline-offset:2px}"
+      "css": ".ds-ov-wrap{background:radial-gradient(ellipse at 50% 45%,#3a3a3a 0,#1a1a1a 40%,#0d0d0d 75%);padding:40px;border-radius:10px} .ds-ov{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;display:inline-flex;flex-direction:column;gap:8px;background:rgba(26,26,26,.90);border-radius:10px;padding:14px 16px;color:#E0E0E0;font-size:14px;-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px)} .ds-ov-num{font-size:32px;font-weight:300;font-variant-numeric:tabular-nums} .ds-ov-sub{color:#A0A0A0} .ds-ov-btn{min-height:44px;border:0;border-radius:10px;background:#1565C0;color:#fff;font:500 14px system-ui;cursor:pointer} .ds-ov-btn:hover{background:#1976D2} .ds-ov-btn:focus-visible{outline:2px solid #42A5F5;outline-offset:2px}"
+    },
+    {
+      "name": "Emergency Stop (Simple Mode)",
+      "kind": "button",
+      "refersTo": "button-emergency-stop-simple",
+      "description": "The 60 px STOP square at the bottom right: emergency-stop fill, a 2 px dark gap then a 1 px red ring; reads HOLD while a darkening sweep fills for 2 s.",
+      "html": "<span class=\"ds-sstop-ring\"><button class=\"ds-sstop\">STOP</button></span>",
+      "css": ".ds-sstop-ring{display:inline-block;padding:2px;background:#1A1A1A;border:1px solid #D32F2F;border-radius:13px} .ds-sstop{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;position:relative;overflow:hidden;width:60px;height:60px;background:#D32F2F;color:#FFFFFF;border:0;border-radius:10px;font-size:14px;font-weight:700;letter-spacing:.5px;cursor:pointer} .ds-sstop::after{content:'';position:absolute;inset:0;width:0;background:rgba(0,0,0,.25);transition:width 2s linear} .ds-sstop:active::after{width:100%} .ds-sstop:focus-visible{outline:2px solid #FFFFFF;outline-offset:3px}"
+    },
+    {
+      "name": "Status Pill (Simple Mode)",
+      "kind": "custom",
+      "refersTo": "status-pill-simple",
+      "description": "Top-right pill, one per thing happening: status dot (blinks green while working, a blue ring while changing), label, dim detail, an optional progress line along its foot; at most 300 px, one line, the detail ellipsised.",
+      "html": "<div class=\"ds-spill-stack\"><div class=\"ds-spill\"><i class=\"ds-dot ds-dot-work\"></i><span>Plan <em>Cooling camera to -10 °C</em></span><b style=\"width:40%\"></b></div><div class=\"ds-spill\"><i class=\"ds-dot ds-dot-ring\"></i><span>Parking</span></div></div>",
+      "css": ".ds-spill-stack{display:flex;flex-direction:column;gap:8px;align-items:flex-end;padding:24px;border-radius:10px;background:radial-gradient(ellipse at 50% 45%,#5a5a5a 0,#2a2a2a 45%,#0d0d0d 80%)} .ds-spill{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;position:relative;display:flex;align-items:center;gap:8px;height:48px;max-width:300px;box-sizing:border-box;padding:0 16px;background:rgba(26,26,26,.90);-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px);border-radius:10px;color:#E0E0E0;font-size:14px;cursor:pointer} .ds-spill span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .ds-spill em{font-style:normal;color:#A0A0A0;margin-left:8px} .ds-spill b{position:absolute;left:16px;bottom:10px;height:3px;border-radius:2px;background:#42A5F5} .ds-spill:focus-visible{outline:2px solid #42A5F5;outline-offset:2px} .ds-dot{flex:none;width:10px;height:10px;border-radius:50%;box-sizing:border-box} .ds-dot-work{background:#4CAF50;animation:ds-blink .7s ease-in-out infinite alternate} .ds-dot-ring{border:2px solid #42A5F5} @keyframes ds-blink{to{opacity:.35}} @media (prefers-reduced-motion:reduce){.ds-dot-work{animation:none}}"
+    },
+    {
+      "name": "Message Pill: Question (Simple Mode)",
+      "kind": "custom",
+      "refersTo": "message-pill-simple",
+      "description": "Top-left message pill (no popups): a question has an amber dot and outline, stays until answered, and fills its last action, the safe answer.",
+      "html": "<div class=\"ds-msg-wrap\"><div class=\"ds-msg\" role=\"status\"><i></i><span>Discard changes to M31?</span><button class=\"ds-msg-t\">Discard</button><button class=\"ds-msg-f\">Keep editing</button></div></div>",
+      "css": ".ds-msg{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;display:inline-flex;align-items:center;gap:8px;min-height:48px;max-width:420px;box-sizing:border-box;padding:0 4px 0 16px;background:rgba(26,26,26,.90);-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px);border:1px solid #FFB300;border-radius:10px;color:#E0E0E0;font-size:14px} .ds-msg-wrap{padding:24px;border-radius:10px;background:radial-gradient(ellipse at 50% 45%,#5a5a5a 0,#2a2a2a 45%,#0d0d0d 80%)} .ds-msg i{flex:none;width:10px;height:10px;border-radius:50%;background:#FFB300} .ds-msg button{font:inherit;min-height:44px;border-radius:10px;padding:0 14px;cursor:pointer;border:0} .ds-msg-t{background:transparent;color:#64B5F6} .ds-msg-f{background:#FFB300;color:#1A1A1A} .ds-msg button:hover{filter:brightness(1.1)} .ds-msg button:focus-visible{outline:2px solid #42A5F5;outline-offset:2px}"
     }
   ],
   "narrative": {
@@ -476,31 +619,43 @@
         "section": "typography"
       },
       {
+        "name": "The Two Densities Rule",
+        "body": "The full UI is dense: 11–15 px type and 4–8 px corners. Simple Mode is roomy and image-first: the frame fills the window, controls float on translucent overlays, every interactive target is at least 44 px tall, corners are 10 px, and body text is 14 px. Both densities share the same colours, the same named rules and the same Emergency Stop hold; Simple Mode's Stop fills with `emergency-stop` (#D32F2F) so its label reads at 4.5:1. Phones run Companion Mode, which builds on Simple Mode, so phones always get the roomy density. Simple Mode ships on master behind an experimental toggle (Settings → System → Experimental); this is its target.",
+        "section": "layout"
+      },
+      {
+        "name": "The Start-Stops Rule",
+        "body": "Whatever starts something also stops it: the shutter that starts a shot, a loop or a routine turns into a red square that stops it, and an Autofocus button turns into Cancel. No second Stop button sits beside it. Simple Mode's Plan is the one variant: a plan runs a whole night, so its shutter starts the plan (a play triangle in a white ring, like every mode but Preview), then pauses it (pause bars), resumes it (a play triangle in an amber ring), and a 2 s hold stops it. In Simple Mode, Done is green (Connected Green), as the one completing action; the full UI keeps its default Done (decided 2026-11-02: the full UI stays as it is).",
+        "section": "elevation"
+      },
+      {
         "name": "The No-Glow Rule",
         "body": "Surfaces don't cast shadows or glow. A panel is separated by a 1 px Hairline and a tonal step, nothing more. The one exception is Simple Mode's overlays: they float over the image on a translucent scrim, still with no shadow.",
         "section": "elevation"
       },
       {
-        "name": "The Two Densities Rule",
-        "body": "The full UI is dense: 11–15 px type and 4–8 px corners. Simple Mode is roomy and image-first: the frame fills the window, controls float on translucent overlays, every interactive target is at least 44 px tall, corners are 10 px, and body text is 14 px. Both densities share the same colours, the same named rules and the same Emergency Stop hold; Simple Mode's Stop fills with #D32F2F for 4.5:1 text. Phones run Companion Mode, which builds on Simple Mode, so phones always get the roomy density. Simple Mode is built behind Settings → System → Experimental (PR #1480).",
-        "section": "layout"
+        "name": "Simple Mode's rule: 4×90% and KISS",
+        "body": "Simple Mode covers the top 90 % most used features, for 90 % of the people, 90 % of the time, 90 % faster, with only the bare minimum for a successful imaging night: defaults and automation first, self-recovery doing the work, and a small set of controls where the user needs them (ASIAir as the reference); a value one Simple Mode control sets is not repeated elsewhere, and nothing links to the full UI. No redundant design: each thing lives in one place, and interactions are contextual (tap the thing to act on it). Its Settings (a sheet over the image with a few controls, ASIAir as the reference; one window per device, the same one its top-bar dot opens; Connect / Disconnect on Settings › Devices only) are shaped in `design/briefs/simple-mode-settings.md` (2026-11-03).",
+        "section": "components"
       }
     ],
     "dos": [
-      "Do pair every warning or fault with icon + colour + text. Colour alone never carries a message.",
-      "Do keep Emergency Stop filled red, visible on every tab and heavier than any other control.",
-      "Do use `AraColors`, `AraSpace` and `AraText` tokens. Accents come only through semantic roles.",
-      "Do use tabular figures for any live number.",
-      "Do check every new state in Night mode: it must still be distinguishable by brightness.",
-      "Do write labels in product voice: verbs, sentence case, no NINA or daemon enum names."
+      "**Do** pair every warning or fault with icon + colour + text. Colour alone never carries a message.",
+      "**Do** keep Emergency Stop filled red, visible on every tab and heavier than any other control.",
+      "**Do** use `AraColors`, `AraSpace` and `AraText` tokens. Accents come only through semantic roles.",
+      "**Do** use tabular figures for any live number.",
+      "**Do** check every new state in Night mode: it must still be distinguishable by brightness.",
+      "**Do** meet WCAG 2.2 AA on every new or changed control (playbook §53): 4.5:1 text, keyboard reach with visible focus, a pointer-free path for every hold or drag. Night mode is exempt from contrast; the default theme isn't.",
+      "**Do** write labels in product voice: verbs, sentence case, no NINA or daemon enum names."
     ],
     "donts": [
-      "Don't use colour for decoration, branding flourishes or emphasis that isn't a state.",
-      "Don't add shadows or glows to separate surfaces; use a tonal step and a Hairline.",
-      "Don't let any state fall back to plain grey text without a designed look.",
-      "Don't fill any control other than Emergency Stop and confirmed destructive actions with Fault Red.",
-      "Don't copy NINA's icons, splash, imagery or wordmark (see PRODUCT.md).",
-      "Don't hard-code colours outside `lib/theme/`. A few widgets still do, and they should migrate to tokens."
+      "**Don't** change the full UI's layout while Simple Mode is being built. Simple Mode is additive: new work goes into Simple Mode, and the full UI (PR #1474's shell) stays as it is for now. Two exceptions are approved: the heavier Emergency Stop (ALP-4812), which applies to the full UI too, and a Simple Mode icon in the full UI's top-right cluster, between Night mode and the gear (decided 2026-11-01).",
+      "**Don't** use colour for decoration, branding flourishes or emphasis that isn't a state.",
+      "**Don't** add shadows or glows to separate surfaces; use a tonal step and a Hairline.",
+      "**Don't** let any state fall back to plain grey text without a designed look.",
+      "**Don't** fill any control other than Emergency Stop and confirmed destructive actions with Fault Red.",
+      "**Don't** copy NINA's icons, splash, imagery or wordmark (see PRODUCT.md).",
+      "**Don't** hard-code colours outside `lib/theme/`. A few widgets still do, and they should migrate to tokens."
     ]
   }
 }

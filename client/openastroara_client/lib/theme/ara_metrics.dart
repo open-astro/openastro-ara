@@ -14,8 +14,9 @@ class AraSpace {
   static const double s24 = 24;
 }
 
-/// Backdrop blur (DESIGN.md `panel-simple`'s `backdropBlur`): Simple Mode's panels blur the
-/// image behind their 90 % scrim, so their words stand off a busy frame.
+/// Backdrop blur (DESIGN.md `panel-simple`, value in .impeccable/design.json):
+/// Simple Mode's panels blur the image behind their 90 % scrim, so their words
+/// stand off a busy frame.
 class AraBlur {
   /// `--dart-define=ARA_BLUR_OFF=true` turns the blur off, to measure its cost.
   static const double panel = bool.fromEnvironment('ARA_BLUR_OFF') ? 0 : 5;
