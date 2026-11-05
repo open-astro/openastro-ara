@@ -89,7 +89,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_known_mode_reaches_the_service_and_is_echoed() {
-            svc.Setup(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Redacted))
+            svc.Setup(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Redacted, It.IsAny<DateTimeOffset?>()))
                 .ReturnsAsync(Prepared(BugReportSharingMode.Redacted));
 
             using var resp = await http.PostAsJsonAsync("/api/v1/bugreport/prepare", new { mode = "redacted" });
@@ -97,7 +97,7 @@ namespace OpenAstroAra.Test {
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
             Assert.That(doc.RootElement.GetProperty("sharing_mode").GetString(), Is.EqualTo("redacted"));
-            svc.Verify(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Redacted), Times.Once);
+            svc.Verify(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Redacted, It.IsAny<DateTimeOffset?>()), Times.Once);
         }
 
         [Test]
@@ -107,32 +107,32 @@ namespace OpenAstroAra.Test {
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
             Assert.That(doc.RootElement.GetProperty("detail").GetString(), Does.Contain("bogus").And.Contain("redacted"));
-            svc.Verify(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<BugReportSharingMode>()), Times.Never);
+            svc.Verify(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<BugReportSharingMode>(), It.IsAny<DateTimeOffset?>()), Times.Never);
         }
 
         [Test]
         public async Task A_post_with_no_body_and_no_content_type_is_full() {
             // A pre-#1185 Dio client posts nothing at all: Kestrel reports no body, the parameter binds null.
-            svc.Setup(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full))
+            svc.Setup(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full, It.IsAny<DateTimeOffset?>()))
                 .ReturnsAsync(Prepared(BugReportSharingMode.Full));
 
             using var request = new HttpRequestMessage(HttpMethod.Post, new Uri("/api/v1/bugreport/prepare", UriKind.Relative));
             using var resp = await http.SendAsync(request);
 
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Accepted), await resp.Content.ReadAsStringAsync());
-            svc.Verify(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full), Times.Once);
+            svc.Verify(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full, It.IsAny<DateTimeOffset?>()), Times.Once);
         }
 
         [Test]
         public async Task An_empty_body_from_an_older_client_is_full() {
-            svc.Setup(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full))
+            svc.Setup(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full, It.IsAny<DateTimeOffset?>()))
                 .ReturnsAsync(Prepared(BugReportSharingMode.Full));
 
             using var content = new StringContent("", Encoding.UTF8, "application/json");
             using var resp = await http.PostAsync(new Uri("/api/v1/bugreport/prepare", UriKind.Relative), content);
 
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Accepted), await resp.Content.ReadAsStringAsync());
-            svc.Verify(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full), Times.Once);
+            svc.Verify(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full, It.IsAny<DateTimeOffset?>()), Times.Once);
         }
 
         [Test]
