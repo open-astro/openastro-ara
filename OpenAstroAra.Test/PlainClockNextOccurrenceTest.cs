@@ -23,6 +23,7 @@ using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
+using OpenAstroAra.Server.Services;
 
 namespace OpenAstroAra.Test {
 
@@ -110,6 +111,24 @@ namespace OpenAstroAra.Test {
             var c = Cond(Plain(null), 22, 0, 2, 0);
             Assert.That(c.Check(null, item5h.Object), Is.False);
             Assert.That(c.Check(null, item1h.Object), Is.False);
+        }
+
+        // A finished plain wait keeps the target it waited for: read at target + 1 s it costs 0 in the
+        // run total, not the next day's 24 h. ResetProgress (a new loop pass) targets the next one.
+        [Test]
+        public async Task WaitForTime_plain_time_finished_costs_nothing_in_the_total() {
+            var now = new[] { Day.AddHours(21).AddMinutes(47) };
+            var clock = new Mock<ICustomDateTime>();
+            clock.Setup(x => x.Now).Returns(() => now[0]);
+            var p = Plain(null);
+            var w = new WaitForTime(new List<IDateTimeProvider> { p }, p) { DateTime = clock.Object };
+            w.Hours = 21; w.Minutes = 47; w.Seconds = 0;
+            await w.Execute(new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(), CancellationToken.None);
+            w.Status = SequenceEntityStatus.FINISHED;
+            now[0] = now[0].AddSeconds(1);
+            Assert.That(RunEtaEstimator.EstimateTotalSeconds(w), Is.EqualTo(0));
+            w.ResetProgress();
+            Assert.That(w.GetEstimatedDuration(), Is.EqualTo(new TimeSpan(23, 59, 59)));
         }
 
         // Night-anchored: rollover 12:00. now 00:30 < rollover, target 21:47 >= rollover -> yesterday (zero wait).
