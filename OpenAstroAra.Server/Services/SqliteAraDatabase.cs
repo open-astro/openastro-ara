@@ -157,6 +157,14 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         // cooler was off or the camera has none). Same after-the-rebuilds placement as above.
         await AddColumnIfMissingAsync(conn, "frames", "rotator_mechanical_deg", "REAL", ct);
         await AddColumnIfMissingAsync(conn, "frames", "cooler_setpoint_c", "REAL", ct);
+        // Sky Album (#1517): J2000 pointing, pixel scale and provenance per frame; updated_utc lets the
+        // album fetch only what changed, pointing_probed_utc marks a row the startup backfill has read.
+        await AddColumnIfMissingAsync(conn, "frames", "ra_deg", "REAL", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "dec_deg", "REAL", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "pixel_scale_arcsec", "REAL", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "updated_utc", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "pointing_probed_utc", "TEXT", ct);
+        await AddColumnIfMissingAsync(conn, "frames", "captured_by_ara", "INTEGER", ct);
 
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_session_id ON frames(session_id);", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_captured_utc ON frames(captured_utc);", ct);

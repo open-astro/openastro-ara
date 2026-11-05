@@ -126,7 +126,8 @@ public sealed partial class CameraService {
         if (!job.Registered) {
             await RegisterFrameAsync(job.FrameId, job.Request, job.FrameType, job.TargetName, job.CapturedAt, path,
                 job.Width, job.Height, job.FocuserPosition, appliedBin: job.Applied.BinX, rotatorMechanicalDeg: job.RotatorDeg,
-                coolerSetpointC: job.CoolerSetpointC, sessionId: job.SessionId, ccdTemperatureC: job.CcdTemperatureC).ConfigureAwait(false);
+                coolerSetpointC: job.CoolerSetpointC, sessionId: job.SessionId, ccdTemperatureC: job.CcdTemperatureC,
+                pointing: job.Pointing).ConfigureAwait(false);
             job.Registered = true;
         }
         job.Saved.TrySetResult();
