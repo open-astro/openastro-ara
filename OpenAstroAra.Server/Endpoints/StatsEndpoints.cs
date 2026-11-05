@@ -102,6 +102,14 @@ public static class StatsEndpoints {
             .Produces<StatsBestFramesDto>(StatusCodes.Status200OK)
             .WithName("GetStatsBestFrames");
 
+        // Sky Album (#1518): the lights Ara captured, with pointing and pixel scale; `since` returns only
+        // rows changed after it, and total_lights always counts them all.
+        stats.MapGet("/album-frames",
+                async (DateTimeOffset? since, IStatsService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.GetAlbumFramesAsync(since, ct)))
+            .Produces<StatsAlbumFramesDto>(StatusCodes.Status200OK)
+            .WithName("GetStatsAlbumFrames");
+
         stats.MapGet("/calendar",
                 async (DateOnly? fromDate, DateOnly? toDate, IStatsService svc, CancellationToken ct) => {
                     var from = fromDate ?? DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-30);
