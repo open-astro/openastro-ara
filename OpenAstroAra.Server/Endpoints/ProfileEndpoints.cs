@@ -254,7 +254,7 @@ public static class ProfileEndpoints {
             .WithSummary("Replace the active profile's unguided-imaging settings.");
 
         // #1364 — the guider's settings beyond Tune Guiding. Apply = PUT here, then
-        // POST /equipment/guider/profile/push?scope=tuning (multi-star lands on the next connect).
+        // POST /equipment/guider/profile/push?scope=tuning (multi-star: POST /equipment/guider/multi-star/apply on a connected guider, else the next connect).
         profile.MapGet("/guider-advanced", (IProfileStore store) =>
                 Results.Ok(store.GetGuiderAdvancedSettings()))
             .Produces<GuiderAdvancedSettingsDto>(StatusCodes.Status200OK)
