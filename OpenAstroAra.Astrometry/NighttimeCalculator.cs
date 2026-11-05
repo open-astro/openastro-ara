@@ -26,21 +26,23 @@ namespace OpenAstroAra.Astrometry {
         private readonly IProfileService profileService;
         private readonly Timer? ReferenceDateTimer;
         private DateTime LastReferenceDate;
+        internal Func<DateTime> Now = () => DateTime.Now; // test seam
 
         public NighttimeCalculator(IProfileService profile) {
             profileService = profile;
             Cache = new Dictionary<string, NighttimeData>();
 
-            LastReferenceDate = GetReferenceDate(DateTime.Now);
+            LastReferenceDate = GetReferenceDate(Now());
             ReferenceDateTimer = new Timer(10 * 60 * 1000);
             ReferenceDateTimer.Elapsed += OnTimedEvent;
             ReferenceDateTimer.AutoReset = true;
             ReferenceDateTimer.Enabled = true;
         }
 
-        private void OnTimedEvent(object? source, ElapsedEventArgs e) {
-            DateTime referenceDate = NighttimeCalculator.GetReferenceDate(DateTime.Now);
+        internal void OnTimedEvent(object? source, ElapsedEventArgs e) {
+            DateTime referenceDate = NighttimeCalculator.GetReferenceDate(Now());
             if (LastReferenceDate != referenceDate) {
+                LastReferenceDate = referenceDate;
                 OnReferenceDayChanged?.Invoke(this, EventArgs.Empty);
             }
         }
