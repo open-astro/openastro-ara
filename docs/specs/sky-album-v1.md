@@ -83,7 +83,7 @@ Never routed through `POST /api/v1/stats/rebuild-catalog`: that endpoint deletes
 }
 ```
 
-- Rows are lights with `captured_by_ara = 1` only; foreign frames are never served. Without `since`, every such light. With `since`, lights whose `updated_utc` is later than it; the client sends the newest `updated_utc` it holds as `since`. `total_lights` is always the full count. Keys are snake_case, as every daemon reply (the `SnakeCaseLower` policy).
+- Rows are lights with `captured_by_ara = 1` only; foreign frames are never served. Without `since`, every such light. With `since`, lights whose `updated_utc` is later than it; the client sends the newest `updated_utc` it holds for that rig as `since`. `total_lights` is always the full count. Keys are snake_case, as every daemon reply (the `SnakeCaseLower` policy).
 - `profile_id` comes from the session join. `composite_score` is `json_extract(quality_score_json, '$.composite')`, null when absent.
 - `GET /api/v1/frames` and `GET /api/v1/stats/targets` are untouched.
 
@@ -169,7 +169,7 @@ Each slice is one PR against `master`, in this order; each lists the spec sectio
 5. Client: album screen, card flip, shelf, widget test with a fake callback.
 6. Simple Mode: rail menu item, callback implementation.
 7. Art and data ([#1535](https://github.com/open-astro/openastro-ara/issues/1535)): manifest, script, the 219-Card Art set with contact-sheet review, trivia and distances, credits in About.
-8. Client ([#1535](https://github.com/open-astro/openastro-ara/issues/1535)): collection cache with the merge rule and Night grouping, card front on Art plus Placeholder, the baseball-card back.
+8. Client ([#1535](https://github.com/open-astro/openastro-ara/issues/1535)): collection cache with the merge rule and Night grouping, card front on Art plus Placeholder, the baseball-card back. Removes slice 4's count reload (`needsFullReload` and its test).
 
 ## Known limits
 
