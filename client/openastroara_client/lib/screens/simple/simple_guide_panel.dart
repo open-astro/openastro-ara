@@ -146,6 +146,17 @@ Future<void> simpleGuideRun(
       await Future<void>.delayed(const Duration(milliseconds: 500));
       await guider.refresh();
     }
+    // The rig accepts a Stop and may then refuse it (ALP-5018): say so, or the
+    // shutter just flips back to running.
+    final g = container.read(guiderStatusProvider).value;
+    if (!start && simpleGuideActive(g)) {
+      notify(
+        // Lower case inside the sentence, as the guiding strip writes the phase.
+        l10n.guideStopRefused(guiderRuntimeText(l10n, g!.runtimeState).toLowerCase()),
+        error: true,
+        snackBarRed: false,
+      );
+    }
   } catch (e) {
     notify(
       friendlyError(

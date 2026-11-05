@@ -2827,6 +2827,11 @@
   "@guideStopping": {
     "description": "While a stop is on its way (the guider finishes its frame first)"
   },
+  "guideStopRefused": "The guider didn't stop: it is still {state}. Try Stop again.",
+  "@guideStopRefused": {
+    "description": "Simple Mode pill: a guider Stop the rig accepted but did not act on; {state} is the guider phase.",
+    "placeholders": {"state": {"type": "String"}}
+  },
   "guideExposureOwn": "The guider's own",
   "@guideExposureOwn": {
     "description": "Guide exposure picker value when the profile leaves it to the guider"
@@ -2838,5 +2843,170 @@
   "shellMainCameraBusy": "The main camera is busy: wait for its frame, or stop it.",
   "@shellMainCameraBusy": {
     "description": "Why a greyed shutter can't start autofocus, the Bahtinov readout or polar alignment"
+  },
+  "albumTitle": "Sky Album",
+  "@albumTitle": {
+    "description": "Sky Album screen: app bar title"
+  },
+  "albumBookMessier": "Messier",
+  "@albumBookMessier": {
+    "description": "Sky Album: Book switch segment for the Messier catalog"
+  },
+  "albumBookCaldwell": "Caldwell",
+  "@albumBookCaldwell": {
+    "description": "Sky Album: Book switch segment for the Caldwell catalog"
+  },
+  "albumCollected": "{collected} / {total} collected",
+  "@albumCollected": {
+    "description": "Sky Album header: cards collected (bronze or better) out of the Book's cards",
+    "placeholders": {
+      "collected": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "albumTierBronze": "Bronze",
+  "@albumTierBronze": {
+    "description": "Sky Album: bronze tier name (at least one light)"
+  },
+  "albumTierSilver": "Silver",
+  "@albumTierSilver": {
+    "description": "Sky Album: silver tier name (1 h or more)"
+  },
+  "albumTierGold": "Gold",
+  "@albumTierGold": {
+    "description": "Sky Album: gold tier name (5 h or more)"
+  },
+  "albumTierCount": "{tier} {count}",
+  "@albumTierCount": {
+    "description": "Sky Album header: per-tier count, e.g. 'Gold 3'",
+    "placeholders": {
+      "tier": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "albumEmpty": "Image a target to collect your first card",
+  "@albumEmpty": {
+    "description": "Sky Album: caption over the all-grey grid when no lights exist yet"
+  },
+  "albumShelfTitle": "{count, plural, =1{1 missing card well placed tonight} other{{count} missing cards well placed tonight}}",
+  "@albumShelfTitle": {
+    "description": "Sky Album: title of the shelf of missing cards Tonight's Sky ranks well tonight",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "albumFirstCapture": "First capture",
+  "@albumFirstCapture": {
+    "description": "Sky Album card back: label of the first capture date"
+  },
+  "albumIntegration": "Integration",
+  "@albumIntegration": {
+    "description": "Sky Album card back: label of total exposure and light count"
+  },
+  "albumIntegrationValue": "{hours} h · {lights, plural, =1{1 light} other{{lights} lights}}",
+  "@albumIntegrationValue": {
+    "description": "Sky Album card back: total hours (one decimal) and number of light frames",
+    "placeholders": {
+      "hours": {
+        "type": "String"
+      },
+      "lights": {
+        "type": "int"
+      }
+    }
+  },
+  "albumFilters": "Filters",
+  "@albumFilters": {
+    "description": "Sky Album card back: label of the filters used"
+  },
+  "albumGearProfile": "Gear profile",
+  "@albumGearProfile": {
+    "description": "Sky Album card back: label of the best frame's gear profile"
+  },
+  "albumBestScore": "Best frame score",
+  "@albumBestScore": {
+    "description": "Sky Album card back: label of the best frame's quality score"
+  },
+  "albumNextTier": "Next tier",
+  "@albumNextTier": {
+    "description": "Sky Album card back: label of the hours left to the next tier"
+  },
+  "albumNextTierValue": "{hours} h to {tier}",
+  "@albumNextTierValue": {
+    "description": "Sky Album card back: hours left to the next tier, tier in lower case",
+    "placeholders": {
+      "hours": {
+        "type": "String"
+      },
+      "tier": {
+        "type": "String"
+      }
+    }
+  },
+  "albumGoldReached": "Gold reached",
+  "@albumGoldReached": {
+    "description": "Sky Album card back: next-tier line when the card is gold"
+  },
+  "albumNotCollected": "Not collected yet",
+  "@albumNotCollected": {
+    "description": "Sky Album card back: shown instead of figures on a missing card"
+  },
+  "albumImageThis": "Image this target",
+  "@albumImageThis": {
+    "description": "Sky Album card back: action on a missing card; hands the object to the planner"
+  },
+  "albumAddTime": "Add more time",
+  "@albumAddTime": {
+    "description": "Sky Album card back: action on a collected card; hands the object to the planner"
+  },
+  "albumLoadFailed": "Couldn't load the album: {reason}",
+  "@albumLoadFailed": {
+    "description": "Sky Album: error pill when the album rows fail to load",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "albumNoServer": "Connect to a rig to fill the album",
+  "@albumNoServer": {
+    "description": "Sky Album: pill when no rig is saved, so no frames can be read"
+  },
+  "albumCardSemantics": "{label} {name}, {state}",
+  "@albumCardSemantics": {
+    "description": "Sky Album: screen-reader label of a card: catalog label, object name and its tier or 'Not collected yet'",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      },
+      "state": {
+        "type": "String"
+      }
+    }
+  },
+  "albumFilterAll": "All",
+  "@albumFilterAll": {
+    "description": "Sky Album: filter segment showing every card of the Book"
+  },
+  "albumFilterCollected": "Collected",
+  "@albumFilterCollected": {
+    "description": "Sky Album: filter segment showing only collected cards (bronze or better)"
+  },
+  "albumFilterMissing": "Missing",
+  "@albumFilterMissing": {
+    "description": "Sky Album: filter segment showing only cards not collected yet"
   }
 }

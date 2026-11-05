@@ -104,16 +104,17 @@ A provider family keyed by the active connection caches the album rows. On album
 
 Files: `screens/album/`, `state/album/`, `widgets/album/`. Nothing imported from `screens/simple/`; the only shell-specific behaviour arrives as the callback below.
 
-- App bar: "Sky Album", a segmented Book switch (Messier / Caldwell).
+- App bar: the album icon and "Sky Album", a segmented Book switch (Messier / Caldwell).
+- A filter beside the header counts: All / Collected / Missing (decided 2026-11-05). It narrows the grid only; the counts stay the Book's, and the shelf hides under Collected.
 - Header line: `n / total collected` with per-tier counts.
 - Tonight shelf (see tie-in) above the grid when it has cards.
 - Binder grid: cards at 2.5:3.5, max about 130 px wide. Card front: best-frame thumbnail (via the existing frame thumbnail endpoint) or a grey silhouette icon per object type; catalog label (`M 31`, `C 14`); name. Border colour per tier, a subtle glow on gold, grey text on missing cards.
-- Card back: in-place flip, the flipped card scaling up over its neighbours. Fields: first capture, integration and frame count, filters, gear profile, best-frame score, distance to the next tier; one action button, "Image this target" on a missing card, "Add more time" on a collected one. Tapping outside flips it back.
+- Card back: in-place flip, the flipped card scaling up over its neighbours. Fields: first capture, integration and frame count, filters, gear profile, best-frame score, distance to the next tier; one action button, "Image this target" on a missing card, "Add more time" on a collected one. Tapping outside it, or on the card again, flips it back.
 - Empty and failure states ([#1502](https://github.com/open-astro/openastro-ara/issues/1502)): with no lights at all the grid is fully grey with one caption, "Image a target to collect your first card"; the shelf still shows. If the fetch fails, show cached rows when present, else grey cards plus the app's usual error pill.
 
 ### Tonight's Sky tie-in ([#1501](https://github.com/open-astro/openastro-ara/issues/1501))
 
-- The shelf is `tonightSkyProvider` (the ranking Simple Mode already shows as Tonight's best) filtered to the open Book's missing cards, in ranker order, capped at 8. No extra threshold. Hidden when the ranker returns nothing. Title: "N missing cards well placed tonight". Shelf cards flip like grid cards; there is no separate start button.
+- The shelf is `tonightSkyProvider` (the ranking Simple Mode already shows as Tonight's best) filtered to the open Book's missing cards, in ranker order, capped at 8. No extra threshold. Hidden when the ranker returns nothing, when no album rows have loaded (every card would look missing) and under the Collected filter. Title: "N missing cards well placed tonight". Shelf cards flip like grid cards; there is no separate start button.
 - Callback contract: the shell passes `void Function(PlanningDso target)`. The album fires it from the card back's action button, grid and shelf alike.
 - Simple Mode's implementation: pop the album, set the planetarium selection the way `simpleSelectionOf` does for a Tonight's best tap (altitude and rise from the ranker when the object is in it, else from the catalog position only), and open the plan sheet with the target picked. Nothing is queued automatically.
 
