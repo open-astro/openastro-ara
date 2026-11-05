@@ -222,7 +222,7 @@ List<TonightSkyObject> computeTonightSkyLocal({
   // inside the night and ±12 h covers all of it, so anchor there directly
   // (this also keeps the current night scored through the small hours instead
   // of skipping ahead to the next one).
-  final twilight = _twilightSunAltitudeDeg(site.twilightDefinition);
+  final twilight = twilightSunAltitudeDeg(site.twilightDefinition);
   final sunAtNow = _sunEquatorialDeg(at);
   final sunHaNowDeg = _mod360(lst0 - sunAtNow.$1);
   final sunAltNowDeg = _altitudeFromHourAngleDeg(sunAtNow.$2, lat, sunHaNowDeg);
@@ -898,7 +898,7 @@ TonightFraming _classifyFraming(
 /// get dark in the next day (a polar summer).
 DateTime? darkStart(SiteSettings site, DateTime nowUtc) {
   if (site.latitudeDeg == 0 && site.longitudeDeg == 0) return null;
-  final line = _twilightSunAltitudeDeg(site.twilightDefinition);
+  final line = twilightSunAltitudeDeg(site.twilightDefinition);
   bool dark(DateTime t) =>
       sunMoonAltitudeDeg(t, site.latitudeDeg, site.longitudeDeg).sunAltDeg <
       line;
@@ -931,7 +931,8 @@ bool scheduleAllowed(SiteSettings site, DateTime nowUtc) {
   return !(now < 0 && sun(nowUtc.add(const Duration(minutes: 10))) > now);
 }
 
-double _twilightSunAltitudeDeg(TwilightDefinition twilight) =>
+/// The sun altitude below which [twilight] counts as dark.
+double twilightSunAltitudeDeg(TwilightDefinition twilight) =>
     switch (twilight) {
       TwilightDefinition.civil => -6.0,
       TwilightDefinition.nautical => -12.0,

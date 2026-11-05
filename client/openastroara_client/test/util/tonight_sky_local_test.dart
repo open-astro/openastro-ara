@@ -1256,6 +1256,27 @@ void main() {
           });
     },
   );
+  test('Up now switches itself on at the site\'s own twilight line, not at nautical dark', () {
+    // Albuquerque, 18:17 MST on 2026-11-05: the sun is at -14.4, past nautical dark but not
+    // astronomical. Up now used to turn on at -12, while no dark window opens until -18, so the
+    // list showed nothing for half an hour every evening.
+    ProviderContainer at(TwilightDefinition twilight, DateTime now) {
+      final c = ProviderContainer(
+        overrides: [
+          clockProvider.overrideWithValue(() => now),
+          siteSettingsProvider.overrideWith(() => _SeededSite(SiteSettings(
+              latitudeDeg: 35.08, longitudeDeg: -106.65, twilightDefinition: twilight))),
+        ],
+      );
+      addTearDown(c.dispose);
+      return c;
+    }
+
+    final dusk = DateTime.utc(2026, 11, 6, 1, 17);
+    expect(at(TwilightDefinition.astronomical, dusk).read(tonightSkyUpNowProvider), isFalse);
+    expect(at(TwilightDefinition.nautical, dusk).read(tonightSkyUpNowProvider), isTrue);
+    expect(at(TwilightDefinition.astronomical, DateTime.utc(2026, 11, 6, 2, 0)).read(tonightSkyUpNowProvider), isTrue);
+  });
   test('a Wolf-Rayet star never enters the ranked list, however bright', () {
     // Review #1105: a WR* row has no size, so the framing score is the
     // NEUTRAL 0.5 rather than the too-small floor — a mag-8 star with no
