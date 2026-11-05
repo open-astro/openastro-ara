@@ -73,12 +73,14 @@ Never routed through `POST /api/v1/stats/rebuild-catalog`: that endpoint deletes
       "filterName": "Ha",
       "targetName": "M31",
       "compositeScore": 0.83,
-      "profileId": "…"
+      "profileId": "…",
+      "updatedUtc": "2026-03-03T08:02:11Z"
     }
   ]
 }
 ```
 
+- On the wire the keys are snake_case (`total_lights`, `frame_id`, `updated_utc`, ...), as the daemon's serializer writes them; the example shows the field names. `updatedUtc` is the row's `updated_utc`: the client sends the newest one back as `since`.
 - Rows are lights with `captured_by_ara = 1` only; foreign frames are never served. Without `since`, every such light. With `since`, lights whose `updated_utc` is later than it. `totalLights` is always the full count.
 - `profileId` comes from the session join. `compositeScore` is `json_extract(quality_score_json, '$.composite')`, null when absent.
 - `GET /api/v1/frames` and `GET /api/v1/stats/targets` are untouched.
