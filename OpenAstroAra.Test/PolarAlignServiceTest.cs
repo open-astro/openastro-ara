@@ -146,7 +146,8 @@ namespace OpenAstroAra.Test {
         private static Mock<ITelescopeMediator> NewMount(bool connected = true, bool tracking = true) {
             var mount = new Mock<ITelescopeMediator>();
             mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo {
-                Connected = connected, SiderealTime = 0.0, TrackingEnabled = tracking,
+                // LST 20 h puts RA 0 east of the meridian, so the seed slew turns RA up like the SolveA→SolveB pair.
+                Connected = connected, SiderealTime = 20.0, TrackingEnabled = tracking,
             });
             // The reported pointing follows slews, so the routine reads the mount's own RA turn.
             var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
@@ -157,6 +158,18 @@ namespace OpenAstroAra.Test {
             mount.Setup(m => m.WaitForSlew(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
             mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns(true);
             return mount;
+        }
+
+        private sealed class CapturingLogger : Microsoft.Extensions.Logging.ILogger<PolarAlignService> {
+            public ConcurrentQueue<(int EventId, string Message)> Entries { get; } = new();
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+                    TState state, Exception? exception, Func<TState, Exception?, string> formatter) {
+                if (logLevel == Microsoft.Extensions.Logging.LogLevel.Information) {
+                    Entries.Enqueue((eventId.Id, formatter(state, exception)));
+                }
+            }
         }
 
         private sealed class RecordingLog : IPolarAlignmentLog {
@@ -201,8 +214,8 @@ namespace OpenAstroAra.Test {
         private static PolarAlignService NewService(GuiderService guider, IPolarAlignFrameSolver solver,
                 Mock<ITelescopeMediator>? mount = null, IWsBroadcaster? ws = null, IProfileStore? store = null,
                 IPolarAlignmentLog? log = null, IPolarAlignFrameFetcher? fetcher = null,
-                IGuideFocusService? guideFocus = null) {
-            var svc = new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, solver,
+                IGuideFocusService? guideFocus = null, Microsoft.Extensions.Logging.ILogger<PolarAlignService>? logger = null) {
+            var svc = new PolarAlignService(guider, logger ?? NullLogger<PolarAlignService>.Instance, solver,
                 (mount ?? NewMount()).Object, store ?? NewStore(), ws, log,
                 fetcher ?? new FakeFrameFetcher(), guideFocus: guideFocus is null ? null : () => guideFocus) {
                 PausedRetryDelay = TimeSpan.FromMilliseconds(20),
@@ -1109,6 +1122,68 @@ namespace OpenAstroAra.Test {
             Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("mount_fault"));
         }
 
+        // #1591 — seed 1° from a mount axis that sits 10° off the pole: the two axis lines the pointings admit
+        // are mirror images, and the pole-nearest pick takes the mirror for some camera azimuths. The routine
+        // passes the mount's own turn direction, so every azimuth and both turn directions keep the true axis.
+        [TestCase(0.0, 20.0, 30.0)]
+        [TestCase(90.0, 20.0, 30.0)]
+        [TestCase(180.0, 20.0, 30.0)]
+        [TestCase(270.0, 20.0, 30.0)]
+        [TestCase(0.0, 2.0, -30.0)]
+        [TestCase(90.0, 2.0, -30.0)]
+        [TestCase(180.0, 2.0, -30.0)]
+        [TestCase(270.0, 2.0, -30.0)]
+        public async Task A_seed_close_to_the_pole_fits_the_true_axis_not_its_mirror(double phiDeg, double lstHours, double turnDeg) {
+            static (double X, double Y, double Z) Unit(double raDeg, double decDeg) {
+                var ra = raDeg * Math.PI / 180.0;
+                var dec = decDeg * Math.PI / 180.0;
+                return (Math.Cos(dec) * Math.Cos(ra), Math.Cos(dec) * Math.Sin(ra), Math.Sin(dec));
+            }
+            static (double X, double Y, double Z) Cross((double X, double Y, double Z) a, (double X, double Y, double Z) b) =>
+                (a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
+            static (double X, double Y, double Z) Turn((double X, double Y, double Z) v, (double X, double Y, double Z) k, double deg) {
+                var t = deg * Math.PI / 180.0;
+                var c = Cross(k, v);
+                var d = k.X * v.X + k.Y * v.Y + k.Z * v.Z;
+                return (v.X * Math.Cos(t) + c.X * Math.Sin(t) + k.X * d * (1 - Math.Cos(t)),
+                        v.Y * Math.Cos(t) + c.Y * Math.Sin(t) + k.Y * d * (1 - Math.Cos(t)),
+                        v.Z * Math.Cos(t) + c.Z * Math.Sin(t) + k.Z * d * (1 - Math.Cos(t)));
+            }
+            static PolarAlignSolveOutcome Solved((double X, double Y, double Z) v) =>
+                new(true, (Math.Atan2(v.Y, v.X) * 180.0 / Math.PI + 360.0) % 360.0, Math.Asin(v.Z) * 180.0 / Math.PI);
+
+            const double AxisRaDeg = 40.0;
+            const double AxisDecDeg = 80.0;
+            var axis = Unit(AxisRaDeg, AxisDecDeg);
+            var side = Turn(Unit(AxisRaDeg + 90.0, 0.0), axis, phiDeg);
+            var camera = Turn(axis, side, 1.0); // 1° from the axis, as a seed at mount Dec 89°
+            var seedA = Solved(camera);
+            var seedB = Solved(Turn(camera, axis, turnDeg));
+
+            var mount = NewMount();
+            mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo { Connected = true, SiderealTime = lstHours, TrackingEnabled = true });
+            var position = new Coordinates(0.0, 89.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .Callback<Coordinates, CancellationToken>((target, _) => position = target)
+                .ReturnsAsync(true);
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver { Fallback = seedB };
+            solver.Enqueue(seedA, seedB);
+            using var svc = NewService(guider, solver, mount);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            var (alt, az) = PolarAlignGeometry.AxisError(AxisRaDeg, AxisDecDeg, SiteLatDeg, SiteLonDeg, DateTimeOffset.UtcNow);
+            Assert.That(status.CurrentErrorArcmin, Is.EqualTo(Math.Sqrt(alt * alt + az * az)).Within(3.0),
+                "the error of the true axis, not of its mirror ~2° away");
+        }
+
         // #1536 — a synced iOptron at home reported Dec 90.9°. The seed target kept that Dec, the mount
         // refused it, and every start failed. Past the pole the same sky point is (RA+180°, 180°−Dec); the
         // fold keeps the mount's Dec axis where it is, so the RA turn stays a pure rotation about the axis.
@@ -1119,6 +1194,8 @@ namespace OpenAstroAra.Test {
             var mount = NewMount();
             var position = new Coordinates(0.0, reportedDec, Epoch.JNOW, Coordinates.RAType.Degrees);
             var targets = new ConcurrentQueue<Coordinates>();
+            // LST 2 h puts the folded RA 180° east of the meridian, so the turn is RA up like SolveA→SolveB.
+            mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo { Connected = true, SiderealTime = 2.0, TrackingEnabled = true });
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
             mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
                 .Callback<Coordinates, CancellationToken>((target, _) => { targets.Enqueue(target); position = target; })
@@ -1393,6 +1470,33 @@ namespace OpenAstroAra.Test {
         }
 
         // ── §45.13 session log + complete ────────────────────────────────────────────────────
+
+        // #1591 — a run's log lets a reader rebuild seeds, fit and final error without the client.
+        [Test]
+        public async Task A_run_logs_its_seeds_fit_live_readouts_and_final_error_at_Information() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            var logger = new CapturingLogger();
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, solver, NewMount(), ws, log: new RecordingLog(), logger: logger);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10))) {
+                while (ws.Count(WsEventCatalog.PolarAlignProgress) < 2) {
+                    await Task.Delay(25, cts.Token).ConfigureAwait(false);
+                }
+            }
+            await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            var ids = logger.Entries.Select(e => e.EventId).ToList();
+            Assert.That(ids.Count(i => i == 4527), Is.EqualTo(2), "both seed solves");
+            Assert.That(ids, Does.Contain(4528).And.Contain(4529).And.Contain(4530));
+            Assert.That(logger.Entries.Single(e => e.EventId == 4528).Message, Does.Contain("axis RA").And.Contain("seed error"));
+        }
 
         [Test]
         public async Task Complete_logs_the_achieved_error_and_unwinds_like_stop() {

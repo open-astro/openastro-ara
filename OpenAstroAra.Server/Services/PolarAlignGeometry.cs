@@ -38,7 +38,11 @@ public static class PolarAlignGeometry {
     /// in the plane spanned by their angular midpoint and their great-circle pole, with the cone
     /// half-angle fixed by <c>sin θ = |P₁P₂| / (2·sin(Δ/2))</c>. Of the two mirror solutions the
     /// one in <paramref name="northernHemisphere"/>'s celestial hemisphere is returned (a mount
-    /// within tens of degrees of alignment is unambiguous).
+    /// within tens of degrees of alignment is unambiguous). Without the turn direction that pick is
+    /// only right while the mirror line is farther from the pole than the true axis — #1591: it fails
+    /// for a seed close to the pole. <paramref name="raIncreasing"/> (the mount's own turn: RA up =
+    /// counter-clockwise about the north end of the axis) lets the fit reject the mirror line, which
+    /// reproduces the turn the wrong way round.
     /// </summary>
     /// <exception cref="ArgumentOutOfRangeException">Non-finite inputs, a rotation outside
     /// (0°, 180°), coincident pointings (no axis information), or a chord longer than the
@@ -46,7 +50,7 @@ public static class PolarAlignGeometry {
     /// commanded, or a solve is bad).</exception>
     public static (double RaDeg, double DecDeg) FitAxisTwoPoint(
             double ra1Deg, double dec1Deg, double ra2Deg, double dec2Deg,
-            double rotationDeg, bool northernHemisphere) {
+            double rotationDeg, bool northernHemisphere, bool? raIncreasing = null) {
         RequireFinite(ra1Deg, nameof(ra1Deg));
         RequireFinite(dec1Deg, nameof(dec1Deg));
         RequireFinite(ra2Deg, nameof(ra2Deg));
@@ -110,6 +114,10 @@ public static class PolarAlignGeometry {
                 if (!ReproducesRotation(p1, p2, candidate, rotationDeg)) {
                     continue;
                 }
+                // RA up is counter-clockwise about the end of the axis that points north.
+                if (raIncreasing is bool up && !ReproducesTurn(p1, p2, candidate.Z >= 0 ? candidate : Scale(candidate, -1.0), up ? rotationDeg : -rotationDeg)) {
+                    continue;
+                }
                 if (best is null || candidate.Z * poleSign > best.Value.Z * poleSign) {
                     best = candidate;
                 }
@@ -143,6 +151,11 @@ public static class PolarAlignGeometry {
         return Norm(Subtract(RotateAbout(p1, axis, angleDeg), p2)) < 1e-6
             || Norm(Subtract(RotateAbout(p1, axis, -angleDeg), p2)) < 1e-6;
     }
+
+    private static bool ReproducesTurn(
+            (double X, double Y, double Z) p1, (double X, double Y, double Z) p2,
+            (double X, double Y, double Z) axis, double signedAngleDeg) =>
+        Norm(Subtract(RotateAbout(p1, axis, signedAngleDeg), p2)) < 1e-6;
 
     // Rodrigues rotation of v about the unit axis k by angleDeg.
     private static (double X, double Y, double Z) RotateAbout(

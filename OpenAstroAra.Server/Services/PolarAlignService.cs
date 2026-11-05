@@ -433,6 +433,7 @@ namespace OpenAstroAra.Server.Services {
                 // ── seed: frame A at the current pointing ──
                 var hintA = CurrentMountPointingJnow();
                 var a = await SolveSeedFrameAsync(guiderClient, workDir, "seed-a", hintA, settings, gen, ct).ConfigureAwait(false);
+                LogSeedSolve("seed-a", a.RaDegJnow, a.DecDegJnow);
 
                 // ── RA slew Δ, away from the meridian so the arc cannot cross it (a crossing risks
                 // a meridian flip, which garbles the two-point fit — guider design §5 step 2). With
@@ -470,18 +471,21 @@ namespace OpenAstroAra.Server.Services {
                 // tiny solved ΔRA for a 30° turn — the fit then rejects every seed.
                 var slewedPointing = CurrentMountPointingJnow()
                     ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
-                var rotationDeg = Math.Abs(Wrap180(slewedPointing.RaDeg - mountRaDeg));
+                var signedRotationDeg = Wrap180(slewedPointing.RaDeg - mountRaDeg);
+                var rotationDeg = Math.Abs(signedRotationDeg);
                 if (rotationDeg < 1.0) {
                     throw new RoutineFailedException("slew_failed",
                         $"the mount reports an RA change of {rotationDeg:F2}° after the seed slew — it did not rotate");
                 }
                 var b = await SolveSeedFrameAsync(guiderClient, workDir, "seed-b", slewedPointing, settings, gen, ct).ConfigureAwait(false);
+                LogSeedSolve("seed-b", b.RaDegJnow, b.DecDegJnow);
                 var bTime = DateTimeOffset.UtcNow;
-                var axis = FitAxis(a, b, rotationDeg, north);
+                var axis = FitAxis(a, b, rotationDeg, north, raIncreasing: signedRotationDeg > 0);
                 var (altErr, azErr) = PolarAlignGeometry.AxisError(
                     axis.RaDeg, axis.DecDeg, site.LatitudeDeg, site.LongitudeDeg, bTime);
                 var seedPointing = PolarAlignGeometry.PointingAltAz(
                     b.RaDegJnow, b.DecDegJnow, site.LatitudeDeg, site.LongitudeDeg, bTime);
+                LogSeedFit(signedRotationDeg, axis.RaDeg, axis.DecDeg, altErr, azErr);
 
                 // ── live adjust: tracking OFF makes the camera direction stationary in alt/az, so
                 // every subsequent solve's alt/az delta from the seed pointing is purely the user's
@@ -626,6 +630,7 @@ namespace OpenAstroAra.Server.Services {
                     * Math.Cos(axisAltDeg * Math.PI / 180.0) * 60.0 * (north ? 1.0 : -1.0);
 
                 SetErrors(gen, altErr, azErr, "adjusting", frameId);
+                LogLiveReadout(frameId, altErr, azErr);
                 lock (_gate) {
                     if (_generation == gen) {
                         _liveIterations = iteration;
@@ -924,10 +929,10 @@ namespace OpenAstroAra.Server.Services {
         }
 
         private static (double RaDeg, double DecDeg) FitAxis(
-                PolarAlignSolveOutcome a, PolarAlignSolveOutcome b, double rotationDeg, bool north) {
+                PolarAlignSolveOutcome a, PolarAlignSolveOutcome b, double rotationDeg, bool north, bool raIncreasing) {
             try {
                 return PolarAlignGeometry.FitAxisTwoPoint(
-                    a.RaDegJnow, a.DecDegJnow, b.RaDegJnow, b.DecDegJnow, rotationDeg, north);
+                    a.RaDegJnow, a.DecDegJnow, b.RaDegJnow, b.DecDegJnow, rotationDeg, north, raIncreasing);
             } catch (ArgumentOutOfRangeException ex) {
                 // Every geometry rejection (coincident pointings, inconsistent chord, axis > 30°
                 // from the pole) is a user-actionable seed failure, not an internal error.
@@ -1003,6 +1008,7 @@ namespace OpenAstroAra.Server.Services {
                     Iterations: _liveIterations,
                     Outcome: outcome);
             }
+            LogFinalError(outcome, record.FinalErrorArcmin, record.FinalAltErrorArcmin, record.FinalAzErrorArcmin, record.Iterations);
             try {
                 await _log.InsertAsync(record, ct).ConfigureAwait(false);
             } catch (Exception ex) {
@@ -1169,6 +1175,18 @@ namespace OpenAstroAra.Server.Services {
                 OperationType: operationType,
                 AcceptedUtc: DateTimeOffset.UtcNow,
                 IdempotencyKey: idempotencyKey);
+
+        [LoggerMessage(EventId = 4527, Level = LogLevel.Information, Message = "§45 polar-align {Frame} solved at RA {RaDeg:F4}° Dec {DecDeg:F4}° (JNOW)")]
+        private partial void LogSeedSolve(string frame, double raDeg, double decDeg);
+
+        [LoggerMessage(EventId = 4528, Level = LogLevel.Information, Message = "§45 polar-align seed fit: mount RA turn {RotationDeg:F3}° -> axis RA {AxisRaDeg:F4}° Dec {AxisDecDeg:F4}°; seed error alt {AltArcmin:F2}′ az {AzArcmin:F2}′")]
+        private partial void LogSeedFit(double rotationDeg, double axisRaDeg, double axisDecDeg, double altArcmin, double azArcmin);
+
+        [LoggerMessage(EventId = 4529, Level = LogLevel.Information, Message = "§45 polar-align live readout {FrameId}: alt {AltArcmin:F2}′ az {AzArcmin:F2}′")]
+        private partial void LogLiveReadout(string? frameId, double altArcmin, double azArcmin);
+
+        [LoggerMessage(EventId = 4530, Level = LogLevel.Information, Message = "§45 polar-align finished ({Outcome}): final error {TotalArcmin}′ (alt {AltArcmin}′ az {AzArcmin}′) after {Iterations} live iterations")]
+        private partial void LogFinalError(string outcome, double? totalArcmin, double? altArcmin, double? azArcmin, int iterations);
 
         [LoggerMessage(EventId = 4510, Level = LogLevel.Information, Message = "§45 polar-align routine started (PA-session lease acquired; seeding)")]
         private partial void LogStarted();
