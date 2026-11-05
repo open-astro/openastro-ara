@@ -4671,6 +4671,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StatsBestFramesDto'
+  /api/v1/stats/album-frames:
+    get:
+      tags:
+        - Stats
+      operationId: GetStatsAlbumFrames
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatsAlbumFramesDto'
   /api/v1/stats/calendar:
     get:
       tags:
@@ -6734,6 +6752,98 @@ paths:
                 $ref: '#/components/schemas/ProblemDetails'
 components:
   schemas:
+    AlbumFrameDto:
+      required:
+        - frame_id
+        - ra_deg
+        - dec_deg
+        - width
+        - height
+        - bin
+        - pixel_scale_arcsec
+        - captured_utc
+        - exposure_seconds
+        - filter_name
+        - target_name
+        - composite_score
+        - profile_id
+        - updated_utc
+      type: object
+      properties:
+        frame_id:
+          type: string
+          format: uuid
+        ra_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        dec_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        width:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        height:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        bin:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        pixel_scale_arcsec:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        captured_utc:
+          type: string
+          format: date-time
+        exposure_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        filter_name:
+          type:
+            - 'null'
+            - string
+        target_name:
+          type: string
+        composite_score:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        profile_id:
+          type:
+            - 'null'
+            - string
+        updated_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
     AlpacaServerVersionDto:
       required:
         - host
@@ -14658,6 +14768,22 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/StatsMilestoneDto'
+    StatsAlbumFramesDto:
+      required:
+        - total_lights
+        - frames
+      type: object
+      properties:
+        total_lights:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        frames:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlbumFrameDto'
     StatsBestFramesDto:
       required:
         - frames
