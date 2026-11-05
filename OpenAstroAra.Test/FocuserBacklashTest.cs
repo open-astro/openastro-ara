@@ -30,50 +30,58 @@ namespace OpenAstroAra.Test {
         private static FocusCalibrationDto Calibration(double? backlashUp) =>
             new(Array.Empty<FocusCalibrationSampleDto>(), DateTimeOffset.UnixEpoch, null, null, BacklashUpSteps: backlashUp);
 
-        private static int[] Legs(params int[] legs) => legs;
-
         private static int Dir(int d, AutofocusSettingsDto s, FocusCalibrationDto? c = null) => FocuserBacklash.StepsFor(d, s, c);
 
-        [Test]
-        public void An_in_to_out_reversal_overshoots_by_the_out_backlash_then_returns() {
-            var s = Settings(backlashOut: 50);
-            var plan = FocuserBacklash.Plan(absolute: true, from: 1000, target: 1200, lastDirection: -1, d => Dir(d, s), 0, 10000);
+        private static FocuserBacklash.Move Plan(bool absolute, int? from, int target, int last, AutofocusSettingsDto s, int offset = 0, int min = 0, int max = 10000) =>
+            FocuserBacklash.Plan(absolute, from, target, last, dir => Dir(dir, s), offset, min, max);
 
-            Assert.That(plan.Legs, Is.EqualTo(Legs(1250, 1200)));
+        [Test]
+        public void An_in_to_out_reversal_adds_the_out_backlash_in_the_same_direction_and_does_not_come_back() {
+            var plan = Plan(true, 1000, 1200, last: -1, Settings(backlashOut: 50));
+
+            Assert.That(plan.HardwareTarget, Is.EqualTo(1250), "one move, 50 steps past the target in the new direction");
+            Assert.That(plan.Extra, Is.EqualTo(50));
             Assert.That(plan.Direction, Is.EqualTo(1));
         }
 
         [Test]
-        public void An_out_to_in_reversal_overshoots_by_the_in_backlash_then_returns() {
-            var s = Settings(backlashIn: 30);
-            var plan = FocuserBacklash.Plan(absolute: true, from: 1000, target: 800, lastDirection: 1, d => Dir(d, s), 0, 10000);
+        public void An_out_to_in_reversal_adds_the_in_backlash_below_the_target() {
+            var plan = Plan(true, 1000, 800, last: 1, Settings(backlashIn: 30));
 
-            Assert.That(plan.Legs, Is.EqualTo(Legs(770, 800)));
+            Assert.That(plan.HardwareTarget, Is.EqualTo(770));
+            Assert.That(plan.Extra, Is.EqualTo(-30));
         }
 
         [Test]
-        public void The_same_direction_moves_once() {
-            var s = Settings(backlashOut: 50);
-            var plan = FocuserBacklash.Plan(true, 1000, 1200, lastDirection: 1, d => Dir(d, s), 0, 10000);
+        public void The_standing_offset_from_earlier_reversals_is_part_of_the_hardware_target() {
+            // The user's target stays 1200; the hardware already sits 20 steps past the logical scale.
+            var plan = Plan(true, 1020, 1200, last: -1, Settings(backlashOut: 50), offset: 20);
 
-            Assert.That(plan.Legs, Is.EqualTo(Legs(1200)));
+            Assert.That(plan.HardwareTarget, Is.EqualTo(1270));
+            Assert.That(plan.Extra, Is.EqualTo(50));
         }
 
         [Test]
-        public void A_first_move_with_no_known_direction_moves_once() {
-            var s = Settings(backlashOut: 50);
-            var plan = FocuserBacklash.Plan(true, 1000, 1200, lastDirection: 0, d => Dir(d, s), 0, 10000);
+        public void The_same_direction_moves_without_extra_steps() {
+            var plan = Plan(true, 1000, 1200, last: 1, Settings(backlashOut: 50));
 
-            Assert.That(plan.Legs, Is.EqualTo(Legs(1200)));
+            Assert.That(plan.HardwareTarget, Is.EqualTo(1200));
+            Assert.That(plan.Extra, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void A_first_move_with_no_known_direction_adds_nothing() {
+            var plan = Plan(true, 1000, 1200, last: 0, Settings(backlashOut: 50));
+
+            Assert.That(plan.Extra, Is.EqualTo(0));
             Assert.That(plan.Direction, Is.EqualTo(1));
         }
 
         [Test]
         public void Zero_backlash_compensates_nothing() {
-            var s = Settings();
-            var plan = FocuserBacklash.Plan(true, 1000, 1200, lastDirection: -1, d => Dir(d, s), 0, 10000);
+            var plan = Plan(true, 1000, 1200, last: -1, Settings());
 
-            Assert.That(plan.Legs, Is.EqualTo(Legs(1200)));
+            Assert.That(plan.Extra, Is.EqualTo(0));
         }
 
         [Test]
@@ -87,19 +95,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void An_overshoot_past_the_travel_stop_is_skipped() {
-            var s = Settings(backlashOut: 50);
-            var plan = FocuserBacklash.Plan(true, 9000, 10000, lastDirection: -1, d => Dir(d, s), 0, 10000);
+        public void Extra_steps_past_the_travel_stop_are_skipped() {
+            var plan = Plan(true, 9000, 10000, last: -1, Settings(backlashOut: 50));
 
-            Assert.That(plan.Legs, Is.EqualTo(Legs(10000)));
+            Assert.That(plan.Extra, Is.EqualTo(0));
+            Assert.That(plan.HardwareTarget, Is.EqualTo(10000));
         }
 
         [Test]
-        public void A_relative_focuser_overshoots_by_offset() {
-            var s = Settings(backlashOut: 50);
-            var plan = FocuserBacklash.Plan(absolute: false, from: null, target: 200, lastDirection: -1, d => Dir(d, s), -10000, 10000);
+        public void A_relative_focuser_adds_the_extra_steps_to_the_offset() {
+            var plan = Plan(false, null, 200, last: -1, Settings(backlashOut: 50), min: -10000);
 
-            Assert.That(plan.Legs, Is.EqualTo(Legs(250, -50)));
+            Assert.That(plan.HardwareTarget, Is.EqualTo(250));
+            Assert.That(plan.Extra, Is.EqualTo(50));
         }
 
         [Test]

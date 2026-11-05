@@ -20,10 +20,10 @@ using System.Threading;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
-/// #1541 — backlash compensation for the focuser service's move path. When a move reverses direction
-/// relative to the last one, it first overshoots the target by the backlash for the new direction and then
-/// returns, so the gear train has taken up its slack before the final approach. Direction +1 is OUT (higher
-/// position), -1 is IN. Pure planning here; <see cref="FocuserService"/> executes the legs.
+/// #1541 — backlash compensation for the focuser service's move path (NINA's Absolute method). When a move
+/// reverses direction relative to the last one, the backlash for the new direction is added to the move, in
+/// that direction. Direction +1 is OUT (higher position), -1 is IN. Pure planning here;
+/// <see cref="FocuserService"/> executes the move and tracks the offset.
 /// </summary>
 internal static class FocuserBacklash {
 
@@ -53,29 +53,25 @@ internal static class FocuserBacklash {
         return Math.Max(0, direction > 0 ? settings.BacklashOutSteps : settings.BacklashInSteps);
     }
 
-    /// <summary>The legs to drive for a move to <paramref name="target"/> and the direction it travels (0 =
-    /// unknown or no motion). Absolute focusers get absolute positions; a relative focuser (<paramref name="from"/>
-    /// unknown) gets signed offsets. A single leg when nothing needs compensating.</summary>
-    internal static (int[] Legs, int Direction) Plan(
-            bool absolute, int? from, int target, int lastDirection, Func<int, int> backlashFor, int minPosition, int maxPosition) {
+    /// <summary>One planned move: the position (or, for a relative focuser, offset) to send the hardware, the
+    /// backlash steps included in it, and the direction the move travels (0 = unknown or no motion).</summary>
+    internal readonly record struct Move(int HardwareTarget, int Extra, int Direction);
+
+    /// <summary>NINA's Absolute method: on a direction change the move goes <c>backlash</c> steps further in the
+    /// NEW direction and stops there, with no return leg. <paramref name="offset"/> is the sum of the extra steps
+    /// already added, so the hardware sits at <c>logical + offset</c> and the user's target scale never shifts.
+    /// A relative focuser (<paramref name="absolute"/> false) takes the offset as it is.
+    /// Extra steps that would leave the travel are skipped.</summary>
+    internal static Move Plan(
+            bool absolute, int? from, int target, int lastDirection, Func<int, int> backlashFor, int offset, int minPosition, int maxPosition) {
         var direction = absolute ? (from is int f ? Math.Sign((long)target - f) : 0) : Math.Sign(target);
-        if (direction == 0 || lastDirection == 0 || direction == lastDirection) {
-            return (new[] { target }, direction);
+        var plain = absolute ? (long)target + offset : target;
+        var steps = direction != 0 && lastDirection != 0 && direction != lastDirection ? backlashFor(direction) : 0;
+        var hardware = plain + direction * steps;
+        if (steps <= 0 || (absolute && maxPosition > 0 && (hardware < minPosition || hardware > maxPosition)) || hardware > int.MaxValue || hardware < int.MinValue) {
+            return new Move((int)plain, 0, direction);
         }
-        var steps = backlashFor(direction);
-        if (steps <= 0) {
-            return (new[] { target }, direction);
-        }
-        var over = (long)target + direction * steps;
-        if (absolute && maxPosition > 0) {
-            over = Math.Clamp(over, minPosition, maxPosition);
-        }
-        if (over == target || over > int.MaxValue || over < int.MinValue) {
-            return (new[] { target }, direction); // no room past the target (travel stop): nothing to take up
-        }
-        // A relative focuser takes offsets, so the return leg is the offset back; an absolute one the target itself.
-        var back = absolute ? target : (int)(target - over);
-        return (new[] { (int)over, back }, direction);
+        return new Move((int)hardware, direction * steps, direction);
     }
 
     /// <summary>The runtime as clients see it: <c>backlash_compensating</c> for the whole compensated move.</summary>

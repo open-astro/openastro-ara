@@ -79,6 +79,8 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
     // #1541 — direction (+1 out / -1 in) of the last move, 0 until one is made on this connection; and whether a
     // compensated move is in flight (reported as `backlash_compensating`). Both under _gate.
     private int _lastDirection;
+    // Sum of the backlash steps added so far (absolute focusers): hardware position = reported position + this.
+    private int _backlashOffset;
     private bool _compensating;
     private long _connectGeneration;
     private bool _disposed;
@@ -258,7 +260,7 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
             var caps = needCaps ? ReadCapabilities(client) : null;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
-                    _runtime = FocuserBacklash.Report(runtime, _compensating);
+                    _runtime = FocuserBacklash.Report(runtime with { Position = runtime.Position - _backlashOffset }, _compensating);
                     // A relative focuser may have no Position to read (NotImplemented is already excluded; some
                     // drivers answer with a plain error instead): only an absolute focuser's Position is essential.
                     ObserveRuntimeReadLocked(readError is null || !(_capabilities?.AbsoluteFocuser ?? true), readError, _device);
@@ -337,6 +339,7 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
                     _client = client;
                     _capabilities = null;       // re-read for the new device
                     _lastDirection = 0;
+                    _backlashOffset = 0;
                     _runtime = IdleRuntime;     // don't serve a prior device's runtime
                     _probe.Reset(); ResetHealthLocked();             // §42.3 — a fresh session starts a fresh streak
                     SetState(EquipmentConnectionState.Connected);

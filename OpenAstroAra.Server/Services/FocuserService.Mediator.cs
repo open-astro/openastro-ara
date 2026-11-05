@@ -100,48 +100,53 @@ public sealed partial class FocuserService : IFocuserMediator {
     public Task<int> MoveFocuserByTemperatureRelative(double temperature, double Slope, CancellationToken ct) =>
         MoveFocuserBlockingAsync(CurrentPosition() + (int)Math.Round(Slope * temperature), ct);
 
-    // #1541 — drive the focuser to `target`, overshooting by the backlash for the new direction and returning when
-    // the move reverses the last one. Blocking (runs on the pool); the sweep suppresses compensation.
+    // #1541 — drive the focuser to the logical `target`; a reversal of the last move adds the new direction's
+    // backlash to the same move (no return leg). The extra steps accumulate in _backlashOffset, so the hardware
+    // sits at logical + offset and every reported position subtracts it. Blocking (runs on the pool); the sweep
+    // suppresses compensation.
     private void MoveCompensated(AlpacaFocuser client, int target) {
-        int[] legs = [target];
-        var direction = 0;
-        int lastDirection;
+        int lastDirection, offset;
         FocuserCapabilitiesDto? caps;
         lock (_gate) {
             lastDirection = _lastDirection;
+            offset = _backlashOffset;
             caps = _capabilities;
         }
-        if (!FocuserBacklash.IsSuppressed && lastDirection != 0 && ReadBacklashInputs() is var (settings, calibration)) {
-            var absolute = caps?.AbsoluteFocuser ?? true;
-            (legs, direction) = FocuserBacklash.Plan(absolute, absolute ? ReadPosition(client) : null, target, lastDirection,
-                d => FocuserBacklash.StepsFor(d, settings, calibration), caps?.MinPosition ?? 0, caps?.MaxPosition ?? 0);
-        } else if (caps?.AbsoluteFocuser ?? true) {
-            direction = ReadPosition(client) is int from ? Math.Sign((long)target - from) : 0;
-        } else {
-            direction = Math.Sign(target);
-        }
-        var compensating = legs.Length > 1;
-        if (compensating) {
+        var absolute = caps?.AbsoluteFocuser ?? true;
+        int? from = absolute && ReadPosition(client) is int hw ? hw - offset : null;
+        var inputs = FocuserBacklash.IsSuppressed || lastDirection == 0 ? null : ReadBacklashInputs();
+        var move = FocuserBacklash.Plan(absolute, from, target, lastDirection,
+            d => inputs is var (settings, calibration) ? FocuserBacklash.StepsFor(d, settings, calibration) : 0,
+            offset, caps?.MinPosition ?? 0, caps?.MaxPosition ?? 0);
+        if (move.Extra != 0) {
             lock (_gate) {
                 _compensating = true;
                 _runtime = FocuserBacklash.Report(_runtime, true);
             }
         }
         try {
-            foreach (var leg in legs) {
-                client.Move(leg);
-            }
+            client.Move(move.HardwareTarget);
         } finally {
-            if (compensating) {
+            if (move.Extra != 0) {
                 lock (_gate) {
                     _compensating = false;
                 }
             }
         }
-        if (direction != 0) {
-            lock (_gate) {
-                _lastDirection = direction;
+        lock (_gate) {
+            if (absolute) {
+                _backlashOffset = offset + move.Extra;
             }
+            if (move.Direction != 0) {
+                _lastDirection = move.Direction;
+            }
+        }
+    }
+
+    // The hardware position as the user's scale sees it: minus the backlash steps added so far.
+    private int? Logical(int? hardware) {
+        lock (_gate) {
+            return hardware - _backlashOffset;
         }
     }
 
@@ -168,7 +173,7 @@ public sealed partial class FocuserService : IFocuserMediator {
         lock (_gate) {
             client = _state == EquipmentConnectionState.Connected ? _client : null;
         }
-        var live = client is not null ? ReadPosition(client) : null;
+        var live = client is not null ? Logical(ReadPosition(client)) : null;
         if (live is int p) {
             return p;
         }
@@ -269,7 +274,7 @@ public sealed partial class FocuserService : IFocuserMediator {
         // instead of where the focuser actually settled. If both the live read and the cache are
         // unavailable, report 0 ("unknown") rather than the requested target — a failed move must not
         // hand back the target and let the caller infer it reached it.
-        var settled = ReadPosition(client);
+        var settled = Logical(ReadPosition(client));
         lock (_gate) {
             return settled ?? _runtime.Position ?? 0;
         }
