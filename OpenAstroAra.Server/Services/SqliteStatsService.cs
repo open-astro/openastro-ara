@@ -322,6 +322,54 @@ public sealed class SqliteStatsService : IStatsService {
         return new StatsBestFramesDto(rows);
     }
 
+    public async Task<StatsAlbumFramesDto> GetAlbumFramesAsync(DateTimeOffset? since, CancellationToken ct) {
+        // Sky Album (#1518): lights Ara captured only; a foreign frame the drive scan catalogued never fills
+        // a card. updated_utc is stored as a UTC "O" string, so the since bound compares lexicographically.
+        await using var conn = _db.OpenConnection();
+        await using var count = conn.CreateCommand();
+        count.CommandText = "SELECT COUNT(*) FROM frames WHERE frame_type = 'light' AND captured_by_ara = 1;";
+        var total = Convert.ToInt32(await count.ExecuteScalarAsync(ct), CultureInfo.InvariantCulture);
+
+        await using var cmd = conn.CreateCommand();
+        var sql = """
+            SELECT f.id, f.ra_deg, f.dec_deg, f.width, f.height, f.bin, f.pixel_scale_arcsec,
+                   f.captured_utc, f.exposure_seconds, f.filter_name, f.target_name,
+                   CAST(json_extract(f.quality_score_json, '$.composite') AS REAL),
+                   s.profile_id, f.updated_utc
+            FROM frames f LEFT JOIN sessions s ON s.id = f.session_id
+            WHERE f.frame_type = 'light' AND f.captured_by_ara = 1
+            """;
+        if (since.HasValue) {
+            sql += " AND f.updated_utc > $since";
+            cmd.Parameters.AddWithValue("$since", SqliteUtcBound(since.Value));
+        }
+        cmd.CommandText = sql + ";";
+
+        var rows = new List<AlbumFrameDto>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct)) {
+            async Task<double?> Real(int i) => await reader.IsDBNullAsync(i, ct) ? null : reader.GetDouble(i);
+            async Task<string?> Text(int i) => await reader.IsDBNullAsync(i, ct) ? null : reader.GetString(i);
+            var updated = await Text(13);
+            rows.Add(new AlbumFrameDto(
+                FrameId: Guid.Parse(reader.GetString(0)),
+                RaDeg: await Real(1),
+                DecDeg: await Real(2),
+                Width: reader.GetInt32(3),
+                Height: reader.GetInt32(4),
+                Bin: await reader.IsDBNullAsync(5, ct) ? null : reader.GetInt32(5),
+                PixelScaleArcsec: await Real(6),
+                CapturedUtc: DateTimeOffset.Parse(reader.GetString(7), CultureInfo.InvariantCulture),
+                ExposureSeconds: reader.GetDouble(8),
+                FilterName: await Text(9),
+                TargetName: reader.GetString(10),
+                CompositeScore: await Real(11),
+                ProfileId: await Text(12),
+                UpdatedUtc: updated is null ? null : DateTimeOffset.Parse(updated, CultureInfo.InvariantCulture)));
+        }
+        return new StatsAlbumFramesDto(total, rows);
+    }
+
     public async Task<StatsCalendarDto> GetCalendarAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct) {
         // Per-day frame counts + integration + distinct target names.
         await using var conn = _db.OpenConnection();

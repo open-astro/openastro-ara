@@ -300,6 +300,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(StatsAchievementsDto))]
 [JsonSerializable(typeof(StatsMilestoneDto))]
 [JsonSerializable(typeof(StatsBestFramesDto))]
+[JsonSerializable(typeof(StatsAlbumFramesDto))]
 [JsonSerializable(typeof(StatsCalendarDayDto))]
 [JsonSerializable(typeof(StatsCalendarDto))]
 [JsonSerializable(typeof(StatsFocusTempDto))]
