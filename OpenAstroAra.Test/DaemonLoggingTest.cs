@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NUnit.Framework;
@@ -19,17 +20,18 @@ namespace OpenAstroAra.Test;
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1848", Justification = "One test line")]
 public class DaemonLoggingTest {
     [Test]
-    public void Core_and_host_loggers_both_reach_the_daemon_log() {
+    public async Task Core_and_host_loggers_both_reach_the_daemon_log() {
         var dir = Path.Combine(Path.GetTempPath(), "ara-logging-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         var previous = Environment.GetEnvironmentVariable("OPENASTROARA_PROFILE_DIR");
         Environment.SetEnvironmentVariable("OPENASTROARA_PROFILE_DIR", dir);
         try {
-            var app = Program.BuildApp(Array.Empty<string>());
+            await using var app = Program.BuildApp(Array.Empty<string>());
             CoreLogger.Info("core-marker");
             app.Services.GetRequiredService<ILogger<PolarAlignService>>()
                 .Log(LogLevel.Information, "host-marker");
             CoreLogger.CloseAndFlush();
+            await Task.CompletedTask.ConfigureAwait(false);
 
             var text = string.Concat(Directory.GetFiles(Path.Combine(dir, "logs"), "openastroara-*.log")
                 .Select(File.ReadAllText));
