@@ -65,6 +65,20 @@ typography:
   mono:
     fontFamily: "ui-monospace, SF Mono, Menlo, monospace"
     fontSize: "11px"
+  readout-simple:
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontSize: "30px"
+    fontWeight: 300
+    fontFeature: "tnum"
+  heading-simple:
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontSize: "16px"
+    fontWeight: 600
+  hint-simple:
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    fontSize: "20px"
+    fontWeight: 400
+    letterSpacing: "2px"
 rounded:
   xs: "4px"
   sm: "6px"
@@ -87,11 +101,32 @@ components:
   button-emergency-stop:
     backgroundColor: "{colors.accent-error}"
     textColor: "{colors.selection-fg}"
-    padding: "0 8px"
+    rounded: "16px"
+    padding: "7px 18px"
+  button-emergency-stop-simple:
+    backgroundColor: "{colors.emergency-stop}"
+    textColor: "{colors.selection-fg}"
+    rounded: "{rounded.simple}"
+    padding: "0"
+    size: "60px"
   panel-simple:
     backgroundColor: "{colors.overlay-scrim}"
     rounded: "{rounded.simple}"
-    backdropBlur: "5px"
+  status-pill-simple:
+    backgroundColor: "{colors.overlay-scrim}"
+    textColor: "{colors.text-primary}"
+    typography: "{typography.body-simple}"
+    rounded: "{rounded.simple}"
+    padding: "0 16px"
+    height: "48px"
+    width: "300px"
+  message-pill-simple:
+    backgroundColor: "{colors.overlay-scrim}"
+    textColor: "{colors.text-primary}"
+    typography: "{typography.body-simple}"
+    rounded: "{rounded.simple}"
+    height: "48px"
+    width: "420px"
   button-primary-simple:
     backgroundColor: "{colors.button-primary}"
     textColor: "{colors.selection-fg}"
@@ -227,7 +262,7 @@ A near-black neutral ramp carries everything; saturated status accents carry mea
 
 ## Layout
 
-The shell (reference: PR #1474, open as of 2026-11-01) follows NINA's arrangement:
+The shell (reference: PR #1474, merged 2026-11-02) follows NINA's arrangement:
 - **Top bar (64 px):** device buttons first, then search, Night mode and a Settings gear at the right edge. The buttons run in order of use: Camera, Mount, Guider, Focuser, Filter Wheel, Rotator, Flat Panel, Switch, Weather, Safety, Dome.
 - **Navigation rail (left):** the night's workflow only, Planning → Checklist → Sequence → Live. Settings is not on the rail; it opens from the gear, which lights in Sky Info Blue while Settings shows.
 - **Centre:** the active tab.
@@ -250,7 +285,7 @@ Responsive behaviour is keyed to the window, not the device:
 Phones run Companion Mode (see PRODUCT.md). PR #1474's narrow layout is the shell phones get today.
 
 ### Named Rules
-**The Two Densities Rule.** The full UI is dense: 11–15 px type and 4–8 px corners. Simple Mode is roomy and image-first: the frame fills the window, controls float on translucent overlays, every interactive target is at least 44 px tall, corners are 10 px, and body text is 14 px. Both densities share the same colours, the same named rules and the same Emergency Stop hold; Simple Mode's Stop fills with `emergency-stop` (#D32F2F) so its label reads at 4.5:1. Phones run Companion Mode, which builds on Simple Mode, so phones always get the roomy density. Simple Mode exists only as a prototype behind an experimental toggle (`feat/simple-mode`); this is its target.
+**The Two Densities Rule.** The full UI is dense: 11–15 px type and 4–8 px corners. Simple Mode is roomy and image-first: the frame fills the window, controls float on translucent overlays, every interactive target is at least 44 px tall, corners are 10 px, and body text is 14 px. Both densities share the same colours, the same named rules and the same Emergency Stop hold; Simple Mode's Stop fills with `emergency-stop` (#D32F2F) so its label reads at 4.5:1. Phones run Companion Mode, which builds on Simple Mode, so phones always get the roomy density. Simple Mode ships on master behind an experimental toggle (Settings → System → Experimental); this is its target.
 
 ## Elevation & Depth
 
@@ -294,8 +329,8 @@ A pill (12 px radius) with a 10 px status dot followed by a label in body-small.
 Material segmented buttons and choice chips. Selected segments use Selection Blue with white text, and outlines use Hairline. On the panels over the image (Simple Mode's device windows, the rail's popovers) an on/off is a pair of segments that name their states ("Cooler On" / "Off"), never a bare toggle, so it reads at night over any frame. In a list of settings (Settings › Rig, the full UI's panels) it is the platform's switch (`Switch.adaptive`: the iOS switch on iPad and iPhone, Material elsewhere), with its label read together with it (decided 2026-11-03).
 
 ### Simple Mode: Image First (two rails)
-Simple Mode (see PRODUCT.md) puts the latest frame first. It is simpler than ASIAir, not a copy of it. The image fills the window edge to edge, and the controls float over it on translucent panels. The layout below is the prototype on `feat/simple-mode`, approved on 2026-11-01; it sits behind Settings → System → Experimental → Simple Mode (off by default, per client), and the system status bar is hidden while it shows.
-- **Panels:** every panel uses `overlay-scrim` (Night Floor at 90 %, so panel text reads at 4.5:1 or better over a dark sky, a grey frame or a white flat; raised from 72 % on 2026-11-02) over a 5 px blur of the image behind it (`panel-simple`'s `backdropBlur`, `AraBlur.panel` in code; one shared blur for all panels (`BackdropGroup`, measured on the iPad 6 on 2026-11-05: one filter per panel cost ~30 ms a frame against ~6 ms shared and ~4 ms with none): the Settings sheet's and the device windows' look, on every panel since 2026-11-04 for legibility; the strip, rails, status pill, message pills, Info tiles, the Night Setup strip, the plan squares and every popover), 10 px corners and no border, and sits 16 px from the frame edge and from its neighbours. Error words on a panel use `error-text` (#FF8A80), Fault Red lightened for the scrim; Fault Red itself stays for fills and the E-stop. Text-button labels on a panel use `link-text` (#64B5F6, Info Blue lightened: 4.5:1 on a tile too) and outlined-button labels white; the button primary (#1565C0) is for fills only, since as text it reads at 3:1 on a panel and 2:1 on a tile. A selected or current item on a panel uses `selection-tint`, with its words and icon in `link-text` (Info Blue reads 4.3:1 on the tint over a white frame).
+Simple Mode (see PRODUCT.md) puts the latest frame first. It is simpler than ASIAir, not a copy of it. The image fills the window edge to edge, and the controls float over it on translucent panels. The layout below was approved on 2026-11-01 and is built on master; it sits behind Settings → System → Experimental → Simple Mode (off by default, per client), and the system status bar is hidden while it shows.
+- **Panels:** every panel uses `overlay-scrim` (Night Floor at 90 %, so panel text reads at 4.5:1 or better over a dark sky, a grey frame or a white flat; raised from 72 % on 2026-11-02) over a 5 px blur of the image behind it (`AraBlur.panel` in code, `panel-simple`'s blur in `.impeccable/design.json`; one shared blur for all panels (`BackdropGroup`, measured on the iPad 6 on 2026-11-05: one filter per panel cost ~30 ms a frame against ~6 ms shared and ~4 ms with none): the Settings sheet's and the device windows' look, on every panel since 2026-11-04 for legibility; the strip, rails, status pill, message pills, Info tiles, the Night Setup strip, the plan squares and every popover), 10 px corners and no border, and sits 16 px from the frame edge and from its neighbours. Error words on a panel use `error-text` (#FF8A80), Fault Red lightened for the scrim; Fault Red itself stays for fills and the E-stop. Text-button labels on a panel use `link-text` (#64B5F6, Info Blue lightened: 4.5:1 on a tile too) and outlined-button labels white; the button primary (#1565C0) is for fills only, since as text it reads at 3:1 on a panel and 2:1 on a tile. A selected or current item on a panel uses `selection-tint`, with its words and icon in `link-text` (Info Blue reads 4.3:1 on the tint over a white frame).
 - **Fixed slots:** nothing moves when state changes. A panel with nothing to show is not drawn, and the panels around it keep their places.
 - **Top:** a full-width status strip, 56 px tall: the device dots (connected gear only; a fault still shows), then Search, Night mode and Settings. Search (⌘K too) is Simple Mode's own: it finds sky objects (the sky points at the hit, with Image this), Simple Settings rows (the sheet opens on their section), the modes and imaged targets (the Image Library, filtered); nothing it finds leads to the full UI (decided 2026-11-03). Nothing hides under a ⋯ menu, and nothing on it leads to the full UI. Settings (⌘, too) opens Simple Mode's own Settings, a sheet over the image under the gear, at most 640 pt wide (growing with the text; window-wide until 2026-11-04), its Rig values all one width (160 pt): **Rig** (the rig's figures, name and profile with Change, telescope, site, Permanent pier, the Simple Mode switch, language, versions, logs) and **Devices** (the profile's devices with Connect / Disconnect / Reconnect, each opening its device window).
 - **Camera status:** a pill at the top-right, 16 px under the strip and at most 300 px wide (half the row on a narrow window), like a camera's REC light: "Taking a frame · 3 s left" with a thin bar, Looping, Stopping…, Frame ready, or why it failed. A running plan's step is its own pill under it (see Status pills below), not this one between frames: "Plan · Cooling camera to -10 °C", a blue ring while Ara paused it, amber when it waits for you, with a thin line along the pill's foot showing how far the step has got when it reports that (cooling, a wait, autofocus); a scheduled plan says when it starts ("Plan · Starts at 21:47") (decided 2026-11-02; stacked pills 2026-11-04). Nothing while idle. It stays in the immersive view and moves up into the corner.
