@@ -70,7 +70,9 @@ class FocuserStatus extends EquipmentDeviceStatus {
     required this.tempCompEnabled,
   });
 
-  bool get isMoving => runtimeState == 'moving';
+  // A compensated move (#1541) reports backlash_compensating until it settles.
+  bool get isMoving =>
+      runtimeState == 'moving' || runtimeState == 'backlash_compensating';
 
   @override
   bool get isBusy => isMoving;

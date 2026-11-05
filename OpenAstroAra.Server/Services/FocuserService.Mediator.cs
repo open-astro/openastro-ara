@@ -126,13 +126,15 @@ public sealed partial class FocuserService : IFocuserMediator {
         }
         try {
             client.Move(move.HardwareTarget);
-        } finally {
+        } catch {
             if (move.Extra != 0) {
                 lock (_gate) {
                     _compensating = false;
                 }
             }
+            throw;
         }
+        // Move returns once the move is dispatched, so the flag stays up; RefreshCacheOnce drops it when IsMoving reads false.
         lock (_gate) {
             if (absolute) {
                 _backlashOffset = move.Offset;

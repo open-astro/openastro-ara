@@ -80,7 +80,7 @@ internal static class FocuserBacklash {
         return new Move((int)hardware, direction * steps, direction, absolute ? (int)hardware - target : offset);
     }
 
-    /// <summary>The runtime as clients see it: <c>backlash_compensating</c> for the whole compensated move.</summary>
+    /// <summary>The runtime as clients see it: <c>backlash_compensating</c> while a compensated move is still moving.</summary>
     internal static FocuserStateDto Report(FocuserStateDto runtime, bool compensating) =>
         compensating ? runtime with { State = "backlash_compensating" } : runtime;
 }

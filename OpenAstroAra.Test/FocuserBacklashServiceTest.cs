@@ -47,6 +47,14 @@ namespace OpenAstroAra.Test {
             private readonly CancellationTokenSource _cts = new();
             private readonly Task _loop;
             private int _position;
+            private int _movingLeft;
+            private int _isMovingReads;
+
+            /// <summary>After a move the stub answers this many <c>ismoving</c> reads with true, then false.</summary>
+            public int MovingReadsAfterMove { get; set; }
+
+            /// <summary>Every <c>ismoving</c> read so far: the service reads it once per refresh tick.</summary>
+            public int IsMovingReads => Volatile.Read(ref _isMovingReads);
 
             public readonly ConcurrentQueue<int> Moves = new();
 
@@ -90,6 +98,7 @@ namespace OpenAstroAra.Test {
                                         && int.TryParse(kv[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var p)) {
                                     Moves.Enqueue(p);
                                     Position = p;
+                                    Volatile.Write(ref _movingLeft, MovingReadsAfterMove);
                                 }
                             }
                         }
@@ -100,7 +109,8 @@ namespace OpenAstroAra.Test {
                             "MAXSTEP" => "50000",
                             "STEPSIZE" => "1",
                             "TEMPERATURE" => "10",
-                            "ISMOVING" or "TEMPCOMP" or "TEMPCOMPAVAILABLE" => "false",
+                            "ISMOVING" => (Interlocked.Increment(ref _isMovingReads) > 0 && Interlocked.Decrement(ref _movingLeft) >= 0) ? "true" : "false",
+                            "TEMPCOMP" or "TEMPCOMPAVAILABLE" => "false",
                             _ => "true", // connected, absolute
                         };
                     }
@@ -183,6 +193,33 @@ namespace OpenAstroAra.Test {
             var dto = await PollAsync(svc, d => d.Runtime.Position == 1000);
             Assert.That(stub.Moves, Is.EqualTo(MovesAfterReversal));
             Assert.That(dto?.Runtime.Position, Is.EqualTo(1000), "the refresh subtracts the standing offset");
+        }
+
+        [Test]
+        public async Task A_compensated_move_reports_backlash_compensating_until_it_settles() {
+            await using var stub = StubFocuser.Start(1000);
+            using var svc = new FocuserService(profiles: Store(backlashIn: 30, backlashOut: 40)) { RefreshPeriod = Tick };
+            await ConnectAsync(svc, stub);
+            await svc.MoveFocuser(1200, CancellationToken.None);
+
+            // The in reversal is compensated; the focuser reports motion for the next 8 reads, i.e. several refresh ticks.
+            stub.MovingReadsAfterMove = 8;
+            await svc.MoveAsync(new FocuserMoveRequestDto(1000), idempotencyKey: null, CancellationToken.None);
+            var readsAtDispatch = stub.IsMovingReads;
+            while (stub.IsMovingReads < readsAtDispatch + 3) {
+                await Task.Delay(20);
+            }
+
+            Assert.That((await svc.GetAsync(CancellationToken.None))!.Runtime.State, Is.EqualTo("backlash_compensating"),
+                "still compensating two refresh ticks after the dispatch");
+            Assert.That(svc.GetInfo().IsMoving, Is.True);
+            var settled = await PollAsync(svc, d => d.Runtime.State == "idle");
+            Assert.That(settled?.Runtime.State, Is.EqualTo("idle"), "cleared once the focuser stops moving");
+            Assert.That(settled!.Runtime.Position, Is.EqualTo(1000));
+
+            // A plain move (no reversal) is just "moving".
+            await svc.MoveAsync(new FocuserMoveRequestDto(800), idempotencyKey: null, CancellationToken.None);
+            Assert.That((await PollAsync(svc, d => d.Runtime.State != "idle"))?.Runtime.State, Is.EqualTo("moving"));
         }
 
         [Test]
