@@ -1047,6 +1047,10 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
             '${startAt.hour.toString().padLeft(2, '0')}:'
             '${startAt.minute.toString().padLeft(2, '0')}',
           )
+        // #1596: a skipped run in Simple Mode's words; other reasons (the
+        // meridian countdown) are the daemon's live text, like the step itself.
+        : run?.reasonCode == 'target_skipped'
+        ? l10n.previewPlanSkipped
         : run?.reasonText ?? run?.currentInstructionDescription;
     final paused =
         run?.state == SequenceRunState.paused ||

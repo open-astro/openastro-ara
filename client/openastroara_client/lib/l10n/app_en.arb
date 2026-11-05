@@ -452,6 +452,10 @@
     "description": "Simple Mode status pill: the imaging plan is paused (its step follows)"
   },
   "previewPlan": "Plan",
+  "previewPlanSkipped": "Nothing imaged: the target's start conditions weren't met",
+  "@previewPlanSkipped": {
+    "description": "Simple Mode status pill: a finished plan imaged nothing because its target never started (#1596)"
+  },
   "@previewPlan": {
     "description": "Simple Mode status pill: the imaging plan is running (its step follows)"
   },

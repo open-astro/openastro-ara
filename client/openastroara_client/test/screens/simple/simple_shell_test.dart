@@ -2978,7 +2978,9 @@ void main() {
             sequenceId: 'seq-1', state: SequenceRunState.completed,
             reasonCode: 'target_skipped', reasonText: 'Skipped, nothing was imaged: M31 did not run'));
     await tester.pump();
-    expect(pill(), contains('M31 did not run'));
+    // Simple Mode's own words, keyed on the code, not the daemon's English text.
+    expect(pill(), contains("Nothing imaged: the target's start conditions weren't met"));
+    expect(pill(), isNot(contains('M31 did not run')));
   });
 
   testWidgets('while a plan runs and the camera is idle, the status pill says which step is running', (tester) async {

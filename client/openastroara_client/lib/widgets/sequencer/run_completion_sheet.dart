@@ -60,7 +60,13 @@ class RunCompletionSheet extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = run.state;
     final ok = state == SequenceRunState.completed;
-    final color = ok ? AraColors.accentConnected : AraColors.accentError;
+    // A run that imaged nothing isn't a failure but isn't fine either: amber.
+    final skipped = ok && run.reasonText != null;
+    final color = skipped
+        ? AraColors.accentBusy
+        : ok
+        ? AraColors.accentConnected
+        : AraColors.accentError;
     final title = switch (state) {
       SequenceRunState.completed =>
         run.reasonText == null ? 'Run complete' : 'Run skipped',
@@ -82,7 +88,7 @@ class RunCompletionSheet extends ConsumerWidget {
           children: [
             Row(
               children: [
-                Icon(ok ? Icons.check_circle : Icons.error_outline,
+                Icon(skipped ? Icons.warning_amber_rounded : ok ? Icons.check_circle : Icons.error_outline,
                     color: color, size: 28),
                 const SizedBox(width: AraSpace.s12),
                 Text(title, style: AraText.title.copyWith(fontSize: 18)),

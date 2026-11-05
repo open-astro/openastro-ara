@@ -292,7 +292,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
     final style = FilledButton.styleFrom(
       backgroundColor: red,
       // Not onError: the app's dark scheme makes that black (4.2:1 on the red).
-      foregroundColor: Colors.white,
+      foregroundColor: AraColors.onEmergencyStop,
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 0 : (simple ? 8 : 18),
         vertical: simple ? 0 : 7,

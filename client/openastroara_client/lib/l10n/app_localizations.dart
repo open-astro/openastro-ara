@@ -687,6 +687,12 @@ abstract class AppLocalizations {
   /// **'Plan'**
   String get previewPlan;
 
+  /// Simple Mode status pill: a finished plan imaged nothing because its target never started (#1596)
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing imaged: the target\'s start conditions weren\'t met'**
+  String get previewPlanSkipped;
+
   /// Simple Mode status pill: the mount is parking
   ///
   /// In en, this message translates to:

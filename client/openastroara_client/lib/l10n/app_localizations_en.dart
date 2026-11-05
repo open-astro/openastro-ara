@@ -349,6 +349,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get previewPlan => 'Plan';
 
   @override
+  String get previewPlanSkipped =>
+      'Nothing imaged: the target\'s start conditions weren\'t met';
+
+  @override
   String get previewParking => 'Parking';
 
   @override

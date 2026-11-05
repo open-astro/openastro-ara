@@ -349,6 +349,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get previewPlan => 'Plan';
 
   @override
+  String get previewPlanSkipped =>
+      'Nothing imaged: the target\'s start conditions weren\'t met';
+
+  @override
   String get previewParking => 'Parking';
 
   @override
@@ -2495,6 +2499,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get previewPlan => 'Plano';
+
+  @override
+  String get previewPlanSkipped =>
+      'Nada foi capturado: as condições de início do alvo não foram atendidas';
 
   @override
   String get previewParking => 'Estacionando';
