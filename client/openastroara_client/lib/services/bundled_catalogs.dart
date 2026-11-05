@@ -120,7 +120,8 @@ List<PlanningDso> parseOpenNgcCsv(String text) {
     // The cross-identifications the row carries (#1267 item 4): Messier,
     // the NGC/IC counterpart, and the Identifiers column (Caldwell, LBN,
     // UGC, PK, …). mergeDuplicates folds rows that share one.
-    if (messier != null) {
+    // An addendum row named by its Messier number (M040) is its own alias.
+    if (messier != null && designationKey('M $messier') != designationKey(name)) {
       aliases.add('M $messier');
     }
     // On Arp/WR rows the cell can hold a list ("4038,4039"): one alias each.

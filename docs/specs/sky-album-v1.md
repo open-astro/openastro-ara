@@ -134,7 +134,7 @@ The bundled OpenNGC file lists NGC and IC objects only, so both Books come up sh
 | C41 | Hyades (Mel 25) | add a row |
 | C99 | Coalsack | add a row |
 
-Search and Tonight's Sky gain these objects as a side effect. Positions and sizes come from OpenNGC's addendum where it has them.
+Search gains these objects as a side effect, and so does Tonight's Sky except M40 and C41: `planningCull` drops M40 as a star (`**`) and C41 as an open cluster with no magnitude, so the shelf never offers those two. Positions and sizes come from OpenNGC's addendum where it has them.
 
 ## Tests
 
