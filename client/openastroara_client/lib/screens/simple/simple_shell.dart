@@ -476,6 +476,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         // As Plan's search: the sky, pointed at it, its card offering Image this.
         setState(() => _sky = true);
         ref.read(planetariumSearchProvider.notifier).search(suggestion.label);
+      case SimpleSettingHit(section: 'Guide'):
+        _pickMode(SimpleModeScreen.guide);
       case SimpleSettingHit(:final section):
         _openMenu(section: section);
       case SimpleModeHit(:final mode):
