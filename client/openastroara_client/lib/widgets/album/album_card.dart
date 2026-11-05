@@ -17,9 +17,9 @@ const double albumCardAspect = 2.5 / 3.5;
 
 Color albumTierColor(AlbumTier? tier) => switch (tier) {
       null => AraColors.border,
-      AlbumTier.bronze => const Color(0xFFB87333),
-      AlbumTier.silver => const Color(0xFFC0C0C0),
-      AlbumTier.gold => const Color(0xFFFFD54F),
+      AlbumTier.bronze => AraColors.tierBronze,
+      AlbumTier.silver => AraColors.tierSilver,
+      AlbumTier.gold => AraColors.tierGold,
     };
 
 String albumTierName(BuildContext context, AlbumTier tier) => switch (tier) {

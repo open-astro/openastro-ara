@@ -11,6 +11,7 @@ import 'package:openastroara/screens/album/sky_album_screen.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/album/album_frame.dart';
+import 'package:openastroara/state/album/album_matching.dart';
 import 'package:openastroara/state/album/album_state.dart';
 import 'package:openastroara/state/profile_cache_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
@@ -344,7 +345,7 @@ void main() {
     await _pump(tester, frames: _m31Frames);
     final node = tester.getSemantics(find.byType(AlbumCard).first);
     final data = node.getSemanticsData();
-    expect(data.hasFlag(SemanticsFlag.isButton), isTrue);
+    expect(data.flagsCollection.isButton, isTrue);
     expect(data.hasAction(SemanticsAction.tap), isTrue);
     expect(data.label, 'M 1 Crab Nebula, Not collected yet');
     // The flipped back closes through the dialog's labelled barrier; the card itself is no
@@ -354,5 +355,18 @@ void main() {
     final back = tester.getSemantics(find.byType(AlbumCardBack)).getSemanticsData();
     expect(back.hasAction(SemanticsAction.tap), isFalse);
     handle.dispose();
+  });
+
+  test('every tier colour reads at 4.5:1 on the card panel and the page', () {
+    // The card back writes the tier name in its colour on Panel Grey; the header on Night Floor.
+    double ratio(Color a, Color b) {
+      final (x, y) = (a.computeLuminance(), b.computeLuminance());
+      return (math.max(x, y) + 0.05) / (math.min(x, y) + 0.05);
+    }
+
+    for (final t in AlbumTier.values) {
+      expect(ratio(albumTierColor(t), AraColors.bgPanel), greaterThanOrEqualTo(4.5), reason: '$t');
+      expect(ratio(albumTierColor(t), AraColors.bgPrimary), greaterThanOrEqualTo(4.5), reason: '$t');
+    }
   });
 }

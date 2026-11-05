@@ -25,6 +25,9 @@ colors:
   tile-fill: "rgba(56, 56, 56, 0.55)"
   alarm-scrim: "rgba(60, 8, 8, 0.88)"
   emergency-stop: "#D32F2F"
+  tier-bronze: "#CD853F"
+  tier-silver: "#C0C0C0"
+  tier-gold: "#FFD54F"
   button-primary: "#1565C0"
   button-secondary: "#424242"
 typography:
@@ -174,6 +177,9 @@ A near-black neutral ramp carries everything; saturated status accents carry mea
 - **Dew Amber** (`accent-warning`, `accent-busy`): the Amber row only. The two tokens share a value; `accent-busy` is kept for the `busy` status dot, which now means warning: an in-between state is Blue, never amber.
 - **Fault Red** (`accent-error`): the Red row. The theme's `error`.
 - **Unplugged Grey** (`accent-disconnected`): the Grey row. The same value as `text-disabled`, deliberately: "not there" reads as absent, not as an alarm.
+
+### Sky Album tiers
+- **Bronze, Silver, Gold** (`tier-bronze`, `tier-silver`, `tier-gold`): a Sky Album Card's tier, as its border and the tier name. A category hue, so the State-Only Colour Rule allows it; the tier is also written and spoken, never colour alone. Each reads at 5:1 or better on Panel Grey and Night Floor.
 
 ### Neutral
 - **Night Floor** (`bg-primary`): the app background and scaffold.
