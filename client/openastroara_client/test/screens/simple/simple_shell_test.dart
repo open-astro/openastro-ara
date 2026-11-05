@@ -870,7 +870,7 @@ void main() {
     expect(find.byKey(const Key('simple-no-devices')), findsNothing);
   });
 
-  testWidgets("the top bar names Main Camera and Guider Camera, the guide camera's icon a video camera",
+  testWidgets("the top bar names Main Camera and Guide Camera, the guide camera's icon a video camera",
       (tester) async {
     // iPad, 2026-11-04: the top bar still showed the guider's target icon after the rename.
     await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
@@ -881,7 +881,7 @@ void main() {
     expect(find.descendant(of: strip, matching: find.byIcon(Icons.videocam_outlined)), findsOneWidget);
     expect(find.descendant(of: strip, matching: find.byIcon(Icons.track_changes)), findsNothing,
         reason: 'the target is the Guide mode now');
-    expect(find.descendant(of: strip, matching: find.byTooltip('Guider Camera')), findsOneWidget);
+    expect(find.descendant(of: strip, matching: find.byTooltip('Guide Camera')), findsOneWidget);
     expect(find.descendant(of: strip, matching: find.byTooltip('Main Camera')), findsOneWidget);
   });
 
@@ -2031,6 +2031,34 @@ void main() {
     expect(find.byKey(const Key('sky')), findsOneWidget, reason: 'Sky still opens it over a frame');
   });
 
+  testWidgets('Search finds the Guide Camera section, and Dither in Guide mode where it lives (#1586)',
+      (tester) async {
+    await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => _GuiderUp())]);
+    Future<void> search(String q) async {
+      await tester.tap(find.byKey(const Key('simple-search-button')));
+      await tester.pump();
+      await tester.enterText(find.byKey(const Key('simple-search-field')), q);
+      await tester.pump();
+      await tester.pump();
+    }
+
+    await search('phd2');
+    expect(find.descendant(of: find.byKey(const Key('simple-search-setting-0')), matching: find.text('Guide Camera')),
+        findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-search-button')));
+    await tester.pump();
+
+    await search('dither');
+    final row = find.byKey(const Key('simple-search-setting-0'));
+    expect(find.descendant(of: row, matching: find.text('Dither')), findsOneWidget);
+    expect(find.descendant(of: row, matching: find.text('Guide')), findsOneWidget,
+        reason: 'Dither is in Guide mode, not the Guide Camera window (user, 2026-11-05)');
+    await tester.tap(row);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-search')), findsNothing);
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Guide')), findsOneWidget);
+  });
+
   testWidgets('Search opens on its own: no mode panel beside the rail', (tester) async {
     await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-search-button')));
@@ -2440,11 +2468,11 @@ void main() {
     ]);
     await _openSection(tester, 'Devices');
     final page = find.byKey(const Key('simple-gear'));
-    expect(find.descendant(of: page, matching: find.text('Guider Camera · ZWO ASI120MM Mini')), findsOneWidget);
+    expect(find.descendant(of: page, matching: find.text('Guide Camera · ZWO ASI120MM Mini')), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-gear-guider-disconnect')));
     await tester.pump();
     expect(guider.calls, ['disconnect']);
-    await tester.tap(find.descendant(of: page, matching: find.text('Guider Camera · ZWO ASI120MM Mini')));
+    await tester.tap(find.descendant(of: page, matching: find.text('Guide Camera · ZWO ASI120MM Mini')));
     // A guiding guider's dot blinks (working): pump a while, never settles.
     for (var n = 0; n < 5; n++) {
       await tester.pump(const Duration(milliseconds: 200));
@@ -2479,7 +2507,7 @@ void main() {
                 .first,
             matching: find.byType(StatusDot)))
         .color;
-    expect(dot('Guider'), guiderStatusLevel(await guider.future).color);
+    expect(dot('Guide Camera'), guiderStatusLevel(await guider.future).color);
     expect(dot('Camera'), StatusLevel.info.color, reason: 'connecting is info on the chips');
   });
 
@@ -2491,7 +2519,7 @@ void main() {
     ]);
     await _openSection(tester, 'Devices');
     final page = find.byKey(const Key('simple-gear'));
-    expect(find.descendant(of: page, matching: find.text('Guider Camera')), findsOneWidget);
+    expect(find.descendant(of: page, matching: find.text('Guide Camera')), findsOneWidget);
     expect(find.descendant(of: page, matching: find.text('Not connected')), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-gear-guider-connect')));
     await tester.pump();

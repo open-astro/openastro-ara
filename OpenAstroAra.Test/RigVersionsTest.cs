@@ -50,6 +50,9 @@ namespace OpenAstroAra.Test {
         public void ASTAPs_version_is_read_from_its_help_banner() {
             const string banner = "ASTAP astrometric solver version CLI-2026.09.01\n(C) 2018, 2026 by Han Kleijn. License MPL 2.0\nUsage:\n";
             Assert.That(RigVersions.ParseAstapVersion(banner), Is.EqualTo("CLI-2026.09.01"));
+            // 2026.11.01 adds ", multi-threaded" after the version (the rig's /opt/openastroara/astap_cli).
+            Assert.That(RigVersions.ParseAstapVersion("ASTAP astrometric solver version CLI-2026.11.01, multi-threaded\n"),
+                Is.EqualTo("CLI-2026.11.01"));
             Assert.That(RigVersions.ParseAstapVersion("command not found"), Is.Null);
         }
 

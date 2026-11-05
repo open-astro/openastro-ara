@@ -1449,7 +1449,7 @@ Future<void> simpleSaveGuider(
 }
 
 /// The guide camera's gain: the guider's own scale, percent of the camera's
-/// range, set when the thumb is let go (Guide mode and the Guider Camera
+/// range, set when the thumb is let go (Guide mode and the Guide Camera
 /// window share it).
 class SimpleGuideGainSlider extends ConsumerStatefulWidget {
   const SimpleGuideGainSlider({super.key});
