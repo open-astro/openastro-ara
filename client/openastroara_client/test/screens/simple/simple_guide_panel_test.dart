@@ -251,7 +251,7 @@ void main() {
     await tester.pump();
     expect(_g.calls, ['stop']);
     await tester.pump(const Duration(seconds: 11)); // still paused after 10 s of reads
-    expect(c.read(simpleMessagesProvider).single.title, "The guider didn't stop: it is still Paused. Try Stop again.");
+    expect(c.read(simpleMessagesProvider).single.title, "The guider didn't stop: it is still paused. Try Stop again.");
   });
 
   testWidgets('no guider: the greyed shutter says why when tapped (user, 2026-11-04)', (tester) async {

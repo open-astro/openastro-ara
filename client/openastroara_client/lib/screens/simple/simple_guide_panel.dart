@@ -151,7 +151,8 @@ Future<void> simpleGuideRun(
     final g = container.read(guiderStatusProvider).value;
     if (!start && simpleGuideActive(g)) {
       notify(
-        l10n.guideStopRefused(guiderRuntimeText(l10n, g!.runtimeState)),
+        // Lower case inside the sentence, as the guiding strip writes the phase.
+        l10n.guideStopRefused(guiderRuntimeText(l10n, g!.runtimeState).toLowerCase()),
         error: true,
         snackBarRed: false,
       );
