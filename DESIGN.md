@@ -30,6 +30,13 @@ colors:
   tier-gold: "#FFD54F"
   button-primary: "#1565C0"
   button-secondary: "#424242"
+  brand-navy-top: "#272C4D"
+  brand-navy-mid: "#171B3B"
+  brand-navy-bottom: "#070914"
+  brand-line-start: "#4FC3F7"
+  brand-line-end: "#7C8CF8"
+  brand-glow: "#8FA8FF"
+  brand-star-hole: "#0B0F24"
 typography:
   title:
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
@@ -133,6 +140,15 @@ components:
     typography: "{typography.body-simple}"
     rounded: "{rounded.simple}"
     height: "44px"
+  ara-sheet-simple:
+    backgroundColor: "{colors.overlay-scrim}"
+    textColor: "{colors.text-primary}"
+    typography: "{typography.body-simple}"
+    rounded: "{rounded.simple}"
+    padding: "16px"
+    width: "420px"
+  wallpaper-simple:
+    backgroundColor: "{colors.brand-navy-mid}"
   card:
     backgroundColor: "{colors.bg-panel}"
     rounded: "{rounded.sm}"
@@ -216,6 +232,13 @@ A near-black neutral ramp carries everything; saturated status accents carry mea
 ### Sky Album tiers
 - **Bronze, Silver, Gold** (`tier-bronze`, `tier-silver`, `tier-gold`): a Sky Album Card's tier, as its border and the tier name. A category hue, so the State-Only Colour Rule allows it; the tier is also written and spoken, never colour alone. Each reads at 5:1 or better on Panel Grey and Night Floor.
 
+### Brand
+The app icon's palette, kept apart from the status colours. Only the Ara mark and Simple Mode's no-frame wallpaper use it (#1602).
+- **Ara Navy** (`brand-navy-top`, `brand-navy-mid`, `brand-navy-bottom`): the wallpaper's top-to-bottom gradient, the icon tile's deep blue. Dim Text reads on its middle step at about 6.4:1.
+- **Constellation Blue** (`brand-line-start` to `brand-line-end`): the mark's lines and star rings, one gradient from cyan to periwinkle across the figure.
+- **Bright Star Glow** (`brand-glow`): the halo around the mark's bright star, faded to nothing.
+- **Star Socket** (`brand-star-hole`): the dark centre inside each ringed star.
+
 ### Neutral
 - **Night Floor** (`bg-primary`): the app background and scaffold.
 - **Panel Grey** (`bg-panel`): side panels, top bar, bottom status bar, cards, navigation rail.
@@ -230,6 +253,8 @@ A near-black neutral ramp carries everything; saturated status accents carry mea
 **The State-Only Colour Rule.** An accent appears only through a semantic role: a state dot, a state chip, a category hue or a destructive action. If it doesn't mean something, it is grey.
 
 **The Brightness-First Rule.** Every state must still read in Night mode, where hue is gone and only luminance remains. A connected dot must stay brighter than a border. Never tell two states apart by hue alone.
+
+**The Brand Stays Home Rule.** The brand palette lives in two places, the Ara mark and the no-frame wallpaper. It never marks a state, a selection or a call to action.
 
 ## Typography
 
@@ -372,6 +397,14 @@ The shutter starts the plan; while imaging it shows pause bars with a blue ring 
 **Always on, in both modes:** Emergency Stop (except in the immersive view), the attention banner, the device status dots, Night mode and the Simple ↔ full UI switch.
 
 Targets are at least 44 px tall (the settings segments too), with 14 px body text. Text follows the user's size (WCAG 1.4.4), checked from 1x to 2x on iPad, in English and Brazilian Portuguese, by the text-size test, which also fails on a label cut short: the rails keep 72 px up to 1.1x and then widen with the text (131 px at 2x), their buttons, the mode tiles, Stop, the plan squares and the Focuser window's dial growing with them; above 1.3x Info's and System's tiles become one panel, a label and value per line, since 72 px tiles would squeeze the text back down (decided 2026-11-03); panels, the sheet and messages follow it too. Colours and status dots behave exactly as in the full UI. Phone Companion Mode uses the same image-first idea in a portrait arrangement. The rendered reference is `design/preview/ara-design-preview.html`.
+### Ara Mark and Sheet (Simple Mode, signature)
+- **Mark:** the app icon's constellation without its tile, drawn in code (`AraMark`), 30 px at the left end of the status strip as a 48 px tap target with the tooltip "OpenAstro Ara". At small sizes the lines stay at least 2 px, the rings 1.5 px wide and 3 px across, and the bright star 6 px. A 28 px Hairline (4 px before it, 12 px after) sets it apart from the device dots.
+- **Sheet:** a tap opens it under the mark (16 px below the strip, at the left inset), and a tap again or on the background closes it. A Simple panel (16 px padding) holds a `SimpleVersions` table titled "OpenAstro Ara": This app, Ara server, Guider when known, Rig (its name) and Profile. Names are in Dim Text, values in Starlight Text. It is as wide as its text, from 280 to 420 px; past that, values wrap. It has no Settings row: the gear is Settings.
+
+### No-Frame Wallpaper (Simple Mode)
+- **Look:** the Ara Navy gradient and three layers of white stars from fixed seeds: far ones many and faint (260, 0.5 px), near ones few and bright (28, 1.6 px). No mark on it (dropped 2026-11-06). The "Tap the shutter to take a frame" hint stays centred over it.
+- **Motion:** on iPad and iPhone the layers shift 6, 14 and 26 px at full tilt (about 20°), eased over 150 ms, on the screen's axes in either orientation. The centre drifts back to how the device is held, and a dead band of about 1 px ignores sensor noise. With Reduce Motion (iOS) or Remove animations (Android), or on desktop, it is still and the sensor isn't read.
+
 ### Cards / Containers
 - **Corner Style:** 6 px.
 - **Background:** Panel Grey.
