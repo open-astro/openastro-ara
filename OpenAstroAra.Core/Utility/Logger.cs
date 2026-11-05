@@ -143,8 +143,8 @@ namespace OpenAstroAra.Core.Utility {
             Log.CloseAndFlush();
         }
 
-        private const string ErrorTemplate = "{source}|{member}|{line}";
-        private const string MessageTemplate = "{source}|{member}|{line}|{message}";
+        private const string ErrorTemplate = "{source:l}|{member:l}|{line}";
+        private const string MessageTemplate = "{source:l}|{member:l}|{line}|{message:l}";
 
         public static void Error(
                 Exception ex,

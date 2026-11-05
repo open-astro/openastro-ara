@@ -34,6 +34,7 @@ public class DaemonLoggingTest {
             var text = string.Concat(Directory.GetFiles(Path.Combine(dir, "logs"), "openastroara-*.log")
                 .Select(File.ReadAllText));
             Assert.That(text, Does.Contain("core-marker").And.Contain("host-marker"));
+            Assert.That(text, Does.Not.Contain("\\\"core-marker\\\""), "Core lines render without quoted values");
         } finally {
             Environment.SetEnvironmentVariable("OPENASTROARA_PROFILE_DIR", previous);
             try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
