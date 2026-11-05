@@ -206,11 +206,19 @@ namespace OpenAstroAra.Test {
             return (fake, tool);
         }
 
-        private static Mock<ITelescopeMediator> NewMount(bool connected = true, bool tracking = true) {
+        /// <param name="trackingSticks">False = the mount reports tracking off again after the switch-on
+        /// (a reconnect dropped it), until the next SetTrackingEnabled(true).</param>
+        private static Mock<ITelescopeMediator> NewMount(bool connected = true, bool tracking = true, bool trackingSticks = true) {
             var mount = new Mock<ITelescopeMediator>();
             var trackingNow = tracking;
-            mount.Setup(m => m.GetInfo()).Returns(() => new TelescopeInfo {
-                Connected = connected, SiderealTime = 20.0, TrackingEnabled = trackingNow,
+            var reads = 0;
+            mount.Setup(m => m.GetInfo()).Returns(() => {
+                // A dropped tracking state shows up a few reads after the first switch-on, once.
+                if (!trackingSticks && trackingNow && ++reads == 6) {
+                    trackingNow = false;
+                    trackingSticks = true;
+                }
+                return new TelescopeInfo { Connected = connected, SiderealTime = 20.0, TrackingEnabled = trackingNow };
             });
             mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>()))
                 .Callback<bool>(on => trackingNow = on)
@@ -237,6 +245,8 @@ namespace OpenAstroAra.Test {
             new(guider, NullLogger<PolarAlignService>.Instance, (mount ?? NewMount()).Object, NewStore(), ws, log,
                 new FakeFrameFetcher(), guideFocus: guideFocus is null ? null : () => guideFocus) {
                 FrameWaitSlack = TimeSpan.FromMilliseconds(10),
+                TrackingConfirmTimeout = TimeSpan.FromMilliseconds(500),
+                TrackingConfirmPoll = TimeSpan.FromMilliseconds(10),
             };
 
         private static async Task<GuiderService> ConnectGuiderAsync(FakeGuider fake) {
@@ -473,6 +483,42 @@ namespace OpenAstroAra.Test {
 
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
             mount.Verify(m => m.SetTrackingEnabled(false), Times.Once, "the user's tracking-off is restored");
+        }
+
+        [Test]
+        public async Task Tracking_dropped_while_the_guider_rotates_is_turned_back_on() {
+            var paCalls = new ConcurrentQueue<bool>();
+            var (fake, tool) = StartFake(paCalls);
+            await using var _f = fake;
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var mount = NewMount(tracking: false, trackingSticks: false);
+            using var svc = NewService(guider, mount);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await WaitForRpcAsync(fake, "staticpa_get_status", atLeast: 10).ConfigureAwait(false);
+
+            mount.Verify(m => m.SetTrackingEnabled(true), Times.AtLeast(2), "the drop during the RA turn is re-asserted");
+            tool.Calc();
+            await PollStateAsync(svc, "adjusting").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            mount.Verify(m => m.SetTrackingEnabled(false), Times.Once);
+        }
+
+        [Test]
+        public async Task A_mount_that_will_not_start_tracking_fails_as_tracking_off() {
+            var paCalls = new ConcurrentQueue<bool>();
+            var (fake, _) = StartFake(paCalls);
+            await using var _f = fake;
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var mount = NewMount(tracking: false);
+            mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns(true); // accepted, never reported
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, mount, ws: ws);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            await PollStateAsync(svc, "failed").ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("tracking_off"));
+            Assert.That(fake.ReceivedMethods, Does.Not.Contain("staticpa_start"));
         }
 
         [Test]

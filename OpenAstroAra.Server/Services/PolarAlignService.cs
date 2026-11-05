@@ -70,6 +70,8 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>Bench knob: how long a star pick or a manual-mode measurement waits for the
         /// guider's next frame between attempts (the exposure plus this).</summary>
         internal TimeSpan FrameWaitSlack { get; set; } = TimeSpan.FromMilliseconds(500);
+        internal TimeSpan TrackingConfirmTimeout { get; set; } = TimeSpan.FromSeconds(10);
+        internal TimeSpan TrackingConfirmPoll { get; set; } = TimeSpan.FromMilliseconds(250);
 
         private bool _active;
         private string _state = "idle";
@@ -295,7 +297,7 @@ namespace OpenAstroAra.Server.Services {
                 var north = site.LatitudeDeg > 0;
                 var exposure = TimeSpan.FromSeconds(Math.Max(0.01, settings.ExposureSeconds));
                 await UnparkIfParkedAsync(ct).ConfigureAwait(false);
-                trackingToRestore = EnsureTrackingOn();
+                trackingToRestore = await EnsureTrackingOnAsync(ct).ConfigureAwait(false);
                 await SetExposureBestEffortAsync(guiderClient, exposure, ct).ConfigureAwait(false);
                 await guiderClient.LoopAsync(ct).ConfigureAwait(false);
                 await FindStarWithRetriesAsync(guiderClient, exposure, ct).ConfigureAwait(false);
@@ -337,23 +339,50 @@ namespace OpenAstroAra.Server.Services {
         /// an Alpaca mount refuses SlewToCoordinatesAsync while not tracking ("requires Tracking to be
         /// true", the iOptron on the CM4, 2026-11-05). Tracking is turned on before the tool starts;
         /// returns the prior state when it was changed, so the exit path can put it back.</summary>
-        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-            Justification = "A mount fault while enabling tracking becomes the routine's tracking_off failure.")]
-        private bool? EnsureTrackingOn() {
+        private async Task<bool?> EnsureTrackingOnAsync(CancellationToken ct) {
             var info = _mount.GetInfo();
             if (info is null || info.TrackingEnabled) {
                 return null;
             }
+            if (!await TurnTrackingOnAsync(ct).ConfigureAwait(false)) {
+                throw new RoutineFailedException("tracking_off",
+                    "the mount is not tracking and would not start — turn tracking on from the mount controls, then start again");
+            }
+            LogTrackingEnabled();
+            return false;
+        }
+
+        /// <summary>Set tracking and wait for the mount to report it (a driver can take a moment, and
+        /// a reported state that never flips means the mount refused). True once it reports tracking.</summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "A mount fault while enabling tracking becomes the routine's tracking_off failure.")]
+        private async Task<bool> TurnTrackingOnAsync(CancellationToken ct) {
             try {
-                if (_mount.SetTrackingEnabled(true)) {
-                    LogTrackingEnabled();
+                if (!_mount.SetTrackingEnabled(true)) {
                     return false;
                 }
             } catch (Exception ex) {
                 LogTrackingEnableFailed(ex);
+                return false;
             }
-            throw new RoutineFailedException("tracking_off",
-                "the mount is not tracking and would not start — turn tracking on from the mount controls, then start again");
+            var deadline = DateTimeOffset.UtcNow + TrackingConfirmTimeout;
+            while (_mount.GetInfo() is not { TrackingEnabled: true }) {
+                if (DateTimeOffset.UtcNow >= deadline) {
+                    return false;
+                }
+                await Task.Delay(TrackingConfirmPoll, ct).ConfigureAwait(false);
+            }
+            return true;
+        }
+
+        /// <summary>While the guider is still rotating the mount, tracking must stay on: a §42.3 fault
+        /// recovery (a mount reconnect) can drop it between Ara's switch-on and the guider's slew (CM4,
+        /// 2026-11-05: "requires Tracking to be true" six seconds after Ara had turned it on). Re-asserts it.</summary>
+        private async Task KeepTrackingOnWhileAligningAsync(CancellationToken ct) {
+            if (_mount.GetInfo() is { TrackingEnabled: false }) {
+                LogTrackingDropped();
+                await TurnTrackingOnAsync(ct).ConfigureAwait(false);
+            }
         }
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -465,6 +494,9 @@ namespace OpenAstroAra.Server.Services {
                     throw new RoutineFailedException("guider_closed", "the guider closed its polar-alignment tool");
                 }
                 if (status.Calced != true) {
+                    if (status.Aligning == true) {
+                        await KeepTrackingOnWhileAligningAsync(ct).ConfigureAwait(false);
+                    }
                     if (status.Aligning != true && status.Auto == true) {
                         throw new RoutineFailedException("fit_failed",
                             "the guider stopped measuring before it had a fit — it lost the star during the RA turn; start again");
@@ -724,5 +756,8 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4549, Level = LogLevel.Warning, Message = "§45 polar-align could not restore tracking")]
         private partial void LogTrackingRestoreFailed(Exception exception);
+
+        [LoggerMessage(EventId = 4550, Level = LogLevel.Warning, Message = "§45 polar-align tracking dropped while the guider was still rotating the mount — turning it back on")]
+        private partial void LogTrackingDropped();
     }
 }
