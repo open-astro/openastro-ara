@@ -1,19 +1,26 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/guider_calibration_view.dart';
+import 'package:openastroara/models/guider_live.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/guiding_assistant.dart';
 import 'package:openastroara/models/server.dart';
+import 'package:openastroara/services/guider_live_api.dart';
 import 'package:openastroara/services/guiding_assistant_api.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/guider/guider_live_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/guider/guiding_assistant_state.dart';
+import 'package:openastroara/widgets/imaging/guide_camera_panel.dart';
 import 'package:openastroara/widgets/imaging/guiding_assistant_dialog.dart';
 
 /// What the daemon's profile holds after an Apply: the guider's North (#1448).
@@ -31,6 +38,7 @@ class _Fake implements GuidingAssistantClient {
   GuidingAssistantStatus status;
   final calls = <String>[];
   bool refuseStart = false;
+  String refusal = 'no star selected - start looping and select a star first';
   _Fake(this.status);
   @override
   Future<GuidingAssistantStatus> getStatus() async => status;
@@ -41,9 +49,7 @@ class _Fake implements GuidingAssistantClient {
   }) async {
     calls.add('start $durationSec $measureBacklash');
     if (refuseStart) {
-      throw StateError(
-        'no star selected - start looping and select a star first',
-      );
+      throw StateError(refusal);
     }
     status = GuidingAssistantStatus.fromJson({
       'connected': true,
@@ -115,6 +121,72 @@ GuidingAssistantStatus _done() => GuidingAssistantStatus.fromJson({
   },
 });
 
+const _stopped = GuiderLive(connected: true, appState: 'Stopped');
+const _looping = GuiderLive(
+  connected: true,
+  appState: 'Looping',
+  frameWidth: 1280,
+  frameHeight: 960,
+  hasFrame: true,
+);
+const _selected = GuiderLive(
+  connected: true,
+  appState: 'Selected',
+  frameWidth: 1280,
+  frameHeight: 960,
+  lockX: 640,
+  lockY: 480,
+  hasFrame: true,
+);
+const _calibrated = GuiderCalibrationView(
+  connected: true,
+  data: GuiderCalibrationData(calibrated: true),
+);
+
+/// The guide camera: serves [view], and a Find star that loops then locks.
+class _Live implements GuiderLiveClient {
+  GuiderLive view;
+  GuiderCalibrationView calibration;
+  final calls = <String>[];
+  String? findStarRefusal;
+  _Live(this.view, this.calibration);
+  static final Uint8List _png = base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+  );
+  @override
+  Future<GuiderLive> getLive() async => view;
+  @override
+  Future<Uint8List?> getFrame() async => view.hasFrame ? _png : null;
+  @override
+  Future<void> loop() async {
+    calls.add('loop');
+    view = _looping;
+  }
+
+  @override
+  Future<void> findStar() async {
+    calls.add('find_star');
+    if (findStarRefusal != null) throw StateError(findStarRefusal!);
+    view = _selected;
+  }
+
+  @override
+  Future<void> selectStar(double x, double y) async =>
+      calls.add('select $x $y');
+  @override
+  Future<GuiderCalibrationView> getCalibration() async => calibration;
+  @override
+  Future<void> stop() async => calls.add('stop');
+  @override
+  Future<void> deselectStar() async {}
+  @override
+  Future<List<Map<String, dynamic>>> getHistory() async => const [];
+  @override
+  Future<void> clearCalibration() async {}
+  @override
+  void close() {}
+}
+
 class _GuiderAt extends GuiderStatusNotifier {
   final GuiderRuntimeState runtime;
   _GuiderAt(this.runtime);
@@ -138,8 +210,10 @@ Future<_Fake> _pump(
   bool open = true,
   bool shared = false,
   _Profile? profile,
+  _Live? live,
 }) async {
   fake ??= _Fake(status);
+  live ??= _Live(_selected, _calibrated);
   t.view.physicalSize = const Size(900, 900);
   t.view.devicePixelRatio = 1;
   addTearDown(t.view.resetPhysicalSize);
@@ -151,6 +225,7 @@ Future<_Fake> _pump(
       overrides: [
         activeServerProvider.overrideWith((ref) => ref.watch(_server)),
         guidingAssistantApiFactoryProvider.overrideWithValue((_) => fake!),
+        guiderLiveApiFactoryProvider.overrideWithValue((_) => live!),
         guiderStatusProvider.overrideWith(() => _GuiderAt(guider)),
         profileApiProvider.overrideWithValue(profile ?? _Profile()),
       ],
@@ -183,6 +258,121 @@ ProviderContainer _container(WidgetTester t) =>
 String _text(WidgetTester t, Key key) => t.widget<Text>(find.byKey(key)).data!;
 
 void main() {
+
+  Future<void> pumpGated(
+    WidgetTester t,
+    GuiderLive view,
+    GuiderCalibrationView cal,
+  ) => _pump(
+    t,
+    const GuidingAssistantStatus(connected: true, state: 'idle'),
+    live: _Live(view, cal),
+  );
+
+  bool startEnabled(WidgetTester t) =>
+      t
+          .widget<FilledButton>(find.byKey(const Key('guiding-assistant-start')))
+          .onPressed !=
+      null;
+
+  testWidgets('Start is disabled with no star selected and names what is missing', (
+    t,
+  ) async {
+    await pumpGated(t, _looping, _calibrated);
+    expect(startEnabled(t), isFalse);
+    expect(
+      _text(t, const Key('guiding-assistant-missing')),
+      contains('a selected star'),
+    );
+    expect(find.byKey(const Key('ga-req-looping-ok')), findsOneWidget);
+    expect(find.byKey(const Key('ga-req-star-missing')), findsOneWidget);
+    expect(find.byKey(const Key('ga-req-calibrated-ok')), findsOneWidget);
+  });
+
+  testWidgets('Start is disabled while the guider is not looping', (t) async {
+    await pumpGated(t, _stopped, _calibrated);
+    expect(startEnabled(t), isFalse);
+    expect(find.byKey(const Key('ga-req-looping-missing')), findsOneWidget);
+    expect(
+      _text(t, const Key('guiding-assistant-missing')),
+      contains('looping'),
+    );
+  });
+
+  testWidgets('Start is disabled while the mount is not calibrated', (t) async {
+    await pumpGated(t, _selected, const GuiderCalibrationView(connected: true));
+    expect(startEnabled(t), isFalse);
+    expect(find.byKey(const Key('ga-req-calibrated-missing')), findsOneWidget);
+    expect(
+      _text(t, const Key('guiding-assistant-missing')),
+      contains('calibration'),
+    );
+  });
+
+  testWidgets('Start is enabled when looping, a star is selected and calibrated', (
+    t,
+  ) async {
+    await pumpGated(t, _selected, _calibrated);
+    expect(startEnabled(t), isTrue);
+    expect(find.byKey(const Key('guiding-assistant-missing')), findsNothing);
+  });
+
+  testWidgets('Find star from a stopped guider loops, locks a star and shows the picture', (
+    t,
+  ) async {
+    final live = _Live(_stopped, _calibrated);
+    await _pump(
+      t,
+      const GuidingAssistantStatus(connected: true, state: 'idle'),
+      live: live,
+    );
+    expect(find.byType(GuideCameraView), findsNothing);
+    await t.tap(find.byKey(const Key('guiding-assistant-find-star')));
+    await t.pump();
+    await t.pump();
+    await t.pump();
+    expect(live.calls, ['loop', 'find_star']);
+    expect(find.byKey(const Key('ga-req-looping-ok')), findsOneWidget);
+    expect(find.byKey(const Key('ga-req-star-ok')), findsOneWidget);
+    expect(_text(t, const Key('ga-lock-position')), '640, 480');
+    expect(find.byType(GuideCameraView), findsOneWidget);
+    expect(startEnabled(t), isTrue);
+  });
+
+  testWidgets('Find star with no usable star says so plainly, with the guider\'s reason', (
+    t,
+  ) async {
+    final live = _Live(_looping, _calibrated)
+      ..findStarRefusal = 'no star found - exposure too short';
+    await _pump(
+      t,
+      const GuidingAssistantStatus(connected: true, state: 'idle'),
+      live: live,
+    );
+    await t.tap(find.byKey(const Key('guiding-assistant-find-star')));
+    await t.pump();
+    await t.pump();
+    await t.pump();
+    final msg = _text(t, const Key('guiding-assistant-error'));
+    expect(msg, contains('Could not find a star'));
+    expect(msg, contains('exposure too short'));
+  });
+
+  testWidgets('a start refused for no star shows a plain message, not the raw 422', (
+    t,
+  ) async {
+    final fake = await _pump(
+      t,
+      const GuidingAssistantStatus(connected: true, state: 'idle'),
+    );
+    fake.refuseStart = true;
+    await t.tap(find.byKey(const Key('guiding-assistant-start')));
+    await t.pump();
+    await t.pump();
+    final msg = _text(t, const Key('guiding-assistant-error'));
+    expect(msg, isNot(contains('loop + find_star')));
+    expect(msg, contains('Find star'));
+  });
   testWidgets('idle: Start sends the chosen duration and backlash flag', (
     t,
   ) async {
@@ -220,12 +410,13 @@ void main() {
       const GuidingAssistantStatus(connected: true, state: 'idle'),
     );
     fake.refuseStart = true;
+    fake.refusal = 'not calibrated - guide once first';
     await t.tap(find.byKey(const Key('guiding-assistant-start')));
     await t.pump();
     await t.pump();
     expect(
       _text(t, const Key('guiding-assistant-error')),
-      contains('no star selected'),
+      contains('not calibrated'),
     );
     expect(find.byKey(const Key('guiding-assistant-start')), findsOneWidget);
   });

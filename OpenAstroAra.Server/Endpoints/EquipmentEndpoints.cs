@@ -603,6 +603,9 @@ public static partial class EquipmentEndpoints {
             .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("GuiderLiveSelectStar").WithSummary("Lock the guider on the star nearest (x, y) guide pixels.");
+        guider.MapPost("/live/find_star", (IGuiderLiveService live, CancellationToken ct) => GuiderLiveResultAsync(() => live.FindStarAsync(ct)))
+            .Produces<GuiderLiveLockDto>(StatusCodes.Status200OK).ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("GuiderLiveFindStar").WithSummary("Let the guider pick its best star in the current frame (422 with its reason when there is no image or no usable star); answers the lock position.");
         guider.MapGet("/live/calibration", async (IGuiderLiveService live, CancellationToken ct) => Results.Ok(await live.GetCalibrationAsync(ct)))
             .Produces<GuiderCalibrationViewDto>(StatusCodes.Status200OK)
             .WithName("GetGuiderCalibrationView")

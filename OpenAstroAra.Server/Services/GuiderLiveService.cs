@@ -36,6 +36,8 @@ public interface IGuiderLiveService {
     Task StopAsync(CancellationToken ct);
     /// <summary>Lock on the star nearest a tap, in guide pixels.</summary>
     Task SelectStarAsync(double x, double y, CancellationToken ct);
+    /// <summary>Let the guider pick its best star in the current frame; answers where it locked.</summary>
+    Task<GuiderLiveLockDto> FindStarAsync(CancellationToken ct);
     Task DeselectStarAsync(CancellationToken ct);
     /// <summary>This session's calibration run, the stored result and Ara's verdict on it.</summary>
     Task<GuiderCalibrationViewDto> GetCalibrationAsync(CancellationToken ct);
@@ -175,6 +177,11 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
             throw new ArgumentOutOfRangeException(nameof(x), $"({x}, {y}) is outside the {s.Width}×{s.Height} guide frame");
         }
         await guider.SetLockPositionAsync(x, y, ct).ConfigureAwait(false);
+    }
+
+    public async Task<GuiderLiveLockDto> FindStarAsync(CancellationToken ct) {
+        var lockPos = await _guider.RequireConnectedGuider().FindStarAsync(ct).ConfigureAwait(false);
+        return new GuiderLiveLockDto(Math.Round(lockPos.X, 2), Math.Round(lockPos.Y, 2));
     }
 
     public Task DeselectStarAsync(CancellationToken ct) => _guider.RequireConnectedGuider().DeselectStarAsync(ct);

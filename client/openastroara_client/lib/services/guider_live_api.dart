@@ -20,6 +20,9 @@ abstract interface class GuiderLiveClient {
   Future<void> selectStar(double x, double y);
   Future<void> deselectStar();
 
+  /// Let the guider pick the best star in its current frame (its find_star).
+  Future<void> findStar();
+
   /// #1364 item 5 — the guider's recent guide steps, oldest first: each in
   /// the `guider.step` payload shape plus `age_sec` (seconds before now,
   /// measured on the guider's clock). Empty when it has none.
@@ -81,6 +84,10 @@ class GuiderLiveApi implements GuiderLiveClient {
     '/api/v1/equipment/guider/live/select',
     data: <String, dynamic>{'x': x, 'y': y},
   );
+
+  @override
+  Future<void> findStar() =>
+      _dio.post<void>('/api/v1/equipment/guider/live/find_star');
 
   @override
   Future<void> deselectStar() =>

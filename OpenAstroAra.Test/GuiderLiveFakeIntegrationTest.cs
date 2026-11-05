@@ -709,6 +709,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task FindStar_answers_the_lock_position_and_422_when_the_guider_has_no_image() {
+            var hasImage = false;
+            var (fake, svc) = await ConnectedAsync(f => {
+                LiveRpcs(f);
+                f.OnRpc("find_star", _ => hasImage
+                    ? new JsonArray(640.5, 480.25)
+                    : throw new InvalidOperationException("no image - start looping first"));
+            }).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            var live = new GuiderLiveService(svc, new NoFrames());
+
+            var refused = await OpenAstroAra.Server.Endpoints.EquipmentEndpoints.GuiderLiveResultAsync(
+                () => live.FindStarAsync(CancellationToken.None)).ConfigureAwait(false);
+            Assert.That((refused as Microsoft.AspNetCore.Http.IStatusCodeHttpResult)?.StatusCode, Is.EqualTo(422), "no frame yet: the guider's refusal");
+
+            hasImage = true;
+            var ok = await OpenAstroAra.Server.Endpoints.EquipmentEndpoints.GuiderLiveResultAsync(
+                () => live.FindStarAsync(CancellationToken.None)).ConfigureAwait(false);
+            Assert.That((ok as Microsoft.AspNetCore.Http.IStatusCodeHttpResult)?.StatusCode, Is.EqualTo(200));
+            var body = (ok as Microsoft.AspNetCore.Http.IValueHttpResult)?.Value as GuiderLiveLockDto;
+            Assert.That(body, Is.EqualTo(new GuiderLiveLockDto(640.5, 480.25)));
+        }
+
+        [Test]
         public async Task Loop_connects_the_guider_equipment_first() {
             var connected = false;
             var (fake, svc) = await ConnectedAsync().ConfigureAwait(false);

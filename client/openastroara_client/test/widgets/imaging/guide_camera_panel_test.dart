@@ -45,6 +45,8 @@ class _FakeLive implements GuiderLiveClient {
       calls.add('select $x $y');
   @override
   Future<void> deselectStar() async => calls.add('deselect');
+  @override
+  Future<void> findStar() async {}
   GuiderCalibrationView calibration = const GuiderCalibrationView(
     connected: true,
     verdict: 'redo',
@@ -589,7 +591,7 @@ void main() {
     expect(find.byType(GuidingAssistantPanel), findsOneWidget);
     expect(
       t.widget<Text>(find.byKey(const Key('guiding-assistant-headline'))).data,
-      startsWith('Ready.'),
+      startsWith('Not ready'),
     );
   });
 }
