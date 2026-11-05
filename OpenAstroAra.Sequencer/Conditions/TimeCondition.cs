@@ -108,11 +108,17 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         private DateTime lastCutOffTime;
 
+        // #1576: the plain-time target resolved at the first Check of a run. Held so the condition
+        // expires at that time instead of rolling over to tomorrow; cleared by ResetProgress and
+        // by any edit of the time.
+        private DateTime? heldTarget;
+
         [JsonProperty]
         public int Hours {
             get => hours;
             set {
                 hours = value;
+                heldTarget = null;
                 RaisePropertyChanged();
                 RaisePropertyChanged(nameof(RemainingTime));
             }
@@ -123,6 +129,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             get => minutes;
             set {
                 minutes = value;
+                heldTarget = null;
                 RaisePropertyChanged();
                 RaisePropertyChanged(nameof(RemainingTime));
             }
@@ -133,6 +140,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             get => minutesOffset;
             set {
                 minutesOffset = value;
+                heldTarget = null;
                 UpdateTime();
                 RaisePropertyChanged();
             }
@@ -151,6 +159,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             get => seconds;
             set {
                 seconds = value;
+                heldTarget = null;
                 RaisePropertyChanged();
                 RaisePropertyChanged(nameof(RemainingTime));
             }
@@ -161,6 +170,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
             get => selectedProvider;
             set {
                 selectedProvider = value;
+                heldTarget = null;
                 if (selectedProvider != null) {
                     UpdateTime();
                     RaisePropertyChanged();
@@ -181,6 +191,9 @@ namespace OpenAstroAra.Sequencer.Conditions {
             // #1155 — read the provider's rollover for THIS calculation; a remaining-time query
             // must not write the bound RolloverTime (an observable property) as a side effect.
             var rollover = SelectedProvider?.GetRolloverTime(this) ?? RolloverTime;
+            if (!HasFixedTimeProvider && heldTarget.HasValue) {
+                return heldTarget.Value;
+            }
             return WallClockTarget.Resolve(now, Hours, Minutes, Seconds, rollover, HasFixedTimeProvider);
         }
 
@@ -222,6 +235,9 @@ namespace OpenAstroAra.Sequencer.Conditions {
         public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             var nextItemDuration = nextItem?.GetEstimatedDuration() ?? TimeSpan.Zero;
             var remainingTime = CalculateRemainingTime();
+            if (!HasFixedTimeProvider) {
+                heldTarget = remainingTime;
+            }
 
             var hasTimeRemaining = DateTime.Now + nextItemDuration <= remainingTime;
             if (lastCutOffTime >= remainingTime) {
@@ -232,7 +248,9 @@ namespace OpenAstroAra.Sequencer.Conditions {
                 if (nextItem != null) {
                     Logger.Info($"No more time remaining. Remaining: {remainingTime - DateTime.Now}, Next Item {nextItem.Name ?? ""}, Next Item Estimated Duration {nextItemDuration}, Next Item Attempts: {nextItem.Attempts}");
                     // There is no time remaining due to the next instruction taking longer - mark the stop time so that all following checks are marked as finished until we exceed the set time
-                    lastCutOffTime = (new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, Hours, Minutes, Seconds)).AddSeconds(10);
+                    lastCutOffTime = HasFixedTimeProvider
+                        ? (new DateTime(DateTime.Now.Year, DateTime.Now.Month, DateTime.Now.Day, Hours, Minutes, Seconds)).AddSeconds(10)
+                        : remainingTime.AddSeconds(10);
                 }
             }
             if (!hasTimeRemaining && IsActive()) {
@@ -247,6 +265,7 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         public override void ResetProgress() {
             lastCutOffTime = System.DateTime.MinValue;
+            heldTarget = null;
             base.ResetProgress();
         }
     }
