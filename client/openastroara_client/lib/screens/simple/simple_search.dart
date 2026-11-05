@@ -77,7 +77,8 @@ List<(String, String, String)> _settings(AppLocalizations l) => [
   (l.searchSectionFocuser, 'Focuser', l.searchWordsFocuser),
   (l.searchSettingFocuserStep, 'Focuser', l.searchWordsFocuserStep),
   (l.searchSectionGuider, 'Guider', l.searchWordsGuider),
-  (l.searchSettingDither, 'Guider', l.searchWordsDither),
+  // Dither lives in Guide mode, not the Guide Camera window (user, 2026-11-05).
+  (l.searchSettingDither, 'Guide', l.searchWordsDither),
 ];
 
 /// A Settings section id's name in [l]'s language.
@@ -87,6 +88,7 @@ String _sectionName(AppLocalizations l, String section) => switch (section) {
   'Mount' => l.searchSectionMount,
   'Focuser' => l.searchSectionFocuser,
   'Guider' => l.searchSectionGuider,
+  'Guide' => l.shellModeGuide,
   _ => l.searchSectionRig,
 };
 
@@ -222,8 +224,10 @@ class _SimpleSearchPanelState extends ConsumerState<SimpleSearchPanel> {
         if (ref.watch(mountProvider.select((v) => v.value != null))) 'Mount',
         if (ref.watch(focuserProvider.select((v) => v.value != null)))
           'Focuser',
-        if (ref.watch(guiderStatusProvider.select((v) => v.value != null)))
+        if (ref.watch(guiderStatusProvider.select((v) => v.value != null))) ...[
           'Guider',
+          'Guide',
+        ],
       },
       // The library is only asked once there is something to look for.
       targets: q.trim().length < 2

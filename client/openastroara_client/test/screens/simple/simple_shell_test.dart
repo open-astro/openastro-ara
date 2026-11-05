@@ -1818,16 +1818,32 @@ void main() {
     expect(find.byKey(const Key('simple-planetarium')), findsOneWidget, reason: 'the sky, pointed at it');
   });
 
-  testWidgets("Search files the guider's settings under Guide Camera (#1586)", (tester) async {
+  testWidgets('Search finds the Guide Camera section, and Dither in Guide mode where it lives (#1586)',
+      (tester) async {
     await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => _GuiderUp())]);
+    Future<void> search(String q) async {
+      await tester.tap(find.byKey(const Key('simple-search-button')));
+      await tester.pump();
+      await tester.enterText(find.byKey(const Key('simple-search-field')), q);
+      await tester.pump();
+      await tester.pump();
+    }
+
+    await search('phd2');
+    expect(find.descendant(of: find.byKey(const Key('simple-search-setting-0')), matching: find.text('Guide Camera')),
+        findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-search-button')));
     await tester.pump();
-    await tester.enterText(find.byKey(const Key('simple-search-field')), 'dither');
-    await tester.pump();
-    await tester.pump();
+
+    await search('dither');
     final row = find.byKey(const Key('simple-search-setting-0'));
     expect(find.descendant(of: row, matching: find.text('Dither')), findsOneWidget);
-    expect(find.descendant(of: row, matching: find.text('Guide Camera')), findsOneWidget, reason: 'its section');
+    expect(find.descendant(of: row, matching: find.text('Guide')), findsOneWidget,
+        reason: 'Dither is in Guide mode, not the Guide Camera window (user, 2026-11-05)');
+    await tester.tap(row);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-search')), findsNothing);
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Guide')), findsOneWidget);
   });
 
   testWidgets('Search opens on its own: no mode panel beside the rail', (tester) async {
