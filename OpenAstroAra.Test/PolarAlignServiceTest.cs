@@ -503,14 +503,20 @@ namespace OpenAstroAra.Test {
             mount.Verify(m => m.SetTrackingEnabled(false), Times.Once);
         }
 
-        [Test]
-        public async Task A_mount_that_will_not_start_tracking_fails_as_tracking_off() {
+        [TestCase("never-reported")]
+        [TestCase("refused")]
+        [TestCase("throws")]
+        public async Task A_mount_that_will_not_start_tracking_fails_as_tracking_off(string how) {
             var paCalls = new ConcurrentQueue<bool>();
             var (fake, _) = StartFake(paCalls);
             await using var _f = fake;
             using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
             var mount = NewMount(tracking: false);
-            mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns(true); // accepted, never reported
+            switch (how) {
+                case "never-reported": mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns(true); break; // accepted, never reported
+                case "refused": mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns(false); break;
+                default: mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Throws(new InvalidOperationException("driver fault")); break;
+            }
             var ws = new WsRecorder();
             using var svc = NewService(guider, mount, ws: ws);
             await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
@@ -519,6 +525,7 @@ namespace OpenAstroAra.Test {
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("tracking_off"));
             Assert.That(fake.ReceivedMethods, Does.Not.Contain("staticpa_start"));
+            mount.Verify(m => m.SetTrackingEnabled(false), Times.Never, "nothing to restore: tracking was never turned on");
         }
 
         [Test]
@@ -570,14 +577,16 @@ namespace OpenAstroAra.Test {
             var (fake, _) = StartFake(paCalls, starFound: false);
             await using var _f = fake;
             using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var mount = NewMount(tracking: false);
             var ws = new WsRecorder();
-            using var svc = NewService(guider, ws: ws);
+            using var svc = NewService(guider, mount, ws: ws);
             await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             var status = await PollStateAsync(svc, "failed").ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("no_star"));
             Assert.That(fake.ReceivedMethods, Does.Not.Contain("staticpa_start"));
+            mount.Verify(m => m.SetTrackingEnabled(false), Times.Once, "tracking turned on for the run is handed back on failure too");
             Assert.That(status.State, Is.EqualTo("failed"));
         }
 
