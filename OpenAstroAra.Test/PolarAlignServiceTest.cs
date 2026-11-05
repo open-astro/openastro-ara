@@ -206,11 +206,15 @@ namespace OpenAstroAra.Test {
             return (fake, tool);
         }
 
-        private static Mock<ITelescopeMediator> NewMount(bool connected = true) {
+        private static Mock<ITelescopeMediator> NewMount(bool connected = true, bool tracking = true) {
             var mount = new Mock<ITelescopeMediator>();
-            mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo {
-                Connected = connected, SiderealTime = 20.0, TrackingEnabled = true,
+            var trackingNow = tracking;
+            mount.Setup(m => m.GetInfo()).Returns(() => new TelescopeInfo {
+                Connected = connected, SiderealTime = 20.0, TrackingEnabled = trackingNow,
             });
+            mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>()))
+                .Callback<bool>(on => trackingNow = on)
+                .Returns(true);
             var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
             mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
@@ -447,6 +451,42 @@ namespace OpenAstroAra.Test {
             var accepted = await svc.RequestCaptureAsync(null, CancellationToken.None).ConfigureAwait(false);
             Assert.That(accepted.OperationType, Is.EqualTo("polar-align.capture"));
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task A_mount_that_is_not_tracking_is_set_tracking_before_the_tool_starts_and_restored_after() {
+            // The iOptron refused the guider's RA slew with "SlewToCoordinatesAsync requires Tracking to
+            // be true" (CM4, 2026-11-05): the routine turns tracking on first and hands it back on exit.
+            var paCalls = new ConcurrentQueue<bool>();
+            var (fake, tool) = StartFake(paCalls);
+            await using var _f = fake;
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var mount = NewMount(tracking: false);
+            using var svc = NewService(guider, mount);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await WaitForRpcAsync(fake, "staticpa_start").ConfigureAwait(false);
+
+            mount.Verify(m => m.SetTrackingEnabled(true), Times.Once, "tracking goes on before the guider slews");
+            tool.Calc();
+            await PollStateAsync(svc, "adjusting").ConfigureAwait(false);
+            mount.Verify(m => m.SetTrackingEnabled(false), Times.Never, "tracking stays on while adjusting");
+
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            mount.Verify(m => m.SetTrackingEnabled(false), Times.Once, "the user's tracking-off is restored");
+        }
+
+        [Test]
+        public async Task A_mount_already_tracking_is_left_alone() {
+            var paCalls = new ConcurrentQueue<bool>();
+            var (fake, _) = StartFake(paCalls);
+            await using var _f = fake;
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var mount = NewMount(tracking: true);
+            using var svc = NewService(guider, mount);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await WaitForRpcAsync(fake, "staticpa_start").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            mount.Verify(m => m.SetTrackingEnabled(It.IsAny<bool>()), Times.Never);
         }
 
         // ── manual mode ──────────────────────────────────────────────────────────────────────
