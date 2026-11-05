@@ -1197,7 +1197,7 @@ As it is on `master` (reconciled 2026-09-19, #1026 — this table describes the 
 
 | Job id | Context | Runner | Steps | Gated by |
 |---|---|---|---|---|
-| `sanity` | `Sanity (design docs)` ✅ required | `ubuntu-latest` | verify the required design docs exist; install gojq (the engine behind `gh --jq`, #1173) so the Flutter-bump selector cross-check runs on it; Python tooling tests (`scripts/tests/`); DUT1 table freshness | never skipped |
+| `sanity` | `Sanity (design docs)` ✅ required | `ubuntu-latest` | verify the required design docs exist; install gojq (the engine behind `gh --jq`, #1173) so the Flutter-bump selector cross-check runs on it; Python tooling tests (`scripts/tests/`); DUT1 table freshness; lint `DESIGN.md` with `@google/design.md` (fails on errors or any contrast-ratio finding, #1600) | never skipped |
 | `changes` | `Changed paths` | `ubuntu-latest` | classify the PR diff into `docs_only` / `dotnet` / `client` outputs (fails open: an error runs everything, and both steps are `continue-on-error` so a checkout flake or a wedged clone leaves the job green with an annotation; only the outer 5-minute job timeout can still report failure — #1024; job-level `continue-on-error` was measured on #1043 to still publish a red check) | never skipped |
 | `alpaca-sim-smoke` | `Alpaca simulator harness (smoke)` | `ubuntu-latest` | download + verify the pinned Alpaca simulators; smoke-test the Alpaca API | `docs_only`, `dotnet` |
 | `alpaca-sim-integration` | `Alpaca discovery integration test` | `ubuntu-latest` | simulators + `dotnet test` of the discovery integration test | `docs_only`, `dotnet` |

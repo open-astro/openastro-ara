@@ -1,0 +1,8 @@
+{
+  "name": "design-lint",
+  "private": true,
+  "description": "Pins the DESIGN.md linter run by the sanity job in .github/workflows/ci.yml.",
+  "devDependencies": {
+    "@google/design.md": "0.4.0"
+  }
+}

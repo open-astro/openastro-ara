@@ -110,6 +110,22 @@ jobs:
       - name: DUT1 table freshness
         run: python3 scripts/check-dut1-freshness.py
 
+      # #1600 — lint the repo-root DESIGN.md with @google/design.md (exact version and
+      # integrity hashes in tools/design-lint/package-lock.json; no npx, no lifecycle scripts).
+      # Pass/fail comes from the JSON via jq, not the linter's exit code: fail on any error
+      # or any contrast-ratio finding; orphaned-tokens, missing-primary and token-summary
+      # are ignored. Node is preinstalled on ubuntu-latest.
+      - name: Lint DESIGN.md
+        working-directory: tools/design-lint
+        run: |
+          npm ci --ignore-scripts
+          ./node_modules/.bin/design.md lint ../../DESIGN.md --format json > "$RUNNER_TEMP/design-lint.json" || true
+          jq -c .summary "$RUNNER_TEMP/design-lint.json"
+          jq -r '.findings[] | select(.rule == "contrast-ratio" or .severity == "error")
+            | "::error file=DESIGN.md::\(.path // "-"): \(.message)"' "$RUNNER_TEMP/design-lint.json"
+          jq -e '.summary.errors == 0 and ([.findings[] | select(.rule == "contrast-ratio")] | length) == 0' \
+            "$RUNNER_TEMP/design-lint.json" > /dev/null
+
       # NOTE: We intentionally don't yaml-lint workflow files here.
       # GitHub Actions' own parser is the ultimate validator — a malformed
       # workflow won't run at all. A lint step is duplicate work.
