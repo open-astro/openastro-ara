@@ -42,15 +42,15 @@ public sealed partial class CenteringService : ICenteringExecutor {
     private const int MaxRotationMoves = 10;
 
     /// <inheritdoc/>
-    public async Task<bool> CenterAsync(Coordinates target, IProgress<ApplicationStatus> progress, CancellationToken token) {
+    public async Task<CenteringResult> CenterAsync(Coordinates target, IProgress<ApplicationStatus> progress, CancellationToken token) {
         ArgumentNullException.ThrowIfNull(target);
         await _centeringGate.WaitAsync(token);
         try {
             if (!await SlewToTargetAsync(target, token)) {
-                return false;
+                return CenteringResult.Failed(CenteringStep.Slew);
             }
             var result = await CenterCoreAsync(target, solveProgress: null, progress, token);
-            return result.Success;
+            return result.Success ? CenteringResult.Ok : CenteringResult.Failed(CenteringStep.Centre);
         } finally {
             _centeringGate.Release();
         }

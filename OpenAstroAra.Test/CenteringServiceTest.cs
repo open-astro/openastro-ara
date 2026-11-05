@@ -270,7 +270,7 @@ namespace OpenAstroAra.Test {
 
             var ok = await sut.CenterAsync(Target, NoProgress, CancellationToken.None);
 
-            Assert.That(ok, Is.True);
+            Assert.That(ok, Is.EqualTo(CenteringResult.Ok));
             Assert.That(h.Calls, Is.EqualTo(SlewCentre));
         }
 
@@ -283,7 +283,7 @@ namespace OpenAstroAra.Test {
 
             var ok = await sut.CenterAsync(Target, NoProgress, CancellationToken.None);
 
-            Assert.That(ok, Is.False);
+            Assert.That(ok, Is.EqualTo(CenteringResult.Failed(CenteringStep.Slew)));
             Assert.That(h.Calls, Is.Empty);
         }
 
@@ -361,6 +361,20 @@ namespace OpenAstroAra.Test {
             using var sut = h.CreateSUT();
 
             var ok = await sut.CenterAndRotateAsync(Target, 0.0, NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.EqualTo(CenteringResult.Failed(CenteringStep.Centre)));
+        }
+
+        [Test]
+        public async Task Center_reports_the_centre_step_when_centring_does_not_converge() {
+            var h = new RotateHarness(rotationTolerance: 0.5, solvedAngles: 0.0);
+            h.CenteringSolver
+                .Setup(s => s.Center(It.IsAny<CaptureSequence>(), It.IsAny<CenterSolveParameter>(),
+                    It.IsAny<IProgress<PlateSolveProgress>>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PlateSolveResult { Success = false });
+            using var sut = h.CreateSUT();
+
+            var ok = await sut.CenterAsync(Target, NoProgress, CancellationToken.None);
 
             Assert.That(ok, Is.EqualTo(CenteringResult.Failed(CenteringStep.Centre)));
         }

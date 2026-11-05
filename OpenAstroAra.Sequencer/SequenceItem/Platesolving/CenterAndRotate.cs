@@ -105,12 +105,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Platesolving {
             // No rotator — the common case, and the only case NINA itself skips rotation in:
             // the position angle stays in the plan but is deliberately not applied.
             Logger.Info($"Center-and-rotate: centering on {target} (position angle {PositionAngle}° preserved; no rotator connected, rotation skipped — matches NINA without a rotator)");
-            var converged = await centeringExecutor.CenterAsync(target, progress, token);
-            if (!converged) {
+            var centred = await centeringExecutor.CenterAsync(target, progress, token);
+            if (!centred.Success) {
                 // An un-centred target would quietly ruin every subsequent frame.
-                throw new SequenceEntityFailedException(
-                    "Centering failed (the slew or the centre loop; the executor does not say which). "
-                    + SlewCheck + " " + CentreCheck);
+                throw new SequenceEntityFailedException(FailureText(centred.FailedStep));
             }
         }
 

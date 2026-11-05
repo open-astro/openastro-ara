@@ -68,7 +68,7 @@ namespace OpenAstroAra.Test {
             Coordinates? seen = null;
             executor.Setup(e => e.CenterAsync(It.IsAny<Coordinates>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .Callback<Coordinates, IProgress<ApplicationStatus>, CancellationToken>((c, _, _) => seen = c)
-                .ReturnsAsync(true);
+                .ReturnsAsync(CenteringResult.Ok);
 
             var target = SomeTarget();
             var item = new CenterAndRotate(executor.Object) { Coordinates = target };
@@ -79,16 +79,19 @@ namespace OpenAstroAra.Test {
             Assert.That(seen.Dec, Is.EqualTo(target.Coordinates.Dec).Within(1e-9));
         }
 
-        [Test]
-        public async Task Unconverged_centering_fails_the_instruction() {
-            // An un-centred target would quietly ruin every subsequent frame — a false
-            // return from the executor must fail the step, never continue.
+        [TestCase(CenteringStep.Slew, "slew", "mount", "target altitude")]
+        [TestCase(CenteringStep.Centre, "centring", "plate solve", "centring threshold")]
+        public async Task Unconverged_centering_fails_the_instruction_naming_the_step_and_what_to_check(
+                CenteringStep step, string stepWord, string check1, string check2) {
+            // An un-centred target would quietly ruin every subsequent frame; with no rotator the
+            // plain centre call still reports which step failed.
             var executor = new Mock<ICenteringExecutor>();
             executor.Setup(e => e.CenterAsync(It.IsAny<Coordinates>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(false);
+                .ReturnsAsync(CenteringResult.Failed(step));
             var item = new CenterAndRotate(executor.Object) { Coordinates = SomeTarget() };
-            await Assert.ThrowsAsync<SequenceEntityFailedException>(
+            var ex = await Assert.ThrowsAsync<SequenceEntityFailedException>(
                 () => item.Execute(NoProgress, CancellationToken.None));
+            Assert.That(ex!.Message, Does.Contain(stepWord).And.Contain(check1).And.Contain(check2));
         }
 
         [Test]
@@ -139,7 +142,7 @@ namespace OpenAstroAra.Test {
             // No rotator = NINA itself never rotates; centring alone is faithful.
             var executor = new Mock<ICenteringExecutor>();
             executor.Setup(e => e.CenterAsync(It.IsAny<Coordinates>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
+                .ReturnsAsync(CenteringResult.Ok);
             var item = new CenterAndRotate(executor.Object, Rotator(connected: false).Object) {
                 Coordinates = SomeTarget(),
                 PositionAngle = 45,
@@ -169,7 +172,7 @@ namespace OpenAstroAra.Test {
             // every real run back into the fail-loudly path.
             var executor = new Mock<ICenteringExecutor>();
             executor.Setup(e => e.CenterAsync(It.IsAny<Coordinates>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
+                .ReturnsAsync(CenteringResult.Ok);
             var prototype = new CenterAndRotate(executor.Object) { Coordinates = SomeTarget() };
             var clone = (CenterAndRotate)prototype.Clone();
             await Assert.DoesNotThrowAsync(() => clone.Execute(NoProgress, CancellationToken.None));
