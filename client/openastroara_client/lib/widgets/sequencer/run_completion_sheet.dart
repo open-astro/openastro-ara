@@ -62,7 +62,8 @@ class RunCompletionSheet extends ConsumerWidget {
     final ok = state == SequenceRunState.completed;
     final color = ok ? AraColors.accentConnected : AraColors.accentError;
     final title = switch (state) {
-      SequenceRunState.completed => 'Run complete',
+      SequenceRunState.completed =>
+        run.reasonText == null ? 'Run complete' : 'Run skipped',
       SequenceRunState.failed => 'Run failed',
       _ => 'Run stopped',
     };
@@ -93,6 +94,11 @@ class RunCompletionSheet extends ConsumerWidget {
             const SizedBox(height: AraSpace.s12),
             if (run.currentTargetName?.isNotEmpty == true)
               Text(run.currentTargetName!, style: AraText.body),
+            if (run.reasonText != null)
+              Padding(
+                padding: const EdgeInsets.only(top: AraSpace.s4),
+                child: Text(run.reasonText!, style: AraText.caption),
+              ),
             if (!ok && run.currentInstructionDescription?.isNotEmpty == true)
               Padding(
                 padding: const EdgeInsets.only(top: AraSpace.s4),

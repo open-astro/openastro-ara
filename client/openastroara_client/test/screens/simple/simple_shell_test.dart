@@ -2947,6 +2947,40 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 
+  testWidgets('#1596 the plan pill says a run is waiting at the meridian', (tester) async {
+    String pill() => find
+        .descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText))
+        .evaluate()
+        .map((e) => (e.widget as RichText).text.toPlainText())
+        .join();
+    const plan = SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+      SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+    ]);
+    await _pump(tester, const Size(1024, 768), plan: plan,
+        runState: const SequenceRunStateInfo(
+            sequenceId: 'seq-1', state: SequenceRunState.running, currentInstructionDescription: 'Taking frames',
+            reasonCode: 'meridian', reasonText: 'Passing meridian — 00:10:00'));
+    await tester.pump();
+    expect(pill(), contains('Passing meridian — 00:10:00'));
+  });
+
+  testWidgets('#1596 the plan pill keeps the reason a run skipped its only target', (tester) async {
+    String pill() => find
+        .descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText))
+        .evaluate()
+        .map((e) => (e.widget as RichText).text.toPlainText())
+        .join();
+    const plan = SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+      SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+    ]);
+    await _pump(tester, const Size(1024, 768), plan: plan,
+        runState: const SequenceRunStateInfo(
+            sequenceId: 'seq-1', state: SequenceRunState.completed,
+            reasonCode: 'target_skipped', reasonText: 'Skipped, nothing was imaged: M31 did not run'));
+    await tester.pump();
+    expect(pill(), contains('M31 did not run'));
+  });
+
   testWidgets('while a plan runs and the camera is idle, the status pill says which step is running', (tester) async {
     final container = await _pump(tester, const Size(1024, 768),
         plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [

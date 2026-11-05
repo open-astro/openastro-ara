@@ -89,6 +89,19 @@ void main() {
     expect(find.text('5/6'), findsOneWidget);
   });
 
+  testWidgets('#1596 a meridian wait shows its reason on the run badge', (tester) async {
+    await _pump(
+      tester,
+      const SequenceRunStateInfo(
+        sequenceId: 's',
+        state: SequenceRunState.running,
+        reasonCode: 'meridian',
+        reasonText: 'Passing meridian — 00:10:00',
+      ),
+    );
+    expect(find.textContaining('Passing meridian — 00:10:00'), findsWidgets);
+  });
+
   testWidgets('running → band with progress, counts and instruction line', (
     tester,
   ) async {

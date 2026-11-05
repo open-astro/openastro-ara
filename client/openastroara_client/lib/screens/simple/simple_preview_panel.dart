@@ -1047,7 +1047,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
             '${startAt.hour.toString().padLeft(2, '0')}:'
             '${startAt.minute.toString().padLeft(2, '0')}',
           )
-        : run?.currentInstructionDescription;
+        : run?.reasonText ?? run?.currentInstructionDescription;
     final paused =
         run?.state == SequenceRunState.paused ||
         run?.state == SequenceRunState.pausedAwaitingUser;
@@ -1131,7 +1131,8 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         ),
       // A running plan says what it's doing (cooling, slewing, centring,
       // focusing), with how far the step has got along the pill's foot.
-      if (planActive && step != null && step.isNotEmpty)
+      // #1596: a finished run that imaged nothing keeps its reason on the pill.
+      if ((planActive || run?.reasonText != null) && step != null && step.isNotEmpty)
         _PillData(
           SimpleStatusOrigin.plan,
           paused ? l10n.previewPlanPaused : l10n.previewPlan,
@@ -1139,13 +1140,13 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           // DESIGN.md status rule: running is working (green); paused by Ara
           // is on its way back (blue); paused waiting for the user needs a
           // look (amber).
-          run!.state == SequenceRunState.pausedAwaitingUser
+          run!.state == SequenceRunState.pausedAwaitingUser || !planActive
               ? AraColors.accentBusy
               : paused
               ? AraColors.accentInfo
               : AraColors.accentConnected,
           ring: paused && run.state != SequenceRunState.pausedAwaitingUser,
-          working: !paused,
+          working: planActive && !paused,
           footProgress: run.currentInstructionProgress,
         ),
       if (parking != null)

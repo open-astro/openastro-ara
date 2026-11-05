@@ -14014,6 +14014,14 @@ components:
             - number
             - string
           format: double
+        reason_code:
+          type:
+            - 'null'
+            - string
+        reason_text:
+          type:
+            - 'null'
+            - string
     SequenceShareDto:
       required:
         - sequence_id

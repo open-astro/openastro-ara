@@ -10,8 +10,11 @@ import '../../theme/ara_colors.dart';
 /// paused blue, needs-attention amber, failed / aborting red,
 /// stopped/completed neutral.
 class RunStateBadge extends StatelessWidget {
-  const RunStateBadge(this.state, {super.key});
+  const RunStateBadge(this.state, {this.reason, super.key});
   final SequenceRunState? state;
+
+  /// #1596 — why the run ended without imaging or is held at the meridian.
+  final String? reason;
 
   /// The badge's state→colour mapping, exposed so sibling widgets (progress
   /// band, tree spotlight) colour consistently. Exhaustive (no wildcard) so a
@@ -52,7 +55,9 @@ class RunStateBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(4),
         border: Border.all(color: color),
       ),
-      child: Text(labelFor(s),
+      child: Text(
+          reason == null || reason!.isEmpty ? labelFor(s) : '${labelFor(s)} · $reason',
+          overflow: TextOverflow.ellipsis,
           style:
               TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
     );

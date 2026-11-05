@@ -32,4 +32,25 @@ void main() {
         home: Row(children: [RunStateBadge(null), RunStateBadge(SequenceRunState.idle)])));
     expect(find.byType(Container), findsNothing);
   });
+
+  testWidgets('#1596 a reason rides next to the state label', (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: RunStateBadge(SequenceRunState.completed,
+            reason: 'Skipped, nothing was imaged: M31 did not run'),
+      ),
+    ));
+    expect(find.textContaining('completed'), findsOneWidget);
+    expect(find.textContaining('M31 did not run'), findsOneWidget);
+  });
+
+  test('#1596 the run state carries the reason from REST and clears it on a WS null', () {
+    final rest = SequenceRunStateInfo.fromJson(const {
+      'state': 'running', 'reason_code': 'meridian', 'reason_text': 'Passing meridian',
+    });
+    expect(rest.reasonText, 'Passing meridian');
+    final done = rest.applyWsProgress(const {'reason_code': null, 'reason_text': null});
+    expect(done.reasonCode, isNull);
+    expect(rest.applyWsProgress(const {'state': 'running'}).reasonText, 'Passing meridian');
+  });
 }

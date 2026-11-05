@@ -602,6 +602,32 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         }
     }
 
+    /// <summary>#1596 — the reason a finished run imaged nothing: every deep-sky target in the tree
+    /// has no finished instruction under it (its conditions were false, so the root skipped its
+    /// steps). Null when there is no target or any target ran.</summary>
+    internal static (string Code, string Text)? SkippedTargetsReason(ISequenceContainer root) {
+        var names = new List<string>();
+        var ran = false;
+        Walk(root);
+        return names.Count > 0 && !ran
+            ? ("target_skipped", $"Skipped, nothing was imaged: {string.Join(", ", names)} did not run (its start conditions were not met).")
+            : null;
+
+        void Walk(ISequenceContainer container) {
+            foreach (var item in container.GetItemsSnapshot()) {
+                if (item is IDeepSkyObjectContainer dso) {
+                    if (HasFinishedLeaf(dso)) ran = true;
+                    else names.Add(string.IsNullOrWhiteSpace(dso.Target?.TargetName) ? "the target" : dso.Target.TargetName);
+                } else if (item is ISequenceContainer child) {
+                    Walk(child);
+                }
+            }
+        }
+
+        static bool HasFinishedLeaf(ISequenceContainer c) =>
+            c.GetItemsSnapshot().Any(i => i is ISequenceContainer sub ? HasFinishedLeaf(sub) : i.Status == SequenceEntityStatus.FINISHED);
+    }
+
     /// <summary>
     /// Whether a run can still be aborted: not terminal (Completed/Failed/Stopped) and not already in the
     /// transient Aborting state. The §29 disk-space monitor's "abort on critical" path uses this (via
@@ -915,6 +941,10 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 var progress = new Progress<ApplicationStatus>(status => {
                     // Tree-derived status first, so the instruction's own report wins.
                     RefreshLiveStatus(run);
+                    // #1596 — the flip executor's status is the meridian wait; its empty report ends it.
+                    if (status.Source == "MeridianFlip") {
+                        run.SetReason(string.IsNullOrEmpty(status.Status) ? null : "meridian", status.Status);
+                    }
                     run.SetDescription(DescribeStatus(status));
                     run.SetProgress(ProgressOf(status));
                     progressPublisher.Poke();
@@ -1002,6 +1032,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 // Set CompletedUtc (under the lock) before the volatile State
                 // write, so a reader that observes Completed always also sees
                 // CompletedUtc populated — never a Completed/null transient.
+                if (run.Root is ISequenceContainer doneRoot && SkippedTargetsReason(doneRoot) is var (skipCode, skipText)) {
+                    run.SetReason(skipCode, skipText);
+                }
                 run.MarkCompleted();
                 run.State = SequenceRunState.Completed;
                 await EmitAsync("sequence.complete", sequenceId, run);
@@ -1548,6 +1581,13 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             }
         }
 
+        private string? _reasonCode;
+        private string? _reasonText;
+
+        public void SetReason(string? code, string? text) {
+            lock (_gate) { (_reasonCode, _reasonText) = code is null ? (null, null) : (code, text); }
+        }
+
         public void MarkCompleted() {
             lock (_gate) { CompletedUtc = DateTimeOffset.UtcNow; }
         }
@@ -1639,7 +1679,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     CurrentInstructionDescription: CurrentInstructionDescription,
                     EstimatedTotalSeconds: total,
                     EstimatedRemainingSeconds: remaining,
-                    CurrentInstructionProgress: CurrentInstructionProgress);
+                    CurrentInstructionProgress: CurrentInstructionProgress,
+                    ReasonCode: _reasonCode,
+                    ReasonText: _reasonText);
             }
         }
     }

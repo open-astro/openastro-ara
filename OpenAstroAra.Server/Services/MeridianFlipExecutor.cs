@@ -173,6 +173,8 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             Logger.Error($"Meridian Flip - Pre-flip flight check failed: {failReason}. The flip will not start; the mount stays in its pre-flip state.");
             await NotifyCritical("Meridian flip aborted before it started",
                 $"Pre-flip flight check failed: {failReason} The mount was left tracking in its pre-flip state and the sequence has been halted.");
+            // #1596 — stays on the run status until the resumed flip reports again.
+            progress.Report(new ApplicationStatus { Source = "MeridianFlip", Status = $"Flip refused: {failReason}" });
             return false;
         }
 
