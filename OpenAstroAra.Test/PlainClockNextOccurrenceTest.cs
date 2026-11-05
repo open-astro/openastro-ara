@@ -13,17 +13,16 @@
 #endregion "copyright"
 
 using Moq;
-using NUnit.Framework;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Astrometry.Interfaces;
 using OpenAstroAra.Astrometry.RiseAndSet;
+using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Sequencer;
 using OpenAstroAra.Sequencer.Conditions;
+using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
-using System;
-using System.Collections.Generic;
 
 namespace OpenAstroAra.Test {
 
@@ -127,7 +126,7 @@ namespace OpenAstroAra.Test {
             return c;
         }
 
-        // A running plain-time condition keeps the target it resolved at its first Check:
+        // A running plain-time condition keeps the target it resolved when the run started:
         // it must expire at the time and stay expired, not roll over to tomorrow.
         [Test]
         public void TimeCondition_plain_time_expires_and_stays_expired_once_running() {
@@ -165,6 +164,24 @@ namespace OpenAstroAra.Test {
             c.SequenceBlockInitialize();
             Assert.That(c.Check(null, null), Is.True);
             Assert.That(c.RemainingTime, Is.EqualTo(new TimeSpan(21, 17, 0)));
+        }
+
+        // A Parallel Instruction Set never calls SequenceBlockInitialize: with its parent running, the
+        // condition holds the target at its first read, so the 1 s watchdog still ends the block.
+        [Test]
+        public void TimeCondition_plain_time_on_a_running_parallel_block_expires() {
+            var now = new[] { Day.AddHours(21) };
+            var clock = new Mock<ICustomDateTime>();
+            clock.Setup(x => x.Now).Returns(() => now[0]);
+            var p = Plain(null);
+            var c = new TimeCondition(new List<IDateTimeProvider> { p }, p) { DateTime = clock.Object };
+            c.Hours = 21; c.Minutes = 47; c.Seconds = 0;
+            var parallel = new ParallelContainer();
+            c.AttachNewParent(parallel);
+            parallel.Status = SequenceEntityStatus.RUNNING;
+            Assert.That(c.Check(null, null), Is.True);
+            now[0] = Day.AddHours(21).AddMinutes(48);
+            Assert.That(c.Check(null, null), Is.False);
         }
 
         [Test]
