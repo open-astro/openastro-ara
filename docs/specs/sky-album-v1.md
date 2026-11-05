@@ -61,42 +61,43 @@ Never routed through `POST /api/v1/stats/rebuild-catalog`: that endpoint deletes
 
 ```json
 {
-  "totalLights": 4821,
+  "total_lights": 4821,
   "frames": [
     {
-      "frameId": "…",
-      "raDeg": 10.6847, "decDeg": 41.2687,
+      "frame_id": "…",
+      "ra_deg": 10.6847, "dec_deg": 41.2687,
       "width": 4144, "height": 2822, "bin": 1,
-      "pixelScaleArcsec": 1.56,
-      "capturedUtc": "2026-03-02T11:20:31Z",
-      "exposureSeconds": 180,
-      "filterName": "Ha",
-      "targetName": "M31",
-      "compositeScore": 0.83,
-      "profileId": "…"
+      "pixel_scale_arcsec": 1.56,
+      "captured_utc": "2026-03-02T11:20:31Z",
+      "updated_utc": "2026-03-02T11:20:31Z",
+      "exposure_seconds": 180,
+      "filter_name": "Ha",
+      "target_name": "M31",
+      "composite_score": 0.83,
+      "profile_id": "…"
     }
   ]
 }
 ```
 
-- Rows are lights with `captured_by_ara = 1` only; foreign frames are never served. Without `since`, every such light. With `since`, lights whose `updated_utc` is later than it. `totalLights` is always the full count.
-- `profileId` comes from the session join. `compositeScore` is `json_extract(quality_score_json, '$.composite')`, null when absent.
+- Rows are lights with `captured_by_ara = 1` only; foreign frames are never served. Without `since`, every such light. With `since`, lights whose `updated_utc` is later than it. `total_lights` is always the full count. Keys are snake_case, as every daemon reply (the `SnakeCaseLower` policy).
+- `profile_id` comes from the session join. `composite_score` is `json_extract(quality_score_json, '$.composite')`, null when absent.
 - `GET /api/v1/frames` and `GET /api/v1/stats/targets` are untouched.
 
 ## Client
 
 ### State
 
-A provider family keyed by the active connection caches the album rows. On album open it fetches with the last `updated_utc` it holds as `since`, merges the returned rows into the cache by `frameId` (a `since` response also carries already-cached rows whose `updated_utc` moved, for example after the backfill), and refetches without `since` when the merged count does not equal `totalLights` (covers deletions). Rows are matched against `bundledCatalogProvider` (not the culled planning catalog, so every Book object is present), producing per-object aggregates:
+A provider family keyed by the active connection caches the album rows. On album open it fetches with the last `updated_utc` it holds as `since`, merges the returned rows into the cache by `frame_id` (a `since` response also carries already-cached rows whose `updated_utc` moved, for example after the backfill), and refetches without `since` when the merged count does not equal `total_lights` (covers deletions). Rows are matched against `bundledCatalogProvider` (not the culled planning catalog, so every Book object is present), producing per-object aggregates:
 
 | Field | Rule |
 |---|---|
 | frame count | lights that contain the object |
-| integration hours | sum of `exposureSeconds` of those lights ([#1498](https://github.com/open-astro/openastro-ara/issues/1498): all lights, any filter, any rating) |
-| first capture | min `capturedUtc` |
-| best frame | max `compositeScore`, ties by latest capture |
-| filters used | distinct `filterName`, in first-seen order |
-| gear profile | `profileId` of the best frame, resolved to a name from the client's profile list, blank if gone |
+| integration hours | sum of `exposure_seconds` of those lights ([#1498](https://github.com/open-astro/openastro-ara/issues/1498): all lights, any filter, any rating) |
+| first capture | min `captured_utc` |
+| best frame | max `composite_score`, ties by latest capture, then by the highest `frame_id` |
+| filters used | distinct `filter_name`, in first-seen order |
+| gear profile | `profile_id` of the best frame, resolved to a name from the client's profile list, blank if gone |
 | tier | none below 1 light; bronze at 1 light; silver at 1 h; gold at 5 h. Derived, never stored, can drop when frames are deleted |
 
 ### Layout ([#1500](https://github.com/open-astro/openastro-ara/issues/1500))
@@ -138,7 +139,7 @@ Search gains these objects as a side effect, and so does Tonight's Sky except M4
 
 ## Tests
 
-- Daemon: `RegisterFrameAsync` stores pointing only for J2000 and sets `captured_by_ara`; the backfill pass fills from a FITS header fixture, marks a NINA-style header (no Ara `SWCREATE`) as not Ara, sets `pointing_probed_utc` on a file without cards, and is a no-op on the second run; `album-frames` honours `since`, excludes foreign frames and reports `totalLights`.
+- Daemon: `RegisterFrameAsync` stores pointing only for J2000 and sets `captured_by_ara`; the backfill pass fills from a FITS header fixture, marks a NINA-style header (no Ara `SWCREATE`) as not Ara, sets `pointing_probed_utc` on a file without cards, and is a no-op on the second run; `album-frames` honours `since`, excludes foreign frames and reports `total_lights`.
 - Client (pure Dart): containment on a synthetic frame (object at centre, at half the short side, just outside it, at a corner); alias fallback with `M31`, `M 31`, `Messier 31`; tier thresholds at the boundaries; aggregate fields; the merge-by-id + count reload rule, including a `since` response that only re-delivers cached rows.
 - Album screen widget test with a fake callback and neither shell: a tap on a missing card's action calls the callback with that `PlanningDso`.
 - Catalog: after the data fix, the Messier Book has 110 cards and the Caldwell Book 109.
