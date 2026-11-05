@@ -301,6 +301,30 @@ namespace OpenAstroAra.Test {
             Assert.That(fake.ReceivedMethods.Count(m => m == "set_pa_session"), Is.EqualTo(before));
         }
 
+        [Test]
+        public async Task An_open_polar_alignment_without_a_lease_is_still_ended_before_guiding() {
+            // #1611: polar alignment runs the guider's Static PA tool and takes no lease, so the guider
+            // reports no PA session — yet its tool holds the camera and refuses `guide`. Guiding must
+            // still end the open alignment; the lease logic alone would keep it.
+            var (fake, svc) = await ConnectedServiceAsync().ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            fake.OnRpc("get_pa_session", _ => new JsonObject { ["active"] = false });
+            var order = new List<string>();
+            svc.PolarAlignActive = () => true;
+            svc.EndPolarAlignAsync = _ => {
+                lock (order) {
+                    order.Add("end-polar-align");
+                }
+                return Task.CompletedTask;
+            };
+
+            await svc.ClearPaSessionQuietlyAsync(svc.RequireConnectedGuider(), CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(order, Has.Count.EqualTo(1).And.Contains("end-polar-align"), "the alignment is ended even with no lease to release");
+            Assert.That(fake.ReceivedMethods, Does.Not.Contain("set_pa_session"), "no lease, nothing to release");
+        }
+
         private sealed class RecordingPaResidualLog : IPaResidualLog {
             public List<PaResidualDto> Rows { get; } = new();
             public Task InsertAsync(PaResidualDto result, CancellationToken ct) {
