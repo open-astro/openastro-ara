@@ -161,34 +161,40 @@ void main() {
     },
   );
 
-  for (final scale in [0.5, 1.0]) {
+  // Scale 0.5 goes down to 520, where the left group leaves the launchers
+  // less than their narrowest form.
+  for (final (scale, low) in [(0.5, 520), (1.0, 700)]) {
     testWidgets(
-      'launcher row never overflows, 1500 down to 700, scale $scale',
+      'launcher row never overflows, 1500 down to $low, scale $scale',
       (tester) async {
         await _pumpAt(tester, 1500, scale: scale);
         final bad = <String>[];
-        for (var w = 1500; w >= 700; w--) {
+        for (var w = 1500; w >= low; w--) {
           tester.view.physicalSize = Size(w.toDouble(), 800);
           await tester.pump();
-          final row = find
-              .ancestor(
-                of: find.byTooltip('Help & report a bug'),
-                matching: find.byType(Row),
+          final help = find.byTooltip('Help & report a bug');
+          final row = find.ancestor(of: help, matching: find.byType(Row)).first;
+          final space = tester
+              .getSize(
+                find.ancestor(of: row, matching: find.byType(Align)).first,
               )
-              .first;
-          final flex = tester.renderObject<RenderFlex>(row);
+              .width;
           var sum = 0.0;
-          flex.visitChildren((c) => sum += (c as RenderBox).size.width);
-          // Below 148 px not even More + bell + help fit (the left group took
-          // the width), which no launcher form can fix.
-          if (flex.constraints.maxWidth >= 148 &&
-              sum > flex.constraints.maxWidth + 0.01) {
-            bad.add(
-              '$w (+${(sum - flex.constraints.maxWidth).toStringAsFixed(1)})',
-            );
+          tester
+              .renderObject<RenderFlex>(row)
+              .visitChildren((c) => sum += (c as RenderBox).size.width);
+          // More + bell + help need 148 px; with less, help must still sit
+          // inside the window. At 0 px the left group fills the bar on its
+          // own, which no launcher form can fix.
+          if (space >= 148 && sum > space + 0.01) {
+            bad.add('$w (+${(sum - space).toStringAsFixed(1)})');
+          } else if (space > 0 &&
+              space < 148 &&
+              tester.getRect(help).right > w + 0.01) {
+            bad.add('$w (help right ${tester.getRect(help).right})');
           }
         }
-        expect(bad, isEmpty, reason: 'row wider than its space at: $bad');
+        expect(bad, isEmpty, reason: 'launchers past their space at: $bad');
       },
     );
   }
