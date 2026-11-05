@@ -1109,6 +1109,50 @@ namespace OpenAstroAra.Test {
             Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("mount_fault"));
         }
 
+        // #1536 — a synced iOptron at home reported Dec 90.9°. The seed target kept that Dec, the mount
+        // refused it, and every start failed. Past the pole the same sky point is (RA+180°, 180°−Dec); the
+        // fold keeps the mount's Dec axis where it is, so the RA turn stays a pure rotation about the axis.
+        [TestCase(90.9, 210.0, 89.1)]
+        [TestCase(-90.9, 210.0, -89.1)]
+        public async Task A_reported_Dec_past_the_pole_is_folded_over_it_before_the_seed_slew(
+                double reportedDec, double expectedTargetRa, double expectedTargetDec) {
+            var mount = NewMount();
+            var position = new Coordinates(0.0, reportedDec, Epoch.JNOW, Coordinates.RAType.Degrees);
+            var targets = new ConcurrentQueue<Coordinates>();
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .Callback<Coordinates, CancellationToken>((target, _) => { targets.Enqueue(target); position = target; })
+                .ReturnsAsync(true);
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            using var svc = NewService(guider, solver, mount);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            Assert.That(targets.TryPeek(out var seedTarget), Is.True);
+            Assert.That(seedTarget!.RADegrees, Is.EqualTo(expectedTargetRa).Within(1e-6));
+            Assert.That(seedTarget.Dec, Is.EqualTo(expectedTargetDec).Within(1e-6));
+        }
+
+        // #1536 — the user-facing reason names the recovery; the driver's own text stays in the log.
+        [Test]
+        public async Task A_refused_seed_slew_fails_with_a_plain_recovery_message() {
+            var mount = NewMount();
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new SequenceEntityFailedException("telescope.slew failed: Invalid Dec 90.9 (driver text)"));
+
+            var message = (await SeedFailureAsync(mount).ConfigureAwait(false)).GetProperty("message").GetString();
+
+            Assert.That(message, Does.Contain("Dec 85").And.Contain("start again"));
+            Assert.That(message, Does.Not.Contain("driver text"));
+        }
+
         /// <summary>Runs the routine against <paramref name="mount"/> with solvable seeds and
         /// returns the reason on its error event once it has failed.</summary>
         /// <summary>A mount that reports AtPark until <see cref="ITelescopeMediator.UnparkTelescope"/> succeeds
@@ -1175,7 +1219,10 @@ namespace OpenAstroAra.Test {
             }
         }
 
-        private static async Task<string?> SeedFailureReasonAsync(Mock<ITelescopeMediator> mount) {
+        private static async Task<string?> SeedFailureReasonAsync(Mock<ITelescopeMediator> mount) =>
+            (await SeedFailureAsync(mount).ConfigureAwait(false)).GetProperty("reason").GetString();
+
+        private static async Task<System.Text.Json.JsonElement> SeedFailureAsync(Mock<ITelescopeMediator> mount) {
             var paCalls = new ConcurrentQueue<bool>();
             await using var fake = StartFake(paCalls);
             using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
@@ -1191,8 +1238,7 @@ namespace OpenAstroAra.Test {
             while (ws.Count(WsEventCatalog.PolarAlignError) < 1) {
                 await Task.Delay(25, cts.Token).ConfigureAwait(false);
             }
-            return ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload
-                .GetProperty("reason").GetString();
+            return ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
         }
 
         [Test]

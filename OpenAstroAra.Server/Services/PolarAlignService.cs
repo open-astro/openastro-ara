@@ -392,6 +392,9 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
+        private const string SeedSlewRefusedMessage =
+            "the mount refused the RA seed slew — slew it to about Dec 85° from the mount controls, then start again";
+
         /// <summary>A fatal routine failure with a machine-readable reason for the WS error event
         /// (<c>seed_solve_failed</c>, <c>slew_failed</c>, …). Anything else that escapes the run
         /// task is reported as reason <c>internal_error</c>.</summary>
@@ -445,15 +448,17 @@ namespace OpenAstroAra.Server.Services {
                 var target = new Coordinates(targetRaDeg, mountDecDeg, Epoch.JNOW, Coordinates.RAType.Degrees);
                 bool slewed;
                 try {
-                    slewed = await _mount.SlewToCoordinatesAsync(target, ct).ConfigureAwait(false);
+                    // #1536 — the failure is this routine's to report; as a mount-op fault it would count toward abort-and-park.
+                    slewed = await TelescopeService.RunWithoutOpFaultsAsync(() => _mount.SlewToCoordinatesAsync(target, ct)).ConfigureAwait(false);
                 } catch (SequenceEntityFailedException ex) {
                     // #1222 — the mediator refuses a slew it cannot frame (#1124: equatorial system
                     // unknown) or that the mount rejected by throwing; that is a slew failure, not
                     // internal_error.
-                    throw new RoutineFailedException("slew_failed", $"the RA seed slew was refused: {ex.Message}");
+                    LogSeedSlewRefused(ex.Message);
+                    throw new RoutineFailedException("slew_failed", SeedSlewRefusedMessage);
                 }
                 if (!slewed) {
-                    throw new RoutineFailedException("slew_failed", "the RA seed slew was rejected by the mount");
+                    throw new RoutineFailedException("slew_failed", SeedSlewRefusedMessage);
                 }
                 await _mount.WaitForSlew(ct).ConfigureAwait(false);
                 await Task.Delay(TimeSpan.FromSeconds(settings.SettleSeconds), ct).ConfigureAwait(false);
@@ -932,7 +937,16 @@ namespace OpenAstroAra.Server.Services {
 
         private (double RaDeg, double DecDeg)? CurrentMountPointingJnow() {
             var pos = _mount.GetCurrentPosition()?.Transform(Epoch.JNOW);
-            return pos is null ? null : (pos.RADegrees, pos.Dec);
+            if (pos is null) {
+                return null;
+            }
+            // #1536 — a synced mount can report Dec past ±90° (the Dec axis is over the pole). The same sky
+            // point is (RA+180°, 180°−Dec); folding keeps the Dec axis where it is, so the seed slew stays a
+            // pure RA turn the mount accepts. Clamping to the pole instead would move the Dec axis between
+            // the two seed frames, which the two-point fit does not model.
+            return Math.Abs(pos.Dec) > 90.0
+                ? ((pos.RADegrees + 180.0) % 360.0, Math.CopySign(180.0, pos.Dec) - pos.Dec)
+                : (pos.RADegrees, pos.Dec);
         }
 
         /// <param name="frameId">The frame these errors came from; null keeps the last captured frame's id.</param>
@@ -1200,6 +1214,9 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4525, Level = LogLevel.Information, Message = "§45.4 the guider did not report the guide camera's frame size — auto binning stays at 1×1: {Reason}")]
         private partial void LogFrameSizeUnavailable(string reason);
+
+        [LoggerMessage(EventId = 4526, Level = LogLevel.Warning, Message = "§45 polar-align seed slew refused by the mount: {Reason}")]
+        private partial void LogSeedSlewRefused(string reason);
 
         [LoggerMessage(EventId = 4523, Level = LogLevel.Information, Message = "§45 polar alignment: the mount is parked — unparking it before the seed slew")]
         private partial void LogUnparking();
