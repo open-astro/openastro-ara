@@ -74,8 +74,10 @@ class AlbumFramesNotifier extends AsyncNotifier<Map<String, AlbumFrame>> {
     final fetch = ref.read(albumFetcherProvider);
     final since = albumSince(cache);
     final page = await fetch(baseUrl, since: since);
+    // A reply without since is the whole set: it replaces the cache, so deleted frames leave.
+    if (since == null) return mergeAlbumRows(const {}, page.frames);
     final merged = mergeAlbumRows(cache, page.frames);
-    if (since == null || !needsFullReload(merged, totalLights: page.totalLights)) return merged;
+    if (!needsFullReload(merged, totalLights: page.totalLights)) return merged;
     final full = await fetch(baseUrl);
     return mergeAlbumRows(const {}, full.frames);
   }

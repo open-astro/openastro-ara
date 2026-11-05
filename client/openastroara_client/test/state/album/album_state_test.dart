@@ -48,6 +48,25 @@ void main() {
     expect(container.read(album).value!.keys, ['b'], reason: 'a failed fetch keeps the cached rows');
   });
 
+  test('without updated times every fetch is full and replaces the cache', () async {
+    final replies = [
+      const AlbumFramesPage(totalLights: 2, frames: [AlbumFrame(frameId: 'a'), AlbumFrame(frameId: 'b')]),
+      const AlbumFramesPage(totalLights: 1, frames: [AlbumFrame(frameId: 'b')]),
+    ];
+    final container = ProviderContainer(overrides: [
+      albumFetcherProvider.overrideWithValue((baseUrl, {since}) async {
+        expect(since, isNull);
+        return replies.removeAt(0);
+      }),
+    ]);
+    addTearDown(container.dispose);
+    final album = albumFramesProvider('http://rig:1888');
+
+    await container.read(album.future);
+    await container.read(album.notifier).refresh();
+    expect(container.read(album).value!.keys, ['b'], reason: 'a deleted frame leaves the cache');
+  });
+
   test('a Book is matched against the full bundled catalog', () async {
     PlanningDso dso(String id, {int? m, int? c}) =>
         PlanningDso(id: id, name: id, type: 'G', magnitude: 5, raDeg: 10, decDeg: 20, messierNum: m, caldwellNum: c);

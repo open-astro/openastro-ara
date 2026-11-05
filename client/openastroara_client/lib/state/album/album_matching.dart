@@ -22,11 +22,10 @@ List<PlanningDso> bookObjects(List<PlanningDso> catalog, AlbumBook book) {
 /// circle, half the short side across. Rotation-free, so corners never count.
 /// False for a frame without pointing or pixel scale (those use [targetNames]).
 bool frameContains(AlbumFrame f, PlanningDso o) {
-  final ra = f.raDeg, dec = f.decDeg, scale = f.pixelScaleArcsec;
-  if (ra == null || dec == null || scale == null || scale <= 0 || f.width <= 0 || f.height <= 0) return false;
-  final radiusArcmin = math.min(f.width, f.height) * scale / 2 / 60;
+  if (!f.hasPosition) return false;
+  final radiusArcmin = math.min(f.width, f.height) * f.pixelScaleArcsec! / 2 / 60;
   // 1e-9': the edge itself counts, whatever the last bit of the trigonometry says.
-  return separationArcmin(ra, dec, o.raDeg, o.decDeg) <= radiusArcmin + 1e-9;
+  return separationArcmin(f.raDeg!, f.decDeg!, o.raDeg, o.decDeg) <= radiusArcmin + 1e-9;
 }
 
 /// The alias fallback: [target] (a frame's target name) names [o] when it
@@ -83,9 +82,8 @@ Map<String, CardStats> aggregateBook(Iterable<AlbumFrame> frames, List<PlanningD
     ..sort((a, b) => (a.capturedUtc ?? epoch).compareTo(b.capturedUtc ?? epoch));
   final hits = <String, List<AlbumFrame>>{};
   for (final f in ordered) {
-    final byPosition = f.raDeg != null && f.decDeg != null && f.pixelScaleArcsec != null;
     for (final o in book) {
-      if (byPosition ? frameContains(f, o) : targetNames(f.targetName, o)) {
+      if (f.hasPosition ? frameContains(f, o) : targetNames(f.targetName, o)) {
         hits.putIfAbsent(o.id, () => []).add(f);
       }
     }
@@ -109,7 +107,7 @@ CardStats _stats(List<AlbumFrame> fs) {
   return CardStats(
     frameCount: fs.length,
     integrationHours: fs.fold(0.0, (h, f) => h + f.exposureSeconds) / 3600,
-    firstCaptureUtc: fs.first.capturedUtc,
+    firstCaptureUtc: fs.map((f) => f.capturedUtc).nonNulls.firstOrNull,
     bestFrameId: best.frameId,
     profileId: best.profileId,
     filters: filters,

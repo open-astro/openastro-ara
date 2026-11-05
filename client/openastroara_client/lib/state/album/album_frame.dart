@@ -27,6 +27,11 @@ class AlbumFrame {
   final double? compositeScore;
   final String? profileId;
 
+  /// Whether the frame can be matched by position: J2000 pointing, a pixel
+  /// scale and a size. Without, it falls back to its target name.
+  bool get hasPosition =>
+      raDeg != null && decDeg != null && (pixelScaleArcsec ?? 0) > 0 && width > 0 && height > 0;
+
   /// When the daemon last changed the row; the newest one is the next fetch's `since`.
   final DateTime? updatedUtc;
 

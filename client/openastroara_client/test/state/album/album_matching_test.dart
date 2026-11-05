@@ -126,6 +126,17 @@ void main() {
       expect(s82.integrationHours, 1.0);
     });
 
+    test('a frame whose stored scale or size is unusable falls back to its target name', () {
+      final frames = [_frame('zero', scale: 0, target: 'M81'), _frame('flat', width: 0, target: 'M81')];
+      expect(aggregateBook(frames, [m81])['NGC3031']!.frameCount, 2);
+    });
+
+    test('first capture skips frames with no capture time', () {
+      final frames = [_frame('a', ra: null, target: 'M81', captured: null), _frame('b', ra: null, target: 'M81')];
+      final undated = AlbumFrame(frameId: 'u', targetName: 'M81', exposureSeconds: 60);
+      expect(aggregateBook([undated, ...frames], [m81])['NGC3031']!.firstCaptureUtc, DateTime.utc(2026, 3, 2));
+    });
+
     test('an object no frame contains has no stats', () {
       expect(aggregateBook([_frame('x', target: 'M 1')], [m81]), isEmpty);
     });
