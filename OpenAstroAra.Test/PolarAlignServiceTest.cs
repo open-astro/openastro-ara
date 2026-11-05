@@ -107,6 +107,8 @@ namespace OpenAstroAra.Test {
             public ConcurrentQueue<int> MeasureRequests { get; } = new();
             public double AltArcmin { get; set; } = 3.5;
             public double AzArcmin { get; set; } = -1.2;
+            /// <summary>Auto mode: the guider reports its own slew in flight.</summary>
+            public bool Slewing { get; set; }
 
             public void Calc() { lock (_gate) { _calced = true; } }
             public void LoseStar(bool lost) { lock (_gate) { _starVisible = !lost; } }
@@ -158,6 +160,9 @@ namespace OpenAstroAra.Test {
                         pts.Add(new JsonObject { ["position"] = p, ["x"] = 10.0, ["y"] = 10.0 });
                     }
                     o["measured_points"] = pts;
+                    if (!_calced && _auto && !_aborted) {
+                        o["rotation"] = new JsonObject { ["required_deg"] = 2.3, ["rotated_deg"] = 0.5, ["step"] = 1, ["required_steps"] = 17, ["slewing"] = Slewing };
+                    }
                     o["calced"] = _calced;
                     if (!_calced) {
                         return o;
@@ -526,6 +531,31 @@ namespace OpenAstroAra.Test {
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("tracking_off"));
             Assert.That(fake.ReceivedMethods, Does.Not.Contain("staticpa_start"));
             mount.Verify(m => m.SetTrackingEnabled(false), Times.Never, "nothing to restore: tracking was never turned on");
+        }
+
+        [Test]
+        public async Task Tracking_reported_off_during_the_guider_own_slew_is_not_re_asserted() {
+            // The iOptron reports tracking off while it slews; a re-assert per step would only add
+            // a write per step and fight the mount. The guard waits for the slew to finish.
+            var paCalls = new ConcurrentQueue<bool>();
+            var (fake, tool) = StartFake(paCalls);
+            await using var _f = fake;
+            tool.Slewing = true;
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var mount = NewMount(tracking: false, trackingSticks: false);
+            using var svc = NewService(guider, mount);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await WaitForRpcAsync(fake, "staticpa_get_status", atLeast: 12).ConfigureAwait(false);
+
+            int TurnOns() => mount.Invocations.Count(i => i.Method.Name == nameof(ITelescopeMediator.SetTrackingEnabled) && Equals(i.Arguments[0], true));
+            Assert.That(TurnOns(), Is.EqualTo(1), "the drop seen mid-slew is left for the step to finish");
+            tool.Slewing = false;
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            while (TurnOns() < 2) {
+                await Task.Delay(50, cts.Token).ConfigureAwait(false);
+            }
+            Assert.That(TurnOns(), Is.GreaterThanOrEqualTo(2), "re-asserted once the guider's slew is over");
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
         }
 
         [Test]

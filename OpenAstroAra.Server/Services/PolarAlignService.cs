@@ -496,7 +496,9 @@ namespace OpenAstroAra.Server.Services {
                     throw new RoutineFailedException("guider_closed", "the guider closed its polar-alignment tool");
                 }
                 if (status.Calced != true) {
-                    if (status.Aligning == true) {
+                    // Not while the guider's own slew is in flight: the iOptron reports tracking off
+                    // for the duration of a slew, and a re-assert then only adds a write per step.
+                    if (status.Aligning == true && status.Rotation?.Slewing != true) {
                         await KeepTrackingOnWhileAligningAsync(ct).ConfigureAwait(false);
                     }
                     if (status.Aligning != true && status.Auto == true) {
