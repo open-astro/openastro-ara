@@ -116,5 +116,49 @@ namespace OpenAstroAra.Test {
             Assert.That(Cond(Fixed(new TimeOnly(12, 0)), 0, 30, 21, 47).RemainingTime, Is.EqualTo(TimeSpan.Zero));
             Assert.That(Cond(Fixed(new TimeOnly(12, 0)), 22, 0, 2, 0).RemainingTime, Is.EqualTo(TimeSpan.FromHours(4)));
         }
+
+        private static TimeCondition Running(DateTime[] now, int h, int m) {
+            var clock = new Mock<ICustomDateTime>();
+            clock.Setup(x => x.Now).Returns(() => now[0]);
+            var p = Plain(null);
+            var c = new TimeCondition(new List<IDateTimeProvider> { p }, p) { DateTime = clock.Object };
+            c.Hours = h; c.Minutes = m; c.Seconds = 0;
+            return c;
+        }
+
+        // A running plain-time condition keeps the target it resolved at its first Check:
+        // it must expire at the time and stay expired, not roll over to tomorrow.
+        [Test]
+        public void TimeCondition_plain_time_expires_and_stays_expired_once_running() {
+            var now = new[] { Day.AddMinutes(30) };
+            var c = Running(now, 21, 47);
+            Assert.That(c.Check(null, null), Is.True);
+            now[0] = Day.AddHours(21).AddMinutes(47).AddSeconds(1);
+            Assert.That(c.Check(null, null), Is.False);
+            Assert.That(c.RemainingTime, Is.EqualTo(TimeSpan.Zero));
+            now[0] = Day.AddHours(23);
+            Assert.That(c.Check(null, null), Is.False);
+        }
+
+        [Test]
+        public void TimeCondition_plain_time_expires_across_midnight_once_running() {
+            var now = new[] { Day.AddHours(22) };
+            var c = Running(now, 2, 0);
+            Assert.That(c.Check(null, null), Is.True);
+            now[0] = Day.AddDays(1).AddHours(2).AddSeconds(1);
+            Assert.That(c.Check(null, null), Is.False);
+        }
+
+        [Test]
+        public void TimeCondition_plain_time_ResetProgress_targets_the_next_occurrence() {
+            var now = new[] { Day.AddMinutes(30) };
+            var c = Running(now, 21, 47);
+            c.Check(null, null);
+            now[0] = Day.AddHours(21).AddMinutes(48);
+            Assert.That(c.Check(null, null), Is.False);
+            c.ResetProgress();
+            Assert.That(c.Check(null, null), Is.True);
+            Assert.That(c.RemainingTime, Is.EqualTo(new TimeSpan(23, 59, 0)));
+        }
     }
 }
