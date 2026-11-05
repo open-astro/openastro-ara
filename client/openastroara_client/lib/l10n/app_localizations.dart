@@ -951,7 +951,7 @@ abstract class AppLocalizations {
   /// **'Focuser'**
   String get searchSectionFocuser;
 
-  /// Simple Mode search panel: name of the Settings sheet's Guider section, shown beside a setting result (and the result for the section itself)
+  /// Simple Mode search panel: name of the Settings sheet's Guide Camera section, shown beside a setting result (and the result for the section itself)
   ///
   /// In en, this message translates to:
   /// **'Guide Camera'**
@@ -1473,7 +1473,7 @@ abstract class AppLocalizations {
   /// **'Focuser'**
   String get shellSectionFocuser;
 
-  /// Simple Mode Settings section and device row: the guider
+  /// Simple Mode Settings section and device row: the guide camera
   ///
   /// In en, this message translates to:
   /// **'Guide Camera'**

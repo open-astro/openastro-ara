@@ -668,7 +668,7 @@
   },
   "searchSectionGuider": "Guide Camera",
   "@searchSectionGuider": {
-    "description": "Simple Mode search panel: name of the Settings sheet's Guider section, shown beside a setting result (and the result for the section itself)"
+    "description": "Simple Mode search panel: name of the Settings sheet's Guide Camera section, shown beside a setting result (and the result for the section itself)"
   },
   "searchSettingAperture": "Main scope aperture",
   "@searchSettingAperture": {
@@ -1060,7 +1060,7 @@
   },
   "shellSectionGuider": "Guide Camera",
   "@shellSectionGuider": {
-    "description": "Simple Mode Settings section and device row: the guider"
+    "description": "Simple Mode Settings section and device row: the guide camera"
   },
   "shellRigNotConnected": "Rig not connected",
   "@shellRigNotConnected": {
