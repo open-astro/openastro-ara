@@ -99,7 +99,7 @@ components:
     backgroundColor: "{colors.button-secondary}"
     textColor: "{colors.text-primary}"
   button-emergency-stop:
-    backgroundColor: "{colors.accent-error}"
+    backgroundColor: "{colors.emergency-stop}"
     textColor: "{colors.selection-fg}"
     rounded: "16px"
     padding: "7px 18px"
