@@ -695,8 +695,47 @@ class PlanetariumSearchBar extends StatelessWidget {
     this.onZoom,
   });
 
+  // Below this width (iPad portrait, #1554) the two labelled toggles drop to
+  // icon-only buttons so the search field keeps room for its hint.
+  static const double _compactBelow = 900;
+
+  static Widget _toggle({
+    required bool compact,
+    required bool open,
+    Key? key,
+    required VoidCallback onPressed,
+    required IconData openIcon,
+    required IconData closedIcon,
+    required String label,
+  }) {
+    final icon = Icon(open ? openIcon : closedIcon, size: 16);
+    if (compact) {
+      return Tooltip(
+        message: label,
+        child: open
+            ? IconButton.filled(key: key, onPressed: onPressed, icon: icon)
+            : IconButton.outlined(key: key, onPressed: onPressed, icon: icon),
+      );
+    }
+    final text = Text(label);
+    return open
+        ? FilledButton.icon(
+            key: key,
+            onPressed: onPressed,
+            icon: icon,
+            label: text,
+          )
+        : OutlinedButton.icon(
+            key: key,
+            onPressed: onPressed,
+            icon: icon,
+            label: text,
+          );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < _compactBelow;
     return Container(
       height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -766,33 +805,26 @@ class PlanetariumSearchBar extends StatelessWidget {
           const SizedBox(width: 8),
           // Rotate camera by hand: the plate-solve readout docked beside the
           // sky, measured against the framing dial.
-          rotateOpen
-              ? FilledButton.icon(
-                  key: const Key('planning-rotate-toggle'),
-                  onPressed: onRotate,
-                  icon: const Icon(Icons.rotate_90_degrees_ccw, size: 16),
-                  label: const Text('Rotate camera'),
-                )
-              : OutlinedButton.icon(
-                  key: const Key('planning-rotate-toggle'),
-                  onPressed: onRotate,
-                  icon: const Icon(Icons.rotate_90_degrees_ccw_outlined, size: 16),
-                  label: const Text('Rotate camera'),
-                ),
+          _toggle(
+            compact: compact,
+            open: rotateOpen,
+            key: const Key('planning-rotate-toggle'),
+            onPressed: onRotate,
+            openIcon: Icons.rotate_90_degrees_ccw,
+            closedIcon: Icons.rotate_90_degrees_ccw_outlined,
+            label: 'Rotate camera',
+          ),
           const SizedBox(width: 8),
           // A filled (vs outlined) button when the panel is open, so the toggle
           // reads its own state at a glance.
-          tonightOpen
-              ? FilledButton.icon(
-                  onPressed: onTonight,
-                  icon: const Icon(Icons.nights_stay, size: 16),
-                  label: const Text("Tonight's Sky"),
-                )
-              : OutlinedButton.icon(
-                  onPressed: onTonight,
-                  icon: const Icon(Icons.nights_stay_outlined, size: 16),
-                  label: const Text("Tonight's Sky"),
-                ),
+          _toggle(
+            compact: compact,
+            open: tonightOpen,
+            onPressed: onTonight,
+            openIcon: Icons.nights_stay,
+            closedIcon: Icons.nights_stay_outlined,
+            label: "Tonight's Sky",
+          ),
         ],
       ),
     );
