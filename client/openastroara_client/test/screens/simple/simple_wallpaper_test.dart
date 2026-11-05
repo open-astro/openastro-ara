@@ -59,6 +59,18 @@ void main() {
     expect(s.dy.abs(), lessThan(s.dx.abs() / 4));
   });
 
+  testWidgets('upright in landscape turned the other way, gravity picks the bottom, not the window shape (#1602)',
+      (tester) async {
+    // Turned a quarter counter-clockwise: the device's left edge is down, so
+    // gravity reads along +x; the window-shape guess would take the right edge.
+    final g = await pump(tester, size: const Size(1024, 768));
+    await feed(tester, g, (x: .95, y: 0, z: .3));
+    await feed(tester, g, (x: .9, y: -.3, z: .3));
+    final s = shifts(tester)[2];
+    expect(s.dx, lessThan(0), reason: 'the same way as in portrait');
+    expect(s.dy.abs(), lessThan(s.dx.abs() / 4));
+  });
+
   testWidgets('a tilt back moves the stars vertically even standing upright (#1602)', (tester) async {
     final g = await pump(tester);
     await feed(tester, g, (x: 0, y: .98, z: .2));
