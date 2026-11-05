@@ -82,7 +82,14 @@ public sealed record FrameDto(
     double? RotatorMechanicalDeg = null,
     // The cooler set-point the frame was taken at (null = cooler off or no cooler), so matching
     // flats can cool to the lights' temperature.
-    double? CoolerSetpointC = null);
+    double? CoolerSetpointC = null,
+    // Sky Album (#1517): the mount's J2000 pointing (null when the frame was taken in another
+    // epoch or with no mount), arcsec per stored pixel, and whether Ara captured it (false for a
+    // foreign frame the drive scan catalogued; null for a row not yet probed).
+    double? RaDeg = null,
+    double? DecDeg = null,
+    double? PixelScaleArcsec = null,
+    bool? CapturedByAra = null);
 
 /// <summary>List item used by /api/v1/frames (paginated). Excludes the heavy quality breakdown.</summary>
 public sealed record FrameListItemDto(

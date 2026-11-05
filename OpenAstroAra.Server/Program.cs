@@ -1419,8 +1419,10 @@ public partial class Program {
         // line into a boot crash-loop — the walk is fixed, but the guard stays:
         // whatever a user's disk throws at us, the daemon comes up.
         try {
-            app.Services.GetRequiredService<CaptureScanService>()
-                .RunAsync(CancellationToken.None).GetAwaiter().GetResult();
+            var captureScan = app.Services.GetRequiredService<CaptureScanService>();
+            captureScan.RunAsync(CancellationToken.None).GetAwaiter().GetResult();
+            // Sky Album (#1517): fill pointing, pixel scale and provenance on rows older than the columns.
+            captureScan.BackfillAlbumFieldsAsync(CancellationToken.None).GetAwaiter().GetResult();
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
                 or System.Security.SecurityException or Microsoft.Data.Sqlite.SqliteException) {
             var scanLogger = app.Services.GetRequiredService<ILogger<Program>>();

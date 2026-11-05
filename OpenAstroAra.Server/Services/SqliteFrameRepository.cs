@@ -467,14 +467,16 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                  file_path, file_size_bytes, width, height, bit_depth,
                  hfr, star_count, eccentricity, guiding_rms_arcsec, snr_estimate,
                  quality_score_json, rating, tags_json, focuser_position,
-                 background_adu, median_adu, bin, rotator_mechanical_deg, cooler_setpoint_c)
+                 background_adu, median_adu, bin, rotator_mechanical_deg, cooler_setpoint_c,
+                 ra_deg, dec_deg, pixel_scale_arcsec, captured_by_ara, updated_utc)
             VALUES
                 ($id, $session_id, $target_name, $frame_type, $filter_name,
                  $exposure_seconds, $gain, $offset, $temperature_c, $captured_utc,
                  $file_path, $file_size_bytes, $width, $height, $bit_depth,
                  $hfr, $star_count, $eccentricity, $guiding_rms_arcsec, $snr_estimate,
                  $quality_score_json, $rating, $tags_json, $focuser_position,
-                 $background_adu, $median_adu, $bin, $rotator_mechanical_deg, $cooler_setpoint_c);
+                 $background_adu, $median_adu, $bin, $rotator_mechanical_deg, $cooler_setpoint_c,
+                 $ra_deg, $dec_deg, $pixel_scale_arcsec, $captured_by_ara, $updated_utc);
             """;
         cmd.Parameters.AddWithValue("$id", f.Id.ToString());
         cmd.Parameters.AddWithValue("$session_id", f.SessionId.ToString());
@@ -508,6 +510,11 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         cmd.Parameters.AddWithValue("$bin", DbValue(f.Bin));
         cmd.Parameters.AddWithValue("$rotator_mechanical_deg", DbValue(f.RotatorMechanicalDeg));
         cmd.Parameters.AddWithValue("$cooler_setpoint_c", DbValue(f.CoolerSetpointC));
+        cmd.Parameters.AddWithValue("$ra_deg", DbValue(f.RaDeg));
+        cmd.Parameters.AddWithValue("$dec_deg", DbValue(f.DecDeg));
+        cmd.Parameters.AddWithValue("$pixel_scale_arcsec", DbValue(f.PixelScaleArcsec));
+        cmd.Parameters.AddWithValue("$captured_by_ara", f.CapturedByAra is bool ara ? (ara ? 1 : 0) : DBNull.Value);
+        cmd.Parameters.AddWithValue("$updated_utc", DateTimeOffset.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
         await cmd.ExecuteNonQueryAsync(ct);
         // The session's running count (it stayed 0 for every session until now).
         await using var bump = conn.CreateCommand();
@@ -610,7 +617,8 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                    file_path, file_size_bytes, width, height, bit_depth,
                    hfr, star_count, eccentricity, guiding_rms_arcsec, snr_estimate,
                    quality_score_json, rating, tags_json, focuser_position,
-                   background_adu, median_adu, bin, rotator_mechanical_deg, cooler_setpoint_c
+                   background_adu, median_adu, bin, rotator_mechanical_deg, cooler_setpoint_c,
+                   ra_deg, dec_deg, pixel_scale_arcsec, captured_by_ara
             FROM frames WHERE id = $id LIMIT 1;
             """;
         cmd.Parameters.AddWithValue("$id", id.ToString());
@@ -660,7 +668,11 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
             MedianAdu: await reader.IsDBNullAsync(25, ct) ? null : reader.GetDouble(25),
             Bin: await reader.IsDBNullAsync(26, ct) ? null : reader.GetInt32(26),
             RotatorMechanicalDeg: await reader.IsDBNullAsync(27, ct) ? null : reader.GetDouble(27),
-            CoolerSetpointC: await reader.IsDBNullAsync(28, ct) ? null : reader.GetDouble(28));
+            CoolerSetpointC: await reader.IsDBNullAsync(28, ct) ? null : reader.GetDouble(28),
+            RaDeg: await reader.IsDBNullAsync(29, ct) ? null : reader.GetDouble(29),
+            DecDeg: await reader.IsDBNullAsync(30, ct) ? null : reader.GetDouble(30),
+            PixelScaleArcsec: await reader.IsDBNullAsync(31, ct) ? null : reader.GetDouble(31),
+            CapturedByAra: await reader.IsDBNullAsync(32, ct) ? null : reader.GetInt32(32) != 0);
     }
 
     /// <inheritdoc />

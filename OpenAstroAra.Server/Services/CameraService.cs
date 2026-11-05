@@ -1540,7 +1540,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             // in a shared frame reveal where someone lives.
             var prefs = ReadHeaderPrefsBestEffort();
 
-            fits.SetHeader("SWCREATE", "OpenAstro Ara", "capture software");
+            fits.SetHeader("SWCREATE", FrameAlbumFields.AraSoftware, "capture software");
             if (!string.IsNullOrWhiteSpace(targetName) && targetName != "Manual capture") {
                 fits.SetHeader("OBJECT", targetName!, "target name");
             }
@@ -1922,7 +1922,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     // appliedBin: the binning the driver ACTUALLY used (read back after the exposure, like XBINNING in
     // the header), not the requested one — a driver can coerce a 2 to 1, and the #1140 pixel scale
     // must follow the frame. Null = no read-back available (the request's value is the best we have).
-    internal async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, FrameType frameType, string targetName, DateTimeOffset capturedAt, string filePath, int width, int height, int? focuserPosition = null, int? appliedBin = null, double? rotatorMechanicalDeg = null, double? coolerSetpointC = null, Guid? sessionId = null, double? ccdTemperatureC = null) {
+    internal async Task RegisterFrameAsync(Guid frameId, ExposureRequestDto request, FrameType frameType, string targetName, DateTimeOffset capturedAt, string filePath, int width, int height, int? focuserPosition = null, int? appliedBin = null, double? rotatorMechanicalDeg = null, double? coolerSetpointC = null, Guid? sessionId = null, double? ccdTemperatureC = null, FramePointing? pointing = null) {
         // §40/§50 — a capture that runs INSIDE a sequence run carries the run's
         // catalog session via the ambient CaptureSessionScope (AsyncLocal set by
         // the run worker); everything else — the REST snapshot path — falls back
@@ -1933,6 +1933,13 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         var fileSize = new FileInfo(filePath).Length;
         // A background save passes the reading taken at capture; registration may run a frame later.
         var ccdTemp = ccdTemperatureC ?? CachedCcdTemperature();
+        var bin = appliedBin ?? request.BinX;
+        // Sky Album (#1517): only J2000 pointing is stored; the scale follows the header's XPIXSZ (binned).
+        var j2000 = pointing is { IsJ2000: true } pt ? pt : (FramePointing?)null;
+        var optics = _profileStore?.GetOpticsSettings();
+        var pixelScale = optics is null ? null : FrameAlbumFields.ArcsecPerPixel(
+            optics.PixelSizeUm * Math.Max(bin, 1),
+            optics.FocalLengthMm * (optics.ReducerFactor > 0 ? optics.ReducerFactor : 1));
         await _frames!.InsertAsync(new FrameDto(
             Id: frameId,
             SessionId: sessionId.Value,
@@ -1954,9 +1961,13 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             Rating: 0,
             Tags: Array.Empty<string>(),
             FocuserPosition: focuserPosition,
-            Bin: appliedBin ?? request.BinX,
+            Bin: bin,
             RotatorMechanicalDeg: rotatorMechanicalDeg,
-            CoolerSetpointC: coolerSetpointC), CancellationToken.None).ConfigureAwait(false);
+            CoolerSetpointC: coolerSetpointC,
+            RaDeg: j2000 is FramePointing p ? OpenAstroAra.Astrometry.AstroUtil.HoursToDegrees(p.RaHours) : null,
+            DecDeg: j2000?.DecDegrees,
+            PixelScaleArcsec: pixelScale,
+            CapturedByAra: true), CancellationToken.None).ConfigureAwait(false);
     }
 
     // ── §32.4 cache (single-flight with coalescing, mirrors TelescopeService) ────────────────────
