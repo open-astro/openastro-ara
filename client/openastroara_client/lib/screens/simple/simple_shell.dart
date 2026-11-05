@@ -65,6 +65,7 @@ import '../../util/friendly_error.dart';
 import '../../services/profile_api.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../widgets/ara_mark.dart';
 import '../../widgets/emergency_stop_button.dart';
 import '../../widgets/equipment/equipment_glyphs.dart';
 import '../../state/equipment/safety_monitor_state.dart';
@@ -103,6 +104,7 @@ import 'simple_guide_panel.dart'
 import 'simple_polar_panel.dart';
 import 'simple_plan_panel.dart';
 import 'simple_preview_panel.dart';
+import 'simple_wallpaper.dart';
 
 /// Inset from the frame edge and between panels.
 const double kSimpleInset = 16;
@@ -136,7 +138,7 @@ const double kSimpleStopSize = 60;
 /// The one popover open beside a rail, if any. [settings] is the chip's: the
 /// current mode's options (Preview's exposure, Focus's panel).
 /// [menu] is the top bar's Settings menu.
-enum _Popover { none, modes, settings, queue, menu, search }
+enum _Popover { none, modes, settings, queue, menu, search, ara }
 
 /// Simple Mode (ALP-4810): the latest frame fills the window and only the
 /// shutter is always out. A right rail holds the mode (tap for the five
@@ -683,6 +685,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         ref.watch(lastCapturedFrameIdProvider) != null ||
         ref.watch(liveViewControllerProvider);
     final showSky = _sky || !hasFrame;
+    // No frame and no sky asked for: the wallpaper (#1602).
+    final wallpaper = !_sky && !hasFrame;
     final panels = !_clean || showSky;
     // Every mode reads the sequencer (the plan squares, the status pill), so
     // opening Simple Mode adopts a run in progress; only Plan acts on it.
@@ -856,8 +860,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                         : polarFrame
                                         ? const SimplePolarFrame()
                                         : const FrameViewer())
-                                  // The sky: asked for, or standing in until there
-                                  // is a frame.
+                                  : wallpaper
+                                  ? const SimpleWallpaper(
+                                      key: Key('simple-wallpaper'),
+                                    )
+                                  // The sky, asked for.
                                   : KeyedSubtree(
                                       key: const Key('simple-planetarium'),
                                       child: widget.planetarium,
@@ -937,6 +944,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 top: kSimpleInset,
                                 height: kSimpleBarHeight,
                                 child: _StatusStrip(
+                                  onAra: () => _toggle(_Popover.ara),
                                   onSearch: () => _toggle(_Popover.search),
                                   onSettings: () => _openMenu(),
                                   onDevices: () =>
@@ -977,13 +985,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     key: _leftRailKey,
                                     child: _LeftRail(
                                       info: _info,
-                                      sky: showSky,
+                                      sky: _sky,
                                       onInfo: () =>
                                           setState(() => _info = !_info),
-                                      // With no frame there is only the sky.
-                                      onSky: hasFrame
-                                          ? () => setState(() => _sky = !_sky)
-                                          : null,
+                                      onSky: () => setState(() => _sky = !_sky),
                                     ),
                                   ),
                                 ),
@@ -1121,7 +1126,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               // The sky's pick, offered to Plan.
-                              if (showSky && sel != null && !runSheet)
+                              if (_sky && sel != null && !runSheet)
                                 Positioned(
                                   left: 0,
                                   right: 0,
@@ -1182,6 +1187,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       child: SimpleSearchPanel(onHit: _openHit),
                                     ),
                                   ),
+                                ),
+                              if (_popover == _Popover.ara)
+                                const Positioned(
+                                  top: kSimpleInset * 2 + kSimpleBarHeight,
+                                  left: kSimpleInset,
+                                  child: _AraSheet(),
                                 ),
                               if (_popover == _Popover.menu) ...[
                                 // Under the strip, which stays live (its
@@ -1433,6 +1444,7 @@ bool _anyDeviceShown(WidgetRef ref) {
 
 class _StatusStrip extends ConsumerWidget {
   const _StatusStrip({
+    required this.onAra,
     required this.onSearch,
     required this.onSettings,
     required this.onDevices,
@@ -1440,6 +1452,9 @@ class _StatusStrip extends ConsumerWidget {
 
   /// Opens Settings › Devices (the no-devices note).
   final VoidCallback onDevices;
+
+  /// Opens the OpenAstro Ara sheet (the mark).
+  final VoidCallback onAra;
 
   final VoidCallback onSearch;
   final VoidCallback onSettings;
@@ -1454,6 +1469,13 @@ class _StatusStrip extends ConsumerWidget {
       padding: const EdgeInsets.only(left: 8, right: 4),
       child: Row(
         children: [
+          // The brand is a control: it opens the OpenAstro Ara sheet (#1602).
+          IconButton(
+            key: const Key('simple-ara-mark'),
+            icon: const AraMark(size: 30),
+            tooltip: kAppName,
+            onPressed: onAra,
+          ),
           // Only gear that's connected; a fault still shows. With none of it
           // showing, a note says so and opens Devices.
           Expanded(
@@ -3593,4 +3615,47 @@ class _RigStepperState extends State<_RigStepper> {
       ],
     ),
   );
+}
+
+/// The OpenAstro Ara sheet under the mark (#1602): the versions a support
+/// question starts with, then which rig and profile this is. Settings stays
+/// on the gear.
+class _AraSheet extends ConsumerWidget {
+  const _AraSheet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final rig = ref.watch(daemonVersionsProvider).value;
+    final server = ref.watch(activeServerProvider);
+    final profiles = ref.watch(profileManagementProvider).value;
+    final profile = profiles?.profiles
+        .where((p) => p.id == profiles.activeId)
+        .firstOrNull
+        ?.name;
+    return SizedBox(
+      key: const Key('simple-ara-sheet'),
+      width: 320,
+      child: SimplePanel(
+        padding: const EdgeInsets.all(AraSpace.s16),
+        child: SimpleVersions(
+          title: kAppName,
+          rows: [
+            (
+              l10n.shellThisApp,
+              ref.watch(appDisplayVersionProvider).value ?? '—',
+            ),
+            (l10n.shellAraServer, rig?.daemonVersion ?? '—'),
+            if (rig?.guiderVersion != null)
+              (l10n.deviceGuider, rig!.guiderVersion!),
+            (
+              l10n.shellSectionRig,
+              server == null ? '—' : server.mdnsName ?? server.hostname,
+            ),
+            (l10n.shellProfile, profile ?? '—'),
+          ],
+        ),
+      ),
+    );
+  }
 }

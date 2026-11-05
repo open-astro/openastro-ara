@@ -741,7 +741,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://github.com/oleg-st/ZstdSharp
 
 
-CLIENT — WILMA direct runtime pub packages (20 packages; transitive pub packages ship via Flutter's in-app LicenseRegistry)
+CLIENT — WILMA direct runtime pub packages (21 packages; transitive pub packages ship via Flutter's in-app LicenseRegistry)
 ===========================================================================================================================
 
 ------------------------------------------------------------------------
@@ -845,6 +845,12 @@ Package:        riverpod 3.4.3
 Copyright:      Copyright (c) 2020 Remi Rousselet
 License:        MIT
 License source: https://pub.dev/packages/riverpod/license
+
+------------------------------------------------------------------------
+Package:        sensors_plus 7.1.1
+Copyright:      Copyright 2017 The Chromium Authors
+License:        BSD-3-Clause
+License source: https://pub.dev/packages/sensors_plus/license
 
 ------------------------------------------------------------------------
 Package:        url_launcher 6.3.3

@@ -687,12 +687,9 @@ void main() {
     final sky = Color.alphaBlend(hint, const Color(0xFF0A0A0A));
     expect((math.max(lum(sky), lum(const Color(0xFF0A0A0A))) + 0.05) / (math.min(lum(sky), lum(const Color(0xFF0A0A0A))) + 0.05),
         greaterThanOrEqualTo(4.5));
-    expect(find.byKey(const Key('sky')), findsOneWidget, reason: 'the sky until there is a frame');
-    // Sky opens the planetarium, which is already open: Sky shows lit (not dimmed), and
-    // screen readers hear there's nothing to switch.
-    expect(tester.widget<Icon>(find.descendant(of: find.byKey(const Key('simple-sky')), matching: find.byType(Icon))).color,
-        AraColors.textPrimary);
-    expect(tester.getSemantics(find.byKey(const Key('simple-sky'))), isSemantics(hasEnabledState: true, isEnabled: false));
+    expect(find.byKey(const Key('simple-wallpaper')), findsOneWidget, reason: 'the wallpaper until there is a frame (#1602)');
+    // Sky shows tonight's sky over the wallpaper, so it is a working button.
+    expect(tester.getSemantics(find.byKey(const Key('simple-sky'))), isSemantics(hasEnabledState: true, isEnabled: true));
   });
 
   testWidgets('the mode name opens the modes in order, Night Setup first; picking one closes them', (tester) async {
@@ -1966,6 +1963,44 @@ void main() {
     expect(find.byKey(const Key('simple-planetarium')), findsOneWidget, reason: 'the sky, pointed at it');
   });
 
+  testWidgets('the Ara mark opens the OpenAstro Ara sheet: versions, rig and profile; the gear stays (#1602)',
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768),
+        server: const AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro'),
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]),
+        versions: DaemonVersions.fromJson({'daemon_version': '0.0.1-ara.7', 'guider_version': '2.6.13dev7'}));
+    expect(find.byTooltip('Settings'), findsOneWidget, reason: 'the gear stays on the right');
+    await tester.tap(find.byKey(const Key('simple-ara-mark')));
+    await tester.pump();
+    await tester.pump();
+    final sheet = find.byKey(const Key('simple-ara-sheet'));
+    for (final t in ['OpenAstro Ara', 'This app', 'Ara server', '0.0.1-ara.7', 'Guider', '2.6.13dev7', 'Rig', 'astro',
+        'Profile', 'Backyard Rig']) {
+      expect(find.descendant(of: sheet, matching: find.text(t)), findsOneWidget, reason: t);
+    }
+    expect(find.descendant(of: sheet, matching: find.text('Settings')), findsNothing, reason: 'no Settings row');
+    await tester.tap(find.byKey(const Key('simple-ara-mark')));
+    await tester.pump();
+    expect(sheet, findsNothing, reason: 'the mark closes it again');
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets("no frame yet: the wallpaper, not the sky; the Sky button shows tonight's sky (#1602)", (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    expect(find.byKey(const Key('simple-wallpaper')), findsOneWidget);
+    expect(find.byKey(const Key('sky')), findsNothing);
+    expect(find.text('Tap the shutter to take a frame'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsOneWidget);
+    expect(find.byKey(const Key('simple-wallpaper')), findsNothing);
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-wallpaper')), findsOneWidget, reason: 'and back');
+  });
+
   testWidgets('Search opens on its own: no mode panel beside the rail', (tester) async {
     await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-search-button')));
@@ -2504,7 +2539,9 @@ void main() {
     final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
       cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),
     ]);
-    // No frame yet: the planetarium is the background (it takes taps itself).
+    // The planetarium as the background (it takes taps itself).
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
     expect(find.byKey(const Key('sky')), findsOneWidget);
     c.read(selectedSettingsPanelProvider.notifier).select('eq.camera');
     c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);

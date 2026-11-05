@@ -413,11 +413,14 @@ class _OnOff extends StatelessWidget {
 }
 
 /// A titled two-column list of versions, each beside its name (Settings ›
-/// Rig, and a device's page in Settings).
+/// Rig, a device's page in Settings and the OpenAstro Ara sheet).
 class SimpleVersions extends StatelessWidget {
-  const SimpleVersions({super.key, required this.rows});
+  const SimpleVersions({super.key, required this.rows, this.title});
 
   final List<(String, String)> rows;
+
+  /// "Versions" unless given.
+  final String? title;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -425,7 +428,7 @@ class SimpleVersions extends StatelessWidget {
     spacing: AraSpace.s8,
     children: [
       Text(
-        context.l10n.deviceVersions,
+        title ?? context.l10n.deviceVersions,
         style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
       ),
       Table(
