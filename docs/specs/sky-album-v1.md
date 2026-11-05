@@ -40,7 +40,7 @@ Added with `AddColumnIfMissingAsync` next to the existing additive columns in `S
 | `dec_deg` | REAL NULL | capture when J2000; backfill |
 | `pixel_scale_arcsec` | REAL NULL | arcsec per stored pixel: `206.265 x XPIXSZ_um / FOCALLEN_mm`. `XPIXSZ` as the header writer computes it is already multiplied by bin, and `width`/`height` are the binned image size, so no further bin factor anywhere. Backfill reads the same two cards |
 | `updated_utc` | TEXT NULL | insert and every backfill write |
-| `pointing_probed_utc` | TEXT NULL | backfill, whether or not the file had the cards |
+| `pointing_probed_utc` | TEXT NULL | capture (an Ara capture never needs its lossier header re-read), rescan recovery, and backfill whether or not the file had the cards |
 | `captured_by_ara` | INTEGER NULL | 1 at capture; backfill sets 1 when `SWCREATE` starts with `OpenAstro Ara` (the XISF writer appends a version), else 0 |
 
 `CameraService.RegisterFrameAsync` receives `job.Pointing` and the pixel scale; `FrameDto` gains the matching optional fields. `CaptureScanService.TryRecoverAsync` parses `OBJCTRA`/`OBJCTDEC` (via `ParseTargetCoordinates`), `EQUINOX`, `FOCALLEN` and `XPIXSZ` so a drive rescan fills the same columns for recovered rows.
