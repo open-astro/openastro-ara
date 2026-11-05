@@ -35,6 +35,7 @@ Future<ProviderContainer> _pump(
   List<PlanningDso> tonight = const [],
   void Function(PlanningDso)? onImageTarget,
   AlbumFetcher? fetcher,
+  List<TonightSkyObject>? tonightRows,
   Size size = const Size(1200, 1600),
 }) async {
   tester.view.physicalSize = size;
@@ -46,7 +47,7 @@ Future<ProviderContainer> _pump(
       bundledCatalogProvider.overrideWith((ref) async => [_m42, _c14, _m31, _m1]),
       albumFetcherProvider.overrideWithValue(fetcher ??
           (baseUrl, {since}) async => AlbumFramesPage(totalLights: frames.length, frames: frames)),
-      tonightSkyProvider.overrideWith((ref) async => [for (final d in tonight) _tonight(d)]),
+      tonightSkyProvider.overrideWith((ref) async => tonightRows ?? [for (final d in tonight) _tonight(d)]),
       cachedProfilesProvider.overrideWith((ref) async => const CachedProfileList(
           activeId: 'p1', profiles: [CachedProfile(id: 'p1', name: 'Backyard refractor', hasSections: false)])),
     ],
@@ -243,5 +244,37 @@ void main() {
     expect(tester.getCenter(find.text('Gold 0')).dy, closeTo(countRow, 4));
     expect(tester.getTopLeft(find.byType(SegmentedButton<AlbumFilter>)).dy,
         greaterThan(tester.getBottomLeft(find.text('1 / 3 collected')).dy));
+  });
+
+  testWidgets('the shelf finds a card the ranker lists under another designation', (tester) async {
+    // The ranker's row is M42 and the Book's object NGC1976 (alias "M 42"); another row names C 14 only as an alias.
+    await _pump(tester, frames: _m31Frames, tonightRows: [
+      const TonightSkyObject(id: 'M42', name: 'Orion Nebula', type: 'HII', magnitude: 4, raDeg: 83.8, decDeg: -5,
+          altitudeDeg: 50, maxAltitudeDeg: 70),
+      const TonightSkyObject(id: 'Double', name: 'h and chi Persei', type: 'OCl', magnitude: 4, raDeg: 34.7, decDeg: 57,
+          altitudeDeg: 40, maxAltitudeDeg: 60, aliases: ['C 14']),
+    ]);
+    expect(_onShelf('Orion Nebula'), findsOneWidget);
+    await tester.tap(find.text('Caldwell'));
+    await tester.pumpAndSettle();
+    expect(_onShelf('Double Cluster'), findsOneWidget);
+  });
+
+  testWidgets('a failed refresh keeps the cached cards under the error', (tester) async {
+    var fail = false;
+    Future<AlbumFramesPage> fetcher(String baseUrl, {DateTime? since}) async {
+      if (fail) throw StateError('rig away');
+      return AlbumFramesPage(totalLights: _m31Frames.length, frames: _m31Frames);
+    }
+
+    final container = await _pump(tester, frames: const [], fetcher: fetcher);
+    expect(find.text('1 / 3 collected'), findsOneWidget);
+
+    fail = true;
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null, open: false)));
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null)));
+    await tester.pumpAndSettle();
+    expect(find.text('1 / 3 collected'), findsOneWidget);
+    expect(find.textContaining("Couldn't load the album"), findsOneWidget);
   });
 }
