@@ -12,6 +12,7 @@ import '../../services/dso_catalog_service.dart';
 import '../../state/album/album_matching.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../util/reduce_motion.dart';
 
 /// Cards are trading-card shaped: 2.5 wide by 3.5 tall.
 const double albumCardAspect = 2.5 / 3.5;
@@ -228,7 +229,7 @@ class AlbumCard extends StatelessWidget {
       barrierDismissible: true,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       barrierColor: Colors.black38,
-      transitionDuration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 320),
+      transitionDuration: reduceMotionOf(context) ? Duration.zero : const Duration(milliseconds: 320),
       pageBuilder: (dialogContext, _, _) => const SizedBox.shrink(),
       transitionBuilder: (dialogContext, animation, _, _) {
         final screen = MediaQuery.sizeOf(dialogContext);

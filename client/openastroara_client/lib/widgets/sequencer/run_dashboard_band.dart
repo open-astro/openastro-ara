@@ -19,6 +19,7 @@ import '../../state/tracking/tracking_probe_live_state.dart';
 import '../../l10n/l10n.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../util/reduce_motion.dart';
 import 'run_state_badge.dart';
 
 /// §Run-redesign S5 — the live run dashboard: a band under the toolbar that
@@ -171,7 +172,7 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
                 // snapping (respects reduced motion).
                 child: TweenAnimationBuilder<double>(
                   tween: Tween(begin: 0, end: progress ?? 0),
-                  duration: MediaQuery.of(context).disableAnimations
+                  duration: reduceMotionOf(context)
                       ? Duration.zero
                       : const Duration(milliseconds: 400),
                   curve: Curves.easeOutCubic,

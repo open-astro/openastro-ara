@@ -17,6 +17,7 @@ import '../../theme/ara_metrics.dart';
 import '../../util/banked_hours.dart';
 import '../../util/integration_budget.dart';
 import '../../util/coord_format.dart';
+import '../../util/reduce_motion.dart';
 import 'optimal_sub_calculator_dialog.dart';
 import 'planning_visuals.dart';
 import 'session_plan_dialog.dart';
@@ -390,7 +391,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
             remainingTonightHours: _object.remainingHours,
           );
 
-    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    final reduceMotion = reduceMotionOf(context);
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: reduceMotion

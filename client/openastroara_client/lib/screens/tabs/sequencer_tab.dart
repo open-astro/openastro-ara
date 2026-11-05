@@ -13,6 +13,7 @@ import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/ws/ws_providers.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../util/reduce_motion.dart';
 import '../../widgets/sequencer/run_completion_sheet.dart';
 import '../../widgets/sequencer/run_dashboard_band.dart';
 import '../../widgets/sequencer/sequence_editor_tree.dart';
@@ -181,7 +182,7 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     // the stage. Reduced-motion honours the platform setting.
     final runActive =
         ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
-    final motionOff = MediaQuery.of(context).disableAnimations;
+    final motionOff = reduceMotionOf(context);
     final dimDuration =
         motionOff ? Duration.zero : const Duration(milliseconds: 250);
     Widget dimmed(Widget child) => AnimatedOpacity(
