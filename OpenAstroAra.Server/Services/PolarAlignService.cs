@@ -80,7 +80,6 @@ namespace OpenAstroAra.Server.Services {
         private int _liveIterations;
         private DateTimeOffset _startedAt;
         private int _generation;
-        private int _startSeq;
         private CancellationTokenSource? _runCts;
         private Task? _runTask;
 
@@ -198,7 +197,6 @@ namespace OpenAstroAra.Server.Services {
                 }
                 var settings = _profileStore.GetPolarAlignSettings();
                 int gen;
-                int startSeq;
                 lock (_gate) {
                     _active = true;
                     _state = "seeding";
@@ -209,11 +207,10 @@ namespace OpenAstroAra.Server.Services {
                     _liveIterations = 0;
                     _startedAt = DateTimeOffset.UtcNow;
                     gen = ++_generation;
-                    startSeq = ++_startSeq;
                 }
                 _runCts = new CancellationTokenSource();
                 var runToken = _runCts.Token;
-                _runTask = Task.Run(() => RunRoutineAsync(guiderClient, site, settings, gen, startSeq, runToken), CancellationToken.None);
+                _runTask = Task.Run(() => RunRoutineAsync(guiderClient, site, settings, gen, runToken), CancellationToken.None);
                 LogStarted();
                 await PublishStateEventAsync(WsEventCatalog.PolarAlignStarted, "seeding").ConfigureAwait(false);
                 return Accepted("polar-align.start", idempotencyKey);
@@ -292,7 +289,7 @@ namespace OpenAstroAra.Server.Services {
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "The run task's boundary: every failure must land in the failed state and release the guider.")]
         private async Task RunRoutineAsync(
-                PHD2Guider guiderClient, SiteSettingsDto site, PolarAlignSettingsDto settings, int gen, int startSeq, CancellationToken ct) {
+                PHD2Guider guiderClient, SiteSettingsDto site, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
             try {
                 var north = site.LatitudeDeg > 0;
                 var exposure = TimeSpan.FromSeconds(Math.Max(0.01, settings.ExposureSeconds));
@@ -328,7 +325,8 @@ namespace OpenAstroAra.Server.Services {
             } catch (Exception ex) {
                 LogRoutineFailed("superseded", ex);
             }
-            _ = startSeq; // the mount is never left in a changed state: the guider's tool restores its own
+            // Manual mode leaves the mount at its last RA turn, which is where the adjust phase wants it;
+            // tracking is the guider's to keep, so there is no hand-back of mount state here.
         }
 
         private async Task UnparkIfParkedAsync(CancellationToken ct) {
