@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -36,6 +38,7 @@ Future<ProviderContainer> _pump(
   void Function(PlanningDso)? onImageTarget,
   AlbumFetcher? fetcher,
   List<TonightSkyObject>? tonightRows,
+  bool bookPending = false,
   Size size = const Size(1200, 1600),
 }) async {
   tester.view.physicalSize = size;
@@ -48,6 +51,7 @@ Future<ProviderContainer> _pump(
       albumFetcherProvider.overrideWithValue(fetcher ??
           (baseUrl, {since}) async => AlbumFramesPage(totalLights: frames.length, frames: frames)),
       tonightSkyProvider.overrideWith((ref) async => tonightRows ?? [for (final d in tonight) _tonight(d)]),
+      if (bookPending) albumBookProvider.overrideWith((ref, key) => Completer<AlbumBookView>().future),
       cachedProfilesProvider.overrideWith((ref) async => const CachedProfileList(
           activeId: 'p1', profiles: [CachedProfile(id: 'p1', name: 'Backyard refractor', hasSections: false)])),
     ],
@@ -276,5 +280,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('1 / 3 collected'), findsOneWidget);
     expect(find.textContaining("Couldn't load the album"), findsOneWidget);
+  });
+
+  testWidgets('the shelf waits until the Book is matched against the rows', (tester) async {
+    // Rows loaded but the Book not yet matched: every card would look missing, M31 included.
+    await _pump(tester, frames: _m31Frames, tonight: [_m31], bookPending: true);
+    expect(_onShelf('Andromeda Galaxy'), findsNothing);
   });
 }
