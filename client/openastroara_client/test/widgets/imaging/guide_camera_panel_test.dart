@@ -82,7 +82,8 @@ class _FakeAdvanced implements GuiderAdvancedClient {
   Future<GuiderAdvancedSettings> putProfile(GuiderAdvancedSettings s) async =>
       profile = s;
   @override
-  Future<GuiderAdvancedView> getGuider() async => GuiderAdvancedView.disconnected;
+  Future<GuiderAdvancedView> getGuider() async =>
+      GuiderAdvancedView.disconnected;
   @override
   Future<void> pushTuning() async {}
   @override
@@ -140,7 +141,7 @@ Future<void> _pumpPanel(
   await t.pumpWidget(
     ProviderScope(
       overrides: [
-          sequenceRunStateProvider.overrideWith(_IdleRun.new),
+        sequenceRunStateProvider.overrideWith(_IdleRun.new),
         activeServerProvider.overrideWithValue(
           const AraServer(hostname: 'localhost', port: 5555),
         ),
@@ -223,90 +224,152 @@ void main() {
     );
   });
 
-  testWidgets('the multi-star chip toggles the setting and shows what the guider reports', (t) async {
-    final fake = _FakeLive(
-      GuiderLive.fromJson({'connected': true, 'app_state': 'Looping', 'multi_star_enabled': true}),
-    );
-    final adv = _FakeAdvanced(fake);
-    await t.pumpWidget(
-      ProviderScope(
-        overrides: [
-          sequenceRunStateProvider.overrideWith(_IdleRun.new),
-          activeServerProvider.overrideWithValue(const AraServer(hostname: 'localhost', port: 5555)),
-          guiderLiveApiFactoryProvider.overrideWithValue((_) => fake),
-          guiderAdvancedApiFactoryProvider.overrideWithValue((_) => adv),
-        ],
-        child: const MaterialApp(
-          home: Scaffold(body: SizedBox(width: 1000, height: 600, child: GuideCameraPanel())),
+  testWidgets(
+    'the multi-star chip toggles the setting and shows what the guider reports',
+    (t) async {
+      final fake = _FakeLive(
+        GuiderLive.fromJson({
+          'connected': true,
+          'app_state': 'Looping',
+          'multi_star_enabled': true,
+        }),
+      );
+      final adv = _FakeAdvanced(fake);
+      await t.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sequenceRunStateProvider.overrideWith(_IdleRun.new),
+            activeServerProvider.overrideWithValue(
+              const AraServer(hostname: 'localhost', port: 5555),
+            ),
+            guiderLiveApiFactoryProvider.overrideWithValue((_) => fake),
+            guiderAdvancedApiFactoryProvider.overrideWithValue((_) => adv),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 1000,
+                height: 600,
+                child: GuideCameraPanel(),
+              ),
+            ),
+          ),
         ),
-      ),
-    );
-    await t.pump();
-    await t.pump();
-    final chip = find.byKey(const Key('guide-camera-multistar'));
-    expect(find.text('Multi-star'), findsOneWidget);
-    expect(t.getSemantics(find.bySemanticsLabel('Multi-star guiding')), matchesSemantics(isButton: true, hasToggledState: true, isToggled: true, label: 'Multi-star guiding', hasTapAction: true, hasEnabledState: true, isEnabled: true));
+      );
+      await t.pump();
+      await t.pump();
+      final chip = find.byKey(const Key('guide-camera-multistar'));
+      expect(find.text('Multi-star'), findsOneWidget);
+      expect(
+        t.getSemantics(find.bySemanticsLabel('Multi-star guiding')),
+        matchesSemantics(
+          isButton: true,
+          hasToggledState: true,
+          isToggled: true,
+          label: 'Multi-star guiding',
+          hasTapAction: true,
+          hasEnabledState: true,
+          isEnabled: true,
+        ),
+      );
 
-    await t.tap(chip);
-    await t.pump();
-    await t.pump();
-    expect(adv.applies, 1);
-    expect(adv.profile['multi_star_enabled'], false, reason: 'the tap writes the setting');
-    expect(find.text('Single star'), findsOneWidget, reason: 'the chip reads the guider, not the tap');
+      await t.tap(chip);
+      await t.pump();
+      await t.pump();
+      expect(adv.applies, 1);
+      expect(
+        adv.profile['multi_star_enabled'],
+        false,
+        reason: 'the tap writes the setting',
+      );
+      expect(
+        find.text('Single star'),
+        findsOneWidget,
+        reason: 'the chip reads the guider, not the tap',
+      );
 
-    await t.tap(chip);
-    await t.pump();
-    await t.pump();
-    expect(adv.profile['multi_star_enabled'], true);
-    expect(find.text('Multi-star'), findsOneWidget);
-  });
+      await t.tap(chip);
+      await t.pump();
+      await t.pump();
+      expect(adv.profile['multi_star_enabled'], true);
+      expect(find.text('Multi-star'), findsOneWidget);
+    },
+  );
 
   testWidgets('the multi-star chip is disabled while guiding', (t) async {
     final fake = _FakeLive(
-      GuiderLive.fromJson({'connected': true, 'app_state': 'Guiding', 'multi_star_enabled': true}),
+      GuiderLive.fromJson({
+        'connected': true,
+        'app_state': 'Guiding',
+        'multi_star_enabled': true,
+      }),
     );
     final adv = _FakeAdvanced(fake);
     await t.pumpWidget(
       ProviderScope(
         overrides: [
           sequenceRunStateProvider.overrideWith(_IdleRun.new),
-          activeServerProvider.overrideWithValue(const AraServer(hostname: 'localhost', port: 5555)),
+          activeServerProvider.overrideWithValue(
+            const AraServer(hostname: 'localhost', port: 5555),
+          ),
           guiderLiveApiFactoryProvider.overrideWithValue((_) => fake),
           guiderAdvancedApiFactoryProvider.overrideWithValue((_) => adv),
         ],
         child: const MaterialApp(
-          home: Scaffold(body: SizedBox(width: 1000, height: 600, child: GuideCameraPanel())),
+          home: Scaffold(
+            body: SizedBox(width: 1000, height: 600, child: GuideCameraPanel()),
+          ),
         ),
       ),
     );
     await t.pump();
     await t.pump();
-    expect(t.widget<ActionChip>(find.byKey(const Key('guide-camera-multistar'))).onPressed, isNull);
+    expect(
+      t
+          .widget<ActionChip>(find.byKey(const Key('guide-camera-multistar')))
+          .onPressed,
+      isNull,
+    );
     expect(adv.applies, 0);
   });
 
-  testWidgets('the multi-star chip is disabled while a sequence runs', (t) async {
+  testWidgets('the multi-star chip is disabled while a sequence runs', (
+    t,
+  ) async {
     // Between targets the guider is stopped, but applying would release its equipment under the run.
     final fake = _FakeLive(
-      GuiderLive.fromJson({'connected': true, 'app_state': 'Stopped', 'multi_star_enabled': true}),
+      GuiderLive.fromJson({
+        'connected': true,
+        'app_state': 'Stopped',
+        'multi_star_enabled': true,
+      }),
     );
     final adv = _FakeAdvanced(fake);
     await t.pumpWidget(
       ProviderScope(
         overrides: [
-          activeServerProvider.overrideWithValue(const AraServer(hostname: 'localhost', port: 5555)),
+          activeServerProvider.overrideWithValue(
+            const AraServer(hostname: 'localhost', port: 5555),
+          ),
           guiderLiveApiFactoryProvider.overrideWithValue((_) => fake),
           guiderAdvancedApiFactoryProvider.overrideWithValue((_) => adv),
           sequenceRunStateProvider.overrideWith(_FakeRun.new),
         ],
         child: const MaterialApp(
-          home: Scaffold(body: SizedBox(width: 1000, height: 600, child: GuideCameraPanel())),
+          home: Scaffold(
+            body: SizedBox(width: 1000, height: 600, child: GuideCameraPanel()),
+          ),
         ),
       ),
     );
     await t.pump();
     await t.pump();
-    expect(t.widget<ActionChip>(find.byKey(const Key('guide-camera-multistar'))).onPressed, isNull);
+    expect(
+      t
+          .widget<ActionChip>(find.byKey(const Key('guide-camera-multistar')))
+          .onPressed,
+      isNull,
+    );
     expect(adv.applies, 0);
   });
 
@@ -445,7 +508,7 @@ void main() {
       await t.pumpWidget(
         ProviderScope(
           overrides: [
-          sequenceRunStateProvider.overrideWith(_IdleRun.new),
+            sequenceRunStateProvider.overrideWith(_IdleRun.new),
             activeServerProvider.overrideWithValue(
               const AraServer(hostname: 'localhost', port: 5555),
             ),

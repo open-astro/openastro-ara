@@ -61,7 +61,9 @@ Future<RigCapabilities> readRigCapabilities(ProviderContainer container) async {
     debugPrint('[planning] rig read for camera failed: $e');
   }
   if (!coolerRegulates) {
-    debugPrint('[planning] camera cannot set a cooling target; the plan gets no Cool Camera step');
+    debugPrint(
+      '[planning] camera cannot set a cooling target; the plan gets no Cool Camera step',
+    );
   }
   return RigCapabilities(
     coolerRegulates: coolerRegulates,
