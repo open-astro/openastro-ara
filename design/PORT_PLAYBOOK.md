@@ -7920,7 +7920,7 @@ ARA commits to a **targeted accessibility baseline** that benefits many user gro
 
 **Night mode is exempt from contrast.** Its red-only palette can't reach 4.5:1 and isn't meant to; the user turns it on, and the default theme is what has to pass.
 
-**Known gap:** white on Fault Red (`#E53935`) is 4.2:1. Simple Mode's Emergency Stop already uses `#D32F2F` (5.0:1); the full UI's Stop and red fills change in their own PR after Simple Mode merges (ALP-4895).
+**Known gap:** white on Fault Red (`#E53935`) is 4.2:1. Both densities' Emergency Stop use `#D32F2F` (5.0:1, white label, darkening hold sweep; #1569). Other Fault Red fills (snackbars, the confirm dialog's EMERGENCY STOP button) stay on Fault Red until the maintainer decides whether Fault Red itself moves (ALP-4895).
 
 ### 53.1 What's in scope
 
