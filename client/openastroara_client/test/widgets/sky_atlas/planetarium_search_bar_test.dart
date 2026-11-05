@@ -54,4 +54,30 @@ void main() {
     expect(find.byTooltip('Reset view'), findsNothing);
     expect(find.byTooltip('Target by coordinates (RA/Dec)'), findsOneWidget);
   });
+
+  // #1554: at 768 pt portrait the two labelled buttons plus the icon buttons
+  // left the field ~70 pt wide, so the hint read "Se...".
+  Future<double> fieldWidth(WidgetTester tester, Size size) async {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await pump(tester, onZoom: (_) {});
+    expect(tester.takeException(), isNull);
+    return tester.getSize(find.byType(TextField)).width;
+  }
+
+  testWidgets('768x1024 portrait keeps a usable search field', (tester) async {
+    expect(
+      await fieldWidth(tester, const Size(768, 1024)),
+      greaterThanOrEqualTo(200),
+    );
+    expect(find.byKey(const Key('planning-rotate-toggle')), findsOneWidget);
+    expect(find.byTooltip('Tonight\'s Sky'), findsOneWidget);
+  });
+
+  testWidgets('1024x768 landscape keeps the labelled buttons', (tester) async {
+    await fieldWidth(tester, const Size(1024, 768));
+    expect(find.text('Rotate camera'), findsOneWidget);
+    expect(find.text("Tonight's Sky"), findsOneWidget);
+  });
 }
