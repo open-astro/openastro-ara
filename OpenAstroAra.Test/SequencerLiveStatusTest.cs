@@ -16,6 +16,7 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyCamera;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.Sequencer.Conditions;
@@ -25,6 +26,7 @@ using OpenAstroAra.Sequencer.SequenceItem.Imaging;
 using OpenAstroAra.Sequencer.SequenceItem.Platesolving;
 using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Server.Services;
+using Slew = OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec;
 using System;
 using System.Linq;
 using System.Threading;
@@ -108,6 +110,31 @@ namespace OpenAstroAra.Test {
             Assert.That(SequencerService.DescribeLeaf(exposure), Is.EqualTo("Exposure 300 s LIGHT — 1/60"));
             loop.CompletedIterations = 3;
             Assert.That(SequencerService.DescribeLeaf(exposure), Is.EqualTo("Exposure 300 s LIGHT — 4/60"));
+        }
+
+        [Test]
+        public void A_slew_that_follows_the_profiles_centre_after_slew_reads_as_centring() {
+            // #1573 — Center = null centres when Settings -> Plate Solving -> "Center target after slew"
+            // is on, so the label must say Centring, as it does for Center = true.
+            Slew Make(bool profileCenters, bool? center) {
+                var settings = new Mock<OpenAstroAra.Profile.Interfaces.IPlateSolveSettings>();
+                settings.SetupGet(x => x.SlewToTarget).Returns(profileCenters);
+                var profile = new Mock<OpenAstroAra.Profile.Interfaces.IProfileService>();
+                profile.SetupGet(p => p.ActiveProfile.PlateSolveSettings).Returns(settings.Object);
+                var mount = new Mock<ITelescopeMediator>();
+                mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo { Connected = true });
+                var slew = new Slew(mount.Object, Mock.Of<IGuiderMediator>(), profile.Object) { Center = center };
+                var target = new SequentialContainer { Name = "NGC 7000" };
+                target.Add((AboveHorizonCondition)HeadlessSequencerFactory.WithDefaults().GetCondition<AboveHorizonCondition>().Clone());
+                target.Add(slew);
+                new SequenceRootContainer().Add(target);
+                return slew;
+            }
+            Assert.Multiple(() => {
+                Assert.That(SequencerService.DescribeLeaf(Make(true, null)), Is.EqualTo("Centring on NGC 7000"));
+                Assert.That(SequencerService.DescribeLeaf(Make(false, null)), Is.EqualTo("Slewing to NGC 7000"));
+                Assert.That(SequencerService.DescribeLeaf(Make(true, false)), Is.EqualTo("Slewing to NGC 7000"), "an explicit blind slew wins");
+            });
         }
 
         [Test]

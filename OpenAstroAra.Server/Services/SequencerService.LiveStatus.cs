@@ -91,7 +91,7 @@ public sealed partial class SequencerService {
         var target = TargetNameOf(leaf);
         string To(string verb) => target is null ? verb : $"{verb} {target}";
         return leaf switch {
-            OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec { Center: true } => target is null ? "Centring" : $"Centring on {target}",
+            OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec { CentersAfterSlew: true } => target is null ? "Centring" : $"Centring on {target}",
             OpenAstroAra.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec => To("Slewing to"),
             OpenAstroAra.Sequencer.SequenceItem.Platesolving.CenterAndRotate => target is null ? "Centring" : $"Centring on {target}",
             OpenAstroAra.Sequencer.SequenceItem.Autofocus.RunAutofocus => "Focusing",

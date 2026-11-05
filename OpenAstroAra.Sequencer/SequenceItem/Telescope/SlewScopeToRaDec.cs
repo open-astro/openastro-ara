@@ -82,6 +82,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
         [JsonProperty]
         public bool? Center { get; set; }
 
+        /// <summary>#1573 — Center resolved against the profile default, the one rule Execute and the
+        /// status label share.</summary>
+        public bool CentersAfterSlew => Center ?? profileService?.ActiveProfile.PlateSolveSettings.SlewToTarget == true;
+
         private IList<string> issues = new List<string>();
 
         public IList<string> Issues {
@@ -109,7 +113,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Telescope {
             // #1446 — Settings → Plate Solving → "Center target after slew" makes the step centre on its
             // target (slew, plate-solve, sync, re-slew) instead of trusting the mount's pointing model.
             // Prototype construction has no executor and keeps the blind slew.
-            if (centeringExecutor is not null && (Center ?? profileService?.ActiveProfile.PlateSolveSettings.SlewToTarget == true)) {
+            if (centeringExecutor is not null && CentersAfterSlew) {
                 if (!await centeringExecutor.CenterAsync(Coordinates.Coordinates, progress, token)) {
                     // Same rule as Center and Rotate: an off-target field would quietly ruin every frame after it.
                     throw new SequenceEntityFailedException(
