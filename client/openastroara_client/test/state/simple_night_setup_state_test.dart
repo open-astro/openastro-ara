@@ -1,3 +1,4 @@
+import 'package:openastroara/models/polar_align.dart' show PolarAlignStates;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
@@ -56,6 +57,7 @@ class _Plan extends SimpleRunNotifier {
 class _Live extends PolarAlignLiveNotifier {
   @override
   PolarAlignLive build() => const PolarAlignLive();
+  void running() => state = PolarAlignLive(phase: PolarAlignStates.adjusting);
 }
 
 Future<ProviderContainer> _container() async {
@@ -96,7 +98,6 @@ void main() {
       expect(c.read(simpleModeActiveProvider), isTrue);
       c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.nightSetup);
       await toggle(c, false);
-      expect(c.read(nightSetupProvider), NightSetupStep.plan, reason: 'leaving changes nothing');
       await toggle(c, true);
       expect(c.read(simpleShowingProvider), SimpleModeScreen.preview);
       expect(c.read(nightSetupProvider), isNull);
@@ -142,5 +143,68 @@ void main() {
     c.read(nightSetupProvider.notifier).next();
     c.read(nightSetupProvider.notifier).stop();
     expect(c.read(simpleShowingProvider), SimpleModeScreen.plan);
+  });
+
+  // Falsified by: simple_night_setup_state.dart NightSetupNotifier.build, drop the close listens (#1513).
+  for (final (name, toggle) in [
+    ('the mode', (ProviderContainer c) => c.read(simpleModeProvider.notifier).set(false)),
+    ('the feature', (ProviderContainer c) => c.read(simpleModeFeatureProvider.notifier).set(false)),
+  ]) {
+    test('Simple Mode closing ($name off) ends Night Setup: a focus finished in Advanced starts no polar routine', () async {
+      final c = await _container();
+      await c.read(simpleModeProvider.future);
+      await c.read(simpleModeFeatureProvider.future);
+      c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.nightSetup);
+      c.read(nightSetupProvider.notifier).next();
+      expect(c.read(nightSetupProvider), NightSetupStep.focus);
+      await toggle(c);
+      expect(c.read(nightSetupProvider), isNull);
+      c.read(_focus.notifier).set(SetupStepState.done);
+      expect(c.read(nightSetupProvider), isNull);
+      expect((c.read(polarAlignApiProvider) as _PolarApi).calls, isEmpty);
+    });
+  }
+
+  Future<ProviderContainer> onPolar() async {
+    final c = await _container();
+    await c.read(simpleModeProvider.future);
+    await c.read(simpleModeFeatureProvider.future);
+    c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.nightSetup);
+    c.read(_focus.notifier).set(SetupStepState.done);
+    c.read(nightSetupProvider.notifier).next();
+    expect(c.read(nightSetupProvider), NightSetupStep.polarAlign);
+    (c.read(polarAlignLiveProvider.notifier) as _Live).running();
+    (c.read(polarAlignApiProvider) as _PolarApi).calls.clear();
+    return c;
+  }
+
+  test('closing Simple Mode on Polar with its routine running stops it once', () async {
+    final c = await onPolar();
+    await c.read(simpleModeProvider.notifier).set(false);
+    expect(c.read(nightSetupProvider), isNull);
+    expect((c.read(polarAlignApiProvider) as _PolarApi).calls, ['stop']);
+  });
+
+  test('a routine Advanced starts after Simple Mode closed is not stopped on reopening (#1514)', () async {
+    final c = await onPolar();
+    await c.read(simpleModeProvider.notifier).set(false);
+    (c.read(polarAlignApiProvider) as _PolarApi).calls.clear();
+    await c.read(simpleModeProvider.notifier).set(true);
+    expect((c.read(polarAlignApiProvider) as _PolarApi).calls, isEmpty);
+  });
+
+  test('a queue Night Setup started keeps running after Simple Mode closes', () async {
+    final c = await _container();
+    await c.read(simpleModeProvider.future);
+    await c.read(simpleModeFeatureProvider.future);
+    c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.nightSetup);
+    (c.read(simpleRunProvider.notifier) as _Plan).queued();
+    c.read(_focus.notifier).set(SetupStepState.done);
+    c.read(_aligned.notifier).set(SetupStepState.done);
+    c.read(nightSetupProvider.notifier).next();
+    c.read(nightSetupProvider.notifier).next();
+    await c.read(simpleModeProvider.notifier).set(false);
+    expect(c.read(simpleRunProvider).started, isTrue);
+    expect(c.read(nightSetupProvider), isNull);
   });
 }
