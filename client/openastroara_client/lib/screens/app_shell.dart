@@ -14,9 +14,7 @@ import '../widgets/command_palette.dart';
 import '../widgets/emergency_stop_button.dart';
 import 'shell_listeners.dart';
 import '../widgets/equipment/equipment_status_chip.dart';
-
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
-
 import '../services/notch_side.dart';
 import '../widgets/equipment_chip.dart'
     show EquipmentChipCompact, kEquipmentChipCompactWidth, kEquipmentChipWidth;
@@ -517,7 +515,13 @@ class _BottomStatusBar extends ConsumerWidget {
             child: LayoutBuilder(
               builder: (context, box) => Align(
                 alignment: Alignment.centerRight,
-                child: _launcherGroup(context, ref, box.maxWidth),
+                // Below the narrowest form (More + bell + help) the group
+                // scrolls, pinned right so help and the bell stay visible.
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  reverse: true,
+                  child: _launcherGroup(context, ref, box.maxWidth),
+                ),
               ),
             ),
           ),
