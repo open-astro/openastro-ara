@@ -99,6 +99,19 @@ namespace OpenAstroAra.Test {
             Assert.That(Cond(Plain(null), 0, 30, 21, 47).Check(null, next.Object), Is.True);
         }
 
+        // 22:00 -> 02:00: a 5 h item does not fit and sets the cut-off. The cut-off is the target
+        // plus 10 s (tomorrow 02:00:10), not today's 02:00:10, so a 1 h item after it does not run.
+        [Test]
+        public void TimeCondition_plain_time_cutoff_is_on_the_target_day() {
+            var item5h = new Mock<OpenAstroAra.Sequencer.SequenceItem.ISequenceItem>();
+            item5h.Setup(n => n.GetEstimatedDuration()).Returns(TimeSpan.FromHours(5));
+            var item1h = new Mock<OpenAstroAra.Sequencer.SequenceItem.ISequenceItem>();
+            item1h.Setup(n => n.GetEstimatedDuration()).Returns(TimeSpan.FromHours(1));
+            var c = Cond(Plain(null), 22, 0, 2, 0);
+            Assert.That(c.Check(null, item5h.Object), Is.False);
+            Assert.That(c.Check(null, item1h.Object), Is.False);
+        }
+
         // Night-anchored: rollover 12:00. now 00:30 < rollover, target 21:47 >= rollover -> yesterday (zero wait).
         [Test]
         public void WaitForTime_fixed_provider_keeps_the_back_a_day_rule() {
