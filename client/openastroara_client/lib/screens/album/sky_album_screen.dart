@@ -145,43 +145,51 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             sliver: SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+              child: LayoutBuilder(
+                builder: (context, box) {
+                  final count = Text(
+                    l.albumCollected(stats.length, objects.length),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  );
+                  final tierCounts = Wrap(
+                    spacing: 16,
+                    alignment: WrapAlignment.end,
                     children: [
-                      Expanded(
-                        child: Text(
-                          l.albumCollected(stats.length, objects.length),
-                          style: Theme.of(context).textTheme.titleMedium,
+                      for (final t in AlbumTier.values.reversed)
+                        Text(
+                          l.albumTierCount(albumTierName(context, t), tiers[t]!),
+                          style: TextStyle(color: albumTierColor(t)),
                         ),
-                      ),
-                      Wrap(
-                        spacing: 16,
-                        children: [
-                          for (final t in AlbumTier.values.reversed)
-                            Text(
-                              l.albumTierCount(albumTierName(context, t), tiers[t]!),
-                              style: TextStyle(color: albumTierColor(t)),
-                            ),
-                        ],
-                      ),
                     ],
-                  ),
-                  const SizedBox(height: 8),
-                  Center(
-                    child: SegmentedButton<AlbumFilter>(
-                      segments: [
-                        ButtonSegment(value: AlbumFilter.all, label: Text(l.albumFilterAll)),
-                        ButtonSegment(value: AlbumFilter.collected, label: Text(l.albumFilterCollected)),
-                        ButtonSegment(value: AlbumFilter.missing, label: Text(l.albumFilterMissing)),
+                  );
+                  final filter = SegmentedButton<AlbumFilter>(
+                    segments: [
+                      ButtonSegment(value: AlbumFilter.all, label: Text(l.albumFilterAll)),
+                      ButtonSegment(value: AlbumFilter.collected, label: Text(l.albumFilterCollected)),
+                      ButtonSegment(value: AlbumFilter.missing, label: Text(l.albumFilterMissing)),
+                    ],
+                    selected: {_filter},
+                    showSelectedIcon: false,
+                    onSelectionChanged: (s) => setState(() => _filter = s.single),
+                  );
+                  // One row, filter centred between equal sides; a phone stacks the filter below.
+                  if (box.maxWidth < 720) {
+                    return Column(
+                      children: [
+                        Row(children: [Expanded(child: count), tierCounts]),
+                        const SizedBox(height: 8),
+                        filter,
                       ],
-                      selected: {_filter},
-                      showSelectedIcon: false,
-                      onSelectionChanged: (s) => setState(() => _filter = s.single),
-                    ),
-                  ),
-                ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: Align(alignment: Alignment.centerLeft, child: count)),
+                      filter,
+                      Expanded(child: Align(alignment: Alignment.centerRight, child: tierCounts)),
+                    ],
+                  );
+                },
               ),
             ),
           ),

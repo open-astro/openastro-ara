@@ -228,4 +228,11 @@ void main() {
     final centre = tester.getCenter(find.byType(SegmentedButton<AlbumFilter>)).dx;
     expect(centre, closeTo(tester.view.physicalSize.width / 2, 2));
   });
+
+  testWidgets('count, filter and tier counts share one row', (tester) async {
+    await _pump(tester, frames: _m31Frames);
+    final row = tester.getCenter(find.byType(SegmentedButton<AlbumFilter>)).dy;
+    expect(tester.getCenter(find.text('1 / 3 collected')).dy, closeTo(row, 4));
+    expect(tester.getCenter(find.text('Gold 0')).dy, closeTo(row, 4));
+  });
 }
