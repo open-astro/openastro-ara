@@ -123,6 +123,7 @@ namespace OpenAstroAra.Test {
             var p = Plain(null);
             var c = new TimeCondition(new List<IDateTimeProvider> { p }, p) { DateTime = clock.Object };
             c.Hours = h; c.Minutes = m; c.Seconds = 0;
+            c.SequenceBlockInitialize();
             return c;
         }
 
@@ -149,6 +150,23 @@ namespace OpenAstroAra.Test {
             Assert.That(c.Check(null, null), Is.False);
         }
 
+        // Attached and idle at 20:00 (the watchdog calls Check every second), the run starts the next
+        // day at 00:30: the target is the run's next 21:47, not one held from the idle Check.
+        [Test]
+        public void TimeCondition_plain_time_idle_Check_does_not_hold_a_target_before_the_run_starts() {
+            var now = new[] { Day.AddHours(20) };
+            var clock = new Mock<ICustomDateTime>();
+            clock.Setup(x => x.Now).Returns(() => now[0]);
+            var p = Plain(null);
+            var c = new TimeCondition(new List<IDateTimeProvider> { p }, p) { DateTime = clock.Object };
+            c.Hours = 21; c.Minutes = 47; c.Seconds = 0;
+            c.Check(null, null);
+            now[0] = Day.AddDays(1).AddMinutes(30);
+            c.SequenceBlockInitialize();
+            Assert.That(c.Check(null, null), Is.True);
+            Assert.That(c.RemainingTime, Is.EqualTo(new TimeSpan(21, 17, 0)));
+        }
+
         [Test]
         public void TimeCondition_plain_time_ResetProgress_targets_the_next_occurrence() {
             var now = new[] { Day.AddMinutes(30) };
@@ -157,6 +175,7 @@ namespace OpenAstroAra.Test {
             now[0] = Day.AddHours(21).AddMinutes(48);
             Assert.That(c.Check(null, null), Is.False);
             c.ResetProgress();
+            c.SequenceBlockInitialize();
             Assert.That(c.Check(null, null), Is.True);
             Assert.That(c.RemainingTime, Is.EqualTo(new TimeSpan(23, 59, 0)));
         }
