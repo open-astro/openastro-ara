@@ -418,6 +418,29 @@ void main() {
       expect(find.textContaining('solved'), findsNothing);
     });
 
+    testWidgets('the live view refreshes every 2 s while the routine runs, and stops with it', (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(
+          api, const PolarAlignLive(phase: PolarAlignStates.adjusting, totalErrorArcmin: 30)));
+      await tester.pump();
+      int frames() => api.calls.where((c) => c == 'frame').length;
+      final before = frames();
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump();
+      expect(frames(), greaterThan(before), reason: 'no per-frame event any more: the panel polls the guider picture');
+
+      // The routine ends: the same panel stops polling.
+      final container = ProviderScope.containerOf(tester.element(find.byType(PolarAlignPanel)));
+      (container.read(polarAlignLiveProvider.notifier) as _StubLiveNotifier)
+          .set(const PolarAlignLive(phase: PolarAlignStates.stopped, totalErrorArcmin: 30));
+      await tester.pump();
+      await tester.pump();
+      final after = frames();
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pump();
+      expect(frames(), after, reason: 'a stopped routine does not poll');
+    });
+
     testWidgets('an active routine shows the guide camera live view', (tester) async {
       // A real 64×48 PNG, so the view decodes and lays out the frame.
       final png = (await tester.runAsync(() async {
