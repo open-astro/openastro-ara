@@ -1,4 +1,3 @@
-import '../../util/reduce_motion.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -8,6 +7,7 @@ import '../../l10n/l10n.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../util/reduce_motion.dart';
 import 'simple_preview_panel.dart' show SimpleTapTarget, kSimpleText;
 import 'simple_shell.dart' show kSimpleInset, simpleFrost;
 

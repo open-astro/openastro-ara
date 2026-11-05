@@ -1,9 +1,9 @@
-import '../../util/reduce_motion.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../../theme/ara_colors.dart';
+import '../../util/reduce_motion.dart';
 
 /// §Planning redesign S4/S5/S6 — the three data-pictures that replace prose
 /// in the Tonight's Sky rows: the dark-window strip, the framing glyph and

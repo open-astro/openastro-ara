@@ -1,4 +1,3 @@
-import '../../util/reduce_motion.dart';
 import 'dart:async';
 
 import 'package:flutter/services.dart';
@@ -14,6 +13,7 @@ import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/ws/ws_providers.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../util/reduce_motion.dart';
 import '../../widgets/sequencer/run_completion_sheet.dart';
 import '../../widgets/sequencer/run_dashboard_band.dart';
 import '../../widgets/sequencer/sequence_editor_tree.dart';

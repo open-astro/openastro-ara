@@ -1,4 +1,3 @@
-import '../../util/reduce_motion.dart';
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
 import 'simple_search.dart';
@@ -66,6 +65,7 @@ import '../../util/friendly_error.dart';
 import '../../services/profile_api.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../util/reduce_motion.dart';
 import '../../widgets/ara_mark.dart';
 import '../../widgets/emergency_stop_button.dart';
 import '../../widgets/equipment/equipment_glyphs.dart';

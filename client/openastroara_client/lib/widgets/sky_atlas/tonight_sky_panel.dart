@@ -1,4 +1,3 @@
-import '../../util/reduce_motion.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -18,6 +17,7 @@ import '../../theme/ara_metrics.dart';
 import '../../util/banked_hours.dart';
 import '../../util/integration_budget.dart';
 import '../../util/coord_format.dart';
+import '../../util/reduce_motion.dart';
 import 'optimal_sub_calculator_dialog.dart';
 import 'planning_visuals.dart';
 import 'session_plan_dialog.dart';

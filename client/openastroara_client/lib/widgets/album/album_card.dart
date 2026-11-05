@@ -3,7 +3,6 @@
 /// in-place flip that scales a card up over its neighbours.
 library;
 
-import '../../util/reduce_motion.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -13,6 +12,7 @@ import '../../services/dso_catalog_service.dart';
 import '../../state/album/album_matching.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../util/reduce_motion.dart';
 
 /// Cards are trading-card shaped: 2.5 wide by 3.5 tall.
 const double albumCardAspect = 2.5 / 3.5;

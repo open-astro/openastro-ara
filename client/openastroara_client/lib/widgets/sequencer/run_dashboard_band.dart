@@ -1,4 +1,3 @@
-import '../../util/reduce_motion.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -20,6 +19,7 @@ import '../../state/tracking/tracking_probe_live_state.dart';
 import '../../l10n/l10n.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../util/reduce_motion.dart';
 import 'run_state_badge.dart';
 
 /// §Run-redesign S5 — the live run dashboard: a band under the toolbar that
