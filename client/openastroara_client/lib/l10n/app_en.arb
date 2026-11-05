@@ -951,6 +951,23 @@
       }
     }
   },
+  "shellDiscardEditQuestion": "Discard changes to {name}?",
+  "@shellDiscardEditQuestion": {
+    "description": "Simple Mode question pill when a rail or image tap would drop the unsaved rows of a queued target being edited",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "shellKeepEditing": "Keep editing",
+  "@shellKeepEditing": {
+    "description": "Discard-changes question: leave the edit sheet open"
+  },
+  "shellDiscard": "Discard",
+  "@shellDiscard": {
+    "description": "Discard-changes question: drop the edit and carry on with the tap"
+  },
   "shellShowControls": "Show controls",
   "@shellShowControls": {
     "description": "Simple Mode screen reader label of the image when the controls are hidden"

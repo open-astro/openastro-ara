@@ -1335,6 +1335,24 @@ abstract class AppLocalizations {
   /// **'Press {shortcut} again to stop the run'**
   String shellStopAgain(String shortcut);
 
+  /// Simple Mode question pill when a rail or image tap would drop the unsaved rows of a queued target being edited
+  ///
+  /// In en, this message translates to:
+  /// **'Discard changes to {name}?'**
+  String shellDiscardEditQuestion(String name);
+
+  /// Discard-changes question: leave the edit sheet open
+  ///
+  /// In en, this message translates to:
+  /// **'Keep editing'**
+  String get shellKeepEditing;
+
+  /// Discard-changes question: drop the edit and carry on with the tap
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get shellDiscard;
+
   /// Simple Mode screen reader label of the image when the controls are hidden
   ///
   /// In en, this message translates to:

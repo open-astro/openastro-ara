@@ -1498,6 +1498,68 @@ void main() {
     expect(find.text('Edit M31'), findsNothing);
   });
 
+  group('#1572 a rail or image tap while editing a queued target', () {
+    Future<ProviderContainer> edit(WidgetTester tester) async {
+      final container = await _pump(tester, const Size(1024, 768), plan: _queuedM31);
+      await _frame(tester, container);
+      await _openEditOfM31(tester);
+      return container;
+    }
+
+    testWidgets('with a changed row, the tap asks first and the sheet stays; Keep editing keeps the edited rows', (tester) async {
+      final container = await edit(tester);
+      container.read(simpleRunPlanProvider.notifier).setFrames(0, 5);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      expect(find.text('Discard changes to M31?'), findsOneWidget);
+      expect(find.byType(SimpleRunSheet), findsOneWidget, reason: 'the sheet stays');
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      expect(container.read(simpleMessagesProvider).length, 1, reason: 'one pill at a time');
+      await tester.tap(find.text('Keep editing'));
+      await tester.pump();
+      expect(find.text('Discard changes to M31?'), findsNothing);
+      expect(find.byType(SimpleRunSheet), findsOneWidget);
+      expect(container.read(simpleRunPlanProvider).single.frameCount, 5);
+    });
+
+    testWidgets('Discard closes the sheet, leaves the queued target as it was, then the tapped Screen shows', (tester) async {
+      final container = await edit(tester);
+      container.read(simpleRunPlanProvider.notifier).setFrames(0, 5);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      await tester.tap(find.text('Discard'));
+      await tester.pump();
+      expect(find.byType(SimpleRunSheet), findsNothing);
+      expect(find.text('Discard changes to M31?'), findsNothing);
+      expect(find.text('Polar align'), findsOneWidget, reason: 'the modes the tap opened');
+      expect(container.read(simpleRunProvider).targets.single.steps.single.frameCount, 30);
+    });
+
+    testWidgets('a tap on the image asks too, and Discard then closes the sheet', (tester) async {
+      final container = await edit(tester);
+      container.read(simpleRunPlanProvider.notifier).setFrames(0, 5);
+      await tester.pump();
+      await tester.tapAt(Offset(500, tester.getRect(find.byType(SimpleRunSheet)).bottom + 6)); // the image, under the sheet
+      await tester.pump();
+      expect(find.text('Discard changes to M31?'), findsOneWidget);
+      expect(find.byType(SimpleRunSheet), findsOneWidget);
+      await tester.tap(find.text('Discard'));
+      await tester.pump();
+      expect(find.byType(SimpleRunSheet), findsNothing);
+    });
+
+    testWidgets('with no change, the tap closes the sheet as before and asks nothing', (tester) async {
+      final container = await edit(tester);
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      expect(container.read(simpleMessagesProvider), isEmpty);
+      expect(find.byType(SimpleRunSheet), findsNothing);
+    });
+  });
+
   testWidgets('the plan square hugs the bottom-right corner, above Stop (no bottom row)', (tester) async {
     await _pump(tester, const Size(1024, 768),
         plan: const SimpleRun(sequenceId: 'seq-1', targets: [

@@ -701,6 +701,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String shellDiscardEditQuestion(String name) {
+    return 'Discard changes to $name?';
+  }
+
+  @override
+  String get shellKeepEditing => 'Keep editing';
+
+  @override
+  String get shellDiscard => 'Discard';
+
+  @override
   String get shellShowControls => 'Show controls';
 
   @override
