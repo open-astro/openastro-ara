@@ -2074,7 +2074,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String albumIntegrationValue(String hours, int lights) {
-    return '$hours h · $lights lights';
+    String _temp0 = intl.Intl.pluralLogic(
+      lights,
+      locale: localeName,
+      other: '$lights lights',
+      one: '1 light',
+    );
+    return '$hours h · $_temp0';
   }
 
   @override
@@ -2113,4 +2119,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get albumNoServer => 'Connect to a rig to fill the album';
+
+  @override
+  String albumCardSemantics(String label, String name, String state) {
+    return '$label $name, $state';
+  }
 }

@@ -3648,7 +3648,7 @@ abstract class AppLocalizations {
   /// Sky Album card back: total hours (one decimal) and number of light frames
   ///
   /// In en, this message translates to:
-  /// **'{hours} h · {lights} lights'**
+  /// **'{hours} h · {lights, plural, =1{1 light} other{{lights} lights}}'**
   String albumIntegrationValue(String hours, int lights);
 
   /// Sky Album card back: label of the filters used
@@ -3716,6 +3716,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Connect to a rig to fill the album'**
   String get albumNoServer;
+
+  /// Sky Album: screen-reader label of a card: catalog label, object name and its tier or 'Not collected yet'
+  ///
+  /// In en, this message translates to:
+  /// **'{label} {name}, {state}'**
+  String albumCardSemantics(String label, String name, String state);
 }
 
 class _AppLocalizationsDelegate

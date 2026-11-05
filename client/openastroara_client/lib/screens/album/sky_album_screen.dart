@@ -49,9 +49,13 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
     final server = ref.read(activeServerProvider);
     if (!mounted || server == null) return;
     final provider = albumFramesProvider(server.baseUrl);
-    if (!ref.read(provider).hasValue) return;
+    final current = ref.read(provider);
+    // A first fetch that failed stays failed in the kept-alive cache: start it over.
+    if (current.hasError && !current.hasValue) return ref.invalidate(provider);
+    if (!current.hasValue) return;
     try {
       await ref.read(provider.notifier).refresh();
+      if (mounted) setState(() => _refreshError = null);
     } catch (e) {
       if (mounted) setState(() => _refreshError = e);
     }
@@ -88,7 +92,8 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
             final e => l.albumLoadFailed(friendlyError(l, e)),
           };
     final noLights = frames?.value?.isEmpty ?? false;
-    final shelf = _shelf(objects, stats);
+    // Without rows every card looks missing, so a shelf would offer collected cards.
+    final shelf = frames?.hasValue ?? false ? _shelf(objects, stats) : const <PlanningDso>[];
     final tiers = {for (final t in AlbumTier.values) t: stats.values.where((s) => s.tier == t).length};
 
     Widget card(PlanningDso d) => AlbumCard(cardFor(d), onAction: () => widget.onImageTarget(d));
@@ -192,11 +197,16 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
   /// order, capped. Empty (so hidden) when the ranker has nothing.
   List<PlanningDso> _shelf(List<PlanningDso> objects, Map<String, CardStats> stats) {
     final ranked = ref.watch(tonightSkyProvider).value ?? const [];
-    final missing = {for (final d in objects) if (!stats.containsKey(d.id)) d.id: d};
+    // By any designation: the ranker's row may carry the object under another id.
+    final missing = <String, PlanningDso>{
+      for (final d in objects)
+        if (!stats.containsKey(d.id))
+          for (final name in [d.id, ...d.aliases]) designationKey(name): d,
+    };
     final out = <PlanningDso>[];
     for (final t in ranked) {
-      final d = missing.remove(t.id);
-      if (d != null) out.add(d);
+      final d = [t.id, ...t.aliases].map((n) => missing[designationKey(n)]).nonNulls.firstOrNull;
+      if (d != null && !out.contains(d)) out.add(d);
       if (out.length == albumShelfCap) break;
     }
     return out;

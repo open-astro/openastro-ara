@@ -2908,7 +2908,7 @@
   "@albumIntegration": {
     "description": "Sky Album card back: label of total exposure and light count"
   },
-  "albumIntegrationValue": "{hours} h · {lights} lights",
+  "albumIntegrationValue": "{hours} h · {lights, plural, =1{1 light} other{{lights} lights}}",
   "@albumIntegrationValue": {
     "description": "Sky Album card back: total hours (one decimal) and number of light frames",
     "placeholders": {
@@ -2976,5 +2976,20 @@
   "albumNoServer": "Connect to a rig to fill the album",
   "@albumNoServer": {
     "description": "Sky Album: pill when no rig is saved, so no frames can be read"
+  },
+  "albumCardSemantics": "{label} {name}, {state}",
+  "@albumCardSemantics": {
+    "description": "Sky Album: screen-reader label of a card: catalog label, object name and its tier or 'Not collected yet'",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "name": {
+        "type": "String"
+      },
+      "state": {
+        "type": "String"
+      }
+    }
   }
 }

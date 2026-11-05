@@ -591,7 +591,7 @@
   "albumShelfTitle": "{count, plural, =1{1 cartão faltando bem posicionado esta noite} other{{count} cartões faltando bem posicionados esta noite}}",
   "albumFirstCapture": "Primeira captura",
   "albumIntegration": "Integração",
-  "albumIntegrationValue": "{hours} h · {lights} quadros",
+  "albumIntegrationValue": "{hours} h · {lights, plural, =1{1 quadro} other{{lights} quadros}}",
   "albumFilters": "Filtros",
   "albumGearProfile": "Perfil de equipamento",
   "albumBestScore": "Nota do melhor quadro",
@@ -602,5 +602,6 @@
   "albumImageThis": "Fotografar este alvo",
   "albumAddTime": "Adicionar mais tempo",
   "albumLoadFailed": "Não foi possível carregar o álbum: {reason}",
-  "albumNoServer": "Conecte-se a um equipamento para preencher o álbum"
+  "albumNoServer": "Conecte-se a um equipamento para preencher o álbum",
+  "albumCardSemantics": "{label} {name}, {state}"
 }

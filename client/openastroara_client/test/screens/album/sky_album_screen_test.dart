@@ -29,33 +29,40 @@ TonightSkyObject _tonight(PlanningDso d) => TonightSkyObject(
     id: d.id, name: d.name, type: d.type, magnitude: d.magnitude, raDeg: d.raDeg, decDeg: d.decDeg,
     altitudeDeg: 50, maxAltitudeDeg: 70);
 
-Future<void> _pump(
+Future<ProviderContainer> _pump(
   WidgetTester tester, {
   required List<AlbumFrame> frames,
   List<PlanningDso> tonight = const [],
   void Function(PlanningDso)? onImageTarget,
+  AlbumFetcher? fetcher,
 }) async {
   tester.view.physicalSize = const Size(1200, 1600);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(ProviderScope(
+  final container = ProviderContainer(
     overrides: [
       activeServerProvider.overrideWithValue(const AraServer(hostname: 'rig', port: 1888)),
       bundledCatalogProvider.overrideWith((ref) async => [_m42, _c14, _m31, _m1]),
-      albumFetcherProvider.overrideWithValue(
+      albumFetcherProvider.overrideWithValue(fetcher ??
           (baseUrl, {since}) async => AlbumFramesPage(totalLights: frames.length, frames: frames)),
       tonightSkyProvider.overrideWith((ref) async => [for (final d in tonight) _tonight(d)]),
       cachedProfilesProvider.overrideWith((ref) async => const CachedProfileList(
           activeId: 'p1', profiles: [CachedProfile(id: 'p1', name: 'Backyard refractor', hasSections: false)])),
     ],
-    child: MaterialApp(
+  );
+  addTearDown(container.dispose);
+  await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(onImageTarget)));
+  await tester.pumpAndSettle();
+  return container;
+}
+
+Widget _app(void Function(PlanningDso)? onImageTarget, {bool open = true}) => MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: SkyAlbumScreen(onImageTarget: onImageTarget ?? (_) {}),
-    ),
-  ));
-  await tester.pumpAndSettle();
-}
+      home: open ? SkyAlbumScreen(onImageTarget: onImageTarget ?? (_) {}) : const SizedBox(),
+    );
+
+Finder _onShelf(String text) => find.descendant(of: find.byType(ListView), matching: find.text(text));
 
 // Two hours on M31 (silver), by target name: no pointing stored.
 final _m31Frames = [
@@ -124,5 +131,52 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Double Cluster'), findsOneWidget);
     expect(find.text('0 / 1 collected'), findsOneWidget);
+  });
+
+  testWidgets('a shelf card fires the same callback, in ranker order', (tester) async {
+    PlanningDso? picked;
+    await _pump(tester, frames: _m31Frames, tonight: [_m42, _c14, _m1], onImageTarget: (d) => picked = d);
+    expect(tester.getTopLeft(_onShelf('Orion Nebula')).dx, lessThan(tester.getTopLeft(_onShelf('Crab Nebula')).dx));
+
+    await tester.tap(_onShelf('Orion Nebula'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Image this target'));
+    await tester.pumpAndSettle();
+    expect(picked, same(_m42));
+  });
+
+  testWidgets('a failed first fetch shows grey cards and an error, hides the shelf, and retries on reopen',
+      (tester) async {
+    var fail = true;
+    Future<AlbumFramesPage> fetcher(String baseUrl, {DateTime? since}) async {
+      if (fail) throw StateError('rig away');
+      return AlbumFramesPage(totalLights: _m31Frames.length, frames: _m31Frames);
+    }
+
+    final container = await _pump(tester, frames: const [], tonight: [_m42], fetcher: fetcher);
+    expect(find.textContaining("Couldn't load the album"), findsOneWidget);
+    expect(find.text('0 / 3 collected'), findsOneWidget);
+    expect(find.textContaining('well placed tonight'), findsNothing,
+        reason: 'without rows every card looks missing, so the shelf would mislead');
+
+    fail = false;
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null, open: false)));
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null)));
+    await tester.pumpAndSettle();
+    expect(find.text('1 / 3 collected'), findsOneWidget);
+    expect(find.textContaining("Couldn't load the album"), findsNothing);
+  });
+
+  testWidgets('a card back lists all six fields, with a dash for what is unknown', (tester) async {
+    await _pump(tester, frames: [
+      AlbumFrame(frameId: 'x', targetName: 'M 31', exposureSeconds: 60, capturedUtc: DateTime.utc(2026, 3, 2)),
+    ]);
+    await tester.tap(find.text('Andromeda Galaxy'));
+    await tester.pumpAndSettle();
+    for (final label in ['First capture', 'Integration', 'Filters', 'Gear profile', 'Best frame score', 'Next tier']) {
+      expect(find.text(label), findsOneWidget, reason: label);
+    }
+    expect(find.text('0.0 h · 1 light'), findsOneWidget, reason: 'singular light');
+    expect(find.text('—'), findsNWidgets(3), reason: 'no filter, no profile, no score');
   });
 }

@@ -2074,7 +2074,13 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String albumIntegrationValue(String hours, int lights) {
-    return '$hours h · $lights lights';
+    String _temp0 = intl.Intl.pluralLogic(
+      lights,
+      locale: localeName,
+      other: '$lights lights',
+      one: '1 light',
+    );
+    return '$hours h · $_temp0';
   }
 
   @override
@@ -2113,6 +2119,11 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get albumNoServer => 'Connect to a rig to fill the album';
+
+  @override
+  String albumCardSemantics(String label, String name, String state) {
+    return '$label $name, $state';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -4197,7 +4208,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String albumIntegrationValue(String hours, int lights) {
-    return '$hours h · $lights quadros';
+    String _temp0 = intl.Intl.pluralLogic(
+      lights,
+      locale: localeName,
+      other: '$lights quadros',
+      one: '1 quadro',
+    );
+    return '$hours h · $_temp0';
   }
 
   @override
@@ -4237,4 +4254,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get albumNoServer =>
       'Conecte-se a um equipamento para preencher o álbum';
+
+  @override
+  String albumCardSemantics(String label, String name, String state) {
+    return '$label $name, $state';
+  }
 }

@@ -154,12 +154,14 @@ class AlbumCardBack extends StatelessWidget {
               if (s == null)
                 Text(l.albumNotCollected, style: const TextStyle(color: AraColors.textSecondary))
               else ...[
-                if (s.firstCaptureUtc case final first?)
-                  row(l.albumFirstCapture, MaterialLocalizations.of(context).formatMediumDate(first.toLocal())),
+                row(l.albumFirstCapture, switch (s.firstCaptureUtc) {
+                  null => _unknown,
+                  final first => MaterialLocalizations.of(context).formatMediumDate(first.toLocal()),
+                }),
                 row(l.albumIntegration, l.albumIntegrationValue(s.integrationHours.toStringAsFixed(1), s.frameCount)),
-                if (s.filters.isNotEmpty) row(l.albumFilters, s.filters.join(', ')),
-                if (card.profileName.isNotEmpty) row(l.albumGearProfile, card.profileName),
-                if (s.bestScore case final score?) row(l.albumBestScore, score.toStringAsFixed(2)),
+                row(l.albumFilters, s.filters.isEmpty ? _unknown : s.filters.join(', ')),
+                row(l.albumGearProfile, card.profileName.isEmpty ? _unknown : card.profileName),
+                row(l.albumBestScore, s.bestScore?.toStringAsFixed(2) ?? _unknown),
                 row(l.albumNextTier, _nextTier(context, s)),
               ],
             ]),
@@ -174,14 +176,17 @@ class AlbumCardBack extends StatelessWidget {
     );
   }
 
+  /// Shown for a field the frames do not tell (no filter, profile or score).
+  static const _unknown = '—';
+
   static String _nextTier(BuildContext context, CardStats s) {
-    final (next, at) = switch (s.tier) {
+    final (next, hoursAt) = switch (s.tier) {
       AlbumTier.gold => (null, 0.0),
-      AlbumTier.silver => (AlbumTier.gold, 5.0),
-      _ => (AlbumTier.silver, 1.0),
+      AlbumTier.silver => (AlbumTier.gold, albumGoldHours),
+      _ => (AlbumTier.silver, albumSilverHours),
     };
     if (next == null) return context.l10n.albumGoldReached;
-    final left = math.max(0.0, at - s.integrationHours);
+    final left = math.max(0.0, hoursAt - s.integrationHours);
     return context.l10n.albumNextTierValue(left.toStringAsFixed(1), albumTierName(context, next).toLowerCase());
   }
 }
@@ -196,8 +201,9 @@ class AlbumCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Semantics(
-        button: true,
-        label: '${card.label} ${card.dso.name}',
+        // The tier is a border colour on screen; say it too.
+        label: context.l10n.albumCardSemantics(card.label, card.dso.name,
+            card.tier == null ? context.l10n.albumNotCollected : albumTierName(context, card.tier!)),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: () => _flip(context),
@@ -213,7 +219,7 @@ class AlbumCard extends StatelessWidget {
       barrierDismissible: true,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       barrierColor: Colors.black38,
-      transitionDuration: const Duration(milliseconds: 320),
+      transitionDuration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 320),
       pageBuilder: (dialogContext, _, _) => const SizedBox.shrink(),
       transitionBuilder: (dialogContext, animation, _, _) {
         final screen = MediaQuery.sizeOf(dialogContext);
