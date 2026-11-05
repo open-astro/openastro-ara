@@ -42,11 +42,15 @@ final RegExp _catalogWord = RegExp(r'^\s*(messier|caldwell)', caseSensitive: fal
 String _albumKey(String s) => designationKey(
     s.replaceFirstMapped(_catalogWord, (m) => m[1]!.toLowerCase() == 'messier' ? 'M' : 'C'));
 
+/// Hours of lights, any filter, that make a Card silver and gold.
+const double albumSilverHours = 1;
+const double albumGoldHours = 5;
+
 /// None below one light; bronze at one, silver at 1 h, gold at 5 h, any filter.
 AlbumTier? tierFor({required int lights, required double hours}) {
   if (lights < 1) return null;
-  if (hours >= 5) return AlbumTier.gold;
-  if (hours >= 1) return AlbumTier.silver;
+  if (hours >= albumGoldHours) return AlbumTier.gold;
+  if (hours >= albumSilverHours) return AlbumTier.silver;
   return AlbumTier.bronze;
 }
 
@@ -57,6 +61,9 @@ class CardStats {
   final DateTime? firstCaptureUtc;
   final String bestFrameId;
 
+  /// The best frame's composite score, null when no frame is scored yet.
+  final double? bestScore;
+
   /// The best frame's gear profile id; the screen resolves it to a name.
   final String? profileId;
   final List<String> filters;
@@ -66,6 +73,7 @@ class CardStats {
     required this.integrationHours,
     required this.firstCaptureUtc,
     required this.bestFrameId,
+    this.bestScore,
     required this.profileId,
     required this.filters,
   });
@@ -113,6 +121,7 @@ CardStats _stats(List<AlbumFrame> fs) {
     integrationHours: fs.fold(0.0, (h, f) => h + f.exposureSeconds) / 3600,
     firstCaptureUtc: fs.map((f) => f.capturedUtc).nonNulls.firstOrNull,
     bestFrameId: best.frameId,
+    bestScore: best.compositeScore,
     profileId: best.profileId,
     filters: filters,
   );

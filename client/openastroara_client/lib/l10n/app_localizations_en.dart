@@ -2028,4 +2028,114 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get shellMainCameraBusy =>
       'The main camera is busy: wait for its frame, or stop it.';
+
+  @override
+  String get albumTitle => 'Sky Album';
+
+  @override
+  String get albumBookMessier => 'Messier';
+
+  @override
+  String get albumBookCaldwell => 'Caldwell';
+
+  @override
+  String albumCollected(int collected, int total) {
+    return '$collected / $total collected';
+  }
+
+  @override
+  String get albumTierBronze => 'Bronze';
+
+  @override
+  String get albumTierSilver => 'Silver';
+
+  @override
+  String get albumTierGold => 'Gold';
+
+  @override
+  String albumTierCount(String tier, int count) {
+    return '$tier $count';
+  }
+
+  @override
+  String get albumEmpty => 'Image a target to collect your first card';
+
+  @override
+  String albumShelfTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count missing cards well placed tonight',
+      one: '1 missing card well placed tonight',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get albumFirstCapture => 'First capture';
+
+  @override
+  String get albumIntegration => 'Integration';
+
+  @override
+  String albumIntegrationValue(String hours, int lights) {
+    String _temp0 = intl.Intl.pluralLogic(
+      lights,
+      locale: localeName,
+      other: '$lights lights',
+      one: '1 light',
+    );
+    return '$hours h · $_temp0';
+  }
+
+  @override
+  String get albumFilters => 'Filters';
+
+  @override
+  String get albumGearProfile => 'Gear profile';
+
+  @override
+  String get albumBestScore => 'Best frame score';
+
+  @override
+  String get albumNextTier => 'Next tier';
+
+  @override
+  String albumNextTierValue(String hours, String tier) {
+    return '$hours h to $tier';
+  }
+
+  @override
+  String get albumGoldReached => 'Gold reached';
+
+  @override
+  String get albumNotCollected => 'Not collected yet';
+
+  @override
+  String get albumImageThis => 'Image this target';
+
+  @override
+  String get albumAddTime => 'Add more time';
+
+  @override
+  String albumLoadFailed(String reason) {
+    return 'Couldn\'t load the album: $reason';
+  }
+
+  @override
+  String get albumNoServer => 'Connect to a rig to fill the album';
+
+  @override
+  String albumCardSemantics(String label, String name, String state) {
+    return '$label $name, $state';
+  }
+
+  @override
+  String get albumFilterAll => 'All';
+
+  @override
+  String get albumFilterCollected => 'Collected';
+
+  @override
+  String get albumFilterMissing => 'Missing';
 }
