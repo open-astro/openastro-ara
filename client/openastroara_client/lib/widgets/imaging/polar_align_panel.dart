@@ -235,8 +235,6 @@ String formatDecDms(double decDeg) {
 }
 
 /// Milliseconds as seconds with one decimal: `1.6 s`.
-String _secondsLabel(num ms) => '${(ms / 1000).toStringAsFixed(1)} s';
-
 /// §45 polar-alignment panel — collapsible Imaging-tab section driving the
 /// server routine: Start (2-point seed → live adjust), the zooming bullseye
 /// with decoupled Az/Alt readouts fed by `polar_align.progress` WS events,
@@ -294,12 +292,14 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     super.dispose();
   }
 
-  void _syncTicker(bool frameInProgress) {
-    if (frameInProgress && _ticker == null) {
-      _ticker = Timer.periodic(const Duration(milliseconds: 200), (_) {
-        if (mounted) setState(() {});
+  /// While the routine runs the guider loops its camera, so the live view is
+  /// refreshed on a timer (there is no per-frame event any more, #1611).
+  void _syncTicker(bool active) {
+    if (active && _ticker == null) {
+      _ticker = Timer.periodic(const Duration(seconds: 2), (_) {
+        if (mounted) unawaited(_loadFrame());
       });
-    } else if (!frameInProgress && _ticker != null) {
+    } else if (!active && _ticker != null) {
       _ticker!.cancel();
       _ticker = null;
     }
@@ -427,16 +427,10 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   Widget build(BuildContext context) {
     final live = ref.watch(polarAlignLiveProvider);
     final api = ref.watch(polarAlignApiProvider);
-    _syncTicker(live.frameInProgress);
+    _syncTicker(live.isActive);
     // §45.16 the bolt-direction nudge is tracked on each state change, not
     // in build: it mutates the baseline fields.
     ref.listen(polarAlignLiveProvider, (prev, next) => setState(() => _bolt.track(next)));
-    // Each finished frame (solved or not) replaces lastFrame — fetch its image.
-    ref.listen(polarAlignLiveProvider, (prev, next) {
-      if (next.lastFrame != null && !identical(prev?.lastFrame, next.lastFrame)) {
-        _loadFrame();
-      }
-    });
     final night = switch (ref.watch(nightModeProvider)) {
       AsyncData(:final value) => value,
       _ => false,
@@ -489,7 +483,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         return 'Measuring axis';
       // Adjusting: no pill — the alignment card already shows the total.
       case PolarAlignStates.paused:
-        return 'Paused — no solve';
+        return 'Paused — star not seen';
       case PolarAlignStates.failed:
         return 'Failed';
       default:
@@ -553,8 +547,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
       children: [
         const Text(
           'Roughly point your mount at the celestial pole, make sure the guider '
-          'and mount are connected, then start. The routine takes two solved '
-          'frames around a small RA slew, then guides your alt/az knob '
+          'and mount are connected, then start. The guider picks a star, turns '
+          'the mount in RA to find the axis, then guides your alt/az knob '
           'adjustments live.',
           style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
         ),
@@ -617,8 +611,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           ),
           const SizedBox(height: 6),
           const Text(
-            'Two solved frames around a small RA slew. Leave the mount alone '
-            'until the bullseye appears.',
+            'The guider is tracking a star through an RA turn to find the '
+            'axis. Leave the mount alone until the bullseye appears.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, height: 1.4),
           ),
@@ -654,23 +648,14 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
 
   Widget _adjustBody(PolarAlignLive live, Color color) {
     final inTolerance = live.totalErrorArcmin != null && live.totalErrorArcmin! <= _toleranceArcmin;
-    final single = _settings.loopMode == PolarAlignLoopModes.single;
     return FitColumn(
       children: [
         if (live.phase == PolarAlignStates.paused) ...[
           _callout(
-            'No solve — check sky and focus. Retrying…',
+            'The guider cannot see the star — check sky and focus. It resumes on its own.',
             AraColors.accentBusy,
             Icons.cloud_outlined,
             key: const Key('polar-align-paused-banner'),
-          ),
-          SizedBox(height: _short ? 8 : 12),
-        ] else if (live.consecutiveSolveFailures > 0) ...[
-          _callout(
-            'No solve (${live.consecutiveSolveFailures}) — check sky and focus.',
-            AraColors.accentBusy,
-            Icons.cloud_outlined,
-            key: const Key('polar-align-retry-banner'),
           ),
           SizedBox(height: _short ? 8 : 12),
         ],
@@ -685,7 +670,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                   spacing: 12,
                   children: [
                     _cameraCard(live),
-                    _alignmentCard(live, color, single, fill: true, readout: false),
+                    _alignmentCard(live, color, fill: true, readout: false),
                   ],
                 ),
               ),
@@ -706,7 +691,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                   const SizedBox(height: 12),
                   _meaningCard(live, color),
                 ]),
-                _alignmentCard(live, color, single, fill: true),
+                _alignmentCard(live, color, fill: true),
               ],
             );
           }
@@ -716,7 +701,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             children: [
               _cameraCard(live, imageHeight: 240),
               const SizedBox(height: 12),
-              _alignmentCard(live, color, single),
+              _alignmentCard(live, color),
               const SizedBox(height: 12),
               _meaningCard(live, color),
             ],
@@ -743,18 +728,6 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                   onPressed: _busy ? null : _abort,
                   child: const Text('Abort'),
                 ),
-                if (single)
-                  FilledButton.tonalIcon(
-                    key: const Key('polar-align-take-frame'),
-                    onPressed: _busy || live.frameInProgress
-                        ? null
-                        : () => _run('take a frame', () async {
-                              final api = ref.read(polarAlignApiProvider);
-                              if (api != null) await api.requestCapture();
-                            }),
-                    icon: const Icon(Icons.camera),
-                    label: const Text('Take Frame'),
-                  ),
                 Tooltip(
                   message: inTolerance
                       ? ''
@@ -784,7 +757,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   /// [fill]: the card is stretched to its row's height and the bullseye
   /// centers in the spare room. [readout] false leaves the numbers to
   /// [_readoutStrip].
-  Widget _alignmentCard(PolarAlignLive live, Color color, bool single, {bool fill = false, bool readout = true}) {
+  Widget _alignmentCard(PolarAlignLive live, Color color, {bool fill = false, bool readout = true}) {
     final range = bullseyeRangeArcmin(live.totalErrorArcmin);
     final reticle = nearPoleReticle(live.totalErrorArcmin);
     final ring = reticle
@@ -872,15 +845,6 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
               ],
             ],
           ),
-          ],
-          if (single) ...[
-            const SizedBox(height: 14),
-            const Center(
-              child: Text(
-                'Turn a knob, then Take Frame.',
-                style: TextStyle(fontSize: _smallFont, color: AraColors.textSecondary),
-              ),
-            ),
           ],
     ];
     // Filling: the bullseye takes the card's spare height (FitRow/FitPane).
@@ -985,7 +949,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                       ),
                     ),
                     Text(
-                      offset?.$2 ?? 'waiting for a solve',
+                      offset?.$2 ?? 'waiting for the guider',
                       style: const TextStyle(fontSize: 16, color: AraColors.textSecondary),
                     ),
                   ],
@@ -1105,8 +1069,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
 
 
 
-  /// Exposure box + Loop/Single switch. Saved to the profile; a running
-  /// routine picks the change up on its next frame.
+  /// Exposure box. Saved to the profile; the guider's loop picks the change
+  /// up on the next start.
   Widget _captureSettings() {
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
@@ -1138,25 +1102,6 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
               ),
             ),
           ],
-        ),
-        SegmentedButton<String>(
-          key: const Key('polar-align-mode'),
-          showSelectedIcon: false,
-          segments: const [
-            ButtonSegment(
-              value: PolarAlignLoopModes.loop,
-              label: Text('Loop'),
-              icon: Icon(Icons.loop),
-            ),
-            ButtonSegment(
-              value: PolarAlignLoopModes.single,
-              label: Text('Single'),
-              icon: Icon(Icons.camera),
-            ),
-          ],
-          selected: {_settings.loopMode},
-          onSelectionChanged: (selection) =>
-              _saveSettings(_settings.copyWith(loopMode: selection.first)),
         ),
       ],
     );
@@ -1236,59 +1181,22 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           ),
         );
 
-  /// The frame in progress (exposing → downloading/solving, with elapsed
-  /// time) and the last finished frame's timings + solved pointing.
+  /// What the guider is doing with its frames: the RA turn while it measures,
+  /// the readout count once it has the axis (#1611: no per-frame solves).
   Widget _frameStatus(PolarAlignLive live) {
     const style = TextStyle(fontSize: _smallFont, color: AraColors.textSecondary, fontFeatures: _tabular);
     final children = <Widget>[];
-    final started = live.frameStartedAt;
-    if (started != null) {
-      final elapsed = DateTime.now().difference(started).inMilliseconds / 1000.0;
-      final exposure = live.frameExposureSeconds ?? 0;
-      final exposing = elapsed < exposure;
-      children.add(ClipRRect(
-        borderRadius: BorderRadius.circular(2),
-        child: LinearProgressIndicator(
-          value: exposing && exposure > 0 ? elapsed / exposure : null,
-          minHeight: 2,
-        ),
-      ));
-      children.add(const SizedBox(height: 6));
-      children.add(Text(
-        exposing
-            ? 'Exposing ${elapsed.toStringAsFixed(1)} / ${exposure.toStringAsFixed(1)} s…'
-            : 'Downloading and solving… ${elapsed.toStringAsFixed(1)} s',
-        key: const Key('polar-align-frame-progress'),
+    if (live.phase == PolarAlignStates.seeding) {
+      children.add(const Text(
+        'The guider is tracking the star through an RA turn…',
+        key: Key('polar-align-frame-progress'),
         style: style,
       ));
-    }
-    final last = live.lastFrame;
-    if (last != null && _short) {
-      // A short window: timings and pointing on one line, so the image keeps
-      // the card's height.
+    } else if (live.phase == PolarAlignStates.adjusting && live.iteration > 0) {
       children.add(Text(
-        '${last.exposureSeconds.toStringAsFixed(1)} s · capture ${_secondsLabel(last.captureMs)} · '
-        'solve ${last.solveMs == null ? '—' : _secondsLabel(last.solveMs!)} · '
-        '${last.solved && last.raDeg != null && last.decDeg != null ? 'RA ${formatRaHms(last.raDeg!)}  Dec ${formatDecDms(last.decDeg!)}' : 'did not solve'}',
-        key: const Key('polar-align-last-frame'),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: last.solved ? style : style.copyWith(color: AraColors.accentBusy),
-      ));
-    } else if (last != null) {
-      children.add(Text(
-        'Last frame: ${last.exposureSeconds.toStringAsFixed(1)} s exposure · '
-        'capture ${_secondsLabel(last.captureMs)} · '
-        'solve ${last.solveMs == null ? '—' : _secondsLabel(last.solveMs!)}',
+        'Live readout #${live.iteration} from the guider',
         key: const Key('polar-align-last-frame'),
         style: style,
-      ));
-      children.add(Text(
-        last.solved && last.raDeg != null && last.decDeg != null
-            ? 'Solved: RA ${formatRaHms(last.raDeg!)}  Dec ${formatDecDms(last.decDeg!)}'
-            : 'Did not solve',
-        key: const Key('polar-align-last-solve'),
-        style: last.solved ? style : style.copyWith(color: AraColors.accentBusy),
       ));
     }
     if (children.isEmpty) return const SizedBox.shrink();
