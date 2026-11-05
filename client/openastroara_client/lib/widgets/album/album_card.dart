@@ -71,7 +71,9 @@ class AlbumCardFront extends StatelessWidget {
   Widget build(BuildContext context) {
     final tier = card.tier;
     final missing = tier == null;
-    final textColor = missing ? AraColors.textDisabled : AraColors.textPrimary;
+    // A missing card is still tappable, so its text keeps 4.5:1; the grey border and
+    // silhouette say "missing".
+    final textColor = missing ? AraColors.textSecondary : AraColors.textPrimary;
     return Container(
       decoration: BoxDecoration(
         color: AraColors.bgPanel,
@@ -109,7 +111,7 @@ class AlbumCardFront extends StatelessWidget {
         Text(card.dso.name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: missing ? AraColors.textDisabled : AraColors.textSecondary, fontSize: 11)),
+            style: const TextStyle(color: AraColors.textSecondary, fontSize: 11)),
       ]),
     );
   }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +15,7 @@ import 'package:openastroara/state/profile_cache_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/album/album_card.dart';
 
 /// Sky Album slice 5 (#1520, docs/specs/sky-album-v1.md "Layout" and
@@ -320,5 +322,19 @@ void main() {
     await tester.pumpAndSettle();
     final last = tester.getRect(find.byType(AlbumCardFront).last);
     expect(last.bottom, lessThanOrEqualTo(600 - 34));
+  });
+
+  testWidgets('a missing card\'s label and name read at 4.5:1 on the card', (tester) async {
+    // A missing card is tappable (its back offers "Image this target"), so WCAG 1.4.3 applies.
+    await _pump(tester, frames: _m31Frames);
+    double ratio(Color a, Color b) {
+      final (x, y) = (a.computeLuminance(), b.computeLuminance());
+      return (math.max(x, y) + 0.05) / (math.min(x, y) + 0.05);
+    }
+
+    for (final text in ['M 1', 'Crab Nebula']) {
+      final style = tester.widget<Text>(find.descendant(of: find.byType(SliverGrid), matching: find.text(text))).style!;
+      expect(ratio(style.color!, AraColors.bgPanel), greaterThanOrEqualTo(4.5), reason: text);
+    }
   });
 }
