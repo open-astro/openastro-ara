@@ -165,7 +165,10 @@ class TonightSkyUpNowNotifier extends Notifier<bool> {
     ref.watch(skyClockProvider);
     final site = ref.watch(siteSettingsProvider);
     if (_pinned) return state;
-    return isDarkNow(site, nowUtc: ref.read(clockProvider)());
+    // The site's own twilight line: the list's dark windows open there, so a
+    // nautical -12 turned it on with nothing yet open (NM, 18:17 MST).
+    return isDarkNow(site, nowUtc: ref.read(clockProvider)(),
+        belowDeg: twilightSunAltitudeDeg(site.twilightDefinition));
   }
 
   void toggle() {
@@ -189,16 +192,17 @@ final skyClockProvider = StreamProvider<int>(
   (_) => Stream<int>.periodic(const Duration(minutes: 5), (i) => i),
 );
 
-/// True when the sun is below −12° (nautical dark) at [site] right now; an
-/// unset site (0, 0) is never "dark" so the filter stays off there.
-bool isDarkNow(SiteSettings site, {DateTime? nowUtc}) {
+/// True when the sun is below [belowDeg] (default −12°, nautical dark) at
+/// [site] right now; an unset site (0, 0) is never "dark" so the filter stays
+/// off there.
+bool isDarkNow(SiteSettings site, {DateTime? nowUtc, double belowDeg = -12}) {
   if (site.latitudeDeg == 0 && site.longitudeDeg == 0) return false;
   final sun = sunMoonAltitudeDeg(
     (nowUtc ?? DateTime.now()).toUtc(),
     site.latitudeDeg,
     site.longitudeDeg,
   ).sunAltDeg;
-  return sun < -12;
+  return sun < belowDeg;
 }
 
 final tonightSkyUpNowProvider = NotifierProvider<TonightSkyUpNowNotifier, bool>(
