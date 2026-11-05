@@ -579,7 +579,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     });
     // Only a failure seen happening: Ara keeps its last run until it restarts,
     // so the first read after a launch or reconnect is old news (ALP-4998).
-    ref.listen(autofocusLiveProvider, (prev, live) {
+    ref.listen(autofocusLiveProvider.select((l) => (hydrated: l.hydrated, run: l.run)), (prev, live) {
       final next = live.run;
       if (prev == null || !prev.hydrated || prev.run.isFailed || !next.isFailed) {
         return;
