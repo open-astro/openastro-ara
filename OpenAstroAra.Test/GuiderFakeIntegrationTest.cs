@@ -707,10 +707,11 @@ namespace OpenAstroAra.Test {
 
         [TestCase("Looping")]
         [TestCase("Selected")]
-        public async Task Stop_stops_a_guider_still_looping_or_on_a_star_not_only_one_guiding(string appState) {
+        [TestCase("Paused")] // ALP-5018: a paused guider refused Stop and Emergency Stop too
+        public async Task Stop_stops_a_guider_looping_on_a_star_or_paused_not_only_one_guiding(string appState) {
             // iPad, 2026-11-04: Stop in Guide mode (and Emergency Stop, which calls the same stop) did nothing
-            // while the guide routine was still looping or had picked its star: StopGuiding skips every state
-            // but Guiding, Calibrating and LostLock.
+            // while the guide routine was still looping or had picked its star, or while the guider was paused
+            // (ALP-5018): StopGuiding skips every state but Guiding, Calibrating and LostLock.
             await using var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState(appState));
             fake.OnRpc("get_app_state", JsonValue.Create(appState));
