@@ -79,7 +79,11 @@ class CardStats {
 Map<String, CardStats> aggregateBook(Iterable<AlbumFrame> frames, List<PlanningDso> book) {
   final epoch = DateTime.utc(0);
   final ordered = frames.toList()
-    ..sort((a, b) => (a.capturedUtc ?? epoch).compareTo(b.capturedUtc ?? epoch));
+    // frameId breaks capture-time ties so the best frame doesn't depend on the reply's order.
+    ..sort((a, b) {
+      final t = (a.capturedUtc ?? epoch).compareTo(b.capturedUtc ?? epoch);
+      return t != 0 ? t : a.frameId.compareTo(b.frameId);
+    });
   final hits = <String, List<AlbumFrame>>{};
   for (final f in ordered) {
     for (final o in book) {
