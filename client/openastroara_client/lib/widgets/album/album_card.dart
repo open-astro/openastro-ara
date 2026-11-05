@@ -223,12 +223,16 @@ class AlbumCard extends StatelessWidget {
       pageBuilder: (dialogContext, _, _) => const SizedBox.shrink(),
       transitionBuilder: (dialogContext, animation, _, _) {
         final screen = MediaQuery.sizeOf(dialogContext);
-        // Scale up over the neighbours, centred on the card, kept on screen.
-        final width = math.min(280.0, screen.width - 32);
+        final insets = MediaQuery.paddingOf(dialogContext);
+        // Scale up over the neighbours, centred on the card, kept inside the safe area: a
+        // landscape phone limits the card by its height, not its width.
+        final left = insets.left + 16, right = screen.width - insets.right - 16;
+        final top = insets.top + 16, bottom = screen.height - insets.bottom - 16;
+        final width = math.min(280.0, math.min(right - left, (bottom - top) * albumCardAspect));
         final size = Size(width, width / albumCardAspect);
         final centre = Offset(
-          from.center.dx.clamp(16 + size.width / 2, math.max(16 + size.width / 2, screen.width - 16 - size.width / 2)),
-          from.center.dy.clamp(16 + size.height / 2, math.max(16 + size.height / 2, screen.height - 16 - size.height / 2)),
+          from.center.dx.clamp(left + size.width / 2, math.max(left + size.width / 2, right - size.width / 2)),
+          from.center.dy.clamp(top + size.height / 2, math.max(top + size.height / 2, bottom - size.height / 2)),
         );
         final to = Rect.fromCenter(center: centre, width: size.width, height: size.height);
         final t = Curves.easeInOut.transform(animation.value);

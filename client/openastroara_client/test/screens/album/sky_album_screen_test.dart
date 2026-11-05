@@ -14,6 +14,7 @@ import 'package:openastroara/state/profile_cache_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
+import 'package:openastroara/widgets/album/album_card.dart';
 
 /// Sky Album slice 5 (#1520, docs/specs/sky-album-v1.md "Layout" and
 /// "Tonight's Sky tie-in"): the screen with a fake callback and neither shell.
@@ -40,8 +41,14 @@ Future<ProviderContainer> _pump(
   List<TonightSkyObject>? tonightRows,
   bool bookPending = false,
   Size size = const Size(1200, 1600),
+  double textScale = 1,
+  double bottomInset = 0,
 }) async {
   tester.view.physicalSize = size;
+  tester.view.padding = FakeViewPadding(bottom: bottomInset);
+  tester.view.viewPadding = FakeViewPadding(bottom: bottomInset);
+  tester.platformDispatcher.textScaleFactorTestValue = textScale;
+  addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final container = ProviderContainer(
@@ -244,10 +251,11 @@ void main() {
 
   testWidgets('a phone puts the filter under the count and tier counts', (tester) async {
     await _pump(tester, frames: _m31Frames, size: const Size(400, 900));
-    final countRow = tester.getCenter(find.text('1 / 3 collected')).dy;
-    expect(tester.getCenter(find.text('Gold 0')).dy, closeTo(countRow, 4));
-    expect(tester.getTopLeft(find.byType(SegmentedButton<AlbumFilter>)).dy,
-        greaterThan(tester.getBottomLeft(find.text('1 / 3 collected')).dy));
+    final filterTop = tester.getTopLeft(find.byType(SegmentedButton<AlbumFilter>)).dy;
+    expect(filterTop, greaterThan(tester.getBottomLeft(find.text('1 / 3 collected')).dy));
+    expect(filterTop, greaterThan(tester.getBottomLeft(find.text('Gold 0')).dy));
+    // The Book switch leaves the bar for the header on a phone.
+    expect(find.descendant(of: find.byType(AppBar), matching: find.text('Messier')), findsNothing);
   });
 
   testWidgets('the shelf finds a card the ranker lists under another designation', (tester) async {
@@ -286,5 +294,31 @@ void main() {
     // Rows loaded but the Book not yet matched: every card would look missing, M31 included.
     await _pump(tester, frames: _m31Frames, tonight: [_m31], bookPending: true);
     expect(_onShelf('Andromeda Galaxy'), findsNothing);
+  });
+
+  // Audit of #1528: a 320 px phone and large system text must not overflow the bar or the header.
+  for (final (size, scale) in [(const Size(320, 700), 1.0), (const Size(400, 900), 1.3), (const Size(400, 900), 2.0)]) {
+    testWidgets('nothing overflows at ${size.width.toInt()} px and text ${scale}x', (tester) async {
+      await _pump(tester, frames: _m31Frames, size: size, textScale: scale);
+      expect(tester.takeException(), isNull);
+      expect(find.text('Messier'), findsOneWidget, reason: 'the Book switch stays reachable');
+    });
+  }
+
+  testWidgets('a flipped card stays inside a landscape phone', (tester) async {
+    await _pump(tester, frames: _m31Frames, size: const Size(800, 400));
+    await tester.tap(find.text('Andromeda Galaxy'));
+    await tester.pumpAndSettle();
+    final back = tester.getRect(find.byType(AlbumCardBack));
+    expect(back.top, greaterThanOrEqualTo(16));
+    expect(back.bottom, lessThanOrEqualTo(400 - 16 + 0.01));
+  });
+
+  testWidgets('the last grid row clears the home indicator', (tester) async {
+    await _pump(tester, frames: _m31Frames, size: const Size(400, 600), bottomInset: 34);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
+    await tester.pumpAndSettle();
+    final last = tester.getRect(find.byType(AlbumCardFront).last);
+    expect(last.bottom, lessThanOrEqualTo(600 - 34));
   });
 }

@@ -119,6 +119,17 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
 
     Widget card(PlanningDso d) => AlbumCard(cardFor(d), onAction: () => widget.onImageTarget(d));
 
+    final phone = MediaQuery.sizeOf(context).width < 600;
+    final bookSwitch = SegmentedButton<AlbumBook>(
+      segments: [
+        ButtonSegment(value: AlbumBook.messier, label: Text(l.albumBookMessier)),
+        ButtonSegment(value: AlbumBook.caldwell, label: Text(l.albumBookCaldwell)),
+      ],
+      selected: {_book},
+      showSelectedIcon: false,
+      onSelectionChanged: (s) => setState(() => _book = s.single),
+    );
+
     return Scaffold(
       backgroundColor: AraColors.bgPrimary,
       appBar: AppBar(
@@ -131,20 +142,8 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
             Flexible(child: Text(l.albumTitle, overflow: TextOverflow.ellipsis)),
           ],
         ),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: SegmentedButton<AlbumBook>(
-              segments: [
-                ButtonSegment(value: AlbumBook.messier, label: Text(l.albumBookMessier)),
-                ButtonSegment(value: AlbumBook.caldwell, label: Text(l.albumBookCaldwell)),
-              ],
-              selected: {_book},
-              showSelectedIcon: false,
-              onSelectionChanged: (s) => setState(() => _book = s.single),
-            ),
-          ),
-        ],
+        // Under 600 px the switch moves into the header, where it has the full width.
+        actions: [if (!phone) Padding(padding: const EdgeInsets.only(right: 12), child: bookSwitch)],
       ),
       body: CustomScrollView(
         slivers: [
@@ -182,7 +181,18 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
                   if (box.maxWidth < 720) {
                     return Column(
                       children: [
-                        Row(children: [Expanded(child: count), tierCounts]),
+                        if (phone) ...[bookSwitch, const SizedBox(height: 8)],
+                        // Count and tier counts share a line while they fit; large text breaks them in two.
+                        SizedBox(
+                          width: double.infinity,
+                          child: Wrap(
+                            alignment: WrapAlignment.spaceBetween,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 16,
+                            runSpacing: 4,
+                            children: [count, tierCounts],
+                          ),
+                        ),
                         const SizedBox(height: 8),
                         filter,
                       ],
@@ -251,7 +261,8 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
               ),
             ),
           SliverPadding(
-            padding: const EdgeInsets.all(16),
+            // The last row clears the home indicator.
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom),
             sliver: SliverGrid(
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                 maxCrossAxisExtent: 130,
