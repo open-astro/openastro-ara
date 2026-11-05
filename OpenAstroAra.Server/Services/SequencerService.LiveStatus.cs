@@ -101,6 +101,8 @@ public sealed partial class SequencerService {
             OpenAstroAra.Sequencer.SequenceItem.Telescope.SetTracking => "Starting tracking",
             OpenAstroAra.Sequencer.SequenceItem.Telescope.TrackingProbe => "Checking the tracking",
             OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter f when f.Filter?.Name is { Length: > 0 } n => $"Switching to the {n} filter",
+            OpenAstroAra.Sequencer.SequenceItem.Camera.CoolCamera { WaitForTemperature: false } cc => string.Create(CultureInfo.InvariantCulture,
+                $"Cooling the camera to {cc.Temperature:0.#} °C, not waiting"),
             OpenAstroAra.Sequencer.SequenceItem.Camera.CoolCamera cc => string.Create(CultureInfo.InvariantCulture,
                 $"Waiting for the camera to cool to {cc.Temperature:0.#} °C"),
             OpenAstroAra.Sequencer.SequenceItem.Camera.WarmCamera => "Warming the camera",

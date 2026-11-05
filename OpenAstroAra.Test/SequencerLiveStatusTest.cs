@@ -113,6 +113,16 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_cool_step_that_does_not_wait_says_the_plan_carries_on() {
+            // #1574 — a session Cool Camera (WaitForTemperature = false) starts the cooler and moves on.
+            var cool = (OpenAstroAra.Sequencer.SequenceItem.Camera.CoolCamera)HeadlessSequencerFactory.WithDefaults()
+                .Items.OfType<OpenAstroAra.Sequencer.SequenceItem.Camera.CoolCamera>().First().Clone();
+            cool.Temperature = -10;
+            cool.WaitForTemperature = false;
+            Assert.That(SequencerService.DescribeLeaf(cool), Is.EqualTo("Cooling the camera to -10 °C, not waiting"));
+        }
+
+        [Test]
         public void A_slew_that_follows_the_profiles_centre_after_slew_reads_as_centring() {
             // #1573 — Center = null centres when Settings -> Plate Solving -> "Center target after slew"
             // is on, so the label must say Centring, as it does for Center = true.
