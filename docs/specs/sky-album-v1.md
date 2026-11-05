@@ -109,7 +109,7 @@ Files: `screens/album/`, `state/album/`, `widgets/album/`. Nothing imported from
 - Header line: `n / total collected` with per-tier counts.
 - Tonight shelf (see tie-in) above the grid when it has cards.
 - Binder grid: cards at 2.5:3.5, max about 130 px wide. Card front: best-frame thumbnail (via the existing frame thumbnail endpoint) or a grey silhouette icon per object type; catalog label (`M 31`, `C 14`); name. Border colour per tier, a subtle glow on gold, grey text on missing cards.
-- Card back: in-place flip, the flipped card scaling up over its neighbours. Fields: first capture, integration and frame count, filters, gear profile, best-frame score, distance to the next tier; one action button, "Image this target" on a missing card, "Add more time" on a collected one. Tapping outside flips it back.
+- Card back: in-place flip, the flipped card scaling up over its neighbours. Fields: first capture, integration and frame count, filters, gear profile, best-frame score, distance to the next tier; one action button, "Image this target" on a missing card, "Add more time" on a collected one. Tapping outside it, or on the card again, flips it back.
 - Empty and failure states ([#1502](https://github.com/open-astro/openastro-ara/issues/1502)): with no lights at all the grid is fully grey with one caption, "Image a target to collect your first card"; the shelf still shows. If the fetch fails, show cached rows when present, else grey cards plus the app's usual error pill.
 
 ### Tonight's Sky tie-in ([#1501](https://github.com/open-astro/openastro-ara/issues/1501))
