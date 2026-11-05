@@ -50,6 +50,7 @@ namespace OpenAstroAra.Test {
         private const double SiteLonDeg = -75.0;
         private static readonly bool[] AutoThenManual = { true, false };
         private static readonly int[] PointsTwoAndThree = { 2, 3 };
+        private static readonly int[] PointTwoOnly = { 2 };
 
         private sealed class WsRecorder : IWsBroadcaster {
             public ConcurrentQueue<(string Type, JsonElement Payload)> Events { get; } = new();
@@ -95,17 +96,23 @@ namespace OpenAstroAra.Test {
             private bool _auto;
             private bool _calced;
             private bool _starVisible = true;
+            private bool _aborted;
             private readonly ConcurrentQueue<int> _measured = new();
+
+            /// <summary>False = the guider never records the point (manual mode, point not read).</summary>
+            public bool RecordMeasurements { get; set; } = true;
 
             public bool CanSlew { get; set; } = true;
             public ConcurrentQueue<JsonObject> StartParams { get; } = new();
-            public ConcurrentQueue<int> MeasureRequests => _measured;
+            public ConcurrentQueue<int> MeasureRequests { get; } = new();
             public double AltArcmin { get; set; } = 3.5;
             public double AzArcmin { get; set; } = -1.2;
 
             public void Calc() { lock (_gate) { _calced = true; } }
             public void LoseStar(bool lost) { lock (_gate) { _starVisible = !lost; } }
             public void CloseFromGuiderSide() { lock (_gate) { _active = false; } }
+            /// <summary>Auto mode lost the star mid-turn: the tool stops aligning with no fit.</summary>
+            public void AbortAligning() { lock (_gate) { _aborted = true; } }
 
             public void Install(FakeGuider fake) {
                 fake.OnRpc("staticpa_start", req => {
@@ -123,7 +130,10 @@ namespace OpenAstroAra.Test {
                 });
                 fake.OnRpc("staticpa_measure", req => {
                     var pos = req["params"]?["position"]?.GetValue<int>() ?? 0;
-                    _measured.Enqueue(pos);
+                    MeasureRequests.Enqueue(pos);
+                    if (RecordMeasurements) {
+                        _measured.Enqueue(pos);
+                    }
                     return Status();
                 });
                 fake.OnRpc("staticpa_get_status", _ => Status());
@@ -137,7 +147,7 @@ namespace OpenAstroAra.Test {
                     if (!_active) {
                         return o;
                     }
-                    o["aligning"] = !_calced;
+                    o["aligning"] = !_calced && !_aborted;
                     o["auto"] = _auto;
                     o["can_slew"] = CanSlew;
                     o["hemisphere"] = "north";
@@ -483,6 +493,61 @@ namespace OpenAstroAra.Test {
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("no_star"));
             Assert.That(fake.ReceivedMethods, Does.Not.Contain("staticpa_start"));
             Assert.That(status.State, Is.EqualTo("failed"));
+        }
+
+        [Test]
+        public async Task Auto_mode_stopping_without_a_fit_fails_as_fit_failed() {
+            var paCalls = new ConcurrentQueue<bool>();
+            var (fake, tool) = StartFake(paCalls);
+            await using var _f = fake;
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, ws: ws);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await WaitForRpcAsync(fake, "staticpa_get_status").ConfigureAwait(false);
+
+            tool.AbortAligning(); // {active, auto, aligning:false, calced:false}
+
+            Assert.That((await PollStateAsync(svc, "failed").ConfigureAwait(false)).State, Is.EqualTo("failed"));
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("fit_failed"));
+        }
+
+        [Test]
+        public async Task Manual_mode_fails_as_measure_failed_when_the_guider_never_records_the_point() {
+            var paCalls = new ConcurrentQueue<bool>();
+            var (fake, tool) = StartFake(paCalls);
+            await using var _f = fake;
+            tool.CanSlew = false;
+            tool.RecordMeasurements = false;
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, ws: ws);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            await PollStateAsync(svc, "failed").ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("measure_failed"));
+            Assert.That(tool.MeasureRequests, Is.EqualTo(PointTwoOnly), "point 2 was asked for and never read; point 3 is not attempted");
+        }
+
+        [Test]
+        public async Task Manual_mode_fails_as_slew_failed_when_the_mount_refuses_the_RA_turn() {
+            var paCalls = new ConcurrentQueue<bool>();
+            var (fake, tool) = StartFake(paCalls);
+            await using var _f = fake;
+            tool.CanSlew = false;
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var mount = NewMount();
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, mount, ws: ws);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            await PollStateAsync(svc, "failed").ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("slew_failed"));
+            Assert.That(tool.MeasureRequests, Is.Empty);
         }
 
         [Test]
