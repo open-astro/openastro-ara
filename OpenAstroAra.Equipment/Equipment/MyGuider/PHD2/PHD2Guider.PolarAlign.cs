@@ -200,6 +200,75 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             return SendPaSessionRpcAsync(new Phd2GetPaSession(), "get_pa_session");
         }
 
+
+        // ── Static PA (the guider's own routine) ────────────────────────────────────────────────
+        // Polar alignment is the guider's: ARA starts its Static PA tool, reads its status object and
+        // draws it. The guider needs a looping camera with a selected star (loop + find_star) first.
+
+        /// <summary><c>staticpa_start</c> — begin the guider's Static PA routine. <paramref name="auto"/>
+        /// true lets the guider rotate the mount itself (needs a slewable guider mount); false is manual
+        /// mode, where the caller rotates RA and calls <see cref="StaticPaMeasureAsync"/>. Throws
+        /// <see cref="GuiderRpcException"/> with the guider's own refusal (no star, guiding, no mount…).</summary>
+        public Task<Phd2StaticPaStatus> StaticPaStartAsync(bool auto, bool north, CancellationToken ct) =>
+            SendStaticPaRpcAsync(new Phd2StaticPaStart {
+                Parameters = new Phd2StaticPaStartParameter { Auto = auto, Hemisphere = north ? "north" : "south" },
+            }, "staticpa_start", ct);
+
+        /// <summary><c>staticpa_measure {position}</c> — manual mode: record point 2 or 3 on the next frame.</summary>
+        public Task<Phd2StaticPaStatus> StaticPaMeasureAsync(int position, CancellationToken ct) =>
+            SendStaticPaRpcAsync(new Phd2StaticPaMeasure { Parameters = new Phd2StaticPaMeasureParameter { Position = position } },
+                "staticpa_measure", ct);
+
+        /// <summary><c>staticpa_get_status</c> — the guider's full Static PA status object.</summary>
+        public Task<Phd2StaticPaStatus> StaticPaGetStatusAsync(CancellationToken ct) =>
+            SendStaticPaRpcAsync(new Phd2StaticPaGetStatus(), "staticpa_get_status", ct);
+
+        /// <summary><c>staticpa_stop</c> — stop aligning; the computed result stays readable.</summary>
+        public Task<Phd2StaticPaStatus> StaticPaStopAsync(CancellationToken ct) =>
+            SendStaticPaRpcAsync(new Phd2StaticPaStop(), "staticpa_stop", ct);
+
+        /// <summary><c>staticpa_close</c> — tear the guider's tool down (aborts any slew first).</summary>
+        public async Task StaticPaCloseAsync(CancellationToken ct) {
+            ct.ThrowIfCancellationRequested();
+            if (!Connected) {
+                throw new InvalidOperationException("guider is not connected");
+            }
+            var response = await SendMessage<GenericPhdMethodResponse>(new Phd2StaticPaClose(), 10000).ConfigureAwait(false);
+            if (response.error != null) {
+                throw new GuiderRpcException("staticpa_close", response.error.code, response.error.message);
+            }
+        }
+
+        /// <summary><c>set_exposure</c> for the looping camera, in milliseconds.</summary>
+        public async Task SetExposureMsAsync(int exposureMs, CancellationToken ct) {
+            ct.ThrowIfCancellationRequested();
+            if (!Connected) {
+                throw new InvalidOperationException("guider is not connected");
+            }
+            if (exposureMs < 1) {
+                throw new ArgumentOutOfRangeException(nameof(exposureMs), exposureMs, "exposure must be a positive number of milliseconds.");
+            }
+            var response = await SendMessage<GenericPhdMethodResponse>(new Phd2SetExposure { Parameters = new int[] { exposureMs } }, 10000).ConfigureAwait(false);
+            if (response.error != null) {
+                throw new GuiderRpcException("set_exposure", response.error.code, response.error.message);
+            }
+        }
+
+        private async Task<Phd2StaticPaStatus> SendStaticPaRpcAsync(Phd2Method msg, string method, CancellationToken ct) {
+            ct.ThrowIfCancellationRequested();
+            if (!Connected) {
+                throw new InvalidOperationException("guider is not connected");
+            }
+            var response = await SendMessage<Phd2StaticPaStatusResponse>(msg, 10000, notifyOnError: false).ConfigureAwait(false);
+            if (response.error != null) {
+                throw new GuiderRpcException(method, response.error.code, response.error.message);
+            }
+            if (response.result is null) {
+                throw new GuiderRpcException(method, 0, "missing result payload");
+            }
+            return response.result;
+        }
+
         // Shared send-and-unwrap for the two RPCs that return the PA-session status object
         // (set_pa_session, get_pa_session): one error/empty-result contract, one place.
         private async Task<Phd2PaSessionStatus> SendPaSessionRpcAsync(Phd2Method msg, string method) {

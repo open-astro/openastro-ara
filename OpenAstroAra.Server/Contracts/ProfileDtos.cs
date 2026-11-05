@@ -504,16 +504,13 @@ public sealed record Phd2SettingsDto(
     int? Phd2ProfileId = null);
 
 /// <summary>
-/// §45.12 polar-alignment settings — the routine's knobs. Every field carries its playbook default
-/// so a profile.json written before this section deserializes to the documented behavior.
-/// <c>Binning</c> 0 = auto (§45.4: the tier for the guide camera's frame size, see
-/// <see cref="OpenAstroAra.Server.Services.PolarAlignBinning"/>), 1–4 = the user's override.
-/// <c>TargetToleranceArcmin</c> gates the client's [Done] button (the server reports errors
-/// regardless); <c>SeedRotationDeg</c> is the 2-point measurement's RA slew;
-/// <c>LoopCadenceMs</c> is the live loop's target period (capture+solve time is inside it).
-/// <c>LoopMode</c> is <c>"loop"</c> (re-shoot continuously) or <c>"single"</c> (the adjust phase
-/// waits for <c>POST /equipment/polaralign/capture</c> before each frame). The live loop re-reads
-/// these settings before every frame, so exposure and mode changes apply mid-run.
+/// §45.12 polar-alignment settings. The routine itself is the guider's Static PA tool (#1611), so
+/// only a few knobs reach it: <c>ExposureSeconds</c> is set on the looping guide camera;
+/// <c>SeedRotationDeg</c> and <c>SettleSeconds</c> shape Ara's RA turns in manual mode (a guider
+/// without a slewable mount); <c>LoopCadenceMs</c> is how often Ara polls the guider's status;
+/// <c>TargetToleranceArcmin</c> gates the client's [Done] button. <c>Binning</c> and
+/// <c>LoopMode</c> are kept on the wire for older clients and ignored — the guider reads every
+/// frame it loops at its own binning.
 /// </summary>
 public sealed record PolarAlignSettingsDto(
     double ExposureSeconds = 1.0,
