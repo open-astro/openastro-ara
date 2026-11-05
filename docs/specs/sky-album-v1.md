@@ -1,8 +1,8 @@
 # Sky Album v1
 
-A collector's album for imaged targets. Every catalog is a **Book** of **Cards**; a card you have imaged shows your own best frame and a **Tier**, a card you have not imaged yet is greyed out. The point is to make you want to go out and fill the gaps.
+A collector's album for imaged targets. Every catalog is a **Book** of **Cards**; a card you have imaged shows its **Art** in colour and a **Tier**, a card you have not imaged yet shows the same Art dimmed. The point is to make you want to go out and fill the gaps.
 
-Status: specification, nothing built. Produced by the wayfinder map in [#1489](https://github.com/open-astro/openastro-ara/issues/1489); each section links the ticket that settled it. Implementation follows the slices in the last section.
+Status: slices 1 to 5 built; slice 6 open. Revised 2026-11-05 by [#1535](https://github.com/open-astro/openastro-ara/issues/1535): premade Art on the front, a client-side collection cache, and the baseball-card back. Produced by the wayfinder map in [#1489](https://github.com/open-astro/openastro-ara/issues/1489); each section links the ticket that settled it. Implementation follows the slices in the last section.
 
 ## Vocabulary
 
@@ -12,11 +12,14 @@ Add to `GLOSSARY.md` in the first implementation slice:
 - **Book**: one catalog's complete set of Cards (Messier, Caldwell).
 - **Card**: one catalog object's slot in a Book.
 - **Collected**: a Card at bronze or better.
-- **Tier**: bronze, silver or gold, derived from the lights that contain the object.
+- **Tier**: bronze, silver or gold, derived from the lights the Card has recorded.
+- **Art**: the premade picture on a Card's front, never the user's capture.
+- **Night**: the observing night a light belongs to, by the noon rule.
+- **Placeholder**: what a Card shows when it has no Art.
 
 ## Scope
 
-In v1: Messier (110) and Caldwell (109) Books; frames matched to catalog objects by field-of-view containment on the mount pointing saved per frame; tiers; a Simple Mode entry point; the Tonight's Sky tie-in; the catalog data fix that completes both Books.
+In v1: Messier (110) and Caldwell (109) Books; frames matched to catalog objects by field-of-view containment on the mount pointing saved per frame; tiers; a Simple Mode entry point; the Tonight's Sky tie-in; the catalog data fix that completes both Books; premade Art per Card with a collection cache on the client ([#1535](https://github.com/open-astro/openastro-ara/issues/1535)).
 
 Out of scope, by decision of the map: a full UI entry point, difficulty or global rarity, sky-survey thumbnails, plate-solve refinement of the frame centre, custom books, AstroBin, sharing, cryptographically signed provenance, rig pointing measurement, re-keying the Stats Targets section.
 
@@ -88,17 +91,16 @@ Never routed through `POST /api/v1/stats/rebuild-catalog`: that endpoint deletes
 
 ### State
 
-A provider family keyed by the active connection caches the album rows. On album open it fetches with the last `updated_utc` it holds as `since`, merges the returned rows into the cache by `frame_id` (a `since` response also carries already-cached rows whose `updated_utc` moved, for example after the backfill), and refetches without `since` when the merged count does not equal `total_lights` (covers deletions). Rows are matched against `bundledCatalogProvider` (not the culled planning catalog, so every Book object is present), producing per-object aggregates:
+The collection is the user's, not the rig's ([#1535](https://github.com/open-astro/openastro-ara/issues/1535)): one **collection cache** per device, merged across every rig the device connects to, in a JSON file in the app support directory (the pattern `safety_alarm_state` uses). It stores the frame rows themselves: `frame_id`, the matched object ids, `captured_utc`, `exposure_seconds`, `filter_name`, `updated_utc`. On album open the client fetches with the newest `updated_utc` it holds for that rig as `since` and merges by `frame_id`: a row with a newer `updated_utc` replaces the cached one (a pointing backfill can add objects to a frame); nothing is ever removed, so a full reply with fewer rows than the cache does not delete, and `total_lights` is informational only. The cache is a high-water mark: a Tier never drops, and deleting frames on the rig does not subtract (ADR 0001). There is no reset in v1; clearing app data is the only way. Rows are matched against `bundledCatalogProvider` (not the culled planning catalog, so every Book object is present), producing per-object aggregates:
 
 | Field | Rule |
 |---|---|
 | frame count | lights that contain the object |
 | integration hours | sum of `exposure_seconds` of those lights ([#1498](https://github.com/open-astro/openastro-ara/issues/1498): all lights, any filter, any rating) |
 | first capture | min `captured_utc` |
-| best frame | max `composite_score`, ties by latest capture, then by the highest `frame_id` |
+| nights | lights grouped by Night: `captured_utc` in the site's time zone (settings), anything before local noon belongs to the previous evening, the `preflightNightKey` rule. Per Night: light count, the most common `exposure_seconds` (the "sub"), hours |
 | filters used | distinct `filter_name`, in first-seen order |
-| gear profile | `profile_id` of the best frame, resolved to a name from the client's profile list, blank if gone |
-| tier | none below 1 light; bronze at 1 light; silver at 1 h; gold at 5 h. Derived, never stored, can drop when frames are deleted |
+| tier | none below 1 light; bronze at 1 light; silver at 1 h; gold at 5 h. Derived, never stored, never drops (the cache keeps every light) |
 
 ### Layout ([#1500](https://github.com/open-astro/openastro-ara/issues/1500))
 
@@ -108,8 +110,8 @@ Files: `screens/album/`, `state/album/`, `widgets/album/`. Nothing imported from
 - A filter beside the header counts: All / Collected / Missing (decided 2026-11-05). It narrows the grid only; the counts stay the Book's, and the shelf hides under Collected.
 - Header line: `n / total collected` with per-tier counts.
 - Tonight shelf (see tie-in) above the grid when it has cards.
-- Binder grid: cards at 2.5:3.5, max about 130 px wide. Card front: best-frame thumbnail (via the existing frame thumbnail endpoint) or a grey silhouette icon per object type; catalog label (`M 31`, `C 14`); name. Border colour per tier, a subtle glow on gold, grey text on missing cards.
-- Card back: in-place flip, the flipped card scaling up over its neighbours. Fields: first capture, integration and frame count, filters, gear profile, best-frame score, distance to the next tier; one action button, "Image this target" on a missing card, "Add more time" on a collected one. Tapping outside it, or on the card again, flips it back.
+- Binder grid: cards at 2.5:3.5, max about 130 px wide. Card front ([#1535](https://github.com/open-astro/openastro-ara/issues/1535)): the Card's Art shown whole on black (never cropped), in colour when Collected and dimmed to grey while missing; the Placeholder, a grey silhouette icon per object type, when the Card has no Art; catalog label (`M 31`, `C 14`); name. Border colour per tier, a subtle glow on gold, grey text on missing cards.
+- Card back ([#1535](https://github.com/open-astro/openastro-ara/issues/1535), the baseball-card back): in-place flip, the flipped card scaling up over its neighbours. From top: a name banner in the Tier colour with the catalog-number badge, the name in capitals and the set number (catalog number over Book size, `63 / 109`); a bio line from the bundled catalog row and the manifest (type, constellation, V magnitude, major axis, distance); the stats table, one row per Night (night, lights, sub, hours), the latest four Nights, then a totals row stating the full count (`Total · 9 nights`); a "Did you know?" line from the manifest; one action button, "Image this target" on a missing card, "Add more time" on a collected one; the art credit line (`Art: ESO · CC BY 4.0`). Tapping outside it, or on the card again, flips it back.
 - Empty and failure states ([#1502](https://github.com/open-astro/openastro-ara/issues/1502)): with no lights at all the grid is fully grey with one caption, "Image a target to collect your first card"; the shelf still shows. If the fetch fails, show cached rows when present, else grey cards plus the app's usual error pill.
 
 ### Tonight's Sky tie-in ([#1501](https://github.com/open-astro/openastro-ara/issues/1501))
@@ -121,6 +123,15 @@ Files: `screens/album/`, `state/album/`, `widgets/album/`. Nothing imported from
 ### Entry point
 
 A "Sky Album" item in the Simple Mode rail menu beside Library and Stats, pushing the screen the way `ImageLibraryScreen` is pushed from `simple_shell.dart`. No reverse link from the plan panel in v1.
+
+## Art and data ([#1535](https://github.com/open-astro/openastro-ara/issues/1535))
+
+- **Licences:** CC BY (any version), CC0 and public domain only, amateur Wikimedia Commons photos included. No ShareAlike, NonCommercial or NoDerivatives: the card crops and dims the Art.
+- **Framing:** cut to the card's picture shape (5:6) with the whole object inside, on black. Wide objects are turned upright. A source photo that crops the object itself is rejected.
+- **Coverage:** decided per object. A Card with no acceptable Art shows the Placeholder.
+- **Format:** one WebP per Card at 560×672 (about 31 KB each, about 7 MB for 219 Cards), bundled with the app so the album works offline.
+- **Manifest:** one JSON row per object: source URL, credit, licence, crop box, distance, the "Did you know?" line. A script in `scripts/` downloads, crops and writes the WebP from it; the outputs are committed, so builds need no network. Trivia and distances are drafted from the OpenNGC notes and standard references and reviewed per Card from a contact sheet.
+- **Credits:** the line on each Card's back, and every credit with its source link registered with Flutter's licence registry, so the existing About page lists them.
 
 ## Catalog data fix ([#1500](https://github.com/open-astro/openastro-ara/issues/1500))
 
@@ -144,6 +155,8 @@ Search gains these objects as a side effect, and so does Tonight's Sky except M4
 - Client (pure Dart): containment on a synthetic frame (object at centre, at half the short side, just outside it, at a corner); alias fallback with `M31`, `M 31`, `Messier 31`; tier thresholds at the boundaries; aggregate fields; the merge-by-id + count reload rule, including a `since` response that only re-delivers cached rows.
 - Album screen widget test with a fake callback and neither shell: a tap on a missing card's action calls the callback with that `PlanningDso`.
 - Catalog: after the data fix, the Messier Book has 110 cards and the Caldwell Book 109.
+- Collection cache ([#1535](https://github.com/open-astro/openastro-ara/issues/1535), pure Dart): a newer `updated_utc` replaces a cached row; a full reply with fewer rows removes nothing; a Tier never drops; Night grouping across local midnight and on a spring-forward day; the sub column picks the most common exposure.
+- Card widgets: a Card with no Art shows the Placeholder; a missing Card shows dimmed Art; the back shows the latest four Nights and a totals row with the full count; every Card's credit is in the licence registry.
 
 ## Slices
 
@@ -155,9 +168,13 @@ Each slice is one PR against `master`, in this order; each lists the spec sectio
 4. Client: album state, matching, aggregates, tiers, pure tests.
 5. Client: album screen, card flip, shelf, widget test with a fake callback.
 6. Simple Mode: rail menu item, callback implementation.
+7. Art and data ([#1535](https://github.com/open-astro/openastro-ara/issues/1535)): manifest, script, the 219-Card Art set with contact-sheet review, trivia and distances, credits in About.
+8. Client ([#1535](https://github.com/open-astro/openastro-ara/issues/1535)): collection cache with the merge rule and Night grouping, card front on Art plus Placeholder, the baseball-card back.
 
 ## Known limits
 
 - Frames captured with optics unset in the profile have no pixel scale and rely on the alias fallback.
 - Gold at 5 h is fixed regardless of focal length; wide-field rigs reach it faster.
+- The collection cache has no reset in v1; a wrongly credited Card stays until app data is cleared.
+- Distance and the "Did you know?" line are curated by hand per Card, so they are only as current as the manifest.
 - A collected card whose object is outside the planning cull or below the horizon shows no altitude or rise when handed to the plan sheet.
