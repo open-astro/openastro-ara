@@ -2827,6 +2827,11 @@
   "@guideStopping": {
     "description": "While a stop is on its way (the guider finishes its frame first)"
   },
+  "guideStopRefused": "The guider didn't stop: it is still {state}. Try Stop again.",
+  "@guideStopRefused": {
+    "description": "Simple Mode pill: a guider Stop the rig accepted but did not act on; {state} is the guider phase.",
+    "placeholders": {"state": {"type": "String"}}
+  },
   "guideExposureOwn": "The guider's own",
   "@guideExposureOwn": {
     "description": "Guide exposure picker value when the profile leaves it to the guider"

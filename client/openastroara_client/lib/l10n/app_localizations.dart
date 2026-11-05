@@ -3555,6 +3555,12 @@ abstract class AppLocalizations {
   /// **'Stopping…'**
   String get guideStopping;
 
+  /// Simple Mode pill: a guider Stop the rig accepted but did not act on; {state} is the guider phase.
+  ///
+  /// In en, this message translates to:
+  /// **'The guider didn\'t stop: it is still {state}. Try Stop again.'**
+  String guideStopRefused(String state);
+
   /// Guide exposure picker value when the profile leaves it to the guider
   ///
   /// In en, this message translates to:

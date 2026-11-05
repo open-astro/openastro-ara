@@ -576,6 +576,7 @@
   "shellNoDevices": "Nenhum dispositivo conectado",
   "guideStarting": "Iniciando…",
   "guideStopping": "Parando…",
+  "guideStopRefused": "O guia não parou: continua {state}. Tente Parar de novo.",
   "guideExposureOwn": "O do guia",
   "focusNeedsFocuser": "Conecte um focalizador para o foco automático, ou foque à mão no Manual.",
   "shellMainCameraBusy": "A câmera principal está ocupada: espere o quadro terminar, ou pare-o."
