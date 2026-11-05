@@ -143,6 +143,12 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "license": "MIT",
         "copyright": "Copyright (c) 2017 Luan Nico and the Blue Fire team",
     },
+    "sensors_plus": {
+        # 7.1.1 verified 2026-11-05 against the package's own LICENSE (BSD-3-Clause, The Chromium Authors).
+        "version": "7.1.1",
+        "license": "BSD-3-Clause",
+        "copyright": "Copyright 2017 The Chromium Authors",
+    },
     "collection": {
         "version": "1.19.1",
         "license": "BSD-3-Clause",
