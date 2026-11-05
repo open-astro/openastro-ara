@@ -95,7 +95,7 @@ A provider family keyed by the active connection caches the album rows. On album
 | frame count | lights that contain the object |
 | integration hours | sum of `exposure_seconds` of those lights ([#1498](https://github.com/open-astro/openastro-ara/issues/1498): all lights, any filter, any rating) |
 | first capture | min `captured_utc` |
-| best frame | max `composite_score`, ties by latest capture, then by `frame_id` |
+| best frame | max `composite_score`, ties by latest capture, then by the highest `frame_id` |
 | filters used | distinct `filter_name`, in first-seen order |
 | gear profile | `profile_id` of the best frame, resolved to a name from the client's profile list, blank if gone |
 | tier | none below 1 light; bronze at 1 light; silver at 1 h; gold at 5 h. Derived, never stored, can drop when frames are deleted |
