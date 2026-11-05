@@ -234,12 +234,12 @@ String formatDecDms(double decDeg) {
   return '$sign${two(d)}°${two(m)}′${two(sec)}″';
 }
 
-/// Milliseconds as seconds with one decimal: `1.6 s`.
 /// §45 polar-alignment panel — collapsible Imaging-tab section driving the
-/// server routine: Start (2-point seed → live adjust), the zooming bullseye
+/// guider's Static PA routine through the daemon (#1611): Start (the guider
+/// picks a star and turns the mount in RA → live adjust), the zooming bullseye
 /// with decoupled Az/Alt readouts fed by `polar_align.progress` WS events,
-/// the §45.11 no-solve retry banner, and Done/Abort. [Done] enables inside the
-/// profile's target tolerance (§45.12).
+/// the star-not-seen banner while paused, and Done/Abort. [Done] enables
+/// inside the profile's target tolerance (§45.12).
 class PolarAlignPanel extends ConsumerStatefulWidget {
   const PolarAlignPanel({super.key});
 
@@ -258,7 +258,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   PolarAlignSettings _settings = const PolarAlignSettings();
   final _exposureCtrl = TextEditingController(text: _exposureText(1.0));
 
-  // Repaints the exposing/solving readout while a frame is in progress.
+  // Refreshes the guide camera's live view every 2 s while the routine runs.
   Timer? _ticker;
 
   // Live view: the guide camera's latest frame, refetched after every frame.
