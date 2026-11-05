@@ -1973,6 +1973,9 @@ void main() {
         profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]),
         versions: DaemonVersions.fromJson({'daemon_version': '0.0.1-ara.7', 'guider_version': '2.6.13dev7'}));
     expect(find.byTooltip('Settings'), findsOneWidget, reason: 'the gear stays on the right');
+    // Set apart from the device dots by a hairline (user, 2026-11-06).
+    expect(tester.getRect(find.byKey(const Key('simple-ara-divider'))).left,
+        greaterThanOrEqualTo(tester.getRect(find.byKey(const Key('simple-ara-mark'))).right));
     await tester.tap(find.byKey(const Key('simple-ara-mark')));
     await tester.pump();
     await tester.pump();

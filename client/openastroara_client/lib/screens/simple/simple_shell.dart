@@ -1480,6 +1480,15 @@ class _StatusStrip extends ConsumerWidget {
             tooltip: kAppName,
             onPressed: onAra,
           ),
+          // A hairline sets the brand apart from the device dots, which
+          // otherwise read as one more device (user, 2026-11-06).
+          Container(
+            key: const Key('simple-ara-divider'),
+            width: 1,
+            height: 28,
+            margin: const EdgeInsets.only(left: AraSpace.s4, right: AraSpace.s12),
+            color: AraColors.border,
+          ),
           // Only gear that's connected; a fault still shows. With none of it
           // showing, a note says so and opens Devices.
           Expanded(
