@@ -11,10 +11,21 @@ void main() {
     // Simulate an in-shell session: gates passed, offline on.
     container.read(profileGatePassedProvider.notifier).pass();
     container.read(offlineModeProvider.notifier).enter();
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: LaunchpadButton())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Consumer(
+              builder: (context, ref, _) => TextButton(
+                onPressed: () => backToLaunchpad(context, ref),
+                child: const Text('Launchpad'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
     return container;
   }
 

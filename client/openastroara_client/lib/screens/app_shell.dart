@@ -102,7 +102,8 @@ class _AppShellState extends ConsumerState<AppShell> {
     // to update the constant trips this in debug instead of silently navigating
     // to the wrong tab.
     assert(
-      _tabs[kOptionsTabIndex].label == 'Settings' && kOptionsTabIndex == _tabs.length - 1,
+      _tabs[kOptionsTabIndex].label == 'Settings' &&
+          kOptionsTabIndex == _tabs.length - 1,
       'kOptionsTabIndex must point at the Settings tab, the last one (the rail lists the tabs before it).',
     );
     assert(
@@ -129,119 +130,112 @@ class _AppShellState extends ConsumerState<AppShell> {
       // The always-alive listeners (policy modals, alarms, Stop Mount, ...)
       // are shared with SimpleShell so both shells react the same way.
       body: ShellListeners(
-                child: _EdgeToEdge(
-                child: CallbackShortcuts(
-                  // §61 ⌘K on macOS, Ctrl+K elsewhere — both bound so the palette
-                  // is reachable regardless of host platform.
-                  bindings: <ShortcutActivator, VoidCallback>{
-                    const SingleActivator(
-                      LogicalKeyboardKey.keyK,
-                      meta: true,
-                    ): () =>
-                        showCommandPalette(context),
-                    const SingleActivator(
-                      LogicalKeyboardKey.keyK,
-                      control: true,
-                    ): () =>
-                        showCommandPalette(context),
-                    // ⌘, / Ctrl+, — the platform-standard Settings shortcut.
-                    const SingleActivator(
-                      LogicalKeyboardKey.comma,
-                      meta: true,
-                    ): _openSettings,
-                    const SingleActivator(
-                      LogicalKeyboardKey.comma,
-                      control: true,
-                    ): _openSettings,
-                  },
-                  child: Focus(
-                    focusNode: _focus,
-                    child: Column(
+        child: _EdgeToEdge(
+          child: CallbackShortcuts(
+            // §61 ⌘K on macOS, Ctrl+K elsewhere — both bound so the palette
+            // is reachable regardless of host platform.
+            bindings: <ShortcutActivator, VoidCallback>{
+              const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () =>
+                  showCommandPalette(context),
+              const SingleActivator(
+                LogicalKeyboardKey.keyK,
+                control: true,
+              ): () =>
+                  showCommandPalette(context),
+              // ⌘, / Ctrl+, — the platform-standard Settings shortcut.
+              const SingleActivator(LogicalKeyboardKey.comma, meta: true):
+                  _openSettings,
+              const SingleActivator(LogicalKeyboardKey.comma, control: true):
+                  _openSettings,
+            },
+            child: Focus(
+              focusNode: _focus,
+              child: Column(
+                children: [
+                  _TopEquipmentBar(showChips: !narrow),
+                  Expanded(
+                    child: Row(
+                      // Stretch so the device column fills the height
+                      // and starts at the top, like the rail.
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _TopEquipmentBar(showChips: !narrow),
-                        Expanded(
-                          child: Row(
-                            // Stretch so the device column fills the height
-                            // and starts at the top, like the rail.
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              // A phone-width window swaps the bars: the
-                              // devices stand in a column here and the tabs
-                              // move to a bottom bar (below).
-                              if (narrow)
-                                const _DeviceColumn()
-                              else
-                              NavigationRail(
-                                // Settings opens from the top-bar gear, so the
-                                // rail lists the workflow tabs only.
-                                selectedIndex: railIndexFor(selectedTab),
-                                onDestinationSelected: (i) => ref
-                                    .read(selectedTabIndexProvider.notifier)
-                                    .select(i),
-                                labelType: NavigationRailLabelType.all,
-                                destinations: [
-                                  for (final t in _tabs.take(kOptionsTabIndex))
-                                    NavigationRailDestination(
-                                      icon: Icon(t.icon),
-                                      label: Text(t.label),
-                                    ),
-                                ],
-                              ),
-                              // Ara's own border tone, not the theme default —
-                              // which renders as a bright line against the
-                              // near-black nav rail.
-                              const VerticalDivider(
-                                  width: 1,
-                                  thickness: 1,
-                                  color: AraColors.border),
-                              // IndexedStack (not `_tabs[selectedTab].body`) so a tab,
-                              // once built, is KEPT ALIVE and merely hidden when another is
-                              // selected. Critical for the Planning/Sky Atlas tab: its native
-                              // webview must persist — tearing it down on a tab-switch and
-                              // re-creating it reloads the planetarium and loses atlas state.
-                              //
-                              // Lazy build: an unvisited tab renders an empty placeholder
-                              // instead of its real body, so we DON'T run every tab's
-                              // initState at startup (no eager API/poll calls before the
-                              // user even opens that tab). A tab builds the first time it's
-                              // selected (it's in visitedTabsProvider) and stays alive thereafter —
-                              // so the atlas still persists across switches once opened.
-                              Expanded(
-                                child: buildTabStack(
-                                  selected: selectedTab,
-                                  visited: liveTabs,
-                                  bodies: [for (final t in _tabs) t.body],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const _BottomStatusBar(),
+                        // A phone-width window swaps the bars: the
+                        // devices stand in a column here and the tabs
+                        // move to a bottom bar (below).
                         if (narrow)
-                          NavigationBar(
-                            // Settings (from the gear) has no tab here:
-                            // nothing is highlighted while it shows.
-                            selectedIndex: railIndexFor(selectedTab) ?? 0,
-                            indicatorColor: railIndexFor(selectedTab) == null
-                                ? Colors.transparent
-                                : null,
+                          const _DeviceColumn()
+                        else
+                          NavigationRail(
+                            // Settings opens from the top-bar gear, so the
+                            // rail lists the workflow tabs only.
+                            selectedIndex: railIndexFor(selectedTab),
                             onDestinationSelected: (i) => ref
                                 .read(selectedTabIndexProvider.notifier)
                                 .select(i),
+                            labelType: NavigationRailLabelType.all,
                             destinations: [
                               for (final t in _tabs.take(kOptionsTabIndex))
-                                NavigationDestination(
+                                NavigationRailDestination(
                                   icon: Icon(t.icon),
-                                  label: t.label,
+                                  label: Text(t.label),
                                 ),
                             ],
                           ),
+                        // Ara's own border tone, not the theme default —
+                        // which renders as a bright line against the
+                        // near-black nav rail.
+                        const VerticalDivider(
+                          width: 1,
+                          thickness: 1,
+                          color: AraColors.border,
+                        ),
+                        // IndexedStack (not `_tabs[selectedTab].body`) so a tab,
+                        // once built, is KEPT ALIVE and merely hidden when another is
+                        // selected. Critical for the Planning/Sky Atlas tab: its native
+                        // webview must persist — tearing it down on a tab-switch and
+                        // re-creating it reloads the planetarium and loses atlas state.
+                        //
+                        // Lazy build: an unvisited tab renders an empty placeholder
+                        // instead of its real body, so we DON'T run every tab's
+                        // initState at startup (no eager API/poll calls before the
+                        // user even opens that tab). A tab builds the first time it's
+                        // selected (it's in visitedTabsProvider) and stays alive thereafter —
+                        // so the atlas still persists across switches once opened.
+                        Expanded(
+                          child: buildTabStack(
+                            selected: selectedTab,
+                            visited: liveTabs,
+                            bodies: [for (final t in _tabs) t.body],
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                ),
+                  const _BottomStatusBar(),
+                  if (narrow)
+                    NavigationBar(
+                      // Settings (from the gear) has no tab here:
+                      // nothing is highlighted while it shows.
+                      selectedIndex: railIndexFor(selectedTab) ?? 0,
+                      indicatorColor: railIndexFor(selectedTab) == null
+                          ? Colors.transparent
+                          : null,
+                      onDestinationSelected: (i) =>
+                          ref.read(selectedTabIndexProvider.notifier).select(i),
+                      destinations: [
+                        for (final t in _tabs.take(kOptionsTabIndex))
+                          NavigationDestination(
+                            icon: Icon(t.icon),
+                            label: t.label,
+                          ),
+                      ],
+                    ),
+                ],
               ),
             ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -291,25 +285,28 @@ class _TopEquipmentBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (!showChips) const Spacer() else
-          Expanded(
-            // Names only when every named chip fits; otherwise icons only, so
-            // no device is pushed off screen (an iPad in portrait, a phone in
-            // landscape, a narrowed desktop window).
-            child: LayoutBuilder(
-              builder: (context, constraints) => EquipmentChipCompact(
-                compact: constraints.maxWidth <
-                    TopEquipmentChips.count * kEquipmentChipWidth + 16,
-                child: const SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  // Per §25.3 order (most used first); each chip is live (status dot) +
-                  // clickable (routes to its Settings panel). See TopEquipmentChips.
-                  child: TopEquipmentChips(),
+          if (!showChips)
+            const Spacer()
+          else
+            Expanded(
+              // Names only when every named chip fits; otherwise icons only, so
+              // no device is pushed off screen (an iPad in portrait, a phone in
+              // landscape, a narrowed desktop window).
+              child: LayoutBuilder(
+                builder: (context, constraints) => EquipmentChipCompact(
+                  compact:
+                      constraints.maxWidth <
+                      TopEquipmentChips.count * kEquipmentChipWidth + 16,
+                  child: const SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    // Per §25.3 order (most used first); each chip is live (status dot) +
+                    // clickable (routes to its Settings panel). See TopEquipmentChips.
+                    child: TopEquipmentChips(),
+                  ),
                 ),
               ),
             ),
-          ),
           // §61.1 — visible magnifying-glass icon on the right side of the
           // top bar. Opens the same `showCommandPalette` dialog that ⌘K
           // launches; tooltip surfaces the platform-correct shortcut so
@@ -426,19 +423,75 @@ class _DeviceColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const ColoredBox(
-        color: AraColors.bgPanel,
-        child: SingleChildScrollView(
-          padding: EdgeInsets.symmetric(vertical: 4),
-          child: TopEquipmentChips(direction: Axis.vertical),
-        ),
-      );
+    color: AraColors.bgPanel,
+    child: SingleChildScrollView(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: TopEquipmentChips(direction: Axis.vertical),
+    ),
+  );
 }
 
-class _BottomStatusBar extends StatelessWidget {
+/// One status-bar launcher: a full-screen route or an action.
+class _Launcher {
+  const _Launcher(this.label, this.icon, this.open);
+  final String label;
+  final IconData icon;
+  final void Function(BuildContext, WidgetRef) open;
+}
+
+void _push(
+  BuildContext context,
+  Widget screen, {
+  bool fullscreenDialog = false,
+}) => Navigator.of(context).push(
+  MaterialPageRoute<void>(
+    builder: (_) => screen,
+    fullscreenDialog: fullscreenDialog,
+  ),
+);
+
+final _launchers = <_Launcher>[
+  // Image Library (§40), Calibration (§39.10), Stats dashboard (§50),
+  // back to the launchpad (§30), profile wizard (§37).
+  _Launcher(
+    'Image Library',
+    Icons.photo_library_outlined,
+    (c, _) => _push(c, const ImageLibraryScreen()),
+  ),
+  _Launcher(
+    'Calibration',
+    Icons.flare_outlined,
+    (c, _) => _push(c, const CalibrationScreen()),
+  ),
+  _Launcher(
+    'Stats',
+    Icons.insights,
+    (c, _) => _push(c, const StatsDashboardScreen()),
+  ),
+  _Launcher('Launchpad', Icons.rocket_launch_outlined, backToLaunchpad),
+  _Launcher(
+    'Run profile wizard',
+    Icons.tune,
+    (c, _) => _push(c, const WizardShell(), fullscreenDialog: true),
+  ),
+];
+
+// Room the labelled form needs beyond the text: Material 3 button padding
+// (12 left, 16 right), icon (16) and the icon-label gap
+// (8). An icon-only compact button is 40 wide; the More button is a default
+// 48 wide IconButton. The sweep test in app_shell_status_bar_test.dart fails
+// if any of these drift from the real widgets.
+const double _labelExtra = 52;
+const double _iconSlot = 40;
+const double _moreWidth = 48;
+// Notification bell + help button (48 each) + the trailing 4 px.
+const double _tailWidth = 100;
+
+class _BottomStatusBar extends ConsumerWidget {
   const _BottomStatusBar();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       // 40px gives `TextButton.icon` enough breathing room at default
       // and 110% text-scale; 32 was clipping the launchers.
@@ -456,100 +509,101 @@ class _BottomStatusBar extends StatelessWidget {
           const EmergencyStopButton(),
           // §44 — the backup stream's live pulse (hidden while disabled).
           const BackupStreamChip(),
-          // The launcher group owns ALL leftover bar width (no Spacer — a
-          // second flex child would split the space 50/50 with the greedy
-          // scroll view and cap the buttons at half the bar). reverse: true
-          // right-anchors the content when it fits and keeps the right-most
-          // entries (help, wizard) visible when it must scroll, instead of
-          // overflowing the RenderFlex with the striped error banner.
+          // The launcher group takes the width left over and picks its form
+          // from it: labels, then icons, then icons plus a More menu.
           Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              reverse: true,
-              child: Row(
-                children: [
-          // Image Library entry (§40). Full-screen route — captured frames
-          // grouped by session per 12f.1's in-memory demo; real backend in
-          // 12f.2.
-          TextButton.icon(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const ImageLibraryScreen(),
-              ),
-            ),
-            icon: const Icon(Icons.photo_library_outlined, size: 16),
-            label: const Text('Image Library'),
-            style: TextButton.styleFrom(
-              foregroundColor: AraColors.textSecondary,
-              textStyle: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-          // Calibration entry (§39.10). Full-screen route — live calibration
-          // sessions + matching-flats generation + the dark library.
-          TextButton.icon(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const CalibrationScreen(),
-              ),
-            ),
-            icon: const Icon(Icons.flare_outlined, size: 16),
-            label: const Text('Calibration'),
-            style: TextButton.styleFrom(
-              foregroundColor: AraColors.textSecondary,
-              textStyle: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-          // Stats dashboard entry (§50). Full-screen route — overview tiles
-          // + Targets rollup + Best Frames over the library demo data.
-          // Real charts (fl_chart) + per-target detail land in 12g.2/.3.
-          TextButton.icon(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const StatsDashboardScreen(),
-              ),
-            ),
-            icon: const Icon(Icons.insights, size: 16),
-            label: const Text('Stats'),
-            style: TextButton.styleFrom(
-              foregroundColor: AraColors.textSecondary,
-              textStyle: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-          // Back to the launchpad (§30): re-arms the launch gates so the user
-          // can switch server, profile, or offline mode without restarting.
-          const LaunchpadButton(),
-          // Profile wizard entry (§37). Launches the 18-screen wizard as a
-          // full-screen route; per-screen content is being filled in across
-          // Phase 12b follow-up PRs.
-          TextButton.icon(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const WizardShell(),
-                fullscreenDialog: true,
-              ),
-            ),
-            icon: const Icon(Icons.tune, size: 16),
-            label: const Text('Run profile wizard'),
-            style: TextButton.styleFrom(
-              foregroundColor: AraColors.textSecondary,
-              textStyle: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-          // Everything Ara decided while you weren't looking (§46).
-          const NotificationBell(),
-          // Bug-report entry (§54) — wired in a Phase 12a follow-up.
-          IconButton(
-            icon: const Icon(Icons.help_outline, size: 18),
-            tooltip: 'Help & report a bug',
-            onPressed: () => showHelpDialog(context),
-          ),
-          const SizedBox(width: 4),
-                ],
+            child: LayoutBuilder(
+              builder: (context, box) => Align(
+                alignment: Alignment.centerRight,
+                // Below the narrowest form (More + bell + help) the group
+                // scrolls, pinned right so help and the bell stay visible.
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  reverse: true,
+                  child: _launcherGroup(context, ref, box.maxWidth),
+                ),
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _launcherGroup(BuildContext context, WidgetRef ref, double width) {
+    final style = Theme.of(context).textTheme.bodySmall;
+    final labelsWidth = _launchers.fold<double>(0, (sum, l) {
+      final painter = TextPainter(
+        text: TextSpan(text: l.label, style: style),
+        textDirection: TextDirection.ltr,
+        textScaler: MediaQuery.textScalerOf(context),
+      )..layout();
+      final width = painter.width;
+      painter.dispose();
+      return sum + width + _labelExtra;
+    });
+    final labelled = labelsWidth + _tailWidth <= width;
+    final iconSlots = ((width - _tailWidth) / _iconSlot).floor();
+    // Every launcher as an icon, or as many as fit plus a More button.
+    final shown = labelled || iconSlots >= _launchers.length
+        ? _launchers.length
+        : ((width - _tailWidth - _moreWidth) / _iconSlot).floor().clamp(
+            0,
+            _launchers.length,
+          );
+    final overflow = _launchers.sublist(shown);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final l in _launchers.take(shown))
+          labelled
+              ? TextButton.icon(
+                  onPressed: () => l.open(context, ref),
+                  icon: Icon(l.icon, size: 16),
+                  label: Text(l.label),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AraColors.textSecondary,
+                    textStyle: style,
+                  ),
+                )
+              : IconButton(
+                  icon: Icon(l.icon, size: 16),
+                  tooltip: l.label,
+                  visualDensity: VisualDensity.compact,
+                  color: AraColors.textSecondary,
+                  onPressed: () => l.open(context, ref),
+                ),
+        if (overflow.isNotEmpty)
+          PopupMenuButton<String>(
+            tooltip: 'More',
+            icon: const Icon(Icons.more_horiz, size: 18),
+            onSelected: (label) =>
+                overflow.firstWhere((l) => l.label == label).open(context, ref),
+            itemBuilder: (_) => [
+              for (final l in overflow)
+                PopupMenuItem<String>(
+                  value: l.label,
+                  child: Row(
+                    children: [
+                      Icon(l.icon, size: 16),
+                      const SizedBox(width: 8),
+                      Text(l.label),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        // Everything Ara decided while you weren't looking (§46).
+        const NotificationBell(),
+        // Bug-report entry (§54) — wired in a Phase 12a follow-up.
+        IconButton(
+          icon: const Icon(Icons.help_outline, size: 18),
+          tooltip: 'Help & report a bug',
+          onPressed: () => showHelpDialog(context),
+        ),
+        const SizedBox(width: 4),
+      ],
     );
   }
 }
