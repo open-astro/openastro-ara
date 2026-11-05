@@ -1301,6 +1301,57 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_late_meridian_report_after_the_run_ended_leaves_no_reason() {
+            // #1596 review — Progress<T> posts to the pool, so a queued wait report can land after the terminal clear.
+            var coords = new OpenAstroAra.Astrometry.Coordinates(
+                OpenAstroAra.Astrometry.Angle.ByHours(5), OpenAstroAra.Astrometry.Angle.ByDegree(20),
+                OpenAstroAra.Astrometry.Epoch.J2000);
+            var telescope = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>();
+            telescope.Setup(t => t.GetCurrentPosition()).Returns(coords);
+            telescope.Setup(t => t.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyTelescope.TelescopeInfo {
+                Connected = true, TrackingEnabled = true, TimeToMeridianFlip = 0, Coordinates = coords,
+            });
+            IProgress<OpenAstroAra.Core.Model.ApplicationStatus>? captured = null;
+            var executor = new Mock<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor>();
+            executor
+                .Setup(x => x.MeridianFlip(It.IsAny<OpenAstroAra.Astrometry.Coordinates>(), It.IsAny<TimeSpan>(),
+                    It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Returns(async (OpenAstroAra.Astrometry.Coordinates _, TimeSpan _, IProgress<OpenAstroAra.Core.Model.ApplicationStatus> p, CancellationToken t) => {
+                    captured = p;
+                    p.Report(new OpenAstroAra.Core.Model.ApplicationStatus { Source = MeridianFlipExecutor.WaitSource, Status = "Passing meridian — 00:10:00" });
+                    await Task.Delay(Timeout.Infinite, t);
+                    return true;
+                });
+            var profile = new HeadlessProfileService();
+            profile.ActiveProfile.MeridianFlipSettings.UseSideOfPier = false;
+            var factory = HeadlessSequencerFactory.WithDefaults(
+                telescopeMediator: telescope.Object, profileService: profile, meridianFlipExecutor: executor.Object);
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Triggers.Add(new OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger(
+                    profile, telescope.Object, executor.Object));
+                c.Items.Add(new Annotation { Name = "after the flip" });
+            }, factory), factory: factory);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            SequenceRunStateDto? during = null;
+            for (var i = 0; i < 250 && during?.ReasonCode is null; i++) {
+                during = await svc.GetRunStateAsync(id, CancellationToken.None);
+                await Task.Delay(20);
+            }
+            await svc.StopAsync(id, null, CancellationToken.None);
+            var done = await WaitForTerminalAsync(svc, id);
+            Assert.That(done!.State, Is.EqualTo(SequenceRunState.Stopped));
+
+            captured!.Report(new OpenAstroAra.Core.Model.ApplicationStatus { Source = MeridianFlipExecutor.WaitSource, Status = "Passing meridian — 00:09:59" });
+            await Task.Delay(300);
+
+            var after = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(after!.ReasonCode, Is.Null, "a run that ended is not waiting on the meridian");
+            Assert.That(after.ReasonText, Is.Null);
+        }
+
+        [Test]
         public async Task Failed_meridian_flip_pauses_the_run_awaiting_user_and_resume_reattempts_the_flip() {
             // §58.12 END-TO-END through the real engine: a MeridianFlipTrigger whose
             // executor fails arms the pause gate as AwaitingUser → the run suspends

@@ -1592,7 +1592,13 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         private string? _reasonText;
 
         public void SetReason(string? code, string? text) {
-            lock (_gate) { (_reasonCode, _reasonText) = code is null ? (null, null) : (code, text); }
+            lock (_gate) {
+                // #1596 — progress reports are posted to the pool and can land after the run ended; a clear always applies.
+                if (code is not null && (IsTerminal(State) || State == SequenceRunState.Aborting)) {
+                    return;
+                }
+                (_reasonCode, _reasonText) = code is null ? (null, null) : (code, text);
+            }
         }
 
         public void MarkCompleted() {
