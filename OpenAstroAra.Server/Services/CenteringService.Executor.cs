@@ -57,7 +57,7 @@ public sealed partial class CenteringService : ICenteringExecutor {
     }
 
     /// <inheritdoc/>
-    public async Task<bool> CenterAndRotateAsync(Coordinates target, double positionAngleDeg,
+    public async Task<CenteringResult> CenterAndRotateAsync(Coordinates target, double positionAngleDeg,
             IProgress<ApplicationStatus> progress, CancellationToken token) {
         ArgumentNullException.ThrowIfNull(target);
         var rotator = rotatorMediator ?? throw new PlateSolverConfigurationException(
@@ -65,16 +65,16 @@ public sealed partial class CenteringService : ICenteringExecutor {
         await _centeringGate.WaitAsync(token);
         try {
             if (!await SlewToTargetAsync(target, token)) {
-                return false;
+                return CenteringResult.Failed(CenteringStep.Slew);
             }
             // NINA's rotate-first order (Center&Rotate): settle the position angle before the
             // centre — a rotator move shifts the field centre on off-axis rigs, so rotating
             // after centring would immediately un-centre what the loop just converged.
             if (!await RotateToPositionAngleAsync(rotator, positionAngleDeg, token)) {
-                return false;
+                return CenteringResult.Failed(CenteringStep.Rotate);
             }
             var result = await CenterCoreAsync(target, solveProgress: null, progress, token);
-            return result.Success;
+            return result.Success ? CenteringResult.Ok : CenteringResult.Failed(CenteringStep.Centre);
         } finally {
             _centeringGate.Release();
         }

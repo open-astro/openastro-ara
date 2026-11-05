@@ -102,7 +102,7 @@ namespace OpenAstroAra.Test {
                     seenTarget = c;
                     seenAngle = pa;
                 })
-                .ReturnsAsync(true);
+                .ReturnsAsync(CenteringResult.Ok);
 
             var target = SomeTarget();
             var item = new CenterAndRotate(executor.Object, Rotator(connected: true).Object) {
@@ -117,16 +117,21 @@ namespace OpenAstroAra.Test {
                 Times.Never, "the combined path owns both halves — no separate centre call");
         }
 
-        [Test]
-        public async Task An_unconverged_rotate_or_centre_fails_the_instruction() {
-            // A mis-rotated or un-centred target would quietly ruin every subsequent frame.
+        // A mis-rotated or un-centred target would quietly ruin every subsequent frame, so each
+        // failed step fails the instruction with text naming the step and what to check.
+        [TestCase(CenteringStep.Slew, "slew", "mount", "target altitude")]
+        [TestCase(CenteringStep.Rotate, "rotation", "rotator", "rotation tolerance")]
+        [TestCase(CenteringStep.Centre, "centring", "plate solve", "centring threshold")]
+        public async Task A_failed_step_fails_the_instruction_naming_the_step_and_what_to_check(
+                CenteringStep step, string stepWord, string check1, string check2) {
             var executor = new Mock<ICenteringExecutor>();
             executor.Setup(e => e.CenterAndRotateAsync(It.IsAny<Coordinates>(), It.IsAny<double>(),
                     It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(false);
+                .ReturnsAsync(CenteringResult.Failed(step));
             var item = new CenterAndRotate(executor.Object, Rotator(connected: true).Object) { Coordinates = SomeTarget() };
-            await Assert.ThrowsAsync<SequenceEntityFailedException>(
+            var ex = await Assert.ThrowsAsync<SequenceEntityFailedException>(
                 () => item.Execute(NoProgress, CancellationToken.None));
+            Assert.That(ex!.Message, Does.Contain(stepWord).And.Contain(check1).And.Contain(check2));
         }
 
         [Test]

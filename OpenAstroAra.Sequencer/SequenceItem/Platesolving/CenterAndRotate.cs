@@ -95,11 +95,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Platesolving {
                 // §38 rotation fidelity — the executor rotates to the plan's position angle
                 // (solve → sync → folded relative move, rotate-first like NINA) then centres.
                 Logger.Info($"Center-and-rotate: rotating to position angle {PositionAngle}° then centering on {target}");
-                var ok = await centeringExecutor.CenterAndRotateAsync(target, PositionAngle, progress, token);
-                if (!ok) {
+                var result = await centeringExecutor.CenterAndRotateAsync(target, PositionAngle, progress, token);
+                if (!result.Success) {
                     // A mis-rotated or un-centred target would quietly ruin every subsequent frame.
-                    throw new SequenceEntityFailedException(
-                        "Center-and-rotate did not converge within the profile's rotation tolerance / centering threshold and attempts.");
+                    throw new SequenceEntityFailedException(FailureText(result.FailedStep));
                 }
                 return;
             }
@@ -109,9 +108,22 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Platesolving {
             var converged = await centeringExecutor.CenterAsync(target, progress, token);
             if (!converged) {
                 // An un-centred target would quietly ruin every subsequent frame.
-                throw new SequenceEntityFailedException("Centering did not converge within the profile's threshold/attempts.");
+                throw new SequenceEntityFailedException(
+                    "Centering failed (the slew or the centre loop; the executor does not say which). "
+                    + SlewCheck + " " + CentreCheck);
             }
         }
+
+        private const string SlewCheck = "Check the mount (connected, unparked, not at a limit) and the target altitude (above the horizon).";
+        private const string CentreCheck = "Check the plate solve (solver set up, focus, exposure) and the centring threshold and attempts.";
+
+        // The text is the run's failure text: name the step that failed and what to check.
+        private static string FailureText(CenteringStep step) => step switch {
+            CenteringStep.Slew => "Center-and-rotate failed at the slew to the target: the mount refused it. " + SlewCheck,
+            CenteringStep.Rotate => "Center-and-rotate failed at the rotation step: the plate solve failed or the rotator did not reach the position angle within the rotation tolerance. "
+                + "Check the rotator (connected, moving, rotation tolerance) and the plate solve (solver set up, focus, exposure).",
+            _ => "Center-and-rotate failed at the centring step: the target did not centre. " + CentreCheck,
+        };
 
         public override object Clone() {
             return new CenterAndRotate(centeringExecutor, rotatorMediator) {

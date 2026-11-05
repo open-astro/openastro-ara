@@ -50,10 +50,19 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Platesolving {
         /// move by the folded delta, looping until within the profile's rotation tolerance —
         /// NINA's rotate-first order), then centre on <paramref name="target"/> exactly like
         /// <see cref="CenterAsync"/>. A 180°-rotated field is the same framing, so deltas fold
-        /// into (-90°, +90°]. Returns false when either half fails to converge within the
-        /// profile's attempts or the slew fails; throws for unrecoverable failures (no solver, no rotator wired).
+        /// into (-90°, +90°]. Returns a failed <see cref="CenteringResult"/> naming the step when the slew is refused or either half fails to converge within the
+        /// profile's attempts; throws for unrecoverable failures (no solver, no rotator wired).
         /// </summary>
-        Task<bool> CenterAndRotateAsync(Coordinates target, double positionAngleDeg,
+        Task<CenteringResult> CenterAndRotateAsync(Coordinates target, double positionAngleDeg,
             IProgress<ApplicationStatus> progress, CancellationToken token);
+    }
+
+    /// <summary>The step of a Center &amp; Rotate that failed.</summary>
+    public enum CenteringStep { None, Slew, Rotate, Centre }
+
+    /// <summary>Outcome of <see cref="ICenteringExecutor.CenterAndRotateAsync"/>: success, or the step that failed.</summary>
+    public readonly record struct CenteringResult(bool Success, CenteringStep FailedStep = CenteringStep.None) {
+        public static readonly CenteringResult Ok = new(true);
+        public static CenteringResult Failed(CenteringStep step) => new(false, step);
     }
 }

@@ -22,6 +22,7 @@ using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.PlateSolving;
 using OpenAstroAra.PlateSolving.Interfaces;
 using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Sequencer.SequenceItem.Platesolving;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
@@ -223,7 +224,7 @@ namespace OpenAstroAra.Test {
 
             var ok = await sut.CenterAndRotateAsync(Target, 0.0, NoProgress, CancellationToken.None);
 
-            Assert.That(ok, Is.True);
+            Assert.That(ok.Success, Is.True);
             Assert.That(seen, Is.Not.Null);
             Assert.That(seen!.FocalLength, Is.EqualTo(448 * 0.8).Within(1e-9), "reducer folded in, as for the centre solve");
             Assert.That(seen.PixelSize, Is.EqualTo(3.76));
@@ -243,7 +244,7 @@ namespace OpenAstroAra.Test {
 
             var ok = await sut.CenterAndRotateAsync(Target, 10.0, NoProgress, CancellationToken.None);
 
-            Assert.That(ok, Is.True);
+            Assert.That(ok.Success, Is.True);
             Assert.That(h.Calls, Is.EqualTo(SlewRotateCentre));
             Assert.That(slewedTo, Is.SameAs(Target));
         }
@@ -257,7 +258,7 @@ namespace OpenAstroAra.Test {
 
             var ok = await sut.CenterAndRotateAsync(Target, 0.0, NoProgress, CancellationToken.None);
 
-            Assert.That(ok, Is.False);
+            Assert.That(ok, Is.EqualTo(CenteringResult.Failed(CenteringStep.Slew)));
             Assert.That(h.Calls, Is.Empty, "no solve, rotation or centre off target");
             h.Rotator.VerifyNoOtherCalls();
         }
@@ -293,7 +294,7 @@ namespace OpenAstroAra.Test {
 
             var ok = await sut.CenterAndRotateAsync(Target, 137.5, NoProgress, CancellationToken.None);
 
-            Assert.That(ok, Is.True);
+            Assert.That(ok.Success, Is.True);
             h.Rotator.Verify(r => r.Sync(137.6f), Times.Once, "the solved angle feeds the rotator's sky frame");
             h.Rotator.Verify(r => r.MoveRelative(It.IsAny<float>(), It.IsAny<CancellationToken>()), Times.Never);
             h.CenteringSolver.Verify(s => s.Center(It.IsAny<CaptureSequence>(), It.IsAny<CenterSolveParameter>(),
@@ -309,7 +310,7 @@ namespace OpenAstroAra.Test {
 
             var ok = await sut.CenterAndRotateAsync(Target, 10.0, NoProgress, CancellationToken.None);
 
-            Assert.That(ok, Is.True);
+            Assert.That(ok.Success, Is.True);
             h.Rotator.Verify(r => r.MoveRelative(It.Is<float>(d => Math.Abs(d - 20f) < 1e-3), It.IsAny<CancellationToken>()),
                 Times.Once);
             h.CaptureSolver.Verify(s => s.Solve(It.IsAny<CaptureSequence>(), It.IsAny<CaptureSolverParameter>(),
@@ -326,7 +327,7 @@ namespace OpenAstroAra.Test {
 
             var ok = await sut.CenterAndRotateAsync(Target, 0.0, NoProgress, CancellationToken.None);
 
-            Assert.That(ok, Is.False);
+            Assert.That(ok, Is.EqualTo(CenteringResult.Failed(CenteringStep.Rotate)));
             h.Rotator.Verify(r => r.MoveRelative(It.IsAny<float>(), It.IsAny<CancellationToken>()), Times.Exactly(10),
                 "exactly MaxRotationMoves moves, the last solve verify-only");
             h.CenteringSolver.Verify(s => s.Center(It.IsAny<CaptureSequence>(), It.IsAny<CenterSolveParameter>(),
@@ -345,9 +346,23 @@ namespace OpenAstroAra.Test {
 
             var ok = await sut.CenterAndRotateAsync(Target, 0.0, NoProgress, CancellationToken.None);
 
-            Assert.That(ok, Is.False);
+            Assert.That(ok, Is.EqualTo(CenteringResult.Failed(CenteringStep.Rotate)));
             h.Rotator.Verify(r => r.MoveRelative(It.IsAny<float>(), It.IsAny<CancellationToken>()), Times.Never,
                 "an unverifiable position angle must never drive a move");
+        }
+
+        [Test]
+        public async Task CenterAndRotate_reports_the_centre_step_when_centring_does_not_converge() {
+            var h = new RotateHarness(rotationTolerance: 0.5, solvedAngles: 0.0);
+            h.CenteringSolver
+                .Setup(s => s.Center(It.IsAny<CaptureSequence>(), It.IsAny<CenterSolveParameter>(),
+                    It.IsAny<IProgress<PlateSolveProgress>>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PlateSolveResult { Success = false });
+            using var sut = h.CreateSUT();
+
+            var ok = await sut.CenterAndRotateAsync(Target, 0.0, NoProgress, CancellationToken.None);
+
+            Assert.That(ok, Is.EqualTo(CenteringResult.Failed(CenteringStep.Centre)));
         }
 
         [Test]
