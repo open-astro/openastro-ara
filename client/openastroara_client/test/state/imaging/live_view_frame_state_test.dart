@@ -60,6 +60,12 @@ ProviderContainer _container(SavedServerService servers, LiveViewClient client) 
       liveViewApiFactoryProvider.overrideWithValue((_) => client),
     ]);
 
+class _ServerPick extends Notifier<AraServer?> {
+  @override
+  AraServer? build() => const AraServer(hostname: 'a', port: 5555);
+  void set(AraServer? s) => state = s;
+}
+
 void main() {
   final jpegA = Uint8List.fromList([1, 2, 3]);
   final jpegB = Uint8List.fromList([4, 5, 6]);
@@ -169,5 +175,75 @@ void main() {
     expect(s.active, isFalse);
     expect(s.error, contains('boom'));
     expect(client.calls, contains('close'));
+  });
+
+  group('server switch (#1587)', () {
+    const a = AraServer(hostname: 'a', port: 5555);
+    const b = AraServer(hostname: 'b', port: 5555);
+    final active = NotifierProvider<_ServerPick, AraServer?>(_ServerPick.new);
+
+    ({ProviderContainer c, _FakeLiveViewClient ca, _FakeLiveViewClient cb}) rig() {
+      final ca = _FakeLiveViewClient([LiveFrame(jpegA, 1, 7)])..activeOnServer = true;
+      final cb = _FakeLiveViewClient([LiveFrame(jpegB, 1, 9)]);
+      final c = ProviderContainer(overrides: [
+        activeServerProvider.overrideWith((ref) => ref.watch(active)),
+        liveViewApiFactoryProvider.overrideWithValue((s) => s == a ? ca : cb),
+      ]);
+      addTearDown(c.dispose);
+      return (c: c, ca: ca, cb: cb);
+    }
+
+    test('loop on A, switch to B: A is no longer polled or called, B is asked', () {
+      fakeAsync((async) {
+        final r = rig();
+        r.c.read(liveViewFrameProvider);
+        async.flushMicrotasks();
+        async.elapse(const Duration(milliseconds: 300));
+        expect(r.c.read(liveViewFrameProvider).active, isTrue);
+        final before = r.ca.calls.length;
+
+        r.c.read(active.notifier).set(b);
+        async.flushMicrotasks();
+        async.elapse(const Duration(seconds: 2));
+
+        expect(r.ca.calls.skip(before), ['close'], reason: 'closed, never stopped or polled');
+        expect(r.cb.calls, contains('isActive'));
+        expect(r.c.read(liveViewFrameProvider).active, isFalse);
+        expect(r.c.read(liveViewControllerProvider), isFalse);
+      });
+    });
+
+    test('B reports an active loop: state active and B is polled', () {
+      fakeAsync((async) {
+        final r = rig();
+        r.cb.activeOnServer = true;
+        r.c.read(liveViewFrameProvider);
+        async.flushMicrotasks();
+        r.c.read(active.notifier).set(b);
+        async.flushMicrotasks();
+        async.elapse(const Duration(seconds: 1));
+        expect(r.cb.calls, contains('isActive'));
+        final s = r.c.read(liveViewFrameProvider);
+        expect(s.active, isTrue);
+        expect(s.session, 9, reason: 'the frame came from B');
+        expect(r.c.read(liveViewControllerProvider), isTrue);
+      });
+    });
+
+    test('switch to null: idle, no further requests', () {
+      fakeAsync((async) {
+        final r = rig();
+        r.c.read(liveViewFrameProvider);
+        async.flushMicrotasks();
+        final before = r.ca.calls.length;
+        r.c.read(active.notifier).set(null);
+        async.flushMicrotasks();
+        async.elapse(const Duration(seconds: 2));
+        expect(r.ca.calls.skip(before), ['close']);
+        expect(r.cb.calls, isEmpty);
+        expect(r.c.read(liveViewFrameProvider).active, isFalse);
+        expect(r.c.read(liveViewControllerProvider), isFalse);
+      });
+    });
   });
 }
