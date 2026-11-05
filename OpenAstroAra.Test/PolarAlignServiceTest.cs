@@ -559,6 +559,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_mount_tracking_at_start_that_drops_mid_turn_is_turned_back_on_and_left_on() {
+            var paCalls = new ConcurrentQueue<bool>();
+            var (fake, tool) = StartFake(paCalls);
+            await using var _f = fake;
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var mount = NewMount(tracking: true, trackingSticks: false);
+            using var svc = NewService(guider, mount);
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await WaitForRpcAsync(fake, "staticpa_get_status", atLeast: 10).ConfigureAwait(false);
+
+            mount.Verify(m => m.SetTrackingEnabled(true), Times.AtLeastOnce, "the drop is re-asserted");
+            tool.Calc();
+            await PollStateAsync(svc, "adjusting").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            mount.Verify(m => m.SetTrackingEnabled(false), Times.Never, "it was tracking when the user started: left on");
+        }
+
+        [Test]
         public async Task A_mount_already_tracking_is_left_alone() {
             var paCalls = new ConcurrentQueue<bool>();
             var (fake, _) = StartFake(paCalls);
