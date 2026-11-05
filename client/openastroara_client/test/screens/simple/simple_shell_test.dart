@@ -1558,6 +1558,33 @@ void main() {
       expect(container.read(simpleMessagesProvider), isEmpty);
       expect(find.byType(SimpleRunSheet), findsNothing);
     });
+
+    testWidgets('a gain-only change asks too: Save would store it', (tester) async {
+      final container = await edit(tester);
+      final seeded = container.read(simpleRunGainProvider);
+      container.read(simpleRunGainProvider.notifier).set((seeded ?? 100) + 50);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      expect(find.text('Discard changes to M31?'), findsOneWidget);
+      expect(find.byType(SimpleRunSheet), findsOneWidget, reason: 'the sheet stays');
+    });
+
+    testWidgets('the question goes when the sheet closes another way (Cancel), so Discard cannot replay an old tap', (tester) async {
+      final container = await edit(tester);
+      container.read(simpleRunPlanProvider.notifier).setFrames(0, 5);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      expect(find.text('Discard changes to M31?'), findsOneWidget);
+      final cancel = find.descendant(of: find.byType(SimpleRunSheet), matching: find.text('Cancel'));
+      await tester.ensureVisible(cancel);
+      await tester.tap(cancel);
+      await tester.pump();
+      expect(find.byType(SimpleRunSheet), findsNothing);
+      expect(find.text('Discard changes to M31?'), findsNothing, reason: 'no question left over the closed sheet');
+      expect(container.read(simpleMessagesProvider), isEmpty);
+    });
   });
 
   testWidgets('the plan square hugs the bottom-right corner, above Stop (no bottom row)', (tester) async {
