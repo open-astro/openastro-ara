@@ -108,9 +108,9 @@ namespace OpenAstroAra.Sequencer.Conditions {
 
         private DateTime lastCutOffTime;
 
-        // #1576: the plain-time target resolved at the first Check of a run. Held so the condition
-        // expires at that time instead of rolling over to tomorrow; cleared by ResetProgress and
-        // by any edit of the time.
+        // #1576: the plain-time target resolved when the run starts (SequenceBlockInitialize). Held so
+        // the condition expires at that time instead of rolling over to tomorrow; Check and the
+        // watchdog only read it. Cleared by ResetProgress and by any edit of the time.
         private DateTime? heldTarget;
 
         [JsonProperty]
@@ -235,9 +235,6 @@ namespace OpenAstroAra.Sequencer.Conditions {
         public override bool Check(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             var nextItemDuration = nextItem?.GetEstimatedDuration() ?? TimeSpan.Zero;
             var remainingTime = CalculateRemainingTime();
-            if (!HasFixedTimeProvider) {
-                heldTarget = remainingTime;
-            }
 
             var hasTimeRemaining = DateTime.Now + nextItemDuration <= remainingTime;
             if (lastCutOffTime >= remainingTime) {
@@ -257,6 +254,14 @@ namespace OpenAstroAra.Sequencer.Conditions {
                 Logger.Info($"{nameof(TimeCondition)} finished.");
             }
             return hasTimeRemaining;
+        }
+
+        public override void SequenceBlockInitialize() {
+            base.SequenceBlockInitialize();
+            if (!HasFixedTimeProvider) {
+                heldTarget = null;
+                heldTarget = CalculateRemainingTime();
+            }
         }
 
         public override string ToString() {
