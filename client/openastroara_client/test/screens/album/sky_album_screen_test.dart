@@ -35,8 +35,9 @@ Future<ProviderContainer> _pump(
   List<PlanningDso> tonight = const [],
   void Function(PlanningDso)? onImageTarget,
   AlbumFetcher? fetcher,
+  Size size = const Size(1200, 1600),
 }) async {
-  tester.view.physicalSize = const Size(1200, 1600);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final container = ProviderContainer(
@@ -234,5 +235,13 @@ void main() {
     final row = tester.getCenter(find.byType(SegmentedButton<AlbumFilter>)).dy;
     expect(tester.getCenter(find.text('1 / 3 collected')).dy, closeTo(row, 4));
     expect(tester.getCenter(find.text('Gold 0')).dy, closeTo(row, 4));
+  });
+
+  testWidgets('a phone puts the filter under the count and tier counts', (tester) async {
+    await _pump(tester, frames: _m31Frames, size: const Size(400, 900));
+    final countRow = tester.getCenter(find.text('1 / 3 collected')).dy;
+    expect(tester.getCenter(find.text('Gold 0')).dy, closeTo(countRow, 4));
+    expect(tester.getTopLeft(find.byType(SegmentedButton<AlbumFilter>)).dy,
+        greaterThan(tester.getBottomLeft(find.text('1 / 3 collected')).dy));
   });
 }

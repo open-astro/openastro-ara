@@ -123,7 +123,12 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
       appBar: AppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
-          children: [const Icon(albumIcon), const SizedBox(width: 8), Text(l.albumTitle)],
+          // The Book switch takes the bar's width on a phone; the title gives way, not overflows.
+          children: [
+            const Icon(albumIcon),
+            const SizedBox(width: 8),
+            Flexible(child: Text(l.albumTitle, overflow: TextOverflow.ellipsis)),
+          ],
         ),
         actions: [
           Padding(
