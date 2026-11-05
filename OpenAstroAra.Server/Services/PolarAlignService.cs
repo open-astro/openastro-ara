@@ -381,7 +381,9 @@ namespace OpenAstroAra.Server.Services {
         private async Task KeepTrackingOnWhileAligningAsync(CancellationToken ct) {
             if (_mount.GetInfo() is { TrackingEnabled: false }) {
                 LogTrackingDropped();
-                await TurnTrackingOnAsync(ct).ConfigureAwait(false);
+                if (!await TurnTrackingOnAsync(ct).ConfigureAwait(false)) {
+                    LogTrackingReassertFailed(); // the guider's next slew will refuse; its fit_failed follows
+                }
             }
         }
 
@@ -759,5 +761,8 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4550, Level = LogLevel.Warning, Message = "§45 polar-align tracking dropped while the guider was still rotating the mount — turning it back on")]
         private partial void LogTrackingDropped();
+
+        [LoggerMessage(EventId = 4551, Level = LogLevel.Warning, Message = "§45 polar-align could not turn tracking back on during the guider's RA turn — the guider's next slew will be refused")]
+        private partial void LogTrackingReassertFailed();
     }
 }
