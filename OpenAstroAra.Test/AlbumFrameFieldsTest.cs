@@ -93,6 +93,36 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_backfill_leaves_a_frame_Ara_captured_as_the_capture_stored_it() {
+            // Review of #1523: a captured row was never marked probed, so the next boot re-read it from
+            // its header, whose OBJCTRA is rounded to whole seconds and whose XPIXSZ follows the
+            // requested bin, and overwrote the exact values (bumping updated_utc for the whole night).
+            var profile = new InMemoryProfileStore();
+            profile.PutOpticsSettings(profile.GetOpticsSettings() with { FocalLengthMm = 500, ReducerFactor = 0.8, PixelSizeUm = 3.76 });
+            using var camera = new CameraService(frames: _repo, profileStore: profile);
+            var path = Path.Combine(_store, "captured.fits");
+            WriteFits(path, h => {
+                h.SetHeader("SWCREATE", "OpenAstro Ara");
+                h.SetHeader("OBJCTRA", "00 42 44");
+                h.SetHeader("OBJCTDEC", "+41 16 12");
+                h.SetHeader("EQUINOX", 2000.0);
+                h.SetHeader("FOCALLEN", 400.0);
+                h.SetHeader("XPIXSZ", 7.52); // the requested bin 2; the driver applied bin 1
+            });
+            var id = Guid.NewGuid();
+            await camera.RegisterFrameAsync(id, new ExposureRequestDto(180, 100, BinX: 2, BinY: 2), FrameType.Light, "M31",
+                Captured, path, 4, 4, appliedBin: 1, pointing: new CameraService.FramePointing(0.71234567, 41.2701234, Epoch.J2000));
+            var before = (await _repo.GetAsync(id, CancellationToken.None))!;
+            var stamp = await ScalarAsync("SELECT updated_utc FROM frames WHERE id = $p;", id.ToString());
+
+            await _scan.BackfillAlbumFieldsAsync(CancellationToken.None);
+
+            var after = (await _repo.GetAsync(id, CancellationToken.None))!;
+            Assert.That((after.RaDeg, after.DecDeg, after.PixelScaleArcsec), Is.EqualTo((before.RaDeg, before.DecDeg, before.PixelScaleArcsec)));
+            Assert.That(await ScalarAsync("SELECT updated_utc FROM frames WHERE id = $p;", id.ToString()), Is.EqualTo(stamp));
+        }
+
+        [Test]
         public async Task The_repository_round_trips_the_album_fields() {
             var id = Guid.NewGuid();
             await _repo.InsertAsync(Frame(id, "x.fits") with { RaDeg = 10.68, DecDeg = 41.27, PixelScaleArcsec = 1.56, CapturedByAra = true },

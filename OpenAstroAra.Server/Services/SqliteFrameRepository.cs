@@ -468,7 +468,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                  hfr, star_count, eccentricity, guiding_rms_arcsec, snr_estimate,
                  quality_score_json, rating, tags_json, focuser_position,
                  background_adu, median_adu, bin, rotator_mechanical_deg, cooler_setpoint_c,
-                 ra_deg, dec_deg, pixel_scale_arcsec, captured_by_ara, updated_utc)
+                 ra_deg, dec_deg, pixel_scale_arcsec, captured_by_ara, updated_utc, pointing_probed_utc)
             VALUES
                 ($id, $session_id, $target_name, $frame_type, $filter_name,
                  $exposure_seconds, $gain, $offset, $temperature_c, $captured_utc,
@@ -476,7 +476,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                  $hfr, $star_count, $eccentricity, $guiding_rms_arcsec, $snr_estimate,
                  $quality_score_json, $rating, $tags_json, $focuser_position,
                  $background_adu, $median_adu, $bin, $rotator_mechanical_deg, $cooler_setpoint_c,
-                 $ra_deg, $dec_deg, $pixel_scale_arcsec, $captured_by_ara, $updated_utc);
+                 $ra_deg, $dec_deg, $pixel_scale_arcsec, $captured_by_ara, $updated_utc, $probed_utc);
             """;
         cmd.Parameters.AddWithValue("$id", f.Id.ToString());
         cmd.Parameters.AddWithValue("$session_id", f.SessionId.ToString());
@@ -514,7 +514,11 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         cmd.Parameters.AddWithValue("$dec_deg", DbValue(f.DecDeg));
         cmd.Parameters.AddWithValue("$pixel_scale_arcsec", DbValue(f.PixelScaleArcsec));
         cmd.Parameters.AddWithValue("$captured_by_ara", f.CapturedByAra is bool ara ? (ara ? 1 : 0) : DBNull.Value);
-        cmd.Parameters.AddWithValue("$updated_utc", DateTimeOffset.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
+        var now = DateTimeOffset.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+        cmd.Parameters.AddWithValue("$updated_utc", now);
+        // A frame Ara captured already holds exact values; its header is a lossy copy (OBJCTRA rounded
+        // to whole seconds, XPIXSZ from the requested bin), so the startup backfill must not re-read it.
+        cmd.Parameters.AddWithValue("$probed_utc", f.CapturedByAra == true ? now : DBNull.Value);
         await cmd.ExecuteNonQueryAsync(ct);
         // The session's running count (it stayed 0 for every session until now).
         await using var bump = conn.CreateCommand();
