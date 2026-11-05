@@ -117,6 +117,7 @@ void main() {
       expect(s81.integrationHours, closeTo(4200 / 3600, 1e-9));
       expect(s81.firstCaptureUtc, DateTime.utc(2026, 3, 1));
       expect(s81.bestFrameId, 'late', reason: 'equal scores: the later capture wins');
+      expect(s81.bestScore, 0.9);
       expect(s81.profileId, 'p2');
       expect(s81.filters, ['L', 'Ha'], reason: 'distinct, in capture order');
       expect(s81.tier, AlbumTier.silver);

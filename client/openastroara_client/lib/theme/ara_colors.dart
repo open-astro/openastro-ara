@@ -69,6 +69,12 @@ class AraColors {
   /// semantic for warning surfaces (e.g. "reachable, but unverified").
   static const accentWarning = Color(0xFFFFB300);
 
+  // Sky Album tiers: a category hue per Card tier, each 5:1 or better on
+  // Panel Grey and Night Floor (the tier name is written in it).
+  static const tierBronze = Color(0xFFCD853F);
+  static const tierSilver = Color(0xFFC0C0C0);
+  static const tierGold = Color(0xFFFFD54F);
+
   // Selection / buttons
   static const selectionBg = Color(0xFF1976D2);
 
