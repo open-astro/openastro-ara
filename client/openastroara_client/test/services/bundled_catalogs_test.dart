@@ -269,5 +269,13 @@ void main() {
       expect(searchSuggestions(bundle, 'M45').first.dso.messierNum, 45);
       expect(searchSuggestions(bundle, 'C14').first.dso.caldwellNum, 14);
     });
+
+    test('Tonight\'s Sky gains every new card but M40 and C41 (spec, Catalog data fix)', () {
+      final planned = {for (final d in planningCull(bundle)) d.id};
+      // M40 is a double star and C41 an open cluster with no magnitude: both culled.
+      expect(planned, isNot(contains('M040')));
+      expect(planned, isNot(contains('C041')));
+      expect(planned, containsAll(['Mel022', 'C099', 'NGC0869', 'NGC5866', 'Sh2-155']));
+    });
   });
 }
