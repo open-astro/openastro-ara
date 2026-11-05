@@ -340,6 +340,9 @@ public sealed class SqliteStatsService : IStatsService {
             WHERE f.frame_type = 'light' AND f.captured_by_ara = 1
             """;
         if (since.HasValue) {
+            // A text comparison: every writer stores updated_utc as UtcNow.ToString("O") (7 digits,
+            // +00:00) and SqliteUtcBound writes the bound the same way. A writer using Z or a local
+            // offset would break the ordering.
             sql += " AND f.updated_utc > $since";
             cmd.Parameters.AddWithValue("$since", SqliteUtcBound(since.Value));
         }
