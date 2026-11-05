@@ -65,5 +65,17 @@ A Card at bronze Tier or better.
 _Avoid_: imaged, done
 
 **Tier**:
-Bronze, silver or gold, derived from the lights that contain the object.
+Bronze, silver or gold, derived from the lights the Card has recorded.
 _Avoid_: rank, level
+
+**Art**:
+The premade picture on a Card's front, never the user's capture.
+_Avoid_: thumbnail, photo, image
+
+**Night**:
+The observing night a light belongs to: anything before local noon at the site counts as the previous evening.
+_Avoid_: date, day
+
+**Placeholder**:
+What a Card shows when it has no Art.
+_Avoid_: silhouette, fallback
