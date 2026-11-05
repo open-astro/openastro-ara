@@ -62,6 +62,7 @@ public interface IStatsService {
     Task<StatsGuidingDto> GetGuidingAsync(DateTimeOffset? since, CancellationToken ct);
     Task<StatsFrameQualityDto> GetFrameQualityAsync(string? filter, CancellationToken ct);
     Task<StatsBestFramesDto> GetBestFramesAsync(int limit, CancellationToken ct);
+    Task<StatsAlbumFramesDto> GetAlbumFramesAsync(DateTimeOffset? since, CancellationToken ct);
     Task<StatsCalendarDto> GetCalendarAsync(DateOnly fromDate, DateOnly toDate, CancellationToken ct);
     Task<StatsAchievementsDto> GetAchievementsAsync(CancellationToken ct);
     Task<(Stream Stream, string FileName)?> OpenCsvExportAsync(string scope, CancellationToken ct);
