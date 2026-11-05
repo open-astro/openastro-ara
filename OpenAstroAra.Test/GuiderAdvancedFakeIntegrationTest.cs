@@ -61,7 +61,7 @@ namespace OpenAstroAra.Test {
         ];
 
         private static async Task<(FakeGuider Fake, GuiderService Svc, ConcurrentQueue<(string Method, JsonNode? Params)> Sent)> ConnectedAsync(
-                Func<GuiderAdvancedSettings?>? advanced = null, Action<FakeGuider>? setup = null) {
+                Func<GuiderAdvancedSettings?>? advanced = null, Action<FakeGuider>? setup = null, ISequencerService? sequencer = null) {
             var sent = new ConcurrentQueue<(string, JsonNode?)>();
             var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
@@ -78,7 +78,7 @@ namespace OpenAstroAra.Test {
             var svc = new GuiderService(new HeadlessProfileService(),
                 new GuiderRecoveryCoordinator(Mock.Of<IGuiderProcessSupervisor>(), Mock.Of<INotificationService>(),
                     Mock.Of<IDiagnosticsService>(), NullLogger<GuiderRecoveryCoordinator>.Instance),
-                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>()) {
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), sequencerResolver: sequencer is null ? null : () => sequencer) {
                 AdvancedSettings = advanced,
             };
             await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
@@ -223,6 +223,24 @@ namespace OpenAstroAra.Test {
             Assert.That(await WaitUntilAsync(() => svc.ConnectedGuiderOrNull()!.State == "Guiding").ConfigureAwait(false), Is.True);
             await Assert.ThrowsAsync<GuiderBusyException>(() => svc.ApplyGuiderMultiStarAsync(CancellationToken.None)).ConfigureAwait(false);
             Assert.That(sent, Is.Empty, "nothing is sent while guiding");
+        }
+
+        [Test]
+        public async Task A_running_sequence_refuses_the_multi_star_apply_and_nothing_is_sent() {
+            // #1592 review — between targets the guider is stopped, so only the run itself says the rig is busy.
+            var sequencer = new Mock<ISequencerService>();
+            sequencer.Setup(q => q.ActiveRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync([Guid.NewGuid()]);
+            var (fake, svc, sent) = await ConnectedAsync(advanced: () => new GuiderAdvancedSettings(), sequencer: sequencer.Object).ConfigureAwait(false);
+            await using var _f = fake;
+            using var _s = svc;
+            Assert.That(await WaitUntilAsync(() => sent.Any(s => s.Method == "set_algo_param" || s.Method == "set_profile_setup")).ConfigureAwait(false), Is.True);
+            sent.Clear();
+            var methods = fake.ReceivedMethods.Count;
+
+            var ex = await Assert.ThrowsAsync<GuiderBusyException>(() => svc.ApplyGuiderMultiStarAsync(CancellationToken.None)).ConfigureAwait(false);
+
+            Assert.That(ex!.Message, Does.Contain("sequence"));
+            Assert.That(fake.ReceivedMethods.Count, Is.EqualTo(methods), "no disconnect, no set_profile_setup");
         }
 
         [Test]

@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/guider_live.dart';
 import '../../state/focus/autofocus_live_state.dart' show describeRequestError;
 import '../../state/guider/guider_live_state.dart';
+import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
 import '../focus/bahtinov_focus_card.dart' show BahtinovFrameView;
 import 'guide_calibration_panel.dart';
@@ -53,9 +54,12 @@ class GuideCameraPanel extends ConsumerWidget {
     final text = Theme.of(context).textTheme;
     final multiStar = live.multiStarEnabled;
     // The guider takes the flag only with its equipment disconnected, which
-    // would end a guide session: no toggle while one runs.
+    // would end a guide session: no toggle while one runs, nor while a
+    // sequence does (the guider sits stopped between targets).
+    final runActive =
+        ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
     final onToggleMultiStar =
-        multiStar == null || live.isGuidingPhase || state.busy
+        multiStar == null || live.isGuidingPhase || runActive || state.busy
         ? null
         : () => unawaited(_toggleMultiStar(context, ref, !multiStar));
     return Padding(
@@ -93,6 +97,8 @@ class GuideCameraPanel extends ConsumerWidget {
                   child: Tooltip(
                     message: live.isGuidingPhase
                         ? 'Stop guiding to change multi-star.'
+                        : runActive
+                        ? 'A sequence is running: change multi-star when it ends.'
                         : multiStar
                         ? 'Multi-star: the guider tracks several stars (the rings are the secondaries). Tap for single star.'
                         : 'Single star. Tap for multi-star.',

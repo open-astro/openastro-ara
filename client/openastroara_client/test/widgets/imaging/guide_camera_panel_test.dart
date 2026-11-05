@@ -14,7 +14,9 @@ import 'package:openastroara/services/guider_api.dart';
 import 'package:openastroara/services/guider_live_api.dart';
 import 'package:openastroara/state/guider/guider_live_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
+import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/widgets/imaging/guide_calibration_panel.dart';
 import 'package:openastroara/models/guiding_assistant.dart';
 import 'package:openastroara/services/guiding_assistant_api.dart';
@@ -138,6 +140,7 @@ Future<void> _pumpPanel(
   await t.pumpWidget(
     ProviderScope(
       overrides: [
+          sequenceRunStateProvider.overrideWith(_IdleRun.new),
         activeServerProvider.overrideWithValue(
           const AraServer(hostname: 'localhost', port: 5555),
         ),
@@ -178,6 +181,17 @@ GuiderLive _looping() => GuiderLive.fromJson({
   'has_frame': true,
 });
 
+class _FakeRun extends SequenceRunStateNotifier {
+  @override
+  Future<SequenceRunStateInfo?> build() async =>
+      const SequenceRunStateInfo(runId: 'r1', state: SequenceRunState.running);
+}
+
+class _IdleRun extends SequenceRunStateNotifier {
+  @override
+  Future<SequenceRunStateInfo?> build() async => null;
+}
+
 void main() {
   test('the live view parses and summarises', () {
     final v = _looping();
@@ -217,6 +231,7 @@ void main() {
     await t.pumpWidget(
       ProviderScope(
         overrides: [
+          sequenceRunStateProvider.overrideWith(_IdleRun.new),
           activeServerProvider.overrideWithValue(const AraServer(hostname: 'localhost', port: 5555)),
           guiderLiveApiFactoryProvider.overrideWithValue((_) => fake),
           guiderAdvancedApiFactoryProvider.overrideWithValue((_) => adv),
@@ -254,9 +269,35 @@ void main() {
     await t.pumpWidget(
       ProviderScope(
         overrides: [
+          sequenceRunStateProvider.overrideWith(_IdleRun.new),
           activeServerProvider.overrideWithValue(const AraServer(hostname: 'localhost', port: 5555)),
           guiderLiveApiFactoryProvider.overrideWithValue((_) => fake),
           guiderAdvancedApiFactoryProvider.overrideWithValue((_) => adv),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: SizedBox(width: 1000, height: 600, child: GuideCameraPanel())),
+        ),
+      ),
+    );
+    await t.pump();
+    await t.pump();
+    expect(t.widget<ActionChip>(find.byKey(const Key('guide-camera-multistar'))).onPressed, isNull);
+    expect(adv.applies, 0);
+  });
+
+  testWidgets('the multi-star chip is disabled while a sequence runs', (t) async {
+    // Between targets the guider is stopped, but applying would release its equipment under the run.
+    final fake = _FakeLive(
+      GuiderLive.fromJson({'connected': true, 'app_state': 'Stopped', 'multi_star_enabled': true}),
+    );
+    final adv = _FakeAdvanced(fake);
+    await t.pumpWidget(
+      ProviderScope(
+        overrides: [
+          activeServerProvider.overrideWithValue(const AraServer(hostname: 'localhost', port: 5555)),
+          guiderLiveApiFactoryProvider.overrideWithValue((_) => fake),
+          guiderAdvancedApiFactoryProvider.overrideWithValue((_) => adv),
+          sequenceRunStateProvider.overrideWith(_FakeRun.new),
         ],
         child: const MaterialApp(
           home: Scaffold(body: SizedBox(width: 1000, height: 600, child: GuideCameraPanel())),
@@ -276,6 +317,7 @@ void main() {
     await t.pumpWidget(
       ProviderScope(
         overrides: [
+          sequenceRunStateProvider.overrideWith(_IdleRun.new),
           activeServerProvider.overrideWithValue(
             const AraServer(hostname: 'localhost', port: 5555),
           ),
@@ -403,6 +445,7 @@ void main() {
       await t.pumpWidget(
         ProviderScope(
           overrides: [
+          sequenceRunStateProvider.overrideWith(_IdleRun.new),
             activeServerProvider.overrideWithValue(
               const AraServer(hostname: 'localhost', port: 5555),
             ),
@@ -518,6 +561,7 @@ void main() {
     await t.pumpWidget(
       ProviderScope(
         overrides: [
+          sequenceRunStateProvider.overrideWith(_IdleRun.new),
           activeServerProvider.overrideWithValue(
             const AraServer(hostname: 'localhost', port: 5555),
           ),
@@ -547,6 +591,7 @@ void main() {
     await t.pumpWidget(
       ProviderScope(
         overrides: [
+          sequenceRunStateProvider.overrideWith(_IdleRun.new),
           activeServerProvider.overrideWithValue(
             const AraServer(hostname: 'localhost', port: 5555),
           ),
