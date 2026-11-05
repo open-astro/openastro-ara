@@ -201,7 +201,7 @@ void main() {
     // The shell's image reads simplePolarFrameProvider; hold it the way the shell does.
     final api = await _pump(tester, _adjusting);
     final container = ProviderScope.containerOf(tester.element(find.byType(SimplePolarPanel)));
-    final sub = container.listen(simplePolarFrameProvider, (_, __) {});
+    final sub = container.listen(simplePolarFrameProvider, (_, _) {});
     addTearDown(sub.close);
     await tester.pumpAndSettle();
     int frames() => api!.calls.where((c) => c == 'frame').length;
@@ -218,7 +218,7 @@ void main() {
   testWidgets('while the guider measures, the frame is refetched on a timer', (tester) async {
     final api = await _pump(tester, _adjusting);
     final container = ProviderScope.containerOf(tester.element(find.byType(SimplePolarPanel)));
-    final sub = container.listen(simplePolarFrameProvider, (_, __) {});
+    final sub = container.listen(simplePolarFrameProvider, (_, _) {});
     addTearDown(sub.close);
     await tester.pumpAndSettle();
     int frames() => api!.calls.where((c) => c == 'frame').length;
