@@ -44,6 +44,16 @@ public sealed partial class AutofocusSweepService {
     /// <summary>The expanding step stops growing at this multiple of the sweep half-width.</summary>
     internal const int CoarseMaxStepMultiplier = 8;
 
+    /// <summary>A one-step coarse probe whose HFR differs from the start's by no more than this fraction is
+    /// indistinguishable from noise. Real V slopes move HFR 30-45 % per 100 steps in the fixtures (2.0 + |d|/50,
+    /// 0.0185/step on the 2026-10-17 rig), flat wings sit within a few percent.</summary>
+    internal const double CoarseNoiseBand = 0.05;
+
+    /// <summary>Without a stored in-focus HFR, a start whose full-resolution HFR is above this (px) is clearly
+    /// defocused: about twice the 1.2-1.5 px the rigs measure at focus, where the fine-sweep fixtures put the
+    /// V's HFR-doubling point (2.5-3).</summary>
+    internal const double CoarseDefocusedHfr = 3.0;
+
     /// <summary>How many times the fine sweep may re-centre on an edge minimum before failing.</summary>
     internal const int MaxSweepRecentres = 2;
 
@@ -113,9 +123,13 @@ public sealed partial class AutofocusSweepService {
             return start;
         }
         var baseStep = settings.Steps * settings.StepSize;
+        // #1540 — the direction probe moves one step size, not the whole half-width: a wide default step
+        // (focuser with no µm/step) otherwise throws the first move far past focus.
+        var probeStep = Math.Min(settings.StepSize, baseStep);
         var measured = new Dictionary<int, double>();
         // Positions where the binned frame lost every star but full resolution still measured enough of them.
         var sharpUnbinned = new HashSet<int>();
+        var sharpReads = new Dictionary<int, (int Stars, double Hfr, bool Flooded)>();
         _lastCoarseFailure = null;
 
         async Task<double> Measure(int position) {
@@ -132,6 +146,7 @@ public sealed partial class AutofocusSweepService {
             // ratio swings with defocus, so no rule is drawn from it until real runs show the pattern.
             var sharp = _metric(frame, token);
             LogCoarseProbe(reached, hfr, sharp.AverageHFR, sharp.DetectedStars);
+            sharpReads[position] = (sharp.DetectedStars, sharp.AverageHFR, sharp.NoiseFlooded);
             measured[position] = hfr;
             // +∞ has two causes: discs too big even for the binned frame, or stars so sharp and faint
             // (a narrowband filter) that binning averages them into the noise. Full resolution tells
@@ -148,46 +163,74 @@ public sealed partial class AutofocusSweepService {
         var pos = start;
         var h = await Measure(pos).ConfigureAwait(false);
         int dir;
-        bool InTravel(int position) => position >= travel.Min && position <= travel.Max;
-        var up = start + baseStep;
-        var hUp = InTravel(up) ? await Measure(up).ConfigureAwait(false) : double.PositiveInfinity;
-        if (!double.IsFinite(h) && sharpUnbinned.Contains(start) && double.IsFinite(hUp)) {
-            // A start whose stars only full resolution can see, between two neighbours the binned frame can
-            // measure, sits inside the V: a start too defocused to bin would have a far neighbour lost too. Near
-            // the travel stop the lower neighbour is the stop itself (2026-10-17: focus 220, half-width 288).
-            var down = Math.Max(start - baseStep, travel.Min);
-            var hDown = down < start ? await Measure(down).ConfigureAwait(false) : double.PositiveInfinity;
-            if (double.IsFinite(hDown)) {
-                LogCoarseSharpStart(start, hUp, hDown);
-                return start;
+        // A flat one-step probe is a wing only when the start is clearly defocused at full resolution: nothing
+        // measurable there, or an HFR over twice the stored in-focus HFR (else CoarseDefocusedHfr). At the V's
+        // bottom a small step reads flat too, and that must stay put.
+        bool StartClearlyDefocused() {
+            if (!sharpReads.TryGetValue(start, out var read) || read.Flooded || read.Stars < MinStarsPerProbe || !(read.Hfr > 0) || !double.IsFinite(read.Hfr)) {
+                return true;
             }
+            var inFocus = _profiles.GetFocusCalibration()?.InFocusHfr;
+            return read.Hfr > (inFocus > 0 ? 2 * inFocus.Value : CoarseDefocusedHfr);
         }
-        if (hUp < h) {
-            dir = 1;
-            pos = up;
-            h = hUp;
-        } else {
-            var down = start - baseStep;
-            var hDown = InTravel(down) ? await Measure(down).ConfigureAwait(false) : double.PositiveInfinity;
-            if (hDown < h) {
-                dir = -1;
-                pos = down;
-                h = hDown;
-            } else if (double.IsFinite(h)) {
-                LogCoarseResult(start, h);
-                return start;
-            } else {
-                _lastCoarseFailure = $"no measurable stars at {start} or ±{baseStep} — check the sky, the exposure, or rough-focus by hand";
-                LogSweepFailed(_lastCoarseFailure);
-                return null;
+        bool InTravel(int position) => position >= travel.Min && position <= travel.Max;
+        while (true) {
+            var up = start + probeStep;
+            var hUp = InTravel(up) ? await Measure(up).ConfigureAwait(false) : double.PositiveInfinity;
+            if (!double.IsFinite(h) && sharpUnbinned.Contains(start) && double.IsFinite(hUp)) {
+                // A start whose stars only full resolution can see, between two neighbours the binned frame can
+                // measure, sits inside the V: a start too defocused to bin would have a far neighbour lost too. Near
+                // the travel stop the lower neighbour is the stop itself (2026-10-17: focus 220, half-width 288).
+                var down = Math.Max(start - probeStep, travel.Min);
+                var hDown = down < start ? await Measure(down).ConfigureAwait(false) : double.PositiveInfinity;
+                if (double.IsFinite(hDown)) {
+                    LogCoarseSharpStart(start, hUp, hDown);
+                    return start;
+                }
             }
+            if (hUp < h) {
+                dir = 1;
+                pos = up;
+                h = hUp;
+            } else {
+                var down = start - probeStep;
+                var hDown = InTravel(down) ? await Measure(down).ConfigureAwait(false) : double.PositiveInfinity;
+                if (hDown < h) {
+                    dir = -1;
+                    pos = down;
+                    h = hDown;
+                } else if (double.IsFinite(h)) {
+                    if (probeStep < baseStep && Math.Abs(hUp - h) <= CoarseNoiseBand * h && Math.Abs(hDown - h) <= CoarseNoiseBand * h && StartClearlyDefocused()) {
+                        // Both neighbours one step out read the same as the start within noise, and the start is far out: a flat wing.
+                        probeStep = baseStep;
+                        continue;
+                    }
+                    LogCoarseResult(start, h);
+                    return start;
+                } else {
+                    if (probeStep < baseStep) {
+                        // Nothing measurable that close in (the binned frame is blind near focus): probe the half-width.
+                        probeStep = baseStep;
+                        continue;
+                    }
+                    _lastCoarseFailure = $"no measurable stars at {start} or ±{probeStep} — check the sky, the exposure, or rough-focus by hand";
+                    LogSweepFailed(_lastCoarseFailure);
+                    return null;
+                }
+            }
+            break;
         }
 
         // Expand: double the step while HFR keeps improving; the first rise brackets the minimum.
-        var step = baseStep;
+        var step = probeStep;
+        // Never leap more than a quarter of a bounded travel in one move.
+        var maxStep = baseStep * CoarseMaxStepMultiplier;
+        if (travel.Min != int.MinValue && travel.Max != int.MaxValue) {
+            maxStep = (int)Math.Min(maxStep, Math.Max(probeStep, ((long)travel.Max - travel.Min) / 4));
+        }
         var bracketed = false;
         while (measured.Count < CoarseMaxProbes) {
-            step = Math.Min(step * 2, baseStep * CoarseMaxStepMultiplier);
+            step = Math.Min(step * 2, maxStep);
             var next = pos + dir * step;
             if (!InTravel(next)) {
                 bracketed = true; // the travel stop is the far side of the bracket

@@ -308,7 +308,16 @@ class SimpleRunGainNotifier extends Notifier<int?> {
   @override
   int? build() => null;
 
+  /// The gain the sheet opened with: an edit compares against this, not the
+  /// camera's gain now, which another client may change meanwhile (#1572).
+  int? seeded;
+
   void set(int? g) => state = g;
+
+  void seed(int? g) {
+    seeded = g;
+    state = g;
+  }
 }
 
 final simpleRunGainProvider = NotifierProvider<SimpleRunGainNotifier, int?>(
@@ -1602,7 +1611,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
       final targets = container.read(simpleRunProvider).targets;
       container
           .read(simpleRunGainProvider.notifier)
-          .set(
+          .seed(
             (editing != null && editing < targets.length
                     ? targets[editing].gain
                     : null) ??

@@ -224,6 +224,8 @@ public sealed partial class AutofocusSweepService : IAutofocusExecutor, IDisposa
         // job or a sequence instruction — and that must cancel the sweep, not just the job polling it.
         using var runCts = CancellationTokenSource.CreateLinkedTokenSource(token);
         var runToken = runCts.Token;
+        // Sweep and Smart Focus land every probe from a direction of their own choosing; the service's backlash overshoot would fight it.
+        using var backlashOff = FocuserBacklash.Suppress();
         var settings = _profiles.GetAutofocusSettings();
         var startInfo = _focuser.GetInfo();
         var startPosition = startInfo?.Position ?? 0;

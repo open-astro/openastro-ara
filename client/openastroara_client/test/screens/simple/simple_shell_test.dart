@@ -569,6 +569,22 @@ class _RunState extends SequenceRunStateNotifier {
   Future<SequenceRunStateInfo?> build() async => value;
 }
 
+const _queuedM31 = SimpleRun(sequenceId: 'seq-1', targets: [
+  SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+]);
+
+/// Plan screen, queue panel, then the edit sheet on the queued M31.
+Future<void> _openEditOfM31(WidgetTester tester) async {
+  await tester.tap(find.byKey(const Key('simple-mode')));
+  await tester.pump();
+  await tester.tap(find.text('Plan').first);
+  await tester.pump();
+  await tester.tap(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('M31')));
+  await tester.pump();
+  await tester.tap(find.byKey(const Key('simple-run-edit-0')));
+  await tester.pump();
+}
+
 Future<void> _frame(WidgetTester tester, ProviderContainer c) async {
   c.read(lastCapturedFrameIdProvider.notifier).set('frame-1');
   await tester.pump();
@@ -1458,6 +1474,138 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
     expect(find.byType(SimpleRunSheet), findsNothing, reason: 'the chip closes the sheet it would open');
+  });
+
+  // #1571: the sheet reopened on the old target when Image this came after an edit left _editing set.
+  testWidgets('Image this after an edit opens the sheet on the new pick, not the edited target (#1571)', (tester) async {
+    final container = await _pump(tester, const Size(1024, 768), plan: _queuedM31);
+    await _frame(tester, container);
+    await _openEditOfM31(tester);
+    expect(find.byKey(const Key('simple-run-save')), findsOneWidget, reason: 'the edit sheet');
+    // The status pill (and Night Setup) switch screen without closing the sheet.
+    container.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preview);
+    await tester.pump();
+    await tester.tap(find.text('Sky'));
+    await tester.pump();
+    container.read(planetariumSelectionProvider.notifier).set(const PlanetariumSelection(
+        name: 'M42', kind: 'Nebula', raHours: 5.58, decDeg: -5.4, raJ2000Hours: 5.58, decJ2000Deg: -5.4,
+        altDeg: 50, maxAltDeg: 60));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-sky-image-this')));
+    await tester.pump();
+    expect(find.byType(SimpleRunSheet), findsOneWidget);
+    expect(find.byKey(const Key('simple-run-save')), findsNothing, reason: 'not the edit of M31');
+    expect(find.text('Edit M31'), findsNothing);
+  });
+
+  group('#1572 a rail or image tap while editing a queued target', () {
+    Future<ProviderContainer> edit(WidgetTester tester) async {
+      final container = await _pump(tester, const Size(1024, 768), plan: _queuedM31);
+      await _frame(tester, container);
+      await _openEditOfM31(tester);
+      return container;
+    }
+
+    testWidgets('with a changed row, the tap asks first and the sheet stays; Keep editing keeps the edited rows', (tester) async {
+      final container = await edit(tester);
+      container.read(simpleRunPlanProvider.notifier).setFrames(0, 5);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      expect(find.text('Discard changes to M31?'), findsOneWidget);
+      expect(find.byType(SimpleRunSheet), findsOneWidget, reason: 'the sheet stays');
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      expect(container.read(simpleMessagesProvider).length, 1, reason: 'one pill at a time');
+      await tester.tap(find.text('Keep editing'));
+      await tester.pump();
+      expect(find.text('Discard changes to M31?'), findsNothing);
+      expect(find.byType(SimpleRunSheet), findsOneWidget);
+      expect(container.read(simpleRunPlanProvider).single.frameCount, 5);
+    });
+
+    testWidgets('Discard closes the sheet, leaves the queued target as it was, then the tapped Screen shows', (tester) async {
+      final container = await edit(tester);
+      container.read(simpleRunPlanProvider.notifier).setFrames(0, 5);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      await tester.tap(find.text('Discard'));
+      await tester.pump();
+      expect(find.byType(SimpleRunSheet), findsNothing);
+      expect(find.text('Discard changes to M31?'), findsNothing);
+      expect(find.text('Polar align'), findsOneWidget, reason: 'the modes the tap opened');
+      expect(container.read(simpleRunProvider).targets.single.steps.single.frameCount, 30);
+    });
+
+    testWidgets('a tap on the image asks too, and Discard then closes the sheet', (tester) async {
+      final container = await edit(tester);
+      container.read(simpleRunPlanProvider.notifier).setFrames(0, 5);
+      await tester.pump();
+      await tester.tapAt(Offset(500, tester.getRect(find.byType(SimpleRunSheet)).bottom + 6)); // the image, under the sheet
+      await tester.pump();
+      expect(find.text('Discard changes to M31?'), findsOneWidget);
+      expect(find.byType(SimpleRunSheet), findsOneWidget);
+      await tester.tap(find.text('Discard'));
+      await tester.pump();
+      expect(find.byType(SimpleRunSheet), findsNothing);
+    });
+
+    testWidgets('with no change, the tap closes the sheet as before and asks nothing', (tester) async {
+      final container = await edit(tester);
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      expect(container.read(simpleMessagesProvider), isEmpty);
+      expect(find.byType(SimpleRunSheet), findsNothing);
+    });
+
+    testWidgets('the safe answer carries the weight: Keep editing is the filled button, Discard a text button', (tester) async {
+      final container = await edit(tester);
+      container.read(simpleRunPlanProvider.notifier).setFrames(0, 5);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      expect(find.ancestor(of: find.text('Keep editing'), matching: find.byType(FilledButton)), findsOneWidget);
+      expect(find.ancestor(of: find.text('Discard'), matching: find.byType(TextButton)), findsOneWidget);
+    });
+
+    testWidgets("the camera's gain changing while the sheet is open (another client) is not an edit", (tester) async {
+      final container = await edit(tester);
+      final camera = container.read(exposureControllerProvider).gain;
+      container.read(exposureControllerProvider.notifier).setGain(camera + 40);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      expect(container.read(simpleMessagesProvider), isEmpty, reason: 'nothing the user changed');
+      expect(find.byType(SimpleRunSheet), findsNothing);
+    });
+
+    testWidgets('a gain-only change asks too: Save would store it', (tester) async {
+      final container = await edit(tester);
+      final seeded = container.read(simpleRunGainProvider);
+      container.read(simpleRunGainProvider.notifier).set((seeded ?? 100) + 50);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      expect(find.text('Discard changes to M31?'), findsOneWidget);
+      expect(find.byType(SimpleRunSheet), findsOneWidget, reason: 'the sheet stays');
+    });
+
+    testWidgets('the question goes when the sheet closes another way (Cancel), so Discard cannot replay an old tap', (tester) async {
+      final container = await edit(tester);
+      container.read(simpleRunPlanProvider.notifier).setFrames(0, 5);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      expect(find.text('Discard changes to M31?'), findsOneWidget);
+      final cancel = find.descendant(of: find.byType(SimpleRunSheet), matching: find.text('Cancel'));
+      await tester.ensureVisible(cancel);
+      await tester.tap(cancel);
+      await tester.pump();
+      expect(find.byType(SimpleRunSheet), findsNothing);
+      expect(find.text('Discard changes to M31?'), findsNothing, reason: 'no question left over the closed sheet');
+      expect(container.read(simpleMessagesProvider), isEmpty);
+    });
   });
 
   testWidgets('the plan square hugs the bottom-right corner, above Stop (no bottom row)', (tester) async {
@@ -2845,6 +2993,42 @@ void main() {
     expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).value, greaterThan(before));
     container.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('#1596 the plan pill says a run is waiting at the meridian', (tester) async {
+    String pill() => find
+        .descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText))
+        .evaluate()
+        .map((e) => (e.widget as RichText).text.toPlainText())
+        .join();
+    const plan = SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+      SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+    ]);
+    await _pump(tester, const Size(1024, 768), plan: plan,
+        runState: const SequenceRunStateInfo(
+            sequenceId: 'seq-1', state: SequenceRunState.running, currentInstructionDescription: 'Taking frames',
+            reasonCode: 'meridian', reasonText: 'Passing meridian — 00:10:00'));
+    await tester.pump();
+    expect(pill(), contains('Passing meridian — 00:10:00'));
+  });
+
+  testWidgets('#1596 the plan pill keeps the reason a run skipped its only target', (tester) async {
+    String pill() => find
+        .descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText))
+        .evaluate()
+        .map((e) => (e.widget as RichText).text.toPlainText())
+        .join();
+    const plan = SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+      SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+    ]);
+    await _pump(tester, const Size(1024, 768), plan: plan,
+        runState: const SequenceRunStateInfo(
+            sequenceId: 'seq-1', state: SequenceRunState.completed,
+            reasonCode: 'target_skipped', reasonText: 'Skipped, nothing was imaged: M31 did not run'));
+    await tester.pump();
+    // Simple Mode's own words, keyed on the code, not the daemon's English text.
+    expect(pill(), contains('Skipped: conditions not met'));
+    expect(pill(), isNot(contains('M31 did not run')));
   });
 
   testWidgets('while a plan runs and the camera is idle, the status pill says which step is running', (tester) async {

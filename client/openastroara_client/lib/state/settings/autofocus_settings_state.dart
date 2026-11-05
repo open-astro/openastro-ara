@@ -55,6 +55,11 @@ class AutofocusSettings {
   final bool restorePositionOnFailure;
   final TelescopeType telescopeType;
 
+  /// #1541 — focuser backlash (steps) from the setup wizard; the daemon
+  /// overshoots by the one for the new direction on a reversal. 0 = none.
+  final int backlashInSteps;
+  final int backlashOutSteps;
+
   const AutofocusSettings({
     this.method = AutofocusMethod.hfrVCurve,
     this.steps = 7,
@@ -70,6 +75,8 @@ class AutofocusSettings {
     this.abortSequenceOnAfFailure = true,
     this.restorePositionOnFailure = true,
     this.telescopeType = TelescopeType.other,
+    this.backlashInSteps = 0,
+    this.backlashOutSteps = 0,
   });
 
   AutofocusSettings copyWith({
@@ -87,6 +94,8 @@ class AutofocusSettings {
     bool? abortSequenceOnAfFailure,
     bool? restorePositionOnFailure,
     TelescopeType? telescopeType,
+    int? backlashInSteps,
+    int? backlashOutSteps,
   }) =>
       AutofocusSettings(
         method: method ?? this.method,
@@ -106,6 +115,8 @@ class AutofocusSettings {
         restorePositionOnFailure:
             restorePositionOnFailure ?? this.restorePositionOnFailure,
         telescopeType: telescopeType ?? this.telescopeType,
+        backlashInSteps: backlashInSteps ?? this.backlashInSteps,
+        backlashOutSteps: backlashOutSteps ?? this.backlashOutSteps,
       );
 }
 

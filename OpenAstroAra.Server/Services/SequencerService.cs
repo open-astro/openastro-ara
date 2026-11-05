@@ -602,6 +602,32 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         }
     }
 
+    /// <summary>#1596 — the reason a finished run imaged nothing: every deep-sky target in the tree
+    /// has no finished instruction under it (its conditions were false, so the root skipped its
+    /// steps). Null when there is no target or any target ran.</summary>
+    internal static (string Code, string Text)? SkippedTargetsReason(ISequenceContainer root) {
+        var names = new List<string>();
+        var ran = false;
+        Walk(root);
+        return names.Count > 0 && !ran
+            ? ("target_skipped", $"Skipped, nothing was imaged: {string.Join(", ", names)} did not run ({(names.Count == 1 ? "its" : "their")} start conditions were not met).")
+            : null;
+
+        void Walk(ISequenceContainer container) {
+            foreach (var item in container.GetItemsSnapshot()) {
+                if (item is IDeepSkyObjectContainer dso) {
+                    if (HasFinishedLeaf(dso)) ran = true;
+                    else names.Add(string.IsNullOrWhiteSpace(dso.Target?.TargetName) ? "the target" : dso.Target.TargetName);
+                } else if (item is ISequenceContainer child) {
+                    Walk(child);
+                }
+            }
+        }
+
+        static bool HasFinishedLeaf(ISequenceContainer c) =>
+            c.GetItemsSnapshot().Any(i => i is ISequenceContainer sub ? HasFinishedLeaf(sub) : i.Status == SequenceEntityStatus.FINISHED);
+    }
+
     /// <summary>
     /// Whether a run can still be aborted: not terminal (Completed/Failed/Stopped) and not already in the
     /// transient Aborting state. The §29 disk-space monitor's "abort on critical" path uses this (via
@@ -683,6 +709,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         // here — the losing writer returns false and isn't counted (no inflated "Sequence halted" tally). A
         // run heading to a terminal state via Aborting still terminates; re-labelling it adds nothing.
         if (!_runs.TryGetValue(id, out var run) || IsTerminal(run.State) || run.State == SequenceRunState.Aborting) return false;
+        run.SetReason(null, null); // #1596 — before the state, so a Stopped status never carries it
         run.State = desired;
         try {
             await run.Cts.CancelAsync();
@@ -915,6 +942,13 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 var progress = new Progress<ApplicationStatus>(status => {
                     // Tree-derived status first, so the instruction's own report wins.
                     RefreshLiveStatus(run);
+                    // #1596 — only the executor's wait / refusal report is a reason; any other flip report
+                    // (the flip proper, its closing empty one) ends it.
+                    if (status.Source == MeridianFlipExecutor.WaitSource) {
+                        run.SetReason("meridian", status.Status);
+                    } else if (status.Source == "MeridianFlip") {
+                        run.SetReason(null, null);
+                    }
                     run.SetDescription(DescribeStatus(status));
                     run.SetProgress(ProgressOf(status));
                     progressPublisher.Poke();
@@ -988,6 +1022,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // it returns normally on cancel). No discrete "Aborted" state — the
             // DTO enum folds abort + stop into Stopped; the WS event type carries
             // the distinction.
+            run.SetReason(null, null); // #1596 — a run that is over is not waiting on the meridian
             if (run.State == SequenceRunState.Aborting) {
                 run.State = SequenceRunState.Stopped;
                 await EmitAsync("sequence.aborted", sequenceId, run);
@@ -1002,6 +1037,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 // Set CompletedUtc (under the lock) before the volatile State
                 // write, so a reader that observes Completed always also sees
                 // CompletedUtc populated — never a Completed/null transient.
+                if (run.Root is ISequenceContainer doneRoot && SkippedTargetsReason(doneRoot) is var (skipCode, skipText)) {
+                    run.SetReason(skipCode, skipText);
+                }
                 run.MarkCompleted();
                 run.State = SequenceRunState.Completed;
                 await EmitAsync("sequence.complete", sequenceId, run);
@@ -1017,6 +1055,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             if (drainFailureReports is not null) {
                 await drainFailureReports();
             }
+            run.SetReason(null, null);
             run.State = SequenceRunState.Stopped;
             await EmitAsync("sequence.stopped", sequenceId, run);
         } catch (Exception ex) {
@@ -1027,6 +1066,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             if (drainFailureReports is not null) {
                 await drainFailureReports();
             }
+            run.SetReason(null, null);
             run.State = SequenceRunState.Failed;
             await EmitAsync("sequence.failed", sequenceId, run);
         } finally {
@@ -1548,6 +1588,19 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             }
         }
 
+        private string? _reasonCode;
+        private string? _reasonText;
+
+        public void SetReason(string? code, string? text) {
+            lock (_gate) {
+                // #1596 — progress reports are posted to the pool and can land after the run ended; a clear always applies.
+                if (code is not null && (IsTerminal(State) || State == SequenceRunState.Aborting)) {
+                    return;
+                }
+                (_reasonCode, _reasonText) = code is null ? (null, null) : (code, text);
+            }
+        }
+
         public void MarkCompleted() {
             lock (_gate) { CompletedUtc = DateTimeOffset.UtcNow; }
         }
@@ -1639,7 +1692,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     CurrentInstructionDescription: CurrentInstructionDescription,
                     EstimatedTotalSeconds: total,
                     EstimatedRemainingSeconds: remaining,
-                    CurrentInstructionProgress: CurrentInstructionProgress);
+                    CurrentInstructionProgress: CurrentInstructionProgress,
+                    ReasonCode: _reasonCode,
+                    ReasonText: _reasonText);
             }
         }
     }

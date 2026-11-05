@@ -41,4 +41,13 @@ void main() {
     expect(f.isMoving, isFalse);
     expect(f.connectionState, EquipmentConnectionState.connecting);
   });
+
+  test('backlash_compensating counts as moving (Move stays disabled)', () {
+    final f = FocuserStatus.fromJson(const {
+      'state': 'connected',
+      'runtime': {'state': 'backlash_compensating', 'position': 100},
+    });
+    expect(f.isMoving, isTrue);
+    expect(f.isBusy, isTrue);
+  });
 }

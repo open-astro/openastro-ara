@@ -116,6 +116,18 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             ThrowOnError("set_lock_position", response);
         }
 
+        /// <summary>Let the guider pick its best star in the current frame (<c>find_star</c>) and answer where
+        /// it locked. The guider refuses (no image yet, no usable star) in its own words.</summary>
+        public async Task<LockPosition> FindStarAsync(CancellationToken ct) {
+            ct.ThrowIfCancellationRequested();
+            RequireConnectedForLive();
+            var response = await SendMessage<GetLockPositionResponse>(new Phd2FindStar(), LiveRpcTimeoutMs).ConfigureAwait(false);
+            ThrowOnError("find_star", response);
+            return response.result is { Count: 2 } p
+                ? new LockPosition(p[0], p[1])
+                : throw new GuiderRpcException("find_star", 1, "the guider found no usable star");
+        }
+
         public async Task DeselectStarAsync(CancellationToken ct) {
             ct.ThrowIfCancellationRequested();
             RequireConnectedForLive();

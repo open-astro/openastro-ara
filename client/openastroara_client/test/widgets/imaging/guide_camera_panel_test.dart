@@ -8,16 +8,21 @@ import 'package:openastroara/models/guider_calibration_view.dart';
 import 'package:openastroara/models/guider_live.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/server.dart';
+import 'package:openastroara/models/guider_advanced_settings.dart';
+import 'package:openastroara/services/guider_advanced_api.dart';
 import 'package:openastroara/services/guider_api.dart';
 import 'package:openastroara/services/guider_live_api.dart';
 import 'package:openastroara/state/guider/guider_live_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
+import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/widgets/imaging/guide_calibration_panel.dart';
 import 'package:openastroara/models/guiding_assistant.dart';
 import 'package:openastroara/services/guiding_assistant_api.dart';
 import 'package:openastroara/state/guider/guiding_assistant_state.dart';
 import 'package:openastroara/widgets/imaging/guide_camera_panel.dart';
+import 'package:openastroara/widgets/imaging/guider_advanced_dialog.dart';
 import 'package:openastroara/widgets/imaging/guiding_assistant_dialog.dart';
 
 /// Serves one live view; records the actions.
@@ -42,6 +47,8 @@ class _FakeLive implements GuiderLiveClient {
       calls.add('select $x $y');
   @override
   Future<void> deselectStar() async => calls.add('deselect');
+  @override
+  Future<void> findStar() async {}
   GuiderCalibrationView calibration = const GuiderCalibrationView(
     connected: true,
     verdict: 'redo',
@@ -58,6 +65,38 @@ class _FakeLive implements GuiderLiveClient {
   Future<List<Map<String, dynamic>>> getHistory() async => const [];
   @override
   Future<void> clearCalibration() async => calls.add('clear_calibration');
+  @override
+  void close() {}
+}
+
+/// The profile block and the apply call behind the multi-star chip; applying
+/// makes the (fake) guider report the profile's value.
+class _FakeAdvanced implements GuiderAdvancedClient {
+  final _FakeLive live;
+  GuiderAdvancedSettings profile = GuiderAdvancedSettings.empty;
+  int applies = 0;
+  _FakeAdvanced(this.live);
+  @override
+  Future<GuiderAdvancedSettings> getProfile() async => profile;
+  @override
+  Future<GuiderAdvancedSettings> putProfile(GuiderAdvancedSettings s) async =>
+      profile = s;
+  @override
+  Future<GuiderAdvancedView> getGuider() async =>
+      GuiderAdvancedView.disconnected;
+  @override
+  Future<void> pushTuning() async {}
+  @override
+  Future<void> applyMultiStar() async {
+    applies++;
+    final on = profile['multi_star_enabled'] != false;
+    live.view = GuiderLive.fromJson({
+      'connected': true,
+      'app_state': 'Looping',
+      'multi_star_enabled': on,
+    });
+  }
+
   @override
   void close() {}
 }
@@ -102,6 +141,7 @@ Future<void> _pumpPanel(
   await t.pumpWidget(
     ProviderScope(
       overrides: [
+        sequenceRunStateProvider.overrideWith(_IdleRun.new),
         activeServerProvider.overrideWithValue(
           const AraServer(hostname: 'localhost', port: 5555),
         ),
@@ -142,6 +182,17 @@ GuiderLive _looping() => GuiderLive.fromJson({
   'has_frame': true,
 });
 
+class _FakeRun extends SequenceRunStateNotifier {
+  @override
+  Future<SequenceRunStateInfo?> build() async =>
+      const SequenceRunStateInfo(runId: 'r1', state: SequenceRunState.running);
+}
+
+class _IdleRun extends SequenceRunStateNotifier {
+  @override
+  Future<SequenceRunStateInfo?> build() async => null;
+}
+
 void main() {
   test('the live view parses and summarises', () {
     final v = _looping();
@@ -173,6 +224,155 @@ void main() {
     );
   });
 
+  testWidgets(
+    'the multi-star chip toggles the setting and shows what the guider reports',
+    (t) async {
+      final fake = _FakeLive(
+        GuiderLive.fromJson({
+          'connected': true,
+          'app_state': 'Looping',
+          'multi_star_enabled': true,
+        }),
+      );
+      final adv = _FakeAdvanced(fake);
+      await t.pumpWidget(
+        ProviderScope(
+          overrides: [
+            sequenceRunStateProvider.overrideWith(_IdleRun.new),
+            activeServerProvider.overrideWithValue(
+              const AraServer(hostname: 'localhost', port: 5555),
+            ),
+            guiderLiveApiFactoryProvider.overrideWithValue((_) => fake),
+            guiderAdvancedApiFactoryProvider.overrideWithValue((_) => adv),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 1000,
+                height: 600,
+                child: GuideCameraPanel(),
+              ),
+            ),
+          ),
+        ),
+      );
+      await t.pump();
+      await t.pump();
+      final chip = find.byKey(const Key('guide-camera-multistar'));
+      expect(find.text('Multi-star'), findsOneWidget);
+      expect(
+        t.getSemantics(find.bySemanticsLabel('Multi-star guiding')),
+        matchesSemantics(
+          isButton: true,
+          hasToggledState: true,
+          isToggled: true,
+          label: 'Multi-star guiding',
+          hasTapAction: true,
+          hasEnabledState: true,
+          isEnabled: true,
+        ),
+      );
+
+      await t.tap(chip);
+      await t.pump();
+      await t.pump();
+      expect(adv.applies, 1);
+      expect(
+        adv.profile['multi_star_enabled'],
+        false,
+        reason: 'the tap writes the setting',
+      );
+      expect(
+        find.text('Single star'),
+        findsOneWidget,
+        reason: 'the chip reads the guider, not the tap',
+      );
+
+      await t.tap(chip);
+      await t.pump();
+      await t.pump();
+      expect(adv.profile['multi_star_enabled'], true);
+      expect(find.text('Multi-star'), findsOneWidget);
+    },
+  );
+
+  testWidgets('the multi-star chip is disabled while guiding', (t) async {
+    final fake = _FakeLive(
+      GuiderLive.fromJson({
+        'connected': true,
+        'app_state': 'Guiding',
+        'multi_star_enabled': true,
+      }),
+    );
+    final adv = _FakeAdvanced(fake);
+    await t.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sequenceRunStateProvider.overrideWith(_IdleRun.new),
+          activeServerProvider.overrideWithValue(
+            const AraServer(hostname: 'localhost', port: 5555),
+          ),
+          guiderLiveApiFactoryProvider.overrideWithValue((_) => fake),
+          guiderAdvancedApiFactoryProvider.overrideWithValue((_) => adv),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(width: 1000, height: 600, child: GuideCameraPanel()),
+          ),
+        ),
+      ),
+    );
+    await t.pump();
+    await t.pump();
+    expect(
+      t
+          .widget<ActionChip>(find.byKey(const Key('guide-camera-multistar')))
+          .onPressed,
+      isNull,
+    );
+    expect(adv.applies, 0);
+  });
+
+  testWidgets('the multi-star chip is disabled while a sequence runs', (
+    t,
+  ) async {
+    // Between targets the guider is stopped, but applying would release its equipment under the run.
+    final fake = _FakeLive(
+      GuiderLive.fromJson({
+        'connected': true,
+        'app_state': 'Stopped',
+        'multi_star_enabled': true,
+      }),
+    );
+    final adv = _FakeAdvanced(fake);
+    await t.pumpWidget(
+      ProviderScope(
+        overrides: [
+          activeServerProvider.overrideWithValue(
+            const AraServer(hostname: 'localhost', port: 5555),
+          ),
+          guiderLiveApiFactoryProvider.overrideWithValue((_) => fake),
+          guiderAdvancedApiFactoryProvider.overrideWithValue((_) => adv),
+          sequenceRunStateProvider.overrideWith(_FakeRun.new),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SizedBox(width: 1000, height: 600, child: GuideCameraPanel()),
+          ),
+        ),
+      ),
+    );
+    await t.pump();
+    await t.pump();
+    expect(
+      t
+          .widget<ActionChip>(find.byKey(const Key('guide-camera-multistar')))
+          .onPressed,
+      isNull,
+    );
+    expect(adv.applies, 0);
+  });
+
   testWidgets('a paused guide offers Stop guiding, not Loop', (t) async {
     final fake = _FakeLive(
       GuiderLive.fromJson({'connected': true, 'app_state': 'Paused'}),
@@ -180,6 +380,7 @@ void main() {
     await t.pumpWidget(
       ProviderScope(
         overrides: [
+          sequenceRunStateProvider.overrideWith(_IdleRun.new),
           activeServerProvider.overrideWithValue(
             const AraServer(hostname: 'localhost', port: 5555),
           ),
@@ -307,6 +508,7 @@ void main() {
       await t.pumpWidget(
         ProviderScope(
           overrides: [
+            sequenceRunStateProvider.overrideWith(_IdleRun.new),
             activeServerProvider.overrideWithValue(
               const AraServer(hostname: 'localhost', port: 5555),
             ),
@@ -422,6 +624,7 @@ void main() {
     await t.pumpWidget(
       ProviderScope(
         overrides: [
+          sequenceRunStateProvider.overrideWith(_IdleRun.new),
           activeServerProvider.overrideWithValue(
             const AraServer(hostname: 'localhost', port: 5555),
           ),
@@ -451,6 +654,7 @@ void main() {
     await t.pumpWidget(
       ProviderScope(
         overrides: [
+          sequenceRunStateProvider.overrideWith(_IdleRun.new),
           activeServerProvider.overrideWithValue(
             const AraServer(hostname: 'localhost', port: 5555),
           ),
@@ -495,7 +699,7 @@ void main() {
     expect(find.byType(GuidingAssistantPanel), findsOneWidget);
     expect(
       t.widget<Text>(find.byKey(const Key('guiding-assistant-headline'))).data,
-      startsWith('Ready.'),
+      startsWith('Not ready'),
     );
   });
 }

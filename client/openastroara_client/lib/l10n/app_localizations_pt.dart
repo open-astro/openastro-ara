@@ -349,6 +349,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get previewPlan => 'Plan';
 
   @override
+  String get previewPlanSkipped => 'Skipped: conditions not met';
+
+  @override
   String get previewParking => 'Parking';
 
   @override
@@ -699,6 +702,17 @@ class AppLocalizationsPt extends AppLocalizations {
   String shellStopAgain(String shortcut) {
     return 'Press $shortcut again to stop the run';
   }
+
+  @override
+  String shellDiscardEditQuestion(String name) {
+    return 'Discard changes to $name?';
+  }
+
+  @override
+  String get shellKeepEditing => 'Keep editing';
+
+  @override
+  String get shellDiscard => 'Discard';
 
   @override
   String get shellShowControls => 'Show controls';
@@ -2486,6 +2500,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get previewPlan => 'Plano';
 
   @override
+  String get previewPlanSkipped => 'Pulado: fora das condições';
+
+  @override
   String get previewParking => 'Estacionando';
 
   @override
@@ -2838,6 +2855,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String shellStopAgain(String shortcut) {
     return 'Pressione $shortcut de novo para parar a sessão';
   }
+
+  @override
+  String shellDiscardEditQuestion(String name) {
+    return 'Descartar as alterações em $name?';
+  }
+
+  @override
+  String get shellKeepEditing => 'Continuar editando';
+
+  @override
+  String get shellDiscard => 'Descartar';
 
   @override
   String get shellShowControls => 'Mostrar controles';

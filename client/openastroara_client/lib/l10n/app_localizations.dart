@@ -687,6 +687,12 @@ abstract class AppLocalizations {
   /// **'Plan'**
   String get previewPlan;
 
+  /// Simple Mode status pill: a finished plan imaged nothing because its target never started (#1596). Keep it short: the pill is one line, max 300 px, after the 'Plan' label, and the cause must survive the ellipsis.
+  ///
+  /// In en, this message translates to:
+  /// **'Skipped: conditions not met'**
+  String get previewPlanSkipped;
+
   /// Simple Mode status pill: the mount is parking
   ///
   /// In en, this message translates to:
@@ -1334,6 +1340,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Press {shortcut} again to stop the run'**
   String shellStopAgain(String shortcut);
+
+  /// Simple Mode question pill when a rail or image tap would drop the unsaved rows of a queued target being edited
+  ///
+  /// In en, this message translates to:
+  /// **'Discard changes to {name}?'**
+  String shellDiscardEditQuestion(String name);
+
+  /// Discard-changes question: leave the edit sheet open
+  ///
+  /// In en, this message translates to:
+  /// **'Keep editing'**
+  String get shellKeepEditing;
+
+  /// Discard-changes question: drop the edit and carry on with the tap
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get shellDiscard;
 
   /// Simple Mode screen reader label of the image when the controls are hidden
   ///

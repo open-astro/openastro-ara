@@ -326,6 +326,11 @@ public interface IGuiderService {
     /// InvalidOperationException when disconnected (→ 409, typed).</summary>
     Task<OperationAcceptedDto> PushGuiderTuningAsync(string? idempotencyKey, CancellationToken ct);
 
+    /// <summary>#1592 — write the profile's multi-star setting to the connected guider (needs its equipment
+    /// disconnected for a moment). Throws GuiderBusyException while guiding (409), InvalidOperationException
+    /// when disconnected (409, typed), GuiderRpcException when the guider refuses (422).</summary>
+    Task ApplyGuiderMultiStarAsync(CancellationToken ct);
+
     /// <summary>§63.4 — what the daemon holds for a profile's guider twin, for the delete dialog: whether
     /// either twin name exists (null = no guider connected), whether it is the daemon's selected profile,
     /// and whether a delete could run right now (idle guider) or would be queued, with the reason. Never

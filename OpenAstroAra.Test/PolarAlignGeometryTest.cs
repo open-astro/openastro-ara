@@ -15,6 +15,8 @@
 using NUnit.Framework;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 
 namespace OpenAstroAra.Test {
 
@@ -55,6 +57,9 @@ namespace OpenAstroAra.Test {
                 v.Y * cos + cross.Y * sin + k.Y * dot * (1 - cos),
                 v.Z * cos + cross.Z * sin + k.Z * dot * (1 - cos));
         }
+
+        private static (double X, double Y, double Z) Cross((double X, double Y, double Z) a, (double X, double Y, double Z) b) =>
+            (a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
 
         private static void AssertFitRecovers(double axisRa, double axisDec, double pointRa,
                 double pointDec, double rotationDeg, bool north) {
@@ -207,6 +212,118 @@ namespace OpenAstroAra.Test {
             Assert.Throws<ArgumentOutOfRangeException>(() =>
                 PolarAlignGeometry.AxisError(0, 90, 0, 0, T),
                 "the celestial pole sits on the horizon at the equator — no alt/az decomposition");
+        }
+
+        // #1591 — how well does the two-point fit hold up when the seed sits close to the pole? The mount
+        // axis is axisOffsetDeg off the pole; the camera sits (90° − seedDec) from the MOUNT axis (that is
+        // what the mount's Dec reads); the mount turns 30° (RA increasing) about its axis; each solve
+        // carries 10″ of tangent-plane noise per component. 300 seeded trials, camera azimuth varied.
+        [SuppressMessage("Security", "CA5394:Do not use insecure randomness",
+            Justification = "Seeded System.Random makes the synthetic solve noise deterministic; test-only, nothing security related.")]
+        private static (System.Collections.Generic.List<double> ErrorsArcmin, int Rejected) FitErrorsArcmin(
+                double axisOffsetDeg, double seedDec, bool knownDirection) {
+            const int Trials = 300;
+            const double RotationDeg = 30.0;
+            const double NoiseArcsec = 10.0;
+            var rng = new Random(1591);
+            double Gauss() => Math.Sqrt(-2 * Math.Log(1 - rng.NextDouble())) * Math.Cos(2 * Math.PI * rng.NextDouble());
+            var axis = Unit(40.0, 90.0 - axisOffsetDeg);
+            var u = Unit(130.0, 0.0);
+            var dotAU = axis.X * u.X + axis.Y * u.Y + axis.Z * u.Z;
+            u = (u.X - dotAU * axis.X, u.Y - dotAU * axis.Y, u.Z - dotAU * axis.Z);
+            var uLen = Math.Sqrt(u.X * u.X + u.Y * u.Y + u.Z * u.Z);
+            u = (u.X / uLen, u.Y / uLen, u.Z / uLen);
+            var theta = (90.0 - seedDec) * Math.PI / 180.0;
+
+            (double X, double Y, double Z) Noisy((double X, double Y, double Z) v) {
+                var e1 = Cross(v, (1.0, 0.0, 0.0));
+                var e1Len = Math.Sqrt(e1.X * e1.X + e1.Y * e1.Y + e1.Z * e1.Z);
+                e1 = (e1.X / e1Len, e1.Y / e1Len, e1.Z / e1Len);
+                var e2 = Cross(v, e1);
+                var sigma = NoiseArcsec / 3600.0 * Math.PI / 180.0;
+                var n1 = Gauss() * sigma;
+                var n2 = Gauss() * sigma;
+                var w = (X: v.X + n1 * e1.X + n2 * e2.X, Y: v.Y + n1 * e1.Y + n2 * e2.Y, Z: v.Z + n1 * e1.Z + n2 * e2.Z);
+                var wLen = Math.Sqrt(w.X * w.X + w.Y * w.Y + w.Z * w.Z);
+                return (w.X / wLen, w.Y / wLen, w.Z / wLen);
+            }
+
+            var errorsArcmin = new System.Collections.Generic.List<double>();
+            var rejected = 0;
+            for (var i = 0; i < Trials; i++) {
+                var tilted = Rotate(u, axis, 360.0 * i / Trials);
+                var p1 = (X: axis.X * Math.Cos(theta) + tilted.X * Math.Sin(theta),
+                          Y: axis.Y * Math.Cos(theta) + tilted.Y * Math.Sin(theta),
+                          Z: axis.Z * Math.Cos(theta) + tilted.Z * Math.Sin(theta));
+                var p2 = Rotate(p1, axis, RotationDeg);
+                var (ra1, dec1) = RaDec(Noisy(p1));
+                var (ra2, dec2) = RaDec(Noisy(p2));
+                try {
+                    var fitted = PolarAlignGeometry.FitAxisTwoPoint(ra1, dec1, ra2, dec2, RotationDeg, northernHemisphere: true,
+                        raIncreasing: knownDirection ? true : null);
+                    var f = Unit(fitted.RaDeg, fitted.DecDeg);
+                    var cos = f.X * axis.X + f.Y * axis.Y + f.Z * axis.Z;
+                    errorsArcmin.Add(Math.Acos(Math.Clamp(cos, -1, 1)) * 180.0 / Math.PI * 60.0);
+                } catch (ArgumentOutOfRangeException) {
+                    rejected++;
+                }
+            }
+            errorsArcmin.Sort();
+            return (errorsArcmin, rejected);
+        }
+
+        // Evidence only (no direction): the two axis lines the pointings admit are mirror images through the
+        // pointing plane; the pole-nearest pick takes the wrong one whenever the mirror sits nearer the
+        // pole, which happens as soon as the seed is not far from the pole compared with the axis offset.
+        // The numbers are in the commit body for #1591.
+        [TestCase(1.0, 80.0)]
+        [TestCase(1.0, 85.0)]
+        [TestCase(1.0, 87.0)]
+        [TestCase(1.0, 88.0)]
+        [TestCase(1.0, 89.0)]
+        [TestCase(4.6, 80.0)]
+        [TestCase(4.6, 85.0)]
+        [TestCase(4.6, 87.0)]
+        [TestCase(4.6, 88.0)]
+        [TestCase(4.6, 89.0)]
+        [TestCase(10.0, 80.0)]
+        [TestCase(10.0, 85.0)]
+        [TestCase(10.0, 87.0)]
+        [TestCase(10.0, 88.0)]
+        [TestCase(10.0, 89.0)]
+        public void Two_point_fit_without_the_slew_direction_report(double axisOffsetDeg, double seedDec) {
+            var (errors, rejected) = FitErrorsArcmin(axisOffsetDeg, seedDec, knownDirection: false);
+            TestContext.Out.WriteLine(
+                $"no direction: axisOffset {axisOffsetDeg} seedDec {seedDec}: rejected {rejected}, " +
+                $"over 10 arcmin {errors.Count(e => e > 10.0)}/{errors.Count}, " +
+                $"median {errors[errors.Count / 2]:F2}, p95 {errors[(int)(errors.Count * 0.95)]:F2}, max {errors[^1]:F2}");
+            Assert.That(rejected, Is.Zero);
+        }
+
+        // With the mount's own turn direction the mirror line reproduces the turn the wrong way round and
+        // is rejected: the fit stays on the true axis (solve noise only) at every seed Dec and axis offset.
+        [TestCase(1.0, 80.0)]
+        [TestCase(1.0, 85.0)]
+        [TestCase(1.0, 87.0)]
+        [TestCase(1.0, 88.0)]
+        [TestCase(1.0, 89.0)]
+        [TestCase(4.6, 80.0)]
+        [TestCase(4.6, 85.0)]
+        [TestCase(4.6, 87.0)]
+        [TestCase(4.6, 88.0)]
+        [TestCase(4.6, 89.0)]
+        [TestCase(10.0, 80.0)]
+        [TestCase(10.0, 85.0)]
+        [TestCase(10.0, 87.0)]
+        [TestCase(10.0, 88.0)]
+        [TestCase(10.0, 89.0)]
+        public void Two_point_fit_with_the_slew_direction_stays_on_the_true_axis(double axisOffsetDeg, double seedDec) {
+            var (errors, rejected) = FitErrorsArcmin(axisOffsetDeg, seedDec, knownDirection: true);
+            TestContext.Out.WriteLine(
+                $"direction: axisOffset {axisOffsetDeg} seedDec {seedDec}: rejected {rejected}, " +
+                $"median {errors[errors.Count / 2]:F2}, p95 {errors[(int)(errors.Count * 0.95)]:F2}, max {errors[^1]:F2}");
+            Assert.That(rejected, Is.Zero);
+            Assert.That(errors[^1], Is.LessThan(3.0), "arcmin; 10 arcsec of solve noise is ~0.6 arcmin median");
         }
     }
 }

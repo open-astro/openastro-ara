@@ -182,6 +182,32 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         }
 
         /// <summary>
+        /// #1592 — multi-star lives in <c>set_profile_setup</c>, which the guider only takes with its equipment
+        /// disconnected, so a save while connected would drop a guide session. Refused (<see cref="GuiderBusyException"/>)
+        /// while guiding, calibrating or paused; otherwise the equipment is released, the flag written from
+        /// the profile (<see cref="AdvancedSettings"/>, on when unset) and the equipment reconnected.
+        /// </summary>
+        public async Task ApplyMultiStarFromProfileAsync(CancellationToken ct) {
+            if (!Connected) {
+                throw new InvalidOperationException("guider is not connected");
+            }
+            var state = State;
+            if (state == PhdAppState.GUIDING || state == PhdAppState.CALIBRATING || state == PhdAppState.LOSTLOCK || state == PhdAppState.PAUSED) {
+                throw new GuiderBusyException("Multi-star is applied with the guider's equipment disconnected - stop guiding first, then save again.");
+            }
+            var enabled = AdvancedSettingsQuietly()?.MultiStarEnabled ?? true;
+            await DisconnectPHD2Equipment(ct).ConfigureAwait(false);
+            var response = await SendMessage(new Phd2SetProfileSetup { Parameters = new() { MultiStarEnabled = enabled } }).ConfigureAwait(false);
+            var reconnected = await EnsurePHD2EquipmentConnected().ConfigureAwait(false);
+            if (response.error != null) {
+                throw new GuiderRpcException("set_profile_setup", -1, response.error.ToString());
+            }
+            if (!reconnected) {
+                throw new GuiderRpcException("set_connected", -1, "multi-star was applied, but the guider's equipment did not reconnect.");
+            }
+        }
+
+        /// <summary>
         /// What the guider has now, for Ara's settings page to show beside the profile's values. Every
         /// group is read best-effort: a getter the guider refuses (no mount defined for the algorithms, an
         /// older build) leaves its fields null. Null when the guider is not connected.
@@ -281,5 +307,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
             return JToken.FromObject(resp.result) is JArray arr ? arr.Values<string>().OfType<string>().ToList() : Array.Empty<string>();
         }
+    }
+
+    /// <summary>#1592 — the guider is mid-session, so the change cannot be applied now; the message says what to do.</summary>
+    public sealed class GuiderBusyException : InvalidOperationException {
+        public GuiderBusyException() { }
+        public GuiderBusyException(string message) : base(message) { }
+        public GuiderBusyException(string message, Exception innerException) : base(message, innerException) { }
     }
 }

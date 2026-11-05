@@ -11,6 +11,8 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/server_api.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/ws/client_session_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/theme/ara_theme.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
@@ -79,6 +81,8 @@ void main() {
           simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(true)),
         ],
         child: MaterialApp(
+          // The app's own theme: its onError is black, not the default white.
+          theme: araTheme,
           home: Scaffold(
             body: pills
                 // The pill the stop's message lands in, as Simple Mode shows it.
@@ -115,10 +119,10 @@ void main() {
   for (final (name, button) in [
     ('compact', const EmergencyStopButton(compact: true)),
     ('simple', const EmergencyStopButton(simple: true)),
+    ('full UI', const EmergencyStopButton()),
   ]) {
-    // The full UI keeps Fault Red and its lighter sweep (user, 2026-11-02).
     testWidgets(
-      'Simple Mode ($name): the label reads at 4.5:1 on the red, at rest and while held',
+      'Emergency Stop ($name): the label reads at 4.5:1 on the red, at rest and while held',
       (tester) async {
         await pumpButton(tester, button: button, simpleMode: true);
         double ratio(Color a, Color b) {
@@ -131,6 +135,8 @@ void main() {
             .style!;
         final fill = style.backgroundColor!.resolve({})!;
         final text = style.foregroundColor!.resolve({})!;
+        expect(fill, AraColors.emergencyStop, reason: 'every Stop shares one red');
+        expect(text, Colors.white, reason: 'the label is white, not the scheme\'s black');
         expect(ratio(fill, text), greaterThanOrEqualTo(4.5), reason: 'at rest');
         final g = await tester.startGesture(
           tester.getCenter(find.byType(EmergencyStopButton)),

@@ -193,6 +193,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     if (_editing != null) ref.invalidate(simpleRunPlanProvider);
     _editing = null;
     _adding = false;
+    // A discard question can't outlive the edit it was about: its Discard
+    // would replay a stale tap.
+    if (_discardAsk case final id?) {
+      ref.read(simpleMessagesProvider.notifier).dismiss(id);
+      _discardAsk = null;
+    }
   }
 
   /// The rails' and the Night Setup row's heights, measured after each frame:
@@ -484,7 +490,52 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
   }
 
-  void _toggle(_Popover p) => setState(() {
+  int? _discardAsk;
+
+  /// A tap that would close the sheet over an edit with unsaved rows asks
+  /// first (#1572): returns true when it asked, [go] being the tap to carry
+  /// on with after Discard.
+  bool _askDiscard(VoidCallback go) {
+    final e = _editing;
+    final targets = ref.read(simpleRunProvider).targets;
+    if (!_adding || e == null || e >= targets.length) return false;
+    final saved = targets[e].steps;
+    final rows = ref.read(simpleRunPlanProvider);
+    // Save stores the gain too: compared with what the sheet opened with.
+    final gain = ref.read(simpleRunGainProvider);
+    final dirty =
+        gain != ref.read(simpleRunGainProvider.notifier).seeded ||
+        rows.length != saved.length ||
+        [
+          for (var i = 0; i < rows.length; i++)
+            rows[i].filterName != saved[i].filterName ||
+                rows[i].exposureSeconds != saved[i].exposureSeconds ||
+                rows[i].frameCount != saved[i].frameCount,
+        ].any((d) => d);
+    if (!dirty) return false;
+    final messages = ref.read(simpleMessagesProvider.notifier);
+    if (ref.read(simpleMessagesProvider).any((m) => m.id == _discardAsk)) {
+      return true;
+    }
+    final l10n = context.l10n;
+    _discardAsk = messages.show(
+      SimpleMessageKind.question,
+      l10n.shellDiscardEditQuestion(targets[e].name),
+      // The pill fills its last action: the safe answer, not the destructive one.
+      actions: [
+        SimpleMessageAction(l10n.shellDiscard, go),
+        SimpleMessageAction(l10n.shellKeepEditing, () {}),
+      ],
+    );
+    return true;
+  }
+
+  void _toggle(_Popover p, {bool discarded = false}) {
+    if (!discarded && _askDiscard(() => _toggle(p, discarded: true))) return;
+    setState(() => _toggleNow(p));
+  }
+
+  void _toggleNow(_Popover p) {
     // Settings covers everything; a rail menu that would cover the camera
     // window closes it.
     if (p == _Popover.menu || !_sideBySide(context)) _device = null;
@@ -498,7 +549,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       return;
     }
     _popover = _popover == p ? _Popover.none : p;
-  });
+  }
 
   /// A tap on the image closes what's open, or else toggles the immersive
   /// view (only once there is a frame to look at).
@@ -507,16 +558,21 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   bool get _anyOpen =>
       _device != null || _popover != _Popover.none || _adding || _info;
 
-  void _tapImage(bool hasFrame) => setState(() {
-    if (_anyOpen) {
-      _device = null;
-      _info = false;
-      _popover = _Popover.none;
-      _closeSheet();
-    } else if (hasFrame) {
-      _clean = !_clean;
+  void _tapImage(bool hasFrame, {bool discarded = false}) {
+    if (!discarded && _askDiscard(() => _tapImage(hasFrame, discarded: true))) {
+      return;
     }
-  });
+    setState(() {
+      if (_anyOpen) {
+        _device = null;
+        _info = false;
+        _popover = _Popover.none;
+        _closeSheet();
+      } else if (hasFrame) {
+        _clean = !_clean;
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1081,6 +1137,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                               .read(simpleShowingProvider.notifier)
                                               .pick(SimpleModeScreen.plan);
                                         }
+                                        // An edit left open is over: the sheet plans the pick.
+                                        _closeSheet();
                                         // Over a run, the sheet adds to its queue.
                                         _popover = runActive
                                             ? _Popover.none

@@ -112,6 +112,7 @@ public sealed partial class CameraService : ILiveStackControl {
     }
 
     public (ReadOnlyMemory<byte> Jpeg, long Seq, long SessionId, int Frames)? GetLiveStackFrame() {
+        TouchLiveViewFetch(); // a stack watcher may never fetch the plain frame; it is still a client
         var s = _liveStack.Snapshot;
         return s.Jpeg is null ? null : (s.Jpeg, s.Seq, s.SessionId, s.FramesStacked);
     }

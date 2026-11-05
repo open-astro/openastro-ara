@@ -654,13 +654,29 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             TaskScheduler.Default);
     }
 
+    private static readonly AsyncLocal<bool> _opFaultsSuppressed = new();
+
+    /// <summary>Runs <paramref name="op"/> with this call's mount-op faults (§42.4) left unpublished. For a
+    /// caller that reports its own failure to the user and must not feed the fault escalation to
+    /// abort-and-park (#1536 Polar Align's seed slew). The flag is set inside this method's own async
+    /// context, so no other caller's ops are affected.</summary>
+    public static Task<T> RunWithoutOpFaultsAsync<T>(Func<Task<T>> op) {
+        ArgumentNullException.ThrowIfNull(op);
+        return RunAsync();
+
+        async Task<T> RunAsync() {
+            _opFaultsSuppressed.Value = true;
+            return await op().ConfigureAwait(false);
+        }
+    }
+
     // §42.4 — op-channel fault publish: snapshot the device under the gate, publish off-lock
     // (EquipmentFaultHub.Publish is non-blocking and never throws into the caller). A fault may
     // only be blamed on the LIVE client — an op whose client was superseded or disposed by a user
     // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
     // so the liveness check and the device snapshot share one critical section.
     private void PublishOpFault(AlpacaTelescope client, EquipmentFaultKind kind, string details) {
-        if (_faults is null) {
+        if (_faults is null || _opFaultsSuppressed.Value) {
             return;
         }
         DiscoveredDeviceDto? device;

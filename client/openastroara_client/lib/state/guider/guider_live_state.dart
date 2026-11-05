@@ -122,7 +122,10 @@ class GuiderLiveNotifier extends Notifier<GuiderLiveState> {
   // An action's re-read can overlap a timer-driven refresh(); both end in
   // _schedule(), which cancels the other's pending timer, so exactly one
   // poll chain survives.
-  Future<void> _act(Future<void> Function(GuiderLiveClient api) op) async {
+  Future<void> _act(
+    Future<void> Function(GuiderLiveClient api) op, {
+    String Function(Object e)? describe,
+  }) async {
     final api = ref.read(guiderLiveApiProvider);
     if (api == null || state.busy) return;
     state = state.copyWith(busy: true, clearError: true);
@@ -133,7 +136,10 @@ class GuiderLiveNotifier extends Notifier<GuiderLiveState> {
       await refresh();
     } catch (e) {
       if (!ref.mounted) return;
-      state = state.copyWith(busy: false, error: describeRequestError(e));
+      state = state.copyWith(
+        busy: false,
+        error: (describe ?? describeRequestError)(e),
+      );
     }
   }
 
@@ -146,6 +152,19 @@ class GuiderLiveNotifier extends Notifier<GuiderLiveState> {
       _act((_) => ref.read(guiderStatusProvider.notifier).startGuiding());
   Future<void> selectStar(double x, double y) =>
       _act((api) => api.selectStar(x, y));
+
+  /// Guiding Assistant's Find star: loop if the guider is not, wait for a
+  /// picture, then let the guider pick its best star (the daemon's find_star).
+  Future<void> findStar() => _act((api) async {
+    if (!state.live.isLooping) await api.loop();
+    // The guider has no image until its first exposure ends; find_star refuses
+    // before that. shortcut: waits at most ~15 s, then lets the guider say why.
+    for (var i = 0; i < 15 && await api.getFrame() == null; i++) {
+      await Future<void>.delayed(const Duration(seconds: 1));
+    }
+    await api.findStar();
+  }, describe: (e) => 'Could not find a star: ${describeRequestError(e)}');
+
   Future<void> deselectStar() => _act((api) => api.deselectStar());
   Future<void> clearCalibration() => _act((api) => api.clearCalibration());
 }

@@ -137,6 +137,10 @@ void main() {
       mount: const MountProps(name: 'iOptron CEM70'),
     )..tracking = TrackingCalibration(
         ceilingSeconds: 45, measuredUtc: DateTime.utc(2026, 10, 11, 12), source: 'measured');
+    // The card shows the local date, so build the expectation the same way (#1512).
+    final local = DateTime.utc(2026, 10, 11, 12).toLocal();
+    final localDate = '${local.year}-${local.month.toString().padLeft(2, '0')}-'
+        '${local.day.toString().padLeft(2, '0')}';
     final c = _container(source);
     await c
         .read(wizardEquipmentReadinessProvider.notifier)
@@ -145,7 +149,7 @@ void main() {
     expect(mount.state, ReadinessState.ready);
     expect(mount.facts.map((f) => f.label), contains('Unguided ceiling'));
     expect(mount.facts.singleWhere((f) => f.label == 'Unguided ceiling').value,
-        startsWith('45 s · measured 2026-10-11'));
+        startsWith('45 s · measured $localDate'));
   });
 
   test('#1264 a failed tracking read never gaps or unreaches the mount card', () async {

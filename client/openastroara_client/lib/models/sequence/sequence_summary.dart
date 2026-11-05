@@ -357,6 +357,11 @@ class SequenceRunStateInfo {
   /// (cooling, a wait, autofocus); null otherwise or from an older daemon.
   final double? currentInstructionProgress;
 
+  /// #1596 — why the run ended without imaging or is waiting on the meridian
+  /// (code to branch on, text to show); null otherwise or from an older daemon.
+  final String? reasonCode;
+  final String? reasonText;
+
   const SequenceRunStateInfo({
     this.sequenceId = '',
     this.runId = '',
@@ -372,6 +377,8 @@ class SequenceRunStateInfo {
     this.estimatedRemainingSeconds,
     this.framesCaptured = 0,
     this.currentInstructionProgress,
+    this.reasonCode,
+    this.reasonText,
   });
 
   factory SequenceRunStateInfo.fromJson(Map<String, dynamic> json) {
@@ -392,6 +399,8 @@ class SequenceRunStateInfo {
       framesCaptured: _int(json['frames_captured']),
       currentInstructionProgress:
           _doubleOrNull(json['current_instruction_progress']),
+      reasonCode: _str(json['reason_code']),
+      reasonText: _str(json['reason_text']),
     );
   }
 
@@ -436,6 +445,14 @@ class SequenceRunStateInfo {
           payload.containsKey('current_instruction_progress')
               ? _doubleOrNull(payload['current_instruction_progress'])
               : currentInstructionProgress,
+      // Cleared by a null the way the progress is (the wait is over); an older
+      // daemon omits the keys and keeps the last known.
+      reasonCode: payload.containsKey('reason_code')
+          ? _str(payload['reason_code'])
+          : reasonCode,
+      reasonText: payload.containsKey('reason_text')
+          ? _str(payload['reason_text'])
+          : reasonText,
     );
   }
 
@@ -457,7 +474,9 @@ class SequenceRunStateInfo {
       other.estimatedTotalSeconds == estimatedTotalSeconds &&
       other.estimatedRemainingSeconds == estimatedRemainingSeconds &&
       other.framesCaptured == framesCaptured &&
-      other.currentInstructionProgress == currentInstructionProgress;
+      other.currentInstructionProgress == currentInstructionProgress &&
+      other.reasonCode == reasonCode &&
+      other.reasonText == reasonText;
 
   @override
   int get hashCode => Object.hash(
@@ -474,7 +493,9 @@ class SequenceRunStateInfo {
       estimatedTotalSeconds,
       estimatedRemainingSeconds,
       framesCaptured,
-      currentInstructionProgress);
+      currentInstructionProgress,
+      reasonCode,
+      reasonText);
 }
 
 /// One row in the sequence list — daemon's `SequenceListItemDto`.

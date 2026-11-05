@@ -349,6 +349,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get previewPlan => 'Plan';
 
   @override
+  String get previewPlanSkipped => 'Skipped: conditions not met';
+
+  @override
   String get previewParking => 'Parking';
 
   @override
@@ -699,6 +702,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String shellStopAgain(String shortcut) {
     return 'Press $shortcut again to stop the run';
   }
+
+  @override
+  String shellDiscardEditQuestion(String name) {
+    return 'Discard changes to $name?';
+  }
+
+  @override
+  String get shellKeepEditing => 'Keep editing';
+
+  @override
+  String get shellDiscard => 'Discard';
 
   @override
   String get shellShowControls => 'Show controls';

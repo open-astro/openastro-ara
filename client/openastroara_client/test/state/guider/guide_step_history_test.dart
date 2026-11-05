@@ -45,6 +45,8 @@ class _History implements GuiderLiveClient {
   @override
   Future<void> deselectStar() async {}
   @override
+  Future<void> findStar() async {}
+  @override
   Future<GuiderCalibrationView> getCalibration() async =>
       GuiderCalibrationView.disconnected;
   @override

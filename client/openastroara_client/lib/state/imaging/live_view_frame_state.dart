@@ -76,10 +76,22 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
     // The daemon keeps a loop running when the app dies mid-Loop (rig,
     // 2026-11-05: the camera stayed busy and every shutter tap was refused
     // with nothing on screen to stop); on connect, adopt it instead.
-    ref.listen(activeServerProvider, fireImmediately: true, (_, server) {
+    ref.listen(activeServerProvider, fireImmediately: true, (prev, server) {
+      if (prev != null && prev != server) _release();
       if (server != null) Future.microtask(() => _adopt(server));
     });
     return LiveFrameState.idle;
+  }
+
+  /// The active server changed: drop the old server's session without calling
+  /// it (it may be gone), so the adopt check can run against the new one.
+  void _release() {
+    _timer?.cancel();
+    _timer = null;
+    _api?.close();
+    _api = null;
+    state = LiveFrameState.idle;
+    ref.read(liveViewControllerProvider.notifier).set(false);
   }
 
   Future<void> _adopt(AraServer server) async {
@@ -93,7 +105,7 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
     }
     // Disposed while the ask was out (a server switch, teardown): a read of
     // state or ref would throw, and the client it built would leak.
-    if (_disposed || !active || _api != null || state.active) {
+    if (_disposed || !active || _api != null || state.active || ref.read(activeServerProvider) != server) {
       api.close();
       return;
     }

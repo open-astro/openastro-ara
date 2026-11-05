@@ -404,7 +404,11 @@ public sealed record AutofocusSettingsDto(
     // §59.8 — size the sweep automatically: from the V half-width the last sweep measured, else half the CFZ
     // when the focuser reports µm/step, else `StepSize` as the wide first sweep. Off = `StepSize` as typed.
     // Trailing default so a pre-existing profile.json reads as auto (the agreed default).
-    bool StepSizeAuto = true);
+    bool StepSizeAuto = true,
+    // #1541 — the focuser's backlash in/out (steps), from the setup wizard. The focuser service adds the one for the
+    // new direction to a move that reverses the last one (NINA's Absolute method); 0 = no compensation. A backlash the sweep measured wins.
+    int BacklashInSteps = 0,
+    int BacklashOutSteps = 0);
 
 /// <summary>
 /// §37.10 plate solving settings — engine + search/timeout knobs +
@@ -526,8 +530,8 @@ public sealed record PolarAlignSettingsDto(
 /// a profile never overwrites a setting it did not set. Kept apart from the PHD2 block so a client that
 /// PUTs that block without these fields cannot wipe them. Units are the guider's: ms, px, plain SNR;
 /// <c>NoiseReduction</c> is "None" | "2x2 Mean" | "3x3 Median"; algorithms are names from
-/// <c>ra_algorithms</c> / <c>dec_algorithms</c> of <c>GET /equipment/guider/advanced</c>. Multi-star lands on the next connect (the guider takes
-/// it only with its equipment disconnected); everything else applies on Apply, while guiding.
+/// <c>ra_algorithms</c> / <c>dec_algorithms</c> of <c>GET /equipment/guider/advanced</c>. Multi-star is on when null (#1592) and reaches a connected guider through POST /equipment/guider/multi-star/apply (the guider takes
+/// it only with its equipment disconnected, so it is refused while guiding); everything else applies on Apply, while guiding.
 /// </summary>
 public sealed record GuiderAdvancedSettingsDto(
     bool? MultiStarEnabled = null,

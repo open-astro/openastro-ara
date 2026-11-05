@@ -124,6 +124,14 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Multi_star_is_on_for_a_new_profile_and_an_unset_one_and_an_explicit_off_is_kept() {
+            Assert.That(GuiderAdvancedSettingsMapping.ToEngine(new GuiderAdvancedSettingsDto()).MultiStarEnabled, Is.True, "new profile");
+            Assert.That(GuiderAdvancedSettingsMapping.ToEngine(new GuiderAdvancedSettingsDto(MultiStarEnabled: null, MinStarSnr: 6)).MultiStarEnabled, Is.True, "null migrates to on");
+            Assert.That(GuiderAdvancedSettingsMapping.ToEngine(new GuiderAdvancedSettingsDto(MultiStarEnabled: false)).MultiStarEnabled, Is.False, "explicit off");
+            Assert.That(GuiderAdvancedSettingsMapping.ToEngine(new GuiderAdvancedSettingsDto(MultiStarEnabled: true)).MultiStarEnabled, Is.True);
+        }
+
+        [Test]
         public void The_write_boundary_refuses_values_the_guider_would_reject() {
             Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto()), Is.Null);
             Assert.That(GuiderAdvancedSettingsMapping.Validate(new GuiderAdvancedSettingsDto(MinStarSnr: 0)), Does.Contain("min_star_snr"));

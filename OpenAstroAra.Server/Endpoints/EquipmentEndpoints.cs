@@ -111,7 +111,12 @@ public static partial class EquipmentEndpoints {
         if (svc.StoreRefusal() is { } noStore) {
             return Results.Problem(title: SequenceEndpoints.NoStoreProblemTitle, detail: noStore, statusCode: StatusCodes.Status409Conflict);
         }
-        return Results.Accepted(value: await svc.StartExposureAsync(request, key, ct));
+        try {
+            return Results.Accepted(value: await svc.StartExposureAsync(request, key, ct));
+        } catch (InvalidOperationException ex) when (ex is not ObjectDisposedException) {
+            // #1584: camera not connected / an exposure already in flight is a state conflict, not a 500.
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
     }
 
     /// <summary>#1298 — POST /equipment/filterwheel/installed: the user reports the filter now in
@@ -598,6 +603,9 @@ public static partial class EquipmentEndpoints {
             .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("GuiderLiveSelectStar").WithSummary("Lock the guider on the star nearest (x, y) guide pixels.");
+        guider.MapPost("/live/find_star", (IGuiderLiveService live, CancellationToken ct) => GuiderLiveResultAsync(() => live.FindStarAsync(ct)))
+            .Produces<GuiderLiveLockDto>(StatusCodes.Status200OK).ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("GuiderLiveFindStar").WithSummary("Let the guider pick its best star in the current frame (422 with its reason when there is no image or no usable star); answers the lock position.");
         guider.MapGet("/live/calibration", async (IGuiderLiveService live, CancellationToken ct) => Results.Ok(await live.GetCalibrationAsync(ct)))
             .Produces<GuiderCalibrationViewDto>(StatusCodes.Status200OK)
             .WithName("GetGuiderCalibrationView")
@@ -702,6 +710,11 @@ public static partial class EquipmentEndpoints {
                     + "continues. Any other value is a 400.")] string? scope, [FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
             await PushGuiderAsync(scope, key, svc, ct))
             .ProducesProblem(StatusCodes.Status400BadRequest); // unknown ?scope
+        // #1592 — write the profile's multi-star setting to the connected guider. 204; 409 not connected
+        // (typed) or guiding (stop guiding first); 422 the guider refused.
+        guider.MapPost("/multi-star/apply", async (IGuiderService svc, CancellationToken ct) => await ApplyGuiderMultiStarAsync(svc, ct))
+            .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("ApplyGuiderMultiStar").WithSummary("Apply the profile's multi-star setting to the connected guider; refused while guiding.");
         // §63.17 manual restart — fire-and-forget systemctl restart of the guider unit (202 immediately;
         // §63.3 recovery + guider.state WS events report the outcome). Deliberately not gated on a
         // connected guider: it's most useful when the daemon is hung.
@@ -1182,6 +1195,19 @@ public static partial class EquipmentEndpoints {
         }
         return Task.FromResult(Results.Problem($"unknown scope '{scope}': expected 'full' or 'tuning'",
             statusCode: StatusCodes.Status400BadRequest));
+    }
+
+    public static async Task<IResult> ApplyGuiderMultiStarAsync(IGuiderService svc, CancellationToken ct) {
+        try {
+            await svc.ApplyGuiderMultiStarAsync(ct);
+            return Results.NoContent();
+        } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderBusyException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        } catch (System.InvalidOperationException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
+        } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
+        }
     }
 
     /// <summary>Tuning-only push (same 202 / typed-409 mapping; there is no reconnect step, so no 422).</summary>

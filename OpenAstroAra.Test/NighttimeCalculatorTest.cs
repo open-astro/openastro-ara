@@ -69,3 +69,28 @@ namespace OpenAstroAra.Test {
         }
     }
 }
+namespace OpenAstroAra.Test {
+
+    [TestFixture]
+    public class NighttimeCalculatorReferenceDayTest {
+
+        [Test]
+        public void ReferenceDayChangedFiresOncePerDayChange() {
+            using var sut = new NighttimeCalculator(null!);
+            var now = new DateTime(2020, 5, 4, 11, 0, 0);
+            sut.Now = () => now;
+            // Re-baseline LastReferenceDate on the injected clock
+            sut.OnTimedEvent(null, null!);
+            var count = 0;
+            sut.OnReferenceDayChanged += (_, _) => count++;
+
+            now = new DateTime(2020, 5, 4, 12, 10, 0);
+            sut.OnTimedEvent(null, null!);
+            Assert.That(count, Is.EqualTo(1));
+
+            now = new DateTime(2020, 5, 4, 12, 20, 0);
+            sut.OnTimedEvent(null, null!);
+            Assert.That(count, Is.EqualTo(1));
+        }
+    }
+}

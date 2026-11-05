@@ -5,9 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/guider_status.dart';
 import '../../models/guiding_assistant.dart';
+import '../../state/guider/guider_live_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/guider/guiding_assistant_state.dart';
 import '../../theme/ara_colors.dart';
+import 'guide_camera_panel.dart' show GuideCameraView;
 
 Future<void> showGuidingAssistantDialog(BuildContext context) =>
     showDialog<void>(
@@ -61,6 +63,13 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
     final guiderState = ref.watch(guiderStatusProvider).asData?.value;
     final guiding =
         guiderState != null && guiderIsGuiding(guiderState.runtimeState);
+    final liveState = ref.watch(guiderLiveProvider);
+    final live = liveState.live;
+    final liveNotifier = ref.read(guiderLiveProvider.notifier);
+    final looping = live.isLooping;
+    final starSelected = looping && live.hasLock;
+    final calibrated = liveState.calibration.data?.calibrated == true;
+    final ready = looping && starSelected && calibrated;
     final status = state.status;
     final text = Theme.of(context).textTheme;
     final recs = status.recommendations;
@@ -94,7 +103,7 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
               const SizedBox(width: 12),
               Flexible(
                 child: Text(
-                  _headline(state, guiding: guiding),
+                  _headline(state, guiding: guiding, ready: ready),
                   key: const Key('guiding-assistant-headline'),
                   overflow: TextOverflow.ellipsis,
                   style: text.bodySmall?.copyWith(
@@ -120,6 +129,37 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
             'with a lot of it.',
             style: text.bodySmall?.copyWith(color: AraColors.textSecondary),
           ),
+          const SizedBox(height: 8),
+          _Requirements(
+            looping: looping,
+            starSelected: starSelected,
+            calibrated: calibrated,
+            lockX: live.lockX,
+            lockY: live.lockY,
+            onFindStar:
+                !live.connected ||
+                    liveState.busy ||
+                    guiding ||
+                    status.isRunning
+                ? null
+                : () => unawaited(liveNotifier.findStar()),
+          ),
+          // The picture the tap needs: the dialog covers the guide camera
+          // window, so the locked star is shown here and a tap picks another.
+          if (!status.isRunning && liveState.frame != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: SizedBox(
+                height: 200,
+                child: GuideCameraView(
+                  frame: liveState.frame,
+                  live: live,
+                  onTap: live.connected && !liveState.busy && !guiding
+                      ? (x, y) => unawaited(liveNotifier.selectStar(x, y))
+                      : null,
+                ),
+              ),
+            ),
           const SizedBox(height: 12),
           Expanded(
             child: SingleChildScrollView(
@@ -198,7 +238,7 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
                 ),
                 FilledButton.icon(
                   key: const Key('guiding-assistant-start'),
-                  onPressed: !status.connected || state.busy || guiding
+                  onPressed: !status.connected || state.busy || guiding || !ready
                       ? null
                       : () => unawaited(
                           notifier.start(
@@ -239,11 +279,13 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
                 ),
             ],
           ),
-          if (state.error != null)
+          if (state.error != null || liveState.error != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
-                state.error!,
+                state.error != null
+                    ? _plainError(state.error!)
+                    : liveState.error!,
                 key: const Key('guiding-assistant-error'),
                 style: text.bodySmall?.copyWith(color: AraColors.accentError),
               ),
@@ -253,7 +295,17 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
     );
   }
 
-  static String _headline(GuidingAssistantState state, {required bool guiding}) {
+  /// The guider's "no star selected - start looping and select a star first
+  /// (loop + find_star)" is its own jargon: say what to press instead.
+  static String _plainError(String e) => e.contains('no star selected')
+      ? 'No star is selected yet. Press Find star, then Start again.'
+      : e;
+
+  static String _headline(
+    GuidingAssistantState state, {
+    required bool guiding,
+    required bool ready,
+  }) {
     final s = state.status;
     if (!state.loaded) return 'Reading…';
     if (!s.connected) {
@@ -266,7 +318,8 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
       'failed' => 'Failed.',
       _ when guiding =>
         'Stop guiding first — the star must drift freely while it measures.',
-      _ => 'Ready. Loop, pick a star, calibrate once, then Start.',
+      _ when ready => 'Ready. Press Start.',
+      _ => 'Not ready — see the checklist below.',
     };
   }
 
@@ -281,6 +334,84 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
     if (s.isDone) return AraColors.accentConnected;
     if (s.isFailed) return AraColors.accentError;
     return AraColors.textSecondary;
+  }
+}
+
+/// The three things the measurement needs, live, and the one action that
+/// gets a stopped guider to the first two.
+class _Requirements extends StatelessWidget {
+  final bool looping;
+  final bool starSelected;
+  final bool calibrated;
+  final double? lockX;
+  final double? lockY;
+  final VoidCallback? onFindStar;
+  const _Requirements({
+    required this.looping,
+    required this.starSelected,
+    required this.calibrated,
+    required this.lockX,
+    required this.lockY,
+    required this.onFindStar,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final missing = [
+      if (!looping) 'looping',
+      if (!starSelected) 'a selected star',
+      if (!calibrated) 'calibration (it runs the first time you press Guide)',
+    ];
+    Widget item(String id, String label, bool ok) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          ok ? Icons.check_circle : Icons.radio_button_unchecked,
+          key: Key('ga-req-$id-${ok ? 'ok' : 'missing'}'),
+          size: 16,
+          color: ok ? AraColors.accentConnected : AraColors.textSecondary,
+        ),
+        const SizedBox(width: 4),
+        Text(label, style: text.bodySmall),
+      ],
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: 16,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            item('looping', 'Looping', looping),
+            item('star', 'Star selected', starSelected),
+            item('calibrated', 'Calibrated', calibrated),
+            if (starSelected && lockX != null && lockY != null)
+              Text(
+                '${lockX!.round()}, ${lockY!.round()}',
+                key: const Key('ga-lock-position'),
+                style: text.bodySmall?.copyWith(color: AraColors.textSecondary),
+              ),
+            OutlinedButton.icon(
+              key: const Key('guiding-assistant-find-star'),
+              onPressed: onFindStar,
+              icon: const Icon(Icons.auto_awesome, size: 16),
+              label: const Text('Find star'),
+            ),
+          ],
+        ),
+        if (missing.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              'Start needs ${missing.join(', ')}.',
+              key: const Key('guiding-assistant-missing'),
+              style: text.bodySmall?.copyWith(color: AraColors.accentBusy),
+            ),
+          ),
+      ],
+    );
   }
 }
 

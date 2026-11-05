@@ -81,7 +81,7 @@ public sealed partial class FocuserService : IFocuserMediator {
                 DeviceId = _device?.UniqueId ?? string.Empty,
                 Position = connected ? runtime.Position ?? 0 : 0,
                 Temperature = connected && runtime.Temperature is double t ? t : double.NaN,
-                IsMoving = connected && runtime.State == "moving",
+                IsMoving = connected && runtime.State is "moving" or "backlash_compensating",
                 TempComp = connected && runtime.TempCompEnabled,
                 TempCompAvailable = connected && (caps?.CanTempComp ?? false),
                 StepSize = connected ? caps?.StepSizeUm ?? 0 : 0,
@@ -100,6 +100,72 @@ public sealed partial class FocuserService : IFocuserMediator {
     public Task<int> MoveFocuserByTemperatureRelative(double temperature, double Slope, CancellationToken ct) =>
         MoveFocuserBlockingAsync(CurrentPosition() + (int)Math.Round(Slope * temperature), ct);
 
+    // #1541 — drive the focuser to the logical `target`; a reversal of the last move adds the new direction's
+    // backlash to the same move (no return leg). The extra steps accumulate in _backlashOffset, so the hardware
+    // sits at logical + offset and every reported position subtracts it. Blocking (runs on the pool); the sweep
+    // suppresses compensation.
+    private void MoveCompensated(AlpacaFocuser client, int target) {
+        int lastDirection, offset;
+        FocuserCapabilitiesDto? caps;
+        lock (_gate) {
+            lastDirection = _lastDirection;
+            offset = _backlashOffset;
+            caps = _capabilities;
+        }
+        var absolute = caps?.AbsoluteFocuser ?? true;
+        int? from = absolute && ReadPosition(client) is int hw ? hw - offset : null;
+        var inputs = FocuserBacklash.IsSuppressed || lastDirection == 0 ? null : ReadBacklashInputs();
+        var move = FocuserBacklash.Plan(absolute, from, target, lastDirection,
+            d => inputs is var (settings, calibration) ? FocuserBacklash.StepsFor(d, settings, calibration) : 0,
+            offset, caps?.MinPosition ?? 0, caps?.MaxPosition ?? 0);
+        if (move.Extra != 0) {
+            lock (_gate) {
+                _compensating = true;
+                _runtime = FocuserBacklash.Report(_runtime, true);
+            }
+        }
+        try {
+            client.Move(move.HardwareTarget);
+        } catch {
+            if (move.Extra != 0) {
+                lock (_gate) {
+                    _compensating = false;
+                }
+            }
+            throw;
+        }
+        // Move returns once the move is dispatched, so the flag stays up; RefreshCacheOnce drops it when IsMoving reads false.
+        lock (_gate) {
+            if (absolute) {
+                _backlashOffset = move.Offset;
+            }
+            if (move.Direction != 0) {
+                _lastDirection = move.Direction;
+            }
+        }
+    }
+
+    // The hardware position as the user's scale sees it: minus the backlash steps added so far.
+    private int? Logical(int? hardware) {
+        lock (_gate) {
+            return hardware - _backlashOffset;
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort profile read: a store hiccup degrades to an uncompensated move rather than failing it. Log-and-recover boundary.")]
+    private (AutofocusSettingsDto Settings, FocusCalibrationDto? Calibration)? ReadBacklashInputs() {
+        if (_profiles is null) {
+            return null;
+        }
+        try {
+            return (_profiles.GetAutofocusSettings(), _profiles.GetFocusCalibration());
+        } catch (Exception ex) {
+            LogMoveFailed(ex, 0);
+            return null;
+        }
+    }
+
     // Base position for a relative move. Prefer a fresh DIRECT device read over the §32.4 cache so
     // the computed absolute target doesn't drift by up to one polling interval (the cache can lag, and
     // a relative move is only meaningful against the focuser's true current position). Falls back to
@@ -109,7 +175,7 @@ public sealed partial class FocuserService : IFocuserMediator {
         lock (_gate) {
             client = _state == EquipmentConnectionState.Connected ? _client : null;
         }
-        var live = client is not null ? ReadPosition(client) : null;
+        var live = client is not null ? Logical(ReadPosition(client)) : null;
         if (live is int p) {
             return p;
         }
@@ -163,7 +229,7 @@ public sealed partial class FocuserService : IFocuserMediator {
             // call can't pin the sequence thread "regardless of cancellation" even when ct never fires
             // and the Alpaca client's own HTTP timeout is generous. The abandoned move is observed so
             // it can't surface as an unobserved task exception.
-            var moveTask = Task.Run(() => client.Move(target), CancellationToken.None);
+            var moveTask = Task.Run(() => MoveCompensated(client, target), CancellationToken.None);
             using (var linked = CancellationTokenSource.CreateLinkedTokenSource(ct)) {
                 linked.CancelAfter(MoveHardTimeout);
                 var completed = await Task.WhenAny(moveTask, Task.Delay(Timeout.Infinite, linked.Token)).ConfigureAwait(false);
@@ -210,7 +276,7 @@ public sealed partial class FocuserService : IFocuserMediator {
         // instead of where the focuser actually settled. If both the live read and the cache are
         // unavailable, report 0 ("unknown") rather than the requested target — a failed move must not
         // hand back the target and let the caller infer it reached it.
-        var settled = ReadPosition(client);
+        var settled = Logical(ReadPosition(client));
         lock (_gate) {
             return settled ?? _runtime.Position ?? 0;
         }

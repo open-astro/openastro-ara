@@ -149,7 +149,7 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
                           ),
                         ),
                         const SizedBox(width: AraSpace.s8),
-                        RunStateBadge(state),
+                        Flexible(child: RunStateBadge(state, reason: run.reasonText)),
                       ],
                     ),
                   ),

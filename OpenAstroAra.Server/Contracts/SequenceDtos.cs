@@ -118,7 +118,11 @@ public sealed record SequenceRunStateDto(
     int FramesCaptured = 0,
     // How far the running instruction has got, 0–1, when it reports a fraction (cooling, a wait,
     // autofocus); null otherwise. Cleared when the next instruction starts.
-    double? CurrentInstructionProgress = null);
+    double? CurrentInstructionProgress = null,
+    // #1596 — why the run ended without imaging ("target_skipped") or is waiting on the meridian
+    // ("meridian"); code is for clients to branch on, text is shown as-is. Both null otherwise.
+    string? ReasonCode = null,
+    string? ReasonText = null);
 
 /// <summary>Per-instruction progress payload (WS sequence.instruction_started / _complete / _failed).</summary>
 public sealed record InstructionProgressDto(

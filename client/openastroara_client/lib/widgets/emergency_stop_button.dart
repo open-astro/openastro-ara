@@ -261,9 +261,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
     final l10n = context.l10n;
     final compact = widget.compact;
     final simple = widget.simple || compact;
-    final red = simple
-        ? AraColors.emergencyStop
-        : Theme.of(context).colorScheme.error;
+    const red = AraColors.emergencyStop;
     final radius = simple ? 10.0 : 16.0;
     final icon = _inFlight
         ? SizedBox(
@@ -293,7 +291,8 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
     );
     final style = FilledButton.styleFrom(
       backgroundColor: red,
-      foregroundColor: Theme.of(context).colorScheme.onError,
+      // Not onError: the app's dark scheme makes that black (4.2:1 on the red).
+      foregroundColor: AraColors.onEmergencyStop,
       padding: EdgeInsets.symmetric(
         horizontal: compact ? 0 : (simple ? 8 : 18),
         vertical: simple ? 0 : 7,
@@ -363,13 +362,8 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
                       builder: (context, _) => FractionallySizedBox(
                         alignment: Alignment.centerLeft,
                         widthFactor: _hold.value,
-                        // Simple Mode's sweep darkens, keeping HOLD at 7.7:1;
-                        // the full UI's lightens.
-                        child: ColoredBox(
-                          color: simple
-                              ? const Color(0x40000000)
-                              : const Color(0x40FFFFFF),
-                        ),
+                        // Darkens, keeping HOLD at 7.7:1.
+                        child: const ColoredBox(color: Color(0x40000000)),
                       ),
                     ),
                   ),

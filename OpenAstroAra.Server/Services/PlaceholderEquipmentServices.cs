@@ -230,6 +230,8 @@ public sealed class PlaceholderGuiderService : IGuiderService {
         Task.FromException<OperationAcceptedDto>(new InvalidOperationException("guider is not connected"));
     public Task<OperationAcceptedDto> PushGuiderTuningAsync(string? idempotencyKey, CancellationToken ct) =>
         Task.FromException<OperationAcceptedDto>(new InvalidOperationException("guider is not connected"));
+    public Task ApplyGuiderMultiStarAsync(CancellationToken ct) =>
+        Task.FromException(new InvalidOperationException("guider is not connected"));
     // Best-effort by contract: the placeholder has no guider, so cleanup is a no-op false.
     // No guider service at all: there is no twin to offer (the dialog hides the box) and nothing to
     // delete — never an error snackbar for a profile delete that went fine.

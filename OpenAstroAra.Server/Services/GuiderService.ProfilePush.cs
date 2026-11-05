@@ -50,6 +50,17 @@ public sealed partial class GuiderService {
         return PushTuningAsync(guider, idempotencyKey, ct);
     }
 
+    /// <summary>#1592 — see <see cref="IGuiderService.ApplyGuiderMultiStarAsync"/>.</summary>
+    public async Task ApplyGuiderMultiStarAsync(CancellationToken ct) {
+        var guider = RequireConnectedGuider();
+        // Between targets the guider is stopped (slew, centre), so its state alone cannot tell a run is on.
+        if (_sequencerResolver?.Invoke() is { } sequencer && (await sequencer.ActiveRunIdsAsync(ct).ConfigureAwait(false)).Count > 0) {
+            throw new OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderBusyException(
+                "A sequence is running; applying multi-star would release the guider's equipment under it. Apply it when the run has ended.");
+        }
+        await guider.ApplyMultiStarFromProfileAsync(ct).ConfigureAwait(false);
+    }
+
     private async Task<OperationAcceptedDto> PushTuningAsync(
             OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PHD2Guider guider, string? idempotencyKey, CancellationToken ct) {
         var methods = await guider.RepushGuiderTuningAsync(ct).ConfigureAwait(false);

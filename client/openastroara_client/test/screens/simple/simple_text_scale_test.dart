@@ -29,6 +29,9 @@ import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/models/library/live_library.dart';
+import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimpleStatusPill;
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
 
@@ -339,4 +342,49 @@ void main() {
     }
   }
   }
+
+  // #1596: the skipped-run pill is one line in a 300 px pill; its cause must
+  // survive the ellipsis in every language (measured with real Roboto).
+  for (final locale in const [Locale('en'), Locale('pt', 'BR')]) {
+    testWidgets('${locale.toLanguageTag()} the skipped-run status pill fits on its line', skip: !hasFonts, (tester) async {
+      tester.view.physicalSize = const Size(1024, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final c = ProviderContainer(overrides: [
+        simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
+        selectedTabIndexProvider.overrideWith(_StartOnLive.new),
+        sequenceRunStateProvider.overrideWith(() => _SkippedRun()),
+      ]);
+      addTearDown(c.dispose);
+      await c.read(simpleModeProvider.future);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: MaterialApp(
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: ThemeData(fontFamily: 'Roboto'),
+          home: const SimpleShell(planetarium: SizedBox()),
+        ),
+      ));
+      await tester.pump();
+      await tester.pump();
+      final skipped = lookupAppLocalizations(locale).previewPlanSkipped;
+      final lines = tester
+          .renderObjectList<RenderParagraph>(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText)))
+          .where((p) => p.text.toPlainText().contains(skipped))
+          .toList();
+      expect(lines, isNotEmpty, reason: 'the pill shows the skip reason');
+      for (final p in lines) {
+        expect(p.didExceedMaxLines, isFalse, reason: '"${p.text.toPlainText()}" is cut off');
+      }
+    });
+  }
+}
+
+class _SkippedRun extends SequenceRunStateNotifier {
+  @override
+  Future<SequenceRunStateInfo?> build() async => const SequenceRunStateInfo(
+      sequenceId: 'seq-1', state: SequenceRunState.completed,
+      reasonCode: 'target_skipped', reasonText: 'Skipped, nothing was imaged: M31 did not run');
 }

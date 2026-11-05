@@ -83,6 +83,10 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
     internal TimeSpan WatchdogHardCap { get; set; } = TimeSpan.FromMinutes(5);
     internal TimeSpan ReconnectPollInterval { get; set; } = TimeSpan.FromSeconds(2);
     internal TimeSpan ReconnectWait { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>#1596 - the status source of the two reports that become the run status reason: waiting out
+    /// the meridian, and a flight-check refusal. Every other flip report keeps source "MeridianFlip".</summary>
+    internal const string WaitSource = "MeridianFlipWait";
     // §58.8 — the first-flip proceed-on-timeout window (spec: ~60 s).
     internal TimeSpan FirstFlipConfirmWait { get; set; } = TimeSpan.FromSeconds(60);
     // Injectable clock for the Layer-1 altitude prediction (tests pin the instant).
@@ -173,6 +177,8 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             Logger.Error($"Meridian Flip - Pre-flip flight check failed: {failReason}. The flip will not start; the mount stays in its pre-flip state.");
             await NotifyCritical("Meridian flip aborted before it started",
                 $"Pre-flip flight check failed: {failReason} The mount was left tracking in its pre-flip state and the sequence has been halted.");
+            // #1596 — stays on the run status until the resumed flip reports again.
+            progress.Report(new ApplicationStatus { Source = WaitSource, Status = $"Flip refused: {failReason}" });
             return false;
         }
 
@@ -329,7 +335,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
 
         var remaining = timeToFlip;
         while (remaining.TotalSeconds >= 1) {
-            progress.Report(new ApplicationStatus { Source = "MeridianFlip", Status = $"Passing meridian — {remaining:hh\\:mm\\:ss}" });
+            progress.Report(new ApplicationStatus { Source = WaitSource, Status = $"Passing meridian — {remaining:hh\\:mm\\:ss}" });
             var delta = await CoreUtil.Delay(1000, token);
             remaining -= delta;
         }

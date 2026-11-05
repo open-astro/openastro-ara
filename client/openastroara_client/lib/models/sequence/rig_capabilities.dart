@@ -13,11 +13,17 @@ class RigCapabilities {
   final bool rotator;
   final bool guider;
 
+  /// The camera can hold a set-point (CanSetCCDTemperature). A camera that
+  /// can't, or a dumb on/off cooler, gets no Cool Camera step: it would only
+  /// wait out a minute for a temperature nothing regulates (#1577).
+  final bool coolerRegulates;
+
   const RigCapabilities({
     this.focuser = false,
     this.filterWheel = false,
     this.rotator = false,
     this.guider = false,
+    this.coolerRegulates = false,
   });
 
   static const everything = RigCapabilities(
@@ -25,6 +31,7 @@ class RigCapabilities {
     filterWheel: true,
     rotator: true,
     guider: true,
+    coolerRegulates: true,
   );
 
   static const nothing = RigCapabilities();
@@ -34,15 +41,17 @@ class RigCapabilities {
     bool? filterWheel,
     bool? rotator,
     bool? guider,
+    bool? coolerRegulates,
   }) => RigCapabilities(
     focuser: focuser ?? this.focuser,
     filterWheel: filterWheel ?? this.filterWheel,
     rotator: rotator ?? this.rotator,
     guider: guider ?? this.guider,
+    coolerRegulates: coolerRegulates ?? this.coolerRegulates,
   );
 
   @override
   String toString() =>
       'RigCapabilities(focuser: $focuser, filterWheel: $filterWheel, '
-      'rotator: $rotator, guider: $guider)';
+      'rotator: $rotator, guider: $guider, coolerRegulates: $coolerRegulates)';
 }

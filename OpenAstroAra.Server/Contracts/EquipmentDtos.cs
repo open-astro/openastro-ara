@@ -596,6 +596,9 @@ public sealed record GuiderCalibrationDataDto(
     double? DeclinationDeg,
     double? OrthogonalityErrorDeg);
 
+/// <summary>The star the guider locked on, guide pixels (<c>POST …/live/find_star</c>).</summary>
+public sealed record GuiderLiveLockDto(double X, double Y);
+
 /// <summary>A tap on the live picture: lock on the star nearest (<c>X</c>, <c>Y</c>) guide pixels.</summary>
 public sealed record GuiderLiveSelectRequestDto(double X, double Y);
 

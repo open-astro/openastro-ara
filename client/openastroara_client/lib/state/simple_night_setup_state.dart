@@ -50,6 +50,12 @@ extension SimpleModeScreenLabels on SimpleModeScreen {
   };
 }
 
+/// Simple Mode is showing: the feature AND the mode, read from the two sources
+/// (a derived Provider with no reader is not recomputed).
+bool _simpleModeActive(Ref ref) =>
+    (ref.read(simpleModeFeatureProvider).value ?? false) &&
+    (ref.read(simpleModeProvider).value ?? false);
+
 /// What Simple Mode shows. Two writers: the person's pick, and Night Setup's
 /// steps. [SimpleModeScreen.nightSetup] is only ever picked: it starts Night
 /// Setup, whose first step is what shows.
@@ -61,12 +67,9 @@ class SimpleShowingNotifier extends Notifier<SimpleModeScreen> {
     // The shell mounts on the feature AND the mode (simpleModeActiveProvider),
     // so both toggles count; the two sources are listened to, as a derived
     // Provider with no reader is not recomputed.
-    bool active() =>
-        (ref.read(simpleModeFeatureProvider).value ?? false) &&
-        (ref.read(simpleModeProvider).value ?? false);
-    var was = active();
+    var was = _simpleModeActive(ref);
     void opened(Object? prev, Object? next) {
-      final now = active();
+      final now = _simpleModeActive(ref);
       if (!was && now) pick(SimpleModeScreen.preview);
       was = now;
     }
@@ -191,6 +194,17 @@ class NightSetupNotifier extends Notifier<NightSetupStep?> {
         ref.read(simpleShowingProvider.notifier)._show(SimpleModeScreen.plan);
       }
     });
+    // Closing Simple Mode ends the setup flow (not a queue it started): in
+    // Advanced nothing here may move the mount or start the guider (#1513).
+    var was = _simpleModeActive(ref);
+    void closed(Object? prev, Object? next) {
+      final now = _simpleModeActive(ref);
+      if (was && !now) _end();
+      was = now;
+    }
+
+    ref.listen(simpleModeProvider, closed);
+    ref.listen(simpleModeFeatureProvider, closed);
     return null;
   }
 
