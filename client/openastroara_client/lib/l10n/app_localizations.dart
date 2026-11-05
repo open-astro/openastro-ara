@@ -954,7 +954,7 @@ abstract class AppLocalizations {
   /// Simple Mode search panel: name of the Settings sheet's Guider section, shown beside a setting result (and the result for the section itself)
   ///
   /// In en, this message translates to:
-  /// **'Guider Camera'**
+  /// **'Guide Camera'**
   String get searchSectionGuider;
 
   /// Simple Mode search panel: a setting's name as a result; should match its name in Settings
@@ -1476,7 +1476,7 @@ abstract class AppLocalizations {
   /// Simple Mode Settings section and device row: the guider
   ///
   /// In en, this message translates to:
-  /// **'Guider Camera'**
+  /// **'Guide Camera'**
   String get shellSectionGuider;
 
   /// Simple Mode Settings › Devices when the app has no link to the rig
@@ -3534,7 +3534,7 @@ abstract class AppLocalizations {
   /// The guide camera's device window title
   ///
   /// In en, this message translates to:
-  /// **'Guider Camera'**
+  /// **'Guide Camera'**
   String get deviceGuiderCamera;
 
   /// Top bar note when no device is connected; opens Settings › Devices

@@ -215,7 +215,7 @@ void main() {
     final tile = find.byKey(const Key('simple-guide-exposure'));
     expect(find.descendant(of: tile, matching: find.text('2 s')), findsOneWidget);
     final slider = tester.widget<Slider>(find.byKey(const Key('simple-guider-gain')));
-    expect((slider.min, slider.max), (0.0, 100.0), reason: "the Guider Camera window's slider, one value");
+    expect((slider.min, slider.max), (0.0, 100.0), reason: "the Guide Camera window's slider, one value");
     slider.onChangeEnd!(70);
     await tester.pump();
     expect(c.read(phd2SettingsProvider).guideCameraGain, 70);

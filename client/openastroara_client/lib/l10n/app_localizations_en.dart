@@ -499,7 +499,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchSectionFocuser => 'Focuser';
 
   @override
-  String get searchSectionGuider => 'Guider Camera';
+  String get searchSectionGuider => 'Guide Camera';
 
   @override
   String get searchSettingAperture => 'Main scope aperture';
@@ -776,7 +776,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellSectionFocuser => 'Focuser';
 
   @override
-  String get shellSectionGuider => 'Guider Camera';
+  String get shellSectionGuider => 'Guide Camera';
 
   @override
   String get shellRigNotConnected => 'Rig not connected';
@@ -2002,7 +2002,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get guideConnectFirst => 'Connect the guider in Settings › Devices.';
 
   @override
-  String get deviceGuiderCamera => 'Guider Camera';
+  String get deviceGuiderCamera => 'Guide Camera';
 
   @override
   String get shellNoDevices => 'No devices connected';
