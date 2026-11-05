@@ -1,3 +1,4 @@
+import '../../util/reduce_motion.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -171,7 +172,7 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
                 // snapping (respects reduced motion).
                 child: TweenAnimationBuilder<double>(
                   tween: Tween(begin: 0, end: progress ?? 0),
-                  duration: MediaQuery.of(context).disableAnimations
+                  duration: reduceMotionOf(context)
                       ? Duration.zero
                       : const Duration(milliseconds: 400),
                   curve: Curves.easeOutCubic,

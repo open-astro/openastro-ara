@@ -1,3 +1,4 @@
+import '../../util/reduce_motion.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -165,7 +166,7 @@ class _Pill extends ConsumerWidget {
         AraColors.accentWarning,
       ),
     };
-    final reduced = MediaQuery.disableAnimationsOf(context);
+    final reduced = reduceMotionOf(context);
     return Semantics(
       // Read out as it appears.
       liveRegion: true,

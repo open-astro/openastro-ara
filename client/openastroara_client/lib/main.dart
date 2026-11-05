@@ -1,3 +1,4 @@
+import 'util/reduce_motion.dart';
 import 'dart:async';
 import 'dart:developer' as developer;
 
@@ -100,7 +101,8 @@ class OpenAstroAraApp extends StatelessWidget {
       // NightFilter for why the Navigator's parent must never change.
       // The language pick overrides below MaterialApp, so a change never
       // rebuilds the root; with no pick the override keeps the device's.
-      builder: (context, child) => NightFilter(
+      builder: (context, child) => ReduceMotionScope(
+      child: NightFilter(
         child: Consumer(
           builder: (context, ref, _) => Localizations.override(
             context: context,
@@ -109,6 +111,7 @@ class OpenAstroAraApp extends StatelessWidget {
             child: SimpleSafetyAlarmLayer(child: child ?? const SizedBox.shrink()),
           ),
         ),
+      ),
       ),
       home: NightHotkey(child: home ?? const _RootRouter()),
     );

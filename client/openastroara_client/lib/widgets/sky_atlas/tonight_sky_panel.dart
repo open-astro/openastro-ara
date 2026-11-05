@@ -1,3 +1,4 @@
+import '../../util/reduce_motion.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -390,7 +391,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
             remainingTonightHours: _object.remainingHours,
           );
 
-    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    final reduceMotion = reduceMotionOf(context);
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
       duration: reduceMotion

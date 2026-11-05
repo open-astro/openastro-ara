@@ -3,6 +3,7 @@
 /// in-place flip that scales a card up over its neighbours.
 library;
 
+import '../../util/reduce_motion.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -228,7 +229,7 @@ class AlbumCard extends StatelessWidget {
       barrierDismissible: true,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       barrierColor: Colors.black38,
-      transitionDuration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 320),
+      transitionDuration: reduceMotionOf(context) ? Duration.zero : const Duration(milliseconds: 320),
       pageBuilder: (dialogContext, _, _) => const SizedBox.shrink(),
       transitionBuilder: (dialogContext, animation, _, _) {
         final screen = MediaQuery.sizeOf(dialogContext);

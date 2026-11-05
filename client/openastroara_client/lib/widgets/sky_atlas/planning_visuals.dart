@@ -1,3 +1,4 @@
+import '../../util/reduce_motion.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -178,7 +179,7 @@ class BudgetRing extends StatelessWidget {
         ? ((banked ?? 0) / needed).clamp(0.0, 1.0)
         : 0.0;
     final complete = fraction >= 1.0;
-    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    final reduceMotion = reduceMotionOf(context);
     return Semantics(
       label:
           '${(banked ?? 0).toStringAsFixed(1)} of ${needed.toStringAsFixed(0)} '

@@ -1,3 +1,4 @@
+import '../util/reduce_motion.dart';
 import 'package:flutter/material.dart';
 
 import '../theme/ara_colors.dart';
@@ -145,7 +146,7 @@ class _StatusBlinkState extends State<StatusBlink>
   }
 
   void _sync() {
-    if (widget.on && !MediaQuery.disableAnimationsOf(context)) {
+    if (widget.on && !reduceMotionOf(context)) {
       if (!_blink.isAnimating) _blink.repeat(reverse: true);
     } else {
       _blink

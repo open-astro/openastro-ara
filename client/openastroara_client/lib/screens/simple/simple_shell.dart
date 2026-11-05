@@ -1,3 +1,4 @@
+import '../../util/reduce_motion.dart';
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
 import 'simple_search.dart';
@@ -794,7 +795,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       ),
     );
     final sel = ref.watch(planetariumSelectionProvider);
-    final motion = MediaQuery.disableAnimationsOf(context)
+    final motion = reduceMotionOf(context)
         ? Duration.zero
         : const Duration(milliseconds: 220);
     return Theme(
@@ -1343,7 +1344,7 @@ class _Fade extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reduce = MediaQuery.disableAnimationsOf(context);
+    final reduce = reduceMotionOf(context);
     return Positioned.fill(
       child: IgnorePointer(
         ignoring: !visible,

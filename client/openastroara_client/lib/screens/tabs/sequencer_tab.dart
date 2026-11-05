@@ -1,3 +1,4 @@
+import '../../util/reduce_motion.dart';
 import 'dart:async';
 
 import 'package:flutter/services.dart';
@@ -181,7 +182,7 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     // the stage. Reduced-motion honours the platform setting.
     final runActive =
         ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
-    final motionOff = MediaQuery.of(context).disableAnimations;
+    final motionOff = reduceMotionOf(context);
     final dimDuration =
         motionOff ? Duration.zero : const Duration(milliseconds: 250);
     Widget dimmed(Widget child) => AnimatedOpacity(
