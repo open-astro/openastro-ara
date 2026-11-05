@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
@@ -336,5 +337,22 @@ void main() {
       final style = tester.widget<Text>(find.descendant(of: find.byType(SliverGrid), matching: find.text(text))).style!;
       expect(ratio(style.color!, AraColors.bgPanel), greaterThanOrEqualTo(4.5), reason: text);
     }
+  });
+
+  testWidgets('a card is announced as one button with its label said once', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, frames: _m31Frames);
+    final node = tester.getSemantics(find.byType(AlbumCard).first);
+    final data = node.getSemanticsData();
+    expect(data.hasFlag(SemanticsFlag.isButton), isTrue);
+    expect(data.hasAction(SemanticsAction.tap), isTrue);
+    expect(data.label, 'M 1 Crab Nebula, Not collected yet');
+    // The flipped back closes through the dialog's labelled barrier; the card itself is no
+    // second, unlabelled close target.
+    await tester.tap(find.text('Crab Nebula'));
+    await tester.pumpAndSettle();
+    final back = tester.getSemantics(find.byType(AlbumCardBack)).getSemanticsData();
+    expect(back.hasAction(SemanticsAction.tap), isFalse);
+    handle.dispose();
   });
 }

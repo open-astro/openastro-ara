@@ -203,13 +203,15 @@ class AlbumCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Semantics(
-        // The tier is a border colour on screen; say it too.
+        button: true,
+        // The tier is a border colour on screen; say it too. The front's own texts stay
+        // out, or the label and name are read twice.
         label: context.l10n.albumCardSemantics(card.label, card.dso.name,
             card.tier == null ? context.l10n.albumNotCollected : albumTierName(context, card.tier!)),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
           onTap: () => _flip(context),
-          child: AlbumCardFront(card),
+          child: ExcludeSemantics(child: AlbumCardFront(card)),
         ),
       );
 
@@ -252,6 +254,8 @@ class AlbumCard extends StatelessWidget {
               child: showBack
                   // Tapping the flipped card again flips it back; its button still acts.
                   ? GestureDetector(
+                      // A pointer shortcut only: screen readers close through the labelled barrier.
+                      excludeFromSemantics: true,
                       onTap: () => Navigator.of(dialogContext).pop(),
                       child: Material(
                         type: MaterialType.transparency,
