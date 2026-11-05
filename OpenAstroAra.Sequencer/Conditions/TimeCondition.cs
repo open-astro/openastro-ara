@@ -269,8 +269,8 @@ namespace OpenAstroAra.Sequencer.Conditions {
         public override void SequenceBlockInitialize() {
             base.SequenceBlockInitialize();
             if (!HasFixedTimeProvider) {
-                Volatile.Write(ref heldTargetTicks, 0);
-                Volatile.Write(ref heldTargetTicks, CalculateRemainingTime().Ticks);
+                var rollover = SelectedProvider?.GetRolloverTime(this) ?? RolloverTime;
+                Volatile.Write(ref heldTargetTicks, WallClockTarget.Resolve(DateTime.Now, Hours, Minutes, Seconds, rollover, false).Ticks);
             }
         }
 
