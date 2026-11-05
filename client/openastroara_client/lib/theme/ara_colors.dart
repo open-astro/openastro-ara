@@ -87,4 +87,14 @@ class AraColors {
   static const selectionFg = Color(0xFFFFFFFF);
   static const buttonPrimary = Color(0xFF1565C0);
   static const buttonSecondary = Color(0xFF424242);
+
+  // Brand: the app icon's palette, for the OpenAstro Ara mark and Simple
+  // Mode's no-frame wallpaper only (#1602); never for state or emphasis.
+  static const brandNavyTop = Color(0xFF272C4D);
+  static const brandNavyMid = Color(0xFF171B3B);
+  static const brandNavyBottom = Color(0xFF070914);
+  static const brandLineStart = Color(0xFF4FC3F7);
+  static const brandLineEnd = Color(0xFF7C8CF8);
+  static const brandGlow = Color(0xFF8FA8FF);
+  static const brandStarHole = Color(0xFF0B0F24);
 }

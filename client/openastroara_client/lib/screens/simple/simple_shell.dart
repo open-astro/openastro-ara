@@ -171,6 +171,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   /// The planetarium on demand (the left rail's Sky), over any frame.
   bool _sky = false;
+  bool _hadFrame = false;
   _Popover _popover = _Popover.none;
 
   /// Plan's sheet open from the queue panel: to add a target (also over a
@@ -684,6 +685,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         focusFrame != null ||
         ref.watch(lastCapturedFrameIdProvider) != null ||
         ref.watch(liveViewControllerProvider);
+    // The first frame takes the screen back from a Sky opened before it.
+    if (hasFrame && !_hadFrame) _sky = false;
+    _hadFrame = hasFrame;
     final showSky = _sky || !hasFrame;
     // No frame and no sky asked for: the wallpaper (#1602).
     final wallpaper = !_sky && !hasFrame;
@@ -1494,6 +1498,13 @@ class _StatusStrip extends ConsumerWidget {
                   : TextButton(
                       key: const Key('simple-no-devices'),
                       onPressed: onDevices,
+                      // No rig is amber (needs a look), not the link blue,
+                      // which reads as connecting.
+                      style: ref.watch(serverLinkUpProvider)
+                          ? null
+                          : TextButton.styleFrom(
+                              foregroundColor: AraColors.accentWarning,
+                            ),
                       child: Text(
                         ref.watch(serverLinkUpProvider)
                             ? context.l10n.shellNoDevices
@@ -3633,10 +3644,18 @@ class _AraSheet extends ConsumerWidget {
         .where((p) => p.id == profiles.activeId)
         .firstOrNull
         ?.name;
-    return SizedBox(
+    // As wide as its text, up to 420 px (wider text wraps in the value column).
+    return ConstrainedBox(
       key: const Key('simple-ara-sheet'),
-      width: 320,
-      child: SimplePanel(
+      constraints: BoxConstraints(
+        minWidth: 280,
+        maxWidth: math.min(
+          420,
+          MediaQuery.sizeOf(context).width - kSimpleInset * 2,
+        ),
+      ),
+      child: IntrinsicWidth(
+        child: SimplePanel(
         padding: const EdgeInsets.all(AraSpace.s16),
         child: SimpleVersions(
           title: kAppName,
@@ -3655,6 +3674,7 @@ class _AraSheet extends ConsumerWidget {
             (l10n.shellProfile, profile ?? '—'),
           ],
         ),
+      ),
       ),
     );
   }

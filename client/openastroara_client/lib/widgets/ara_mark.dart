@@ -1,4 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+
+import '../theme/ara_colors.dart';
 
 /// The OpenAstro Ara mark: the app icon's constellation
 /// (icon_sources/app_icon_1024.png) without its tile, traced from the icon.
@@ -8,8 +12,10 @@ class AraMark extends StatelessWidget {
   final double size;
 
   @override
-  Widget build(BuildContext context) =>
-      CustomPaint(size: Size.square(size), painter: const _AraMarkPainter());
+  Widget build(BuildContext context) => CustomPaint(
+    size: Size.square(size),
+    painter: const _AraMarkPainter(),
+  );
 }
 
 class _AraMarkPainter extends CustomPainter {
@@ -31,13 +37,19 @@ class _AraMarkPainter extends CustomPainter {
   static const _bright = Offset(514, 246);
   static const _box = Rect.fromLTWH(200, 200, 630, 630);
   static const _line = LinearGradient(
-    colors: [Color(0xFF4FC3F7), Color(0xFF7C8CF8)],
+    colors: [AraColors.brandLineStart, AraColors.brandLineEnd],
   );
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Icon units per logical pixel. Small, the icon's hairlines would vanish
+    // (the strip draws it at 30 px), so no line, ring or star goes under its
+    // floor in pixels: lines 2, rings 1.5 wide and 3 across, the star 6.
+    final px = _box.width / size.width;
+    double atLeast(double units, double pixels) =>
+        math.max(units, pixels * px);
     canvas
-      ..scale(size.width / _box.width)
+      ..scale(1 / px)
       ..translate(-_box.left, -_box.top);
     canvas.drawCircle(
       _bright,
@@ -46,7 +58,7 @@ class _AraMarkPainter extends CustomPainter {
         ..shader = RadialGradient(
           colors: [
             Colors.white.withValues(alpha: .55),
-            const Color(0x008FA8FF),
+            AraColors.brandGlow.withValues(alpha: 0),
           ],
         ).createShader(Rect.fromCircle(center: _bright, radius: 110)),
     );
@@ -56,17 +68,18 @@ class _AraMarkPainter extends CustomPainter {
       ..strokeJoin = StrokeJoin.round;
     canvas.drawPath(
       Path()..addPolygon([..._stars, _bright], false),
-      stroke..strokeWidth = 16,
+      stroke..strokeWidth = atLeast(16, 2),
     );
-    final hole = Paint()..color = const Color(0xFF0B0F24);
-    stroke.strokeWidth = 14;
+    final hole = Paint()..color = AraColors.brandStarHole;
+    stroke.strokeWidth = atLeast(14, 1.5);
     for (final (i, c) in _stars.indexed) {
       if (_radii[i] == 0) continue;
+      final r = atLeast(_radii[i], 1.5);
       canvas
-        ..drawCircle(c, _radii[i], hole)
-        ..drawCircle(c, _radii[i], stroke);
+        ..drawCircle(c, r, hole)
+        ..drawCircle(c, r, stroke);
     }
-    canvas.drawCircle(_bright, 30, Paint()..color = Colors.white);
+    canvas.drawCircle(_bright, atLeast(30, 3), Paint()..color = Colors.white);
   }
 
   @override

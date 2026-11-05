@@ -859,6 +859,9 @@ void main() {
     await _pump(tester, const Size(1024, 768));
     expect(find.descendant(of: find.byKey(const Key('simple-no-devices')), matching: find.text('Rig not connected')),
         findsOneWidget);
+    // Amber: it needs a look. Blue would read as connecting (user, 2026-11-06).
+    final text = tester.renderObject<RenderParagraph>(find.text('Rig not connected'));
+    expect(text.text.style!.color, AraColors.accentWarning);
   });
 
   testWidgets('a connected device hides the no-devices note', (tester) async {
@@ -1999,6 +2002,18 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-sky')));
     await tester.pump();
     expect(find.byKey(const Key('simple-wallpaper')), findsOneWidget, reason: 'and back');
+  });
+
+  testWidgets('Sky turned on with no frame gives way to the first frame (#1602)', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsOneWidget);
+    await _frame(tester, c);
+    expect(find.byKey(const Key('sky')), findsNothing, reason: 'the frame, not the sky');
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsOneWidget, reason: 'Sky still opens it over a frame');
   });
 
   testWidgets('Search opens on its own: no mode panel beside the rail', (tester) async {
