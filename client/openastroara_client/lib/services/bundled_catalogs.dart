@@ -121,9 +121,8 @@ List<PlanningDso> parseOpenNgcCsv(String text) {
     // the NGC/IC counterpart, and the Identifiers column (Caldwell, LBN,
     // UGC, PK, …). mergeDuplicates folds rows that share one.
     // An addendum row named by its Messier number (M040) is its own alias.
-    final messierAlias = 'M $messier';
-    if (messier != null && designationKey(messierAlias) != designationKey(name)) {
-      aliases.add(messierAlias);
+    if (messier != null && designationKey('M $messier') != designationKey(name)) {
+      aliases.add('M $messier');
     }
     // On Arp/WR rows the cell can hold a list ("4038,4039"): one alias each.
     if (iNgc >= 0 && f.length > iNgc && !name.startsWith('NGC')) {

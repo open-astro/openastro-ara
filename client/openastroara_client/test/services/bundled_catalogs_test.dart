@@ -262,6 +262,7 @@ void main() {
     test('search finds M45 and C14 offline', () {
       expect(findCatalogObject(bundle, 'M45')!.messierNum, 45);
       expect(findCatalogObject(bundle, 'Pleiades')!.messierNum, 45);
+      expect(findCatalogObject(bundle, 'Winnecke 4')!.messierNum, 40);
       expect(findCatalogObject(bundle, 'C14')!.caldwellNum, 14);
       // The Double Cluster is one Card: NGC 884 folds into NGC 869's row.
       expect(findCatalogObject(bundle, 'NGC 884')!.caldwellNum, 14);
