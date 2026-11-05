@@ -3006,7 +3006,7 @@ void main() {
             reasonCode: 'target_skipped', reasonText: 'Skipped, nothing was imaged: M31 did not run'));
     await tester.pump();
     // Simple Mode's own words, keyed on the code, not the daemon's English text.
-    expect(pill(), contains("Nothing imaged: the target's start conditions weren't met"));
+    expect(pill(), contains('Skipped: start conditions not met'));
     expect(pill(), isNot(contains('M31 did not run')));
   });
 

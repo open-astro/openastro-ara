@@ -98,7 +98,7 @@
   "previewLooping": "Em contínuo",
   "previewPlanPaused": "Plano pausado",
   "previewPlan": "Plano",
-  "previewPlanSkipped": "Nada foi capturado: as condições de início do alvo não foram atendidas",
+  "previewPlanSkipped": "Pulado: condições de início não atendidas",
   "previewParking": "Estacionando",
   "previewUnparking": "Desestacionando",
   "previewCooling": "Resfriando",
