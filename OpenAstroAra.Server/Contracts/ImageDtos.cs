@@ -85,7 +85,8 @@ public sealed record FrameDto(
     double? CoolerSetpointC = null,
     // Sky Album (#1517): the mount's J2000 pointing (null when the frame was taken in another
     // epoch or with no mount), arcsec per stored pixel, and whether Ara captured it (false for a
-    // foreign frame the drive scan catalogued; null for a row not yet probed).
+    // foreign frame the drive scan catalogued; null for an older row not yet probed, and the
+    // startup backfill probes only light rows, so an older flat or dark stays null).
     double? RaDeg = null,
     double? DecDeg = null,
     double? PixelScaleArcsec = null,
