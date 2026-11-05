@@ -105,8 +105,14 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
         : const <PlanningDso>[];
     final shown = switch (_filter) {
       AlbumFilter.all => objects,
-      AlbumFilter.collected => [for (final d in objects) if (stats.containsKey(d.id)) d],
-      AlbumFilter.missing => [for (final d in objects) if (!stats.containsKey(d.id)) d],
+      AlbumFilter.collected => [
+        for (final d in objects)
+          if (stats.containsKey(d.id)) d,
+      ],
+      AlbumFilter.missing => [
+        for (final d in objects)
+          if (!stats.containsKey(d.id)) d,
+      ],
     };
     final tiers = {for (final t in AlbumTier.values) t: stats.values.where((s) => s.tier == t).length};
 
@@ -115,11 +121,10 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
     return Scaffold(
       backgroundColor: AraColors.bgPrimary,
       appBar: AppBar(
-        title: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(albumIcon),
-          const SizedBox(width: 8),
-          Text(l.albumTitle),
-        ]),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [const Icon(albumIcon), const SizedBox(width: 8), Text(l.albumTitle)],
+        ),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 12),
@@ -135,97 +140,116 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
           ),
         ],
       ),
-      body: CustomScrollView(slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-          sliver: SliverToBoxAdapter(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Expanded(
-                  child: Text(l.albumCollected(stats.length, objects.length),
-                      style: Theme.of(context).textTheme.titleMedium),
-                ),
-                Wrap(spacing: 16, children: [
-                  for (final t in AlbumTier.values.reversed)
-                    Text(l.albumTierCount(albumTierName(context, t), tiers[t]!),
-                        style: TextStyle(color: albumTierColor(t))),
-                ]),
-              ]),
-              const SizedBox(height: 8),
-              SegmentedButton<AlbumFilter>(
-                segments: [
-                  ButtonSegment(value: AlbumFilter.all, label: Text(l.albumFilterAll)),
-                  ButtonSegment(value: AlbumFilter.collected, label: Text(l.albumFilterCollected)),
-                  ButtonSegment(value: AlbumFilter.missing, label: Text(l.albumFilterMissing)),
-                ],
-                selected: {_filter},
-                showSelectedIcon: false,
-                onSelectionChanged: (s) => setState(() => _filter = s.single),
-              ),
-            ]),
-          ),
-        ),
-        if (error != null)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: AraColors.bgPanel,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AraColors.accentError),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    child: Text(error, style: const TextStyle(color: AraColors.errorText)),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        if (shelf.isNotEmpty) ...[
+      body: CustomScrollView(
+        slivers: [
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             sliver: SliverToBoxAdapter(
-              child: Text(l.albumShelfTitle(shelf.length), style: Theme.of(context).textTheme.titleSmall),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          l.albumCollected(stats.length, objects.length),
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                      ),
+                      Wrap(
+                        spacing: 16,
+                        children: [
+                          for (final t in AlbumTier.values.reversed)
+                            Text(
+                              l.albumTierCount(albumTierName(context, t), tiers[t]!),
+                              style: TextStyle(color: albumTierColor(t)),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Center(
+                    child: SegmentedButton<AlbumFilter>(
+                      segments: [
+                        ButtonSegment(value: AlbumFilter.all, label: Text(l.albumFilterAll)),
+                        ButtonSegment(value: AlbumFilter.collected, label: Text(l.albumFilterCollected)),
+                        ButtonSegment(value: AlbumFilter.missing, label: Text(l.albumFilterMissing)),
+                      ],
+                      selected: {_filter},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (s) => setState(() => _filter = s.single),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 130 / albumCardAspect,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                scrollDirection: Axis.horizontal,
-                itemCount: shelf.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 10),
-                itemBuilder: (_, i) => SizedBox(width: 130, child: card(shelf[i])),
+          if (error != null)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: AraColors.bgPanel,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AraColors.accentError),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      child: Text(error, style: const TextStyle(color: AraColors.errorText)),
+                    ),
+                  ),
+                ),
               ),
+            ),
+          if (shelf.isNotEmpty) ...[
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+              sliver: SliverToBoxAdapter(
+                child: Text(l.albumShelfTitle(shelf.length), style: Theme.of(context).textTheme.titleSmall),
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 130 / albumCardAspect,
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: shelf.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 10),
+                  itemBuilder: (_, i) => SizedBox(width: 130, child: card(shelf[i])),
+                ),
+              ),
+            ),
+          ],
+          if (noLights)
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              sliver: SliverToBoxAdapter(
+                child: Text(
+                  l.albumEmpty,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: AraColors.textSecondary),
+                ),
+              ),
+            ),
+          SliverPadding(
+            padding: const EdgeInsets.all(16),
+            sliver: SliverGrid(
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 130,
+                childAspectRatio: albumCardAspect,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+              ),
+              delegate: SliverChildBuilderDelegate((_, i) => card(shown[i]), childCount: shown.length),
             ),
           ),
         ],
-        if (noLights)
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            sliver: SliverToBoxAdapter(
-              child: Text(l.albumEmpty,
-                  textAlign: TextAlign.center, style: const TextStyle(color: AraColors.textSecondary)),
-            ),
-          ),
-        SliverPadding(
-          padding: const EdgeInsets.all(16),
-          sliver: SliverGrid(
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 130,
-              childAspectRatio: albumCardAspect,
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-            ),
-            delegate: SliverChildBuilderDelegate((_, i) => card(shown[i]), childCount: shown.length),
-          ),
-        ),
-      ]),
+      ),
     );
   }
 

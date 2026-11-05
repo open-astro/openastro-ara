@@ -222,4 +222,10 @@ void main() {
     expect(tester.getTopLeft(find.text('1 / 3 collected')).dx, lessThan(width / 2));
     expect(tester.getTopRight(find.text('Bronze 0')).dx, greaterThan(width - 40));
   });
+
+  testWidgets('the filter is centred', (tester) async {
+    await _pump(tester, frames: _m31Frames);
+    final centre = tester.getCenter(find.byType(SegmentedButton<AlbumFilter>)).dx;
+    expect(centre, closeTo(tester.view.physicalSize.width / 2, 2));
+  });
 }
