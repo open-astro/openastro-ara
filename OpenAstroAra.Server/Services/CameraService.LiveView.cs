@@ -58,6 +58,15 @@ public sealed partial class CameraService {
     // Reject an absurd binning up front (→ 400) rather than let the driver fail every frame until the
     // consecutive-failure self-stop trips. 16 covers any real sensor.
     private const int LiveViewMaxBin = 16;
+    // A loop no client has fetched a frame from for this long ends itself (↑ara#1585): an orphaned loop
+    // (client killed, left the LAN) otherwise holds the camera until a daemon restart. Well over any poll period.
+    internal static readonly TimeSpan LiveViewIdleStop = TimeSpan.FromSeconds(30);
+    private TimeProvider _liveViewClock = TimeProvider.System;
+    // Clock stamp of the last GET /liveview/frame (or of the session start); read by the loop, written by requests.
+    private long _liveViewLastFetch;
+    private bool LiveViewIdleTooLong() =>
+        _liveViewClock.GetElapsedTime(Interlocked.Read(ref _liveViewLastFetch), _liveViewClock.GetTimestamp()) > LiveViewIdleStop;
+    internal void SetLiveViewClockForTest(TimeProvider clock) => _liveViewClock = clock;
 
     // Serializes Start/Stop so they can never interleave (a Stop awaiting the old loop can't race a
     // concurrent Start spinning up a second loop). State reads (status/frame) stay lock-free. Not
@@ -134,6 +143,7 @@ public sealed partial class CameraService {
             // Fresh session: drop any frame from a prior session so FrameSeq == 0 / GET /frame → 204
             // reliably mean "no frame yet this session".
             _liveViewFrame = null;
+            Interlocked.Exchange(ref _liveViewLastFetch, _liveViewClock.GetTimestamp());
             var cts = new CancellationTokenSource();
             _liveViewCts = cts;
             _liveViewMeta = new LiveViewMeta(request.ExposureSec, DateTimeOffset.UtcNow);
@@ -233,6 +243,7 @@ public sealed partial class CameraService {
     }
 
     public (ReadOnlyMemory<byte> Jpeg, long Seq, long SessionId)? GetLiveViewFrame() {
+        Interlocked.Exchange(ref _liveViewLastFetch, _liveViewClock.GetTimestamp()); // a client is still watching
         var f = _liveViewFrame; // single volatile read — all fields are a consistent snapshot
         // ReadOnlyMemory view: the buffer is shared (published, never mutated in place — each frame
         // is a fresh array), so readers get a read-only window with no per-fetch copy.
@@ -253,6 +264,10 @@ public sealed partial class CameraService {
         var settingsApplied = false;
         try {
             while (!token.IsCancellationRequested) {
+                if (LiveViewIdleTooLong()) {
+                    LogLiveViewStoppedIdle((int)LiveViewIdleStop.TotalSeconds);
+                    break; // the finally below clears the frame and ends the stack, as on any self-stop
+                }
                 // Per-frame mutual exclusion with real captures: skip this frame if a manual
                 // exposure holds the gate, so Live View never collides with a catalog capture. A
                 // skipped frame is not a failure (a capture is running), so don't count it — but the
@@ -488,6 +503,10 @@ public sealed partial class CameraService {
 
     [LoggerMessage(EventId = 6413, Level = LogLevel.Warning, Message = "Live View loop faulted and stopped.")]
     partial void LogLiveViewLoopFaulted(Exception ex);
+
+    [LoggerMessage(EventId = 6416, Level = LogLevel.Warning,
+        Message = "Live View stopped itself: no client fetched a frame for {Seconds} s.")]
+    partial void LogLiveViewStoppedIdle(int seconds);
 
     [LoggerMessage(EventId = 6414, Level = LogLevel.Error,
         Message = "Live View self-stopped after {Failures} consecutive frames produced no image (check exposure/binning vs the camera's capabilities).")]
