@@ -87,7 +87,13 @@ class _SimpleWallpaperState extends State<SimpleWallpaper>
                 samplingPeriod: SensorInterval.uiInterval,
               ).map((e) => (x: e.x / 9.81, y: e.y / 9.81, z: e.z / 9.81))
             : null);
-    _sub = gravity?.listen(_onGravity, onError: (_) => _sub?.cancel());
+    _sub = gravity?.listen(
+      _onGravity,
+      onError: (_) {
+        _sub?.cancel();
+        _sub = null;
+      },
+    );
   }
 
   void _onGravity(Gravity g) {

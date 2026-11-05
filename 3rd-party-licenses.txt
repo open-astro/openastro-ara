@@ -75,10 +75,10 @@ them: the Stellarium Web Engine (AGPL-3.0,
 client/.../assets/stellarium/README.md + the open-astro/stellarium-web-engine
 fork).
 
-License summary (105 packages):
+License summary (106 packages):
     MIT: 72 packages
     Apache-2.0: 20 packages
-    BSD-3-Clause: 9 packages
+    BSD-3-Clause: 10 packages
     Microsoft .NET Library License: 2 packages
     BSD-2-Clause: 1 package
     MIT AND Ms-PL: 1 package

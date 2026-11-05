@@ -157,8 +157,8 @@ class SimpleShell extends ConsumerStatefulWidget {
     this.planetarium = const StellariumView(bare: true),
   });
 
-  /// Shown behind the panels until there is a frame; tests pass a stand-in
-  /// for the webview.
+  /// Shown only when Sky is asked for, over a frame or over the wallpaper;
+  /// tests pass a stand-in for the webview.
   final Widget planetarium;
 
   @override
@@ -3657,14 +3657,16 @@ class _AraSheet extends ConsumerWidget {
         ?.name;
     // As wide as its text, up to 420 px; past that the table shrinks the
     // value column to its longest word and the text wraps.
+    final maxWidth = math.min(
+      420.0,
+      MediaQuery.sizeOf(context).width - kSimpleInset * 2,
+    );
     return ConstrainedBox(
       key: const Key('simple-ara-sheet'),
+      // minWidth stays <= maxWidth in a window narrower than 312 px.
       constraints: BoxConstraints(
-        minWidth: 280,
-        maxWidth: math.min(
-          420,
-          MediaQuery.sizeOf(context).width - kSimpleInset * 2,
-        ),
+        minWidth: math.min(280.0, maxWidth),
+        maxWidth: maxWidth,
       ),
       child: IntrinsicWidth(
         child: SimplePanel(

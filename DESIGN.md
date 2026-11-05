@@ -392,7 +392,7 @@ The shutter starts the plan; while imaging it shows pause bars with a blue ring 
 
 **Errors.** While the person works a mode, errors (solve, autofocus, slew) show inside that mode's panel with the cause, the fix and Retry. During an unattended run they use the centred attention banner. The Queue is the exception (decided 2026-11-04): a failure after a rig round-trip (add, edit, reorder, start, pause, stop) shows as one message pill, because the sheet that would show it may be closed (Night Setup's last Done, a Stop from the shutter); only a refusal the sheet can give before asking the rig (already queued, run ending) stays inline, and the no-storage case keeps Open Storage in the sheet under the pill.
 
-**No rig connected (not built yet; ALP-4858).** Planned: the planetarium of tonight's sky fills the image area with a centred card: rigs found on the network with Connect, and Add a rig by address; device dots go grey and the mode name dims. Today Simple Mode shows the planetarium with no card, and Emergency Stop stays enabled and answers a press with "No server connected — nothing to stop."
+**No rig connected (not built yet; ALP-4858).** Planned: the planetarium of tonight's sky fills the image area with a centred card: rigs found on the network with Connect, and Add a rig by address; device dots go grey and the mode name dims. Today Simple Mode shows the stars-only wallpaper with no card (Sky shows tonight's planetarium), and Emergency Stop stays enabled and answers a press with "No server connected — nothing to stop."
 
 **Always on, in both modes:** Emergency Stop (except in the immersive view), the attention banner, the device status dots, Night mode and the Simple ↔ full UI switch.
 
