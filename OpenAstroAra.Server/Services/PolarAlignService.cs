@@ -70,6 +70,8 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>Bench knob: how long a star pick or a manual-mode measurement waits for the
         /// guider's next frame between attempts (the exposure plus this).</summary>
         internal TimeSpan FrameWaitSlack { get; set; } = TimeSpan.FromMilliseconds(500);
+        internal TimeSpan TrackingConfirmTimeout { get; set; } = TimeSpan.FromSeconds(10);
+        internal TimeSpan TrackingConfirmPoll { get; set; } = TimeSpan.FromMilliseconds(250);
 
         private bool _active;
         private string _state = "idle";
@@ -290,10 +292,12 @@ namespace OpenAstroAra.Server.Services {
             Justification = "The run task's boundary: every failure must land in the failed state and release the guider.")]
         private async Task RunRoutineAsync(
                 PHD2Guider guiderClient, SiteSettingsDto site, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
+            bool? trackingToRestore = null;
             try {
                 var north = site.LatitudeDeg > 0;
                 var exposure = TimeSpan.FromSeconds(Math.Max(0.01, settings.ExposureSeconds));
                 await UnparkIfParkedAsync(ct).ConfigureAwait(false);
+                trackingToRestore = await EnsureTrackingOnAsync(ct).ConfigureAwait(false);
                 await SetExposureBestEffortAsync(guiderClient, exposure, ct).ConfigureAwait(false);
                 await guiderClient.LoopAsync(ct).ConfigureAwait(false);
                 await FindStarWithRetriesAsync(guiderClient, exposure, ct).ConfigureAwait(false);
@@ -324,9 +328,76 @@ namespace OpenAstroAra.Server.Services {
                 await FailRoutineAsync("internal_error", ex, gen).ConfigureAwait(false);
             } catch (Exception ex) {
                 LogRoutineFailed("superseded", ex);
+            } finally {
+                // Manual mode leaves the mount at its last RA turn, which is where the adjust phase wants
+                // it; tracking goes back to what the user had only if the routine turned it on.
+                RestoreTrackingBestEffort(trackingToRestore);
             }
-            // Manual mode leaves the mount at its last RA turn, which is where the adjust phase wants it;
-            // tracking is the guider's to keep, so there is no hand-back of mount state here.
+        }
+
+        /// <summary>The guider's Static PA slews in RA (auto mode) and reads the star through the turn, and
+        /// an Alpaca mount refuses SlewToCoordinatesAsync while not tracking ("requires Tracking to be
+        /// true", the iOptron on the CM4, 2026-11-05). Tracking is turned on before the tool starts;
+        /// returns the prior state when it was changed, so the exit path can put it back.</summary>
+        private async Task<bool?> EnsureTrackingOnAsync(CancellationToken ct) {
+            var info = _mount.GetInfo();
+            if (info is null || info.TrackingEnabled) {
+                return null;
+            }
+            if (!await TurnTrackingOnAsync(ct).ConfigureAwait(false)) {
+                throw new RoutineFailedException("tracking_off",
+                    "the mount is not tracking and would not start — turn tracking on from the mount controls, then start again");
+            }
+            LogTrackingEnabled();
+            return false;
+        }
+
+        /// <summary>Set tracking and wait for the mount to report it (a driver can take a moment, and
+        /// a reported state that never flips means the mount refused). True once it reports tracking.</summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "A mount fault while enabling tracking becomes the routine's tracking_off failure.")]
+        private async Task<bool> TurnTrackingOnAsync(CancellationToken ct) {
+            try {
+                if (!_mount.SetTrackingEnabled(true)) {
+                    return false;
+                }
+            } catch (Exception ex) {
+                LogTrackingEnableFailed(ex);
+                return false;
+            }
+            var deadline = DateTimeOffset.UtcNow + TrackingConfirmTimeout;
+            while (_mount.GetInfo() is not { TrackingEnabled: true }) {
+                if (DateTimeOffset.UtcNow >= deadline) {
+                    return false;
+                }
+                await Task.Delay(TrackingConfirmPoll, ct).ConfigureAwait(false);
+            }
+            return true;
+        }
+
+        /// <summary>While the guider is still rotating the mount, tracking must stay on: a §42.3 fault
+        /// recovery (a mount reconnect) can drop it between Ara's switch-on and the guider's slew (CM4,
+        /// 2026-11-05: "requires Tracking to be true" six seconds after Ara had turned it on). Re-asserts it.</summary>
+        private async Task KeepTrackingOnWhileAligningAsync(CancellationToken ct) {
+            if (_mount.GetInfo() is { TrackingEnabled: false }) {
+                LogTrackingDropped();
+                if (!await TurnTrackingOnAsync(ct).ConfigureAwait(false)) {
+                    LogTrackingReassertFailed(); // the guider's next slew will refuse; its fit_failed follows
+                }
+            }
+        }
+
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Hand-back is best-effort; a mount fault here must not mask the routine's outcome.")]
+        private void RestoreTrackingBestEffort(bool? priorTracking) {
+            if (priorTracking is not bool tracking) {
+                return;
+            }
+            try {
+                _mount.SetTrackingEnabled(tracking);
+            } catch (Exception ex) {
+                LogTrackingRestoreFailed(ex);
+            }
         }
 
         private async Task UnparkIfParkedAsync(CancellationToken ct) {
@@ -425,6 +496,11 @@ namespace OpenAstroAra.Server.Services {
                     throw new RoutineFailedException("guider_closed", "the guider closed its polar-alignment tool");
                 }
                 if (status.Calced != true) {
+                    // Not while the guider's own slew is in flight: the iOptron reports tracking off
+                    // for the duration of a slew, and a re-assert then only adds a write per step.
+                    if (status.Aligning == true && status.Rotation?.Slewing != true) {
+                        await KeepTrackingOnWhileAligningAsync(ct).ConfigureAwait(false);
+                    }
                     if (status.Aligning != true && status.Auto == true) {
                         throw new RoutineFailedException("fit_failed",
                             "the guider stopped measuring before it had a fit — it lost the star during the RA turn; start again");
@@ -675,5 +751,20 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4546, Level = LogLevel.Warning, Message = "§45 polar-align exposure not set on the guider: {Reason}")]
         private partial void LogExposureNotSet(string reason);
+
+        [LoggerMessage(EventId = 4547, Level = LogLevel.Information, Message = "§45 polar-align turned tracking on for the guider's RA turn (restored on exit)")]
+        private partial void LogTrackingEnabled();
+
+        [LoggerMessage(EventId = 4548, Level = LogLevel.Warning, Message = "§45 polar-align could not turn tracking on")]
+        private partial void LogTrackingEnableFailed(Exception exception);
+
+        [LoggerMessage(EventId = 4549, Level = LogLevel.Warning, Message = "§45 polar-align could not restore tracking")]
+        private partial void LogTrackingRestoreFailed(Exception exception);
+
+        [LoggerMessage(EventId = 4550, Level = LogLevel.Warning, Message = "§45 polar-align tracking dropped while the guider was still rotating the mount — turning it back on")]
+        private partial void LogTrackingDropped();
+
+        [LoggerMessage(EventId = 4551, Level = LogLevel.Warning, Message = "§45 polar-align could not turn tracking back on during the guider's RA turn — the guider's next slew will be refused")]
+        private partial void LogTrackingReassertFailed();
     }
 }
