@@ -15,5 +15,16 @@ void main() {
       expect(wire['step_size'], 80);
       expect(ProfileApi.autofocusSettingsFromJson(wire).stepSizeAuto, isFalse);
     });
+
+    test('backlash in/out steps (#1541) default to 0 and round-trip', () {
+      final none = ProfileApi.autofocusSettingsFromJson(const {});
+      expect(none.backlashInSteps, 0);
+      expect(none.backlashOutSteps, 0);
+
+      final set = ProfileApi.autofocusSettingsFromJson(const {'backlash_in_steps': 30, 'backlash_out_steps': 50});
+      final wire = ProfileApi.autofocusSettingsToJson(set);
+      expect(wire['backlash_in_steps'], 30);
+      expect(wire['backlash_out_steps'], 50);
+    });
   });
 }

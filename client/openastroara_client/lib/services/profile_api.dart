@@ -1007,6 +1007,8 @@ class ProfileApi {
         restorePositionOnFailure:
             (j['restore_position_on_failure'] as bool?) ?? true,
         telescopeType: telescopeTypeFromWire(j['telescope_type'] as String?),
+        backlashInSteps: (j['backlash_in_steps'] as num?)?.toInt() ?? 0,
+        backlashOutSteps: (j['backlash_out_steps'] as num?)?.toInt() ?? 0,
       );
 
   static Map<String, dynamic> autofocusSettingsToJson(AutofocusSettings v) => {
@@ -1024,6 +1026,8 @@ class ProfileApi {
     'abort_sequence_on_af_failure': v.abortSequenceOnAfFailure,
     'restore_position_on_failure': v.restorePositionOnFailure,
     'telescope_type': telescopeTypeToWire(v.telescopeType),
+    'backlash_in_steps': v.backlashInSteps,
+    'backlash_out_steps': v.backlashOutSteps,
   };
 
   static AutofocusMethod _autofocusMethodFromString(String? s) {

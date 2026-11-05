@@ -180,6 +180,21 @@ void main() {
       expect(out.searchRadiusDeg, const PlateSolveSettings().searchRadiusDeg);
     });
 
+    test('#1541 — applyDraftToAutofocus carries the focuser backlash and keeps the base when unset', () {
+      final d = ProfileDraft();
+      d.focuser
+        ..backlashInSteps = 30
+        ..backlashOutSteps = 50;
+      final out = applyDraftToAutofocus(const AutofocusSettings(), d);
+      expect(out.backlashInSteps, 30);
+      expect(out.backlashOutSteps, 50);
+
+      final kept = applyDraftToAutofocus(
+          const AutofocusSettings(backlashInSteps: 7, backlashOutSteps: 9), ProfileDraft());
+      expect(kept.backlashInSteps, 7);
+      expect(kept.backlashOutSteps, 9);
+    });
+
     test('§76 S5 — applyDraftToAutofocus derive branch runs when the base is '
         'at default', () {
       final d = ProfileDraft();

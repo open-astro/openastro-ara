@@ -55,6 +55,7 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
     private readonly ILogger<FocuserService> _logger;
     private readonly EquipmentEventPublisher? _events;
     private readonly IEquipmentFaultSink? _faults;
+    private readonly IProfileStore? _profiles;
     private readonly DeviceConnectionProbe _probe = new();
     // §42.3 second channel — the essential runtime read's health (the probe alone misses a bridge
     // that answers Connected while every read fails, 2026-10-16). Mutated under _gate like _probe.
@@ -75,14 +76,19 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
     private FocuserCapabilitiesDto? _capabilities;
     private FocuserStateDto _runtime = IdleRuntime;
     private int _refreshing;
+    // #1541 — direction (+1 out / -1 in) of the last move, 0 until one is made on this connection; and whether a
+    // compensated move is in flight (reported as `backlash_compensating`). Both under _gate.
+    private int _lastDirection;
+    private bool _compensating;
     private long _connectGeneration;
     private bool _disposed;
 
     public FocuserService(ILogger<FocuserService>? logger = null, EquipmentEventPublisher? events = null,
-            IEquipmentFaultSink? faults = null) {
+            IEquipmentFaultSink? faults = null, IProfileStore? profiles = null) {
         _logger = logger ?? NullLogger<FocuserService>.Instance;
         _events = events;
         _faults = faults;
+        _profiles = profiles;
         _health = new DeviceHealthWatch(DeviceType.Focuser, faults);
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
@@ -208,7 +214,7 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
                 // driver-dependent; honour an explicit request where the driver allows it.
                 try { client.TempComp = tc; } catch (Exception ex) { LogTempCompIgnored(ex); }
             }
-            client.Move(target);
+            MoveCompensated(client, target);
             RefreshCacheOnce(); // surface IsMoving/Position promptly
         } catch (Exception ex) {
             LogMoveFailed(ex, target);
@@ -252,7 +258,7 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
             var caps = needCaps ? ReadCapabilities(client) : null;
             lock (_gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
-                    _runtime = runtime;
+                    _runtime = FocuserBacklash.Report(runtime, _compensating);
                     // A relative focuser may have no Position to read (NotImplemented is already excluded; some
                     // drivers answer with a plain error instead): only an absolute focuser's Position is essential.
                     ObserveRuntimeReadLocked(readError is null || !(_capabilities?.AbsoluteFocuser ?? true), readError, _device);
@@ -330,6 +336,7 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
                     _capabilities = null;       // re-read for the new device
+                    _lastDirection = 0;
                     _runtime = IdleRuntime;     // don't serve a prior device's runtime
                     _probe.Reset(); ResetHealthLocked();             // §42.3 — a fresh session starts a fresh streak
                     SetState(EquipmentConnectionState.Connected);

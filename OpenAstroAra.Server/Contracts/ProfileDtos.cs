@@ -404,7 +404,11 @@ public sealed record AutofocusSettingsDto(
     // §59.8 — size the sweep automatically: from the V half-width the last sweep measured, else half the CFZ
     // when the focuser reports µm/step, else `StepSize` as the wide first sweep. Off = `StepSize` as typed.
     // Trailing default so a pre-existing profile.json reads as auto (the agreed default).
-    bool StepSizeAuto = true);
+    bool StepSizeAuto = true,
+    // #1541 — the focuser's backlash in/out (steps), from the setup wizard. The focuser service overshoots by the
+    // one for the new direction on a reversal and returns; 0 = no compensation. A backlash the sweep measured wins.
+    int BacklashInSteps = 0,
+    int BacklashOutSteps = 0);
 
 /// <summary>
 /// §37.10 plate solving settings — engine + search/timeout knobs +

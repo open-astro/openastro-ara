@@ -81,7 +81,7 @@ public sealed partial class FocuserService : IFocuserMediator {
                 DeviceId = _device?.UniqueId ?? string.Empty,
                 Position = connected ? runtime.Position ?? 0 : 0,
                 Temperature = connected && runtime.Temperature is double t ? t : double.NaN,
-                IsMoving = connected && runtime.State == "moving",
+                IsMoving = connected && runtime.State is "moving" or "backlash_compensating",
                 TempComp = connected && runtime.TempCompEnabled,
                 TempCompAvailable = connected && (caps?.CanTempComp ?? false),
                 StepSize = connected ? caps?.StepSizeUm ?? 0 : 0,
@@ -99,6 +99,65 @@ public sealed partial class FocuserService : IFocuserMediator {
     // Temperature-relative move (NINA semantics): shift the current position by slope × temperature.
     public Task<int> MoveFocuserByTemperatureRelative(double temperature, double Slope, CancellationToken ct) =>
         MoveFocuserBlockingAsync(CurrentPosition() + (int)Math.Round(Slope * temperature), ct);
+
+    // #1541 — drive the focuser to `target`, overshooting by the backlash for the new direction and returning when
+    // the move reverses the last one. Blocking (runs on the pool); the sweep suppresses compensation.
+    private void MoveCompensated(AlpacaFocuser client, int target) {
+        int[] legs = [target];
+        var direction = 0;
+        int lastDirection;
+        FocuserCapabilitiesDto? caps;
+        lock (_gate) {
+            lastDirection = _lastDirection;
+            caps = _capabilities;
+        }
+        if (!FocuserBacklash.IsSuppressed && lastDirection != 0 && ReadBacklashInputs() is var (settings, calibration)) {
+            var absolute = caps?.AbsoluteFocuser ?? true;
+            (legs, direction) = FocuserBacklash.Plan(absolute, absolute ? ReadPosition(client) : null, target, lastDirection,
+                d => FocuserBacklash.StepsFor(d, settings, calibration), caps?.MinPosition ?? 0, caps?.MaxPosition ?? 0);
+        } else if (caps?.AbsoluteFocuser ?? true) {
+            direction = ReadPosition(client) is int from ? Math.Sign((long)target - from) : 0;
+        } else {
+            direction = Math.Sign(target);
+        }
+        var compensating = legs.Length > 1;
+        if (compensating) {
+            lock (_gate) {
+                _compensating = true;
+                _runtime = FocuserBacklash.Report(_runtime, true);
+            }
+        }
+        try {
+            foreach (var leg in legs) {
+                client.Move(leg);
+            }
+        } finally {
+            if (compensating) {
+                lock (_gate) {
+                    _compensating = false;
+                }
+            }
+        }
+        if (direction != 0) {
+            lock (_gate) {
+                _lastDirection = direction;
+            }
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort profile read: a store hiccup degrades to an uncompensated move rather than failing it. Log-and-recover boundary.")]
+    private (AutofocusSettingsDto Settings, FocusCalibrationDto? Calibration)? ReadBacklashInputs() {
+        if (_profiles is null) {
+            return null;
+        }
+        try {
+            return (_profiles.GetAutofocusSettings(), _profiles.GetFocusCalibration());
+        } catch (Exception ex) {
+            LogMoveFailed(ex, 0);
+            return null;
+        }
+    }
 
     // Base position for a relative move. Prefer a fresh DIRECT device read over the §32.4 cache so
     // the computed absolute target doesn't drift by up to one polling interval (the cache can lag, and
@@ -163,7 +222,7 @@ public sealed partial class FocuserService : IFocuserMediator {
             // call can't pin the sequence thread "regardless of cancellation" even when ct never fires
             // and the Alpaca client's own HTTP timeout is generous. The abandoned move is observed so
             // it can't surface as an unobserved task exception.
-            var moveTask = Task.Run(() => client.Move(target), CancellationToken.None);
+            var moveTask = Task.Run(() => MoveCompensated(client, target), CancellationToken.None);
             using (var linked = CancellationTokenSource.CreateLinkedTokenSource(ct)) {
                 linked.CancelAfter(MoveHardTimeout);
                 var completed = await Task.WhenAny(moveTask, Task.Delay(Timeout.Infinite, linked.Token)).ConfigureAwait(false);

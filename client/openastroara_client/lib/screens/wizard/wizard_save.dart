@@ -296,6 +296,9 @@ AutofocusSettings applyDraftToAutofocus(AutofocusSettings base, ProfileDraft d) 
     telescopeType: af.telescopeType == null
         ? null
         : telescopeTypeFromWire(af.telescopeType),
+    // #1541 — the focuser screen's backlash rides in the autofocus section; the daemon applies it on reversals.
+    backlashInSteps: d.focuser.backlashInSteps,
+    backlashOutSteps: d.focuser.backlashOutSteps,
   );
 }
 
