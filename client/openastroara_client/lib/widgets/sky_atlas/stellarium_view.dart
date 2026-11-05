@@ -131,13 +131,19 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         // draws, from the cached site.
         SiteLocation? serverSite;
         try {
-          serverSite = ref.read(siteLocationProvider).asData?.value ??
+          serverSite =
+              ref.read(siteLocationProvider).asData?.value ??
               await ref.read(siteLocationProvider.future);
         } catch (e) {
-          debugPrint('StellariumView: daemon site unavailable, using cached: $e');
+          debugPrint(
+            'StellariumView: daemon site unavailable, using cached: $e',
+          );
         }
         if (!mounted) return;
-        final site = planetariumSiteFor(serverSite, ref.read(siteSettingsProvider));
+        final site = planetariumSiteFor(
+          serverSite,
+          ref.read(siteSettingsProvider),
+        );
         final optics = planetariumOpticsFor(ref.read(opticsSettingsProvider));
         final activeServer = await ref.read(activeServerFutureProvider.future);
         if (!mounted) return;
@@ -271,7 +277,8 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       // The page posts its canvas size on every frame it lays out; print only
       // a change (about 400 identical lines a session otherwise).
       final line = '$event';
-      if (kDebugMode && line != _lastDebugLine) debugPrint('StellariumView debug: $line');
+      if (kDebugMode && line != _lastDebugLine)
+        debugPrint('StellariumView debug: $line');
       _lastDebugLine = line;
       return;
     }
@@ -333,7 +340,11 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     // §47 / #1146 — the grid behind the panels, for the mosaic project record.
     final cols = (event['cols'] as num?)?.toInt();
     final rows = (event['rows'] as num?)?.toInt();
-    final mosaicGrid = isMosaic && cols != null && rows != null && cols * rows == mosaicPanels.length
+    final mosaicGrid =
+        isMosaic &&
+            cols != null &&
+            rows != null &&
+            cols * rows == mosaicPanels.length
         ? (
             cols: cols,
             rows: rows,
@@ -413,7 +424,8 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     // the page's framing target keeps whatever name it had when a goto
     // brings none, so Create Run after "select the Moon, type NGC 7000"
     // used to build a run called "Moon" at NGC 7000.
-    final catalog = ref.read(bundledCatalogProvider).value ??
+    final catalog =
+        ref.read(bundledCatalogProvider).value ??
         ref.read(dsoCatalogProvider).value ??
         const <PlanningDso>[];
     final route = routeSearch(applyImagingRegions(catalog), q);
@@ -695,8 +707,47 @@ class PlanetariumSearchBar extends StatelessWidget {
     this.onZoom,
   });
 
+  // Below this width (iPad portrait, #1554) the two labelled toggles drop to
+  // icon-only buttons so the search field keeps room for its hint.
+  static const double _compactBelow = 900;
+
+  static Widget _toggle({
+    required bool compact,
+    required bool open,
+    Key? key,
+    required VoidCallback onPressed,
+    required IconData openIcon,
+    required IconData closedIcon,
+    required String label,
+  }) {
+    final icon = Icon(open ? openIcon : closedIcon, size: 16);
+    if (compact) {
+      return Tooltip(
+        message: label,
+        child: open
+            ? IconButton.filled(key: key, onPressed: onPressed, icon: icon)
+            : IconButton.outlined(key: key, onPressed: onPressed, icon: icon),
+      );
+    }
+    final text = Text(label);
+    return open
+        ? FilledButton.icon(
+            key: key,
+            onPressed: onPressed,
+            icon: icon,
+            label: text,
+          )
+        : OutlinedButton.icon(
+            key: key,
+            onPressed: onPressed,
+            icon: icon,
+            label: text,
+          );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < _compactBelow;
     return Container(
       height: 44,
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -766,33 +817,26 @@ class PlanetariumSearchBar extends StatelessWidget {
           const SizedBox(width: 8),
           // Rotate camera by hand: the plate-solve readout docked beside the
           // sky, measured against the framing dial.
-          rotateOpen
-              ? FilledButton.icon(
-                  key: const Key('planning-rotate-toggle'),
-                  onPressed: onRotate,
-                  icon: const Icon(Icons.rotate_90_degrees_ccw, size: 16),
-                  label: const Text('Rotate camera'),
-                )
-              : OutlinedButton.icon(
-                  key: const Key('planning-rotate-toggle'),
-                  onPressed: onRotate,
-                  icon: const Icon(Icons.rotate_90_degrees_ccw_outlined, size: 16),
-                  label: const Text('Rotate camera'),
-                ),
+          _toggle(
+            compact: compact,
+            open: rotateOpen,
+            key: const Key('planning-rotate-toggle'),
+            onPressed: onRotate,
+            openIcon: Icons.rotate_90_degrees_ccw,
+            closedIcon: Icons.rotate_90_degrees_ccw_outlined,
+            label: 'Rotate camera',
+          ),
           const SizedBox(width: 8),
           // A filled (vs outlined) button when the panel is open, so the toggle
           // reads its own state at a glance.
-          tonightOpen
-              ? FilledButton.icon(
-                  onPressed: onTonight,
-                  icon: const Icon(Icons.nights_stay, size: 16),
-                  label: const Text("Tonight's Sky"),
-                )
-              : OutlinedButton.icon(
-                  onPressed: onTonight,
-                  icon: const Icon(Icons.nights_stay_outlined, size: 16),
-                  label: const Text("Tonight's Sky"),
-                ),
+          _toggle(
+            compact: compact,
+            open: tonightOpen,
+            onPressed: onTonight,
+            openIcon: Icons.nights_stay,
+            closedIcon: Icons.nights_stay_outlined,
+            label: "Tonight's Sky",
+          ),
         ],
       ),
     );
