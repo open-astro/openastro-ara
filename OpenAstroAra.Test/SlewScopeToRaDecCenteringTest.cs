@@ -80,7 +80,7 @@ namespace OpenAstroAra.Test {
             executor.Setup(e => e.CenterAsync(It.IsAny<Coordinates>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .Returns(() => {
                     order?.Add("center");
-                    return Task.FromResult(converges);
+                    return Task.FromResult(converges ? CenteringResult.Ok : CenteringResult.Failed(CenteringStep.Centre));
                 });
             return executor;
         }
@@ -92,7 +92,7 @@ namespace OpenAstroAra.Test {
             Coordinates? seen = null;
             centering.Setup(e => e.CenterAsync(It.IsAny<Coordinates>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .Callback<Coordinates, IProgress<ApplicationStatus>, CancellationToken>((c, _, _) => seen = c)
-                .ReturnsAsync(true);
+                .ReturnsAsync(CenteringResult.Ok);
             var target = Helix();
             var item = new SlewScopeToRaDec(mount.Object, Guider(wasGuiding: false).Object, Profile(centerAfterSlew: true), centering.Object) {
                 Coordinates = target,

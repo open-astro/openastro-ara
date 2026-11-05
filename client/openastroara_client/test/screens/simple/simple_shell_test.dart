@@ -687,12 +687,9 @@ void main() {
     final sky = Color.alphaBlend(hint, const Color(0xFF0A0A0A));
     expect((math.max(lum(sky), lum(const Color(0xFF0A0A0A))) + 0.05) / (math.min(lum(sky), lum(const Color(0xFF0A0A0A))) + 0.05),
         greaterThanOrEqualTo(4.5));
-    expect(find.byKey(const Key('sky')), findsOneWidget, reason: 'the sky until there is a frame');
-    // Sky opens the planetarium, which is already open: Sky shows lit (not dimmed), and
-    // screen readers hear there's nothing to switch.
-    expect(tester.widget<Icon>(find.descendant(of: find.byKey(const Key('simple-sky')), matching: find.byType(Icon))).color,
-        AraColors.textPrimary);
-    expect(tester.getSemantics(find.byKey(const Key('simple-sky'))), isSemantics(hasEnabledState: true, isEnabled: false));
+    expect(find.byKey(const Key('simple-wallpaper')), findsOneWidget, reason: 'the wallpaper until there is a frame (#1602)');
+    // Sky shows tonight's sky over the wallpaper, so it is a working button.
+    expect(tester.getSemantics(find.byKey(const Key('simple-sky'))), isSemantics(hasEnabledState: true, isEnabled: true));
   });
 
   testWidgets('the mode name opens the modes in order, Night Setup first; picking one closes them', (tester) async {
@@ -862,6 +859,9 @@ void main() {
     await _pump(tester, const Size(1024, 768));
     expect(find.descendant(of: find.byKey(const Key('simple-no-devices')), matching: find.text('Rig not connected')),
         findsOneWidget);
+    // Amber: it needs a look. Blue would read as connecting (user, 2026-11-06).
+    final text = tester.renderObject<RenderParagraph>(find.text('Rig not connected'));
+    expect(text.text.style!.color, AraColors.accentWarning);
   });
 
   testWidgets('a connected device hides the no-devices note', (tester) async {
@@ -870,7 +870,7 @@ void main() {
     expect(find.byKey(const Key('simple-no-devices')), findsNothing);
   });
 
-  testWidgets("the top bar names Main Camera and Guider Camera, the guide camera's icon a video camera",
+  testWidgets("the top bar names Main Camera and Guide Camera, the guide camera's icon a video camera",
       (tester) async {
     // iPad, 2026-11-04: the top bar still showed the guider's target icon after the rename.
     await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
@@ -881,7 +881,7 @@ void main() {
     expect(find.descendant(of: strip, matching: find.byIcon(Icons.videocam_outlined)), findsOneWidget);
     expect(find.descendant(of: strip, matching: find.byIcon(Icons.track_changes)), findsNothing,
         reason: 'the target is the Guide mode now');
-    expect(find.descendant(of: strip, matching: find.byTooltip('Guider Camera')), findsOneWidget);
+    expect(find.descendant(of: strip, matching: find.byTooltip('Guide Camera')), findsOneWidget);
     expect(find.descendant(of: strip, matching: find.byTooltip('Main Camera')), findsOneWidget);
   });
 
@@ -1966,6 +1966,99 @@ void main() {
     expect(find.byKey(const Key('simple-planetarium')), findsOneWidget, reason: 'the sky, pointed at it');
   });
 
+  testWidgets('the Ara mark opens the OpenAstro Ara sheet: versions, rig and profile; the gear stays (#1602)',
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768),
+        server: const AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro'),
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]),
+        versions: DaemonVersions.fromJson({'daemon_version': '0.0.1-ara.7', 'guider_version': '2.6.13dev7'}));
+    expect(find.byTooltip('Settings'), findsOneWidget, reason: 'the gear stays on the right');
+    // Set apart from the device dots by a hairline (user, 2026-11-06).
+    expect(tester.getRect(find.byKey(const Key('simple-ara-divider'))).left,
+        greaterThanOrEqualTo(tester.getRect(find.byKey(const Key('simple-ara-mark'))).right));
+    await tester.tap(find.byKey(const Key('simple-ara-mark')));
+    await tester.pump();
+    await tester.pump();
+    final sheet = find.byKey(const Key('simple-ara-sheet'));
+    for (final t in ['OpenAstro Ara', 'This app', 'Ara server', '0.0.1-ara.7', 'Guider', '2.6.13dev7', 'Rig', 'astro',
+        'Profile', 'Backyard Rig']) {
+      expect(find.descendant(of: sheet, matching: find.text(t)), findsOneWidget, reason: t);
+    }
+    expect(find.descendant(of: sheet, matching: find.text('Settings')), findsNothing, reason: 'no Settings row');
+    await tester.tap(find.byKey(const Key('simple-ara-mark')));
+    await tester.pump();
+    expect(sheet, findsNothing, reason: 'the mark closes it again');
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('the Ara sheet grows with a long rig name up to 420 px, then wraps it (#1602)', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768),
+        server: const AraServer(
+            hostname: '10.0.0.5', port: 5555, mdnsName: 'backyard-observatory-raspberry-pi-five-north-pier-astro-rig'));
+    await tester.tap(find.byKey(const Key('simple-ara-mark')));
+    await tester.pump();
+    expect(tester.getSize(find.byKey(const Key('simple-ara-sheet'))).width, 420);
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets("no frame yet: the wallpaper, not the sky; the Sky button shows tonight's sky (#1602)", (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    expect(find.byKey(const Key('simple-wallpaper')), findsOneWidget);
+    expect(find.byKey(const Key('sky')), findsNothing);
+    expect(find.text('Tap the shutter to take a frame'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsOneWidget);
+    expect(find.byKey(const Key('simple-wallpaper')), findsNothing);
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-wallpaper')), findsOneWidget, reason: 'and back');
+  });
+
+  testWidgets('Sky turned on with no frame gives way to the first frame (#1602)', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsOneWidget);
+    await _frame(tester, c);
+    expect(find.byKey(const Key('sky')), findsNothing, reason: 'the frame, not the sky');
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    expect(find.byKey(const Key('sky')), findsOneWidget, reason: 'Sky still opens it over a frame');
+  });
+
+  testWidgets('Search finds the Guide Camera section, and Dither in Guide mode where it lives (#1586)',
+      (tester) async {
+    await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => _GuiderUp())]);
+    Future<void> search(String q) async {
+      await tester.tap(find.byKey(const Key('simple-search-button')));
+      await tester.pump();
+      await tester.enterText(find.byKey(const Key('simple-search-field')), q);
+      await tester.pump();
+      await tester.pump();
+    }
+
+    await search('phd2');
+    expect(find.descendant(of: find.byKey(const Key('simple-search-setting-0')), matching: find.text('Guide Camera')),
+        findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-search-button')));
+    await tester.pump();
+
+    await search('dither');
+    final row = find.byKey(const Key('simple-search-setting-0'));
+    expect(find.descendant(of: row, matching: find.text('Dither')), findsOneWidget);
+    expect(find.descendant(of: row, matching: find.text('Guide')), findsOneWidget,
+        reason: 'Dither is in Guide mode, not the Guide Camera window (user, 2026-11-05)');
+    await tester.tap(row);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-search')), findsNothing);
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Guide')), findsOneWidget);
+  });
+
   testWidgets('Search opens on its own: no mode panel beside the rail', (tester) async {
     await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-search-button')));
@@ -2375,11 +2468,11 @@ void main() {
     ]);
     await _openSection(tester, 'Devices');
     final page = find.byKey(const Key('simple-gear'));
-    expect(find.descendant(of: page, matching: find.text('Guider Camera · ZWO ASI120MM Mini')), findsOneWidget);
+    expect(find.descendant(of: page, matching: find.text('Guide Camera · ZWO ASI120MM Mini')), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-gear-guider-disconnect')));
     await tester.pump();
     expect(guider.calls, ['disconnect']);
-    await tester.tap(find.descendant(of: page, matching: find.text('Guider Camera · ZWO ASI120MM Mini')));
+    await tester.tap(find.descendant(of: page, matching: find.text('Guide Camera · ZWO ASI120MM Mini')));
     // A guiding guider's dot blinks (working): pump a while, never settles.
     for (var n = 0; n < 5; n++) {
       await tester.pump(const Duration(milliseconds: 200));
@@ -2414,7 +2507,7 @@ void main() {
                 .first,
             matching: find.byType(StatusDot)))
         .color;
-    expect(dot('Guider'), guiderStatusLevel(await guider.future).color);
+    expect(dot('Guide Camera'), guiderStatusLevel(await guider.future).color);
     expect(dot('Camera'), StatusLevel.info.color, reason: 'connecting is info on the chips');
   });
 
@@ -2426,7 +2519,7 @@ void main() {
     ]);
     await _openSection(tester, 'Devices');
     final page = find.byKey(const Key('simple-gear'));
-    expect(find.descendant(of: page, matching: find.text('Guider Camera')), findsOneWidget);
+    expect(find.descendant(of: page, matching: find.text('Guide Camera')), findsOneWidget);
     expect(find.descendant(of: page, matching: find.text('Not connected')), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-gear-guider-connect')));
     await tester.pump();
@@ -2504,7 +2597,9 @@ void main() {
     final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
       cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),
     ]);
-    // No frame yet: the planetarium is the background (it takes taps itself).
+    // The planetarium as the background (it takes taps itself).
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
     expect(find.byKey(const Key('sky')), findsOneWidget);
     c.read(selectedSettingsPanelProvider.notifier).select('eq.camera');
     c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);

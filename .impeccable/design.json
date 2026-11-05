@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-05T21:49:30+13:00",
+  "generatedAt": "2026-11-06T00:37:33+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -387,6 +387,111 @@
           "oklch(84% 0.000 90)",
           "oklch(95% 0.000 90)"
         ]
+      },
+      "brand-navy-top": {
+        "role": "brand",
+        "displayName": "Ara Navy (top)",
+        "canonical": "#272C4D",
+        "tonalRamp": [
+          "#1F212E",
+          "#31354E",
+          "#414871",
+          "#4F5996",
+          "#6972B0",
+          "#8E94BE",
+          "#C1C4D7",
+          "#F0F1F4"
+        ]
+      },
+      "brand-navy-mid": {
+        "role": "brand",
+        "displayName": "Ara Navy",
+        "canonical": "#171B3B",
+        "tonalRamp": [
+          "#1D1F30",
+          "#2C3153",
+          "#394079",
+          "#434EA2",
+          "#5D67BC",
+          "#868DC6",
+          "#BEC1DA",
+          "#F0F0F5"
+        ]
+      },
+      "brand-navy-bottom": {
+        "role": "brand",
+        "displayName": "Ara Navy (bottom)",
+        "canonical": "#070914",
+        "tonalRamp": [
+          "#1C1F31",
+          "#2A3155",
+          "#36417C",
+          "#3F4FA7",
+          "#5868C0",
+          "#838DC9",
+          "#BCC1DC",
+          "#EFF0F5"
+        ]
+      },
+      "brand-line-start": {
+        "role": "brand",
+        "displayName": "Constellation Blue (start)",
+        "canonical": "#4FC3F7",
+        "tonalRamp": [
+          "#122E3B",
+          "#174F68",
+          "#16739C",
+          "#1098D5",
+          "#2AB2EF",
+          "#63BFE9",
+          "#AED7EA",
+          "#EDF4F8"
+        ]
+      },
+      "brand-line-end": {
+        "role": "brand",
+        "displayName": "Constellation Blue (end)",
+        "canonical": "#7C8CF8",
+        "tonalRamp": [
+          "#12173A",
+          "#182268",
+          "#17289B",
+          "#122BD4",
+          "#2B44ED",
+          "#6475E8",
+          "#AFB6E9",
+          "#EDEEF8"
+        ]
+      },
+      "brand-glow": {
+        "role": "brand",
+        "displayName": "Bright Star Glow",
+        "canonical": "#8FA8FF",
+        "tonalRamp": [
+          "#101A3C",
+          "#13276C",
+          "#1031A2",
+          "#0737DF",
+          "#2051F8",
+          "#5D7DEF",
+          "#ABBAED",
+          "#ECEFF8"
+        ]
+      },
+      "brand-star-hole": {
+        "role": "brand",
+        "displayName": "Star Socket",
+        "canonical": "#0B0F24",
+        "tonalRamp": [
+          "#1A1E32",
+          "#283057",
+          "#323F80",
+          "#394CAC",
+          "#5365C6",
+          "#7F8BCD",
+          "#BBC0DD",
+          "#EFF0F5"
+        ]
       }
     },
     "typographyMeta": {
@@ -583,6 +688,30 @@
       "description": "Top-left message pill (no popups): a question has an amber dot and outline, stays until answered, and fills its last action, the safe answer.",
       "html": "<div class=\"ds-msg-wrap\"><div class=\"ds-msg\" role=\"status\"><i></i><span>Discard changes to M31?</span><button class=\"ds-msg-t\">Discard</button><button class=\"ds-msg-f\">Keep editing</button></div></div>",
       "css": ".ds-msg{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;display:inline-flex;align-items:center;gap:8px;min-height:48px;max-width:420px;box-sizing:border-box;padding:0 4px 0 16px;background:rgba(26,26,26,.90);-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px);border:1px solid #FFB300;border-radius:10px;color:#E0E0E0;font-size:14px} .ds-msg-wrap{padding:24px;border-radius:10px;background:radial-gradient(ellipse at 50% 45%,#5a5a5a 0,#2a2a2a 45%,#0d0d0d 80%)} .ds-msg i{flex:none;width:10px;height:10px;border-radius:50%;background:#FFB300} .ds-msg button{font:inherit;min-height:44px;border-radius:10px;padding:0 14px;cursor:pointer;border:0} .ds-msg-t{background:transparent;color:#64B5F6} .ds-msg-f{background:#FFB300;color:#1A1A1A} .ds-msg button:hover{filter:brightness(1.1)} .ds-msg button:focus-visible{outline:2px solid #42A5F5;outline-offset:2px}"
+    },
+    {
+      "name": "Ara Mark and Strip (Simple Mode)",
+      "kind": "nav",
+      "refersTo": "panel-simple",
+      "description": "The status strip opens with the Ara mark (30 px, 48 px target), then a 28 px Hairline, then the device dots.",
+      "html": "<div class=\"ds-ara-strip\"><button class=\"ds-ara-mark-btn\" aria-label=\"OpenAstro Ara\"><svg class=\"ds-ara-mark\" viewBox=\"200 200 630 630\" width=\"30\" height=\"30\" aria-hidden=\"true\"><defs><linearGradient id=\"dsAraLn\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#4FC3F7\"/><stop offset=\"1\" stop-color=\"#7C8CF8\"/></linearGradient><radialGradient id=\"dsAraGlow\"><stop offset=\"0\" stop-color=\"#fff\" stop-opacity=\".55\"/><stop offset=\"1\" stop-color=\"#8FA8FF\" stop-opacity=\"0\"/></radialGradient></defs><circle cx=\"514\" cy=\"246\" r=\"110\" fill=\"url(#dsAraGlow)\"/><polyline fill=\"none\" stroke=\"url(#dsAraLn)\" stroke-width=\"42\" stroke-linejoin=\"round\" points=\"242,270 514,246 745,412 742,556 782,715 521,777 560,567 557,525 514,246\"/><g fill=\"#0B0F24\" stroke=\"url(#dsAraLn)\" stroke-width=\"32\"><circle cx=\"242\" cy=\"270\" r=\"32\"/><circle cx=\"745\" cy=\"412\" r=\"32\"/><circle cx=\"742\" cy=\"556\" r=\"32\"/><circle cx=\"782\" cy=\"715\" r=\"32\"/><circle cx=\"521\" cy=\"777\" r=\"32\"/><circle cx=\"560\" cy=\"567\" r=\"32\"/><circle cx=\"557\" cy=\"525\" r=\"32\"/></g><circle cx=\"514\" cy=\"246\" r=\"63\" fill=\"#fff\"/></svg></button><span class=\"ds-ara-rule\"></span><span class=\"ds-ara-dot\"><i></i>Main Camera</span><span class=\"ds-ara-dot\"><i></i>Mount</span></div>",
+      "css": ".ds-ara-strip { display: flex; align-items: center; height: 56px; padding: 0 4px 0 8px; background: rgba(26,26,26,.9); border-radius: 10px; color: #A0A0A0; font: 13px system-ui, sans-serif; } .ds-ara-mark-btn { width: 48px; height: 48px; display: grid; place-items: center; border: 0; border-radius: 24px; background: transparent; cursor: pointer; } .ds-ara-mark-btn:hover { background: rgba(224,224,224,.08); } .ds-ara-mark-btn:focus-visible { outline: 2px solid #64B5F6; outline-offset: 2px; } .ds-ara-rule { width: 1px; height: 28px; margin: 0 12px 0 4px; background: #404040; } .ds-ara-dot { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; } .ds-ara-dot i { width: 8px; height: 8px; border-radius: 50%; background: #4CAF50; }"
+    },
+    {
+      "name": "Ara Sheet (Simple Mode)",
+      "kind": "card",
+      "refersTo": "ara-sheet-simple",
+      "description": "Opened from the mark: versions, rig and profile; as wide as its text from 280 to 420 px; no Settings row.",
+      "html": "<div class=\"ds-ara-sheet\"><div class=\"ds-ara-sheet-title\">OpenAstro Ara</div><table><tr><td>This app</td><td>0.0.1</td></tr><tr><td>Ara server</td><td>1.0.0.0</td></tr><tr><td>Guider</td><td>2.1.0</td></tr><tr><td>Rig</td><td>astro</td></tr><tr><td>Profile</td><td>Backyard Rig</td></tr></table></div>",
+      "css": ".ds-ara-sheet { display: inline-block; min-width: 280px; max-width: 420px; padding: 16px; background: rgba(26,26,26,.9); border-radius: 10px; color: #E0E0E0; font: 14px system-ui, sans-serif; } .ds-ara-sheet-title { font-weight: 600; margin-bottom: 8px; } .ds-ara-sheet table { border-collapse: collapse; } .ds-ara-sheet td { padding: 0 0 4px; vertical-align: baseline; } .ds-ara-sheet td:first-child { color: #A0A0A0; padding-right: 24px; }"
+    },
+    {
+      "name": "No-Frame Wallpaper (Simple Mode)",
+      "kind": "custom",
+      "refersTo": "wallpaper-simple",
+      "description": "Ara Navy gradient with three star layers; the hint stays centred. Parallax on tilt on iPad and iPhone only.",
+      "html": "<div class=\"ds-wallpaper\"><span class=\"ds-wallpaper-hint\">Tap the shutter to take a frame</span></div>",
+      "css": ".ds-wallpaper { position: relative; width: 100%; height: 240px; border-radius: 10px; overflow: hidden; display: grid; place-items: center; background: radial-gradient(1.6px 1.6px at 22% 30%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 64% 22%, rgba(255,255,255,.7) 50%, transparent 51%), radial-gradient(1px 1px at 80% 70%, rgba(255,255,255,.6) 50%, transparent 51%), radial-gradient(.8px .8px at 40% 80%, rgba(255,255,255,.4) 50%, transparent 51%), radial-gradient(.8px .8px at 12% 62%, rgba(255,255,255,.35) 50%, transparent 51%), linear-gradient(#272C4D 0%, #171B3B 45%, #070914 100%); } .ds-wallpaper-hint { color: #A0A0A0; font: 20px system-ui, sans-serif; letter-spacing: 2px; }"
     }
   ],
   "narrative": {
@@ -637,6 +766,11 @@
         "name": "Simple Mode's rule: 4×90% and KISS",
         "body": "Simple Mode covers the top 90 % most used features, for 90 % of the people, 90 % of the time, 90 % faster, with only the bare minimum for a successful imaging night: defaults and automation first, self-recovery doing the work, and a small set of controls where the user needs them (ASIAir as the reference); a value one Simple Mode control sets is not repeated elsewhere, and nothing links to the full UI. No redundant design: each thing lives in one place, and interactions are contextual (tap the thing to act on it). Its Settings (a sheet over the image with a few controls, ASIAir as the reference; one window per device, the same one its top-bar dot opens; Connect / Disconnect on Settings › Devices only) are shaped in `design/briefs/simple-mode-settings.md` (2026-11-03).",
         "section": "components"
+      },
+      {
+        "name": "The Brand Stays Home Rule",
+        "body": "The brand palette lives in two places, the Ara mark and the no-frame wallpaper. It never marks a state, a selection or a call to action.",
+        "section": "colors"
       }
     ],
     "dos": [
@@ -650,7 +784,7 @@
     ],
     "donts": [
       "**Don't** change the full UI's layout while Simple Mode is being built. Simple Mode is additive: new work goes into Simple Mode, and the full UI (PR #1474's shell) stays as it is for now. Two exceptions are approved: the heavier Emergency Stop (ALP-4812), which applies to the full UI too, and a Simple Mode icon in the full UI's top-right cluster, between Night mode and the gear (decided 2026-11-01).",
-      "**Don't** use colour for decoration, branding flourishes or emphasis that isn't a state.",
+      "**Don't** use colour for decoration, branding flourishes or emphasis that isn't a state. The one exception is the brand palette (`AraColors.brand*`, the app icon's navy and line blues): only the OpenAstro Ara mark and Simple Mode's no-frame wallpaper use it (approved 2026-11-05, #1602).",
       "**Don't** add shadows or glows to separate surfaces; use a tonal step and a Hairline.",
       "**Don't** let any state fall back to plain grey text without a designed look.",
       "**Don't** fill any control other than Emergency Stop and confirmed destructive actions with Fault Red.",

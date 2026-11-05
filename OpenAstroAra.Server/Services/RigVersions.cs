@@ -121,13 +121,13 @@ public sealed partial class RigVersions {
         return version;
     }
 
-    /// <summary>The version from ASTAP's banner ("ASTAP astrometric solver version CLI-2026.09.01").</summary>
+    /// <summary>The version from ASTAP's banner ("ASTAP astrometric solver version CLI-2026.11.01, multi-threaded").</summary>
     internal static string? ParseAstapVersion(string output) {
         var m = AstapBanner().Match(output);
         return m.Success ? m.Groups[1].Value : null;
     }
 
-    [GeneratedRegex(@"ASTAP[^\n]*?version\s+(\S+)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"ASTAP[^\n]*?version\s+([^\s,]+)", RegexOptions.IgnoreCase)]
     private static partial Regex AstapBanner();
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

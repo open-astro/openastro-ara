@@ -197,7 +197,7 @@ namespace OpenAstroAra.Test {
             Coordinates? seen = null;
             executor.Setup(e => e.CenterAsync(It.IsAny<Coordinates>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .Callback<Coordinates, IProgress<ApplicationStatus>, CancellationToken>((c, _, _) => seen = c)
-                .ReturnsAsync(true);
+                .ReturnsAsync(CenteringResult.Ok);
             var t = Trigger(feed, executor.Object);
             feed.Save(OffsetBy(15));
             t.ShouldTrigger(Light(), Light());
@@ -224,7 +224,7 @@ namespace OpenAstroAra.Test {
         public async Task A_centre_that_does_not_converge_fails_the_trigger() {
             var executor = new Mock<ICenteringExecutor>();
             executor.Setup(e => e.CenterAsync(It.IsAny<Coordinates>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(false);
+                .ReturnsAsync(CenteringResult.Failed(CenteringStep.Centre));
             var t = Trigger(new ScriptedSolveFeed(), executor.Object);
             await Assert.ThrowsAsync<SequenceEntityFailedException>(
                 () => t.Execute(new SequentialContainer(), new Progress<ApplicationStatus>(), CancellationToken.None));
@@ -264,7 +264,7 @@ namespace OpenAstroAra.Test {
             feed.Setup(f => f.SolveFrameAsync(It.IsAny<Guid>(), It.IsAny<CancellationToken>()))
                 .Returns(() => ++calls == 1 ? Task.FromResult<Coordinates?>(OffsetBy(15)) : gate.Task);
             var executor = new Mock<ICenteringExecutor>();
-            executor.Setup(e => e.CenterAsync(It.IsAny<Coordinates>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+            executor.Setup(e => e.CenterAsync(It.IsAny<Coordinates>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).ReturnsAsync(CenteringResult.Ok);
             var t = Trigger(feed.Object, executor.Object);
 
             latest = new SavedLight(Guid.NewGuid(), ++seq, DateTimeOffset.UtcNow);
