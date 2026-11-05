@@ -80,7 +80,7 @@ Never routed through `POST /api/v1/stats/rebuild-catalog`: that endpoint deletes
 }
 ```
 
-- Rows are lights with `captured_by_ara = 1` only; foreign frames are never served. Without `since`, every such light. With `since`, lights whose `updated_utc` is later than it. `total_lights` is always the full count. Keys are snake_case, as every daemon reply (the `SnakeCaseLower` policy).
+- Rows are lights with `captured_by_ara = 1` only; foreign frames are never served. Without `since`, every such light. With `since`, lights whose `updated_utc` is later than it; the client sends the newest `updated_utc` it holds as `since`. `total_lights` is always the full count. Keys are snake_case, as every daemon reply (the `SnakeCaseLower` policy).
 - `profile_id` comes from the session join. `composite_score` is `json_extract(quality_score_json, '$.composite')`, null when absent.
 - `GET /api/v1/frames` and `GET /api/v1/stats/targets` are untouched.
 

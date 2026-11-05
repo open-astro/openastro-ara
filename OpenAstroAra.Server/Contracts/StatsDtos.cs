@@ -91,6 +91,32 @@ public sealed record BestFrameDto(
     double CompositeScore,
     string? FilterName);
 
+/// <summary>GET /api/v1/stats/album-frames — the Sky Album's rows: lights Ara captured, only those
+/// changed after <c>since</c> when given. <see cref="TotalLights"/> always counts every such light,
+/// so a client whose merged cache disagrees knows to refetch in full (a frame was deleted).</summary>
+public sealed record StatsAlbumFramesDto(
+    int TotalLights,
+    IReadOnlyList<AlbumFrameDto> Frames);
+
+/// <summary>One album row: J2000 pointing and pixel scale (null when unknown, then the client matches
+/// by target name), the session's profile, and when the daemon last changed the row (the next
+/// <c>since</c>).</summary>
+public sealed record AlbumFrameDto(
+    Guid FrameId,
+    double? RaDeg,
+    double? DecDeg,
+    int Width,
+    int Height,
+    int? Bin,
+    double? PixelScaleArcsec,
+    DateTimeOffset CapturedUtc,
+    double ExposureSeconds,
+    string? FilterName,
+    string TargetName,
+    double? CompositeScore,
+    string? ProfileId,
+    DateTimeOffset? UpdatedUtc);
+
 /// <summary>GET /api/v1/stats/calendar — per-day session calendar heatmap.</summary>
 public sealed record StatsCalendarDto(
     IReadOnlyList<StatsCalendarDayDto> Days);
