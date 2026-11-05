@@ -57,6 +57,9 @@ class CardStats {
   final DateTime? firstCaptureUtc;
   final String bestFrameId;
 
+  /// The best frame's composite score, null when no frame is scored yet.
+  final double? bestScore;
+
   /// The best frame's gear profile id; the screen resolves it to a name.
   final String? profileId;
   final List<String> filters;
@@ -66,6 +69,7 @@ class CardStats {
     required this.integrationHours,
     required this.firstCaptureUtc,
     required this.bestFrameId,
+    this.bestScore,
     required this.profileId,
     required this.filters,
   });
@@ -113,6 +117,7 @@ CardStats _stats(List<AlbumFrame> fs) {
     integrationHours: fs.fold(0.0, (h, f) => h + f.exposureSeconds) / 3600,
     firstCaptureUtc: fs.map((f) => f.capturedUtc).nonNulls.firstOrNull,
     bestFrameId: best.frameId,
+    bestScore: best.compositeScore,
     profileId: best.profileId,
     filters: filters,
   );

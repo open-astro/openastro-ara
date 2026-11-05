@@ -3572,6 +3572,150 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The main camera is busy: wait for its frame, or stop it.'**
   String get shellMainCameraBusy;
+
+  /// Sky Album screen: app bar title
+  ///
+  /// In en, this message translates to:
+  /// **'Sky Album'**
+  String get albumTitle;
+
+  /// Sky Album: Book switch segment for the Messier catalog
+  ///
+  /// In en, this message translates to:
+  /// **'Messier'**
+  String get albumBookMessier;
+
+  /// Sky Album: Book switch segment for the Caldwell catalog
+  ///
+  /// In en, this message translates to:
+  /// **'Caldwell'**
+  String get albumBookCaldwell;
+
+  /// Sky Album header: cards collected (bronze or better) out of the Book's cards
+  ///
+  /// In en, this message translates to:
+  /// **'{collected} / {total} collected'**
+  String albumCollected(int collected, int total);
+
+  /// Sky Album: bronze tier name (at least one light)
+  ///
+  /// In en, this message translates to:
+  /// **'Bronze'**
+  String get albumTierBronze;
+
+  /// Sky Album: silver tier name (1 h or more)
+  ///
+  /// In en, this message translates to:
+  /// **'Silver'**
+  String get albumTierSilver;
+
+  /// Sky Album: gold tier name (5 h or more)
+  ///
+  /// In en, this message translates to:
+  /// **'Gold'**
+  String get albumTierGold;
+
+  /// Sky Album header: per-tier count, e.g. 'Gold 3'
+  ///
+  /// In en, this message translates to:
+  /// **'{tier} {count}'**
+  String albumTierCount(String tier, int count);
+
+  /// Sky Album: caption over the all-grey grid when no lights exist yet
+  ///
+  /// In en, this message translates to:
+  /// **'Image a target to collect your first card'**
+  String get albumEmpty;
+
+  /// Sky Album: title of the shelf of missing cards Tonight's Sky ranks well tonight
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 missing card well placed tonight} other{{count} missing cards well placed tonight}}'**
+  String albumShelfTitle(int count);
+
+  /// Sky Album card back: label of the first capture date
+  ///
+  /// In en, this message translates to:
+  /// **'First capture'**
+  String get albumFirstCapture;
+
+  /// Sky Album card back: label of total exposure and light count
+  ///
+  /// In en, this message translates to:
+  /// **'Integration'**
+  String get albumIntegration;
+
+  /// Sky Album card back: total hours (one decimal) and number of light frames
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h · {lights} lights'**
+  String albumIntegrationValue(String hours, int lights);
+
+  /// Sky Album card back: label of the filters used
+  ///
+  /// In en, this message translates to:
+  /// **'Filters'**
+  String get albumFilters;
+
+  /// Sky Album card back: label of the best frame's gear profile
+  ///
+  /// In en, this message translates to:
+  /// **'Gear profile'**
+  String get albumGearProfile;
+
+  /// Sky Album card back: label of the best frame's quality score
+  ///
+  /// In en, this message translates to:
+  /// **'Best frame score'**
+  String get albumBestScore;
+
+  /// Sky Album card back: label of the hours left to the next tier
+  ///
+  /// In en, this message translates to:
+  /// **'Next tier'**
+  String get albumNextTier;
+
+  /// Sky Album card back: hours left to the next tier, tier in lower case
+  ///
+  /// In en, this message translates to:
+  /// **'{hours} h to {tier}'**
+  String albumNextTierValue(String hours, String tier);
+
+  /// Sky Album card back: next-tier line when the card is gold
+  ///
+  /// In en, this message translates to:
+  /// **'Gold reached'**
+  String get albumGoldReached;
+
+  /// Sky Album card back: shown instead of figures on a missing card
+  ///
+  /// In en, this message translates to:
+  /// **'Not collected yet'**
+  String get albumNotCollected;
+
+  /// Sky Album card back: action on a missing card; hands the object to the planner
+  ///
+  /// In en, this message translates to:
+  /// **'Image this target'**
+  String get albumImageThis;
+
+  /// Sky Album card back: action on a collected card; hands the object to the planner
+  ///
+  /// In en, this message translates to:
+  /// **'Add more time'**
+  String get albumAddTime;
+
+  /// Sky Album: error pill when the album rows fail to load
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load the album: {reason}'**
+  String albumLoadFailed(String reason);
+
+  /// Sky Album: pill when no rig is saved, so no frames can be read
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to a rig to fill the album'**
+  String get albumNoServer;
 }
 
 class _AppLocalizationsDelegate

@@ -2023,6 +2023,96 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get shellMainCameraBusy =>
       'The main camera is busy: wait for its frame, or stop it.';
+
+  @override
+  String get albumTitle => 'Sky Album';
+
+  @override
+  String get albumBookMessier => 'Messier';
+
+  @override
+  String get albumBookCaldwell => 'Caldwell';
+
+  @override
+  String albumCollected(int collected, int total) {
+    return '$collected / $total collected';
+  }
+
+  @override
+  String get albumTierBronze => 'Bronze';
+
+  @override
+  String get albumTierSilver => 'Silver';
+
+  @override
+  String get albumTierGold => 'Gold';
+
+  @override
+  String albumTierCount(String tier, int count) {
+    return '$tier $count';
+  }
+
+  @override
+  String get albumEmpty => 'Image a target to collect your first card';
+
+  @override
+  String albumShelfTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count missing cards well placed tonight',
+      one: '1 missing card well placed tonight',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get albumFirstCapture => 'First capture';
+
+  @override
+  String get albumIntegration => 'Integration';
+
+  @override
+  String albumIntegrationValue(String hours, int lights) {
+    return '$hours h · $lights lights';
+  }
+
+  @override
+  String get albumFilters => 'Filters';
+
+  @override
+  String get albumGearProfile => 'Gear profile';
+
+  @override
+  String get albumBestScore => 'Best frame score';
+
+  @override
+  String get albumNextTier => 'Next tier';
+
+  @override
+  String albumNextTierValue(String hours, String tier) {
+    return '$hours h to $tier';
+  }
+
+  @override
+  String get albumGoldReached => 'Gold reached';
+
+  @override
+  String get albumNotCollected => 'Not collected yet';
+
+  @override
+  String get albumImageThis => 'Image this target';
+
+  @override
+  String get albumAddTime => 'Add more time';
+
+  @override
+  String albumLoadFailed(String reason) {
+    return 'Couldn\'t load the album: $reason';
+  }
+
+  @override
+  String get albumNoServer => 'Connect to a rig to fill the album';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -4056,4 +4146,95 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get shellMainCameraBusy =>
       'A câmera principal está ocupada: espere o quadro terminar, ou pare-o.';
+
+  @override
+  String get albumTitle => 'Álbum do Céu';
+
+  @override
+  String get albumBookMessier => 'Messier';
+
+  @override
+  String get albumBookCaldwell => 'Caldwell';
+
+  @override
+  String albumCollected(int collected, int total) {
+    return '$collected / $total coletados';
+  }
+
+  @override
+  String get albumTierBronze => 'Bronze';
+
+  @override
+  String get albumTierSilver => 'Prata';
+
+  @override
+  String get albumTierGold => 'Ouro';
+
+  @override
+  String albumTierCount(String tier, int count) {
+    return '$tier $count';
+  }
+
+  @override
+  String get albumEmpty => 'Fotografe um alvo para coletar seu primeiro cartão';
+
+  @override
+  String albumShelfTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cartões faltando bem posicionados esta noite',
+      one: '1 cartão faltando bem posicionado esta noite',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get albumFirstCapture => 'Primeira captura';
+
+  @override
+  String get albumIntegration => 'Integração';
+
+  @override
+  String albumIntegrationValue(String hours, int lights) {
+    return '$hours h · $lights quadros';
+  }
+
+  @override
+  String get albumFilters => 'Filtros';
+
+  @override
+  String get albumGearProfile => 'Perfil de equipamento';
+
+  @override
+  String get albumBestScore => 'Nota do melhor quadro';
+
+  @override
+  String get albumNextTier => 'Próximo nível';
+
+  @override
+  String albumNextTierValue(String hours, String tier) {
+    return '$hours h para $tier';
+  }
+
+  @override
+  String get albumGoldReached => 'Ouro alcançado';
+
+  @override
+  String get albumNotCollected => 'Ainda não coletado';
+
+  @override
+  String get albumImageThis => 'Fotografar este alvo';
+
+  @override
+  String get albumAddTime => 'Adicionar mais tempo';
+
+  @override
+  String albumLoadFailed(String reason) {
+    return 'Não foi possível carregar o álbum: $reason';
+  }
+
+  @override
+  String get albumNoServer =>
+      'Conecte-se a um equipamento para preencher o álbum';
 }
