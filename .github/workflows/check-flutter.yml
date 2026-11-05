@@ -162,7 +162,7 @@ jobs:
       # the server half and never reaches the pub half at all.
       - name: Setup .NET (the notices generator reads the NuGet graph)
         if: steps.check.outputs.update == 'true' && steps.existing.outputs.open == 'false'
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68  # v4.x pinned per zizmor pattern
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73  # v4.x pinned per zizmor pattern
         with:
           dotnet-version: '10.0.x'
 
