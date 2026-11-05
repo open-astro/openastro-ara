@@ -483,15 +483,8 @@ public partial class Program {
             return guider;
         });
         builder.Services.AddSingleton<IGuiderService>(sp => sp.GetRequiredService<GuiderService>());
-        // §45 — the polar-align engine: the guider supplies capture + the PA-session lease, the frame
-        // solver runs ASTAP with the guide optics, the telescope mediator drives the seed RA slew +
-        // tracking hand-back, and the profile store supplies the site for the pole-error geometry.
-        builder.Services.AddSingleton<IPolarAlignFrameSolver>(sp =>
-            new PolarAlignFrameSolver(
-                sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
-                sp.GetRequiredService<IProfileStore>(),
-                sp.GetRequiredService<OpenAstroAra.PlateSolving.Interfaces.IPlateSolverFactory>(),
-                ct => sp.GetRequiredService<IGuiderService>().TryGetGuideOpticsAsync(ct)));
+        // §45 — polar alignment runs in the guider (its Static PA tool, #1611); Ara drives it, does the
+        // manual-mode RA turns through the telescope mediator and keeps the session log.
         builder.Services.AddSingleton<IPolarAlignmentLog>(sp =>
             new SqlitePolarAlignmentLog(sp.GetRequiredService<IAraDatabase>()));
         builder.Services.AddSingleton<IPaResidualLog>(sp =>
@@ -502,7 +495,6 @@ public partial class Program {
             new PolarAlignService(
                 sp.GetRequiredService<GuiderService>(),
                 sp.GetRequiredService<ILogger<PolarAlignService>>(),
-                sp.GetRequiredService<IPolarAlignFrameSolver>(),
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
                 sp.GetRequiredService<IProfileStore>(),
                 sp.GetService<IWsBroadcaster>(),
