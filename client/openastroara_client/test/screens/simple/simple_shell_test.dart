@@ -1993,6 +1993,18 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('the Ara sheet grows with a long rig name up to 420 px, then wraps it (#1602)', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768),
+        server: const AraServer(
+            hostname: '10.0.0.5', port: 5555, mdnsName: 'backyard-observatory-raspberry-pi-five-north-pier-astro-rig'));
+    await tester.tap(find.byKey(const Key('simple-ara-mark')));
+    await tester.pump();
+    expect(tester.getSize(find.byKey(const Key('simple-ara-sheet'))).width, 420);
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
+  });
+
   testWidgets("no frame yet: the wallpaper, not the sky; the Sky button shows tonight's sky (#1602)", (tester) async {
     await _pump(tester, const Size(1024, 768));
     expect(find.byKey(const Key('simple-wallpaper')), findsOneWidget);

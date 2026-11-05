@@ -3653,7 +3653,8 @@ class _AraSheet extends ConsumerWidget {
         .where((p) => p.id == profiles.activeId)
         .firstOrNull
         ?.name;
-    // As wide as its text, up to 420 px (wider text wraps in the value column).
+    // As wide as its text, up to 420 px; past that the table shrinks the
+    // value column to its longest word and the text wraps.
     return ConstrainedBox(
       key: const Key('simple-ara-sheet'),
       constraints: BoxConstraints(

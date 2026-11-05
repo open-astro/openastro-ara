@@ -433,8 +433,6 @@ class SimpleVersions extends StatelessWidget {
       ),
       Table(
         defaultColumnWidth: const IntrinsicColumnWidth(),
-        // A value too long for its row wraps instead of running out.
-        columnWidths: const {1: FlexColumnWidth()},
         defaultVerticalAlignment: TableCellVerticalAlignment.baseline,
         textBaseline: TextBaseline.alphabetic,
         children: [
