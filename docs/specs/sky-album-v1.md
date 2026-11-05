@@ -152,7 +152,7 @@ Search gains these objects as a side effect, and so does Tonight's Sky except M4
 ## Tests
 
 - Daemon: `RegisterFrameAsync` stores pointing only for J2000 and sets `captured_by_ara`; the backfill pass fills from a FITS header fixture, marks a NINA-style header (no Ara `SWCREATE`) as not Ara, sets `pointing_probed_utc` on a file without cards, and is a no-op on the second run; `album-frames` honours `since`, excludes foreign frames and reports `total_lights`.
-- Client (pure Dart): containment on a synthetic frame (object at centre, at half the short side, just outside it, at a corner); alias fallback with `M31`, `M 31`, `Messier 31`; tier thresholds at the boundaries; aggregate fields; the merge-by-id + count reload rule, including a `since` response that only re-delivers cached rows.
+- Client (pure Dart): containment on a synthetic frame (object at centre, at half the short side, just outside it, at a corner); alias fallback with `M31`, `M 31`, `Messier 31`; tier thresholds at the boundaries; aggregate fields; merge by `frame_id`, including a `since` response that only re-delivers cached rows. (The count reload rule is gone: the collection-cache bullet below replaces it.)
 - Album screen widget test with a fake callback and neither shell: a tap on a missing card's action calls the callback with that `PlanningDso`.
 - Catalog: after the data fix, the Messier Book has 110 cards and the Caldwell Book 109.
 - Collection cache ([#1535](https://github.com/open-astro/openastro-ara/issues/1535), pure Dart): a newer `updated_utc` replaces a cached row; a full reply with fewer rows removes nothing; a Tier never drops; Night grouping across local midnight and on a spring-forward day; the sub column picks the most common exposure.
