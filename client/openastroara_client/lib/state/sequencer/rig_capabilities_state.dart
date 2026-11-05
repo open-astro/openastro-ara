@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/guider_status.dart';
 import '../../models/sequence/rig_capabilities.dart';
+import '../equipment/camera_state.dart';
 import '../equipment/filter_wheel_state.dart';
 import '../equipment/focuser_state.dart';
 import '../equipment/rotator_state.dart';
@@ -49,7 +50,21 @@ Future<RigCapabilities> readRigCapabilities(ProviderContainer container) async {
   } catch (e) {
     debugPrint('[planning] rig read for guider failed: $e');
   }
+  // Unknown (no status yet) keeps the historical "it can cool" shape.
+  var coolerRegulates = true;
+  try {
+    final camera = await container
+        .read(cameraStatusProvider.future)
+        .timeout(const Duration(seconds: 8));
+    coolerRegulates = camera?.capabilities?.canSetTemperature ?? true;
+  } catch (e) {
+    debugPrint('[planning] rig read for camera failed: $e');
+  }
+  if (!coolerRegulates) {
+    debugPrint('[planning] camera cannot set a cooling target; the plan gets no Cool Camera step');
+  }
   return RigCapabilities(
+    coolerRegulates: coolerRegulates,
     focuser: await focuser,
     filterWheel: await wheel,
     rotator: await rotator,
@@ -67,6 +82,7 @@ RigCapabilities rigCapabilitiesFromSettings(Phd2Settings phd2) =>
       filterWheel: true,
       rotator: false,
       guider: guiderConfigured(null, phd2),
+      coolerRegulates: true,
     );
 
 /// A guider is part of the rig when the daemon reports one (whatever its link

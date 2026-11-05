@@ -394,6 +394,25 @@ void main() {
     });
   });
 
+  group('a camera that cannot hold a set-point (#1577)', () {
+    bool hasCool(Map<String, dynamic> n) =>
+        n[r'$type'] == coolCameraType || childrenOf(n).any(hasCool);
+
+    test('gets no Cool Camera step, session or per-target', () {
+      final b = buildImagingRunBody(
+          raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10,
+          coolToC: -10, rig: const RigCapabilities(focuser: true, filterWheel: true, guider: true));
+      expect(hasCool(b), isFalse);
+    });
+
+    test('one that can keeps both', () {
+      final b = buildImagingRunBody(
+          raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10,
+          coolToC: -10, rig: RigCapabilities.everything);
+      expect(hasCool(b), isTrue);
+    });
+  });
+
   group('cooling while the plan gets ready', () {
     test('the session starts the cool without waiting; the target waits for it just before the first light', () {
       final b = buildImagingRunBody(

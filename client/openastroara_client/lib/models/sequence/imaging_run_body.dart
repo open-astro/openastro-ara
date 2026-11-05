@@ -115,6 +115,8 @@ Map<String, dynamic> buildImagingRunBody({
   double? trackingPriorSeconds,
   bool alwaysCenter = false,
 }) {
+  // #1577 — nothing regulates a set-point on this camera: no Cool Camera step.
+  if (!rig.coolerRegulates) coolToC = null;
   final target = buildTargetBlock(
     raDeg: raDeg,
     decDeg: decDeg,
@@ -219,6 +221,8 @@ Map<String, dynamic> buildTargetBlock({
   // Simple Mode: centre on the target whatever Settings → Plate Solving says.
   bool alwaysCenter = false,
 }) {
+  // #1577 — nothing regulates a set-point on this camera: no Cool Camera step.
+  if (!rig.coolerRegulates) coolToC = null;
   // Cook the block from the rig: a device the rig lacks gets no step and no
   // trigger, whatever the caller asked for. Without a focuser there is
   // nothing to autofocus; without a guider nothing to guide or dither with;
