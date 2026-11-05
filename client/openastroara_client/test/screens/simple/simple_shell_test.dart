@@ -1818,6 +1818,18 @@ void main() {
     expect(find.byKey(const Key('simple-planetarium')), findsOneWidget, reason: 'the sky, pointed at it');
   });
 
+  testWidgets("Search files the guider's settings under Guide Camera (#1586)", (tester) async {
+    await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => _GuiderUp())]);
+    await tester.tap(find.byKey(const Key('simple-search-button')));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('simple-search-field')), 'dither');
+    await tester.pump();
+    await tester.pump();
+    final row = find.byKey(const Key('simple-search-setting-0'));
+    expect(find.descendant(of: row, matching: find.text('Dither')), findsOneWidget);
+    expect(find.descendant(of: row, matching: find.text('Guide Camera')), findsOneWidget, reason: 'its section');
+  });
+
   testWidgets('Search opens on its own: no mode panel beside the rail', (tester) async {
     await _pump(tester, const Size(1024, 768));
     await tester.tap(find.byKey(const Key('simple-search-button')));
