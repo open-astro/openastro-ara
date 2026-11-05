@@ -13,6 +13,8 @@ class _Fake implements GuiderAdvancedClient {
   final GuiderAdvancedView guider;
   Map<String, dynamic>? putBody;
   int pushes = 0;
+  int multiStarApplies = 0;
+  Object? applyError;
   _Fake(this.profile, this.guider);
   @override
   Future<GuiderAdvancedSettings> getProfile() async {
@@ -31,6 +33,12 @@ class _Fake implements GuiderAdvancedClient {
   Future<GuiderAdvancedView> getGuider() async => guider;
   @override
   Future<void> pushTuning() async => pushes++;
+  @override
+  Future<void> applyMultiStar() async {
+    if (applyError != null) throw applyError!;
+    multiStarApplies++;
+  }
+
   @override
   void close() {}
 }
@@ -169,6 +177,39 @@ void main() {
     );
     expect(fake.pushes, 1, reason: 'connected: pushed at once');
     expect(find.byKey(const Key('guider-advanced-status')), findsOneWidget);
+  });
+
+  testWidgets('saving multi-star off while connected writes it to the guider', (t) async {
+    final fake = await _pump(
+      t,
+      profile: const GuiderAdvancedSettings({'multi_star_enabled': false}),
+    );
+    await t.tap(find.widgetWithText(FilledButton, 'Apply'));
+    await t.pumpAndSettle();
+    expect(fake.putBody!['multi_star_enabled'], false);
+    expect(fake.multiStarApplies, 1, reason: 'the guider reports on, the profile says off');
+    final status = t.widget<Text>(find.byKey(const Key('guider-advanced-status'))).data!;
+    expect(status, isNot(contains('next guider connect')));
+  });
+
+  testWidgets('an unset multi-star matches a guider that reports on: no reconnect', (t) async {
+    final fake = await _pump(t);
+    await t.tap(find.widgetWithText(FilledButton, 'Apply'));
+    await t.pumpAndSettle();
+    expect(fake.multiStarApplies, 0);
+  });
+
+  testWidgets('a refused multi-star write is reported in plain words', (t) async {
+    final fake = await _pump(
+      t,
+      profile: const GuiderAdvancedSettings({'multi_star_enabled': false}),
+    );
+    fake.applyError = Exception('stop guiding first');
+    await t.tap(find.widgetWithText(FilledButton, 'Apply'));
+    await t.pumpAndSettle();
+    final status = t.widget<Text>(find.byKey(const Key('guider-advanced-status'))).data!;
+    expect(status, startsWith('Saved, but multi-star was not applied'));
+    expect(status, contains('stop guiding first'));
   });
 
   test('cross-field rules match the server: delay trio and min <= max', () {

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/guider_live.dart';
+import '../../state/focus/autofocus_live_state.dart' show describeRequestError;
 import '../../state/guider/guider_live_state.dart';
 import '../../theme/ara_colors.dart';
 import '../focus/bahtinov_focus_card.dart' show BahtinovFrameView;
@@ -25,6 +26,22 @@ Future<void> showGuideCameraDialog(BuildContext context) => showDialog<void>(
   ),
 );
 
+Future<void> _toggleMultiStar(
+  BuildContext context,
+  WidgetRef ref,
+  bool on,
+) async {
+  final api = ref.read(guiderAdvancedApiProvider);
+  if (api == null) return;
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  try {
+    await setMultiStar(api, on);
+  } catch (e) {
+    messenger?.showSnackBar(SnackBar(content: Text(describeRequestError(e))));
+  }
+  await ref.read(guiderLiveProvider.notifier).refresh();
+}
+
 class GuideCameraPanel extends ConsumerWidget {
   const GuideCameraPanel({super.key});
 
@@ -34,6 +51,13 @@ class GuideCameraPanel extends ConsumerWidget {
     final notifier = ref.read(guiderLiveProvider.notifier);
     final live = state.live;
     final text = Theme.of(context).textTheme;
+    final multiStar = live.multiStarEnabled;
+    // The guider takes the flag only with its equipment disconnected, which
+    // would end a guide session: no toggle while one runs.
+    final onToggleMultiStar =
+        multiStar == null || live.isGuidingPhase || state.busy
+        ? null
+        : () => unawaited(_toggleMultiStar(context, ref, !multiStar));
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -58,16 +82,28 @@ class GuideCameraPanel extends ConsumerWidget {
                 ),
               ),
               const Spacer(),
-              if (live.multiStarEnabled != null)
-                Tooltip(
-                  message: live.multiStarEnabled!
-                      ? 'The guider tracks several stars; the rings are the secondaries.'
-                      : 'Single-star guiding.',
-                  child: Chip(
-                    visualDensity: VisualDensity.compact,
-                    label: Text(
-                      live.multiStarEnabled! ? 'Multi-star' : 'Single star',
-                      style: const TextStyle(fontSize: 12),
+              if (multiStar != null)
+                Semantics(
+                  button: true,
+                  toggled: multiStar,
+                  enabled: onToggleMultiStar != null,
+                  label: 'Multi-star guiding',
+                  onTap: onToggleMultiStar,
+                  excludeSemantics: true,
+                  child: Tooltip(
+                    message: live.isGuidingPhase
+                        ? 'Stop guiding to change multi-star.'
+                        : multiStar
+                        ? 'Multi-star: the guider tracks several stars (the rings are the secondaries). Tap for single star.'
+                        : 'Single star. Tap for multi-star.',
+                    child: ActionChip(
+                      key: const Key('guide-camera-multistar'),
+                      visualDensity: VisualDensity.compact,
+                      label: Text(
+                        multiStar ? 'Multi-star' : 'Single star',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      onPressed: onToggleMultiStar,
                     ),
                   ),
                 ),

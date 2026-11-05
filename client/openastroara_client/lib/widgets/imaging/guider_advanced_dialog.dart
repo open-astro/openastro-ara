@@ -33,8 +33,19 @@ Future<void> showGuiderAdvancedDialog(BuildContext context) => showDialog<void>(
 /// #1364 item 3 — every guider setting beyond Tune Guiding, from Ara. Each row
 /// shows the profile's value, or "Guider's" with the guider's current value
 /// when the profile leaves it alone. Apply saves the profile and pushes the
-/// runtime-safe settings while guiding continues; multi-star lands on the
-/// next guider connect.
+/// runtime-safe settings while guiding continues; multi-star is written to a
+/// connected guider by briefly reconnecting its equipment, which a running
+/// guide session refuses (stop guiding first).
+/// #1592 — save the multi-star setting to the profile and, when a guider is
+/// connected, write it to the guider. The chip in the guide camera window
+/// uses this path; the settings dialog's Apply does the same write. A guide
+/// session makes the daemon refuse the write (the profile keeps the value).
+Future<void> setMultiStar(GuiderAdvancedClient api, bool on) async {
+  final profile = await api.getProfile();
+  await api.putProfile(profile.withValue('multi_star_enabled', on));
+  await api.applyMultiStar();
+}
+
 /// Test access to the panel's pure helpers.
 abstract final class GuiderAdvancedPanelTestHooks {
   static (Object?, String?) parse(GuiderAdvancedField f, String raw) =>
@@ -206,17 +217,30 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
     try {
       final saved = await api.putProfile(_draft);
       var pushed = false;
+      String? multiStarProblem;
       if (_guider.connected) {
         await api.pushTuning();
         pushed = true;
+        // Unset means on (#1592); the guider is only touched when it differs.
+        final want = saved['multi_star_enabled'] != false;
+        final has = _guider.current['multi_star_enabled'];
+        if (has != want) {
+          try {
+            await api.applyMultiStar();
+          } catch (e) {
+            multiStarProblem = describeRequestError(e);
+          }
+        }
       }
       if (!mounted) return;
       setState(() {
         _draft = saved;
         _applying = false;
-        _statusIsError = false;
-        _status = pushed
-            ? 'Saved and sent to the guider. Multi-star applies on the next guider connect.'
+        _statusIsError = multiStarProblem != null;
+        _status = multiStarProblem != null
+            ? 'Saved, but multi-star was not applied: $multiStarProblem'
+            : pushed
+            ? 'Saved and sent to the guider.'
             : 'Saved to the profile — sent to the guider when it connects.';
       });
       try {

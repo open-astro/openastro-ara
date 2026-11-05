@@ -197,7 +197,7 @@ framing/focus loop when you need to point or focus by eye.
   multi-star, star detection, auto exposure, noise reduction, subframes, the RA and Dec algorithms,
   maximum pulses, Dec backlash, mount options, dither scale and variable delay. Each row shows the
   guider's own value until you set one; your values are kept in the profile and sent on Apply while
-  guiding continues (multi-star takes effect the next time the guider connects). Setting a row back
+  guiding continues. Multi-star is on unless you turn it off; saving it briefly reconnects the guider's equipment, so it is refused while guiding (stop guiding first) - the **Multi-star** / **Single star** chip in the Guide camera window changes it the same way. Setting a row back
   to the guider's (or **All guider's**) only stops Ara sending it: the guider keeps whatever value it has,
   including one Ara sent before.
 - **Guiding Assistant.** The Guide camera dialog's assistant button (also under Checklist → Smart Focus →

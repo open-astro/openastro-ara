@@ -119,7 +119,7 @@ class GuiderAdvancedField {
       'Multi-star guiding',
       'Star tracking',
       GuiderAdvancedKind.toggle,
-      help: 'Guide on several stars at once — steadier in poor seeing. Applies on the next guider connect.',
+      help: 'Guide on several stars at once — steadier in poor seeing. On unless you turn it off. Saving applies it to a connected guider by briefly reconnecting its equipment, so stop guiding first.',
     ),
     GuiderAdvancedField(
       'fast_recenter',

@@ -12,6 +12,10 @@ abstract interface class GuiderAdvancedClient {
 
   /// The runtime-safe push (`?scope=tuning`): applies while guiding.
   Future<void> pushTuning();
+
+  /// #1592 — write the profile's multi-star setting to the connected guider.
+  /// The daemon answers 409 "stop guiding first" while a guide session runs.
+  Future<void> applyMultiStar();
   void close();
 }
 
@@ -63,6 +67,13 @@ class GuiderAdvancedApi implements GuiderAdvancedClient {
   Future<void> pushTuning() => _dio.post<void>(
     '/api/v1/equipment/guider/profile/push',
     queryParameters: const {'scope': 'tuning'},
+  );
+
+  @override
+  Future<void> applyMultiStar() => _dio.post<void>(
+    '/api/v1/equipment/guider/multi-star/apply',
+    // The guider's equipment is released and reconnected inside this request.
+    options: Options(receiveTimeout: const Duration(seconds: 60)),
   );
 
   @override

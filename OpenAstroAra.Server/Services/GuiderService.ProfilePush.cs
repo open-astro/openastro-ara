@@ -50,6 +50,9 @@ public sealed partial class GuiderService {
         return PushTuningAsync(guider, idempotencyKey, ct);
     }
 
+    /// <summary>#1592 - see <see cref="IGuiderService.ApplyGuiderMultiStarAsync"/>.</summary>
+    public Task ApplyGuiderMultiStarAsync(CancellationToken ct) => RequireConnectedGuider().ApplyMultiStarFromProfileAsync(ct);
+
     private async Task<OperationAcceptedDto> PushTuningAsync(
             OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PHD2Guider guider, string? idempotencyKey, CancellationToken ct) {
         var methods = await guider.RepushGuiderTuningAsync(ct).ConfigureAwait(false);
