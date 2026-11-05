@@ -131,19 +131,13 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         // draws, from the cached site.
         SiteLocation? serverSite;
         try {
-          serverSite =
-              ref.read(siteLocationProvider).asData?.value ??
+          serverSite = ref.read(siteLocationProvider).asData?.value ??
               await ref.read(siteLocationProvider.future);
         } catch (e) {
-          debugPrint(
-            'StellariumView: daemon site unavailable, using cached: $e',
-          );
+          debugPrint('StellariumView: daemon site unavailable, using cached: $e');
         }
         if (!mounted) return;
-        final site = planetariumSiteFor(
-          serverSite,
-          ref.read(siteSettingsProvider),
-        );
+        final site = planetariumSiteFor(serverSite, ref.read(siteSettingsProvider));
         final optics = planetariumOpticsFor(ref.read(opticsSettingsProvider));
         final activeServer = await ref.read(activeServerFutureProvider.future);
         if (!mounted) return;
@@ -277,8 +271,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       // The page posts its canvas size on every frame it lays out; print only
       // a change (about 400 identical lines a session otherwise).
       final line = '$event';
-      if (kDebugMode && line != _lastDebugLine)
-        debugPrint('StellariumView debug: $line');
+      if (kDebugMode && line != _lastDebugLine) debugPrint('StellariumView debug: $line');
       _lastDebugLine = line;
       return;
     }
@@ -340,11 +333,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     // §47 / #1146 — the grid behind the panels, for the mosaic project record.
     final cols = (event['cols'] as num?)?.toInt();
     final rows = (event['rows'] as num?)?.toInt();
-    final mosaicGrid =
-        isMosaic &&
-            cols != null &&
-            rows != null &&
-            cols * rows == mosaicPanels.length
+    final mosaicGrid = isMosaic && cols != null && rows != null && cols * rows == mosaicPanels.length
         ? (
             cols: cols,
             rows: rows,
@@ -424,8 +413,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     // the page's framing target keeps whatever name it had when a goto
     // brings none, so Create Run after "select the Moon, type NGC 7000"
     // used to build a run called "Moon" at NGC 7000.
-    final catalog =
-        ref.read(bundledCatalogProvider).value ??
+    final catalog = ref.read(bundledCatalogProvider).value ??
         ref.read(dsoCatalogProvider).value ??
         const <PlanningDso>[];
     final route = routeSearch(applyImagingRegions(catalog), q);
