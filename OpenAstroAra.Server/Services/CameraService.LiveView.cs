@@ -66,6 +66,7 @@ public sealed partial class CameraService {
     private long _liveViewLastFetch;
     private bool LiveViewIdleTooLong() =>
         _liveViewClock.GetElapsedTime(Interlocked.Read(ref _liveViewLastFetch), _liveViewClock.GetTimestamp()) > LiveViewIdleStop;
+    private void TouchLiveViewFetch() => Interlocked.Exchange(ref _liveViewLastFetch, _liveViewClock.GetTimestamp());
     internal void SetLiveViewClockForTest(TimeProvider clock) => _liveViewClock = clock;
 
     // Serializes Start/Stop so they can never interleave (a Stop awaiting the old loop can't race a
@@ -243,7 +244,7 @@ public sealed partial class CameraService {
     }
 
     public (ReadOnlyMemory<byte> Jpeg, long Seq, long SessionId)? GetLiveViewFrame() {
-        Interlocked.Exchange(ref _liveViewLastFetch, _liveViewClock.GetTimestamp()); // a client is still watching
+        TouchLiveViewFetch();
         var f = _liveViewFrame; // single volatile read — all fields are a consistent snapshot
         // ReadOnlyMemory view: the buffer is shared (published, never mutated in place — each frame
         // is a fresh array), so readers get a read-only window with no per-fetch copy.

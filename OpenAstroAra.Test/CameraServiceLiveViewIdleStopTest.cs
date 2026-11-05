@@ -83,6 +83,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_loop_whose_only_reader_fetches_the_stack_frame_keeps_going() {
+            var (svc, clock, log) = NewService();
+            using var disposeSvc = svc;
+            await Start(svc);
+            try {
+                ((ILiveStackControl)svc).StartLiveStack();
+                Assert.That(await Until(() => svc.GetLiveViewStatus().FrameSeq > 0), Is.True);
+                for (var i = 0; i < 6; i++) {
+                    ((ILiveStackControl)svc).GetLiveStackFrame();
+                    clock.Advance(TimeSpan.FromSeconds(10));
+                    await Task.Delay(250);
+                }
+                Assert.That(svc.GetLiveViewStatus().Active, Is.True);
+                Assert.That(log.Msgs, Has.None.Contain("no client fetched a frame"));
+            } finally {
+                await svc.StopLiveViewAsync();
+            }
+        }
+
+        [Test]
         public async Task A_loop_whose_frames_are_being_fetched_keeps_going() {
             var (svc, clock, log) = NewService();
             using var disposeSvc = svc;
