@@ -177,6 +177,41 @@ namespace OpenAstroAra.Test {
 
         private static IProgress<ApplicationStatus> Progress => new Progress<ApplicationStatus>();
 
+        /// <summary>Records reports synchronously (Progress&lt;T&gt; posts to the pool and would reorder them).</summary>
+        private sealed class RecordingProgress : IProgress<ApplicationStatus> {
+            public readonly List<ApplicationStatus> Reports = new();
+            public void Report(ApplicationStatus value) => Reports.Add(value);
+        }
+
+        [Test]
+        public async Task The_passing_meridian_countdown_is_reported_as_a_wait() {
+            // #1596 — the run status shows a "meridian" reason only for WaitSource reports.
+            SetupProfile(recenter: false);
+            var sut = CreateSUT();
+            var progress = new RecordingProgress();
+
+            await sut.MeridianFlip(Target, TimeSpan.FromSeconds(1), progress, CancellationToken.None);
+
+            var countdown = progress.Reports.Where(r => r.Status.StartsWith("Passing meridian", StringComparison.Ordinal)).ToList();
+            Assert.That(countdown, Is.Not.Empty);
+            Assert.That(countdown.Select(r => r.Source), Is.All.EqualTo(MeridianFlipExecutor.WaitSource));
+        }
+
+        [Test]
+        public async Task A_failed_flight_check_is_reported_as_a_wait_that_starts_with_Flip_refused() {
+            SetupProfile();
+            SetupSafety(Safety());
+            SetupHealthyTrackingMount();
+            var sut = CreateSafetySUT();
+            var progress = new RecordingProgress();
+
+            var ok = await sut.MeridianFlip(LowTarget, TimeSpan.Zero, progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            var refused = progress.Reports.Single(r => r.Status.StartsWith("Flip refused:", StringComparison.Ordinal));
+            Assert.That(refused.Source, Is.EqualTo(MeridianFlipExecutor.WaitSource), "stays on the run status until the resumed flip reports again");
+        }
+
         [Test]
         public async Task MeridianFlip_runs_the_full_recovery_sequence_in_order_when_a_guider_is_connected() {
             SetupProfile(recenter: true);
