@@ -1559,6 +1559,16 @@ void main() {
       expect(find.byType(SimpleRunSheet), findsNothing);
     });
 
+    testWidgets('the safe answer carries the weight: Keep editing is the filled button, Discard a text button', (tester) async {
+      final container = await edit(tester);
+      container.read(simpleRunPlanProvider.notifier).setFrames(0, 5);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      expect(find.ancestor(of: find.text('Keep editing'), matching: find.byType(FilledButton)), findsOneWidget);
+      expect(find.ancestor(of: find.text('Discard'), matching: find.byType(TextButton)), findsOneWidget);
+    });
+
     testWidgets('a gain-only change asks too: Save would store it', (tester) async {
       final container = await edit(tester);
       final seeded = container.read(simpleRunGainProvider);

@@ -524,9 +524,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     _discardAsk = messages.show(
       SimpleMessageKind.question,
       l10n.shellDiscardEditQuestion(targets[e].name),
+      // The pill fills its last action: the safe answer, not the destructive one.
       actions: [
-        SimpleMessageAction(l10n.shellKeepEditing, () {}),
         SimpleMessageAction(l10n.shellDiscard, go),
+        SimpleMessageAction(l10n.shellKeepEditing, () {}),
       ],
     );
     return true;
