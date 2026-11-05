@@ -31,7 +31,10 @@ class _Api implements PolarAlignClient {
   @override
   Future<void> requestCapture() async => calls.add('capture');
   @override
-  Future<Uint8List?> getLiveFrame() async => null;
+  Future<Uint8List?> getLiveFrame() async {
+    calls.add('frame');
+    return null;
+  }
   @override
   Future<PolarAlignSettings> putSettings(PolarAlignSettings next) async {
     calls.add('save ${next.exposureSeconds}');
@@ -60,6 +63,9 @@ class _Live extends PolarAlignLiveNotifier {
   PolarAlignLive build() => live;
   void frame(PolarAlignLive next) => state = next;
 }
+
+_Live _liveOf(WidgetTester tester) =>
+    ProviderScope.containerOf(tester.element(find.byType(SimplePolarPanel))).read(polarAlignLiveProvider.notifier) as _Live;
 
 const _adjusting = PolarAlignLive(
   phase: PolarAlignStates.adjusting,
@@ -191,6 +197,24 @@ void main() {
     live.frame(at(2, 13, -4.2));
     await tester.pumpAndSettle();
     expect(find.text('Altitude got worse. Turn that bolt back past where you started.'), findsOneWidget);
+  });
+
+  testWidgets('each live readout refetches the guide camera frame (#1611: no per-frame event)', (tester) async {
+    // The shell's image reads simplePolarFrameProvider; hold it the way the shell does.
+    final api = await _pump(tester, _adjusting);
+    final container = ProviderScope.containerOf(tester.element(find.byType(SimplePolarPanel)));
+    final sub = container.listen(simplePolarFrameProvider, (_, __) {});
+    addTearDown(sub.close);
+    await tester.pumpAndSettle();
+    int frames() => api!.calls.where((c) => c == 'frame').length;
+    final before = frames();
+    final live = _liveOf(tester);
+    live.frame(_adjusting.copyWith(iteration: _adjusting.iteration + 1));
+    await tester.pumpAndSettle();
+    expect(frames(), before + 1, reason: 'a new iteration is a new guider picture');
+    live.frame(_adjusting.copyWith(iteration: _adjusting.iteration + 1, altErrorArcmin: 1.0));
+    await tester.pumpAndSettle();
+    expect(frames(), before + 1, reason: 'the same iteration is the same picture');
   });
 
   testWidgets('a lost star says so while paused', (tester) async {
