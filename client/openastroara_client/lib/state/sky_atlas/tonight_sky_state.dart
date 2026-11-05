@@ -152,8 +152,9 @@ final selectedTonightObjectProvider =
 /// design (a plan made in the afternoon needs the targets that rise later),
 /// but at 22:40 with the scope out a user wants what they can point at right
 /// now — so until the user touches the chip it follows the sky: ON once the
-/// sun is below the nautical-dark line at the site, OFF in daylight/dusk.
-/// A tap pins the choice for the session.
+/// sun is below the site's twilight line (`twilightDefinition`, where the
+/// list's dark windows open), OFF before it. A tap pins the choice for the
+/// session.
 class TonightSkyUpNowNotifier extends Notifier<bool> {
   bool _pinned = false;
 
@@ -165,7 +166,10 @@ class TonightSkyUpNowNotifier extends Notifier<bool> {
     ref.watch(skyClockProvider);
     final site = ref.watch(siteSettingsProvider);
     if (_pinned) return state;
-    return isDarkNow(site, nowUtc: ref.read(clockProvider)());
+    // The site's own twilight line: the list's dark windows open there, so a
+    // nautical -12 turned it on with nothing yet open (NM, 18:17 MST).
+    return isDarkNow(site, nowUtc: ref.read(clockProvider)(),
+        belowDeg: twilightSunAltitudeDeg(site.twilightDefinition));
   }
 
   void toggle() {
@@ -189,16 +193,17 @@ final skyClockProvider = StreamProvider<int>(
   (_) => Stream<int>.periodic(const Duration(minutes: 5), (i) => i),
 );
 
-/// True when the sun is below −12° (nautical dark) at [site] right now; an
-/// unset site (0, 0) is never "dark" so the filter stays off there.
-bool isDarkNow(SiteSettings site, {DateTime? nowUtc}) {
+/// True when the sun is below [belowDeg] (default −12°, nautical dark) at
+/// [site] right now; an unset site (0, 0) is never "dark" so the filter stays
+/// off there.
+bool isDarkNow(SiteSettings site, {DateTime? nowUtc, double belowDeg = -12}) {
   if (site.latitudeDeg == 0 && site.longitudeDeg == 0) return false;
   final sun = sunMoonAltitudeDeg(
     (nowUtc ?? DateTime.now()).toUtc(),
     site.latitudeDeg,
     site.longitudeDeg,
   ).sunAltDeg;
-  return sun < -12;
+  return sun < belowDeg;
 }
 
 final tonightSkyUpNowProvider = NotifierProvider<TonightSkyUpNowNotifier, bool>(
