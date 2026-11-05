@@ -239,4 +239,44 @@ void main() {
     expect(dup.map((d) => d.id), ['NGC2239']);
     expect(dup.single.aliases, ['C 050', 'NGC2244']);
   });
+
+  group('Sky Album Books (#1516)', () {
+    // The whole bundle as loadBundledCatalogs sees it: every asset, merged.
+    final bundle = mergeDuplicates(
+      [for (final a in bundledCatalogAssets) ...load(a.split('/').last)],
+      links: catalogTwinLinks,
+    );
+
+    test('the Messier Book has 110 cards, one row each', () {
+      final rows = bundle.where((d) => d.messierNum != null).toList();
+      expect({for (final d in rows) d.messierNum}, {for (var n = 1; n <= 110; n++) n});
+      expect(rows.length, 110);
+    });
+
+    test('the Caldwell Book has 109 cards, one row each', () {
+      final rows = bundle.where((d) => d.caldwellNum != null).toList();
+      expect({for (final d in rows) d.caldwellNum}, {for (var n = 1; n <= 109; n++) n});
+      expect(rows.length, 109);
+    });
+
+    test('search finds M45 and C14 offline', () {
+      expect(findCatalogObject(bundle, 'M45')!.messierNum, 45);
+      expect(findCatalogObject(bundle, 'Pleiades')!.messierNum, 45);
+      expect(findCatalogObject(bundle, 'Winnecke 4')!.messierNum, 40);
+      expect(findCatalogObject(bundle, 'C14')!.caldwellNum, 14);
+      // The Double Cluster is one Card: NGC 884 folds into NGC 869's row.
+      expect(findCatalogObject(bundle, 'NGC 884')!.caldwellNum, 14);
+      expect(findCatalogObject(bundle, 'Double Cluster')!.caldwellNum, 14);
+      expect(searchSuggestions(bundle, 'M45').first.dso.messierNum, 45);
+      expect(searchSuggestions(bundle, 'C14').first.dso.caldwellNum, 14);
+    });
+
+    test('Tonight\'s Sky gains every new card but M40 and C41 (spec, Catalog data fix)', () {
+      final planned = {for (final d in planningCull(bundle)) d.id};
+      // M40 is a double star and C41 an open cluster with no magnitude: both culled.
+      expect(planned, isNot(contains('M040')));
+      expect(planned, isNot(contains('C041')));
+      expect(planned, containsAll(['Mel022', 'C099', 'NGC0869', 'NGC5866', 'Sh2-155']));
+    });
+  });
 }

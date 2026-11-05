@@ -45,3 +45,25 @@ _Avoid_: Mobile Mode
 **Night Setup**:
 Simple Mode's ordered walk through the steps before imaging (plan, focus, polar alignment), whose last step starts the Session.
 _Avoid_: Guided Run, Autopilot
+
+### Sky Album
+
+**Sky Album**:
+The screen that shows the Books.
+_Avoid_: collection, gallery
+
+**Book**:
+One catalog's complete set of Cards, such as Messier or Caldwell.
+_Avoid_: page, list
+
+**Card**:
+One catalog object's slot in a Book.
+_Avoid_: tile, sticker
+
+**Collected**:
+A Card at bronze Tier or better.
+_Avoid_: imaged, done
+
+**Tier**:
+Bronze, silver or gold, derived from the lights that contain the object.
+_Avoid_: rank, level
