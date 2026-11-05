@@ -11,6 +11,7 @@ import '../../l10n/l10n.dart';
 import '../../services/dso_catalog_service.dart';
 import '../../state/album/album_matching.dart';
 import '../../theme/ara_colors.dart';
+import '../../theme/ara_metrics.dart';
 
 /// Cards are trading-card shaped: 2.5 wide by 3.5 tall.
 const double albumCardAspect = 2.5 / 3.5;
@@ -111,11 +112,11 @@ class AlbumCardFront extends StatelessWidget {
         Text(card.label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 12)),
+            style: AraText.body.copyWith(color: textColor, fontWeight: FontWeight.w600)),
         Text(card.dso.name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: AraColors.textSecondary, fontSize: 11)),
+            style: AraText.caption),
       ]),
     );
   }
@@ -135,8 +136,8 @@ class AlbumCardBack extends StatelessWidget {
     Widget row(String k, String v) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(k, style: const TextStyle(color: AraColors.textSecondary, fontSize: 11)),
-            Text(v, style: const TextStyle(color: AraColors.textPrimary, fontSize: 13)),
+            Text(k, style: AraText.caption),
+            Text(v, style: AraText.body),
           ]),
         );
     return Container(
@@ -150,9 +151,9 @@ class AlbumCardBack extends StatelessWidget {
         Text('${card.label} · ${card.dso.name}',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: AraColors.textPrimary, fontWeight: FontWeight.w600)),
+            style: AraText.title),
         if (tier != null)
-          Text(albumTierName(context, tier), style: TextStyle(color: albumTierColor(tier), fontSize: 12)),
+          Text(albumTierName(context, tier), style: AraText.caption.copyWith(color: albumTierColor(tier))),
         const SizedBox(height: 6),
         Expanded(
           child: SingleChildScrollView(
