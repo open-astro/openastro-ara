@@ -26,7 +26,6 @@ import '../../state/profile_management_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/guider/guide_step_state.dart';
 import '../../state/guider/guider_state.dart';
-import '../../state/imaging/exposure_state.dart';
 import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
@@ -502,12 +501,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     if (!_adding || e == null || e >= targets.length) return false;
     final saved = targets[e].steps;
     final rows = ref.read(simpleRunPlanProvider);
-    // Save stores the gain too; the sheet seeded it from the target's, or the
-    // camera's when the target had none.
+    // Save stores the gain too: compared with what the sheet opened with.
     final gain = ref.read(simpleRunGainProvider);
-    final savedGain = targets[e].gain ?? ref.read(exposureControllerProvider).gain;
     final dirty =
-        (gain != null && gain != savedGain) ||
+        gain != ref.read(simpleRunGainProvider.notifier).seeded ||
         rows.length != saved.length ||
         [
           for (var i = 0; i < rows.length; i++)

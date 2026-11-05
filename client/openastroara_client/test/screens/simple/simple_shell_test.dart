@@ -1569,6 +1569,17 @@ void main() {
       expect(find.ancestor(of: find.text('Discard'), matching: find.byType(TextButton)), findsOneWidget);
     });
 
+    testWidgets("the camera's gain changing while the sheet is open (another client) is not an edit", (tester) async {
+      final container = await edit(tester);
+      final camera = container.read(exposureControllerProvider).gain;
+      container.read(exposureControllerProvider.notifier).setGain(camera + 40);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      expect(container.read(simpleMessagesProvider), isEmpty, reason: 'nothing the user changed');
+      expect(find.byType(SimpleRunSheet), findsNothing);
+    });
+
     testWidgets('a gain-only change asks too: Save would store it', (tester) async {
       final container = await edit(tester);
       final seeded = container.read(simpleRunGainProvider);
