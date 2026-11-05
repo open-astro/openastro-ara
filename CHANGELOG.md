@@ -37,6 +37,7 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ### Fixed
 
+- A go-to from the Planning page turns tracking on first. A mount at home has it off, and the slew was refused with no message in the app.
 - Polar Align turns tracking on before the guider's RA turn when the mount is not tracking, keeps it on if it drops while the guider is still measuring (between its slews), and puts it back on exit (#1611). The iOptron refused the guider's slew with "requires Tracking to be true", which ended the routine as `fit_failed`.
 - The daemon keeps one log: Polar Align runs and every plate solve are now in `logs/` and in the bug report, not a separate `NINA/Logs` file (#1591). Core log lines now read `File.cs|Member|42|message`, without quotes around each value.
 

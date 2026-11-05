@@ -610,7 +610,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 client.SyncToCoordinates(raHours, decDeg);
             } else {
                 // Async goto: returns immediately, Slewing goes true; the refresh cache surfaces
-                // State="slewing" until the mount settles.
+                // State="slewing" until the mount settles. A goto needs tracking on (a mount at home
+                // has it off and the bridge refuses the slew), same as the mediator's slew path.
+                TryEnableTracking(client);
                 client.SlewToCoordinatesAsync(raHours, decDeg);
             }
             RefreshCacheOnce();
