@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
@@ -82,5 +85,38 @@ void main() {
     expect(view.objects.map((d) => d.id), ['NGC1', 'NGC2']);
     expect(view.collected, 2, reason: 'one frame on top of both objects credits each');
     expect(view.stats['NGC1']!.tier, AlbumTier.bronze);
+  });
+
+  test('the fetch reads the daemon\'s snake_case reply and sends since as UTC', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    final queries = <Map<String, String>>[];
+    Object body = {
+      'total_lights': 7,
+      'frames': [
+        {'frame_id': 'f1', 'target_name': 'M31', 'ra_deg': 10.68, 'updated_utc': '2026-03-02T11:20:31Z'},
+        {'target_name': 'no id'}, // no frame_id: dropped
+      ],
+    };
+    server.listen((req) {
+      queries.add(req.uri.queryParameters);
+      expect(req.uri.path, '/api/v1/stats/album-frames');
+      req.response
+        ..headers.contentType = ContentType.json
+        ..write(jsonEncode(body))
+        ..close();
+    });
+    final base = 'http://127.0.0.1:${server.port}';
+
+    final page = await fetchAlbumFrames(base, since: DateTime.parse('2026-03-02T23:20:31+12:00'));
+    expect(page.totalLights, 7);
+    expect(page.frames.map((f) => (f.frameId, f.targetName, f.raDeg)), [('f1', 'M31', 10.68)]);
+    expect(queries.single['since'], '2026-03-02T11:20:31.000Z');
+
+    await fetchAlbumFrames(base);
+    expect(queries.last.containsKey('since'), isFalse, reason: 'a full fetch sends no since');
+
+    body = {'total_lights': 0};
+    await expectLater(fetchAlbumFrames(base), throwsA(isA<FormatException>()));
   });
 }
