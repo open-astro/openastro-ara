@@ -244,12 +244,16 @@ class AlbumCard extends StatelessWidget {
                 ..setEntry(3, 2, 0.001)
                 ..rotateY(showBack ? angle - math.pi : angle),
               child: showBack
-                  ? Material(
-                      type: MaterialType.transparency,
-                      child: AlbumCardBack(card, onAction: () {
-                        Navigator.of(dialogContext).pop();
-                        onAction();
-                      }),
+                  // Tapping the flipped card again flips it back; its button still acts.
+                  ? GestureDetector(
+                      onTap: () => Navigator.of(dialogContext).pop(),
+                      child: Material(
+                        type: MaterialType.transparency,
+                        child: AlbumCardBack(card, onAction: () {
+                          Navigator.of(dialogContext).pop();
+                          onAction();
+                        }),
+                      ),
                     )
                   : AlbumCardFront(card),
             ),

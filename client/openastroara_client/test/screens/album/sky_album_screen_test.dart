@@ -206,4 +206,20 @@ void main() {
     await _pump(tester, frames: const []);
     expect(find.descendant(of: find.byType(AppBar), matching: find.byIcon(Icons.style_outlined)), findsOneWidget);
   });
+
+  testWidgets('tapping the flipped card again flips it back', (tester) async {
+    await _pump(tester, frames: _m31Frames);
+    await tester.tap(find.text('Crab Nebula'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Not collected yet'));
+    await tester.pumpAndSettle();
+    expect(find.text('Image this target'), findsNothing);
+  });
+
+  testWidgets('the tier counts sit on the right of the header', (tester) async {
+    await _pump(tester, frames: _m31Frames);
+    final width = tester.view.physicalSize.width;
+    expect(tester.getTopLeft(find.text('1 / 3 collected')).dx, lessThan(width / 2));
+    expect(tester.getTopRight(find.text('Bronze 0')).dx, greaterThan(width - 40));
+  });
 }
