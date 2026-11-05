@@ -78,6 +78,7 @@ namespace OpenAstroAra.Test {
             new object[] { 11, 0, 13, 0, null!, TimeSpan.FromHours(2) },      // was: ran at once
             new object[] { 22, 0, 2, 0, null!, TimeSpan.FromHours(4) },       // already worked
             new object[] { 22, 0, 6, 30, new TimeOnly(6, 0), new TimeSpan(8, 30, 0) },
+            new object[] { 22, 30, 22, 0, null!, new TimeSpan(23, 30, 0) },   // was: ran at once (late start)
         };
 
         [TestCaseSource(nameof(PlainCases))]
