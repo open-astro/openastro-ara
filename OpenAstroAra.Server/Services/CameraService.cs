@@ -1934,7 +1934,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // A background save passes the reading taken at capture; registration may run a frame later.
         var ccdTemp = ccdTemperatureC ?? CachedCcdTemperature();
         var bin = appliedBin ?? request.BinX;
-        // Sky Album (#1517): only J2000 pointing is stored; the scale follows the header's XPIXSZ (binned).
+        // Sky Album (#1517): only J2000 pointing is stored; the scale uses the applied bin, not the requested
+        // bin the header's XPIXSZ follows, so a coerced bin still gets the right scale.
         var j2000 = pointing is { IsJ2000: true } pt ? pt : (FramePointing?)null;
         var optics = _profileStore?.GetOpticsSettings();
         var pixelScale = optics is null ? null : FrameAlbumFields.ArcsecPerPixel(
