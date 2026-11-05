@@ -297,7 +297,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   void _syncTicker(bool active) {
     if (active && _ticker == null) {
       _ticker = Timer.periodic(const Duration(seconds: 2), (_) {
-        if (mounted) unawaited(_loadFrame());
+        // A slow link: let the fetch in flight finish rather than queue another.
+        if (mounted && !_frameLoading) unawaited(_loadFrame());
       });
     } else if (!active && _ticker != null) {
       _ticker!.cancel();

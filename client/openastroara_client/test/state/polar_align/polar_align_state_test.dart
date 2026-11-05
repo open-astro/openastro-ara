@@ -178,10 +178,10 @@ void main() {
 
   group('PolarAlignSettings', () {
     test('loop_mode round-trips and unknown values fall back to loop', () {
-      const single = PolarAlignSettings(loopMode: PolarAlignLoopModes.single);
-      expect(PolarAlignSettings.fromJson(single.toJson()).loopMode, PolarAlignLoopModes.single);
-      expect(PolarAlignSettings.fromJson({'loop_mode': 'bogus'}).loopMode, PolarAlignLoopModes.loop);
-      expect(PolarAlignSettings.fromJson({}).loopMode, PolarAlignLoopModes.loop);
+      const single = PolarAlignSettings(loopMode: 'single');
+      expect(PolarAlignSettings.fromJson(single.toJson()).loopMode, 'single');
+      expect(PolarAlignSettings.fromJson({'loop_mode': 'bogus'}).loopMode, 'loop');
+      expect(PolarAlignSettings.fromJson({}).loopMode, 'loop');
     });
 
     test('round-trips through json with playbook defaults for missing keys', () {

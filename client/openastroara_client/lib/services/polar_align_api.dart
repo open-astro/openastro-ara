@@ -12,7 +12,6 @@ abstract interface class PolarAlignClient {
   Future<void> start();
   Future<void> stop();
   Future<void> complete();
-  Future<void> requestCapture();
   Future<Uint8List?> getLiveFrame();
   Future<PolarAlignSettings> getSettings();
   Future<PolarAlignSettings> putSettings(PolarAlignSettings settings);
@@ -66,13 +65,6 @@ class PolarAlignApi implements PolarAlignClient {
   @override
   Future<void> complete() async {
     await _dio.post<void>('/api/v1/equipment/polaralign/complete');
-  }
-
-  /// Single-frame mode: take the next adjust frame. 202-Accepted; a 409
-  /// outside the adjust phase.
-  @override
-  Future<void> requestCapture() async {
-    await _dio.post<void>('/api/v1/equipment/polaralign/capture');
   }
 
   /// The guide camera's latest frame as JPEG bytes (the live view), or

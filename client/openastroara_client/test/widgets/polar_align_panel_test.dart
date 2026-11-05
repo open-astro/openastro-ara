@@ -27,8 +27,6 @@ class _FakePolarAlignClient implements PolarAlignClient {
   Future<void> stop() async => calls.add('stop');
   @override
   Future<void> complete() async => calls.add('complete');
-  @override
-  Future<void> requestCapture() async => calls.add('capture');
   Uint8List? frame;
   @override
   Future<Uint8List?> getLiveFrame() async {

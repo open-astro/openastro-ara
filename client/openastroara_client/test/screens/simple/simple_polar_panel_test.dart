@@ -29,8 +29,6 @@ class _Api implements PolarAlignClient {
   @override
   Future<void> complete() async => calls.add('complete');
   @override
-  Future<void> requestCapture() async => calls.add('capture');
-  @override
   Future<Uint8List?> getLiveFrame() async {
     calls.add('frame');
     return null;
@@ -215,6 +213,23 @@ void main() {
     live.frame(_adjusting.copyWith(iteration: _adjusting.iteration + 1, altErrorArcmin: 1.0));
     await tester.pumpAndSettle();
     expect(frames(), before + 1, reason: 'the same iteration is the same picture');
+  });
+
+  testWidgets('while the guider measures, the frame is refetched on a timer', (tester) async {
+    final api = await _pump(tester, _adjusting);
+    final container = ProviderScope.containerOf(tester.element(find.byType(SimplePolarPanel)));
+    final sub = container.listen(simplePolarFrameProvider, (_, __) {});
+    addTearDown(sub.close);
+    await tester.pumpAndSettle();
+    int frames() => api!.calls.where((c) => c == 'frame').length;
+    _liveOf(tester).frame(const PolarAlignLive(phase: PolarAlignStates.seeding));
+    await tester.pump();
+    final before = frames();
+    await tester.pump(simplePolarFrameRefresh);
+    await tester.pump();
+    expect(frames(), before + 1, reason: 'no readouts while measuring, so the timer refetches');
+    _liveOf(tester).frame(_adjusting); // ends the timer: settle must not hang
+    await tester.pumpAndSettle();
   });
 
   testWidgets('a lost star says so while paused', (tester) async {

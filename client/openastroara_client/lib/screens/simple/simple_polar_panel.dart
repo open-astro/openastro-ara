@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -121,13 +122,23 @@ String simplePolarPhase(PolarAlignLive live, AppLocalizations l10n) =>
       _ => l10n.polarPhaseReady,
     };
 
-/// The guide camera's latest frame, refetched on each live readout; null
+/// How often the guide camera's frame is refetched while the guider measures.
+const simplePolarFrameRefresh = Duration(seconds: 2);
+
+/// The guide camera's latest frame, refetched on each live readout and every
+/// [simplePolarFrameRefresh] while the guider measures; null
 /// until there is one. Keeps the previous picture while the next loads (read
 /// `.value`).
 final simplePolarFrameProvider = FutureProvider.autoDispose<Uint8List?>((
   ref,
 ) async {
-  ref.watch(polarAlignLiveProvider.select((l) => (l.phase, l.iteration)));
+  final (phase, _) = ref.watch(polarAlignLiveProvider.select((l) => (l.phase, l.iteration)));
+  if (phase == PolarAlignStates.seeding) {
+    // No readouts arrive while the guider measures, yet it is looping: refetch
+    // on a timer, like the full panel does (#1611).
+    final timer = Timer(simplePolarFrameRefresh, ref.invalidateSelf);
+    ref.onDispose(timer.cancel);
+  }
   final api = ref.watch(polarAlignApiProvider);
   return api?.getLiveFrame();
 });
