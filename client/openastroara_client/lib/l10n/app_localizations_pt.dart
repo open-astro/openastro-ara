@@ -2014,6 +2014,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get guideStopping => 'Stopping…';
 
   @override
+  String guideStopRefused(String state) {
+    return 'The guider didn\'t stop: it is still $state. Try Stop again.';
+  }
+
+  @override
   String get guideExposureOwn => 'The guider\'s own';
 
   @override
@@ -4155,6 +4160,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get guideStopping => 'Parando…';
+
+  @override
+  String guideStopRefused(String state) {
+    return 'O guia não parou: continua $state. Tente Parar de novo.';
+  }
 
   @override
   String get guideExposureOwn => 'O do guia';
