@@ -369,4 +369,12 @@ void main() {
       expect(ratio(albumTierColor(t), AraColors.bgPrimary), greaterThanOrEqualTo(4.5), reason: '$t');
     }
   });
+
+  testWidgets('a thumbnail decodes at the card\'s width, not the file\'s', (tester) async {
+    await _pump(tester, frames: _m31Frames);
+    final image = tester.widget<Image>(find.byType(Image).first);
+    expect(image.image, isA<ResizeImage>());
+    final width = tester.getSize(find.byType(Image).first).width;
+    expect((image.image as ResizeImage).width, width.round(), reason: 'device pixel ratio 1 in tests');
+  });
 }

@@ -96,10 +96,14 @@ class AlbumCardFront extends StatelessWidget {
                     size: 32, color: missing ? AraColors.textDisabled : AraColors.textSecondary),
               ),
               if (card.thumbnailUrl != null)
-                Image.network(card.thumbnailUrl!,
-                    fit: BoxFit.cover,
-                    // Keep the silhouette when the thumbnail is missing or the rig is away.
-                    errorBuilder: (_, _, _) => const SizedBox.shrink()),
+                LayoutBuilder(
+                  builder: (context, box) => Image.network(card.thumbnailUrl!,
+                      fit: BoxFit.cover,
+                      // Decode at the slot's width: a Book holds 110 cards and the files are wider.
+                      cacheWidth: (box.maxWidth * MediaQuery.devicePixelRatioOf(context)).round(),
+                      // Keep the silhouette when the thumbnail is missing or the rig is away.
+                      errorBuilder: (_, _, _) => const SizedBox.shrink()),
+                ),
             ]),
           ),
         ),
