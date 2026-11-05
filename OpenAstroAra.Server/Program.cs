@@ -591,8 +591,11 @@ public partial class Program {
         // the file FileShare.Read, so LogService can read it while the daemon writes.
         var logsDir = Path.Combine(profileDir, "logs");
         Directory.CreateDirectory(logsDir);
+        // #1591 — one log: the Core logger now writes here too, so a bug report carries it all.
+        OpenAstroAra.Core.Utility.LoggerHost.OwnsLogging = true;
         Log.Logger = new LoggerConfiguration()
-            .MinimumLevel.Information()
+            .MinimumLevel.ControlledBy(OpenAstroAra.Core.Utility.LoggerHost.LevelSwitch)
+            .MinimumLevel.Override("Microsoft.AspNetCore", Serilog.Events.LogEventLevel.Warning)
             .Enrich.FromLogContext()
             .WriteTo.Console()
             .WriteTo.File(

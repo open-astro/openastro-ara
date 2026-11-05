@@ -35,6 +35,10 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Fixed
+
+- The daemon keeps one log: Polar Align runs and every plate solve are now in `logs/` and in the bug report, not a separate `NINA/Logs` file (#1591).
+
 ### Added
 - **Simple Mode wears the OpenAstro Ara brand (#1602).** The app icon's constellation opens the status strip; a tap shows the app, Ara server and guider versions, the rig and the selected profile. With no frame yet, a navy starfield replaces tonight's sky (Sky still shows it, until the first frame), and on an iPad or iPhone the stars shift as you tilt the device, in portrait or landscape (they stay still with Reduce Motion). "Rig not connected" in the strip is now amber. New client dependency: `sensors_plus`.
 - **Frames remember where the mount pointed (#1517).** Each light frame now stores its J2000 pointing, its pixel scale and whether Ara captured it, the groundwork for the Sky Album. New captures and drive rescans fill them at once; at startup a one-time pass reads them from the headers of older frames, and a frame on a drive that is not plugged in is read on a later boot. A frame taken while the astrometry library was missing (pointing in the mount's own epoch) stores no pointing. `GET /api/v1/frames/{id}` returns them as `ra_deg`, `dec_deg`, `pixel_scale_arcsec` and `captured_by_ara`.
