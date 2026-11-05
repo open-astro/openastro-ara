@@ -158,6 +158,44 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_backfill_bumps_updated_utc_only_when_a_value_changed() {
+            // A captured row already holds what its header says; a header without the cards keeps it.
+            var same = await OldRowAsync("same.fits", h => {
+                h.SetHeader("SWCREATE", "OpenAstro Ara");
+                h.SetHeader("OBJCTRA", "00 42 44.3");
+                h.SetHeader("OBJCTDEC", "+41 16 09");
+                h.SetHeader("EQUINOX", 2000.0);
+            });
+            var kept = await OldRowAsync("kept.fits", h => h.SetHeader("SWCREATE", "OpenAstro Ara"));
+            const string Old = "2026-01-01T00:00:00.0000000+00:00";
+            var (ra, dec) = SqliteFrameRepository.ParseTargetCoordinates("00 42 44.3", "+41 16 09")!.Value;
+            foreach (var id in new[] { same, kept }) {
+                await using var conn = _db.OpenConnection();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = """
+                    UPDATE frames SET updated_utc = $old, captured_by_ara = 1,
+                        ra_deg = $ra, dec_deg = $dec, pixel_scale_arcsec = 1.5
+                    WHERE id = $id;
+                    """;
+                cmd.Parameters.AddWithValue("$old", Old);
+                cmd.Parameters.AddWithValue("$id", id.ToString());
+                cmd.Parameters.AddWithValue("$ra", ra);
+                cmd.Parameters.AddWithValue("$dec", dec);
+                await cmd.ExecuteNonQueryAsync(CancellationToken.None);
+            }
+
+            await _scan.BackfillAlbumFieldsAsync(CancellationToken.None);
+
+            foreach (var id in new[] { same, kept }) {
+                Assert.That(await ScalarAsync("SELECT updated_utc FROM frames WHERE id = $p;", id.ToString()), Is.EqualTo(Old));
+                Assert.That(await ProbedAsync(id), Is.Not.Null);
+                var got = (await _repo.GetAsync(id, CancellationToken.None))!;
+                Assert.That((got.RaDeg, got.PixelScaleArcsec), Is.EqualTo(((double?)ra, (double?)1.5)),
+                    "a card the header lacks never clears a stored value");
+            }
+        }
+
+        [Test]
         public async Task A_rescan_recovers_the_album_fields_with_the_orphan() {
             WriteFits(Path.Combine(_store, "orphan.fits"), h => {
                 h.SetHeader("SWCREATE", "OpenAstro Ara");
