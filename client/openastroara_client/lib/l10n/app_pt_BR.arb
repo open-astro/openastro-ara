@@ -630,5 +630,8 @@
   "albumCardSemantics": "{label} {name}, {state}",
   "albumFilterAll": "Todos",
   "albumFilterCollected": "Coletados",
-  "albumFilterMissing": "Faltando"
+  "albumFilterMissing": "Faltando",
+  "albumNewCards": "{count, plural, =1{1 carta nova} other{{count} cartas novas}}",
+  "albumTiersUp": "{count, plural, =1{1 nível acima} other{{count} níveis acima}}",
+  "albumSinceLastVisit": "{changes} desde a última visita"
 }

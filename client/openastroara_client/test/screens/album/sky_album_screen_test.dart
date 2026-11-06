@@ -65,6 +65,9 @@ Future<ProviderContainer> _pump(
   double textScale = 1,
   double bottomInset = 0,
   Locale? locale,
+  // The rows were already held from an earlier open, so no card is new; the new-cards
+  // shelf would otherwise repeat every collected card.
+  bool seen = true,
 }) async {
   tester.view.physicalSize = size;
   tester.view.padding = FakeViewPadding(bottom: bottomInset);
@@ -76,7 +79,8 @@ Future<ProviderContainer> _pump(
   final container = ProviderContainer(
     overrides: [
       activeServerProvider.overrideWithValue(const AraServer(hostname: 'rig', port: 1888)),
-      albumCollectionStoreProvider.overrideWithValue(_MemStore()),
+      albumCollectionStoreProvider.overrideWithValue(
+          _MemStore()..held = AlbumCollection(frames: {if (seen) for (final f in frames) f.frameId: f})),
       albumManifestProvider.overrideWith((ref) async => manifest),
       bundledCatalogProvider.overrideWith((ref) async => [_m42, _c14, _m31, _m1]),
       albumFetcherProvider.overrideWithValue(fetcher ??
@@ -98,7 +102,10 @@ Widget _app(void Function(PlanningDso)? onImageTarget, {bool open = true, Locale
       home: open ? SkyAlbumScreen(onImageTarget: onImageTarget ?? (_) {}) : const SizedBox(),
     );
 
-Finder _onShelf(String text) => find.descendant(of: find.byType(ListView), matching: find.text(text));
+Finder _onShelf(String text) =>
+    find.descendant(of: find.byKey(const Key('album-shelf-tonight')), matching: find.text(text));
+Finder _onNewShelf(String text) =>
+    find.descendant(of: find.byKey(const Key('album-shelf-new')), matching: find.text(text));
 
 // Two hours on M31 (silver), by target name: no pointing stored. One light a night, at local 22:00.
 final _m31Frames = [
@@ -419,6 +426,101 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('1 / 4 collected'), findsOneWidget);
     expect(find.textContaining("Couldn't load the album"), findsOneWidget);
+  });
+
+  testWidgets('cards new or up a tier since the last open turn to colour once, and the header says so',
+      (tester) async {
+    var served = [_m31Frames.first];
+    Future<AlbumFramesPage> fetcher(String baseUrl, {DateTime? since}) async =>
+        AlbumFramesPage(totalLights: served.length, frames: served);
+    late final ProviderContainer container;
+    Future<void> reopen() async {
+      await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null, open: false)));
+      await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null)));
+      await tester.pump();
+      await tester.pump();
+    }
+
+    container = await _pump(tester, frames: const [], fetcher: fetcher);
+    // First open: the cache was empty, so the whole collection is new to the album. It shows
+    // on a shelf at the top, so a card far down the grid (C 63 under 110 Messier cards) is seen.
+    expect(find.text('1 new card'), findsOneWidget);
+    expect(_onNewShelf('Andromeda Galaxy'), findsOneWidget);
+
+    // A night later: M31 reached silver and M1 is new.
+    served = [
+      ..._m31Frames,
+      AlbumFrame(frameId: 'm1', targetName: 'M 1', exposureSeconds: 60, capturedUtc: DateTime(2026, 3, 9, 22).toUtc()),
+    ];
+    await reopen();
+    expect(find.byKey(const Key('album-card-reveal')), findsNWidgets(2), reason: 'M31 and M1 animate');
+    await tester.pumpAndSettle();
+    expect(find.text('1 new card · 1 tier up since your last visit'), findsOneWidget);
+    expect(_onNewShelf('Andromeda Galaxy'), findsOneWidget);
+    expect(_onNewShelf('Crab Nebula'), findsOneWidget);
+    expect(find.byKey(const Key('album-card-reveal')), findsNothing, reason: 'played once, then a plain card');
+
+    // Nothing changed since: no line, no reveal.
+    await reopen();
+    expect(find.byKey(const Key('album-card-reveal')), findsNothing);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('since your last visit'), findsNothing);
+    expect(find.byKey(const Key('album-shelf-new')), findsNothing);
+  });
+
+  testWidgets('a new card holds grey while the album opens, then turns to colour', (tester) async {
+    // The rig answers in about 60 ms, so the reveal must wait out the page coming in.
+    const art = AlbumArt(asset: 'assets/album/art/test.webp', credit: 'ESO', licence: 'CC BY 4.0');
+    var served = const <AlbumFrame>[];
+    final container = await _pump(tester,
+        frames: const [],
+        manifest: const {'M31': art},
+        fetcher: (baseUrl, {since}) async => AlbumFramesPage(totalLights: served.length, frames: served));
+    served = _m31Frames;
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null, open: false)));
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null)));
+    await tester.pump();
+    await tester.pump();
+    double colour() => tester
+        .widget<Opacity>(find.ancestor(
+            of: find.descendant(of: find.byKey(const Key('album-shelf-new')), matching: find.byKey(const Key('album-art'))),
+            matching: find.byType(Opacity)))
+        .opacity;
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(colour(), lessThan(0.05), reason: 'still grey while the page settles');
+    await tester.pump(const Duration(milliseconds: 800));
+    expect(colour(), allOf(greaterThan(0.2), lessThan(0.95)), reason: 'fading in where the eye can follow it');
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('the reveal decodes the Art once: its decode width holds through the fade', (tester) async {
+    // A width that changes mid-fade re-decodes the Art, and the card shows black until it lands.
+    const art = AlbumArt(asset: 'assets/album/art/test.webp', credit: 'ESO', licence: 'CC BY 4.0');
+    var served = const <AlbumFrame>[];
+    final container = await _pump(tester,
+        frames: const [],
+        manifest: const {'M31': art},
+        fetcher: (baseUrl, {since}) async => AlbumFramesPage(totalLights: served.length, frames: served));
+    served = _m31Frames;
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null, open: false)));
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null)));
+    final widths = <int?>{};
+    for (var i = 0; i < 25; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+      for (final img in tester.widgetList<Image>(
+          find.descendant(of: find.byKey(const Key('album-shelf-new')), matching: find.byType(Image)))) {
+        widths.add((img.image as ResizeImage).width);
+      }
+    }
+    expect(widths, hasLength(1));
+  });
+
+  testWidgets('with reduced motion a new card shows in colour at once', (tester) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(reduceMotion: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await _pump(tester, frames: _m31Frames, seen: false);
+    expect(find.text('1 new card'), findsOneWidget);
+    expect(find.byKey(const Key('album-card-reveal')), findsNothing);
   });
 
   testWidgets('the shelf waits until the Book is matched against the rows', (tester) async {

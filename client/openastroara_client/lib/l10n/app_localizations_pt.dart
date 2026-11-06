@@ -2215,6 +2215,33 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get albumFilterMissing => 'Missing';
+
+  @override
+  String albumNewCards(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count new cards',
+      one: '1 new card',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String albumTiersUp(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count tiers up',
+      one: '1 tier up',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String albumSinceLastVisit(String changes) {
+    return '$changes since your last visit';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -4441,4 +4468,31 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get albumFilterMissing => 'Faltando';
+
+  @override
+  String albumNewCards(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cartas novas',
+      one: '1 carta nova',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String albumTiersUp(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count níveis acima',
+      one: '1 nível acima',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String albumSinceLastVisit(String changes) {
+    return '$changes desde a última visita';
+  }
 }
