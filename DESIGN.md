@@ -72,6 +72,7 @@ typography:
     fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
     fontSize: "14px"
     fontWeight: 400
+    fontFeature: "tnum"
   mono:
     fontFamily: "ui-monospace, SF Mono, Menlo, monospace"
     fontSize: "11px"
@@ -181,6 +182,23 @@ components:
   bottom-status-bar:
     backgroundColor: "{colors.bg-panel}"
     height: "40px"
+  album-card:
+    backgroundColor: "{colors.bg-panel}"
+    textColor: "{colors.text-primary}"
+    rounded: "{rounded.simple}"
+    padding: "4px"
+    width: "130px"
+  album-card-back:
+    backgroundColor: "{colors.bg-panel}"
+    textColor: "{colors.text-primary}"
+    typography: "{typography.body-simple}"
+    rounded: "{rounded.simple}"
+    width: "320px"
+  album-filter-chip:
+    textColor: "{colors.text-primary}"
+    typography: "{typography.body-simple}"
+    rounded: "22px"
+    height: "44px"
 ---
 
 # Design System: OpenAstro Ara
@@ -411,6 +429,9 @@ Targets are at least 44 px tall (the settings segments too), with 14 px body tex
 ### No-Frame Wallpaper (Simple Mode)
 - **Look:** the Ara Navy gradient and three layers of white stars from fixed seeds: far ones many and faint (260, 0.5 px), near ones few and bright (28, 1.6 px). No mark on it (dropped 2026-11-06). The "Tap the shutter to take a frame" hint stays centred over it.
 - **Motion:** on iPad and iPhone the layers shift 6, 14 and 26 px at full tilt (about 20°), eased over 150 ms, on the screen's axes in either orientation. The centre drifts back to how the device is held, and a dead band of about 1 px ignores sensor noise. With Reduce Motion (iOS) or Remove animations (Android), or on desktop, it is still and the sensor isn't read.
+
+### Sky Album Card
+A trading card (2.5:3.5) in the binder grid, 130 px wide. The front is the object's Art filling the picture on Art Backdrop, in colour once collected and grey at 45 % while missing (one colour matrix, one layer), or the Placeholder silhouette when it has no Art; under it the catalog label and the name in the dense ramp. The border is the tier colour (2 px; 1 px Hairline while missing) and a gold Card alone glows. Tapped, it flips in place and grows to at most 320 px wide: a tier-coloured banner (On Tier text), the bio line, the latest four Nights and a totals row, "Did you know?", the action and a 44 px credit row, all in 14 px `kSimpleText`. Front and back share the 10 px corner. Under Reduce Motion the flip is instant.
 
 ### Cards / Containers
 - **Corner Style:** 6 px.
