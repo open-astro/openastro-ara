@@ -11292,18 +11292,13 @@ docs/DEPLOY.md (per §34.6) documents:
 - **Home network**: trust your own LAN. Standard deployment.
 - **Star party / shared LAN**: same posture as ASIAir. Standard deployment is fine. If you want isolation, run the Pi in AP mode (§32.6) so only your devices connect, or use the Pi's Ethernet interface with a dedicated cable.
 - **Public Wi-Fi (coffee shop, airport, hotel)**: don't. Image on private networks.
-- **Remote observatory access (over internet)**: out of scope for the initial release — use a VPN. A future release may add an opt-in remote-access mode with TLS + token auth.
+- **Remote observatory access (over internet)**: use a VPN (WireGuard, Tailscale or the router's own). ARA does not plan a remote-access mode (§67.4).
 
-### 67.4 Remote-access mode (deferred — see the `P1`–`P5` issue backlog)
+### 67.4 Remote-access mode (not planned)
 
-When users want to image from a remote observatory over the internet, the open-LAN model breaks down — the internet has actual adversaries. The ROADMAP adds an opt-in **remote-access mode**:
+**Decided 2026-11-06 (#1163): not planned.** ARA stays LAN-only with no API auth, and a VPN is the supported way to reach a rig from outside its network. The reasoning is in `.out-of-scope/remote-access-mode.md`. Encrypted backups (§28.14, #1175) are not built for the same reason.
 
-- TLS termination (Let's Encrypt or self-signed)
-- Token authentication (re-introduces the auth that the initial release dropped)
-- Rate limiting + optional IP allowlist
-- Binds on a separate interface so internal LAN access stays unauthenticated
-
-Remote-access mode is **opt-in** — users explicitly enable it in Settings. Default deployment stays unauthenticated.
+The design that was deferred here, kept for the record: an opt-in mode with TLS termination (Let's Encrypt or self-signed), token authentication, rate limiting with an optional IP allowlist, bound on a separate interface so LAN access stayed unauthenticated. Other mentions of a "future" or "planned" remote-access mode elsewhere in this playbook describe that shelved design, not a commitment.
 
 ### 67.5 What ARA does NOT do (current anti-features)
 
