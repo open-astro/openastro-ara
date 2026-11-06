@@ -667,7 +667,7 @@ Future<ImagingRunResult?> _tryLiveAppend(
           id,
           parentPath: const [],
           index: liveAppendIndex(serverBody),
-          item: block,
+          item: inheritDawnStop(serverBody, block),
         );
         serverBody = detail.body;
         added++;

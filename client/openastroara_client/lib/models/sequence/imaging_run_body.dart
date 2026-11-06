@@ -256,14 +256,8 @@ Map<String, dynamic> buildTargetBlock({
   // #1560 — one per container: on the block, a target not started by dawn is
   // skipped (no slew, filter or focus); on a loop, it ends after the frame in
   // hand.
-  Map<String, dynamic>? dawn() {
-    if (stopAtDawn == null) return null;
-    final def = conditionForType(timeConditionType);
-    if (def == null) {
-      throw StateError('TimeCondition missing from the condition catalog');
-    }
-    return def.build()..['SelectedProvider'] = timeProviderValue(stopAtDawn);
-  }
+  Map<String, dynamic>? dawn() =>
+      stopAtDawn == null ? null : _dawnCondition(stopAtDawn);
   if (exposureSeconds <= 0) {
     throw ArgumentError.value(
       exposureSeconds,
@@ -546,7 +540,58 @@ Map<String, dynamic> appendTargetToRunBody(
   }
   final children = childrenOf(root);
   final insertAt = liveAppendIndex(root);
-  return withChildren(root, [...children]..insert(insertAt, targetBlock));
+  return withChildren(
+    root,
+    [...children]..insert(insertAt, inheritDawnStop(root, targetBlock)),
+  );
+}
+
+/// #1560 — [targetBlock] stopping at the dawn [root]'s targets already stop
+/// at (a Simple Mode queue), on the block and on each imaging loop in it, so
+/// a target added from the Full UI doesn't image past dawn. Unchanged when
+/// [root] has no dawn stop or the block already has one.
+Map<String, dynamic> inheritDawnStop(
+  Map<String, dynamic> root,
+  Map<String, dynamic> targetBlock,
+) {
+  final dawn = dawnStopOf(root);
+  if (dawn == null || _dawnOf(targetBlock) != null) return targetBlock;
+  Map<String, dynamic> stops(Map<String, dynamic> n) =>
+      withConditions(n, [...conditionsOf(n), _dawnCondition(dawn)]);
+  return stops(
+    withChildren(targetBlock, [
+      for (final c in childrenOf(targetBlock)) isContainer(c) ? stops(c) : c,
+    ]),
+  );
+}
+
+/// The dawn label ('Civil Dawn' …) the first of [root]'s target blocks that
+/// has one stops at, or null.
+String? dawnStopOf(Map<String, dynamic> root) {
+  if (!isContainer(root)) return null;
+  for (final c in childrenOf(root)) {
+    if (!isContainer(c)) continue;
+    if (_dawnOf(c) case final dawn?) return dawn;
+  }
+  return null;
+}
+
+/// The dawn label of [node]'s own dawn `TimeCondition`, or null.
+String? _dawnOf(Map<String, dynamic> node) {
+  for (final c in conditionsOf(node)) {
+    if (c[r'$type'] != timeConditionType) continue;
+    final label = timeProviderLabel(c['SelectedProvider']);
+    if (label.endsWith(' Dawn')) return label;
+  }
+  return null;
+}
+
+Map<String, dynamic> _dawnCondition(String label) {
+  final def = conditionForType(timeConditionType);
+  if (def == null) {
+    throw StateError('TimeCondition missing from the condition catalog');
+  }
+  return def.build()..['SelectedProvider'] = timeProviderValue(label);
 }
 
 /// The root-child index a new target block should land at: the end, but before
