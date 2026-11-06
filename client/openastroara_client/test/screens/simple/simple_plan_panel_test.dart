@@ -989,6 +989,34 @@ void main() {
         expect(dawns(body), hasLength(5));
       });
 
+      // Audit of #1654: once a queue exists, the line follows the queue's own dawn stop.
+      testWidgets('a queue that stops at dawn says so even when started now in daylight', (tester) async {
+        final dawn = nightEnd(site, dark.toUtc())!.toLocal();
+        await _pump(tester, _Seq(),
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            overrides: overrides);
+        await tester.tap(find.byKey(const Key('simple-run-queue')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('simple-run-start-now')));
+        await tester.pump();
+        expect(find.text('Stops at dawn · ${hhmm(dawn)}'), findsOneWidget);
+      });
+
+      testWidgets('a queue made without a dawn stop never promises one', (tester) async {
+        // Queued at 05:00 in Sydney (after dawn, before sunrise): no dawn stop. Then night falls.
+        var at = DateTime.utc(2026, 1, 14, 18);
+        final c = await _pump(tester, _Seq(),
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            overrides: [siteSettingsProvider.overrideWith(() => _SiteAt(site)), clockProvider.overrideWithValue(() => at.toLocal())]);
+        await tester.tap(find.byKey(const Key('simple-run-queue')));
+        await tester.pumpAndSettle();
+        expect(c.read(simpleRunProvider).dawnStop, isNull);
+        at = DateTime.utc(2026, 1, 15, 11); // 22:00, dark
+        c.read(planetariumSelectionProvider.notifier).set(_m42);
+        await tester.pumpAndSettle();
+        expect(find.textContaining('Stops at dawn'), findsNothing);
+      });
+
       testWidgets('the start-time wheel takes the arrow keys: Down is 5 minutes later', (tester) async {
         await _pump(tester, _Seq(),
             SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
@@ -1292,13 +1320,16 @@ void main() {
     await create(tester);
     final tracker = find.byKey(const Key('simple-run-tracker'));
     expect(find.descendant(of: tracker, matching: find.text('Parks at end')), findsOneWidget);
+    // Marked with the Park Scope step's icon, apart from the time line above it.
+    expect(find.descendant(of: tracker, matching: find.byIcon(Icons.local_parking_outlined)), findsOneWidget);
     c.read(planetariumSelectionProvider.notifier).set(_m42);
     await tester.pumpAndSettle();
     await create(tester);
     // The queue runs right to left: the caption sits on M42's square, the leftmost.
     final caption = tester.getRect(find.descendant(of: tracker, matching: find.text('Parks at end')));
     expect(find.descendant(of: tracker, matching: find.text('Parks at end')), findsOneWidget);
-    expect(caption.center.dx, closeTo(tester.getRect(find.descendant(of: tracker, matching: find.text('M42'))).center.dx, 1));
+    // Same square: centres within a few px (the icon shifts the words), squares sit 78 px apart.
+    expect(caption.center.dx, closeTo(tester.getRect(find.descendant(of: tracker, matching: find.text('M42'))).center.dx, 10));
   });
 
   test('progress fills the queue in order, target by target', () {

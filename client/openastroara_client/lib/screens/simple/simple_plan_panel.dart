@@ -1347,11 +1347,31 @@ class _PlanSquare extends StatelessWidget {
                                 ? small.copyWith(color: color)
                                 : small,
                           ),
-                          if (foot != null) (foot!, small),
                         ])
                           FittedBox(
                             fit: BoxFit.scaleDown,
                             child: Text(text, style: style, maxLines: 1),
+                          ),
+                        // About the whole queue, not this target: the Park
+                        // Scope step's icon (the sequence editor's) sets it
+                        // apart from the time line above.
+                        if (foot != null)
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              spacing: 2,
+                              children: [
+                                Icon(
+                                  Icons.local_parking_outlined,
+                                  size: MediaQuery.textScalerOf(
+                                    context,
+                                  ).scale(small.fontSize!),
+                                  color: small.color,
+                                ),
+                                Text(foot!, style: small, maxLines: 1),
+                              ],
+                            ),
                           ),
                       ],
                     ),
@@ -1670,20 +1690,37 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
   int _timeKeyed = 0;
   bool _picking = false;
 
-  // #1560 — when a start at a time stops at dawn (local), worked out once per
-  // start and site: a minute-by-minute sun scan, like dark's.
-  (DateTime, SiteSettings, DateTime?)? _dawn;
-  DateTime? _dawnAfter(DateTime start) {
+  // #1560 — the dawn of the night a start at [start] runs into (local), and
+  // whether it starts in the dark; a minute-by-minute sun scan, so worked out
+  // once per minute and site (Start now is a new instant on every rebuild).
+  (DateTime, SiteSettings, DateTime?, bool)? _night;
+  (DateTime?, bool) _nightOf(DateTime start) {
     final site = ref.read(siteSettingsProvider);
-    final memo = _dawn;
-    if (memo != null && memo.$1 == start && identical(memo.$2, site)) {
-      return memo.$3;
+    final minute = DateTime(
+      start.year,
+      start.month,
+      start.day,
+      start.hour,
+      start.minute,
+    );
+    if (_night case (final m, final s, final dawn, final dark)
+        when m == minute && identical(s, site)) {
+      return (dawn, dark);
     }
-    final dawn = dawnStopFor(site, start.toUtc()) == null
-        ? null
-        : nightEnd(site, start.toUtc())?.toLocal();
-    _dawn = (start, site, dawn);
-    return dawn;
+    final darkAt = darkStart(site, minute.toUtc());
+    final dawn = nightEnd(site, darkAt ?? minute.toUtc())?.toLocal();
+    final dark = darkAt == null && dawn != null;
+    _night = (minute, site, dawn, dark);
+    return (dawn, dark);
+  }
+
+  /// When the plan stops at dawn, or null when it won't: a new queue stops
+  /// when it starts in the dark; a queue already on the rig keeps the dawn
+  /// stop it was made with.
+  DateTime? _stopsAtDawn(SimpleRun run, DateTime start) {
+    final (dawn, dark) = _nightOf(start);
+    final stops = run.sequenceId == null ? dark : run.dawnStop != null;
+    return stops ? dawn : null;
   }
 
   @override
@@ -2158,7 +2195,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 ),
             ],
           ),
-          if (_dawnAfter(startAt ?? now) case final dawn?)
+          if (_stopsAtDawn(run, startAt ?? now) case final dawn?)
             Text(context.l10n.planStopsAtDawn(_hhmm(dawn)), style: _dim),
           if (_picking && canSchedule)
             SizedBox(
