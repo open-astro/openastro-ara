@@ -29,12 +29,13 @@ class _Api implements PolarAlignClient {
   @override
   Future<void> complete() async => calls.add('complete');
   @override
-  Future<void> requestCapture() async => calls.add('capture');
-  @override
-  Future<Uint8List?> getLiveFrame() async => null;
+  Future<Uint8List?> getLiveFrame() async {
+    calls.add('frame');
+    return null;
+  }
   @override
   Future<PolarAlignSettings> putSettings(PolarAlignSettings next) async {
-    calls.add('save ${next.exposureSeconds} ${next.loopMode}');
+    calls.add('save ${next.exposureSeconds}');
     return settings = next;
   }
   @override
@@ -61,6 +62,9 @@ class _Live extends PolarAlignLiveNotifier {
   void frame(PolarAlignLive next) => state = next;
 }
 
+_Live _liveOf(WidgetTester tester) =>
+    ProviderScope.containerOf(tester.element(find.byType(SimplePolarPanel))).read(polarAlignLiveProvider.notifier) as _Live;
+
 const _adjusting = PolarAlignLive(
   phase: PolarAlignStates.adjusting,
   altErrorArcmin: 3.2,
@@ -70,8 +74,8 @@ const _adjusting = PolarAlignLive(
 );
 
 Future<_Api?> _pump(WidgetTester tester, PolarAlignLive live,
-    {bool server = true, String loopMode = PolarAlignLoopModes.loop, Widget child = const SimplePolarPanel()}) async {
-  final api = server ? (_Api()..settings = PolarAlignSettings(loopMode: loopMode)) : null;
+    {bool server = true, Widget child = const SimplePolarPanel()}) async {
+  final api = server ? (_Api()..settings = const PolarAlignSettings()) : null;
   await tester.pumpWidget(ProviderScope(
     overrides: [
       polarAlignApiProvider.overrideWithValue(api),
@@ -86,9 +90,8 @@ Future<_Api?> _pump(WidgetTester tester, PolarAlignLive live,
 void main() {
   test('simplePolarSummary: the settings, tight enough for the 60 px chip', () {
     final en = lookupAppLocalizations(const Locale('en'));
-    expect(simplePolarSummary(const PolarAlignSettings(), en), '1 s\nLoop');
-    expect(simplePolarSummary(const PolarAlignSettings(exposureSeconds: 45, loopMode: PolarAlignLoopModes.single), en),
-        '45 s\nSingle');
+    expect(simplePolarSummary(const PolarAlignSettings(), en), '1 s');
+    expect(simplePolarSummary(const PolarAlignSettings(exposureSeconds: 45), en), '45 s');
   });
 
   test('simplePolarPhase names each phase', () {
@@ -104,9 +107,8 @@ void main() {
     expect(find.text('Ready'), findsNothing);
     expect(find.text('Start'), findsNothing);
     expect(find.text('1 s'), findsOneWidget);
-    await tester.tap(find.text('Single'));
-    await tester.pumpAndSettle();
-    expect(api!.calls, ['save 1.0 single']);
+    expect(find.text('Single'), findsNothing, reason: 'the guider loops its own frames (#1611)');
+    expect(api!.calls, isEmpty);
   });
 
   testWidgets('adjusting: the error, the turns, no Stop (the shutter stops it); Done waits for the tolerance', (tester) async {
@@ -134,15 +136,13 @@ void main() {
   });
 
   testWidgets('while it runs, the whole panel fits the room beside the rail on an iPad (388 pt)', (tester) async {
-    await _pump(tester, _adjusting, loopMode: PolarAlignLoopModes.single);
+    await _pump(tester, _adjusting);
     expect(tester.getSize(find.byType(SimplePolarPanel)).height, lessThanOrEqualTo(388));
   });
 
-  testWidgets('Single running: Take frame takes the next one', (tester) async {
-    final api = await _pump(tester, _adjusting, loopMode: PolarAlignLoopModes.single);
-    await tester.tap(find.byKey(const Key('simple-polar-capture')));
-    await tester.pump();
-    expect(api!.calls, ['capture']);
+  testWidgets('running: no Take frame (the guider reads every frame, #1611)', (tester) async {
+    await _pump(tester, _adjusting);
+    expect(find.byKey(const Key('simple-polar-capture')), findsNothing);
   });
 
   testWidgets('inside the tolerance Done completes it', (tester) async {
@@ -197,9 +197,44 @@ void main() {
     expect(find.text('Altitude got worse. Turn that bolt back past where you started.'), findsOneWidget);
   });
 
-  testWidgets('failed solves say so', (tester) async {
-    await _pump(tester, _adjusting.copyWith(consecutiveSolveFailures: 2));
-    expect(find.text('No solve (2 in a row). Check the sky.'), findsOneWidget);
+  testWidgets('each live readout refetches the guide camera frame (#1611: no per-frame event)', (tester) async {
+    // The shell's image reads simplePolarFrameProvider; hold it the way the shell does.
+    final api = await _pump(tester, _adjusting);
+    final container = ProviderScope.containerOf(tester.element(find.byType(SimplePolarPanel)));
+    final sub = container.listen(simplePolarFrameProvider, (_, _) {});
+    addTearDown(sub.close);
+    await tester.pumpAndSettle();
+    int frames() => api!.calls.where((c) => c == 'frame').length;
+    final before = frames();
+    final live = _liveOf(tester);
+    live.frame(_adjusting.copyWith(iteration: _adjusting.iteration + 1));
+    await tester.pumpAndSettle();
+    expect(frames(), before + 1, reason: 'a new iteration is a new guider picture');
+    live.frame(_adjusting.copyWith(iteration: _adjusting.iteration + 1, altErrorArcmin: 1.0));
+    await tester.pumpAndSettle();
+    expect(frames(), before + 1, reason: 'the same iteration is the same picture');
+  });
+
+  testWidgets('while the guider measures, the frame is refetched on a timer', (tester) async {
+    final api = await _pump(tester, _adjusting);
+    final container = ProviderScope.containerOf(tester.element(find.byType(SimplePolarPanel)));
+    final sub = container.listen(simplePolarFrameProvider, (_, _) {});
+    addTearDown(sub.close);
+    await tester.pumpAndSettle();
+    int frames() => api!.calls.where((c) => c == 'frame').length;
+    _liveOf(tester).frame(const PolarAlignLive(phase: PolarAlignStates.seeding));
+    await tester.pump();
+    final before = frames();
+    await tester.pump(simplePolarFrameRefresh);
+    await tester.pump();
+    expect(frames(), before + 1, reason: 'no readouts while measuring, so the timer refetches');
+    _liveOf(tester).frame(_adjusting); // ends the timer: settle must not hang
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a lost star says so while paused', (tester) async {
+    await _pump(tester, _adjusting.copyWith(phase: PolarAlignStates.paused));
+    expect(find.text('The guider cannot see the star. Check the sky.'), findsOneWidget);
   });
 
   testWidgets('a failed routine shows why, and Start again', (tester) async {
@@ -208,8 +243,8 @@ void main() {
   });
 
   group('the shutter runs the routine', () {
-    Future<_Api?> shutter(WidgetTester tester, PolarAlignLive live, {String loopMode = PolarAlignLoopModes.loop, bool server = true}) =>
-        _pump(tester, live, loopMode: loopMode, server: server, child: const SimplePolarShutter());
+    Future<_Api?> shutter(WidgetTester tester, PolarAlignLive live, {bool server = true}) =>
+        _pump(tester, live, server: server, child: const SimplePolarShutter());
 
     testWidgets('a start that fails says so in a pill', (tester) async {
       final api = _FailingApi();
@@ -243,13 +278,6 @@ void main() {
     });
     testWidgets('Loop running: the square stops it', (tester) async {
       final api = await shutter(tester, _adjusting);
-      expect(find.bySemanticsLabel('Stop'), findsOneWidget);
-      await tester.tap(find.byKey(const Key('simple-shutter')));
-      await tester.pump();
-      expect(api!.calls, ['stop']);
-    });
-    testWidgets('Single running: the square stops it too', (tester) async {
-      final api = await shutter(tester, _adjusting, loopMode: PolarAlignLoopModes.single);
       expect(find.bySemanticsLabel('Stop'), findsOneWidget);
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pump();

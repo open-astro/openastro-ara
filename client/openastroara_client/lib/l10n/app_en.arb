@@ -512,14 +512,6 @@
   "@focusNoFocuser": {
     "description": "Simple Mode Focus panel: shown when no focuser is connected"
   },
-  "polarLoop": "Loop",
-  "@polarLoop": {
-    "description": "Simple Mode Polar align panel: loop mode segment (shoots frames on its own); also the rail chip caption"
-  },
-  "polarSingle": "Single",
-  "@polarSingle": {
-    "description": "Simple Mode Polar align panel: single mode segment (waits for a tap before each frame); also the rail chip caption"
-  },
   "polarStart": "Start polar alignment",
   "@polarStart": {
     "description": "Polar align shutter button's spoken label when idle"
@@ -539,10 +531,6 @@
   "polarActionSave": "save the polar-align settings",
   "@polarActionSave": {
     "description": "Simple Mode Polar align panel: error message tail after \"Couldn't \" when saving its settings fails; lower-case, no period"
-  },
-  "polarActionCapture": "take a frame",
-  "@polarActionCapture": {
-    "description": "Simple Mode Polar align panel: error message tail after \"Couldn't \" when taking a frame fails; lower-case, no period"
   },
   "polarActionComplete": "complete polar alignment",
   "@polarActionComplete": {
@@ -586,22 +574,13 @@
       }
     }
   },
-  "polarNoSolve": "No solve ({count} in a row). Check the sky.",
-  "@polarNoSolve": {
-    "description": "Simple Mode Polar align panel: warning when frames fail to plate-solve",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
+  "polarStarLost": "The guider cannot see the star. Check the sky.",
+  "@polarStarLost": {
+    "description": "Polar align panel: shown while the routine is paused because the guider lost the star"
   },
   "polarExposure": "Exposure",
   "@polarExposure": {
     "description": "Simple Mode Polar align panel: exposure picker tile label"
-  },
-  "polarTakeFrame": "Take frame",
-  "@polarTakeFrame": {
-    "description": "Simple Mode Polar align panel: button that shoots the next frame in Single mode"
   },
   "polarDone": "Done",
   "@polarDone": {
