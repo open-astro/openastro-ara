@@ -53,7 +53,7 @@ permissions:
 jobs:
   sanity:
     name: Sanity (design docs)
-    runs-on: ubuntu-24.04 # 26.04 fails test_configure_storage_switch (4 tests); master passed on 24.04; revisit once fixed on 26.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout (no LFS)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor + CodeRabbit security finding on PR #12

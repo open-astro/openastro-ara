@@ -36,7 +36,7 @@ def block_devices() -> list[str]:
     for name in names:
         path = f"/dev/{name}"
         try:
-            if stat.S_ISBLK(os.stat(path).st_mode):
+            if stat.S_ISBLK(os.lstat(path).st_mode):
                 found.append(path)
         except OSError:
             continue
