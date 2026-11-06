@@ -1535,6 +1535,19 @@
       }
     }
   },
+  "planStopsAtDawn": "Stops at dawn · {time}",
+  "@planStopsAtDawn": {
+    "description": "Plan sheet: imaging stops at dawn (HH:MM, the site's twilight definition) and the mount parks",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "planSquareParks": "Parks",
+  "@planSquareParks": {
+    "description": "Plan square caption on the queue's last target: the mount parks once the queue ends. One short word: the square has 60 px for it at 11.5 px"
+  },
   "planStartsAt": "Starts at {time}",
   "@planStartsAt": {
     "description": "Plan sheet: the run starts at a picked time (HH:MM)",
@@ -1664,6 +1677,10 @@
   "planNightDone": "Night done",
   "@planNightDone": {
     "description": "Night done heading after the run ends"
+  },
+  "planStoppedAtDawn": "stopped at dawn",
+  "@planStoppedAtDawn": {
+    "description": "Night done summary, lowercase: dawn ended the run before its frames ran out"
   },
   "planStopped": "stopped",
   "@planStopped": {

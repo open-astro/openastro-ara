@@ -71,10 +71,6 @@ Future<void> exportSequence(
     saved = await FilePicker.saveFile(
       dialogTitle: 'Export sequence for NINA',
       fileName: sequenceExportFileName(exportName),
-      // Enforce the .json extension at the dialog so the user can't accidentally
-      // save a name NINA won't load.
-      type: FileType.custom,
-      allowedExtensions: const ['json'],
       bytes: bytes,
     );
   } catch (e, st) {

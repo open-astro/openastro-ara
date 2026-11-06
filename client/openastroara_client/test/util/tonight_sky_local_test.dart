@@ -48,6 +48,52 @@ void main() {
     );
   });
 
+  group('the dawn stop (#1560)', () {
+    double sun(DateTime t) =>
+        sunMoonAltitudeDeg(t, site.latitudeDeg, site.longitudeDeg).sunAltDeg;
+
+    test('a start in the dark stops at the site\'s dawn; nightEnd is the first minute back above the line', () {
+      final night = DateTime.utc(2026, 1, 15, 3);
+      expect(dawnStopFor(site, night), 'Astronomical Dawn');
+      final end = nightEnd(site, night)!;
+      expect(sun(end), greaterThanOrEqualTo(-18));
+      expect(sun(end.subtract(const Duration(minutes: 1))), lessThan(-18));
+      expect(
+        end.isAfter(DateTime.utc(2026, 1, 15, 10, 30)) &&
+            end.isBefore(DateTime.utc(2026, 1, 15, 12)),
+        isTrue,
+        reason: 'before sunrise local: $end',
+      );
+    });
+
+    test('a start at dusk (Wait for dark) gets it; a start a minute earlier, in daylight, does not', () {
+      final dark = darkStart(site, DateTime.utc(2026, 1, 14, 20))!;
+      expect(dawnStopFor(site, dark), 'Astronomical Dawn');
+      expect(dawnStopFor(site, dark.subtract(const Duration(minutes: 1))), isNull);
+    });
+
+    test('daylight and after dawn: no dawn stop (an indoor test runs on)', () {
+      expect(dawnStopFor(site, DateTime.utc(2026, 1, 14, 20)), isNull);
+      expect(dawnStopFor(site, DateTime.utc(2026, 1, 15, 11, 50)), isNull);
+      expect(nightEnd(site, DateTime.utc(2026, 1, 14, 20)), isNull);
+    });
+
+    test('follows the twilight definition', () {
+      SiteSettings at(TwilightDefinition d) => SiteSettings(
+          latitudeDeg: site.latitudeDeg, longitudeDeg: site.longitudeDeg, twilightDefinition: d);
+      final night = DateTime.utc(2026, 1, 15, 3);
+      expect(dawnStopFor(at(TwilightDefinition.civil), night), 'Civil Dawn');
+      expect(dawnStopFor(at(TwilightDefinition.nautical), night), 'Nautical Dawn');
+    });
+
+    test('no dawn to stop at: a site never astronomically dark (high-latitude summer), or no site', () {
+      const north = SiteSettings(
+          latitudeDeg: 51.477833, longitudeDeg: -0.001500, twilightDefinition: TwilightDefinition.astronomical);
+      expect(dawnStopFor(north, DateTime.utc(2026, 6, 21, 23)), isNull);
+      expect(dawnStopFor(const SiteSettings(), DateTime.utc(2026, 1, 15, 3)), isNull);
+    });
+  });
+
   test('darkStart: none from the end of the night until sunrise (the daemon reads evening times then as yesterday)', () {
     // 11:30 UTC Jan 15 is 06:30 local, morning twilight at the Atlanta-ish site (sunrise ~07:40).
     expect(darkStart(site, DateTime.utc(2026, 1, 15, 11, 30)), isNull);

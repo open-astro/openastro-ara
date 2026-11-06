@@ -343,6 +343,33 @@ void main() {
   }
   }
 
+  // #1560 audit: the queue's park line on the last 72 px plan square renders at
+  // its full 11.5 px, like the square's other secondary lines, not shrunk to fit
+  // (measured with real Roboto; it read 8.6 px in English and 6.7 px in pt-BR).
+  for (final locale in const [Locale('en'), Locale('pt', 'BR')]) {
+    testWidgets('${locale.toLanguageTag()} the plan square\'s park line is full size', skip: !hasFonts, (tester) async {
+      tester.view.physicalSize = const Size(1024, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [simpleRunProvider.overrideWith(_Queue.new)],
+        child: MaterialApp(
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: ThemeData(fontFamily: 'Roboto'),
+          home: Scaffold(body: Center(child: SimpleRunTracker(onTap: () {}))),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      final line = find.text(lookupAppLocalizations(locale).planSquareParks);
+      final text = tester.widget<Text>(line);
+      final scale = tester.getRect(line).height / tester.renderObject<RenderBox>(line).size.height;
+      expect(text.style!.fontSize! * scale, greaterThanOrEqualTo(11.5 * 0.99),
+          reason: '"${text.data}" renders at ${(text.style!.fontSize! * scale).toStringAsFixed(1)} px');
+    });
+  }
+
   // #1596: the skipped-run pill is one line in a 300 px pill; its cause must
   // survive the ellipsis in every language (measured with real Roboto).
   for (final locale in const [Locale('en'), Locale('pt', 'BR')]) {

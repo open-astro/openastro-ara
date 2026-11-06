@@ -55,6 +55,7 @@ class UnguidedOptions {
 /// │        Conditions: Loop (× frame count)
 /// │        Triggers:  Autofocus After Exposures (when a cadence is set)
 /// │        └─ Take Exposure (Imaging Defaults: time / gain / offset / binning, LIGHT)
+/// ├─ Park Scope         (when [parkAtEnd]: Simple Mode's Sessions)
 /// └─ Warm Camera        (when "warm up at session end" is on)
 /// ```
 ///
@@ -114,6 +115,11 @@ Map<String, dynamic> buildImagingRunBody({
   // Null = no sheet. Ignored on a guided rig.
   double? trackingPriorSeconds,
   bool alwaysCenter = false,
+  // #1560 — a [timeProviders] dawn label ('Civil Dawn' …): the target and each
+  // of its imaging loops end at that dawn. Null = no dawn stop.
+  String? stopAtDawn,
+  // #1560 — park the mount once the last target is done (before the warm-up).
+  bool parkAtEnd = false,
 }) {
   // #1577 — nothing regulates a set-point on this camera: no Cool Camera step.
   if (!rig.coolerRegulates) coolToC = null;
@@ -140,6 +146,7 @@ Map<String, dynamic> buildImagingRunBody({
     trackingPriorSeconds: trackingPriorSeconds,
     coolToC: coolToC,
     alwaysCenter: alwaysCenter,
+    stopAtDawn: stopAtDawn,
   );
 
   // ── The session around it, in run order ──────────────────────────────────
@@ -155,6 +162,7 @@ Map<String, dynamic> buildImagingRunBody({
     _item(unparkScopeType),
     _item(setTrackingType), // catalog default: sidereal
     target,
+    if (parkAtEnd) _item(parkScopeType),
     if (warmAtEnd) _item(warmCameraType)..['Duration'] = 0.0,
   ];
 
@@ -220,6 +228,8 @@ Map<String, dynamic> buildTargetBlock({
   double? coolToC,
   // Simple Mode: centre on the target whatever Settings → Plate Solving says.
   bool alwaysCenter = false,
+  // #1560 — see [buildImagingRunBody].
+  String? stopAtDawn,
 }) {
   // #1577 — nothing regulates a set-point on this camera: no Cool Camera step.
   if (!rig.coolerRegulates) coolToC = null;
@@ -243,6 +253,12 @@ Map<String, dynamic> buildTargetBlock({
       ? autofocusAfterTempChangeC
       : null;
   final handSwap = manualFilterSwap || !rig.filterWheel;
+  // #1560 — one per container: on the block, a target not started by dawn is
+  // skipped (no slew, filter or focus); on a loop, no frame starts that would
+  // end after dawn. The daemon's TimeCondition also interrupts whatever is
+  // still running at dawn (its 1 s watchdog).
+  Map<String, dynamic>? dawn() =>
+      stopAtDawn == null ? null : _dawnCondition(stopAtDawn);
   if (exposureSeconds <= 0) {
     throw ArgumentError.value(
       exposureSeconds,
@@ -309,7 +325,7 @@ Map<String, dynamic> buildTargetBlock({
     var imaging = _item(sequentialContainerType);
     imaging['Name'] = name;
     imaging = withChildren(imaging, [exposure]);
-    imaging = withConditions(imaging, [loop]);
+    imaging = withConditions(imaging, [loop, ?dawn()]);
 
     final triggers = <Map<String, dynamic>>[];
     if (afEvery != null) {
@@ -501,7 +517,7 @@ Map<String, dynamic> buildTargetBlock({
   // block run ONCE but still end early mid-pass when the target sets
   // (review #876 — proven by SequentialStrategyConditionSemanticsTest).
   final onePass = loopDef.build()..['Iterations'] = 1;
-  return withConditions(block, [onePass, horizon]);
+  return withConditions(block, [onePass, horizon, ?dawn()]);
 }
 
 /// A copy of [root] with [targetBlock] appended as another target: inserted
@@ -525,7 +541,83 @@ Map<String, dynamic> appendTargetToRunBody(
   }
   final children = childrenOf(root);
   final insertAt = liveAppendIndex(root);
-  return withChildren(root, [...children]..insert(insertAt, targetBlock));
+  return withChildren(
+    root,
+    [...children]..insert(insertAt, inheritDawnStop(root, targetBlock)),
+  );
+}
+
+/// #1560 — [targetBlock] stopping at the dawn [root]'s targets already stop
+/// at (a Simple Mode queue), on the block and on each imaging loop in it, so
+/// a target added from the Full UI doesn't image past dawn. Unchanged when
+/// [root] has no dawn stop or the block already has one.
+Map<String, dynamic> inheritDawnStop(
+  Map<String, dynamic> root,
+  Map<String, dynamic> targetBlock,
+) {
+  final dawn = dawnStopOf(root);
+  if (dawn == null || _dawnOf(targetBlock) != null) return targetBlock;
+  return _blockDawn(targetBlock, dawn);
+}
+
+/// #1560 — [root] with every target block (and its imaging loops) stopping at
+/// [dawn], or at no dawn when null. The daemon reads a dawn condition against
+/// the dusk rollover, so a block that starts between dawn and sunset sees this
+/// morning's dawn as passed and is skipped: Simple Mode settles the dawn stop
+/// when the queue starts, from the start time.
+Map<String, dynamic> withDawnStop(Map<String, dynamic> root, String? dawn) =>
+    withChildren(root, [
+      for (final c in childrenOf(root))
+        isContainer(c) ? _blockDawn(c, dawn) : c,
+    ]);
+
+/// [block] and its child containers without their dawn conditions, then with
+/// [dawn]'s when given.
+Map<String, dynamic> _blockDawn(Map<String, dynamic> block, String? dawn) {
+  Map<String, dynamic> stops(Map<String, dynamic> n) => withConditions(n, [
+    for (final c in conditionsOf(n))
+      if (_dawnLabel(c) == null) c,
+    if (dawn != null) _dawnCondition(dawn),
+  ]);
+  return stops(
+    withChildren(block, [
+      for (final c in childrenOf(block)) isContainer(c) ? stops(c) : c,
+    ]),
+  );
+}
+
+/// The dawn label ('Civil Dawn' …) the first of [root]'s target blocks that
+/// has one stops at, or null.
+String? dawnStopOf(Map<String, dynamic> root) {
+  if (!isContainer(root)) return null;
+  for (final c in childrenOf(root)) {
+    if (!isContainer(c)) continue;
+    if (_dawnOf(c) case final dawn?) return dawn;
+  }
+  return null;
+}
+
+/// The dawn label of [node]'s own dawn `TimeCondition`, or null.
+String? _dawnOf(Map<String, dynamic> node) {
+  for (final c in conditionsOf(node)) {
+    if (_dawnLabel(c) case final label?) return label;
+  }
+  return null;
+}
+
+/// The dawn label ('Civil Dawn' …) when [condition] is a dawn `TimeCondition`.
+String? _dawnLabel(Map<String, dynamic> condition) {
+  if (condition[r'$type'] != timeConditionType) return null;
+  final label = timeProviderLabel(condition['SelectedProvider']);
+  return label.endsWith(' Dawn') ? label : null;
+}
+
+Map<String, dynamic> _dawnCondition(String label) {
+  final def = conditionForType(timeConditionType);
+  if (def == null) {
+    throw StateError('TimeCondition missing from the condition catalog');
+  }
+  return def.build()..['SelectedProvider'] = timeProviderValue(label);
 }
 
 /// The root-child index a new target block should land at: the end, but before
