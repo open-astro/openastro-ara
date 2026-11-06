@@ -46,13 +46,15 @@ case "$("$CC" -dumpmachine)" in
     aarch64*-linux*) REMAINDER_SYMVER="GLIBC_2.17" ;;
     x86_64*-linux*)  REMAINDER_SYMVER="GLIBC_2.2.5" ;;
 esac
-SYMVER_FLAGS=()
+# Never empty: bash < 4.4 (macOS /bin/bash 3.2) treats "${a[@]}" of an empty array as unbound
+# under set -u.
+SNOVAS_CFLAGS=("${CFLAGS[@]}")
 if [ -n "$REMAINDER_SYMVER" ]; then
     SYMVER_DIR="$(mktemp -d)"
     trap 'rm -rf "$SYMVER_DIR"' EXIT
     SYMVER_H="$SYMVER_DIR/remainder-symver.h"
     echo "__asm__(\".symver remainder,remainder@$REMAINDER_SYMVER\");" >"$SYMVER_H"
-    SYMVER_FLAGS=(-include "$SYMVER_H")
+    SNOVAS_CFLAGS+=(-include "$SYMVER_H")
 fi
 
 # ERFA — every source except the t_erfa_c*.c validation drivers (they carry main()).
@@ -100,8 +102,8 @@ fi
 # the build if a bump ever brings it back.
 SNOVAS_SRC+=("$SNOVAS/legacy/solsys1.c" "$SNOVAS/legacy/eph_manager.c")
 echo "building libsupernovas.$EXT"
-"$CC" "${CFLAGS[@]}" $SHARED -I"$SNOVAS/include" -I"$SNOVAS/legacy" -DWITHOUT_CURL -DUSER_SOLSYS=1 \
-    "${SYMVER_FLAGS[@]}" -o "$OUT/libsupernovas.$EXT" "${SNOVAS_SRC[@]}" -lm
+"$CC" "${SNOVAS_CFLAGS[@]}" $SHARED -I"$SNOVAS/include" -I"$SNOVAS/legacy" -DWITHOUT_CURL -DUSER_SOLSYS=1 \
+    -o "$OUT/libsupernovas.$EXT" "${SNOVAS_SRC[@]}" -lm
 
 echo "built into $OUT:"
 ls -la "$OUT"/liberfa."$EXT" "$OUT"/libsupernovas."$EXT"
