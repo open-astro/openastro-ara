@@ -49,6 +49,14 @@ class AraText {
       fontFeatures: [FontFeature.tabularFigures()]);
 }
 
+/// Simple Mode body text: 14 px minimum (brief), tabular for live numbers. The
+/// Sky Album shares it, since it follows Simple Mode's density.
+const kSimpleText = TextStyle(
+  fontSize: 14,
+  color: AraColors.textPrimary,
+  fontFeatures: [FontFeature.tabularFigures()],
+);
+
 /// Window-size tiers, in logical px (what Flutter sees after OS scaling).
 class AraBreakpoints {
   /// Under this window height a pane goes compact: tighter padding, secondary

@@ -1,0 +1,3254 @@
+[
+  {
+    "id": "M1",
+    "name": "Crab Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:Crab_Nebula.jpg",
+    "credit": "NASA, ESA, J. Hester and A. Loll",
+    "licence": "Public domain",
+    "distance": "6,500 ly",
+    "trivia": "The remnant of a supernova that Chinese astronomers recorded in 1054 CE.",
+    "art": "m001.webp",
+    "pt": {
+      "distance": "6.500 anos-luz",
+      "trivia": "O remanescente de uma supernova registrada por astrônomos chineses em 1054 d.C."
+    }
+  },
+  {
+    "id": "M2",
+    "name": "NGC 7089",
+    "source": "https://commons.wikimedia.org/wiki/File:M2,_NGC_7089_(noao-m2).jpg",
+    "credit": "Doug Williams, REU Program/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "37,500 ly",
+    "trivia": "Holds about 150,000 stars and is one of the larger globular clusters known.",
+    "art": "m002.webp",
+    "pt": {
+      "distance": "37.500 anos-luz",
+      "trivia": "Abriga cerca de 150.000 estrelas e é um dos maiores aglomerados globulares conhecidos."
+    }
+  },
+  {
+    "id": "M3",
+    "name": "NGC 5272",
+    "source": "https://commons.wikimedia.org/wiki/File:M3,_NGC_5272_(noao-m3-kpno-mayall-4-m).jpg",
+    "credit": "T.A. Rector, H. Schweiker et al.",
+    "licence": "CC BY 4.0",
+    "distance": "33,900 ly",
+    "trivia": "Holds more than 270 known variable stars, among the most of any globular cluster.",
+    "art": "m003.webp",
+    "pt": {
+      "distance": "33.900 anos-luz",
+      "trivia": "Abriga mais de 270 estrelas variáveis conhecidas, entre as mais numerosas de qualquer aglomerado globular."
+    }
+  },
+  {
+    "id": "M4",
+    "name": "NGC 6121",
+    "source": "https://commons.wikimedia.org/wiki/File:The_globular_star_cluster_Messier_4.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 3.0",
+    "distance": "~5,900 ly",
+    "trivia": "One of the closest globular clusters to Earth, lying about 1.3 degrees west of Antares.",
+    "art": "m004.webp",
+    "pt": {
+      "distance": "~5.900 anos-luz",
+      "trivia": "Um dos aglomerados globulares mais próximos da Terra, a cerca de 1,3 grau a oeste de Antares."
+    }
+  },
+  {
+    "id": "M5",
+    "name": "NGC 5904",
+    "source": "https://commons.wikimedia.org/wiki/File:M5,_NGC_5904_(noao-02216).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "24,500 ly",
+    "trivia": "Among the oldest globular clusters in the Milky Way, at about 13 billion years old.",
+    "art": "m005.webp",
+    "pt": {
+      "distance": "24.500 anos-luz",
+      "trivia": "Um dos aglomerados globulares mais antigos da Via Láctea, com cerca de 13 bilhões de anos."
+    }
+  },
+  {
+    "id": "M6",
+    "name": "Butterfly Cluster",
+    "source": "https://commons.wikimedia.org/wiki/File:M6,_NGC_6405;_Butterfly_Cluster_(noao-02637).jpg",
+    "credit": "N.A.Sharp, Mark Hanna, REU program/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "1,600 ly",
+    "trivia": "Its brightest star, BM Scorpii, is an orange giant that varies in brightness.",
+    "art": "m006.webp",
+    "pt": {
+      "distance": "1.600 anos-luz",
+      "trivia": "Sua estrela mais brilhante, BM Scorpii, é uma gigante laranja de brilho variável."
+    }
+  },
+  {
+    "id": "M7",
+    "name": "Ptolemy Cluster",
+    "source": "https://commons.wikimedia.org/wiki/File:M7,_NGC_6475_(noao-m7).jpg",
+    "credit": "N.A.Sharp, REU program/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "980 ly",
+    "trivia": "Ptolemy described it around 130 CE as a nebulous patch following the sting of Scorpius.",
+    "art": "m007.webp",
+    "pt": {
+      "distance": "980 anos-luz",
+      "trivia": "Ptolomeu o descreveu por volta de 130 d.C. como uma mancha nebulosa depois do ferrão de Escorpião."
+    }
+  },
+  {
+    "id": "M8",
+    "name": "Lagoon Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:VST_images_the_Lagoon_Nebula.jpg",
+    "credit": "ESO/VPHAS+ team",
+    "licence": "CC BY 4.0",
+    "distance": "4,100 ly",
+    "trivia": "Visible to the naked eye under dark skies, it contains the bright Hourglass Nebula at its core.",
+    "art": "m008.webp",
+    "pt": {
+      "distance": "4.100 anos-luz",
+      "trivia": "Visível a olho nu em céus escuros, contém a brilhante Nebulosa da Ampulheta em seu núcleo."
+    }
+  },
+  {
+    "id": "M9",
+    "name": "NGC 6333",
+    "source": "https://commons.wikimedia.org/wiki/File:Globular_cluster_Messier_9_(captured_by_the_Hubble_Space_Telescope).tif",
+    "credit": "NASA & ESA",
+    "licence": "CC BY 4.0",
+    "distance": "25,800 ly",
+    "trivia": "Lies only about 5,500 light-years from the Milky Way's centre, near the galactic bulge.",
+    "art": "m009.webp",
+    "pt": {
+      "distance": "25.800 anos-luz",
+      "trivia": "Fica a apenas cerca de 5.500 anos-luz do centro da Via Láctea, perto do bojo galáctico."
+    }
+  },
+  {
+    "id": "M10",
+    "name": "NGC 6254",
+    "source": "https://commons.wikimedia.org/wiki/File:M10;_NGC_6254_(noao-m10).jpg",
+    "credit": "N.A.Sharp, Vanessa Harvey/REU program/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "14,300 ly",
+    "trivia": "M10 and M12 form a near-matching pair of globular clusters in Ophiuchus, about 3 degrees apart.",
+    "art": "m010.webp",
+    "pt": {
+      "distance": "14.300 anos-luz",
+      "trivia": "M10 e M12 formam um par quase idêntico de aglomerados globulares em Ofiúco, separados por cerca de 3 graus."
+    }
+  },
+  {
+    "id": "M11",
+    "name": "Wild Duck Cluster",
+    "source": "https://commons.wikimedia.org/wiki/File:The_Wild_Duck_cluster_(eso1430a).jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "6,200 ly",
+    "trivia": "Admiral Smyth likened its fan-shaped star pattern to a flock of ducks in flight.",
+    "art": "m011.webp",
+    "pt": {
+      "distance": "6.200 anos-luz",
+      "trivia": "O almirante Smyth comparou o padrão de estrelas em forma de leque a um bando de patos em voo."
+    }
+  },
+  {
+    "id": "M12",
+    "name": "NGC 6218",
+    "source": "https://commons.wikimedia.org/wiki/File:M12,_NGC_6218_(noao-m12).jpg",
+    "credit": "REU Program/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "16,000 ly",
+    "trivia": "A loosely concentrated globular cluster whose core is less dense than most.",
+    "art": "m012.webp",
+    "pt": {
+      "distance": "16.000 anos-luz",
+      "trivia": "Um aglomerado globular pouco concentrado, cujo núcleo é menos denso que o da maioria."
+    }
+  },
+  {
+    "id": "M13",
+    "name": "Great Hercules Cluster",
+    "source": "https://commons.wikimedia.org/wiki/File:M13,_NGC_6205_(noao-m13kpno4m).jpg",
+    "credit": "T.A. Rector, H. Schweiker et al.",
+    "licence": "CC BY 4.0",
+    "distance": "22,200 ly",
+    "trivia": "The 1974 Arecibo radio message was aimed at this cluster.",
+    "art": "m013.webp",
+    "pt": {
+      "distance": "22.200 anos-luz",
+      "trivia": "A mensagem de rádio de Arecibo de 1974 foi apontada para este aglomerado."
+    }
+  },
+  {
+    "id": "M14",
+    "name": "NGC 6402",
+    "source": "https://commons.wikimedia.org/wiki/File:Messier_14.jpg",
+    "credit": "NOIRLAB / NSF / AURA",
+    "licence": "CC BY 4.0",
+    "distance": "30,300 ly",
+    "trivia": "A nova appeared in this cluster in 1938, a rare event in a globular cluster.",
+    "art": "m014.webp",
+    "pt": {
+      "distance": "30.300 anos-luz",
+      "trivia": "Uma nova surgiu neste aglomerado em 1938, um evento raro em um aglomerado globular."
+    }
+  },
+  {
+    "id": "M15",
+    "name": "NGC 7078",
+    "source": "https://commons.wikimedia.org/wiki/File:New_Hubble_image_of_star_cluster_Messier_15.jpg",
+    "credit": "NASA, ESA",
+    "licence": "CC BY 3.0",
+    "distance": "33,600 ly",
+    "trivia": "One of the densest known globular clusters, with a collapsed core.",
+    "art": "m015.webp",
+    "pt": {
+      "distance": "33.600 anos-luz",
+      "trivia": "Um dos aglomerados globulares mais densos conhecidos, com o núcleo colapsado."
+    }
+  },
+  {
+    "id": "M16",
+    "name": "Eagle Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:Eagle_Nebula_from_ESO.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "7,000 ly",
+    "trivia": "Contains the Pillars of Creation, famously photographed by Hubble in 1995.",
+    "art": "m016.webp",
+    "pt": {
+      "distance": "7.000 anos-luz",
+      "trivia": "Contém os Pilares da Criação, famosamente fotografados pelo Hubble em 1995."
+    }
+  },
+  {
+    "id": "M17",
+    "name": "Omega Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:M17,_Omega_(noao-noao-m17-09).jpg",
+    "credit": "T.A. Rector (University of Alaska Anchorage) and WIYN",
+    "licence": "CC BY 4.0",
+    "distance": "5,500 ly",
+    "trivia": "Also called the Swan or Horseshoe Nebula, it is one of the brightest star-forming regions in the Milky Way.",
+    "art": "m017.webp",
+    "pt": {
+      "distance": "5.500 anos-luz",
+      "trivia": "Também chamada de Nebulosa do Cisne ou da Ferradura, é uma das regiões de formação estelar mais brilhantes da Via Láctea."
+    }
+  },
+  {
+    "id": "M18",
+    "name": "NGC 6613",
+    "source": "https://commons.wikimedia.org/wiki/File:M18,_NGC_6613_(noao-m18).jpg",
+    "credit": "Hillary Mathis, REU program/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "4,900 ly",
+    "trivia": "A sparse cluster of about 20 stars in Sagittarius, close to the Omega Nebula in the sky.",
+    "art": "m018.webp",
+    "pt": {
+      "distance": "4.900 anos-luz",
+      "trivia": "Um aglomerado esparso de cerca de 20 estrelas em Sagitário, próximo da Nebulosa Ômega no céu."
+    }
+  },
+  {
+    "id": "M19",
+    "name": "NGC 6273",
+    "source": "https://commons.wikimedia.org/wiki/File:M19-Cluster.png",
+    "credit": "Chuck Ayoub",
+    "licence": "CC0",
+    "distance": "28,700 ly",
+    "trivia": "One of the most flattened globular clusters known, visibly oblate.",
+    "art": "m019.webp",
+    "pt": {
+      "distance": "28.700 anos-luz",
+      "trivia": "Um dos aglomerados globulares mais achatados conhecidos, visivelmente oblato."
+    }
+  },
+  {
+    "id": "M20",
+    "name": "Trifid Nebula",
+    "source": "https://app.astrobin.com/u/DiegoNas",
+    "credit": "Diego Nascimento",
+    "licence": "CC BY 4.0",
+    "distance": "~5,000 ly",
+    "trivia": "Dark dust lanes divide its glowing emission nebula into three lobes.",
+    "art": "m020.webp",
+    "file": "M20-trifid-diego.png",
+    "pt": {
+      "distance": "~5.000 anos-luz",
+      "trivia": "Faixas escuras de poeira dividem sua nebulosa de emissão brilhante em três lóbulos."
+    }
+  },
+  {
+    "id": "M21",
+    "name": "NGC 6531",
+    "source": "https://commons.wikimedia.org/wiki/File:M21,_NGC_6531_(noao-m21).jpg",
+    "credit": "REU program/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "4,250 ly",
+    "trivia": "A young open cluster, only a few million years old, lying near the Trifid Nebula.",
+    "art": "m021.webp",
+    "pt": {
+      "distance": "4.250 anos-luz",
+      "trivia": "Um aglomerado aberto jovem, com apenas alguns milhões de anos, perto da Nebulosa Trífida."
+    }
+  },
+  {
+    "id": "M22",
+    "name": "NGC 6656",
+    "source": "https://commons.wikimedia.org/wiki/File:M22_(Great_Sagittarius_Cluster)_%E2%80%93_2020-07-14_%E2%80%93_V2_(55288107825).png",
+    "credit": "horizon_productions_sfl",
+    "licence": "CC0",
+    "distance": "10,600 ly",
+    "trivia": "One of the first globular clusters ever discovered, found by Abraham Ihle in 1665.",
+    "art": "m022.webp",
+    "pt": {
+      "distance": "10.600 anos-luz",
+      "trivia": "Um dos primeiros aglomerados globulares já descobertos, encontrado por Abraham Ihle em 1665."
+    }
+  },
+  {
+    "id": "M23",
+    "name": "NGC 6494",
+    "source": "https://commons.wikimedia.org/wiki/File:M23,_NGC_6494_(noao-m23).jpg",
+    "credit": "N.A.Sharp, REU program/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "2,150 ly",
+    "trivia": "Contains about 150 stars spread over an area roughly the size of the full Moon.",
+    "art": "m023.webp",
+    "pt": {
+      "distance": "2.150 anos-luz",
+      "trivia": "Contém cerca de 150 estrelas espalhadas por uma área do tamanho aproximado da Lua cheia."
+    }
+  },
+  {
+    "id": "M24",
+    "name": "Sagittarius Star Cloud",
+    "source": "https://commons.wikimedia.org/wiki/File:Sagittarius_Star_Cloud_(noao-m24).jpg",
+    "credit": "Vanessa Harvey, REU program/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "~10,000 ly",
+    "trivia": "A dense patch of the Milky Way seen through a gap in the intervening dust clouds.",
+    "art": "m024.webp",
+    "pt": {
+      "distance": "~10.000 anos-luz",
+      "trivia": "Uma região densa da Via Láctea vista através de uma abertura nas nuvens de poeira intermediárias."
+    }
+  },
+  {
+    "id": "M25",
+    "name": "IC 4725",
+    "source": "https://commons.wikimedia.org/wiki/File:M25,_IC4725_(noao-m25).jpg",
+    "credit": "Hillary Mathis, Vanessa Harvey et al.",
+    "licence": "CC BY 4.0",
+    "distance": "2,000 ly",
+    "trivia": "Contains the Cepheid variable U Sagittarii, a rare find in an open cluster.",
+    "art": "m025.webp",
+    "pt": {
+      "distance": "2.000 anos-luz",
+      "trivia": "Contém a variável Cefeida U Sagittarii, uma raridade em um aglomerado aberto."
+    }
+  },
+  {
+    "id": "M26",
+    "name": "NGC 6694",
+    "source": "https://commons.wikimedia.org/wiki/File:Messier_26.jpg",
+    "credit": "Hillary Mathis, Vanessa Harvey et al.",
+    "licence": "CC BY 4.0",
+    "distance": "5,000 ly",
+    "trivia": "Shows a region of unusually low star density, possibly caused by a dust cloud in front of it.",
+    "art": "m026.webp",
+    "pt": {
+      "distance": "5.000 anos-luz",
+      "trivia": "Apresenta uma região de densidade estelar incomumente baixa, possivelmente causada por uma nuvem de poeira à sua frente."
+    }
+  },
+  {
+    "id": "M27",
+    "name": "Dumbbell Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:M27_-_Noao-m27-kpno-mayall-4-m_(north_up).jpg",
+    "credit": "T.A. Rector, H. Schweiker et al.",
+    "licence": "CC BY 4.0",
+    "distance": "1,360 ly",
+    "trivia": "The first planetary nebula ever discovered, found by Messier in 1764.",
+    "art": "m027.webp",
+    "pt": {
+      "distance": "1.360 anos-luz",
+      "trivia": "A primeira nebulosa planetária já descoberta, encontrada por Messier em 1764."
+    }
+  },
+  {
+    "id": "M28",
+    "name": "NGC 6626",
+    "source": "https://commons.wikimedia.org/wiki/File:M28,_NGC_6626_(noao-m28).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "17,900 ly",
+    "trivia": "Contains a millisecond pulsar, the first ever found in a globular cluster.",
+    "art": "m028.webp",
+    "pt": {
+      "distance": "17.900 anos-luz",
+      "trivia": "Contém um pulsar de milissegundo, o primeiro já encontrado em um aglomerado globular."
+    }
+  },
+  {
+    "id": "M29",
+    "name": "NGC 6913",
+    "source": "https://commons.wikimedia.org/wiki/File:M29,_NGC_6913_(noao-m29).jpg",
+    "credit": "Hillary Mathis/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "~4,000 ly",
+    "trivia": "A small cluster of about 50 stars near Gamma Cygni, nicknamed the Cooling Tower.",
+    "art": "m029.webp",
+    "pt": {
+      "distance": "~4.000 anos-luz",
+      "trivia": "Um pequeno aglomerado de cerca de 50 estrelas perto de Gamma Cygni, apelidado de Torre de Resfriamento."
+    }
+  },
+  {
+    "id": "M30",
+    "name": "NGC 7099",
+    "source": "https://commons.wikimedia.org/wiki/File:M30_NASA.jpg",
+    "credit": "NASA/ESA",
+    "licence": "Public domain",
+    "distance": "27,100 ly",
+    "trivia": "Its core has collapsed, making it one of the densest globular clusters.",
+    "art": "m030.webp",
+    "pt": {
+      "distance": "27.100 anos-luz",
+      "trivia": "Seu núcleo colapsou, tornando-o um dos aglomerados globulares mais densos."
+    }
+  },
+  {
+    "id": "M31",
+    "name": "Andromeda Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:Andromeda_Galaxy_(with_h-alpha).jpg",
+    "credit": "Adam Evans",
+    "licence": "CC BY 2.0",
+    "distance": "2.5 million ly",
+    "trivia": "Approaching the Milky Way at about 110 km/s, it is expected to merge with it in billions of years.",
+    "art": "m031.webp",
+    "pt": {
+      "distance": "2,5 milhões de anos-luz",
+      "trivia": "Aproximando-se da Via Láctea a cerca de 110 km/s, deve se fundir com ela em bilhões de anos."
+    }
+  },
+  {
+    "id": "M32",
+    "name": "NGC 221",
+    "source": "https://commons.wikimedia.org/wiki/File:M32,_NGC_221_(noao-02326).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "2.5 million ly",
+    "trivia": "A compact satellite of the Andromeda Galaxy, probably the stripped core of a larger galaxy.",
+    "art": "m032.webp",
+    "pt": {
+      "distance": "2,5 milhões de anos-luz",
+      "trivia": "Uma galáxia satélite compacta de Andrômeda, provavelmente o núcleo remanescente de uma galáxia maior."
+    }
+  },
+  {
+    "id": "M33",
+    "name": "Triangulum Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:VST_snaps_a_very_detailed_view_of_the_Triangulum_Galaxy.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "2.7 million ly",
+    "trivia": "Contains NGC 604, one of the largest star-forming regions in the Local Group.",
+    "art": "m033.webp",
+    "pt": {
+      "distance": "2,7 milhões de anos-luz",
+      "trivia": "Contém NGC 604, uma das maiores regiões de formação estelar do Grupo Local."
+    }
+  },
+  {
+    "id": "M34",
+    "name": "NGC 1039",
+    "source": "https://commons.wikimedia.org/wiki/File:M34,_NGC_1039_(noao-m34).jpg",
+    "credit": "REU program/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "1,500 ly",
+    "trivia": "Visible to the naked eye under dark skies, and roughly 250 million years old.",
+    "art": "m034.webp",
+    "pt": {
+      "distance": "1.500 anos-luz",
+      "trivia": "Visível a olho nu em céus escuros, tem aproximadamente 250 milhões de anos."
+    }
+  },
+  {
+    "id": "M35",
+    "name": "NGC 2168",
+    "source": "https://commons.wikimedia.org/wiki/File:M35_and_NGC_2158.png",
+    "credit": "Chuck Ayoub",
+    "licence": "CC0",
+    "distance": "~2,800 ly",
+    "trivia": "The much more distant cluster NGC 2158 sits beside it and fits in the same low-power field.",
+    "art": "m035.webp",
+    "pt": {
+      "distance": "~2.800 anos-luz",
+      "trivia": "O aglomerado NGC 2158, muito mais distante, fica ao seu lado e cabe no mesmo campo de baixo aumento."
+    }
+  },
+  {
+    "id": "M36",
+    "name": "NGC 1960",
+    "source": "https://commons.wikimedia.org/wiki/File:M36,_NGC_1960_(noao-m36).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "4,100 ly",
+    "trivia": "A young cluster about 25 million years old, one of three Messier clusters in Auriga.",
+    "art": "m036.webp",
+    "pt": {
+      "distance": "4.100 anos-luz",
+      "trivia": "Um aglomerado jovem de cerca de 25 milhões de anos, um dos três aglomerados de Messier em Auriga."
+    }
+  },
+  {
+    "id": "M37",
+    "name": "NGC 2099",
+    "source": "https://commons.wikimedia.org/wiki/File:M37,_NGC_2099_(noao-m37).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "4,500 ly",
+    "trivia": "The richest of the three Messier open clusters in Auriga.",
+    "art": "m037.webp",
+    "pt": {
+      "distance": "4.500 anos-luz",
+      "trivia": "O mais rico dos três aglomerados abertos de Messier em Auriga."
+    }
+  },
+  {
+    "id": "M38",
+    "name": "NGC 1912",
+    "source": "https://commons.wikimedia.org/wiki/File:M38,_NGC_1912_(noao-m38).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "4,200 ly",
+    "trivia": "Its brighter stars form a loose cross or pi shape; the small cluster NGC 1907 lies nearby.",
+    "art": "m038.webp",
+    "pt": {
+      "distance": "4.200 anos-luz",
+      "trivia": "Suas estrelas mais brilhantes formam uma cruz ou a letra pi; o pequeno aglomerado NGC 1907 fica por perto."
+    }
+  },
+  {
+    "id": "M39",
+    "name": "NGC 7092",
+    "source": "https://commons.wikimedia.org/wiki/File:M39,_NGC_7092_(noao-m39).jpg",
+    "credit": "Heidi Schweiker/WIYN and NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "825 ly",
+    "trivia": "A roughly triangular open cluster in Cygnus, easy to see with binoculars.",
+    "art": "m039.webp",
+    "pt": {
+      "distance": "825 anos-luz",
+      "trivia": "Um aglomerado aberto aproximadamente triangular em Cisne, fácil de ver com binóculos."
+    }
+  },
+  {
+    "id": "M40",
+    "name": "Winnecke 4",
+    "source": "https://commons.wikimedia.org/wiki/File:M40_(Winnecke_4)_(noao-m40).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "510 ly",
+    "trivia": "Messier searched for a nebula reported by Hevelius and logged this double star instead.",
+    "art": "m040.webp",
+    "pt": {
+      "distance": "510 anos-luz",
+      "trivia": "Messier procurou uma nebulosa relatada por Hevelius e registrou esta estrela dupla no lugar."
+    }
+  },
+  {
+    "id": "M41",
+    "name": "NGC 2287",
+    "source": "https://commons.wikimedia.org/wiki/File:M41-noao.jpg",
+    "credit": "NOIRLab / NSF / AURA",
+    "licence": "CC BY 4.0",
+    "distance": "2,300 ly",
+    "trivia": "Lies about 4 degrees south of Sirius and was possibly noted by Aristotle around 325 BCE.",
+    "art": "m041.webp",
+    "pt": {
+      "distance": "2.300 anos-luz",
+      "trivia": "Fica a cerca de 4 graus ao sul de Sirius e possivelmente foi notado por Aristóteles por volta de 325 a.C."
+    }
+  },
+  {
+    "id": "M42",
+    "name": "Orion Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:Orion_Nebula_-_Hubble_2006_mosaic_18000.jpg",
+    "credit": "NASA, ESA, M. Robberto et al.",
+    "licence": "Public domain",
+    "distance": "1,344 ly",
+    "trivia": "The nearest massive star-forming region, visible to the naked eye in Orion's sword.",
+    "art": "m042.webp",
+    "pt": {
+      "distance": "1.344 anos-luz",
+      "trivia": "A região de formação de estrelas massivas mais próxima, visível a olho nu na espada de Órion."
+    }
+  },
+  {
+    "id": "M43",
+    "name": "De Mairan's Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:M43_HST.jpg",
+    "credit": "NASA, ESA et al.",
+    "licence": "Public domain",
+    "distance": "1,600 ly",
+    "trivia": "A dark dust lane separates it from the Orion Nebula, and the star NU Orionis lights it.",
+    "art": "m043.webp",
+    "pt": {
+      "distance": "1.600 anos-luz",
+      "trivia": "Uma faixa escura de poeira a separa da Nebulosa de Órion, e a estrela NU Orionis a ilumina."
+    }
+  },
+  {
+    "id": "M44",
+    "name": "Beehive Cluster",
+    "source": "https://commons.wikimedia.org/wiki/File:M44,_NGC_2632_(noao-m44).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "600 ly",
+    "trivia": "Galileo first resolved the Beehive Cluster, also called Praesepe, into about 40 stars with his telescope.",
+    "art": "m044.webp",
+    "pt": {
+      "distance": "600 anos-luz",
+      "trivia": "Galileu foi o primeiro a resolver o Aglomerado da Colmeia, também chamado Praesepe, em cerca de 40 estrelas com seu telescópio."
+    }
+  },
+  {
+    "id": "M45",
+    "name": "Pleiades",
+    "source": "https://commons.wikimedia.org/wiki/File:Pleiades_large.jpg",
+    "credit": "NASA, ESA, AURA/Caltech, Palomar Observatory",
+    "licence": "Public domain",
+    "distance": "444 ly",
+    "trivia": "Its blue nebulosity is dust the cluster is passing through, not leftover birth gas.",
+    "art": "m045.webp",
+    "pt": {
+      "distance": "444 anos-luz",
+      "trivia": "Sua nebulosidade azul é poeira pela qual o aglomerado está passando, não gás remanescente do nascimento."
+    }
+  },
+  {
+    "id": "M46",
+    "name": "NGC 2437",
+    "source": "https://commons.wikimedia.org/wiki/File:M46,_NGC_2437_(noao-m46).jpg",
+    "credit": "N.A.Sharp/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "5,400 ly",
+    "trivia": "The planetary nebula NGC 2438 appears to lie inside it, though it is probably a foreground object.",
+    "art": "m046.webp",
+    "pt": {
+      "distance": "5.400 anos-luz",
+      "trivia": "A nebulosa planetária NGC 2438 parece estar dentro dele, embora provavelmente seja um objeto em primeiro plano."
+    }
+  },
+  {
+    "id": "M47",
+    "name": "NGC 2422",
+    "source": "https://commons.wikimedia.org/wiki/File:M47,_NGC_2422_(noao-m47).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "1,600 ly",
+    "trivia": "Long a missing Messier object because Messier recorded its position incorrectly.",
+    "art": "m047.webp",
+    "pt": {
+      "distance": "1.600 anos-luz",
+      "trivia": "Por muito tempo foi um objeto de Messier perdido, porque Messier registrou sua posição incorretamente."
+    }
+  },
+  {
+    "id": "M48",
+    "name": "NGC 2548",
+    "source": "https://commons.wikimedia.org/wiki/File:M48,_NGC_2548_(noao-m48).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "2,500 ly",
+    "trivia": "Long considered missing due to a position error, it was identified with NGC 2548 in 1934.",
+    "art": "m048.webp",
+    "pt": {
+      "distance": "2.500 anos-luz",
+      "trivia": "Considerado perdido por muito tempo devido a um erro de posição, foi identificado com NGC 2548 em 1934."
+    }
+  },
+  {
+    "id": "M49",
+    "name": "NGC 4472",
+    "source": "https://commons.wikimedia.org/wiki/File:Messier_49-Rubin_Observatory.png",
+    "credit": "RubinObs/NOIRLab/SLAC/NSF/DOE/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "56 million ly",
+    "trivia": "The brightest elliptical galaxy in the Virgo Cluster, discovered by Messier in 1771.",
+    "art": "m049.webp",
+    "pt": {
+      "distance": "56 milhões de anos-luz",
+      "trivia": "A galáxia elíptica mais brilhante do Aglomerado de Virgem, descoberta por Messier em 1771."
+    }
+  },
+  {
+    "id": "M50",
+    "name": "NGC 2323",
+    "source": "https://commons.wikimedia.org/wiki/File:M50,_NGC_2323_(noao-m50).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "3,200 ly",
+    "trivia": "Often described as heart-shaped in photographs.",
+    "art": "m050.webp",
+    "pt": {
+      "distance": "3.200 anos-luz",
+      "trivia": "Frequentemente descrito como em forma de coração nas fotografias."
+    }
+  },
+  {
+    "id": "M51",
+    "name": "Whirlpool Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:M51,_the_Whirlpool_Nebula,_NGC_5194-5195_(noao0124a).jpg",
+    "credit": "T.A.Rector and Monica Ramirez/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "23 million ly",
+    "trivia": "Lord Rosse was the first to identify its spiral structure, in 1845.",
+    "art": "m051.webp",
+    "pt": {
+      "distance": "23 milhões de anos-luz",
+      "trivia": "Lord Rosse foi o primeiro a identificar sua estrutura espiral, em 1845."
+    }
+  },
+  {
+    "id": "M52",
+    "name": "NGC 7654",
+    "source": "https://commons.wikimedia.org/wiki/File:M52atlas.jpg",
+    "credit": "2MASS (UMass/IPAC-Caltech/NASA/NSF)",
+    "licence": "Public domain",
+    "distance": "5,000 ly",
+    "trivia": "Found in Cassiopeia by extending a line from Alpha to Beta Cassiopeiae; it lies near the Bubble Nebula.",
+    "art": "m052.webp",
+    "pt": {
+      "distance": "5.000 anos-luz",
+      "trivia": "Encontrado em Cassiopeia prolongando uma linha de Alpha a Beta Cassiopeiae; fica perto da Nebulosa da Bolha."
+    }
+  },
+  {
+    "id": "M53",
+    "name": "NGC 5024",
+    "source": "https://commons.wikimedia.org/wiki/File:M53,_NGC_5024_(noao-m53).jpg",
+    "credit": "REU Program/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "58,000 ly",
+    "trivia": "Lies only about 1 degree from NGC 5053, a much sparser globular cluster.",
+    "art": "m053.webp",
+    "pt": {
+      "distance": "58.000 anos-luz",
+      "trivia": "Fica a apenas cerca de 1 grau de NGC 5053, um aglomerado globular muito mais esparso."
+    }
+  },
+  {
+    "id": "M54",
+    "name": "NGC 6715",
+    "source": "https://commons.wikimedia.org/wiki/File:M54,_NGC_6715_(noao-m54).jpg",
+    "credit": "REU Program/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "87,000 ly",
+    "trivia": "Belongs to the Sagittarius Dwarf Galaxy rather than to the Milky Way itself.",
+    "art": "m054.webp",
+    "pt": {
+      "distance": "87.000 anos-luz",
+      "trivia": "Pertence à Galáxia Anã de Sagitário, e não à própria Via Láctea."
+    }
+  },
+  {
+    "id": "M55",
+    "name": "NGC 6809",
+    "source": "https://commons.wikimedia.org/wiki/File:M55,_NGC_6809_(noao-m55).jpg",
+    "credit": "Hillary Mathis, REU Program/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "17,600 ly",
+    "trivia": "Large and loose, so many of its stars can be resolved in modest telescopes.",
+    "art": "m055.webp",
+    "pt": {
+      "distance": "17.600 anos-luz",
+      "trivia": "Grande e pouco concentrado, de modo que muitas de suas estrelas podem ser resolvidas em telescópios modestos."
+    }
+  },
+  {
+    "id": "M56",
+    "name": "NGC 6779",
+    "source": "https://commons.wikimedia.org/wiki/File:M56-LRGB.jpg",
+    "credit": "Robert J. Vanderbei, Princeton University",
+    "licence": "CC BY 2.5",
+    "distance": "32,900 ly",
+    "trivia": "Lies in a rich Milky Way star field in Lyra, between Albireo and Gamma Lyrae.",
+    "art": "m056.webp",
+    "pt": {
+      "distance": "32.900 anos-luz",
+      "trivia": "Fica em um rico campo estelar da Via Láctea em Lira, entre Albireo e Gamma Lyrae."
+    }
+  },
+  {
+    "id": "M57",
+    "name": "Ring Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:Hubble_image_of_the_Ring_Nebula_(Messier_57).jpg",
+    "credit": "NASA, ESA, and C. Robert O’Dell (Vanderbilt University)",
+    "licence": "Public domain",
+    "distance": "2,300 ly",
+    "trivia": "A faint central white dwarf near magnitude 15 sits inside the glowing ring.",
+    "art": "m057.webp",
+    "pt": {
+      "distance": "2.300 anos-luz",
+      "trivia": "Uma anã branca central tênue, perto da magnitude 15, fica dentro do anel brilhante."
+    }
+  },
+  {
+    "id": "M58",
+    "name": "NGC 4579",
+    "source": "https://commons.wikimedia.org/wiki/File:M58,_NGC_4579_(noao-m58).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "62 million ly",
+    "trivia": "A barred spiral and one of the brighter galaxies of the Virgo Cluster.",
+    "art": "m058.webp",
+    "crop": [
+      0.24,
+      0.31,
+      0.52,
+      0.38
+    ],
+    "pt": {
+      "distance": "62 milhões de anos-luz",
+      "trivia": "Uma espiral barrada e uma das galáxias mais brilhantes do Aglomerado de Virgem."
+    }
+  },
+  {
+    "id": "M59",
+    "name": "NGC 4621",
+    "source": "https://commons.wikimedia.org/wiki/File:Messier59_-_HST_-_Potw1921a.jpg",
+    "credit": "ESA/Hubble & NASA, L. Ho et al.",
+    "licence": "CC BY 4.0",
+    "distance": "60 million ly",
+    "trivia": "Discovered in 1779 by Johann Gottfried Koehler, who found M60 the same night.",
+    "art": "m059.webp",
+    "pt": {
+      "distance": "60 milhões de anos-luz",
+      "trivia": "Descoberta em 1779 por Johann Gottfried Koehler, que encontrou M60 na mesma noite."
+    }
+  },
+  {
+    "id": "M60",
+    "name": "NGC 4649",
+    "source": "https://commons.wikimedia.org/wiki/File:Arp116_Hubble.jpg",
+    "credit": "NASA, ESA",
+    "licence": "CC BY 3.0",
+    "distance": "57 million ly",
+    "trivia": "Lies next to the smaller spiral NGC 4647, with which it appears to be interacting.",
+    "art": "m060.webp",
+    "crop": [
+      0.297,
+      0,
+      0.703,
+      1
+    ],
+    "rotate": false,
+    "pt": {
+      "distance": "57 milhões de anos-luz",
+      "trivia": "Fica ao lado da espiral menor NGC 4647, com a qual parece estar interagindo."
+    }
+  },
+  {
+    "id": "M61",
+    "name": "NGC 4303",
+    "source": "https://commons.wikimedia.org/wiki/File:M61_(noao-m61block).jpg",
+    "credit": "KPNO/NOIRLab/NSF/AURA/Adam Block",
+    "licence": "CC BY 4.0",
+    "distance": "52 million ly",
+    "trivia": "A face-on spiral that has hosted at least six observed supernovae.",
+    "art": "m061.webp",
+    "pt": {
+      "distance": "52 milhões de anos-luz",
+      "trivia": "Uma espiral vista de frente que abrigou pelo menos seis supernovas observadas."
+    }
+  },
+  {
+    "id": "M62",
+    "name": "NGC 6266",
+    "source": "https://commons.wikimedia.org/wiki/File:Messier62_-_HST_-_Potw1915a.jpg",
+    "credit": "ESA/Hubble & NASA, S. Anderson et al",
+    "licence": "CC BY 4.0",
+    "distance": "22,500 ly",
+    "trivia": "One of the most asymmetrical globular clusters known, distorted by tides near the galactic centre.",
+    "art": "m062.webp",
+    "pt": {
+      "distance": "22.500 anos-luz",
+      "trivia": "Um dos aglomerados globulares mais assimétricos conhecidos, distorcido pelas marés perto do centro galáctico."
+    }
+  },
+  {
+    "id": "M63",
+    "name": "Sunflower Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:M63_(Sunflower_Galaxy)_(noao-m63hugo).jpg",
+    "credit": "KPNO/NOIRLab/NSF/AURA/Bruce Hugo and Leslie Gaul/Adam Block",
+    "licence": "CC BY 4.0",
+    "distance": "27 million ly",
+    "trivia": "Its tightly wound arms break into short segments, giving a sunflower look.",
+    "art": "m063.webp",
+    "pt": {
+      "distance": "27 milhões de anos-luz",
+      "trivia": "Seus braços bem enrolados se quebram em segmentos curtos, dando-lhe aparência de girassol."
+    }
+  },
+  {
+    "id": "M64",
+    "name": "Black Eye Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:Eye_in_the_Sky_NGC_4826.jpg",
+    "credit": "ESA/Hubble & NASA, J. Lee and the PHANGS-HST Team",
+    "licence": "CC BY 4.0",
+    "distance": "17 million ly",
+    "trivia": "Its outer gas rotates opposite to its inner stars, probably from an ancient merger.",
+    "art": "m064.webp",
+    "pt": {
+      "distance": "17 milhões de anos-luz",
+      "trivia": "Seu gás externo gira em sentido oposto ao das estrelas internas, provavelmente por causa de uma fusão antiga."
+    }
+  },
+  {
+    "id": "M65",
+    "name": "NGC 3623",
+    "source": "https://commons.wikimedia.org/wiki/File:M65,_NGC_3623_(noao-m65).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "35 million ly",
+    "trivia": "Forms the Leo Triplet with M66 and NGC 3628.",
+    "art": "m065.webp",
+    "pt": {
+      "distance": "35 milhões de anos-luz",
+      "trivia": "Forma o Trio de Leão com M66 e NGC 3628."
+    }
+  },
+  {
+    "id": "M66",
+    "name": "NGC 3627",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_3627_(weic2403n).jpg",
+    "credit": "NASA, ESA, CSA, STScI, J. Lee, T. Williams, PHANGS Team",
+    "licence": "CC BY 4.0",
+    "distance": "36 million ly",
+    "trivia": "Its distorted spiral arms are probably the result of gravitational interaction within the Leo Triplet.",
+    "art": "m066.webp",
+    "pt": {
+      "distance": "36 milhões de anos-luz",
+      "trivia": "Seus braços espirais distorcidos são provavelmente resultado da interação gravitacional dentro do Trio de Leão."
+    }
+  },
+  {
+    "id": "M67",
+    "name": "NGC 2682",
+    "source": "https://commons.wikimedia.org/wiki/File:M67-Star-Cluster.png",
+    "credit": "Chuck Ayoub",
+    "licence": "CC0",
+    "distance": "2,700 ly",
+    "trivia": "One of the oldest known open clusters, about 4 billion years old, close to the Sun's age.",
+    "art": "m067.webp",
+    "pt": {
+      "distance": "2.700 anos-luz",
+      "trivia": "Um dos aglomerados abertos mais antigos conhecidos, com cerca de 4 bilhões de anos, próximo da idade do Sol."
+    }
+  },
+  {
+    "id": "M68",
+    "name": "NGC 4590",
+    "source": "https://commons.wikimedia.org/wiki/File:Messier_68_(eso9923a).jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "33,600 ly",
+    "trivia": "A very metal-poor globular cluster in Hydra.",
+    "art": "m068.webp",
+    "pt": {
+      "distance": "33.600 anos-luz",
+      "trivia": "Um aglomerado globular muito pobre em metais em Hidra."
+    }
+  },
+  {
+    "id": "M69",
+    "name": "NGC 6637",
+    "source": "https://commons.wikimedia.org/wiki/File:M69,_NGC_6637_(noao-m69).jpg",
+    "credit": "REU program/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "29,700 ly",
+    "trivia": "Discovered by Nicolas Lacaille in 1751-52 and added to Messier's catalogue in 1780.",
+    "art": "m069.webp",
+    "pt": {
+      "distance": "29.700 anos-luz",
+      "trivia": "Descoberto por Nicolas Lacaille em 1751-52 e adicionado ao catálogo de Messier em 1780."
+    }
+  },
+  {
+    "id": "M70",
+    "name": "NGC 6681",
+    "source": "https://commons.wikimedia.org/wiki/File:M70,_NGC_6681_(noao-m70).jpg",
+    "credit": "REU program/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "29,400 ly",
+    "trivia": "Messier observed it on the same night as M69 in August 1780.",
+    "art": "m070.webp",
+    "pt": {
+      "distance": "29.400 anos-luz",
+      "trivia": "Messier o observou na mesma noite que M69, em agosto de 1780."
+    }
+  },
+  {
+    "id": "M71",
+    "name": "NGC 6838",
+    "source": "https://commons.wikimedia.org/wiki/File:M71_-_Noao-m71.jpg",
+    "credit": "REU program/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "13,000 ly",
+    "trivia": "Long debated as a loose globular or dense open cluster, it is now classed as a globular.",
+    "art": "m071.webp",
+    "pt": {
+      "distance": "13.000 anos-luz",
+      "trivia": "Por muito tempo debatido como globular pouco concentrado ou aglomerado aberto denso, hoje é classificado como globular."
+    }
+  },
+  {
+    "id": "M72",
+    "name": "NGC 6981",
+    "source": "https://commons.wikimedia.org/wiki/File:M72,_NGC_6981_(noao-m72).jpg",
+    "credit": "REU program/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "55,000 ly",
+    "trivia": "Found by Pierre Mechain in 1780, along with the nearby M73.",
+    "art": "m072.webp",
+    "pt": {
+      "distance": "55.000 anos-luz",
+      "trivia": "Encontrado por Pierre Mechain em 1780, junto com o vizinho M73."
+    }
+  },
+  {
+    "id": "M73",
+    "name": "NGC 6994",
+    "source": "https://commons.wikimedia.org/wiki/File:M73,_NGC_6994_(noao-m73).jpg",
+    "credit": "REU program/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "~2,500 ly",
+    "trivia": "Not a true cluster but a chance alignment of four stars in Aquarius.",
+    "art": "m073.webp",
+    "pt": {
+      "distance": "~2.500 anos-luz",
+      "trivia": "Não é um aglomerado verdadeiro, mas um alinhamento casual de quatro estrelas em Aquário."
+    }
+  },
+  {
+    "id": "M74",
+    "name": "Phantom Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:Perfect_Spiral_M74_(gemini0607a).jpg",
+    "credit": "International Gemini Observatory/GMOS Commissioning Team",
+    "licence": "CC BY 4.0",
+    "distance": "32 million ly",
+    "trivia": "A textbook face-on spiral, but its low surface brightness makes it hard to see.",
+    "art": "m074.webp",
+    "pt": {
+      "distance": "32 milhões de anos-luz",
+      "trivia": "Uma espiral vista de frente de livro didático, mas seu baixo brilho superficial a torna difícil de ver."
+    }
+  },
+  {
+    "id": "M75",
+    "name": "NGC 6864",
+    "source": "https://commons.wikimedia.org/wiki/File:M75,_NGC_6864_(noao-m75).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "67,500 ly",
+    "trivia": "One of the most highly concentrated globular clusters, with a very dense core.",
+    "art": "m075.webp",
+    "pt": {
+      "distance": "67.500 anos-luz",
+      "trivia": "Um dos aglomerados globulares mais concentrados, com um núcleo muito denso."
+    }
+  },
+  {
+    "id": "M76",
+    "name": "Little Dumbbell Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:Little_Dumbbell_Nebula_(WFC3_Image)_(2024-013).png",
+    "credit": "NASA, ESA, STScI",
+    "licence": "Public domain",
+    "distance": "2,500 ly",
+    "trivia": "Called the Little Dumbbell for its resemblance to M27, it is among the faintest Messier objects.",
+    "art": "m076.webp",
+    "pt": {
+      "distance": "2.500 anos-luz",
+      "trivia": "Chamada de Pequena Halteres por sua semelhança com M27, é um dos objetos de Messier mais fracos."
+    }
+  },
+  {
+    "id": "M77",
+    "name": "NGC 1068",
+    "source": "https://commons.wikimedia.org/wiki/File:Dazzling_galaxy_Messier_77.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "47 million ly",
+    "trivia": "A Seyfert galaxy whose neutrino emission was reported by IceCube in 2022.",
+    "art": "m077.webp",
+    "pt": {
+      "distance": "47 milhões de anos-luz",
+      "trivia": "Uma galáxia Seyfert cuja emissão de neutrinos foi relatada pelo IceCube em 2022."
+    }
+  },
+  {
+    "id": "M78",
+    "name": "NGC 2068",
+    "source": "https://commons.wikimedia.org/wiki/File:Messier_78.jpg",
+    "credit": "ESO/Igor Chekalin",
+    "licence": "CC BY 4.0",
+    "distance": "1,600 ly",
+    "trivia": "The brightest diffuse reflection nebula in the sky, in Orion.",
+    "art": "m078.webp",
+    "pt": {
+      "distance": "1.600 anos-luz",
+      "trivia": "A nebulosa de reflexão difusa mais brilhante do céu, em Órion."
+    }
+  },
+  {
+    "id": "M79",
+    "name": "NGC 1904",
+    "source": "https://commons.wikimedia.org/wiki/File:A_snowstorm_of_stars.jpg",
+    "credit": "NASA and ESA",
+    "licence": "CC BY 4.0",
+    "distance": "42,000 ly",
+    "trivia": "May have been captured from the Canis Major Dwarf Galaxy.",
+    "art": "m079.webp",
+    "pt": {
+      "distance": "42.000 anos-luz",
+      "trivia": "Pode ter sido capturado da Galáxia Anã do Cão Maior."
+    }
+  },
+  {
+    "id": "M80",
+    "name": "NGC 6093",
+    "source": "https://commons.wikimedia.org/wiki/File:M80,_NGC_6093_(noao-m80).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "32,600 ly",
+    "trivia": "One of the densest globular clusters; a nova, T Scorpii, appeared in it in 1860.",
+    "art": "m080.webp",
+    "pt": {
+      "distance": "32.600 anos-luz",
+      "trivia": "Um dos aglomerados globulares mais densos; uma nova, T Scorpii, surgiu nele em 1860."
+    }
+  },
+  {
+    "id": "M81",
+    "name": "Bode's Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:M81,_NGC_3031_(noao-m81).jpg",
+    "credit": "N.A.Sharp/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "12 million ly",
+    "trivia": "Discovered by Johann Elert Bode in 1774, it forms a pair in the sky with M82.",
+    "art": "m081.webp",
+    "pt": {
+      "distance": "12 milhões de anos-luz",
+      "trivia": "Descoberta por Johann Elert Bode em 1774, forma um par no céu com M82."
+    }
+  },
+  {
+    "id": "M82",
+    "name": "Cigar Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:M82_HST_ACS_2006-14-a-large_web.jpg",
+    "credit": "NASA, ESA, and The Hubble Heritage Team (STScI/AURA)",
+    "licence": "Public domain",
+    "distance": "12 million ly",
+    "trivia": "A starburst galaxy forming stars about ten times faster than the Milky Way.",
+    "art": "m082.webp",
+    "pt": {
+      "distance": "12 milhões de anos-luz",
+      "trivia": "Uma galáxia starburst que forma estrelas cerca de dez vezes mais rápido que a Via Láctea."
+    }
+  },
+  {
+    "id": "M83",
+    "name": "Southern Pinwheel Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:M83_-_Southern_Pinwheel.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "15 million ly",
+    "trivia": "It has hosted at least six observed supernovae.",
+    "art": "m083.webp",
+    "pt": {
+      "distance": "15 milhões de anos-luz",
+      "trivia": "Abrigou pelo menos seis supernovas observadas."
+    }
+  },
+  {
+    "id": "M84",
+    "name": "NGC 4374",
+    "source": "https://commons.wikimedia.org/wiki/File:A_fascinating_core.jpg",
+    "credit": "ESA/Hubble & NASA",
+    "licence": "CC BY 4.0",
+    "distance": "60 million ly",
+    "trivia": "Hosts a supermassive black hole of more than a billion solar masses.",
+    "art": "m084.webp",
+    "pt": {
+      "distance": "60 milhões de anos-luz",
+      "trivia": "Abriga um buraco negro supermassivo de mais de um bilhão de massas solares."
+    }
+  },
+  {
+    "id": "M85",
+    "name": "NGC 4382",
+    "source": "https://commons.wikimedia.org/wiki/File:M85_(28308516491).jpg",
+    "credit": "SDSS/Giuseppe Donatiello",
+    "licence": "CC0",
+    "distance": "60 million ly",
+    "trivia": "A lenticular galaxy whose faint shells suggest a past merger; Mechain found it in 1781.",
+    "art": "m085.webp",
+    "pt": {
+      "distance": "60 milhões de anos-luz",
+      "trivia": "Uma galáxia lenticular cujas camadas tênues sugerem uma fusão passada; Mechain a encontrou em 1781."
+    }
+  },
+  {
+    "id": "M86",
+    "name": "NGC 4406",
+    "source": "https://commons.wikimedia.org/wiki/File:Messier86_-_SDSS_DR14_(panorama).jpg",
+    "credit": "Sloan Digital Sky Survey",
+    "licence": "CC BY 4.0",
+    "distance": "52 million ly",
+    "trivia": "One of the few Virgo Cluster galaxies moving toward us, as it falls toward the cluster's centre.",
+    "art": "m086.webp",
+    "pt": {
+      "distance": "52 milhões de anos-luz",
+      "trivia": "Uma das poucas galáxias do Aglomerado de Virgem que se movem em nossa direção, pois cai rumo ao centro do aglomerado."
+    }
+  },
+  {
+    "id": "M87",
+    "name": "Virgo A",
+    "source": "https://commons.wikimedia.org/wiki/File:Messier_87_Hubble_WikiSky.jpg",
+    "credit": "NASA, STScI, WikiSky",
+    "licence": "Public domain",
+    "distance": "53 million ly",
+    "trivia": "Its black hole was the first ever imaged, by the Event Horizon Telescope in 2019.",
+    "art": "m087.webp",
+    "pt": {
+      "distance": "53 milhões de anos-luz",
+      "trivia": "Seu buraco negro foi o primeiro já fotografado, pelo Event Horizon Telescope em 2019."
+    }
+  },
+  {
+    "id": "M88",
+    "name": "NGC 4501",
+    "source": "https://commons.wikimedia.org/wiki/File:M88_(noao-m88quinn).jpg",
+    "credit": "KPNO/NOIRLab/NSF/AURA/Jim Quinn/Adam Block",
+    "licence": "CC BY 4.0",
+    "distance": "47 million ly",
+    "trivia": "A large spiral galaxy in Coma Berenices, discovered by Messier in 1781.",
+    "art": "m088.webp",
+    "pt": {
+      "distance": "47 milhões de anos-luz",
+      "trivia": "Uma grande galáxia espiral em Cabeleira de Berenice, descoberta por Messier em 1781."
+    }
+  },
+  {
+    "id": "M89",
+    "name": "NGC 4552",
+    "source": "https://commons.wikimedia.org/wiki/File:M89_Galaxy.png",
+    "credit": "Chuck Ayoub",
+    "licence": "CC0",
+    "distance": "50 million ly",
+    "trivia": "A nearly spherical elliptical galaxy surrounded by faint shells.",
+    "art": "m089.webp",
+    "pt": {
+      "distance": "50 milhões de anos-luz",
+      "trivia": "Uma galáxia elíptica quase esférica cercada por camadas tênues."
+    }
+  },
+  {
+    "id": "M90",
+    "name": "NGC 4569",
+    "source": "https://commons.wikimedia.org/wiki/File:M90_-_Noao-m90.jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "58 million ly",
+    "trivia": "One of the few galaxies in the Virgo Cluster that is blueshifted, moving toward us.",
+    "art": "m090.webp",
+    "pt": {
+      "distance": "58 milhões de anos-luz",
+      "trivia": "Uma das poucas galáxias do Aglomerado de Virgem com desvio para o azul, movendo-se em nossa direção."
+    }
+  },
+  {
+    "id": "M91",
+    "name": "NGC 4548",
+    "source": "https://commons.wikimedia.org/wiki/File:M91,_NGC_4548_(noao-m91).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "63 million ly",
+    "trivia": "Long missing from the catalogue, it was identified with NGC 4548 in 1969.",
+    "art": "m091.webp",
+    "pt": {
+      "distance": "63 milhões de anos-luz",
+      "trivia": "Ausente do catálogo por muito tempo, foi identificada com NGC 4548 em 1969."
+    }
+  },
+  {
+    "id": "M92",
+    "name": "NGC 6341",
+    "source": "https://commons.wikimedia.org/wiki/File:M92,_NGC_6341_(noao-02213).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "26,700 ly",
+    "trivia": "One of the brighter northern globular clusters, often overlooked beside M13 in Hercules.",
+    "art": "m092.webp",
+    "pt": {
+      "distance": "26.700 anos-luz",
+      "trivia": "Um dos aglomerados globulares do norte mais brilhantes, frequentemente ignorado ao lado de M13 em Hércules."
+    }
+  },
+  {
+    "id": "M93",
+    "name": "NGC 2447",
+    "source": "https://commons.wikimedia.org/wiki/File:M93,_NGC_2447_(noao-m93).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "3,600 ly",
+    "trivia": "A bright open cluster in Puppis with a wedge or arrowhead shape.",
+    "art": "m093.webp",
+    "pt": {
+      "distance": "3.600 anos-luz",
+      "trivia": "Um aglomerado aberto brilhante em Popa com formato de cunha ou ponta de flecha."
+    }
+  },
+  {
+    "id": "M94",
+    "name": "NGC 4736",
+    "source": "https://commons.wikimedia.org/wiki/File:NASA's_Chandra_Releases_'Red,_White,_and_Blue'_Universe_for_US_250th_(NGC_4736_composite).jpg",
+    "credit": "X-ray: NASA/CXC/SAO; Optical: Brian Brennan and Remi Lacasse",
+    "licence": "Public domain",
+    "distance": "16 million ly",
+    "trivia": "A starburst galaxy with a bright inner ring of intense star formation.",
+    "art": "m094.webp",
+    "pt": {
+      "distance": "16 milhões de anos-luz",
+      "trivia": "Uma galáxia starburst com um anel interno brilhante de intensa formação de estrelas."
+    }
+  },
+  {
+    "id": "M95",
+    "name": "NGC 3351",
+    "source": "https://commons.wikimedia.org/wiki/File:The_VLT_goes_lion_hunting.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 3.0",
+    "distance": "~35 million ly",
+    "trivia": "A barred spiral with a ring of star formation, in the Leo I Group with M96.",
+    "art": "m095.webp",
+    "pt": {
+      "distance": "~35 milhões de anos-luz",
+      "trivia": "Uma espiral barrada com um anel de formação estelar, no Grupo de Leão I com M96."
+    }
+  },
+  {
+    "id": "M96",
+    "name": "NGC 3368",
+    "source": "https://commons.wikimedia.org/wiki/File:Messier_96_-_Potw1535a.tif",
+    "credit": "ESA/Hubble & NASA and the LEGUS Team",
+    "licence": "CC BY 4.0",
+    "distance": "31 million ly",
+    "trivia": "Lends its name to the M96 Group of galaxies in Leo, which includes M95 and M105.",
+    "art": "m096.webp",
+    "pt": {
+      "distance": "31 milhões de anos-luz",
+      "trivia": "Dá nome ao Grupo M96 de galáxias em Leão, que inclui M95 e M105."
+    }
+  },
+  {
+    "id": "M97",
+    "name": "Owl Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:M97-stargazer-obs.jpg",
+    "credit": "Stargazer 7000",
+    "licence": "Public domain",
+    "distance": "~2,000 ly",
+    "trivia": "Lord Rosse named it in 1848 for two dark patches that resemble an owl's eyes.",
+    "art": "m097.webp",
+    "crop": [
+      0.3,
+      0.145,
+      0.38,
+      0.57
+    ],
+    "pt": {
+      "distance": "~2.000 anos-luz",
+      "trivia": "Lord Rosse a nomeou em 1848 por duas manchas escuras que lembram os olhos de uma coruja."
+    }
+  },
+  {
+    "id": "M98",
+    "name": "NGC 4192",
+    "source": "https://commons.wikimedia.org/wiki/File:M98,_NGC_4192_(noao-m98).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "44 million ly",
+    "trivia": "Seen nearly edge-on, it is blueshifted, approaching us as it falls into the Virgo Cluster.",
+    "art": "m098.webp",
+    "pt": {
+      "distance": "44 milhões de anos-luz",
+      "trivia": "Vista quase de perfil, tem desvio para o azul, aproximando-se de nós enquanto cai no Aglomerado de Virgem."
+    }
+  },
+  {
+    "id": "M99",
+    "name": "NGC 4254",
+    "source": "https://commons.wikimedia.org/wiki/File:M99;_NGC_4254_(noao-m99).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "50 million ly",
+    "trivia": "Lord Rosse identified its spiral structure in 1846, a year after M51.",
+    "art": "m099.webp",
+    "pt": {
+      "distance": "50 milhões de anos-luz",
+      "trivia": "Lord Rosse identificou sua estrutura espiral em 1846, um ano depois de M51."
+    }
+  },
+  {
+    "id": "M100",
+    "name": "NGC 4321",
+    "source": "https://commons.wikimedia.org/wiki/File:Messier_100_and_Supernova_SN_2006X_(wallpaper).jpg",
+    "credit": "ESO/IDA/Danish 1.5 m/R. Gendler et al.",
+    "licence": "CC BY 4.0",
+    "distance": "55 million ly",
+    "trivia": "A grand-design spiral whose Cepheid variables helped Hubble calibrate the distance scale.",
+    "art": "m100.webp",
+    "pt": {
+      "distance": "55 milhões de anos-luz",
+      "trivia": "Uma espiral de grande desenho cujas variáveis Cefeidas ajudaram Hubble a calibrar a escala de distâncias."
+    }
+  },
+  {
+    "id": "M101",
+    "name": "Pinwheel Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:M101_Mosaic_(noao-02881).jpg",
+    "credit": "George Jacoby, Bruce Bohannan, Mark Hanna/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "21 million ly",
+    "trivia": "About 170,000 light-years across, it is larger than the Milky Way.",
+    "art": "m101.webp",
+    "pt": {
+      "distance": "21 milhões de anos-luz",
+      "trivia": "Com cerca de 170.000 anos-luz de diâmetro, é maior que a Via Láctea."
+    }
+  },
+  {
+    "id": "M102",
+    "name": "Spindle Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:Ngc5866_hst_big.jpg",
+    "credit": "NASA, ESA, and The Hubble Heritage Team (STScI/AURA)",
+    "licence": "Public domain",
+    "distance": "~50 million ly",
+    "trivia": "Its identity as M102 is disputed, and Messier's entry may be a duplicate of M101.",
+    "art": "m102.webp",
+    "pt": {
+      "distance": "~50 milhões de anos-luz",
+      "trivia": "Sua identidade como M102 é contestada, e a entrada de Messier pode ser uma duplicata de M101."
+    }
+  },
+  {
+    "id": "M103",
+    "name": "NGC 581",
+    "source": "https://commons.wikimedia.org/wiki/File:M103,_NGC_581_(noao-m103).jpg",
+    "credit": "Hillary Mathis, N.A.Sharp/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "~9,000 ly",
+    "trivia": "Discovered by Pierre Mechain in 1781; the cluster is only about 25 million years old.",
+    "art": "m103.webp",
+    "pt": {
+      "distance": "~9.000 anos-luz",
+      "trivia": "Descoberto por Pierre Mechain em 1781; o aglomerado tem apenas cerca de 25 milhões de anos."
+    }
+  },
+  {
+    "id": "M104",
+    "name": "Sombrero Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:Sombrero_Galaxy–_The_Universe’s_Dusty_Brimmed_Hat_(noirlab2612a).jpg",
+    "credit": "CTIO/NOIRLab/DOE/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "29 million ly",
+    "trivia": "Its prominent dust lane and large central bulge give it the look of a wide-brimmed hat.",
+    "art": "m104.webp",
+    "crop": [
+      0.4376,
+      0.3719,
+      0.1318,
+      0.2495
+    ],
+    "rotate": false,
+    "fetch_px": 6000,
+    "level": [
+      45,
+      100
+    ],
+    "pt": {
+      "distance": "29 milhões de anos-luz",
+      "trivia": "Sua proeminente faixa de poeira e grande bojo central lhe dão a aparência de um chapéu de abas largas."
+    }
+  },
+  {
+    "id": "M105",
+    "name": "NGC 3379",
+    "source": "https://commons.wikimedia.org/wiki/File:M105,_NGC_3379_(noao-m105).tiff",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "38 million ly",
+    "trivia": "An elliptical galaxy in the Leo I Group, near M95 and M96.",
+    "art": "m105.webp",
+    "pt": {
+      "distance": "38 milhões de anos-luz",
+      "trivia": "Uma galáxia elíptica no Grupo de Leão I, perto de M95 e M96."
+    }
+  },
+  {
+    "id": "M106",
+    "name": "NGC 4258",
+    "source": "https://commons.wikimedia.org/wiki/File:M106_-_Noirlab2112b.jpg",
+    "credit": "KPNO/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "24 million ly",
+    "trivia": "Water-maser emission in its disc gave a precise geometric distance used to calibrate the cosmic scale.",
+    "art": "m106.webp",
+    "pt": {
+      "distance": "24 milhões de anos-luz",
+      "trivia": "A emissão maser de água em seu disco forneceu uma distância geométrica precisa usada para calibrar a escala cósmica."
+    }
+  },
+  {
+    "id": "M107",
+    "name": "NGC 6171",
+    "source": "https://commons.wikimedia.org/wiki/File:The_globular_star_cluster_Messier_107.jpg",
+    "credit": "ESO/ESO Imaging Survey",
+    "licence": "CC BY 4.0",
+    "distance": "20,900 ly",
+    "trivia": "Pierre Mechain discovered it in April 1782 in Ophiuchus.",
+    "art": "m107.webp",
+    "pt": {
+      "distance": "20.900 anos-luz",
+      "trivia": "Pierre Mechain o descobriu em abril de 1782 em Ofiúco."
+    }
+  },
+  {
+    "id": "M108",
+    "name": "Surfboard Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:M108,_NGC_3556_(noao-m108).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "46 million ly",
+    "trivia": "Seen nearly edge-on, it hosted the supernova SN 1969B.",
+    "art": "m108.webp",
+    "pt": {
+      "distance": "46 milhões de anos-luz",
+      "trivia": "Vista quase de perfil, abrigou a supernova SN 1969B."
+    }
+  },
+  {
+    "id": "M109",
+    "name": "NGC 3992",
+    "source": "https://commons.wikimedia.org/wiki/File:M109,_NGC_3992_(noao-m109).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "83 million ly",
+    "trivia": "A barred spiral that hosted the supernova SN 1956A.",
+    "art": "m109.webp",
+    "pt": {
+      "distance": "83 milhões de anos-luz",
+      "trivia": "Uma espiral barrada que abrigou a supernova SN 1956A."
+    }
+  },
+  {
+    "id": "M110",
+    "name": "NGC 205",
+    "source": "https://commons.wikimedia.org/wiki/File:M110_-_Noao-m110.jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "2.7 million ly",
+    "trivia": "Kenneth Glyn Jones added it to the Messier list in 1967.",
+    "art": "m110.webp",
+    "pt": {
+      "distance": "2,7 milhões de anos-luz",
+      "trivia": "Kenneth Glyn Jones a adicionou à lista de Messier em 1967."
+    }
+  },
+  {
+    "id": "C1",
+    "name": "NGC 188",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_188,_Caldwell_1_(noao0906a).jpg",
+    "credit": "NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "5,000 ly",
+    "trivia": "One of the oldest known open clusters, about 7 billion years old, near the north celestial pole.",
+    "art": "c001.webp",
+    "pt": {
+      "distance": "5.000 anos-luz",
+      "trivia": "Um dos aglomerados abertos mais antigos conhecidos, com cerca de 7 bilhões de anos, perto do polo celeste norte."
+    }
+  },
+  {
+    "id": "C2",
+    "name": "Bow-Tie Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC40_-_Noao-ngc40w.jpg",
+    "credit": "WIYN/NOIRLab/NSF",
+    "licence": "CC BY 4.0",
+    "distance": "3,500 ly",
+    "trivia": "The central star is a Wolf-Rayet-type star shedding material that forms the glowing shell.",
+    "art": "c002.webp",
+    "pt": {
+      "distance": "3.500 anos-luz",
+      "trivia": "A estrela central é uma estrela do tipo Wolf-Rayet que ejeta material, formando a casca brilhante."
+    }
+  },
+  {
+    "id": "C3",
+    "name": "NGC 4236",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_4236_(50954895758).jpg",
+    "credit": "Carsten Frenzl",
+    "licence": "CC BY 2.0",
+    "distance": "14 million ly",
+    "trivia": "A barred spiral in Draco with low surface brightness, so it needs a dark sky.",
+    "art": "c003.webp",
+    "pt": {
+      "distance": "14 milhões de anos-luz",
+      "trivia": "Uma espiral barrada em Dragão com baixo brilho superficial, por isso exige um céu escuro."
+    }
+  },
+  {
+    "id": "C4",
+    "name": "Iris Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:Iris_nebula_from_Estonia.jpg",
+    "credit": "Taavi Niittee/Tõrva Astronomy Club",
+    "licence": "CC BY 4.0",
+    "distance": "1,300 ly",
+    "trivia": "A reflection nebula lit by the young star HD 200775.",
+    "art": "c004.webp",
+    "pt": {
+      "distance": "1.300 anos-luz",
+      "trivia": "Uma nebulosa de reflexão iluminada pela estrela jovem HD 200775."
+    }
+  },
+  {
+    "id": "C5",
+    "name": "Hidden Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:Spiral_Galaxy_IC_342_(noao0703a).jpg",
+    "credit": "NOIRLab/NSF/AURA/T.A. Rector & H. Schweiker et al.",
+    "licence": "CC BY 4.0",
+    "distance": "~10 million ly",
+    "trivia": "Milky Way dust hides much of its light; it would otherwise rank among the brightest galaxies.",
+    "art": "c005.webp",
+    "pt": {
+      "distance": "~10 milhões de anos-luz",
+      "trivia": "A poeira da Via Láctea esconde grande parte de sua luz; sem ela, estaria entre as galáxias mais brilhantes."
+    }
+  },
+  {
+    "id": "C6",
+    "name": "Cat's Eye Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:Looking_at_the_Cat’s_Eye_Nebula_with_Hubble_(potm2602b).tiff",
+    "credit": "ESA/Hubble & NASA, Z. Tsvetanov",
+    "licence": "CC BY 4.0",
+    "distance": "3,300 ly",
+    "trivia": "In 1864 William Huggins showed from its spectrum that planetary nebulae are glowing gas.",
+    "art": "c006.webp",
+    "pt": {
+      "distance": "3.300 anos-luz",
+      "trivia": "Em 1864, William Huggins mostrou, a partir de seu espectro, que as nebulosas planetárias são gás incandescente."
+    }
+  },
+  {
+    "id": "C7",
+    "name": "NGC 2403",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_2403_-_A_Galaxy_of_Birth_and_Death_(iotw2221a).jpg",
+    "credit": "KPNO/NOIRLab/NSF/AURA/M. T. Patterson et al.",
+    "licence": "CC BY 4.0",
+    "distance": "~8 million ly",
+    "trivia": "Contains NGC 2404, one of the largest known star-forming regions.",
+    "art": "c007.webp",
+    "pt": {
+      "distance": "~8 milhões de anos-luz",
+      "trivia": "Contém NGC 2404, uma das maiores regiões de formação estelar conhecidas."
+    }
+  },
+  {
+    "id": "C8",
+    "name": "NGC 559",
+    "source": "https://www.astrobin.com/3vb85w/",
+    "credit": "altazastro",
+    "licence": "CC BY",
+    "distance": "~3,700 ly",
+    "trivia": "Discovered by William Herschel in 1787.",
+    "art": "c008.webp",
+    "file": "C8-ngc559-altazastro.jpg",
+    "crop": [
+      0.17,
+      0.214,
+      0.6,
+      0.452
+    ],
+    "level": 70,
+    "pt": {
+      "distance": "~3.700 anos-luz",
+      "trivia": "Descoberto por William Herschel em 1787."
+    }
+  },
+  {
+    "id": "C9",
+    "name": "Cave Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:Sh2-155,_Cave_Nebula_(noao-sh2-155).jpg",
+    "credit": "T.A. Rector, H. Schweiker et al.",
+    "licence": "CC BY 4.0",
+    "distance": "2,400 ly",
+    "trivia": "A faint emission nebula in Cepheus whose dark lane gives the cave-mouth look.",
+    "art": "c009.webp",
+    "pt": {
+      "distance": "2.400 anos-luz",
+      "trivia": "Uma nebulosa de emissão tênue em Cefeu cuja faixa escura lhe dá o aspecto de boca de caverna."
+    }
+  },
+  {
+    "id": "C10",
+    "name": "NGC 663",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_663_(noao-n663erickson).jpg",
+    "credit": "KPNO/NOIRLab/NSF/AURA/Peter and Suzie Erickson/Adam Block",
+    "licence": "CC BY 4.0",
+    "distance": "~8,000 ly",
+    "trivia": "Contains a number of Be stars, hot and rapidly spinning.",
+    "art": "c010.webp",
+    "pt": {
+      "distance": "~8.000 anos-luz",
+      "trivia": "Contém várias estrelas Be, quentes e de rotação rápida."
+    }
+  },
+  {
+    "id": "C11",
+    "name": "Bubble Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:The_Bubble_Nebula_-_NGC_7635_-_Heic1608a.jpg",
+    "credit": "NASA, ESA, Hubble Heritage Team",
+    "licence": "Public domain",
+    "distance": "7,100 ly",
+    "trivia": "The bubble is blown by the stellar wind of the star BD+60 2522.",
+    "art": "c011.webp",
+    "pt": {
+      "distance": "7.100 anos-luz",
+      "trivia": "A bolha é soprada pelo vento estelar da estrela BD+60 2522."
+    }
+  },
+  {
+    "id": "C12",
+    "name": "Fireworks Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC6946_-_Noao-ngc6946kpno.jpg",
+    "credit": "KPNO/NOIRLab/NSF/AURA/T.A. Rector/H. Schweiker et al.",
+    "licence": "CC BY 4.0",
+    "distance": "~25 million ly",
+    "trivia": "Ten supernovae have been observed in it since 1917, earning the nickname.",
+    "art": "c012.webp",
+    "pt": {
+      "distance": "~25 milhões de anos-luz",
+      "trivia": "Dez supernovas foram observadas nela desde 1917, o que lhe rendeu o apelido."
+    }
+  },
+  {
+    "id": "C13",
+    "name": "Owl Cluster",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_457-_The_\"ET\"_Cluster_(noao-n457siark).jpg",
+    "credit": "KPNO/NOIRLab/NSF/AURA/Ken and Emilie Siarkiewicz/Adam Block",
+    "licence": "CC BY 4.0",
+    "distance": "~8,000 ly",
+    "trivia": "Two bright stars look like eyes, giving the nicknames Owl Cluster and E.T. Cluster.",
+    "art": "c013.webp",
+    "pt": {
+      "distance": "~8.000 anos-luz",
+      "trivia": "Duas estrelas brilhantes parecem olhos, dando os apelidos de Aglomerado da Coruja e Aglomerado do E.T."
+    }
+  },
+  {
+    "id": "C14",
+    "name": "Double Cluster",
+    "source": "https://commons.wikimedia.org/wiki/File:Double_Cluster_in_Perseus_-_Flickr_-_astrophotography_andy.jpg",
+    "credit": "Andy Weeks",
+    "licence": "CC0",
+    "distance": "7,500 ly",
+    "trivia": "Both clusters are visible to the naked eye and are each about 13 million years old.",
+    "art": "c014.webp",
+    "pt": {
+      "distance": "7.500 anos-luz",
+      "trivia": "Ambos os aglomerados são visíveis a olho nu e têm cerca de 13 milhões de anos cada."
+    }
+  },
+  {
+    "id": "C15",
+    "name": "Blinking Planetary",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_6826_\"Blinking_Eye\".jpg",
+    "credit": "Judy Schmidt",
+    "licence": "CC BY 2.0",
+    "distance": "~3,000 ly",
+    "trivia": "Look straight at it and the bright central star drowns the nebula, which reappears when you glance away.",
+    "art": "c015.webp",
+    "pt": {
+      "distance": "~3.000 anos-luz",
+      "trivia": "Olhando diretamente para ela, a estrela central brilhante ofusca a nebulosa, que reaparece quando você desvia o olhar."
+    }
+  },
+  {
+    "id": "C16",
+    "name": "NGC 7243",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_7243_PanS.jpg",
+    "credit": "Donald Pelletier (Pan-STARRS data)",
+    "licence": "CC0",
+    "distance": "~2,800 ly",
+    "trivia": "A bright, loose open cluster in Lacerta, easily seen in binoculars.",
+    "art": "c016.webp",
+    "crop": [
+      0.12,
+      0.05,
+      0.66,
+      0.88
+    ],
+    "pt": {
+      "distance": "~2.800 anos-luz",
+      "trivia": "Um aglomerado aberto brilhante e pouco concentrado em Lagarto, facilmente visto com binóculos."
+    }
+  },
+  {
+    "id": "C17",
+    "name": "NGC 147",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_147.jpg",
+    "credit": "Roberto Mura",
+    "licence": "Public domain",
+    "distance": "2.5 million ly",
+    "trivia": "A dwarf satellite of the Andromeda Galaxy, paired with NGC 185.",
+    "art": "c017.webp",
+    "crop": [
+      0.444,
+      0.384,
+      0.152,
+      0.243
+    ],
+    "fetch_px": 3264,
+    "pt": {
+      "distance": "2,5 milhões de anos-luz",
+      "trivia": "Uma galáxia anã satélite de Andrômeda, emparelhada com NGC 185."
+    }
+  },
+  {
+    "id": "C18",
+    "name": "NGC 185",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_185_(2007).jpg",
+    "credit": "Roberto Mura",
+    "licence": "Public domain",
+    "distance": "2.0 million ly",
+    "trivia": "A dwarf elliptical satellite of Andromeda that unusually contains dust and young stars.",
+    "art": "c018.webp",
+    "crop": [
+      0.3875,
+      0.371,
+      0.155,
+      0.248
+    ],
+    "fetch_px": 3264,
+    "pt": {
+      "distance": "2,0 milhões de anos-luz",
+      "trivia": "Uma galáxia elíptica anã satélite de Andrômeda que, incomumente, contém poeira e estrelas jovens."
+    }
+  },
+  {
+    "id": "C19",
+    "name": "Cocoon Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:IC_5146_LRGB.png",
+    "credit": "Hunter Outten (Outten Astrophotography)",
+    "licence": "CC BY 4.0",
+    "distance": "~3,300 ly",
+    "trivia": "The dark nebula Barnard 168 stretches westward from it like a long tail.",
+    "art": "c019.webp",
+    "pt": {
+      "distance": "~3.300 anos-luz",
+      "trivia": "A nebulosa escura Barnard 168 se estende para oeste a partir dela como uma longa cauda."
+    }
+  },
+  {
+    "id": "C20",
+    "name": "North America Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:The_North_America_Nebula_(ground-based_image)_(heic0510a).jpg",
+    "credit": "Davide De Martin",
+    "licence": "Public domain",
+    "distance": "2,600 ly",
+    "trivia": "Its shape resembles North America, and it lies next to the bright star Deneb.",
+    "art": "c020.webp",
+    "pt": {
+      "distance": "2.600 anos-luz",
+      "trivia": "Sua forma lembra a América do Norte, e ela fica ao lado da brilhante estrela Deneb."
+    }
+  },
+  {
+    "id": "C21",
+    "name": "NGC 4449",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_4449_(Hubble_image)_(potm2405e).jpg",
+    "credit": "NASA, ESA et al.",
+    "licence": "CC BY 4.0",
+    "distance": "12.5 million ly",
+    "trivia": "Hubble images show many young star clusters in this irregular starburst galaxy.",
+    "art": "c021.webp",
+    "pt": {
+      "distance": "12,5 milhões de anos-luz",
+      "trivia": "Imagens do Hubble mostram muitos aglomerados estelares jovens nesta galáxia starburst irregular."
+    }
+  },
+  {
+    "id": "C22",
+    "name": "Blue Snowball Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:Caldwell_22.jpg",
+    "credit": "NASA Hubble",
+    "licence": "CC BY 2.0",
+    "distance": "~5,600 ly",
+    "trivia": "Its blue-green colour and round shape give it the nickname Blue Snowball.",
+    "art": "c022.webp",
+    "pt": {
+      "distance": "~5.600 anos-luz",
+      "trivia": "Sua cor azul-esverdeada e formato redondo lhe renderam o apelido de Bola de Neve Azul."
+    }
+  },
+  {
+    "id": "C23",
+    "name": "NGC 891",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC891_iotw2023a.jpg",
+    "credit": "KPNO/NOIRLab/NSF/AURA",
+    "licence": "CC BY 4.0",
+    "distance": "30 million ly",
+    "trivia": "A near-perfect edge-on spiral with a thin dust lane, often compared to the Milky Way.",
+    "art": "c023.webp",
+    "pt": {
+      "distance": "30 milhões de anos-luz",
+      "trivia": "Uma espiral quase perfeitamente de perfil com uma fina faixa de poeira, frequentemente comparada à Via Láctea."
+    }
+  },
+  {
+    "id": "C24",
+    "name": "Perseus A",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_1275_Hubble.jpg",
+    "credit": "NASA, ESA et al.",
+    "licence": "Public domain",
+    "distance": "235 million ly",
+    "trivia": "The central galaxy of the Perseus Cluster, wrapped in filaments of gas and a strong radio source.",
+    "art": "c024.webp",
+    "pt": {
+      "distance": "235 milhões de anos-luz",
+      "trivia": "A galáxia central do Aglomerado de Perseu, envolta em filamentos de gás e uma forte fonte de rádio."
+    }
+  },
+  {
+    "id": "C25",
+    "name": "Intergalactic Wanderer",
+    "source": "https://commons.wikimedia.org/wiki/File:Caldwell_25.jpg",
+    "credit": "NASA Hubble",
+    "licence": "CC BY 2.0",
+    "distance": "~300,000 ly",
+    "trivia": "One of the most remote globular clusters of the Milky Way; Shapley called it the Intergalactic Tramp.",
+    "art": "c025.webp",
+    "pt": {
+      "distance": "~300.000 anos-luz",
+      "trivia": "Um dos aglomerados globulares mais remotos da Via Láctea; Shapley o chamou de Vagabundo Intergaláctico."
+    }
+  },
+  {
+    "id": "C26",
+    "name": "Silver Needle Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_4244_Silver_Needle_Galaxu.png",
+    "credit": "Chuck Ayoub",
+    "licence": "CC0",
+    "distance": "14 million ly",
+    "trivia": "Seen edge-on and slightly warped, it is a pure disc galaxy with no noticeable bulge.",
+    "art": "c026.webp",
+    "pt": {
+      "distance": "14 milhões de anos-luz",
+      "trivia": "Vista de perfil e levemente deformada, é uma galáxia de disco puro, sem bojo perceptível."
+    }
+  },
+  {
+    "id": "C27",
+    "name": "Crescent Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:Crescent_Ferretti_Bruzzone.jpg",
+    "credit": "Antonio Ferretti, Attilio Bruzzone",
+    "licence": "CC BY 4.0",
+    "distance": "5,000 ly",
+    "trivia": "Blown by the Wolf-Rayet star WR 136, which will eventually end as a supernova.",
+    "art": "c027.webp",
+    "pt": {
+      "distance": "5.000 anos-luz",
+      "trivia": "Soprada pela estrela Wolf-Rayet WR 136, que acabará como uma supernova."
+    }
+  },
+  {
+    "id": "C28",
+    "name": "NGC 752",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_752_60f_GraXpert.jpg",
+    "credit": "C messier",
+    "licence": "CC BY 4.0",
+    "distance": "~1,300 ly",
+    "trivia": "An old open cluster over a billion years old, large enough to fill a binocular field.",
+    "art": "c028.webp",
+    "level": [
+      12,
+      32
+    ],
+    "pt": {
+      "distance": "~1.300 anos-luz",
+      "trivia": "Um aglomerado aberto antigo, com mais de um bilhão de anos, grande o bastante para preencher o campo de um binóculo."
+    }
+  },
+  {
+    "id": "C29",
+    "name": "NGC 5005",
+    "source": "https://commons.wikimedia.org/wiki/File:Noao-n5005magnani.jpg",
+    "credit": "KPNO/NOIRLab/NSF/AURA/Ray and Emily Magnani/Adam Block",
+    "licence": "CC BY 4.0",
+    "distance": "~65 million ly",
+    "trivia": "A spiral in Canes Venatici with a LINER-type active nucleus.",
+    "art": "c029.webp",
+    "pt": {
+      "distance": "~65 milhões de anos-luz",
+      "trivia": "Uma espiral em Cães de Caça com um núcleo ativo do tipo LINER."
+    }
+  },
+  {
+    "id": "C30",
+    "name": "NGC 7331",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_7331_Acquired_with_the_Schulman_Telescope_at_the_Mount_Lemmon_SkyCenter.jpg",
+    "credit": "Ngc1535 (Schulman Telescope, Mount Lemmon SkyCenter)",
+    "licence": "CC BY 3.0",
+    "distance": "~45 million ly",
+    "trivia": "Often called a Milky Way twin; Stephan's Quintet appears nearby in the sky but is far more distant.",
+    "art": "c030.webp",
+    "pt": {
+      "distance": "~45 milhões de anos-luz",
+      "trivia": "Frequentemente chamada de gêmea da Via Láctea; o Quinteto de Stephan aparece perto dela no céu, mas está muito mais distante."
+    }
+  },
+  {
+    "id": "C31",
+    "name": "Flaming Star Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:IC_405_and_IC_410-_The_Flaming_Star_Nebula_(noao-ic405block).jpg",
+    "credit": "KPNO/NOIRLab/NSF/AURA/Adam Block",
+    "licence": "CC BY 4.0",
+    "distance": "1,500 ly",
+    "trivia": "Lit by the runaway star AE Aurigae.",
+    "art": "c031.webp",
+    "pt": {
+      "distance": "1.500 anos-luz",
+      "trivia": "Iluminada pela estrela fugitiva AE Aurigae."
+    }
+  },
+  {
+    "id": "C32",
+    "name": "Whale Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_4631_The_whale_galaxy.png",
+    "credit": "Juan lacruz",
+    "licence": "CC BY 4.0",
+    "distance": "~25 million ly",
+    "trivia": "Seen edge-on, its disc is distorted and starburst-active, probably from interaction with neighbours.",
+    "art": "c032.webp",
+    "pt": {
+      "distance": "~25 milhões de anos-luz",
+      "trivia": "Vista de perfil, seu disco é distorcido e tem atividade starburst, provavelmente por interação com vizinhas."
+    }
+  },
+  {
+    "id": "C33",
+    "name": "Eastern Veil Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_6992_(50667967031).jpg",
+    "credit": "Carsten Frenzl",
+    "licence": "CC BY 2.0",
+    "distance": "~2,400 ly",
+    "trivia": "Part of the Cygnus Loop, the remnant of a supernova that exploded 10,000 to 20,000 years ago.",
+    "art": "c033.webp",
+    "crop": [
+      0.15,
+      0.12,
+      0.454,
+      0.72
+    ],
+    "rotate": false,
+    "pt": {
+      "distance": "~2.400 anos-luz",
+      "trivia": "Parte do Laço do Cisne, o remanescente de uma supernova que explodiu há 10.000 a 20.000 anos."
+    }
+  },
+  {
+    "id": "C34",
+    "name": "Western Veil Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:Western_veil_nebula.jpg",
+    "credit": "Taavi Niittee",
+    "licence": "CC0",
+    "distance": "~2,400 ly",
+    "trivia": "Its brightest part is crossed by the foreground star 52 Cygni.",
+    "art": "c034.webp",
+    "crop": [
+      0.2039,
+      -0.1224,
+      0.6679,
+      1.248
+    ],
+    "angle": 20.9,
+    "pt": {
+      "distance": "~2.400 anos-luz",
+      "trivia": "Sua parte mais brilhante é cruzada pela estrela em primeiro plano 52 Cygni."
+    }
+  },
+  {
+    "id": "C35",
+    "name": "NGC 4889",
+    "source": "https://commons.wikimedia.org/wiki/File:Caldwell_35.jpg",
+    "credit": "NASA Hubble",
+    "licence": "CC BY 2.0",
+    "distance": "320 million ly",
+    "trivia": "The brightest galaxy in the Coma Cluster, with a black hole estimated at about 21 billion solar masses.",
+    "art": "c035.webp",
+    "pt": {
+      "distance": "320 milhões de anos-luz",
+      "trivia": "A galáxia mais brilhante do Aglomerado de Coma, com um buraco negro estimado em cerca de 21 bilhões de massas solares."
+    }
+  },
+  {
+    "id": "C36",
+    "name": "NGC 4559",
+    "source": "https://commons.wikimedia.org/wiki/File:Noao-n4559hapeman.jpg",
+    "credit": "KPNO/NOIRLab/NSF/AURA/Jeff Hapeman/Adam Block",
+    "licence": "CC BY 4.0",
+    "distance": "29 million ly",
+    "trivia": "Discovered by William Herschel in 1785.",
+    "art": "c036.webp",
+    "pt": {
+      "distance": "29 milhões de anos-luz",
+      "trivia": "Descoberto por William Herschel em 1785."
+    }
+  },
+  {
+    "id": "C37",
+    "name": "NGC 6885",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_6885.png",
+    "credit": "Roberto Mura",
+    "licence": "Public domain",
+    "distance": "~6,000 ly",
+    "trivia": "An open cluster in Vulpecula containing the star 20 Vulpeculae.",
+    "art": "c037.webp",
+    "crop": [
+      0.25,
+      0.0,
+      0.5,
+      0.8
+    ],
+    "level": 45,
+    "pt": {
+      "distance": "~6.000 anos-luz",
+      "trivia": "Um aglomerado aberto em Raposa contendo a estrela 20 Vulpeculae."
+    }
+  },
+  {
+    "id": "C38",
+    "name": "Needle Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_4565_and_4562.jpg",
+    "credit": "Jschulman555",
+    "licence": "CC BY 3.0",
+    "distance": "43 million ly",
+    "trivia": "A near-perfect edge-on spiral with a thin dust lane, a favourite of amateurs in Coma Berenices.",
+    "art": "c038.webp",
+    "crop": [
+      0.126,
+      0.05,
+      0.874,
+      0.95
+    ],
+    "pt": {
+      "distance": "43 milhões de anos-luz",
+      "trivia": "Uma espiral quase perfeitamente de perfil com uma fina faixa de poeira, favorita dos amadores em Cabeleira de Berenice."
+    }
+  },
+  {
+    "id": "C39",
+    "name": "Eskimo Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:Lion_Nebula_roars_to_life_for_Webb_ESA524574.jpg",
+    "credit": "ESA/Webb, NASA & CSA",
+    "licence": "CC BY 4.0",
+    "distance": "~4,000 ly",
+    "trivia": "From the ground it looks like a face in a fur parka, and Hubble reveals a complex gas outflow.",
+    "art": "c039.webp",
+    "pt": {
+      "distance": "~4.000 anos-luz",
+      "trivia": "Do solo parece um rosto em uma parca de pele, e o Hubble revela uma complexa ejeção de gás."
+    }
+  },
+  {
+    "id": "C40",
+    "name": "NGC 3626",
+    "source": "https://commons.wikimedia.org/wiki/File:Caldwell_40_(50290767418).jpg",
+    "credit": "NASA Hubble Space Telescope",
+    "licence": "CC BY 2.0",
+    "distance": "~70 million ly",
+    "trivia": "A lenticular galaxy in Leo whose gas and stars rotate in opposite directions.",
+    "art": "c040.webp",
+    "pt": {
+      "distance": "~70 milhões de anos-luz",
+      "trivia": "Uma galáxia lenticular em Leão cujo gás e estrelas giram em sentidos opostos."
+    }
+  },
+  {
+    "id": "C41",
+    "name": "Hyades",
+    "source": "https://commons.wikimedia.org/wiki/File:The_Hyades_star_cluster_(noirlab2018e).jpg",
+    "credit": "NOIRLab/NSF/AURA/Digitized Sky Survey 2",
+    "licence": "CC BY 4.0",
+    "distance": "153 ly",
+    "trivia": "The nearest open cluster to the Sun, forming the V-shaped face of Taurus the Bull.",
+    "art": "c041.webp",
+    "pt": {
+      "distance": "153 anos-luz",
+      "trivia": "O aglomerado aberto mais próximo do Sol, formando a face em V do Touro."
+    }
+  },
+  {
+    "id": "C42",
+    "name": "NGC 7006",
+    "source": "https://commons.wikimedia.org/wiki/File:Caldwell_42.jpg",
+    "credit": "NASA Hubble",
+    "licence": "CC BY 2.0",
+    "distance": "135,000 ly",
+    "trivia": "One of the most distant globular clusters of the Milky Way, lying in the outer halo.",
+    "art": "c042.webp",
+    "pt": {
+      "distance": "135.000 anos-luz",
+      "trivia": "Um dos aglomerados globulares mais distantes da Via Láctea, no halo externo."
+    }
+  },
+  {
+    "id": "C43",
+    "name": "Little Sombrero",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_7814_(noao-n7814block).jpg",
+    "credit": "KPNO/NOIRLab/NSF/AURA/Adam Block",
+    "licence": "CC BY 4.0",
+    "distance": "40 million ly",
+    "trivia": "Its central bulge and dust lane resemble the Sombrero Galaxy on a smaller scale.",
+    "art": "c043.webp",
+    "pt": {
+      "distance": "40 milhões de anos-luz",
+      "trivia": "Seu bojo central e faixa de poeira lembram a Galáxia do Sombrero em escala menor."
+    }
+  },
+  {
+    "id": "C44",
+    "name": "Propeller Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:Caldwell_44.jpg",
+    "credit": "NASA Hubble",
+    "licence": "CC BY 2.0",
+    "distance": "~105 million ly",
+    "trivia": "Its single prominent arm is thought to come from a past minor merger with a smaller galaxy.",
+    "art": "c044.webp",
+    "pt": {
+      "distance": "~105 milhões de anos-luz",
+      "trivia": "Acredita-se que seu único braço proeminente venha de uma fusão menor passada com uma galáxia menor."
+    }
+  },
+  {
+    "id": "C45",
+    "name": "NGC 5248",
+    "source": "https://commons.wikimedia.org/wiki/File:Noao-n5248niksch.jpg",
+    "credit": "KPNO/NOIRLab/NSF/AURA/ Dale Niksch/Adam Block",
+    "licence": "CC BY 4.0",
+    "distance": "~59 million ly",
+    "trivia": "A grand-design spiral in Bootes with a ring of star formation around its core.",
+    "art": "c045.webp",
+    "pt": {
+      "distance": "~59 milhões de anos-luz",
+      "trivia": "Uma espiral de grande desenho em Boieiro com um anel de formação estelar ao redor do núcleo."
+    }
+  },
+  {
+    "id": "C46",
+    "name": "Hubble's Variable Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:Hubble's_Variable_Nebula_-_NGC_2261.png",
+    "credit": "Judy Schmidt",
+    "licence": "CC BY 2.0",
+    "distance": "2,500 ly",
+    "trivia": "Its brightness and shape change within weeks as clouds shade light from the variable star R Monocerotis.",
+    "art": "c046.webp",
+    "pt": {
+      "distance": "2.500 anos-luz",
+      "trivia": "Seu brilho e formato mudam em poucas semanas, conforme nuvens sombreiam a luz da estrela variável R Monocerotis."
+    }
+  },
+  {
+    "id": "C47",
+    "name": "NGC 6934",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_6934_Hubble_WikiSky.jpg",
+    "credit": "NASA, STScI, WikiSky",
+    "licence": "Public domain",
+    "distance": "50,000 ly",
+    "trivia": "Discovered by William Herschel in 1785.",
+    "art": "c047.webp",
+    "pt": {
+      "distance": "50.000 anos-luz",
+      "trivia": "Descoberto por William Herschel em 1785."
+    }
+  },
+  {
+    "id": "C48",
+    "name": "NGC 2775",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_2775.png",
+    "credit": "Judy Schmidt (Hubble data)",
+    "licence": "CC BY 2.0",
+    "distance": "~67 million ly",
+    "trivia": "Dust lanes spiral around a smooth, bright central bulge.",
+    "art": "c048.webp",
+    "pt": {
+      "distance": "~67 milhões de anos-luz",
+      "trivia": "Faixas de poeira espiralam ao redor de um bojo central liso e brilhante."
+    }
+  },
+  {
+    "id": "C49",
+    "name": "Rosette Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:Rosette_Nebula_Captured_with_DECam_(noirlab2424a).jpg",
+    "credit": "CTIO/NOIRLab/DOE/NSF/AURA, T.A. Rector",
+    "licence": "CC BY 4.0",
+    "distance": "5,200 ly",
+    "trivia": "Stellar winds from the young cluster NGC 2244 have cleared the hole at its centre.",
+    "art": "c049.webp",
+    "pt": {
+      "distance": "5.200 anos-luz",
+      "trivia": "Os ventos estelares do jovem aglomerado NGC 2244 limparam o buraco em seu centro."
+    }
+  },
+  {
+    "id": "C50",
+    "name": "Rosette Cluster",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_2244_and_Rosette_Nebula_-_Flickr_-_gjdonatiello.jpg",
+    "credit": "Giuseppe Donatiello",
+    "licence": "CC0",
+    "distance": "5,200 ly",
+    "trivia": "A young open cluster whose hot stars ionise the surrounding Rosette Nebula.",
+    "art": "c050.webp",
+    "crop": [
+      0.35,
+      0.382,
+      0.28,
+      0.336
+    ],
+    "rotate": false,
+    "pt": {
+      "distance": "5.200 anos-luz",
+      "trivia": "Um aglomerado aberto jovem cujas estrelas quentes ionizam a Nebulosa da Roseta ao redor."
+    }
+  },
+  {
+    "id": "C51",
+    "name": "IC 1613",
+    "source": "https://commons.wikimedia.org/wiki/File:Dwarf_galaxy_IC_1613.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "2.4 million ly",
+    "trivia": "A Local Group dwarf galaxy with few dust clouds, a good laboratory for Cepheid variable stars.",
+    "art": "c051.webp",
+    "pt": {
+      "distance": "2,4 milhões de anos-luz",
+      "trivia": "Uma galáxia anã do Grupo Local com poucas nuvens de poeira, um bom laboratório para estrelas variáveis Cefeidas."
+    }
+  },
+  {
+    "id": "C52",
+    "name": "NGC 4697",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC4697_-_SDSS_DR14.jpg",
+    "credit": "Sloan Digital Sky Survey",
+    "licence": "CC BY 4.0",
+    "distance": "~40 million ly",
+    "trivia": "Discovered by William Herschel in 1784.",
+    "art": "c052.webp",
+    "level": [
+      25,
+      100
+    ],
+    "pt": {
+      "distance": "~40 milhões de anos-luz",
+      "trivia": "Descoberto por William Herschel em 1784."
+    }
+  },
+  {
+    "id": "C53",
+    "name": "Spindle Galaxy",
+    "source": "https://www.astrobin.com/bouzwb/",
+    "credit": "jmacon",
+    "licence": "CC BY",
+    "distance": "32 million ly",
+    "trivia": "A lenticular galaxy hosting one of the nearest known billion-solar-mass black holes.",
+    "art": "c053.webp",
+    "file": "C53-ngc3115-jmacon.jpg",
+    "crop": [
+      0.367,
+      0.234,
+      0.24,
+      0.432
+    ],
+    "rotate": false,
+    "pt": {
+      "distance": "32 milhões de anos-luz",
+      "trivia": "Uma galáxia lenticular que abriga um dos buracos negros de bilhões de massas solares mais próximos conhecidos."
+    }
+  },
+  {
+    "id": "C54",
+    "name": "NGC 2506",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_2506_composite.png",
+    "credit": "YayLol123",
+    "licence": "CC BY 4.0",
+    "distance": "~11,000 ly",
+    "trivia": "An old open cluster, over a billion years old, in Monoceros.",
+    "art": "c054.webp",
+    "crop": [
+      0.325,
+      0.207,
+      0.35,
+      0.585
+    ],
+    "pt": {
+      "distance": "~11.000 anos-luz",
+      "trivia": "Um aglomerado aberto antigo, com mais de um bilhão de anos, em Unicórnio."
+    }
+  },
+  {
+    "id": "C55",
+    "name": "Saturn Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_7009_\"Saturn_Nebula\".jpg",
+    "credit": "Judy Schmidt",
+    "licence": "CC BY 2.0",
+    "distance": "~5,200 ly",
+    "trivia": "Lord Rosse's drawing showed bright extensions like Saturn's rings, hence the name.",
+    "art": "c055.webp",
+    "pt": {
+      "distance": "~5.200 anos-luz",
+      "trivia": "O desenho de Lord Rosse mostrava extensões brilhantes como os anéis de Saturno, daí o nome."
+    }
+  },
+  {
+    "id": "C56",
+    "name": "Skull Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:New_ESO’s_VLT_image_of_the_Skull_Nebula.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "~1,600 ly",
+    "trivia": "Its nickname comes from dark patches and stars that suggest eyes and a nose.",
+    "art": "c056.webp",
+    "pt": {
+      "distance": "~1.600 anos-luz",
+      "trivia": "Seu apelido vem de manchas escuras e estrelas que sugerem olhos e um nariz."
+    }
+  },
+  {
+    "id": "C57",
+    "name": "Barnard's Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:Barnard%27s_Galaxy.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "1.6 million ly",
+    "trivia": "Hubble used it in 1925 to help show that galaxies exist beyond the Milky Way.",
+    "art": "c057.webp",
+    "pt": {
+      "distance": "1,6 milhão de anos-luz",
+      "trivia": "Hubble a usou em 1925 para ajudar a mostrar que existem galáxias além da Via Láctea."
+    }
+  },
+  {
+    "id": "C58",
+    "name": "Caroline's Cluster",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC2360_-_SDSS_DR14_(panorama).jpg",
+    "credit": "Sloan Digital Sky Survey",
+    "licence": "CC BY 4.0",
+    "distance": "3,700 ly",
+    "trivia": "Discovered by Caroline Herschel in 1783.",
+    "art": "c058.webp",
+    "pt": {
+      "distance": "3.700 anos-luz",
+      "trivia": "Descoberto por Caroline Herschel em 1783."
+    }
+  },
+  {
+    "id": "C59",
+    "name": "Ghost of Jupiter",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_3242_\"Ghost_of_Jupiter\".png",
+    "credit": "Judy Schmidt",
+    "licence": "CC BY 2.0",
+    "distance": "~1,400 ly",
+    "trivia": "Its nickname comes from its apparent size, similar to Jupiter's disc in a small telescope.",
+    "art": "c059.webp",
+    "pt": {
+      "distance": "~1.400 anos-luz",
+      "trivia": "Seu apelido vem de seu tamanho aparente, semelhante ao disco de Júpiter em um telescópio pequeno."
+    }
+  },
+  {
+    "id": "C60",
+    "name": "Antennae Galaxies",
+    "source": "https://commons.wikimedia.org/wiki/File:Antennae_galaxies_xl.jpg",
+    "credit": "NASA, ESA et al.",
+    "licence": "Public domain",
+    "distance": "~45 million ly",
+    "trivia": "NGC 4038, the northern Antennae galaxy, holds most of the pair's bright pink knots of new stars.",
+    "art": "c060.webp",
+    "crop": [
+      0.22,
+      0.0,
+      0.6,
+      0.7255
+    ],
+    "rotate": false,
+    "pt": {
+      "distance": "~45 milhões de anos-luz",
+      "trivia": "NGC 4038, a galáxia das Antenas do norte, contém a maior parte dos nós rosados brilhantes de estrelas novas do par."
+    }
+  },
+  {
+    "id": "C61",
+    "name": "Antennae Galaxies",
+    "source": "https://commons.wikimedia.org/wiki/File:Antennae_galaxies_xl.jpg",
+    "credit": "NASA, ESA et al.",
+    "licence": "Public domain",
+    "distance": "~45 million ly",
+    "trivia": "NGC 4039, the southern Antennae galaxy, is merging with NGC 4038 and the two will become one galaxy.",
+    "art": "c061.webp",
+    "crop": [
+      0.1,
+      0.27,
+      0.6,
+      0.7255
+    ],
+    "rotate": false,
+    "pt": {
+      "distance": "~45 milhões de anos-luz",
+      "trivia": "NGC 4039, a galáxia das Antenas do sul, está se fundindo com NGC 4038 e as duas se tornarão uma só galáxia."
+    }
+  },
+  {
+    "id": "C62",
+    "name": "NGC 247",
+    "source": "https://commons.wikimedia.org/wiki/File:Wide_Field_Imager_view_of_the_spiral_galaxy_NGC_247.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "11 million ly",
+    "trivia": "A member of the Sculptor Group that shows a notable clear gap in its disc.",
+    "art": "c062.webp",
+    "pt": {
+      "distance": "11 milhões de anos-luz",
+      "trivia": "Um membro do Grupo do Escultor que mostra uma notável abertura limpa em seu disco."
+    }
+  },
+  {
+    "id": "C63",
+    "name": "Helix Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:A_new_view_of_the_Helix_Nebula_(opo0432d).jpg",
+    "credit": "NASA, ESA et al.",
+    "licence": "Public domain",
+    "distance": "650 ly",
+    "trivia": "One of the closest planetary nebulae to Earth.",
+    "art": "c063.webp",
+    "pt": {
+      "distance": "650 anos-luz",
+      "trivia": "Uma das nebulosas planetárias mais próximas da Terra."
+    }
+  },
+  {
+    "id": "C64",
+    "name": "Tau Canis Majoris Cluster",
+    "source": "https://commons.wikimedia.org/wiki/File:Starshine_in_Canis_Major.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "4,800 ly",
+    "trivia": "A very young open cluster, only a few million years old, around Tau Canis Majoris.",
+    "art": "c064.webp",
+    "pt": {
+      "distance": "4.800 anos-luz",
+      "trivia": "Um aglomerado aberto muito jovem, com apenas alguns milhões de anos, ao redor de Tau Canis Majoris."
+    }
+  },
+  {
+    "id": "C65",
+    "name": "Sculptor Galaxy",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_253_Galaxy.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "11.4 million ly",
+    "trivia": "One of the brightest spiral galaxies in the sky, discovered by Caroline Herschel in 1783.",
+    "art": "c065.webp",
+    "pt": {
+      "distance": "11,4 milhões de anos-luz",
+      "trivia": "Uma das galáxias espirais mais brilhantes do céu, descoberta por Caroline Herschel em 1783."
+    }
+  },
+  {
+    "id": "C66",
+    "name": "NGC 5694",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_5694.jpg",
+    "credit": "Judy Schmidt (Hubble data)",
+    "licence": "CC BY 2.0",
+    "distance": "~110,000 ly",
+    "trivia": "Discovered by William Herschel in 1784, it lies in the Milky Way's outer halo.",
+    "art": "c066.webp",
+    "crop": [
+      0.18,
+      0,
+      0.82,
+      1
+    ],
+    "pt": {
+      "distance": "~110.000 anos-luz",
+      "trivia": "Descoberto por William Herschel em 1784, fica no halo externo da Via Láctea."
+    }
+  },
+  {
+    "id": "C67",
+    "name": "NGC 1097",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC1097_-_ESO_-_eso0438d.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "45 million ly",
+    "trivia": "A barred spiral with a bright starburst ring around its core and a small satellite galaxy.",
+    "art": "c067.webp",
+    "pt": {
+      "distance": "45 milhões de anos-luz",
+      "trivia": "Uma espiral barrada com um brilhante anel starburst ao redor do núcleo e uma pequena galáxia satélite."
+    }
+  },
+  {
+    "id": "C68",
+    "name": "NGC 6729",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_6729.jpg",
+    "credit": "ESO/Sergey Stepanenko",
+    "licence": "CC BY 4.0",
+    "distance": "~500 ly",
+    "trivia": "A comet-shaped nebula in Corona Australis surrounding the variable star R Coronae Australis.",
+    "art": "c068.webp",
+    "pt": {
+      "distance": "~500 anos-luz",
+      "trivia": "Uma nebulosa em forma de cometa em Coroa Austral que envolve a estrela variável R Coronae Australis."
+    }
+  },
+  {
+    "id": "C69",
+    "name": "Bug Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_6302_HST_new.jpg",
+    "credit": "NASA, ESA, and the Hubble SM4 ERO Team",
+    "licence": "Public domain",
+    "distance": "~3,800 ly",
+    "trivia": "Its central star is among the hottest known, at over 200,000 K.",
+    "art": "c069.webp",
+    "pt": {
+      "distance": "~3.800 anos-luz",
+      "trivia": "Sua estrela central está entre as mais quentes conhecidas, com mais de 200.000 K."
+    }
+  },
+  {
+    "id": "C70",
+    "name": "NGC 300",
+    "source": "https://commons.wikimedia.org/wiki/File:View_of_the_southern_spiral_NGC_300.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "6.1 million ly",
+    "trivia": "A member of the Sculptor Group seen almost face-on, one of the nearest spirals beyond the Local Group.",
+    "art": "c070.webp",
+    "pt": {
+      "distance": "6,1 milhões de anos-luz",
+      "trivia": "Um membro do Grupo do Escultor visto quase de frente, uma das espirais mais próximas além do Grupo Local."
+    }
+  },
+  {
+    "id": "C71",
+    "name": "NGC 2477",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_2477_(perez-ngc_2477).jpg",
+    "credit": "ESO/J.Pérez",
+    "licence": "CC BY 4.0",
+    "distance": "~4,000 ly",
+    "trivia": "One of the richest open clusters in Puppis, with several hundred stars.",
+    "art": "c071.webp",
+    "pt": {
+      "distance": "~4.000 anos-luz",
+      "trivia": "Um dos aglomerados abertos mais ricos de Popa, com várias centenas de estrelas."
+    }
+  },
+  {
+    "id": "C72",
+    "name": "NGC 55",
+    "source": "https://commons.wikimedia.org/wiki/File:Irregular_Galaxy_NGC_55_(ESO_0914a).jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "~7 million ly",
+    "trivia": "Seen nearly edge-on, it is an irregular barred spiral in the Sculptor Group.",
+    "art": "c072.webp",
+    "pt": {
+      "distance": "~7 milhões de anos-luz",
+      "trivia": "Vista quase de perfil, é uma espiral barrada irregular no Grupo do Escultor."
+    }
+  },
+  {
+    "id": "C73",
+    "name": "NGC 1851",
+    "source": "https://commons.wikimedia.org/wiki/File:Caldwell_73_(50291856937).jpg",
+    "credit": "NASA Hubble Space Telescope",
+    "licence": "CC BY 2.0",
+    "distance": "39,000 ly",
+    "trivia": "A dense globular cluster in Columba with evidence of two distinct stellar populations.",
+    "art": "c073.webp",
+    "pt": {
+      "distance": "39.000 anos-luz",
+      "trivia": "Um aglomerado globular denso em Pomba com indícios de duas populações estelares distintas."
+    }
+  },
+  {
+    "id": "C74",
+    "name": "Southern Ring Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:Southern_Ring_Nebula_by_Webb_Telescope_(2022).jpg",
+    "credit": "NASA, ESA, CSA, STScI",
+    "licence": "Public domain",
+    "distance": "2,000 ly",
+    "trivia": "Webb's 2022 images show the fainter of its two central stars shaped the nebula.",
+    "art": "c074.webp",
+    "pt": {
+      "distance": "2.000 anos-luz",
+      "trivia": "As imagens do Webb de 2022 mostram que a mais fraca de suas duas estrelas centrais moldou a nebulosa."
+    }
+  },
+  {
+    "id": "C75",
+    "name": "NGC 6124",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_6124_DECaPS_DR2.jpg",
+    "credit": "Legacy Surveys / D. Lang",
+    "licence": "CC BY 4.0",
+    "distance": "~1,800 ly",
+    "trivia": "A bright open cluster in Scorpius found by Lacaille in 1751-52.",
+    "art": "c075.webp",
+    "pt": {
+      "distance": "~1.800 anos-luz",
+      "trivia": "Um aglomerado aberto brilhante em Escorpião encontrado por Lacaille em 1751-52."
+    }
+  },
+  {
+    "id": "C76",
+    "name": "NGC 6231",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_6193_and_NGC_6231-_open_clusters_of_stars_(b14).jpg",
+    "credit": "ESO/S. Brunier",
+    "licence": "CC BY 4.0",
+    "distance": "~5,200 ly",
+    "trivia": "The heart of the Scorpius OB1 association, packed with luminous O and B stars.",
+    "art": "c076.webp",
+    "pt": {
+      "distance": "~5.200 anos-luz",
+      "trivia": "O coração da associação Scorpius OB1, repleta de estrelas O e B luminosas."
+    }
+  },
+  {
+    "id": "C77",
+    "name": "Centaurus A",
+    "source": "https://commons.wikimedia.org/wiki/File:Centaurus_A.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "~12 million ly",
+    "trivia": "A galaxy merger with a prominent dust lane and a powerful radio jet, and one of the nearest active galaxies.",
+    "art": "c077.webp",
+    "pt": {
+      "distance": "~12 milhões de anos-luz",
+      "trivia": "Uma fusão de galáxias com uma proeminente faixa de poeira e um poderoso jato de rádio, e uma das galáxias ativas mais próximas."
+    }
+  },
+  {
+    "id": "C78",
+    "name": "NGC 6541",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_6541_WFC3_275_336_438_Wiki.jpg",
+    "credit": "NASA/ESA, Hubble Legacy Archive",
+    "licence": "Public domain",
+    "distance": "22,000 ly",
+    "trivia": "A core-collapsed globular cluster in Corona Australis.",
+    "art": "c078.webp",
+    "pt": {
+      "distance": "22.000 anos-luz",
+      "trivia": "Um aglomerado globular de núcleo colapsado em Coroa Austral."
+    }
+  },
+  {
+    "id": "C79",
+    "name": "NGC 3201",
+    "source": "https://commons.wikimedia.org/wiki/File:Caldwell_79.jpg",
+    "credit": "NASA Hubble",
+    "licence": "CC BY 2.0",
+    "distance": "~16,000 ly",
+    "trivia": "A stellar-mass black hole was found in it in 2018 by tracking a companion star's motion.",
+    "art": "c079.webp",
+    "pt": {
+      "distance": "~16.000 anos-luz",
+      "trivia": "Um buraco negro de massa estelar foi encontrado nele em 2018 ao rastrear o movimento de uma estrela companheira."
+    }
+  },
+  {
+    "id": "C80",
+    "name": "Omega Centauri",
+    "source": "https://commons.wikimedia.org/wiki/File:Omega_Centauri_by_ESO.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "~17,000 ly",
+    "trivia": "The most massive globular cluster in the Milky Way, probably the stripped core of a dwarf galaxy.",
+    "art": "c080.webp",
+    "pt": {
+      "distance": "~17.000 anos-luz",
+      "trivia": "O aglomerado globular mais massivo da Via Láctea, provavelmente o núcleo remanescente de uma galáxia anã."
+    }
+  },
+  {
+    "id": "C81",
+    "name": "NGC 6352",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_6352.jpg",
+    "credit": "NASA - Hubble Space Telescope",
+    "licence": "Public domain",
+    "distance": "~18,000 ly",
+    "trivia": "A metal-rich globular cluster in Ara discovered by James Dunlop in 1826.",
+    "art": "c081.webp",
+    "pt": {
+      "distance": "~18.000 anos-luz",
+      "trivia": "Um aglomerado globular rico em metais em Altar descoberto por James Dunlop em 1826."
+    }
+  },
+  {
+    "id": "C82",
+    "name": "NGC 6193",
+    "source": "https://app.astrobin.com/u/DiegoNas?i=vr7f5u",
+    "credit": "Diego Nascimento",
+    "licence": "CC BY 4.0",
+    "distance": "~4,300 ly",
+    "trivia": "Its hot stars light up the neighbouring emission nebula NGC 6188.",
+    "art": "c082.webp",
+    "file": "C82-dragons-diego.jpg",
+    "level": [
+      10,
+      82
+    ],
+    "pt": {
+      "distance": "~4.300 anos-luz",
+      "trivia": "Suas estrelas quentes iluminam a nebulosa de emissão vizinha NGC 6188."
+    }
+  },
+  {
+    "id": "C83",
+    "name": "NGC 4945",
+    "source": "https://commons.wikimedia.org/wiki/File:Spiral_Galaxy_NGC_4945.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "~13 million ly",
+    "trivia": "A Milky Way-like barred spiral seen edge-on, with a hidden active nucleus.",
+    "art": "c083.webp",
+    "pt": {
+      "distance": "~13 milhões de anos-luz",
+      "trivia": "Uma espiral barrada semelhante à Via Láctea vista de perfil, com um núcleo ativo oculto."
+    }
+  },
+  {
+    "id": "C84",
+    "name": "NGC 5286",
+    "source": "https://commons.wikimedia.org/wiki/File:Caldwell_84_(50291859591).jpg",
+    "credit": "NASA Hubble Space Telescope",
+    "licence": "CC BY 2.0",
+    "distance": "36,000 ly",
+    "trivia": "A globular cluster in Centaurus discovered by James Dunlop in 1826.",
+    "art": "c084.webp",
+    "pt": {
+      "distance": "36.000 anos-luz",
+      "trivia": "Um aglomerado globular em Centauro descoberto por James Dunlop em 1826."
+    }
+  },
+  {
+    "id": "C85",
+    "name": "Omicron Velorum Cluster",
+    "source": "https://www.legacysurvey.org/viewer?ra=130.07&dec=-53.03&layer=decaps2",
+    "credit": "Legacy Surveys / D. Lang (Perimeter Institute)",
+    "licence": "CC BY 4.0",
+    "distance": "~500 ly",
+    "trivia": "A bright, nearby open cluster visible to the naked eye.",
+    "art": "c085.webp",
+    "file": "C85-ic2391-decaps2.jpg",
+    "pt": {
+      "distance": "~500 anos-luz",
+      "trivia": "Um aglomerado aberto brilhante e próximo, visível a olho nu."
+    }
+  },
+  {
+    "id": "C86",
+    "name": "NGC 6397",
+    "source": "https://commons.wikimedia.org/wiki/File:Globular_cluster_NGC_6397_(eso0630a).jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "7,800 ly",
+    "trivia": "Among the closest globular clusters to Earth.",
+    "art": "c086.webp",
+    "pt": {
+      "distance": "7.800 anos-luz",
+      "trivia": "Entre os aglomerados globulares mais próximos da Terra."
+    }
+  },
+  {
+    "id": "C87",
+    "name": "NGC 1261",
+    "source": "https://commons.wikimedia.org/wiki/File:Caldwell_87_(50291193293).jpg",
+    "credit": "NASA Hubble Space Telescope",
+    "licence": "CC BY 2.0",
+    "distance": "~53,000 ly",
+    "trivia": "A southern globular cluster in Horologium, discovered by James Dunlop in 1826.",
+    "art": "c087.webp",
+    "pt": {
+      "distance": "~53.000 anos-luz",
+      "trivia": "Um aglomerado globular do sul em Relógio, descoberto por James Dunlop em 1826."
+    }
+  },
+  {
+    "id": "C88",
+    "name": "NGC 5823",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_5823_DECaPS_DR2.jpg",
+    "credit": "Legacy Surveys / D. Lang (Perimeter Institute), Meli thev",
+    "licence": "CC BY 4.0",
+    "distance": "~3,900 ly",
+    "trivia": "A rich open cluster in the southern constellation Circinus, in a dense Milky Way field.",
+    "art": "c088.webp",
+    "crop": [
+      0.2,
+      0.14,
+      0.6,
+      0.72
+    ],
+    "pt": {
+      "distance": "~3.900 anos-luz",
+      "trivia": "Um aglomerado aberto rico na constelação austral do Compasso, em um denso campo da Via Láctea."
+    }
+  },
+  {
+    "id": "C89",
+    "name": "S Normae Cluster",
+    "source": "https://www.legacysurvey.org/viewer?ra=244.73&dec=-57.93&layer=decaps2",
+    "credit": "Legacy Surveys / D. Lang (Perimeter Institute)",
+    "licence": "CC BY 4.0",
+    "distance": "3,000 ly",
+    "trivia": "Contains the Cepheid variable S Normae, a bright supergiant member.",
+    "art": "c089.webp",
+    "file": "C89-ngc6087-decaps2.jpg",
+    "crop": [
+      0.15,
+      0.15,
+      0.7,
+      0.7
+    ],
+    "level": [
+      10,
+      100,
+      0.7
+    ],
+    "erode": 1.5,
+    "pt": {
+      "distance": "3.000 anos-luz",
+      "trivia": "Contém a variável Cefeida S Normae, uma supergigante brilhante membro do aglomerado."
+    }
+  },
+  {
+    "id": "C90",
+    "name": "NGC 2867",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_2867.jpg",
+    "credit": "Judy Schmidt",
+    "licence": "CC BY 2.0",
+    "distance": "~8,000 ly",
+    "trivia": "A compact planetary nebula in Carina with a hot central star.",
+    "art": "c090.webp",
+    "pt": {
+      "distance": "~8.000 anos-luz",
+      "trivia": "Uma nebulosa planetária compacta em Carina com uma estrela central quente."
+    }
+  },
+  {
+    "id": "C91",
+    "name": "Wishing Well Cluster",
+    "source": "https://commons.wikimedia.org/wiki/File:Eso1439a.jpg",
+    "credit": "ESO/G. Beccari",
+    "licence": "CC BY 4.0",
+    "distance": "1,300 ly",
+    "trivia": "One of the brightest and richest open clusters, with some 400 stars, visible to the naked eye.",
+    "art": "c091.webp",
+    "pt": {
+      "distance": "1.300 anos-luz",
+      "trivia": "Um dos aglomerados abertos mais brilhantes e ricos, com cerca de 400 estrelas, visível a olho nu."
+    }
+  },
+  {
+    "id": "C92",
+    "name": "Carina Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:The_spectacular_star-forming_Carina_Nebula_imaged_by_the_VLT_Survey_Telescope.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "~8,500 ly",
+    "trivia": "Contains Eta Carinae, which erupted in the 1840s to become the second-brightest star in the sky.",
+    "art": "c092.webp",
+    "pt": {
+      "distance": "~8.500 anos-luz",
+      "trivia": "Contém Eta Carinae, que entrou em erupção na década de 1840 e se tornou a segunda estrela mais brilhante do céu."
+    }
+  },
+  {
+    "id": "C93",
+    "name": "NGC 6752",
+    "source": "https://commons.wikimedia.org/wiki/File:Star_cluster_NGC_6752.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "13,000 ly",
+    "trivia": "The third-brightest globular cluster in the sky, nicknamed the Great Peacock Globular.",
+    "art": "c093.webp",
+    "pt": {
+      "distance": "13.000 anos-luz",
+      "trivia": "O terceiro aglomerado globular mais brilhante do céu, apelidado de Grande Globular do Pavão."
+    }
+  },
+  {
+    "id": "C94",
+    "name": "Jewel Box",
+    "source": "https://commons.wikimedia.org/wiki/File:Wide_Field_Image_of_the_Jewel_Box.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "6,400 ly",
+    "trivia": "John Herschel likened its coloured stars to a casket of jewels.",
+    "art": "c094.webp",
+    "pt": {
+      "distance": "6.400 anos-luz",
+      "trivia": "John Herschel comparou suas estrelas coloridas a um porta-joias."
+    }
+  },
+  {
+    "id": "C95",
+    "name": "NGC 6025",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_6025_DECaPS_DR2.jpg",
+    "credit": "Legacy Surveys / D. Lang",
+    "licence": "CC BY 4.0",
+    "distance": "~2,700 ly",
+    "trivia": "An open cluster in Triangulum Australe, discovered by Lacaille in 1751-52.",
+    "art": "c095.webp",
+    "pt": {
+      "distance": "~2.700 anos-luz",
+      "trivia": "Um aglomerado aberto em Triângulo Austral, descoberto por Lacaille em 1751-52."
+    }
+  },
+  {
+    "id": "C96",
+    "name": "Southern Beehive Cluster",
+    "source": "https://commons.wikimedia.org/wiki/File:Caldwell_96_(50327623248).jpg",
+    "credit": "NASA Hubble Space Telescope",
+    "licence": "CC BY 2.0",
+    "distance": "1,300 ly",
+    "trivia": "Bright enough to see with the naked eye in Carina.",
+    "art": "c096.webp",
+    "crop": [
+      0.33,
+      0.07,
+      0.64,
+      0.86
+    ],
+    "pt": {
+      "distance": "1.300 anos-luz",
+      "trivia": "Brilhante o bastante para ser visto a olho nu em Carina."
+    }
+  },
+  {
+    "id": "C97",
+    "name": "Pearl Cluster",
+    "source": "https://commons.wikimedia.org/wiki/File:Star_cluster_NGC_3766.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "~5,800 ly",
+    "trivia": "A young open cluster in Centaurus, about 20 million years old, with many B-type stars.",
+    "art": "c097.webp",
+    "pt": {
+      "distance": "~5.800 anos-luz",
+      "trivia": "Um aglomerado aberto jovem em Centauro, com cerca de 20 milhões de anos, com muitas estrelas do tipo B."
+    }
+  },
+  {
+    "id": "C98",
+    "name": "NGC 4609",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_4609.jpg",
+    "credit": "Roberto Mura",
+    "licence": "CC0",
+    "distance": "~4,200 ly",
+    "trivia": "A small open cluster in Crux, next to the Coalsack.",
+    "art": "c098.webp",
+    "crop": [
+      0.325,
+      0.22,
+      0.35,
+      0.56
+    ],
+    "level": 45,
+    "pt": {
+      "distance": "~4.200 anos-luz",
+      "trivia": "Um pequeno aglomerado aberto no Cruzeiro do Sul, ao lado do Saco de Carvão."
+    }
+  },
+  {
+    "id": "C99",
+    "name": "Coalsack Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:Coalsack-ESO-B06.jpg",
+    "credit": "ESO/S. Brunier",
+    "licence": "CC BY 4.0",
+    "distance": "~600 ly",
+    "trivia": "The most prominent dark nebula in the sky, visible to the naked eye beside the Southern Cross.",
+    "art": "c099.webp",
+    "pt": {
+      "distance": "~600 anos-luz",
+      "trivia": "A nebulosa escura mais proeminente do céu, visível a olho nu ao lado do Cruzeiro do Sul."
+    }
+  },
+  {
+    "id": "C100",
+    "name": "Lambda Centauri Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:IC_2944,_Nicknamed_the_Running_Chicken_Nebula.jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "~6,000 ly",
+    "trivia": "Its dark globules were identified in 1950 by A. D. Thackeray.",
+    "art": "c100.webp",
+    "pt": {
+      "distance": "~6.000 anos-luz",
+      "trivia": "Seus glóbulos escuros foram identificados em 1950 por A. D. Thackeray."
+    }
+  },
+  {
+    "id": "C101",
+    "name": "NGC 6744",
+    "source": "https://commons.wikimedia.org/wiki/File:Galactic_Twin_NGC_6744_(iotw2434a).jpg",
+    "credit": "Dark Energy Survey / NOIRLab / NSF / AURA",
+    "licence": "CC BY 4.0",
+    "distance": "30 million ly",
+    "trivia": "Often called a Milky Way twin for its size and structure, in Pavo.",
+    "art": "c101.webp",
+    "pt": {
+      "distance": "30 milhões de anos-luz",
+      "trivia": "Frequentemente chamada de gêmea da Via Láctea por seu tamanho e estrutura, em Pavão."
+    }
+  },
+  {
+    "id": "C102",
+    "name": "Southern Pleiades",
+    "source": "https://commons.wikimedia.org/wiki/File:The_Southern_Pleiades_(IC_2602).jpg",
+    "credit": "Tel Lekatsas",
+    "licence": "CC BY 2.0",
+    "distance": "~480 ly",
+    "trivia": "Its brightest star, Theta Carinae, makes the cluster visible to the naked eye.",
+    "art": "c102.webp",
+    "pt": {
+      "distance": "~480 anos-luz",
+      "trivia": "Sua estrela mais brilhante, Theta Carinae, torna o aglomerado visível a olho nu."
+    }
+  },
+  {
+    "id": "C103",
+    "name": "Tarantula Nebula",
+    "source": "https://commons.wikimedia.org/wiki/File:Tarantula_Nebula_(eso0005a).jpg",
+    "credit": "ESO",
+    "licence": "CC BY 4.0",
+    "distance": "160,000 ly",
+    "trivia": "The most active starburst region in the Local Group, in the Large Magellanic Cloud.",
+    "art": "c103.webp",
+    "pt": {
+      "distance": "160.000 anos-luz",
+      "trivia": "A região starburst mais ativa do Grupo Local, na Grande Nuvem de Magalhães."
+    }
+  },
+  {
+    "id": "C104",
+    "name": "NGC 362",
+    "source": "https://commons.wikimedia.org/wiki/File:Caldwell_104.jpg",
+    "credit": "ESA/Hubble & NASA",
+    "licence": "CC BY 4.0",
+    "distance": "~29,000 ly",
+    "trivia": "Appears beside the Small Magellanic Cloud in Tucana but is far closer to us.",
+    "art": "c104.webp",
+    "pt": {
+      "distance": "~29.000 anos-luz",
+      "trivia": "Aparece ao lado da Pequena Nuvem de Magalhães em Tucano, mas está muito mais perto de nós."
+    }
+  },
+  {
+    "id": "C105",
+    "name": "NGC 4833",
+    "source": "https://commons.wikimedia.org/wiki/File:A_sky_full_of_stars_NGC_4833.jpg",
+    "credit": "ESA/Hubble and NASA",
+    "licence": "CC BY 4.0",
+    "distance": "21,000 ly",
+    "trivia": "A dusty, heavily reddened globular cluster in Musca, found by Lacaille in 1751-52.",
+    "art": "c105.webp",
+    "pt": {
+      "distance": "21.000 anos-luz",
+      "trivia": "Um aglomerado globular empoeirado e muito avermelhado em Mosca, encontrado por Lacaille em 1751-52."
+    }
+  },
+  {
+    "id": "C106",
+    "name": "47 Tucanae",
+    "source": "https://commons.wikimedia.org/wiki/File:Heic1510a.tif",
+    "credit": "NASA, ESA, Hubble Heritage (STScI/AURA)",
+    "licence": "CC BY 4.0",
+    "distance": "~14,700 ly",
+    "trivia": "The second-brightest globular cluster in the sky after Omega Centauri.",
+    "art": "c106.webp",
+    "pt": {
+      "distance": "~14.700 anos-luz",
+      "trivia": "O segundo aglomerado globular mais brilhante do céu, depois de Ômega Centauri."
+    }
+  },
+  {
+    "id": "C107",
+    "name": "NGC 6101",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_6101.jpg",
+    "credit": "NASA - Hubble Space Telescope",
+    "licence": "Public domain",
+    "distance": "~50,000 ly",
+    "trivia": "A remote, loose globular cluster in Apus, discovered by James Dunlop in 1826.",
+    "art": "c107.webp",
+    "pt": {
+      "distance": "~50.000 anos-luz",
+      "trivia": "Um aglomerado globular remoto e pouco concentrado em Ave do Paraíso, descoberto por James Dunlop em 1826."
+    }
+  },
+  {
+    "id": "C108",
+    "name": "NGC 4372",
+    "source": "https://www.astrobin.com/e2roy9/",
+    "credit": "@Anthonyominning",
+    "licence": "CC BY",
+    "distance": "~15,000 ly",
+    "trivia": "A loose globular cluster in Musca, near the dark nebula known as the Dark Doodad.",
+    "art": "c108.webp",
+    "file": "C108-ngc4372-anthonyominning.jpg",
+    "crop": [
+      0.653,
+      0.217,
+      0.219,
+      0.411
+    ],
+    "rotate": false,
+    "level": [
+      5,
+      90
+    ],
+    "pt": {
+      "distance": "~15.000 anos-luz",
+      "trivia": "Um aglomerado globular pouco concentrado em Mosca, perto da nebulosa escura conhecida como Dark Doodad."
+    }
+  },
+  {
+    "id": "C109",
+    "name": "NGC 3195",
+    "source": "https://commons.wikimedia.org/wiki/File:NGC_3195.jpg",
+    "credit": "Judy Schmidt",
+    "licence": "CC BY 2.0",
+    "distance": "~5,500 ly",
+    "trivia": "A planetary nebula in Chamaeleon, and the last entry in the Caldwell list.",
+    "art": "c109.webp",
+    "pt": {
+      "distance": "~5.500 anos-luz",
+      "trivia": "Uma nebulosa planetária em Camaleão, e a última entrada da lista Caldwell."
+    }
+  }
+]

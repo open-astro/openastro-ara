@@ -19,7 +19,6 @@ export '../../state/simple_night_setup_state.dart'
         nightSetupProvider;
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
-import 'simple_preview_panel.dart' show kSimpleText;
 import 'simple_shell.dart' show SimplePanel;
 
 
