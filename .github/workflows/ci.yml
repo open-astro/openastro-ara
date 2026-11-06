@@ -601,7 +601,7 @@ jobs:
 
   server-build:
     name: Server (build + cross-publish + Docker)
-    runs-on: ubuntu-24.04 # 26.04 gcc-15/glibc builds an aarch64 libsupernovas.so the noble runtime image cannot load; revisit when the runtime image base moves past noble
+    runs-on: ubuntu-latest
     needs: [sanity, changes]
     if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
     steps:
@@ -844,6 +844,32 @@ jobs:
           CC=aarch64-linux-gnu-gcc ./scripts/build-astrometry-natives.sh ./publish/arm64
           for lib in liberfa.so libsupernovas.so; do
             file "./publish/arm64/$lib" | tee /dev/stderr | grep -q 'ARM aarch64'
+          done
+
+      # The natives must load in the runtime image (Dockerfile base, Ubuntu 24.04 noble chiseled),
+      # whatever glibc the runner builds with. Fail here, with the cause, instead of at the container
+      # probe. GLIBC_FLOOR follows the Dockerfile base image: raise it only when that base moves.
+      - name: Guard astrometry natives against the runtime image glibc
+        env:
+          GLIBC_FLOOR: "2.39"  # noble; keep in step with the Dockerfile FROM
+          ALLOWED_NEEDED: "libm.so.6 libc.so.6 libgcc_s.so.1 ld-linux-aarch64.so.1"
+        run: |
+          set -e
+          for lib in liberfa.so libsupernovas.so; do
+            f="./publish/arm64/$lib"
+            newest="$(aarch64-linux-gnu-objdump -T "$f" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -1)"
+            echo "$lib needs glibc <= ${newest:-none} (floor $GLIBC_FLOOR)"
+            if [ -n "$newest" ] && [ "$(printf '%s\n%s\n' "$newest" "$GLIBC_FLOOR" | sort -V | tail -1)" != "$GLIBC_FLOOR" ]; then
+              echo "::error::$lib needs GLIBC_$newest, newer than the runtime image's $GLIBC_FLOOR"
+              aarch64-linux-gnu-objdump -T "$f" | grep "GLIBC_$newest" || true
+              exit 1
+            fi
+            for needed in $(aarch64-linux-gnu-objdump -p "$f" | awk '/NEEDED/ {print $2}'); do
+              case " $ALLOWED_NEEDED " in
+                *" $needed "*) ;;
+                *) echo "::error::$lib needs $needed, which the runtime image does not ship"; exit 1 ;;
+              esac
+            done
           done
 
       # Build the arm64 Docker image via buildx. Buildx + qemu lets the
