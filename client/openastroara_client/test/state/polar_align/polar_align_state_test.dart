@@ -48,12 +48,11 @@ void main() {
       expect(folded.azErrorArcmin, 3.25);
       expect(folded.totalErrorArcmin, 12.92);
       expect(folded.zone, 'yellow');
-      expect(folded.consecutiveSolveFailures, 0, reason: 'a solved iteration clears the retry streak');
     });
 
     test('progress after paused resumes adjusting', () {
       final folded = foldPolarAlignEvent(
-        const PolarAlignLive(phase: PolarAlignStates.paused, consecutiveSolveFailures: 5),
+        const PolarAlignLive(phase: PolarAlignStates.paused),
         _event(PolarAlignWsEvents.progress, {
           'iteration': 8,
           'altitude_error_arcmin': 1.0,
@@ -63,54 +62,26 @@ void main() {
         }),
       )!;
       expect(folded.phase, PolarAlignStates.adjusting);
-      expect(folded.consecutiveSolveFailures, 0);
     });
 
-    test('frame_complete tracks the failed-solve streak without touching errors', () {
-      const current = PolarAlignLive(
-        phase: PolarAlignStates.adjusting,
-        totalErrorArcmin: 9.9,
+    test('frame_started and frame_complete are ignored (#1611: nothing is solved per frame)', () {
+      const current = PolarAlignLive(phase: PolarAlignStates.adjusting, totalErrorArcmin: 9.9);
+      expect(
+        foldPolarAlignEvent(current, _event(PolarAlignWsEvents.frameStarted, {'frame_id': 'live-3', 'exposure_seconds': 1.5})),
+        isNull,
       );
-      final folded = foldPolarAlignEvent(
-        current,
-        _event(PolarAlignWsEvents.frameComplete,
-            {'frame_id': 'live-9', 'solved': false, 'consecutive_solve_failures': 3}),
-      )!;
-      expect(folded.consecutiveSolveFailures, 3);
-      expect(folded.totalErrorArcmin, 9.9);
-      expect(folded.phase, PolarAlignStates.adjusting);
+      expect(
+        foldPolarAlignEvent(current, _event(PolarAlignWsEvents.frameComplete, {'frame_id': 'live-3', 'solved': false})),
+        isNull,
+      );
     });
 
-    test('frame_started marks a frame in progress; frame_complete records it', () {
-      final at = DateTime.utc(2026, 10, 3, 3);
-      final started = foldPolarAlignEvent(
-        const PolarAlignLive(phase: PolarAlignStates.adjusting),
-        _event(PolarAlignWsEvents.frameStarted, {'frame_id': 'live-3', 'exposure_seconds': 1.5}),
-        now: () => at,
-      )!;
-      expect(started.frameInProgress, isTrue);
-      expect(started.frameStartedAt, at);
-      expect(started.frameExposureSeconds, 1.5);
-
-      final done = foldPolarAlignEvent(
-        started,
-        _event(PolarAlignWsEvents.frameComplete, {
-          'frame_id': 'live-3',
-          'solved': true,
-          'consecutive_solve_failures': 0,
-          'exposure_seconds': 1.5,
-          'capture_ms': 2100,
-          'solve_ms': 480,
-          'ra_deg': 138.6667,
-          'dec_deg': 87.1822,
-        }),
-      )!;
-      expect(done.frameInProgress, isFalse);
-      expect(done.frameExposureSeconds, isNull);
-      expect(done.lastFrame!.frameId, 'live-3');
-      expect(done.lastFrame!.captureMs, 2100);
-      expect(done.lastFrame!.solveMs, 480);
-      expect(done.lastFrame!.decDeg, 87.1822);
+    test('isActive covers the three running phases', () {
+      expect(const PolarAlignLive(phase: PolarAlignStates.seeding).isActive, isTrue);
+      expect(const PolarAlignLive(phase: PolarAlignStates.adjusting).isActive, isTrue);
+      expect(const PolarAlignLive(phase: PolarAlignStates.paused).isActive, isTrue);
+      expect(const PolarAlignLive().isActive, isFalse);
+      expect(const PolarAlignLive(phase: PolarAlignStates.failed).isActive, isFalse);
     });
 
     test('paused and stopped flip only the phase', () {
@@ -152,7 +123,6 @@ void main() {
       expect(fresh.totalErrorArcmin, 5.0);
       expect(fresh.errorReason, isNull);
       expect(fresh.zone, 'green', reason: "the snapshot's own error, not a previous run's zone");
-      expect(fresh.consecutiveSolveFailures, 0);
       expect(fresh.iteration, 0);
     });
 
@@ -208,10 +178,10 @@ void main() {
 
   group('PolarAlignSettings', () {
     test('loop_mode round-trips and unknown values fall back to loop', () {
-      const single = PolarAlignSettings(loopMode: PolarAlignLoopModes.single);
-      expect(PolarAlignSettings.fromJson(single.toJson()).loopMode, PolarAlignLoopModes.single);
-      expect(PolarAlignSettings.fromJson({'loop_mode': 'bogus'}).loopMode, PolarAlignLoopModes.loop);
-      expect(PolarAlignSettings.fromJson({}).loopMode, PolarAlignLoopModes.loop);
+      const single = PolarAlignSettings(loopMode: 'single');
+      expect(PolarAlignSettings.fromJson(single.toJson()).loopMode, 'single');
+      expect(PolarAlignSettings.fromJson({'loop_mode': 'bogus'}).loopMode, 'loop');
+      expect(PolarAlignSettings.fromJson({}).loopMode, 'loop');
     });
 
     test('round-trips through json with playbook defaults for missing keys', () {

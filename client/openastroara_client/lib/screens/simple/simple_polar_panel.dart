@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -23,7 +24,7 @@ import 'simple_preview_panel.dart'
         kSimpleText,
         simpleMainCameraBusy;
 import 'simple_shell.dart'
-    show SimplePanel, SimpleSegments, kSimpleGoStyle, simpleStackText;
+    show SimplePanel, kSimpleGoStyle, simpleStackText;
 import '../../state/simple_messages_state.dart';
 
 /// True while the server runs any phase of the routine.
@@ -35,18 +36,13 @@ bool simplePolarActive(PolarAlignLive live) =>
 Duration _exposure(PolarAlignSettings s) =>
     Duration(milliseconds: (s.exposureSeconds * 1000).round());
 
-bool _single(PolarAlignSettings s) => s.loopMode == PolarAlignLoopModes.single;
+/// "45 s": the rail chip's caption in Polar align, the guide exposure the
+/// routine loops at. Pure — unit-tested.
+String simplePolarSummary(PolarAlignSettings s, AppLocalizations l10n) =>
+    formatExposure(_exposure(s));
 
-/// "45 s" over "Single": the rail chip's caption in Polar align, the
-/// routine's setup on two lines (one doesn't fit the 60 px chip). Pure —
-/// unit-tested.
-String simplePolarSummary(PolarAlignSettings s, AppLocalizations l10n) {
-  return '${formatExposure(_exposure(s))}\n'
-      '${_single(s) ? l10n.polarSingle : l10n.polarLoop}';
-}
-
-/// The profile's polar-align settings (exposure, Loop/Single, tolerance). A
-/// save applies to the routine's next frame; a failed save rolls back.
+/// The profile's polar-align settings (exposure, tolerance). A save applies
+/// to the routine's next start; a failed save rolls back.
 class SimplePolarSettings extends AsyncNotifier<PolarAlignSettings> {
   @override
   Future<PolarAlignSettings> build() async {
@@ -126,21 +122,31 @@ String simplePolarPhase(PolarAlignLive live, AppLocalizations l10n) =>
       _ => l10n.polarPhaseReady,
     };
 
-/// The polar-align camera's latest frame, refetched after each finished
-/// frame; null until there is one. Keeps the previous picture while the next
-/// loads (read `.value`).
+/// How often the guide camera's frame is refetched while the guider measures.
+const simplePolarFrameRefresh = Duration(seconds: 2);
+
+/// The guide camera's latest frame, refetched on each live readout and every
+/// [simplePolarFrameRefresh] while the guider measures; null
+/// until there is one. Keeps the previous picture while the next loads (read
+/// `.value`).
 final simplePolarFrameProvider = FutureProvider.autoDispose<Uint8List?>((
   ref,
 ) async {
-  ref.watch(polarAlignLiveProvider.select((l) => l.lastFrame));
+  final (phase, _) = ref.watch(polarAlignLiveProvider.select((l) => (l.phase, l.iteration)));
+  if (phase == PolarAlignStates.seeding) {
+    // No readouts arrive while the guider measures, yet it is looping: refetch
+    // on a timer, like the full panel does (#1611).
+    final timer = Timer(simplePolarFrameRefresh, ref.invalidateSelf);
+    ref.onDispose(timer.cancel);
+  }
   final api = ref.watch(polarAlignApiProvider);
   return api?.getLiveFrame();
 });
 
 /// Polar align's panel beside the right rail: the routine's settings
-/// (exposure, Loop/Single); while it runs, the phase, the total error with its
-/// zone, the bullseye, the altitude and azimuth turns, Take frame (Single) and
-/// Done (once inside the profile's tolerance). The rail's shutter starts and
+/// (exposure); while it runs, the phase, the total error with its zone, the
+/// bullseye, the altitude and azimuth turns and Done (once inside the
+/// profile's tolerance). The rail's shutter starts and
 /// stops it.
 class SimplePolarPanel extends ConsumerStatefulWidget {
   const SimplePolarPanel({super.key});
@@ -368,9 +374,9 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 ),
                 style: kSimpleText.copyWith(color: AraColors.accentBusy),
               ),
-            if (active && live.consecutiveSolveFailures > 0)
+            if (live.phase == PolarAlignStates.paused)
               Text(
-                l10n.polarNoSolve(live.consecutiveSolveFailures),
+                l10n.polarStarLost,
                 style: kSimpleText.copyWith(color: AraColors.accentBusy),
               ),
             if (error != null)
@@ -391,14 +397,6 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               spacing: AraSpace.s8,
               children: [
                 for (final w in <Widget>[
-                  SimpleSegments<String>(
-                    options: [
-                      (PolarAlignLoopModes.loop, l10n.polarLoop, 'loop'),
-                      (PolarAlignLoopModes.single, l10n.polarSingle, 'single'),
-                    ],
-                    selected: settings.loopMode,
-                    onPick: (mode) => _save(settings.copyWith(loopMode: mode)),
-                  ),
                   SimplePresetTile<Duration>(
                     key: const Key('simple-polar-exposure'),
                     label: l10n.polarExposure,
@@ -419,21 +417,6 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               Row(
                 spacing: AraSpace.s8,
                 children: [
-                  // Single waits for a tap before each frame; Loop shoots on
-                  // its own.
-                  if (_single(settings))
-                    Expanded(
-                      child: FilledButton.tonal(
-                        key: const Key('simple-polar-capture'),
-                        onPressed: _busy
-                            ? null
-                            : () => _run(
-                                l10n.polarActionCapture,
-                                (api) => api.requestCapture(),
-                              ),
-                        child: Text(l10n.polarTakeFrame),
-                      ),
-                    ),
                   Expanded(
                     child: FilledButton(
                       key: const Key('simple-polar-done'),
