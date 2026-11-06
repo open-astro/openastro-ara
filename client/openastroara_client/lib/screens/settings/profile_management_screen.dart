@@ -187,7 +187,6 @@ class _ProfileListView extends ConsumerWidget {
         dialogTitle: 'Save profile share',
         fileName: shareFileName(
             share.profileName.isEmpty ? p.name : share.profileName),
-        type: FileType.any,
         bytes: jsonBytes,
       );
     } catch (e) {
