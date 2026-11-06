@@ -601,7 +601,7 @@ jobs:
 
   server-build:
     name: Server (build + cross-publish + Docker)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # 26.04 gcc-15/glibc builds an aarch64 libsupernovas.so the noble runtime image cannot load; revisit when the runtime image base moves past noble
     needs: [sanity, changes]
     if: ${{ !cancelled() && needs.sanity.result == 'success' && needs.changes.outputs.docs_only != 'true' }}
     steps:
