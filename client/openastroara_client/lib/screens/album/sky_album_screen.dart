@@ -4,6 +4,7 @@
 /// [SkyAlbumScreen.onImageTarget].
 library;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -51,6 +52,17 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
   /// may only mean nothing has loaded.
   bool _synced = false;
 
+  /// Cards new or up a tier since the last open (only an open refreshes the
+  /// cache, so the rows held before it are what the user last saw), by object id
+  /// to the tier they had (null: missing). They sit on their own shelf for this open.
+  final Map<String, AlbumTier?> _revealFrom = {};
+
+  /// The [_revealFrom] cards whose reveal has played; they stay on the shelf, plain.
+  final Set<String> _revealed = {};
+
+  /// The cache was empty before this open's fetch: the whole collection is new.
+  bool _firstOpen = false;
+
   @override
   void initState() {
     super.initState();
@@ -61,12 +73,25 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
   Future<void> _refresh() async {
     final server = ref.read(activeServerProvider);
     if (!mounted || server == null) return;
+    Future<Map<String, AlbumTier>> tiers() async => {
+          for (final b in AlbumBook.values)
+            for (final MapEntry(:key, :value) in (await ref.read(albumBookProvider(b).future)).stats.entries)
+              key: ?value.tier,
+        };
     try {
+      final firstOpen = (await ref.read(albumFramesProvider.future)).frames.isEmpty;
+      final before = await tiers();
       await ref.read(albumFramesProvider.notifier).refresh(server.baseUrl);
+      final after = await tiers();
       if (mounted) {
         setState(() {
           _refreshError = null;
           _synced = true;
+          _firstOpen = firstOpen;
+          for (final MapEntry(:key, :value) in after.entries) {
+            final was = before[key];
+            if (was == null || value.index > was.index) _revealFrom[key] = was;
+          }
         });
       }
     } catch (e) {
@@ -145,6 +170,51 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
     final tiers = {for (final t in AlbumTier.values) t: stats.values.where((s) => s.tier == t).length};
 
     Widget card(PlanningDso d) => AlbumCard(cardFor(d), onAction: () => widget.onImageTarget(d));
+    // The new-cards shelf: the catalogs shown, in Book order, and only cards that are
+    // collected, so it hides under Missing. Its cards play their reveal once.
+    final fresh = _filter == AlbumFilter.missing
+        ? const <PlanningDso>[]
+        : [
+            for (final d in objects)
+              if (_revealFrom.containsKey(d.id)) d,
+          ];
+    final newCards = fresh.where((d) => _revealFrom[d.id] == null).length;
+    final changes = [
+      if (newCards > 0) l.albumNewCards(newCards),
+      if (fresh.length > newCards) l.albumTiersUp(fresh.length - newCards),
+    ].join(' · ');
+    Widget freshCard(PlanningDso d) => AlbumCard(
+          cardFor(d),
+          onAction: () => widget.onImageTarget(d),
+          reveal: !_revealed.contains(d.id),
+          revealFrom: _revealFrom[d.id],
+          onRevealed: () => setState(() => _revealed.add(d.id)),
+          news: _revealFrom[d.id] == null ? l.albumCardNew : l.albumCardTierUp,
+        );
+    // A titled row of cards above the grid: the new cards, then tonight's missing ones.
+    List<Widget> shelfRow(Key key, String title, List<PlanningDso> cards, Widget Function(PlanningDso) build) => [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+            sliver: SliverToBoxAdapter(child: Text(title, style: Theme.of(context).textTheme.titleSmall)),
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(
+              height: 130 / albumCardAspect,
+              // A plain wheel scrolls the page, so a mouse drags the shelf sideways.
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(context).copyWith(dragDevices: PointerDeviceKind.values.toSet()),
+                child: ListView.separated(
+                  key: key,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: cards.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 10),
+                  itemBuilder: (_, i) => SizedBox(width: 130, child: build(cards[i])),
+                ),
+              ),
+            ),
+          ),
+        ];
 
     // Simple Mode density (DESIGN.md, Two Densities Rule): 44 px controls, 14 px text.
     const headerText = kSimpleText;
@@ -236,6 +306,7 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
                         ),
                       );
                   return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       line([catalogChips, filter]),
                       const SizedBox(height: 8),
@@ -266,26 +337,11 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
                 ),
               ),
             ),
-          if (shelf.isNotEmpty) ...[
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-              sliver: SliverToBoxAdapter(
-                child: Text(l.albumShelfTitle(shelf.length), style: Theme.of(context).textTheme.titleSmall),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 130 / albumCardAspect,
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: shelf.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 10),
-                  itemBuilder: (_, i) => SizedBox(width: 130, child: card(shelf[i])),
-                ),
-              ),
-            ),
-          ],
+          if (fresh.isNotEmpty)
+            ...shelfRow(const Key('album-shelf-new'), _firstOpen ? changes : l.albumSinceLastVisit(changes), fresh,
+                freshCard),
+          if (shelf.isNotEmpty)
+            ...shelfRow(const Key('album-shelf-tonight'), l.albumShelfTitle(shelf.length), shelf, card),
           if (noLights)
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),

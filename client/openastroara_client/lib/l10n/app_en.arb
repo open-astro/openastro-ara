@@ -3099,5 +3099,28 @@
   "albumFilterMissing": "Missing",
   "@albumFilterMissing": {
     "description": "Sky Album: filter segment showing only cards not collected yet"
+  },
+  "albumNewCards": "{count, plural, =1{1 new card} other{{count} new cards}}",
+  "@albumNewCards": {
+    "description": "Sky Album header: cards collected since the album was last opened",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "albumTiersUp": "{count, plural, =1{1 tier up} other{{count} tiers up}}",
+  "@albumTiersUp": {
+    "description": "Sky Album header: cards that moved up a tier since the album was last opened",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "albumCardNew": "new",
+  "@albumCardNew": {
+    "description": "Sky Album: said by screen readers after a new-shelf card's tier, for a card collected since the last open"
+  },
+  "albumCardTierUp": "up a tier",
+  "@albumCardTierUp": {
+    "description": "Sky Album: said by screen readers after a new-shelf card's tier, for a card that moved up a tier since the last open"
+  },
+  "albumSinceLastVisit": "{changes} since your last visit",
+  "@albumSinceLastVisit": {
+    "description": "Sky Album header after a sync brought cards; {changes} is albumNewCards and/or albumTiersUp joined by ' · '",
+    "placeholders": {"changes": {"type": "String"}}
   }
 }
