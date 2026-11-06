@@ -323,7 +323,7 @@
   "planStartsNow": "Começa agora",
   "planStartsAtDark": "Começa ao escurecer ({time})",
   "planStopsAtDawn": "Para ao amanhecer · {time}",
-  "planParksAtEnd": "Estaciona no fim",
+  "planSquareParks": "Estaciona",
   "planStartsAt": "Começa às {time}",
   "planStartNowInstead": "Começar agora",
   "planWaitForDark": "Esperar escurecer ({time})",

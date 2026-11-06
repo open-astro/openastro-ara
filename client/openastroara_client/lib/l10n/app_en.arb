@@ -1544,9 +1544,9 @@
       }
     }
   },
-  "planParksAtEnd": "Parks at end",
-  "@planParksAtEnd": {
-    "description": "Plan square caption on the queue's last target: the mount parks once the queue ends"
+  "planSquareParks": "Parks",
+  "@planSquareParks": {
+    "description": "Plan square caption on the queue's last target: the mount parks once the queue ends. One short word: the square has 60 px for it at 11.5 px"
   },
   "planStartsAt": "Starts at {time}",
   "@planStartsAt": {

@@ -1170,7 +1170,7 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
     // #1560 — Simple Mode's queue parks the mount after its last target.
     final parks = phase == SimpleRunPhase.done
         ? null
-        : context.l10n.planParksAtEnd;
+        : context.l10n.planSquareParks;
     Widget square(int i, {String? foot}) {
       final t = run.targets[i];
       final done = progress[i];
@@ -1297,7 +1297,7 @@ class _PlanSquare extends StatelessWidget {
   final bool paused;
   final double? fraction;
 
-  /// A last line under [last] ("Parks at end" on the queue's last square).
+  /// A last line under [last] ("Parks" on the queue's last square).
   final String? foot;
   final VoidCallback onTap;
 
@@ -1326,54 +1326,45 @@ class _PlanSquare extends StatelessWidget {
             height: kSimplePlanSquareHeight * simpleRailScale(context),
             child: Stack(
               children: [
-                // A long name or time shrinks to fit, clear of the border.
+                // A long name or time shrinks to fit, clear of the border; so
+                // does the whole column when its lines outgrow the square's
+                // height (five lines past 1.1x text), all by the same amount.
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 6),
                   child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      spacing: 2,
-                      children: [
-                        for (final (text, style) in [
-                          (
-                            name,
-                            kSimpleText.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                          (frames, kSimpleText),
-                          if (sub != null) (sub!, small),
-                          (
-                            last,
-                            paused
-                                ? small.copyWith(color: color)
-                                : small,
-                          ),
-                        ])
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(text, style: style, maxLines: 1),
-                          ),
-                        // About the whole queue, not this target: the Park
-                        // Scope step's icon (the sequence editor's) sets it
-                        // apart from the time line above.
-                        if (foot != null)
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              spacing: 2,
-                              children: [
-                                Icon(
-                                  Icons.local_parking_outlined,
-                                  size: MediaQuery.textScalerOf(
-                                    context,
-                                  ).scale(small.fontSize!),
-                                  color: small.color,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: SizedBox(
+                        width: kSimpleRailWidth * simpleRailScale(context) - 12,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          spacing: 2,
+                          children: [
+                            for (final (text, style) in [
+                              (
+                                name,
+                                kSimpleText.copyWith(
+                                  fontWeight: FontWeight.w600,
                                 ),
-                                Text(foot!, style: small, maxLines: 1),
-                              ],
-                            ),
-                          ),
-                      ],
+                              ),
+                              (frames, kSimpleText),
+                              if (sub != null) (sub!, small),
+                              (
+                                last,
+                                paused
+                                    ? small.copyWith(color: color)
+                                    : small,
+                              ),
+                              // One short word: the square has 60 px for it.
+                              if (foot != null) (foot!, small),
+                            ])
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(text, style: style, maxLines: 1),
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),

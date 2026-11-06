@@ -1107,7 +1107,7 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get planParksAtEnd => 'Parks at end';
+  String get planSquareParks => 'Parks';
 
   @override
   String planStartsAt(String time) {
@@ -3326,7 +3326,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String get planParksAtEnd => 'Estaciona no fim';
+  String get planSquareParks => 'Estaciona';
 
   @override
   String planStartsAt(String time) {

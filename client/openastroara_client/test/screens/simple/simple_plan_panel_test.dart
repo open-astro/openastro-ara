@@ -1319,17 +1319,14 @@ void main() {
     final (c, _) = await run(tester);
     await create(tester);
     final tracker = find.byKey(const Key('simple-run-tracker'));
-    expect(find.descendant(of: tracker, matching: find.text('Parks at end')), findsOneWidget);
-    // Marked with the Park Scope step's icon, apart from the time line above it.
-    expect(find.descendant(of: tracker, matching: find.byIcon(Icons.local_parking_outlined)), findsOneWidget);
+    expect(find.descendant(of: tracker, matching: find.text('Parks')), findsOneWidget);
     c.read(planetariumSelectionProvider.notifier).set(_m42);
     await tester.pumpAndSettle();
     await create(tester);
     // The queue runs right to left: the caption sits on M42's square, the leftmost.
-    final caption = tester.getRect(find.descendant(of: tracker, matching: find.text('Parks at end')));
-    expect(find.descendant(of: tracker, matching: find.text('Parks at end')), findsOneWidget);
-    // Same square: centres within a few px (the icon shifts the words), squares sit 78 px apart.
-    expect(caption.center.dx, closeTo(tester.getRect(find.descendant(of: tracker, matching: find.text('M42'))).center.dx, 10));
+    final caption = tester.getRect(find.descendant(of: tracker, matching: find.text('Parks')));
+    expect(find.descendant(of: tracker, matching: find.text('Parks')), findsOneWidget);
+    expect(caption.center.dx, closeTo(tester.getRect(find.descendant(of: tracker, matching: find.text('M42'))).center.dx, 1));
   });
 
   test('progress fills the queue in order, target by target', () {

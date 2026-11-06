@@ -254,8 +254,9 @@ Map<String, dynamic> buildTargetBlock({
       : null;
   final handSwap = manualFilterSwap || !rig.filterWheel;
   // #1560 — one per container: on the block, a target not started by dawn is
-  // skipped (no slew, filter or focus); on a loop, it ends after the frame in
-  // hand.
+  // skipped (no slew, filter or focus); on a loop, no frame starts that would
+  // end after dawn. The daemon's TimeCondition also interrupts whatever is
+  // still running at dawn (its 1 s watchdog).
   Map<String, dynamic>? dawn() =>
       stopAtDawn == null ? null : _dawnCondition(stopAtDawn);
   if (exposureSeconds <= 0) {

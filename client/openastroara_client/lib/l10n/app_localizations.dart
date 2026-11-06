@@ -2037,11 +2037,11 @@ abstract class AppLocalizations {
   /// **'Stops at dawn · {time}'**
   String planStopsAtDawn(String time);
 
-  /// Plan square caption on the queue's last target: the mount parks once the queue ends
+  /// Plan square caption on the queue's last target: the mount parks once the queue ends. One short word: the square has 60 px for it at 11.5 px
   ///
   /// In en, this message translates to:
-  /// **'Parks at end'**
-  String get planParksAtEnd;
+  /// **'Parks'**
+  String get planSquareParks;
 
   /// Plan sheet: the run starts at a picked time (HH:MM)
   ///
