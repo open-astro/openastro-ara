@@ -50,9 +50,9 @@ esac
 # under set -u.
 SNOVAS_CFLAGS=("${CFLAGS[@]}")
 if [ -n "$REMAINDER_SYMVER" ]; then
-    SYMVER_DIR="$(mktemp -d)"
-    trap 'rm -rf "$SYMVER_DIR"' EXIT
-    SYMVER_H="$SYMVER_DIR/remainder-symver.h"
+    # In $OUT (ours already) rather than a temp dir; removed on exit so it never ships.
+    SYMVER_H="$OUT/.remainder-symver.h"
+    trap 'rm -f "$SYMVER_H"' EXIT
     echo "__asm__(\".symver remainder,remainder@$REMAINDER_SYMVER\");" >"$SYMVER_H"
     SNOVAS_CFLAGS+=(-include "$SYMVER_H")
 fi
