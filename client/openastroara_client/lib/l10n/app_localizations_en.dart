@@ -1102,6 +1102,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String planStopsAtDawn(String time) {
+    return 'Stops at dawn · $time';
+  }
+
+  @override
+  String get planParksAtEnd => 'Parks at end';
+
+  @override
   String planStartsAt(String time) {
     return 'Starts at $time';
   }
@@ -1185,6 +1193,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get planNightDone => 'Night done';
+
+  @override
+  String get planStoppedAtDawn => 'stopped at dawn';
 
   @override
   String get planStopped => 'stopped';

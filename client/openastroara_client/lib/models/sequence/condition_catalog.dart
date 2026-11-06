@@ -42,6 +42,11 @@ const String loopConditionType =
 const String aboveHorizonConditionType =
     'OpenAstroAra.Sequencer.Conditions.AboveHorizonCondition, OpenAstroAra.Sequencer';
 
+/// #1560 — reused by the imaging-run builder: Simple Mode's targets and their
+/// imaging loops end at dawn (a sky-event [timeProviders] entry).
+const String timeConditionType =
+    'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer';
+
 const String waitLoopDataType =
     'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitLoopData, OpenAstroAra.Sequencer';
 
@@ -305,8 +310,7 @@ const List<ConditionDef> conditionCatalog = [
   // (Custom time); for a sky-event provider they're computed at runtime, and
   // MinutesOffset shifts the result. All four are `[JsonProperty] public int`.
   ConditionDef(
-    type:
-        'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer',
+    type: timeConditionType,
     label: 'Until a time',
     icon: Icons.schedule_outlined,
     fields: [

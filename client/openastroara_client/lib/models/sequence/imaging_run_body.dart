@@ -55,6 +55,7 @@ class UnguidedOptions {
 /// │        Conditions: Loop (× frame count)
 /// │        Triggers:  Autofocus After Exposures (when a cadence is set)
 /// │        └─ Take Exposure (Imaging Defaults: time / gain / offset / binning, LIGHT)
+/// ├─ Park Scope         (when [parkAtEnd]: Simple Mode's Sessions)
 /// └─ Warm Camera        (when "warm up at session end" is on)
 /// ```
 ///
@@ -114,6 +115,11 @@ Map<String, dynamic> buildImagingRunBody({
   // Null = no sheet. Ignored on a guided rig.
   double? trackingPriorSeconds,
   bool alwaysCenter = false,
+  // #1560 — a [timeProviders] dawn label ('Civil Dawn' …): the target and each
+  // of its imaging loops end at that dawn. Null = no dawn stop.
+  String? stopAtDawn,
+  // #1560 — park the mount once the last target is done (before the warm-up).
+  bool parkAtEnd = false,
 }) {
   // #1577 — nothing regulates a set-point on this camera: no Cool Camera step.
   if (!rig.coolerRegulates) coolToC = null;
@@ -140,6 +146,7 @@ Map<String, dynamic> buildImagingRunBody({
     trackingPriorSeconds: trackingPriorSeconds,
     coolToC: coolToC,
     alwaysCenter: alwaysCenter,
+    stopAtDawn: stopAtDawn,
   );
 
   // ── The session around it, in run order ──────────────────────────────────
@@ -155,6 +162,7 @@ Map<String, dynamic> buildImagingRunBody({
     _item(unparkScopeType),
     _item(setTrackingType), // catalog default: sidereal
     target,
+    if (parkAtEnd) _item(parkScopeType),
     if (warmAtEnd) _item(warmCameraType)..['Duration'] = 0.0,
   ];
 
@@ -220,6 +228,8 @@ Map<String, dynamic> buildTargetBlock({
   double? coolToC,
   // Simple Mode: centre on the target whatever Settings → Plate Solving says.
   bool alwaysCenter = false,
+  // #1560 — see [buildImagingRunBody].
+  String? stopAtDawn,
 }) {
   // #1577 — nothing regulates a set-point on this camera: no Cool Camera step.
   if (!rig.coolerRegulates) coolToC = null;
@@ -243,6 +253,17 @@ Map<String, dynamic> buildTargetBlock({
       ? autofocusAfterTempChangeC
       : null;
   final handSwap = manualFilterSwap || !rig.filterWheel;
+  // #1560 — one per container: on the block, a target not started by dawn is
+  // skipped (no slew, filter or focus); on a loop, it ends after the frame in
+  // hand.
+  Map<String, dynamic>? dawn() {
+    if (stopAtDawn == null) return null;
+    final def = conditionForType(timeConditionType);
+    if (def == null) {
+      throw StateError('TimeCondition missing from the condition catalog');
+    }
+    return def.build()..['SelectedProvider'] = timeProviderValue(stopAtDawn);
+  }
   if (exposureSeconds <= 0) {
     throw ArgumentError.value(
       exposureSeconds,
@@ -309,7 +330,7 @@ Map<String, dynamic> buildTargetBlock({
     var imaging = _item(sequentialContainerType);
     imaging['Name'] = name;
     imaging = withChildren(imaging, [exposure]);
-    imaging = withConditions(imaging, [loop]);
+    imaging = withConditions(imaging, [loop, ?dawn()]);
 
     final triggers = <Map<String, dynamic>>[];
     if (afEvery != null) {
@@ -501,7 +522,7 @@ Map<String, dynamic> buildTargetBlock({
   // block run ONCE but still end early mid-pass when the target sets
   // (review #876 — proven by SequentialStrategyConditionSemanticsTest).
   final onePass = loopDef.build()..['Iterations'] = 1;
-  return withConditions(block, [onePass, horizon]);
+  return withConditions(block, [onePass, horizon, ?dawn()]);
 }
 
 /// A copy of [root] with [targetBlock] appended as another target: inserted

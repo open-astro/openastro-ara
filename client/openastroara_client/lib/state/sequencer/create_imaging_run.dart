@@ -157,6 +157,11 @@ Future<ImagingRunResult?> createImagingRun(
   // Simple Mode: the plan's own gain (seeded from the camera's); null = the
   // profile's default.
   int? gain,
+  // #1560 — Simple Mode: every target block ends at this dawn (a
+  // [timeProviders] label) and a fresh run parks at the end. Off = the body
+  // the Full UI has always built.
+  String? stopAtDawn,
+  bool parkAtEnd = false,
 }) async {
   // Pin the autoDispose API for the whole create. With no widget watching
   // it (the coordinate-entry dialog, a Tonight's Sky row whose panel just
@@ -185,6 +190,8 @@ Future<ImagingRunResult?> createImagingRun(
       appendToOpen: appendToOpen,
       alwaysCenter: alwaysCenter,
       gainOverride: gain,
+      stopAtDawn: stopAtDawn,
+      parkAtEnd: parkAtEnd,
     );
   } finally {
     keepApi.close();
@@ -209,6 +216,8 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   // Simple Mode: every target centres, whatever Settings → Plate Solving says.
   bool alwaysCenter = false,
   int? gainOverride,
+  String? stopAtDawn,
+  bool parkAtEnd = false,
 }) async {
   final api = container.read(sequenceApiProvider);
 
@@ -267,7 +276,9 @@ Future<ImagingRunResult?> _createImagingRunPinned(
       frameCount: frameCount,
       coolToC: defaults.coolerTargetC,
       alwaysCenter: alwaysCenter,
+      stopAtDawn: stopAtDawn,
       warmAtEnd: defaults.warmupAtSessionEnd,
+      parkAtEnd: parkAtEnd,
       autofocusEveryNExposures: afEvery,
       autofocusAfterTempChangeC: af.triggerTempDeltaC,
       positionAngleDeg: positionAngleDeg,
@@ -287,6 +298,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
           raDeg: p.raDeg,
           coolToC: defaults.coolerTargetC,
           alwaysCenter: alwaysCenter,
+          stopAtDawn: stopAtDawn,
           decDeg: p.decDeg,
           targetName: p.name,
           exposureSeconds: exposureSeconds,
@@ -319,6 +331,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
             raDeg: p.raDeg,
             coolToC: defaults.coolerTargetC,
             alwaysCenter: alwaysCenter,
+            stopAtDawn: stopAtDawn,
             decDeg: p.decDeg,
             targetName: p.name,
             exposureSeconds: exposureSeconds,
@@ -407,6 +420,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
           raDeg: p.raDeg,
           coolToC: defaults.coolerTargetC,
           alwaysCenter: alwaysCenter,
+          stopAtDawn: stopAtDawn,
           decDeg: p.decDeg,
           targetName: p.name,
           exposureSeconds: exposureSeconds,
@@ -468,7 +482,9 @@ Future<ImagingRunResult?> _createImagingRunPinned(
     frameCount: frameCount,
     coolToC: defaults.coolerTargetC,
     alwaysCenter: alwaysCenter,
+    stopAtDawn: stopAtDawn,
     warmAtEnd: defaults.warmupAtSessionEnd,
+    parkAtEnd: parkAtEnd,
     autofocusEveryNExposures: afEveryExposures,
     autofocusAfterTempChangeC: af.triggerTempDeltaC,
     positionAngleDeg: positionAngleDeg,
@@ -487,6 +503,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
         raDeg: p.raDeg,
         coolToC: defaults.coolerTargetC,
         alwaysCenter: alwaysCenter,
+        stopAtDawn: stopAtDawn,
         decDeg: p.decDeg,
         targetName: p.name,
         exposureSeconds: exposureSeconds,

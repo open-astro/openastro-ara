@@ -931,6 +931,37 @@ bool scheduleAllowed(SiteSettings site, DateTime nowUtc) {
   return !(now < 0 && sun(nowUtc.add(const Duration(minutes: 10))) > now);
 }
 
+/// When the dark that [startUtc] falls in ends at [site] (the sun back above
+/// its twilight line), to the minute; null when [startUtc] isn't dark, the
+/// site is unset, or the dark doesn't end within a day (a polar winter).
+DateTime? nightEnd(SiteSettings site, DateTime startUtc) {
+  if (site.latitudeDeg == 0 && site.longitudeDeg == 0) return null;
+  final line = twilightSunAltitudeDeg(site.twilightDefinition);
+  bool dark(DateTime t) =>
+      sunMoonAltitudeDeg(t, site.latitudeDeg, site.longitudeDeg).sunAltDeg <
+      line;
+  final start = startUtc.toUtc();
+  if (!dark(start)) return null;
+  for (var m = 1; m <= 24 * 60; m++) {
+    final t = start.add(Duration(minutes: m));
+    if (!dark(t)) return t;
+  }
+  return null;
+}
+
+/// #1560 — the dawn a Simple Mode Session starting at [startUtc] stops at, as
+/// a `TimeCondition` provider label ('Civil Dawn' …), or null for none: a
+/// start in daylight (an indoor test runs on), or a night with no dawn for the
+/// daemon's provider to find.
+String? dawnStopFor(SiteSettings site, DateTime startUtc) {
+  if (nightEnd(site, startUtc) == null) return null;
+  return switch (site.twilightDefinition) {
+    TwilightDefinition.civil => 'Civil Dawn',
+    TwilightDefinition.nautical => 'Nautical Dawn',
+    TwilightDefinition.astronomical => 'Astronomical Dawn',
+  };
+}
+
 /// The sun altitude below which [twilight] counts as dark.
 double twilightSunAltitudeDeg(TwilightDefinition twilight) =>
     switch (twilight) {
