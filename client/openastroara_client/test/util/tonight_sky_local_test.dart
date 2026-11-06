@@ -88,7 +88,7 @@ void main() {
 
     test('no dawn to stop at: a site never astronomically dark (high-latitude summer), or no site', () {
       const north = SiteSettings(
-          latitudeDeg: 60, longitudeDeg: 10.75, twilightDefinition: TwilightDefinition.astronomical);
+          latitudeDeg: 51.477833, longitudeDeg: -0.001500, twilightDefinition: TwilightDefinition.astronomical);
       expect(dawnStopFor(north, DateTime.utc(2026, 6, 21, 23)), isNull);
       expect(dawnStopFor(const SiteSettings(), DateTime.utc(2026, 1, 15, 3)), isNull);
     });
