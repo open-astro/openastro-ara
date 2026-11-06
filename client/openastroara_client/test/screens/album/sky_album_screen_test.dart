@@ -64,6 +64,7 @@ Future<ProviderContainer> _pump(
   Size size = const Size(1200, 1600),
   double textScale = 1,
   double bottomInset = 0,
+  Locale? locale,
 }) async {
   tester.view.physicalSize = size;
   tester.view.padding = FakeViewPadding(bottom: bottomInset);
@@ -85,12 +86,13 @@ Future<ProviderContainer> _pump(
     ],
   );
   addTearDown(container.dispose);
-  await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(onImageTarget)));
+  await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(onImageTarget, locale: locale)));
   await tester.pumpAndSettle();
   return container;
 }
 
-Widget _app(void Function(PlanningDso)? onImageTarget, {bool open = true}) => MaterialApp(
+Widget _app(void Function(PlanningDso)? onImageTarget, {bool open = true, Locale? locale}) => MaterialApp(
+      locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: open ? SkyAlbumScreen(onImageTarget: onImageTarget ?? (_) {}) : const SizedBox(),
@@ -186,9 +188,49 @@ void main() {
         of: find.ancestor(of: find.text(name), matching: find.byType(AlbumCardFront)), matching: find.byKey(Key(key)));
     expect(on('Andromeda Galaxy', 'album-art'), findsOneWidget, reason: 'collected: in colour');
     expect(on('Crab Nebula', 'album-art-dimmed'), findsOneWidget, reason: 'missing: dimmed');
-    expect(find.descendant(of: find.ancestor(of: on('Crab Nebula', 'album-art-dimmed'), matching: find.byType(Opacity)),
-        matching: find.byType(ColorFiltered)), findsOneWidget, reason: 'greyed');
+    expect(find.ancestor(of: on('Crab Nebula', 'album-art-dimmed'), matching: find.byType(ColorFiltered)), findsOneWidget,
+        reason: 'greyed');
+    // One compositing layer per missing card: the dimming is in the colour matrix, not an Opacity on top.
+    expect(find.ancestor(of: on('Crab Nebula', 'album-art-dimmed'), matching: find.byType(Opacity)), findsNothing);
     expect(on('Orion Nebula', 'album-placeholder'), findsOneWidget, reason: 'no Art: the Placeholder');
+  });
+
+  testWidgets('in Portuguese the back reads the type, distance and trivia in Portuguese', (tester) async {
+    await _pump(tester, frames: _m31Frames, locale: const Locale('pt', 'BR'), manifest: const {
+      'M31': AlbumArt(asset: 'assets/album/art/m031.webp', credit: 'ESO', licence: 'CC BY 4.0',
+          distance: '2.5 million ly', trivia: 'It is approaching us.',
+          pt: AlbumArtText(distance: '2,5 milhões de anos-luz', trivia: 'Está se aproximando de nós.')),
+    });
+    await tester.tap(find.text('Andromeda Galaxy'));
+    await tester.pumpAndSettle();
+    expect(find.text('Galáxia · V 5.0 · 2,5 milhões de anos-luz'), findsOneWidget);
+    expect(find.text('Está se aproximando de nós.'), findsOneWidget);
+  });
+
+  testWidgets('the Album uses Simple Mode sizes: 44 px controls, 14 px header and back text', (tester) async {
+    await _pump(tester, frames: _m31Frames, manifest: const {
+      'M31': AlbumArt(asset: 'assets/album/art/m031.webp', credit: 'ESO', licence: 'CC BY 4.0', trivia: 'Close.'),
+    });
+    for (final chip in find.byType(FilterChip).evaluate()) {
+      expect(tester.getSize(find.byWidget(chip.widget)).height, greaterThanOrEqualTo(44));
+    }
+    expect(tester.getSize(find.byType(SegmentedButton<AlbumFilter>)).height, greaterThanOrEqualTo(44));
+    TextStyle styleOf(Finder f) => DefaultTextStyle.of(tester.element(f)).style.merge(tester.widget<Text>(f).style);
+    expect(styleOf(find.text('1 / 4 collected')).fontSize, 14);
+    await tester.tap(find.text('Andromeda Galaxy'));
+    await tester.pumpAndSettle();
+    expect(styleOf(find.text('Close.')).fontSize, 14);
+  });
+
+  testWidgets('a missing card\'s Placeholder icon reads at 3:1 on its panel', (tester) async {
+    await _pump(tester, frames: const []);
+    double ratio(Color a, Color b) {
+      final (x, y) = (a.computeLuminance(), b.computeLuminance());
+      return (math.max(x, y) + 0.05) / (math.min(x, y) + 0.05);
+    }
+
+    final icon = tester.widget<Icon>(find.descendant(of: find.byKey(const Key('album-placeholder')), matching: find.byType(Icon)).first);
+    expect(ratio(icon.color!, AraColors.bgPanelAlt), greaterThanOrEqualTo(3));
   });
 
   testWidgets('tapping outside a flipped card flips it back', (tester) async {

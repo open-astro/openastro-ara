@@ -3621,6 +3621,90 @@ abstract class AppLocalizations {
   /// **'Caldwell'**
   String get albumBookCaldwell;
 
+  /// Deep-sky object type on a Sky Album card back's bio line
+  ///
+  /// In en, this message translates to:
+  /// **'Galaxy'**
+  String get dsoTypeGalaxy;
+
+  /// Deep-sky object type on a Sky Album card back's bio line
+  ///
+  /// In en, this message translates to:
+  /// **'Galaxy pair'**
+  String get dsoTypeGalaxyPair;
+
+  /// Deep-sky object type on a Sky Album card back's bio line
+  ///
+  /// In en, this message translates to:
+  /// **'Galaxy triplet'**
+  String get dsoTypeGalaxyTriplet;
+
+  /// Deep-sky object type on a Sky Album card back's bio line
+  ///
+  /// In en, this message translates to:
+  /// **'Galaxy group'**
+  String get dsoTypeGalaxyGroup;
+
+  /// Deep-sky object type on a Sky Album card back's bio line
+  ///
+  /// In en, this message translates to:
+  /// **'Nebula'**
+  String get dsoTypeNebula;
+
+  /// Deep-sky object type on a Sky Album card back's bio line
+  ///
+  /// In en, this message translates to:
+  /// **'Emission nebula'**
+  String get dsoTypeEmissionNebula;
+
+  /// Deep-sky object type on a Sky Album card back's bio line
+  ///
+  /// In en, this message translates to:
+  /// **'Reflection nebula'**
+  String get dsoTypeReflectionNebula;
+
+  /// Deep-sky object type on a Sky Album card back's bio line
+  ///
+  /// In en, this message translates to:
+  /// **'Planetary nebula'**
+  String get dsoTypePlanetaryNebula;
+
+  /// Deep-sky object type on a Sky Album card back's bio line
+  ///
+  /// In en, this message translates to:
+  /// **'Supernova remnant'**
+  String get dsoTypeSupernovaRemnant;
+
+  /// Deep-sky object type on a Sky Album card back's bio line
+  ///
+  /// In en, this message translates to:
+  /// **'Cluster'**
+  String get dsoTypeCluster;
+
+  /// Deep-sky object type on a Sky Album card back's bio line
+  ///
+  /// In en, this message translates to:
+  /// **'Open cluster'**
+  String get dsoTypeOpenCluster;
+
+  /// Deep-sky object type on a Sky Album card back's bio line
+  ///
+  /// In en, this message translates to:
+  /// **'Globular cluster'**
+  String get dsoTypeGlobularCluster;
+
+  /// Deep-sky object type on a Sky Album card back's bio line
+  ///
+  /// In en, this message translates to:
+  /// **'Cluster + nebula'**
+  String get dsoTypeClusterNebula;
+
+  /// Deep-sky object type on a Sky Album card back's bio line
+  ///
+  /// In en, this message translates to:
+  /// **'Object'**
+  String get dsoTypeObject;
+
   /// Sky Album: label before the catalog filter chips (none selected shows every catalog)
   ///
   /// In en, this message translates to:

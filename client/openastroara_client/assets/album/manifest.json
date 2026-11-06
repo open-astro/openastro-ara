@@ -7,7 +7,11 @@
     "licence": "Public domain",
     "distance": "6,500 ly",
     "trivia": "The remnant of a supernova that Chinese astronomers recorded in 1054 CE.",
-    "art": "m001.webp"
+    "art": "m001.webp",
+    "pt": {
+      "distance": "6.500 anos-luz",
+      "trivia": "O remanescente de uma supernova registrada por astrônomos chineses em 1054 d.C."
+    }
   },
   {
     "id": "M2",
@@ -17,7 +21,11 @@
     "licence": "CC BY 4.0",
     "distance": "37,500 ly",
     "trivia": "Holds about 150,000 stars and is one of the larger globular clusters known.",
-    "art": "m002.webp"
+    "art": "m002.webp",
+    "pt": {
+      "distance": "37.500 anos-luz",
+      "trivia": "Abriga cerca de 150.000 estrelas e é um dos maiores aglomerados globulares conhecidos."
+    }
   },
   {
     "id": "M3",
@@ -27,7 +35,11 @@
     "licence": "CC BY 4.0",
     "distance": "33,900 ly",
     "trivia": "Holds more than 270 known variable stars, among the most of any globular cluster.",
-    "art": "m003.webp"
+    "art": "m003.webp",
+    "pt": {
+      "distance": "33.900 anos-luz",
+      "trivia": "Abriga mais de 270 estrelas variáveis conhecidas, entre as mais numerosas de qualquer aglomerado globular."
+    }
   },
   {
     "id": "M4",
@@ -37,7 +49,11 @@
     "licence": "CC BY 3.0",
     "distance": "~5,900 ly",
     "trivia": "One of the closest globular clusters to Earth, lying about 1.3 degrees west of Antares.",
-    "art": "m004.webp"
+    "art": "m004.webp",
+    "pt": {
+      "distance": "~5.900 anos-luz",
+      "trivia": "Um dos aglomerados globulares mais próximos da Terra, a cerca de 1,3 grau a oeste de Antares."
+    }
   },
   {
     "id": "M5",
@@ -47,7 +63,11 @@
     "licence": "CC BY 4.0",
     "distance": "24,500 ly",
     "trivia": "Among the oldest globular clusters in the Milky Way, at about 13 billion years old.",
-    "art": "m005.webp"
+    "art": "m005.webp",
+    "pt": {
+      "distance": "24.500 anos-luz",
+      "trivia": "Um dos aglomerados globulares mais antigos da Via Láctea, com cerca de 13 bilhões de anos."
+    }
   },
   {
     "id": "M6",
@@ -57,7 +77,11 @@
     "licence": "CC BY 4.0",
     "distance": "1,600 ly",
     "trivia": "Its brightest star, BM Scorpii, is an orange giant that varies in brightness.",
-    "art": "m006.webp"
+    "art": "m006.webp",
+    "pt": {
+      "distance": "1.600 anos-luz",
+      "trivia": "Sua estrela mais brilhante, BM Scorpii, é uma gigante laranja de brilho variável."
+    }
   },
   {
     "id": "M7",
@@ -67,7 +91,11 @@
     "licence": "CC BY 4.0",
     "distance": "980 ly",
     "trivia": "Ptolemy described it around 130 CE as a nebulous patch following the sting of Scorpius.",
-    "art": "m007.webp"
+    "art": "m007.webp",
+    "pt": {
+      "distance": "980 anos-luz",
+      "trivia": "Ptolomeu o descreveu por volta de 130 d.C. como uma mancha nebulosa depois do ferrão de Escorpião."
+    }
   },
   {
     "id": "M8",
@@ -77,7 +105,11 @@
     "licence": "CC BY 4.0",
     "distance": "4,100 ly",
     "trivia": "Visible to the naked eye under dark skies, it contains the bright Hourglass Nebula at its core.",
-    "art": "m008.webp"
+    "art": "m008.webp",
+    "pt": {
+      "distance": "4.100 anos-luz",
+      "trivia": "Visível a olho nu em céus escuros, contém a brilhante Nebulosa da Ampulheta em seu núcleo."
+    }
   },
   {
     "id": "M9",
@@ -87,7 +119,11 @@
     "licence": "CC BY 4.0",
     "distance": "25,800 ly",
     "trivia": "Lies only about 5,500 light-years from the Milky Way's centre, near the galactic bulge.",
-    "art": "m009.webp"
+    "art": "m009.webp",
+    "pt": {
+      "distance": "25.800 anos-luz",
+      "trivia": "Fica a apenas cerca de 5.500 anos-luz do centro da Via Láctea, perto do bojo galáctico."
+    }
   },
   {
     "id": "M10",
@@ -97,7 +133,11 @@
     "licence": "CC BY 4.0",
     "distance": "14,300 ly",
     "trivia": "M10 and M12 form a near-matching pair of globular clusters in Ophiuchus, about 3 degrees apart.",
-    "art": "m010.webp"
+    "art": "m010.webp",
+    "pt": {
+      "distance": "14.300 anos-luz",
+      "trivia": "M10 e M12 formam um par quase idêntico de aglomerados globulares em Ofiúco, separados por cerca de 3 graus."
+    }
   },
   {
     "id": "M11",
@@ -107,7 +147,11 @@
     "licence": "CC BY 4.0",
     "distance": "6,200 ly",
     "trivia": "Admiral Smyth likened its fan-shaped star pattern to a flock of ducks in flight.",
-    "art": "m011.webp"
+    "art": "m011.webp",
+    "pt": {
+      "distance": "6.200 anos-luz",
+      "trivia": "O almirante Smyth comparou o padrão de estrelas em forma de leque a um bando de patos em voo."
+    }
   },
   {
     "id": "M12",
@@ -117,7 +161,11 @@
     "licence": "CC BY 4.0",
     "distance": "16,000 ly",
     "trivia": "A loosely concentrated globular cluster whose core is less dense than most.",
-    "art": "m012.webp"
+    "art": "m012.webp",
+    "pt": {
+      "distance": "16.000 anos-luz",
+      "trivia": "Um aglomerado globular pouco concentrado, cujo núcleo é menos denso que o da maioria."
+    }
   },
   {
     "id": "M13",
@@ -127,7 +175,11 @@
     "licence": "CC BY 4.0",
     "distance": "22,200 ly",
     "trivia": "The 1974 Arecibo radio message was aimed at this cluster.",
-    "art": "m013.webp"
+    "art": "m013.webp",
+    "pt": {
+      "distance": "22.200 anos-luz",
+      "trivia": "A mensagem de rádio de Arecibo de 1974 foi apontada para este aglomerado."
+    }
   },
   {
     "id": "M14",
@@ -137,7 +189,11 @@
     "licence": "CC BY 4.0",
     "distance": "30,300 ly",
     "trivia": "A nova appeared in this cluster in 1938, a rare event in a globular cluster.",
-    "art": "m014.webp"
+    "art": "m014.webp",
+    "pt": {
+      "distance": "30.300 anos-luz",
+      "trivia": "Uma nova surgiu neste aglomerado em 1938, um evento raro em um aglomerado globular."
+    }
   },
   {
     "id": "M15",
@@ -147,7 +203,11 @@
     "licence": "CC BY 3.0",
     "distance": "33,600 ly",
     "trivia": "One of the densest known globular clusters, with a collapsed core.",
-    "art": "m015.webp"
+    "art": "m015.webp",
+    "pt": {
+      "distance": "33.600 anos-luz",
+      "trivia": "Um dos aglomerados globulares mais densos conhecidos, com o núcleo colapsado."
+    }
   },
   {
     "id": "M16",
@@ -157,7 +217,11 @@
     "licence": "CC BY 4.0",
     "distance": "7,000 ly",
     "trivia": "Contains the Pillars of Creation, famously photographed by Hubble in 1995.",
-    "art": "m016.webp"
+    "art": "m016.webp",
+    "pt": {
+      "distance": "7.000 anos-luz",
+      "trivia": "Contém os Pilares da Criação, famosamente fotografados pelo Hubble em 1995."
+    }
   },
   {
     "id": "M17",
@@ -167,7 +231,11 @@
     "licence": "CC BY 4.0",
     "distance": "5,500 ly",
     "trivia": "Also called the Swan or Horseshoe Nebula, it is one of the brightest star-forming regions in the Milky Way.",
-    "art": "m017.webp"
+    "art": "m017.webp",
+    "pt": {
+      "distance": "5.500 anos-luz",
+      "trivia": "Também chamada de Nebulosa do Cisne ou da Ferradura, é uma das regiões de formação estelar mais brilhantes da Via Láctea."
+    }
   },
   {
     "id": "M18",
@@ -177,7 +245,11 @@
     "licence": "CC BY 4.0",
     "distance": "4,900 ly",
     "trivia": "A sparse cluster of about 20 stars in Sagittarius, close to the Omega Nebula in the sky.",
-    "art": "m018.webp"
+    "art": "m018.webp",
+    "pt": {
+      "distance": "4.900 anos-luz",
+      "trivia": "Um aglomerado esparso de cerca de 20 estrelas em Sagitário, próximo da Nebulosa Ômega no céu."
+    }
   },
   {
     "id": "M19",
@@ -187,7 +259,11 @@
     "licence": "CC0",
     "distance": "28,700 ly",
     "trivia": "One of the most flattened globular clusters known, visibly oblate.",
-    "art": "m019.webp"
+    "art": "m019.webp",
+    "pt": {
+      "distance": "28.700 anos-luz",
+      "trivia": "Um dos aglomerados globulares mais achatados conhecidos, visivelmente oblato."
+    }
   },
   {
     "id": "M20",
@@ -198,7 +274,11 @@
     "distance": "~5,000 ly",
     "trivia": "Dark dust lanes divide its glowing emission nebula into three lobes.",
     "art": "m020.webp",
-    "file": "M20-trifid-diego.png"
+    "file": "M20-trifid-diego.png",
+    "pt": {
+      "distance": "~5.000 anos-luz",
+      "trivia": "Faixas escuras de poeira dividem sua nebulosa de emissão brilhante em três lóbulos."
+    }
   },
   {
     "id": "M21",
@@ -208,7 +288,11 @@
     "licence": "CC BY 4.0",
     "distance": "4,250 ly",
     "trivia": "A young open cluster, only a few million years old, lying near the Trifid Nebula.",
-    "art": "m021.webp"
+    "art": "m021.webp",
+    "pt": {
+      "distance": "4.250 anos-luz",
+      "trivia": "Um aglomerado aberto jovem, com apenas alguns milhões de anos, perto da Nebulosa Trífida."
+    }
   },
   {
     "id": "M22",
@@ -218,7 +302,11 @@
     "licence": "CC0",
     "distance": "10,600 ly",
     "trivia": "One of the first globular clusters ever discovered, found by Abraham Ihle in 1665.",
-    "art": "m022.webp"
+    "art": "m022.webp",
+    "pt": {
+      "distance": "10.600 anos-luz",
+      "trivia": "Um dos primeiros aglomerados globulares já descobertos, encontrado por Abraham Ihle em 1665."
+    }
   },
   {
     "id": "M23",
@@ -228,7 +316,11 @@
     "licence": "CC BY 4.0",
     "distance": "2,150 ly",
     "trivia": "Contains about 150 stars spread over an area roughly the size of the full Moon.",
-    "art": "m023.webp"
+    "art": "m023.webp",
+    "pt": {
+      "distance": "2.150 anos-luz",
+      "trivia": "Contém cerca de 150 estrelas espalhadas por uma área do tamanho aproximado da Lua cheia."
+    }
   },
   {
     "id": "M24",
@@ -238,7 +330,11 @@
     "licence": "CC BY 4.0",
     "distance": "~10,000 ly",
     "trivia": "A dense patch of the Milky Way seen through a gap in the intervening dust clouds.",
-    "art": "m024.webp"
+    "art": "m024.webp",
+    "pt": {
+      "distance": "~10.000 anos-luz",
+      "trivia": "Uma região densa da Via Láctea vista através de uma abertura nas nuvens de poeira intermediárias."
+    }
   },
   {
     "id": "M25",
@@ -248,7 +344,11 @@
     "licence": "CC BY 4.0",
     "distance": "2,000 ly",
     "trivia": "Contains the Cepheid variable U Sagittarii, a rare find in an open cluster.",
-    "art": "m025.webp"
+    "art": "m025.webp",
+    "pt": {
+      "distance": "2.000 anos-luz",
+      "trivia": "Contém a variável Cefeida U Sagittarii, uma raridade em um aglomerado aberto."
+    }
   },
   {
     "id": "M26",
@@ -258,7 +358,11 @@
     "licence": "CC BY 4.0",
     "distance": "5,000 ly",
     "trivia": "Shows a region of unusually low star density, possibly caused by a dust cloud in front of it.",
-    "art": "m026.webp"
+    "art": "m026.webp",
+    "pt": {
+      "distance": "5.000 anos-luz",
+      "trivia": "Apresenta uma região de densidade estelar incomumente baixa, possivelmente causada por uma nuvem de poeira à sua frente."
+    }
   },
   {
     "id": "M27",
@@ -268,7 +372,11 @@
     "licence": "CC BY 4.0",
     "distance": "1,360 ly",
     "trivia": "The first planetary nebula ever discovered, found by Messier in 1764.",
-    "art": "m027.webp"
+    "art": "m027.webp",
+    "pt": {
+      "distance": "1.360 anos-luz",
+      "trivia": "A primeira nebulosa planetária já descoberta, encontrada por Messier em 1764."
+    }
   },
   {
     "id": "M28",
@@ -278,7 +386,11 @@
     "licence": "CC BY 4.0",
     "distance": "17,900 ly",
     "trivia": "Contains a millisecond pulsar, the first ever found in a globular cluster.",
-    "art": "m028.webp"
+    "art": "m028.webp",
+    "pt": {
+      "distance": "17.900 anos-luz",
+      "trivia": "Contém um pulsar de milissegundo, o primeiro já encontrado em um aglomerado globular."
+    }
   },
   {
     "id": "M29",
@@ -288,7 +400,11 @@
     "licence": "CC BY 4.0",
     "distance": "~4,000 ly",
     "trivia": "A small cluster of about 50 stars near Gamma Cygni, nicknamed the Cooling Tower.",
-    "art": "m029.webp"
+    "art": "m029.webp",
+    "pt": {
+      "distance": "~4.000 anos-luz",
+      "trivia": "Um pequeno aglomerado de cerca de 50 estrelas perto de Gamma Cygni, apelidado de Torre de Resfriamento."
+    }
   },
   {
     "id": "M30",
@@ -298,7 +414,11 @@
     "licence": "Public domain",
     "distance": "27,100 ly",
     "trivia": "Its core has collapsed, making it one of the densest globular clusters.",
-    "art": "m030.webp"
+    "art": "m030.webp",
+    "pt": {
+      "distance": "27.100 anos-luz",
+      "trivia": "Seu núcleo colapsou, tornando-o um dos aglomerados globulares mais densos."
+    }
   },
   {
     "id": "M31",
@@ -308,7 +428,11 @@
     "licence": "CC BY 2.0",
     "distance": "2.5 million ly",
     "trivia": "Approaching the Milky Way at about 110 km/s, it is expected to merge with it in billions of years.",
-    "art": "m031.webp"
+    "art": "m031.webp",
+    "pt": {
+      "distance": "2,5 milhões de anos-luz",
+      "trivia": "Aproximando-se da Via Láctea a cerca de 110 km/s, deve se fundir com ela em bilhões de anos."
+    }
   },
   {
     "id": "M32",
@@ -318,7 +442,11 @@
     "licence": "CC BY 4.0",
     "distance": "2.5 million ly",
     "trivia": "A compact satellite of the Andromeda Galaxy, probably the stripped core of a larger galaxy.",
-    "art": "m032.webp"
+    "art": "m032.webp",
+    "pt": {
+      "distance": "2,5 milhões de anos-luz",
+      "trivia": "Uma galáxia satélite compacta de Andrômeda, provavelmente o núcleo remanescente de uma galáxia maior."
+    }
   },
   {
     "id": "M33",
@@ -328,7 +456,11 @@
     "licence": "CC BY 4.0",
     "distance": "2.7 million ly",
     "trivia": "Contains NGC 604, one of the largest star-forming regions in the Local Group.",
-    "art": "m033.webp"
+    "art": "m033.webp",
+    "pt": {
+      "distance": "2,7 milhões de anos-luz",
+      "trivia": "Contém NGC 604, uma das maiores regiões de formação estelar do Grupo Local."
+    }
   },
   {
     "id": "M34",
@@ -338,7 +470,11 @@
     "licence": "CC BY 4.0",
     "distance": "1,500 ly",
     "trivia": "Visible to the naked eye under dark skies, and roughly 250 million years old.",
-    "art": "m034.webp"
+    "art": "m034.webp",
+    "pt": {
+      "distance": "1.500 anos-luz",
+      "trivia": "Visível a olho nu em céus escuros, tem aproximadamente 250 milhões de anos."
+    }
   },
   {
     "id": "M35",
@@ -348,7 +484,11 @@
     "licence": "CC0",
     "distance": "~2,800 ly",
     "trivia": "The much more distant cluster NGC 2158 sits beside it and fits in the same low-power field.",
-    "art": "m035.webp"
+    "art": "m035.webp",
+    "pt": {
+      "distance": "~2.800 anos-luz",
+      "trivia": "O aglomerado NGC 2158, muito mais distante, fica ao seu lado e cabe no mesmo campo de baixo aumento."
+    }
   },
   {
     "id": "M36",
@@ -358,7 +498,11 @@
     "licence": "CC BY 4.0",
     "distance": "4,100 ly",
     "trivia": "A young cluster about 25 million years old, one of three Messier clusters in Auriga.",
-    "art": "m036.webp"
+    "art": "m036.webp",
+    "pt": {
+      "distance": "4.100 anos-luz",
+      "trivia": "Um aglomerado jovem de cerca de 25 milhões de anos, um dos três aglomerados de Messier em Auriga."
+    }
   },
   {
     "id": "M37",
@@ -368,7 +512,11 @@
     "licence": "CC BY 4.0",
     "distance": "4,500 ly",
     "trivia": "The richest of the three Messier open clusters in Auriga.",
-    "art": "m037.webp"
+    "art": "m037.webp",
+    "pt": {
+      "distance": "4.500 anos-luz",
+      "trivia": "O mais rico dos três aglomerados abertos de Messier em Auriga."
+    }
   },
   {
     "id": "M38",
@@ -378,7 +526,11 @@
     "licence": "CC BY 4.0",
     "distance": "4,200 ly",
     "trivia": "Its brighter stars form a loose cross or pi shape; the small cluster NGC 1907 lies nearby.",
-    "art": "m038.webp"
+    "art": "m038.webp",
+    "pt": {
+      "distance": "4.200 anos-luz",
+      "trivia": "Suas estrelas mais brilhantes formam uma cruz ou a letra pi; o pequeno aglomerado NGC 1907 fica por perto."
+    }
   },
   {
     "id": "M39",
@@ -388,7 +540,11 @@
     "licence": "CC BY 4.0",
     "distance": "825 ly",
     "trivia": "A roughly triangular open cluster in Cygnus, easy to see with binoculars.",
-    "art": "m039.webp"
+    "art": "m039.webp",
+    "pt": {
+      "distance": "825 anos-luz",
+      "trivia": "Um aglomerado aberto aproximadamente triangular em Cisne, fácil de ver com binóculos."
+    }
   },
   {
     "id": "M40",
@@ -398,7 +554,11 @@
     "licence": "CC BY 4.0",
     "distance": "510 ly",
     "trivia": "Messier searched for a nebula reported by Hevelius and logged this double star instead.",
-    "art": "m040.webp"
+    "art": "m040.webp",
+    "pt": {
+      "distance": "510 anos-luz",
+      "trivia": "Messier procurou uma nebulosa relatada por Hevelius e registrou esta estrela dupla no lugar."
+    }
   },
   {
     "id": "M41",
@@ -408,7 +568,11 @@
     "licence": "CC BY 4.0",
     "distance": "2,300 ly",
     "trivia": "Lies about 4 degrees south of Sirius and was possibly noted by Aristotle around 325 BCE.",
-    "art": "m041.webp"
+    "art": "m041.webp",
+    "pt": {
+      "distance": "2.300 anos-luz",
+      "trivia": "Fica a cerca de 4 graus ao sul de Sirius e possivelmente foi notado por Aristóteles por volta de 325 a.C."
+    }
   },
   {
     "id": "M42",
@@ -418,7 +582,11 @@
     "licence": "Public domain",
     "distance": "1,344 ly",
     "trivia": "The nearest massive star-forming region, visible to the naked eye in Orion's sword.",
-    "art": "m042.webp"
+    "art": "m042.webp",
+    "pt": {
+      "distance": "1.344 anos-luz",
+      "trivia": "A região de formação de estrelas massivas mais próxima, visível a olho nu na espada de Órion."
+    }
   },
   {
     "id": "M43",
@@ -428,7 +596,11 @@
     "licence": "Public domain",
     "distance": "1,600 ly",
     "trivia": "A dark dust lane separates it from the Orion Nebula, and the star NU Orionis lights it.",
-    "art": "m043.webp"
+    "art": "m043.webp",
+    "pt": {
+      "distance": "1.600 anos-luz",
+      "trivia": "Uma faixa escura de poeira a separa da Nebulosa de Órion, e a estrela NU Orionis a ilumina."
+    }
   },
   {
     "id": "M44",
@@ -438,7 +610,11 @@
     "licence": "CC BY 4.0",
     "distance": "600 ly",
     "trivia": "Galileo first resolved the Beehive Cluster, also called Praesepe, into about 40 stars with his telescope.",
-    "art": "m044.webp"
+    "art": "m044.webp",
+    "pt": {
+      "distance": "600 anos-luz",
+      "trivia": "Galileu foi o primeiro a resolver o Aglomerado da Colmeia, também chamado Praesepe, em cerca de 40 estrelas com seu telescópio."
+    }
   },
   {
     "id": "M45",
@@ -448,7 +624,11 @@
     "licence": "Public domain",
     "distance": "444 ly",
     "trivia": "Its blue nebulosity is dust the cluster is passing through, not leftover birth gas.",
-    "art": "m045.webp"
+    "art": "m045.webp",
+    "pt": {
+      "distance": "444 anos-luz",
+      "trivia": "Sua nebulosidade azul é poeira pela qual o aglomerado está passando, não gás remanescente do nascimento."
+    }
   },
   {
     "id": "M46",
@@ -458,7 +638,11 @@
     "licence": "CC BY 4.0",
     "distance": "5,400 ly",
     "trivia": "The planetary nebula NGC 2438 appears to lie inside it, though it is probably a foreground object.",
-    "art": "m046.webp"
+    "art": "m046.webp",
+    "pt": {
+      "distance": "5.400 anos-luz",
+      "trivia": "A nebulosa planetária NGC 2438 parece estar dentro dele, embora provavelmente seja um objeto em primeiro plano."
+    }
   },
   {
     "id": "M47",
@@ -468,7 +652,11 @@
     "licence": "CC BY 4.0",
     "distance": "1,600 ly",
     "trivia": "Long a missing Messier object because Messier recorded its position incorrectly.",
-    "art": "m047.webp"
+    "art": "m047.webp",
+    "pt": {
+      "distance": "1.600 anos-luz",
+      "trivia": "Por muito tempo foi um objeto de Messier perdido, porque Messier registrou sua posição incorretamente."
+    }
   },
   {
     "id": "M48",
@@ -478,7 +666,11 @@
     "licence": "CC BY 4.0",
     "distance": "2,500 ly",
     "trivia": "Long considered missing due to a position error, it was identified with NGC 2548 in 1934.",
-    "art": "m048.webp"
+    "art": "m048.webp",
+    "pt": {
+      "distance": "2.500 anos-luz",
+      "trivia": "Considerado perdido por muito tempo devido a um erro de posição, foi identificado com NGC 2548 em 1934."
+    }
   },
   {
     "id": "M49",
@@ -488,7 +680,11 @@
     "licence": "CC BY 4.0",
     "distance": "56 million ly",
     "trivia": "The brightest elliptical galaxy in the Virgo Cluster, discovered by Messier in 1771.",
-    "art": "m049.webp"
+    "art": "m049.webp",
+    "pt": {
+      "distance": "56 milhões de anos-luz",
+      "trivia": "A galáxia elíptica mais brilhante do Aglomerado de Virgem, descoberta por Messier em 1771."
+    }
   },
   {
     "id": "M50",
@@ -498,7 +694,11 @@
     "licence": "CC BY 4.0",
     "distance": "3,200 ly",
     "trivia": "Often described as heart-shaped in photographs.",
-    "art": "m050.webp"
+    "art": "m050.webp",
+    "pt": {
+      "distance": "3.200 anos-luz",
+      "trivia": "Frequentemente descrito como em forma de coração nas fotografias."
+    }
   },
   {
     "id": "M51",
@@ -508,7 +708,11 @@
     "licence": "CC BY 4.0",
     "distance": "23 million ly",
     "trivia": "Lord Rosse was the first to identify its spiral structure, in 1845.",
-    "art": "m051.webp"
+    "art": "m051.webp",
+    "pt": {
+      "distance": "23 milhões de anos-luz",
+      "trivia": "Lord Rosse foi o primeiro a identificar sua estrutura espiral, em 1845."
+    }
   },
   {
     "id": "M52",
@@ -518,7 +722,11 @@
     "licence": "Public domain",
     "distance": "5,000 ly",
     "trivia": "Found in Cassiopeia by extending a line from Alpha to Beta Cassiopeiae; it lies near the Bubble Nebula.",
-    "art": "m052.webp"
+    "art": "m052.webp",
+    "pt": {
+      "distance": "5.000 anos-luz",
+      "trivia": "Encontrado em Cassiopeia prolongando uma linha de Alpha a Beta Cassiopeiae; fica perto da Nebulosa da Bolha."
+    }
   },
   {
     "id": "M53",
@@ -528,7 +736,11 @@
     "licence": "CC BY 4.0",
     "distance": "58,000 ly",
     "trivia": "Lies only about 1 degree from NGC 5053, a much sparser globular cluster.",
-    "art": "m053.webp"
+    "art": "m053.webp",
+    "pt": {
+      "distance": "58.000 anos-luz",
+      "trivia": "Fica a apenas cerca de 1 grau de NGC 5053, um aglomerado globular muito mais esparso."
+    }
   },
   {
     "id": "M54",
@@ -538,7 +750,11 @@
     "licence": "CC BY 4.0",
     "distance": "87,000 ly",
     "trivia": "Belongs to the Sagittarius Dwarf Galaxy rather than to the Milky Way itself.",
-    "art": "m054.webp"
+    "art": "m054.webp",
+    "pt": {
+      "distance": "87.000 anos-luz",
+      "trivia": "Pertence à Galáxia Anã de Sagitário, e não à própria Via Láctea."
+    }
   },
   {
     "id": "M55",
@@ -548,7 +764,11 @@
     "licence": "CC BY 4.0",
     "distance": "17,600 ly",
     "trivia": "Large and loose, so many of its stars can be resolved in modest telescopes.",
-    "art": "m055.webp"
+    "art": "m055.webp",
+    "pt": {
+      "distance": "17.600 anos-luz",
+      "trivia": "Grande e pouco concentrado, de modo que muitas de suas estrelas podem ser resolvidas em telescópios modestos."
+    }
   },
   {
     "id": "M56",
@@ -558,7 +778,11 @@
     "licence": "CC BY 2.5",
     "distance": "32,900 ly",
     "trivia": "Lies in a rich Milky Way star field in Lyra, between Albireo and Gamma Lyrae.",
-    "art": "m056.webp"
+    "art": "m056.webp",
+    "pt": {
+      "distance": "32.900 anos-luz",
+      "trivia": "Fica em um rico campo estelar da Via Láctea em Lira, entre Albireo e Gamma Lyrae."
+    }
   },
   {
     "id": "M57",
@@ -568,7 +792,11 @@
     "licence": "Public domain",
     "distance": "2,300 ly",
     "trivia": "A faint central white dwarf near magnitude 15 sits inside the glowing ring.",
-    "art": "m057.webp"
+    "art": "m057.webp",
+    "pt": {
+      "distance": "2.300 anos-luz",
+      "trivia": "Uma anã branca central tênue, perto da magnitude 15, fica dentro do anel brilhante."
+    }
   },
   {
     "id": "M58",
@@ -584,7 +812,11 @@
       0.31,
       0.52,
       0.38
-    ]
+    ],
+    "pt": {
+      "distance": "62 milhões de anos-luz",
+      "trivia": "Uma espiral barrada e uma das galáxias mais brilhantes do Aglomerado de Virgem."
+    }
   },
   {
     "id": "M59",
@@ -594,7 +826,11 @@
     "licence": "CC BY 4.0",
     "distance": "60 million ly",
     "trivia": "Discovered in 1779 by Johann Gottfried Koehler, who found M60 the same night.",
-    "art": "m059.webp"
+    "art": "m059.webp",
+    "pt": {
+      "distance": "60 milhões de anos-luz",
+      "trivia": "Descoberta em 1779 por Johann Gottfried Koehler, que encontrou M60 na mesma noite."
+    }
   },
   {
     "id": "M60",
@@ -611,7 +847,11 @@
       0.703,
       1
     ],
-    "rotate": false
+    "rotate": false,
+    "pt": {
+      "distance": "57 milhões de anos-luz",
+      "trivia": "Fica ao lado da espiral menor NGC 4647, com a qual parece estar interagindo."
+    }
   },
   {
     "id": "M61",
@@ -621,7 +861,11 @@
     "licence": "CC BY 4.0",
     "distance": "52 million ly",
     "trivia": "A face-on spiral that has hosted at least six observed supernovae.",
-    "art": "m061.webp"
+    "art": "m061.webp",
+    "pt": {
+      "distance": "52 milhões de anos-luz",
+      "trivia": "Uma espiral vista de frente que abrigou pelo menos seis supernovas observadas."
+    }
   },
   {
     "id": "M62",
@@ -631,7 +875,11 @@
     "licence": "CC BY 4.0",
     "distance": "22,500 ly",
     "trivia": "One of the most asymmetrical globular clusters known, distorted by tides near the galactic centre.",
-    "art": "m062.webp"
+    "art": "m062.webp",
+    "pt": {
+      "distance": "22.500 anos-luz",
+      "trivia": "Um dos aglomerados globulares mais assimétricos conhecidos, distorcido pelas marés perto do centro galáctico."
+    }
   },
   {
     "id": "M63",
@@ -641,7 +889,11 @@
     "licence": "CC BY 4.0",
     "distance": "27 million ly",
     "trivia": "Its tightly wound arms break into short segments, giving a sunflower look.",
-    "art": "m063.webp"
+    "art": "m063.webp",
+    "pt": {
+      "distance": "27 milhões de anos-luz",
+      "trivia": "Seus braços bem enrolados se quebram em segmentos curtos, dando-lhe aparência de girassol."
+    }
   },
   {
     "id": "M64",
@@ -651,7 +903,11 @@
     "licence": "CC BY 4.0",
     "distance": "17 million ly",
     "trivia": "Its outer gas rotates opposite to its inner stars, probably from an ancient merger.",
-    "art": "m064.webp"
+    "art": "m064.webp",
+    "pt": {
+      "distance": "17 milhões de anos-luz",
+      "trivia": "Seu gás externo gira em sentido oposto ao das estrelas internas, provavelmente por causa de uma fusão antiga."
+    }
   },
   {
     "id": "M65",
@@ -661,7 +917,11 @@
     "licence": "CC BY 4.0",
     "distance": "35 million ly",
     "trivia": "Forms the Leo Triplet with M66 and NGC 3628.",
-    "art": "m065.webp"
+    "art": "m065.webp",
+    "pt": {
+      "distance": "35 milhões de anos-luz",
+      "trivia": "Forma o Trio de Leão com M66 e NGC 3628."
+    }
   },
   {
     "id": "M66",
@@ -671,7 +931,11 @@
     "licence": "CC BY 4.0",
     "distance": "36 million ly",
     "trivia": "Its distorted spiral arms are probably the result of gravitational interaction within the Leo Triplet.",
-    "art": "m066.webp"
+    "art": "m066.webp",
+    "pt": {
+      "distance": "36 milhões de anos-luz",
+      "trivia": "Seus braços espirais distorcidos são provavelmente resultado da interação gravitacional dentro do Trio de Leão."
+    }
   },
   {
     "id": "M67",
@@ -681,7 +945,11 @@
     "licence": "CC0",
     "distance": "2,700 ly",
     "trivia": "One of the oldest known open clusters, about 4 billion years old, close to the Sun's age.",
-    "art": "m067.webp"
+    "art": "m067.webp",
+    "pt": {
+      "distance": "2.700 anos-luz",
+      "trivia": "Um dos aglomerados abertos mais antigos conhecidos, com cerca de 4 bilhões de anos, próximo da idade do Sol."
+    }
   },
   {
     "id": "M68",
@@ -691,7 +959,11 @@
     "licence": "CC BY 4.0",
     "distance": "33,600 ly",
     "trivia": "A very metal-poor globular cluster in Hydra.",
-    "art": "m068.webp"
+    "art": "m068.webp",
+    "pt": {
+      "distance": "33.600 anos-luz",
+      "trivia": "Um aglomerado globular muito pobre em metais em Hidra."
+    }
   },
   {
     "id": "M69",
@@ -701,7 +973,11 @@
     "licence": "CC BY 4.0",
     "distance": "29,700 ly",
     "trivia": "Discovered by Nicolas Lacaille in 1751-52 and added to Messier's catalogue in 1780.",
-    "art": "m069.webp"
+    "art": "m069.webp",
+    "pt": {
+      "distance": "29.700 anos-luz",
+      "trivia": "Descoberto por Nicolas Lacaille em 1751-52 e adicionado ao catálogo de Messier em 1780."
+    }
   },
   {
     "id": "M70",
@@ -711,7 +987,11 @@
     "licence": "CC BY 4.0",
     "distance": "29,400 ly",
     "trivia": "Messier observed it on the same night as M69 in August 1780.",
-    "art": "m070.webp"
+    "art": "m070.webp",
+    "pt": {
+      "distance": "29.400 anos-luz",
+      "trivia": "Messier o observou na mesma noite que M69, em agosto de 1780."
+    }
   },
   {
     "id": "M71",
@@ -721,7 +1001,11 @@
     "licence": "CC BY 4.0",
     "distance": "13,000 ly",
     "trivia": "Long debated as a loose globular or dense open cluster, it is now classed as a globular.",
-    "art": "m071.webp"
+    "art": "m071.webp",
+    "pt": {
+      "distance": "13.000 anos-luz",
+      "trivia": "Por muito tempo debatido como globular pouco concentrado ou aglomerado aberto denso, hoje é classificado como globular."
+    }
   },
   {
     "id": "M72",
@@ -731,7 +1015,11 @@
     "licence": "CC BY 4.0",
     "distance": "55,000 ly",
     "trivia": "Found by Pierre Mechain in 1780, along with the nearby M73.",
-    "art": "m072.webp"
+    "art": "m072.webp",
+    "pt": {
+      "distance": "55.000 anos-luz",
+      "trivia": "Encontrado por Pierre Mechain em 1780, junto com o vizinho M73."
+    }
   },
   {
     "id": "M73",
@@ -741,7 +1029,11 @@
     "licence": "CC BY 4.0",
     "distance": "~2,500 ly",
     "trivia": "Not a true cluster but a chance alignment of four stars in Aquarius.",
-    "art": "m073.webp"
+    "art": "m073.webp",
+    "pt": {
+      "distance": "~2.500 anos-luz",
+      "trivia": "Não é um aglomerado verdadeiro, mas um alinhamento casual de quatro estrelas em Aquário."
+    }
   },
   {
     "id": "M74",
@@ -751,7 +1043,11 @@
     "licence": "CC BY 4.0",
     "distance": "32 million ly",
     "trivia": "A textbook face-on spiral, but its low surface brightness makes it hard to see.",
-    "art": "m074.webp"
+    "art": "m074.webp",
+    "pt": {
+      "distance": "32 milhões de anos-luz",
+      "trivia": "Uma espiral vista de frente de livro didático, mas seu baixo brilho superficial a torna difícil de ver."
+    }
   },
   {
     "id": "M75",
@@ -761,7 +1057,11 @@
     "licence": "CC BY 4.0",
     "distance": "67,500 ly",
     "trivia": "One of the most highly concentrated globular clusters, with a very dense core.",
-    "art": "m075.webp"
+    "art": "m075.webp",
+    "pt": {
+      "distance": "67.500 anos-luz",
+      "trivia": "Um dos aglomerados globulares mais concentrados, com um núcleo muito denso."
+    }
   },
   {
     "id": "M76",
@@ -771,7 +1071,11 @@
     "licence": "Public domain",
     "distance": "2,500 ly",
     "trivia": "Called the Little Dumbbell for its resemblance to M27, it is among the faintest Messier objects.",
-    "art": "m076.webp"
+    "art": "m076.webp",
+    "pt": {
+      "distance": "2.500 anos-luz",
+      "trivia": "Chamada de Pequena Halteres por sua semelhança com M27, é um dos objetos de Messier mais fracos."
+    }
   },
   {
     "id": "M77",
@@ -781,7 +1085,11 @@
     "licence": "CC BY 4.0",
     "distance": "47 million ly",
     "trivia": "A Seyfert galaxy whose neutrino emission was reported by IceCube in 2022.",
-    "art": "m077.webp"
+    "art": "m077.webp",
+    "pt": {
+      "distance": "47 milhões de anos-luz",
+      "trivia": "Uma galáxia Seyfert cuja emissão de neutrinos foi relatada pelo IceCube em 2022."
+    }
   },
   {
     "id": "M78",
@@ -791,7 +1099,11 @@
     "licence": "CC BY 4.0",
     "distance": "1,600 ly",
     "trivia": "The brightest diffuse reflection nebula in the sky, in Orion.",
-    "art": "m078.webp"
+    "art": "m078.webp",
+    "pt": {
+      "distance": "1.600 anos-luz",
+      "trivia": "A nebulosa de reflexão difusa mais brilhante do céu, em Órion."
+    }
   },
   {
     "id": "M79",
@@ -801,7 +1113,11 @@
     "licence": "CC BY 4.0",
     "distance": "42,000 ly",
     "trivia": "May have been captured from the Canis Major Dwarf Galaxy.",
-    "art": "m079.webp"
+    "art": "m079.webp",
+    "pt": {
+      "distance": "42.000 anos-luz",
+      "trivia": "Pode ter sido capturado da Galáxia Anã do Cão Maior."
+    }
   },
   {
     "id": "M80",
@@ -811,7 +1127,11 @@
     "licence": "CC BY 4.0",
     "distance": "32,600 ly",
     "trivia": "One of the densest globular clusters; a nova, T Scorpii, appeared in it in 1860.",
-    "art": "m080.webp"
+    "art": "m080.webp",
+    "pt": {
+      "distance": "32.600 anos-luz",
+      "trivia": "Um dos aglomerados globulares mais densos; uma nova, T Scorpii, surgiu nele em 1860."
+    }
   },
   {
     "id": "M81",
@@ -821,7 +1141,11 @@
     "licence": "CC BY 4.0",
     "distance": "12 million ly",
     "trivia": "Discovered by Johann Elert Bode in 1774, it forms a pair in the sky with M82.",
-    "art": "m081.webp"
+    "art": "m081.webp",
+    "pt": {
+      "distance": "12 milhões de anos-luz",
+      "trivia": "Descoberta por Johann Elert Bode em 1774, forma um par no céu com M82."
+    }
   },
   {
     "id": "M82",
@@ -831,7 +1155,11 @@
     "licence": "Public domain",
     "distance": "12 million ly",
     "trivia": "A starburst galaxy forming stars about ten times faster than the Milky Way.",
-    "art": "m082.webp"
+    "art": "m082.webp",
+    "pt": {
+      "distance": "12 milhões de anos-luz",
+      "trivia": "Uma galáxia starburst que forma estrelas cerca de dez vezes mais rápido que a Via Láctea."
+    }
   },
   {
     "id": "M83",
@@ -841,7 +1169,11 @@
     "licence": "CC BY 4.0",
     "distance": "15 million ly",
     "trivia": "It has hosted at least six observed supernovae.",
-    "art": "m083.webp"
+    "art": "m083.webp",
+    "pt": {
+      "distance": "15 milhões de anos-luz",
+      "trivia": "Abrigou pelo menos seis supernovas observadas."
+    }
   },
   {
     "id": "M84",
@@ -851,7 +1183,11 @@
     "licence": "CC BY 4.0",
     "distance": "60 million ly",
     "trivia": "Hosts a supermassive black hole of more than a billion solar masses.",
-    "art": "m084.webp"
+    "art": "m084.webp",
+    "pt": {
+      "distance": "60 milhões de anos-luz",
+      "trivia": "Abriga um buraco negro supermassivo de mais de um bilhão de massas solares."
+    }
   },
   {
     "id": "M85",
@@ -861,7 +1197,11 @@
     "licence": "CC0",
     "distance": "60 million ly",
     "trivia": "A lenticular galaxy whose faint shells suggest a past merger; Mechain found it in 1781.",
-    "art": "m085.webp"
+    "art": "m085.webp",
+    "pt": {
+      "distance": "60 milhões de anos-luz",
+      "trivia": "Uma galáxia lenticular cujas camadas tênues sugerem uma fusão passada; Mechain a encontrou em 1781."
+    }
   },
   {
     "id": "M86",
@@ -871,7 +1211,11 @@
     "licence": "CC BY 4.0",
     "distance": "52 million ly",
     "trivia": "One of the few Virgo Cluster galaxies moving toward us, as it falls toward the cluster's centre.",
-    "art": "m086.webp"
+    "art": "m086.webp",
+    "pt": {
+      "distance": "52 milhões de anos-luz",
+      "trivia": "Uma das poucas galáxias do Aglomerado de Virgem que se movem em nossa direção, pois cai rumo ao centro do aglomerado."
+    }
   },
   {
     "id": "M87",
@@ -881,7 +1225,11 @@
     "licence": "Public domain",
     "distance": "53 million ly",
     "trivia": "Its black hole was the first ever imaged, by the Event Horizon Telescope in 2019.",
-    "art": "m087.webp"
+    "art": "m087.webp",
+    "pt": {
+      "distance": "53 milhões de anos-luz",
+      "trivia": "Seu buraco negro foi o primeiro já fotografado, pelo Event Horizon Telescope em 2019."
+    }
   },
   {
     "id": "M88",
@@ -891,7 +1239,11 @@
     "licence": "CC BY 4.0",
     "distance": "47 million ly",
     "trivia": "A large spiral galaxy in Coma Berenices, discovered by Messier in 1781.",
-    "art": "m088.webp"
+    "art": "m088.webp",
+    "pt": {
+      "distance": "47 milhões de anos-luz",
+      "trivia": "Uma grande galáxia espiral em Cabeleira de Berenice, descoberta por Messier em 1781."
+    }
   },
   {
     "id": "M89",
@@ -901,7 +1253,11 @@
     "licence": "CC0",
     "distance": "50 million ly",
     "trivia": "A nearly spherical elliptical galaxy surrounded by faint shells.",
-    "art": "m089.webp"
+    "art": "m089.webp",
+    "pt": {
+      "distance": "50 milhões de anos-luz",
+      "trivia": "Uma galáxia elíptica quase esférica cercada por camadas tênues."
+    }
   },
   {
     "id": "M90",
@@ -911,7 +1267,11 @@
     "licence": "CC BY 4.0",
     "distance": "58 million ly",
     "trivia": "One of the few galaxies in the Virgo Cluster that is blueshifted, moving toward us.",
-    "art": "m090.webp"
+    "art": "m090.webp",
+    "pt": {
+      "distance": "58 milhões de anos-luz",
+      "trivia": "Uma das poucas galáxias do Aglomerado de Virgem com desvio para o azul, movendo-se em nossa direção."
+    }
   },
   {
     "id": "M91",
@@ -921,7 +1281,11 @@
     "licence": "CC BY 4.0",
     "distance": "63 million ly",
     "trivia": "Long missing from the catalogue, it was identified with NGC 4548 in 1969.",
-    "art": "m091.webp"
+    "art": "m091.webp",
+    "pt": {
+      "distance": "63 milhões de anos-luz",
+      "trivia": "Ausente do catálogo por muito tempo, foi identificada com NGC 4548 em 1969."
+    }
   },
   {
     "id": "M92",
@@ -931,7 +1295,11 @@
     "licence": "CC BY 4.0",
     "distance": "26,700 ly",
     "trivia": "One of the brighter northern globular clusters, often overlooked beside M13 in Hercules.",
-    "art": "m092.webp"
+    "art": "m092.webp",
+    "pt": {
+      "distance": "26.700 anos-luz",
+      "trivia": "Um dos aglomerados globulares do norte mais brilhantes, frequentemente ignorado ao lado de M13 em Hércules."
+    }
   },
   {
     "id": "M93",
@@ -941,7 +1309,11 @@
     "licence": "CC BY 4.0",
     "distance": "3,600 ly",
     "trivia": "A bright open cluster in Puppis with a wedge or arrowhead shape.",
-    "art": "m093.webp"
+    "art": "m093.webp",
+    "pt": {
+      "distance": "3.600 anos-luz",
+      "trivia": "Um aglomerado aberto brilhante em Popa com formato de cunha ou ponta de flecha."
+    }
   },
   {
     "id": "M94",
@@ -951,7 +1323,11 @@
     "licence": "Public domain",
     "distance": "16 million ly",
     "trivia": "A starburst galaxy with a bright inner ring of intense star formation.",
-    "art": "m094.webp"
+    "art": "m094.webp",
+    "pt": {
+      "distance": "16 milhões de anos-luz",
+      "trivia": "Uma galáxia starburst com um anel interno brilhante de intensa formação de estrelas."
+    }
   },
   {
     "id": "M95",
@@ -961,7 +1337,11 @@
     "licence": "CC BY 3.0",
     "distance": "~35 million ly",
     "trivia": "A barred spiral with a ring of star formation, in the Leo I Group with M96.",
-    "art": "m095.webp"
+    "art": "m095.webp",
+    "pt": {
+      "distance": "~35 milhões de anos-luz",
+      "trivia": "Uma espiral barrada com um anel de formação estelar, no Grupo de Leão I com M96."
+    }
   },
   {
     "id": "M96",
@@ -971,7 +1351,11 @@
     "licence": "CC BY 4.0",
     "distance": "31 million ly",
     "trivia": "Lends its name to the M96 Group of galaxies in Leo, which includes M95 and M105.",
-    "art": "m096.webp"
+    "art": "m096.webp",
+    "pt": {
+      "distance": "31 milhões de anos-luz",
+      "trivia": "Dá nome ao Grupo M96 de galáxias em Leão, que inclui M95 e M105."
+    }
   },
   {
     "id": "M97",
@@ -987,7 +1371,11 @@
       0.145,
       0.38,
       0.57
-    ]
+    ],
+    "pt": {
+      "distance": "~2.000 anos-luz",
+      "trivia": "Lord Rosse a nomeou em 1848 por duas manchas escuras que lembram os olhos de uma coruja."
+    }
   },
   {
     "id": "M98",
@@ -997,7 +1385,11 @@
     "licence": "CC BY 4.0",
     "distance": "44 million ly",
     "trivia": "Seen nearly edge-on, it is blueshifted, approaching us as it falls into the Virgo Cluster.",
-    "art": "m098.webp"
+    "art": "m098.webp",
+    "pt": {
+      "distance": "44 milhões de anos-luz",
+      "trivia": "Vista quase de perfil, tem desvio para o azul, aproximando-se de nós enquanto cai no Aglomerado de Virgem."
+    }
   },
   {
     "id": "M99",
@@ -1007,7 +1399,11 @@
     "licence": "CC BY 4.0",
     "distance": "50 million ly",
     "trivia": "Lord Rosse identified its spiral structure in 1846, a year after M51.",
-    "art": "m099.webp"
+    "art": "m099.webp",
+    "pt": {
+      "distance": "50 milhões de anos-luz",
+      "trivia": "Lord Rosse identificou sua estrutura espiral em 1846, um ano depois de M51."
+    }
   },
   {
     "id": "M100",
@@ -1017,7 +1413,11 @@
     "licence": "CC BY 4.0",
     "distance": "55 million ly",
     "trivia": "A grand-design spiral whose Cepheid variables helped Hubble calibrate the distance scale.",
-    "art": "m100.webp"
+    "art": "m100.webp",
+    "pt": {
+      "distance": "55 milhões de anos-luz",
+      "trivia": "Uma espiral de grande desenho cujas variáveis Cefeidas ajudaram Hubble a calibrar a escala de distâncias."
+    }
   },
   {
     "id": "M101",
@@ -1027,7 +1427,11 @@
     "licence": "CC BY 4.0",
     "distance": "21 million ly",
     "trivia": "About 170,000 light-years across, it is larger than the Milky Way.",
-    "art": "m101.webp"
+    "art": "m101.webp",
+    "pt": {
+      "distance": "21 milhões de anos-luz",
+      "trivia": "Com cerca de 170.000 anos-luz de diâmetro, é maior que a Via Láctea."
+    }
   },
   {
     "id": "M102",
@@ -1037,7 +1441,11 @@
     "licence": "Public domain",
     "distance": "~50 million ly",
     "trivia": "Its identity as M102 is disputed, and Messier's entry may be a duplicate of M101.",
-    "art": "m102.webp"
+    "art": "m102.webp",
+    "pt": {
+      "distance": "~50 milhões de anos-luz",
+      "trivia": "Sua identidade como M102 é contestada, e a entrada de Messier pode ser uma duplicata de M101."
+    }
   },
   {
     "id": "M103",
@@ -1047,7 +1455,11 @@
     "licence": "CC BY 4.0",
     "distance": "~9,000 ly",
     "trivia": "Discovered by Pierre Mechain in 1781; the cluster is only about 25 million years old.",
-    "art": "m103.webp"
+    "art": "m103.webp",
+    "pt": {
+      "distance": "~9.000 anos-luz",
+      "trivia": "Descoberto por Pierre Mechain em 1781; o aglomerado tem apenas cerca de 25 milhões de anos."
+    }
   },
   {
     "id": "M104",
@@ -1069,7 +1481,11 @@
     "level": [
       45,
       100
-    ]
+    ],
+    "pt": {
+      "distance": "29 milhões de anos-luz",
+      "trivia": "Sua proeminente faixa de poeira e grande bojo central lhe dão a aparência de um chapéu de abas largas."
+    }
   },
   {
     "id": "M105",
@@ -1079,7 +1495,11 @@
     "licence": "CC BY 4.0",
     "distance": "38 million ly",
     "trivia": "An elliptical galaxy in the Leo I Group, near M95 and M96.",
-    "art": "m105.webp"
+    "art": "m105.webp",
+    "pt": {
+      "distance": "38 milhões de anos-luz",
+      "trivia": "Uma galáxia elíptica no Grupo de Leão I, perto de M95 e M96."
+    }
   },
   {
     "id": "M106",
@@ -1089,7 +1509,11 @@
     "licence": "CC BY 4.0",
     "distance": "24 million ly",
     "trivia": "Water-maser emission in its disc gave a precise geometric distance used to calibrate the cosmic scale.",
-    "art": "m106.webp"
+    "art": "m106.webp",
+    "pt": {
+      "distance": "24 milhões de anos-luz",
+      "trivia": "A emissão maser de água em seu disco forneceu uma distância geométrica precisa usada para calibrar a escala cósmica."
+    }
   },
   {
     "id": "M107",
@@ -1099,7 +1523,11 @@
     "licence": "CC BY 4.0",
     "distance": "20,900 ly",
     "trivia": "Pierre Mechain discovered it in April 1782 in Ophiuchus.",
-    "art": "m107.webp"
+    "art": "m107.webp",
+    "pt": {
+      "distance": "20.900 anos-luz",
+      "trivia": "Pierre Mechain o descobriu em abril de 1782 em Ofiúco."
+    }
   },
   {
     "id": "M108",
@@ -1109,7 +1537,11 @@
     "licence": "CC BY 4.0",
     "distance": "46 million ly",
     "trivia": "Seen nearly edge-on, it hosted the supernova SN 1969B.",
-    "art": "m108.webp"
+    "art": "m108.webp",
+    "pt": {
+      "distance": "46 milhões de anos-luz",
+      "trivia": "Vista quase de perfil, abrigou a supernova SN 1969B."
+    }
   },
   {
     "id": "M109",
@@ -1119,7 +1551,11 @@
     "licence": "CC BY 4.0",
     "distance": "83 million ly",
     "trivia": "A barred spiral that hosted the supernova SN 1956A.",
-    "art": "m109.webp"
+    "art": "m109.webp",
+    "pt": {
+      "distance": "83 milhões de anos-luz",
+      "trivia": "Uma espiral barrada que abrigou a supernova SN 1956A."
+    }
   },
   {
     "id": "M110",
@@ -1129,7 +1565,11 @@
     "licence": "CC BY 4.0",
     "distance": "2.7 million ly",
     "trivia": "Kenneth Glyn Jones added it to the Messier list in 1967.",
-    "art": "m110.webp"
+    "art": "m110.webp",
+    "pt": {
+      "distance": "2,7 milhões de anos-luz",
+      "trivia": "Kenneth Glyn Jones a adicionou à lista de Messier em 1967."
+    }
   },
   {
     "id": "C1",
@@ -1139,7 +1579,11 @@
     "licence": "CC BY 4.0",
     "distance": "5,000 ly",
     "trivia": "One of the oldest known open clusters, about 7 billion years old, near the north celestial pole.",
-    "art": "c001.webp"
+    "art": "c001.webp",
+    "pt": {
+      "distance": "5.000 anos-luz",
+      "trivia": "Um dos aglomerados abertos mais antigos conhecidos, com cerca de 7 bilhões de anos, perto do polo celeste norte."
+    }
   },
   {
     "id": "C2",
@@ -1149,7 +1593,11 @@
     "licence": "CC BY 4.0",
     "distance": "3,500 ly",
     "trivia": "The central star is a Wolf-Rayet-type star shedding material that forms the glowing shell.",
-    "art": "c002.webp"
+    "art": "c002.webp",
+    "pt": {
+      "distance": "3.500 anos-luz",
+      "trivia": "A estrela central é uma estrela do tipo Wolf-Rayet que ejeta material, formando a casca brilhante."
+    }
   },
   {
     "id": "C3",
@@ -1159,7 +1607,11 @@
     "licence": "CC BY 2.0",
     "distance": "14 million ly",
     "trivia": "A barred spiral in Draco with low surface brightness, so it needs a dark sky.",
-    "art": "c003.webp"
+    "art": "c003.webp",
+    "pt": {
+      "distance": "14 milhões de anos-luz",
+      "trivia": "Uma espiral barrada em Dragão com baixo brilho superficial, por isso exige um céu escuro."
+    }
   },
   {
     "id": "C4",
@@ -1169,7 +1621,11 @@
     "licence": "CC BY 4.0",
     "distance": "1,300 ly",
     "trivia": "A reflection nebula lit by the young star HD 200775.",
-    "art": "c004.webp"
+    "art": "c004.webp",
+    "pt": {
+      "distance": "1.300 anos-luz",
+      "trivia": "Uma nebulosa de reflexão iluminada pela estrela jovem HD 200775."
+    }
   },
   {
     "id": "C5",
@@ -1179,7 +1635,11 @@
     "licence": "CC BY 4.0",
     "distance": "~10 million ly",
     "trivia": "Milky Way dust hides much of its light; it would otherwise rank among the brightest galaxies.",
-    "art": "c005.webp"
+    "art": "c005.webp",
+    "pt": {
+      "distance": "~10 milhões de anos-luz",
+      "trivia": "A poeira da Via Láctea esconde grande parte de sua luz; sem ela, estaria entre as galáxias mais brilhantes."
+    }
   },
   {
     "id": "C6",
@@ -1189,7 +1649,11 @@
     "licence": "CC BY 4.0",
     "distance": "3,300 ly",
     "trivia": "In 1864 William Huggins showed from its spectrum that planetary nebulae are glowing gas.",
-    "art": "c006.webp"
+    "art": "c006.webp",
+    "pt": {
+      "distance": "3.300 anos-luz",
+      "trivia": "Em 1864, William Huggins mostrou, a partir de seu espectro, que as nebulosas planetárias são gás incandescente."
+    }
   },
   {
     "id": "C7",
@@ -1199,7 +1663,11 @@
     "licence": "CC BY 4.0",
     "distance": "~8 million ly",
     "trivia": "Contains NGC 2404, one of the largest known star-forming regions.",
-    "art": "c007.webp"
+    "art": "c007.webp",
+    "pt": {
+      "distance": "~8 milhões de anos-luz",
+      "trivia": "Contém NGC 2404, uma das maiores regiões de formação estelar conhecidas."
+    }
   },
   {
     "id": "C8",
@@ -1217,7 +1685,11 @@
       0.6,
       0.452
     ],
-    "level": 70
+    "level": 70,
+    "pt": {
+      "distance": "~3.700 anos-luz",
+      "trivia": "Descoberto por William Herschel em 1787."
+    }
   },
   {
     "id": "C9",
@@ -1227,7 +1699,11 @@
     "licence": "CC BY 4.0",
     "distance": "2,400 ly",
     "trivia": "A faint emission nebula in Cepheus whose dark lane gives the cave-mouth look.",
-    "art": "c009.webp"
+    "art": "c009.webp",
+    "pt": {
+      "distance": "2.400 anos-luz",
+      "trivia": "Uma nebulosa de emissão tênue em Cefeu cuja faixa escura lhe dá o aspecto de boca de caverna."
+    }
   },
   {
     "id": "C10",
@@ -1237,7 +1713,11 @@
     "licence": "CC BY 4.0",
     "distance": "~8,000 ly",
     "trivia": "Contains a number of Be stars, hot and rapidly spinning.",
-    "art": "c010.webp"
+    "art": "c010.webp",
+    "pt": {
+      "distance": "~8.000 anos-luz",
+      "trivia": "Contém várias estrelas Be, quentes e de rotação rápida."
+    }
   },
   {
     "id": "C11",
@@ -1247,7 +1727,11 @@
     "licence": "Public domain",
     "distance": "7,100 ly",
     "trivia": "The bubble is blown by the stellar wind of the star BD+60 2522.",
-    "art": "c011.webp"
+    "art": "c011.webp",
+    "pt": {
+      "distance": "7.100 anos-luz",
+      "trivia": "A bolha é soprada pelo vento estelar da estrela BD+60 2522."
+    }
   },
   {
     "id": "C12",
@@ -1257,7 +1741,11 @@
     "licence": "CC BY 4.0",
     "distance": "~25 million ly",
     "trivia": "Ten supernovae have been observed in it since 1917, earning the nickname.",
-    "art": "c012.webp"
+    "art": "c012.webp",
+    "pt": {
+      "distance": "~25 milhões de anos-luz",
+      "trivia": "Dez supernovas foram observadas nela desde 1917, o que lhe rendeu o apelido."
+    }
   },
   {
     "id": "C13",
@@ -1267,7 +1755,11 @@
     "licence": "CC BY 4.0",
     "distance": "~8,000 ly",
     "trivia": "Two bright stars look like eyes, giving the nicknames Owl Cluster and E.T. Cluster.",
-    "art": "c013.webp"
+    "art": "c013.webp",
+    "pt": {
+      "distance": "~8.000 anos-luz",
+      "trivia": "Duas estrelas brilhantes parecem olhos, dando os apelidos de Aglomerado da Coruja e Aglomerado do E.T."
+    }
   },
   {
     "id": "C14",
@@ -1277,7 +1769,11 @@
     "licence": "CC0",
     "distance": "7,500 ly",
     "trivia": "Both clusters are visible to the naked eye and are each about 13 million years old.",
-    "art": "c014.webp"
+    "art": "c014.webp",
+    "pt": {
+      "distance": "7.500 anos-luz",
+      "trivia": "Ambos os aglomerados são visíveis a olho nu e têm cerca de 13 milhões de anos cada."
+    }
   },
   {
     "id": "C15",
@@ -1287,7 +1783,11 @@
     "licence": "CC BY 2.0",
     "distance": "~3,000 ly",
     "trivia": "Look straight at it and the bright central star drowns the nebula, which reappears when you glance away.",
-    "art": "c015.webp"
+    "art": "c015.webp",
+    "pt": {
+      "distance": "~3.000 anos-luz",
+      "trivia": "Olhando diretamente para ela, a estrela central brilhante ofusca a nebulosa, que reaparece quando você desvia o olhar."
+    }
   },
   {
     "id": "C16",
@@ -1303,7 +1803,11 @@
       0.05,
       0.66,
       0.88
-    ]
+    ],
+    "pt": {
+      "distance": "~2.800 anos-luz",
+      "trivia": "Um aglomerado aberto brilhante e pouco concentrado em Lagarto, facilmente visto com binóculos."
+    }
   },
   {
     "id": "C17",
@@ -1320,7 +1824,11 @@
       0.152,
       0.243
     ],
-    "fetch_px": 3264
+    "fetch_px": 3264,
+    "pt": {
+      "distance": "2,5 milhões de anos-luz",
+      "trivia": "Uma galáxia anã satélite de Andrômeda, emparelhada com NGC 185."
+    }
   },
   {
     "id": "C18",
@@ -1337,7 +1845,11 @@
       0.155,
       0.248
     ],
-    "fetch_px": 3264
+    "fetch_px": 3264,
+    "pt": {
+      "distance": "2,0 milhões de anos-luz",
+      "trivia": "Uma galáxia elíptica anã satélite de Andrômeda que, incomumente, contém poeira e estrelas jovens."
+    }
   },
   {
     "id": "C19",
@@ -1347,7 +1859,11 @@
     "licence": "CC BY 4.0",
     "distance": "~3,300 ly",
     "trivia": "The dark nebula Barnard 168 stretches westward from it like a long tail.",
-    "art": "c019.webp"
+    "art": "c019.webp",
+    "pt": {
+      "distance": "~3.300 anos-luz",
+      "trivia": "A nebulosa escura Barnard 168 se estende para oeste a partir dela como uma longa cauda."
+    }
   },
   {
     "id": "C20",
@@ -1357,7 +1873,11 @@
     "licence": "Public domain",
     "distance": "2,600 ly",
     "trivia": "Its shape resembles North America, and it lies next to the bright star Deneb.",
-    "art": "c020.webp"
+    "art": "c020.webp",
+    "pt": {
+      "distance": "2.600 anos-luz",
+      "trivia": "Sua forma lembra a América do Norte, e ela fica ao lado da brilhante estrela Deneb."
+    }
   },
   {
     "id": "C21",
@@ -1367,7 +1887,11 @@
     "licence": "CC BY 4.0",
     "distance": "12.5 million ly",
     "trivia": "Hubble images show many young star clusters in this irregular starburst galaxy.",
-    "art": "c021.webp"
+    "art": "c021.webp",
+    "pt": {
+      "distance": "12,5 milhões de anos-luz",
+      "trivia": "Imagens do Hubble mostram muitos aglomerados estelares jovens nesta galáxia starburst irregular."
+    }
   },
   {
     "id": "C22",
@@ -1377,7 +1901,11 @@
     "licence": "CC BY 2.0",
     "distance": "~5,600 ly",
     "trivia": "Its blue-green colour and round shape give it the nickname Blue Snowball.",
-    "art": "c022.webp"
+    "art": "c022.webp",
+    "pt": {
+      "distance": "~5.600 anos-luz",
+      "trivia": "Sua cor azul-esverdeada e formato redondo lhe renderam o apelido de Bola de Neve Azul."
+    }
   },
   {
     "id": "C23",
@@ -1387,7 +1915,11 @@
     "licence": "CC BY 4.0",
     "distance": "30 million ly",
     "trivia": "A near-perfect edge-on spiral with a thin dust lane, often compared to the Milky Way.",
-    "art": "c023.webp"
+    "art": "c023.webp",
+    "pt": {
+      "distance": "30 milhões de anos-luz",
+      "trivia": "Uma espiral quase perfeitamente de perfil com uma fina faixa de poeira, frequentemente comparada à Via Láctea."
+    }
   },
   {
     "id": "C24",
@@ -1397,7 +1929,11 @@
     "licence": "Public domain",
     "distance": "235 million ly",
     "trivia": "The central galaxy of the Perseus Cluster, wrapped in filaments of gas and a strong radio source.",
-    "art": "c024.webp"
+    "art": "c024.webp",
+    "pt": {
+      "distance": "235 milhões de anos-luz",
+      "trivia": "A galáxia central do Aglomerado de Perseu, envolta em filamentos de gás e uma forte fonte de rádio."
+    }
   },
   {
     "id": "C25",
@@ -1407,7 +1943,11 @@
     "licence": "CC BY 2.0",
     "distance": "~300,000 ly",
     "trivia": "One of the most remote globular clusters of the Milky Way; Shapley called it the Intergalactic Tramp.",
-    "art": "c025.webp"
+    "art": "c025.webp",
+    "pt": {
+      "distance": "~300.000 anos-luz",
+      "trivia": "Um dos aglomerados globulares mais remotos da Via Láctea; Shapley o chamou de Vagabundo Intergaláctico."
+    }
   },
   {
     "id": "C26",
@@ -1417,7 +1957,11 @@
     "licence": "CC0",
     "distance": "14 million ly",
     "trivia": "Seen edge-on and slightly warped, it is a pure disc galaxy with no noticeable bulge.",
-    "art": "c026.webp"
+    "art": "c026.webp",
+    "pt": {
+      "distance": "14 milhões de anos-luz",
+      "trivia": "Vista de perfil e levemente deformada, é uma galáxia de disco puro, sem bojo perceptível."
+    }
   },
   {
     "id": "C27",
@@ -1427,7 +1971,11 @@
     "licence": "CC BY 4.0",
     "distance": "5,000 ly",
     "trivia": "Blown by the Wolf-Rayet star WR 136, which will eventually end as a supernova.",
-    "art": "c027.webp"
+    "art": "c027.webp",
+    "pt": {
+      "distance": "5.000 anos-luz",
+      "trivia": "Soprada pela estrela Wolf-Rayet WR 136, que acabará como uma supernova."
+    }
   },
   {
     "id": "C28",
@@ -1441,7 +1989,11 @@
     "level": [
       12,
       32
-    ]
+    ],
+    "pt": {
+      "distance": "~1.300 anos-luz",
+      "trivia": "Um aglomerado aberto antigo, com mais de um bilhão de anos, grande o bastante para preencher o campo de um binóculo."
+    }
   },
   {
     "id": "C29",
@@ -1451,7 +2003,11 @@
     "licence": "CC BY 4.0",
     "distance": "~65 million ly",
     "trivia": "A spiral in Canes Venatici with a LINER-type active nucleus.",
-    "art": "c029.webp"
+    "art": "c029.webp",
+    "pt": {
+      "distance": "~65 milhões de anos-luz",
+      "trivia": "Uma espiral em Cães de Caça com um núcleo ativo do tipo LINER."
+    }
   },
   {
     "id": "C30",
@@ -1461,7 +2017,11 @@
     "licence": "CC BY 3.0",
     "distance": "~45 million ly",
     "trivia": "Often called a Milky Way twin; Stephan's Quintet appears nearby in the sky but is far more distant.",
-    "art": "c030.webp"
+    "art": "c030.webp",
+    "pt": {
+      "distance": "~45 milhões de anos-luz",
+      "trivia": "Frequentemente chamada de gêmea da Via Láctea; o Quinteto de Stephan aparece perto dela no céu, mas está muito mais distante."
+    }
   },
   {
     "id": "C31",
@@ -1471,7 +2031,11 @@
     "licence": "CC BY 4.0",
     "distance": "1,500 ly",
     "trivia": "Lit by the runaway star AE Aurigae.",
-    "art": "c031.webp"
+    "art": "c031.webp",
+    "pt": {
+      "distance": "1.500 anos-luz",
+      "trivia": "Iluminada pela estrela fugitiva AE Aurigae."
+    }
   },
   {
     "id": "C32",
@@ -1481,7 +2045,11 @@
     "licence": "CC BY 4.0",
     "distance": "~25 million ly",
     "trivia": "Seen edge-on, its disc is distorted and starburst-active, probably from interaction with neighbours.",
-    "art": "c032.webp"
+    "art": "c032.webp",
+    "pt": {
+      "distance": "~25 milhões de anos-luz",
+      "trivia": "Vista de perfil, seu disco é distorcido e tem atividade starburst, provavelmente por interação com vizinhas."
+    }
   },
   {
     "id": "C33",
@@ -1498,7 +2066,11 @@
       0.454,
       0.72
     ],
-    "rotate": false
+    "rotate": false,
+    "pt": {
+      "distance": "~2.400 anos-luz",
+      "trivia": "Parte do Laço do Cisne, o remanescente de uma supernova que explodiu há 10.000 a 20.000 anos."
+    }
   },
   {
     "id": "C34",
@@ -1515,7 +2087,11 @@
       0.6679,
       1.248
     ],
-    "angle": 20.9
+    "angle": 20.9,
+    "pt": {
+      "distance": "~2.400 anos-luz",
+      "trivia": "Sua parte mais brilhante é cruzada pela estrela em primeiro plano 52 Cygni."
+    }
   },
   {
     "id": "C35",
@@ -1525,7 +2101,11 @@
     "licence": "CC BY 2.0",
     "distance": "320 million ly",
     "trivia": "The brightest galaxy in the Coma Cluster, with a black hole estimated at about 21 billion solar masses.",
-    "art": "c035.webp"
+    "art": "c035.webp",
+    "pt": {
+      "distance": "320 milhões de anos-luz",
+      "trivia": "A galáxia mais brilhante do Aglomerado de Coma, com um buraco negro estimado em cerca de 21 bilhões de massas solares."
+    }
   },
   {
     "id": "C36",
@@ -1535,7 +2115,11 @@
     "licence": "CC BY 4.0",
     "distance": "29 million ly",
     "trivia": "Discovered by William Herschel in 1785.",
-    "art": "c036.webp"
+    "art": "c036.webp",
+    "pt": {
+      "distance": "29 milhões de anos-luz",
+      "trivia": "Descoberto por William Herschel em 1785."
+    }
   },
   {
     "id": "C37",
@@ -1552,7 +2136,11 @@
       0.5,
       0.8
     ],
-    "level": 45
+    "level": 45,
+    "pt": {
+      "distance": "~6.000 anos-luz",
+      "trivia": "Um aglomerado aberto em Raposa contendo a estrela 20 Vulpeculae."
+    }
   },
   {
     "id": "C38",
@@ -1568,7 +2156,11 @@
       0.05,
       0.874,
       0.95
-    ]
+    ],
+    "pt": {
+      "distance": "43 milhões de anos-luz",
+      "trivia": "Uma espiral quase perfeitamente de perfil com uma fina faixa de poeira, favorita dos amadores em Cabeleira de Berenice."
+    }
   },
   {
     "id": "C39",
@@ -1578,7 +2170,11 @@
     "licence": "CC BY 4.0",
     "distance": "~4,000 ly",
     "trivia": "From the ground it looks like a face in a fur parka, and Hubble reveals a complex gas outflow.",
-    "art": "c039.webp"
+    "art": "c039.webp",
+    "pt": {
+      "distance": "~4.000 anos-luz",
+      "trivia": "Do solo parece um rosto em uma parca de pele, e o Hubble revela uma complexa ejeção de gás."
+    }
   },
   {
     "id": "C40",
@@ -1588,7 +2184,11 @@
     "licence": "CC BY 2.0",
     "distance": "~70 million ly",
     "trivia": "A lenticular galaxy in Leo whose gas and stars rotate in opposite directions.",
-    "art": "c040.webp"
+    "art": "c040.webp",
+    "pt": {
+      "distance": "~70 milhões de anos-luz",
+      "trivia": "Uma galáxia lenticular em Leão cujo gás e estrelas giram em sentidos opostos."
+    }
   },
   {
     "id": "C41",
@@ -1598,7 +2198,11 @@
     "licence": "CC BY 4.0",
     "distance": "153 ly",
     "trivia": "The nearest open cluster to the Sun, forming the V-shaped face of Taurus the Bull.",
-    "art": "c041.webp"
+    "art": "c041.webp",
+    "pt": {
+      "distance": "153 anos-luz",
+      "trivia": "O aglomerado aberto mais próximo do Sol, formando a face em V do Touro."
+    }
   },
   {
     "id": "C42",
@@ -1608,7 +2212,11 @@
     "licence": "CC BY 2.0",
     "distance": "135,000 ly",
     "trivia": "One of the most distant globular clusters of the Milky Way, lying in the outer halo.",
-    "art": "c042.webp"
+    "art": "c042.webp",
+    "pt": {
+      "distance": "135.000 anos-luz",
+      "trivia": "Um dos aglomerados globulares mais distantes da Via Láctea, no halo externo."
+    }
   },
   {
     "id": "C43",
@@ -1618,7 +2226,11 @@
     "licence": "CC BY 4.0",
     "distance": "40 million ly",
     "trivia": "Its central bulge and dust lane resemble the Sombrero Galaxy on a smaller scale.",
-    "art": "c043.webp"
+    "art": "c043.webp",
+    "pt": {
+      "distance": "40 milhões de anos-luz",
+      "trivia": "Seu bojo central e faixa de poeira lembram a Galáxia do Sombrero em escala menor."
+    }
   },
   {
     "id": "C44",
@@ -1628,7 +2240,11 @@
     "licence": "CC BY 2.0",
     "distance": "~105 million ly",
     "trivia": "Its single prominent arm is thought to come from a past minor merger with a smaller galaxy.",
-    "art": "c044.webp"
+    "art": "c044.webp",
+    "pt": {
+      "distance": "~105 milhões de anos-luz",
+      "trivia": "Acredita-se que seu único braço proeminente venha de uma fusão menor passada com uma galáxia menor."
+    }
   },
   {
     "id": "C45",
@@ -1638,7 +2254,11 @@
     "licence": "CC BY 4.0",
     "distance": "~59 million ly",
     "trivia": "A grand-design spiral in Bootes with a ring of star formation around its core.",
-    "art": "c045.webp"
+    "art": "c045.webp",
+    "pt": {
+      "distance": "~59 milhões de anos-luz",
+      "trivia": "Uma espiral de grande desenho em Boieiro com um anel de formação estelar ao redor do núcleo."
+    }
   },
   {
     "id": "C46",
@@ -1648,7 +2268,11 @@
     "licence": "CC BY 2.0",
     "distance": "2,500 ly",
     "trivia": "Its brightness and shape change within weeks as clouds shade light from the variable star R Monocerotis.",
-    "art": "c046.webp"
+    "art": "c046.webp",
+    "pt": {
+      "distance": "2.500 anos-luz",
+      "trivia": "Seu brilho e formato mudam em poucas semanas, conforme nuvens sombreiam a luz da estrela variável R Monocerotis."
+    }
   },
   {
     "id": "C47",
@@ -1658,7 +2282,11 @@
     "licence": "Public domain",
     "distance": "50,000 ly",
     "trivia": "Discovered by William Herschel in 1785.",
-    "art": "c047.webp"
+    "art": "c047.webp",
+    "pt": {
+      "distance": "50.000 anos-luz",
+      "trivia": "Descoberto por William Herschel em 1785."
+    }
   },
   {
     "id": "C48",
@@ -1668,7 +2296,11 @@
     "licence": "CC BY 2.0",
     "distance": "~67 million ly",
     "trivia": "Dust lanes spiral around a smooth, bright central bulge.",
-    "art": "c048.webp"
+    "art": "c048.webp",
+    "pt": {
+      "distance": "~67 milhões de anos-luz",
+      "trivia": "Faixas de poeira espiralam ao redor de um bojo central liso e brilhante."
+    }
   },
   {
     "id": "C49",
@@ -1678,7 +2310,11 @@
     "licence": "CC BY 4.0",
     "distance": "5,200 ly",
     "trivia": "Stellar winds from the young cluster NGC 2244 have cleared the hole at its centre.",
-    "art": "c049.webp"
+    "art": "c049.webp",
+    "pt": {
+      "distance": "5.200 anos-luz",
+      "trivia": "Os ventos estelares do jovem aglomerado NGC 2244 limparam o buraco em seu centro."
+    }
   },
   {
     "id": "C50",
@@ -1695,7 +2331,11 @@
       0.28,
       0.336
     ],
-    "rotate": false
+    "rotate": false,
+    "pt": {
+      "distance": "5.200 anos-luz",
+      "trivia": "Um aglomerado aberto jovem cujas estrelas quentes ionizam a Nebulosa da Roseta ao redor."
+    }
   },
   {
     "id": "C51",
@@ -1705,7 +2345,11 @@
     "licence": "CC BY 4.0",
     "distance": "2.4 million ly",
     "trivia": "A Local Group dwarf galaxy with few dust clouds, a good laboratory for Cepheid variable stars.",
-    "art": "c051.webp"
+    "art": "c051.webp",
+    "pt": {
+      "distance": "2,4 milhões de anos-luz",
+      "trivia": "Uma galáxia anã do Grupo Local com poucas nuvens de poeira, um bom laboratório para estrelas variáveis Cefeidas."
+    }
   },
   {
     "id": "C52",
@@ -1719,7 +2363,11 @@
     "level": [
       25,
       100
-    ]
+    ],
+    "pt": {
+      "distance": "~40 milhões de anos-luz",
+      "trivia": "Descoberto por William Herschel em 1784."
+    }
   },
   {
     "id": "C53",
@@ -1737,7 +2385,11 @@
       0.24,
       0.432
     ],
-    "rotate": false
+    "rotate": false,
+    "pt": {
+      "distance": "32 milhões de anos-luz",
+      "trivia": "Uma galáxia lenticular que abriga um dos buracos negros de bilhões de massas solares mais próximos conhecidos."
+    }
   },
   {
     "id": "C54",
@@ -1753,7 +2405,11 @@
       0.207,
       0.35,
       0.585
-    ]
+    ],
+    "pt": {
+      "distance": "~11.000 anos-luz",
+      "trivia": "Um aglomerado aberto antigo, com mais de um bilhão de anos, em Unicórnio."
+    }
   },
   {
     "id": "C55",
@@ -1763,7 +2419,11 @@
     "licence": "CC BY 2.0",
     "distance": "~5,200 ly",
     "trivia": "Lord Rosse's drawing showed bright extensions like Saturn's rings, hence the name.",
-    "art": "c055.webp"
+    "art": "c055.webp",
+    "pt": {
+      "distance": "~5.200 anos-luz",
+      "trivia": "O desenho de Lord Rosse mostrava extensões brilhantes como os anéis de Saturno, daí o nome."
+    }
   },
   {
     "id": "C56",
@@ -1773,7 +2433,11 @@
     "licence": "CC BY 4.0",
     "distance": "~1,600 ly",
     "trivia": "Its nickname comes from dark patches and stars that suggest eyes and a nose.",
-    "art": "c056.webp"
+    "art": "c056.webp",
+    "pt": {
+      "distance": "~1.600 anos-luz",
+      "trivia": "Seu apelido vem de manchas escuras e estrelas que sugerem olhos e um nariz."
+    }
   },
   {
     "id": "C57",
@@ -1783,7 +2447,11 @@
     "licence": "CC BY 4.0",
     "distance": "1.6 million ly",
     "trivia": "Hubble used it in 1925 to help show that galaxies exist beyond the Milky Way.",
-    "art": "c057.webp"
+    "art": "c057.webp",
+    "pt": {
+      "distance": "1,6 milhão de anos-luz",
+      "trivia": "Hubble a usou em 1925 para ajudar a mostrar que existem galáxias além da Via Láctea."
+    }
   },
   {
     "id": "C58",
@@ -1793,7 +2461,11 @@
     "licence": "CC BY 4.0",
     "distance": "3,700 ly",
     "trivia": "Discovered by Caroline Herschel in 1783.",
-    "art": "c058.webp"
+    "art": "c058.webp",
+    "pt": {
+      "distance": "3.700 anos-luz",
+      "trivia": "Descoberto por Caroline Herschel em 1783."
+    }
   },
   {
     "id": "C59",
@@ -1803,7 +2475,11 @@
     "licence": "CC BY 2.0",
     "distance": "~1,400 ly",
     "trivia": "Its nickname comes from its apparent size, similar to Jupiter's disc in a small telescope.",
-    "art": "c059.webp"
+    "art": "c059.webp",
+    "pt": {
+      "distance": "~1.400 anos-luz",
+      "trivia": "Seu apelido vem de seu tamanho aparente, semelhante ao disco de Júpiter em um telescópio pequeno."
+    }
   },
   {
     "id": "C60",
@@ -1820,7 +2496,11 @@
       0.6,
       0.7255
     ],
-    "rotate": false
+    "rotate": false,
+    "pt": {
+      "distance": "~45 milhões de anos-luz",
+      "trivia": "NGC 4038, a galáxia das Antenas do norte, contém a maior parte dos nós rosados brilhantes de estrelas novas do par."
+    }
   },
   {
     "id": "C61",
@@ -1837,7 +2517,11 @@
       0.6,
       0.7255
     ],
-    "rotate": false
+    "rotate": false,
+    "pt": {
+      "distance": "~45 milhões de anos-luz",
+      "trivia": "NGC 4039, a galáxia das Antenas do sul, está se fundindo com NGC 4038 e as duas se tornarão uma só galáxia."
+    }
   },
   {
     "id": "C62",
@@ -1847,7 +2531,11 @@
     "licence": "CC BY 4.0",
     "distance": "11 million ly",
     "trivia": "A member of the Sculptor Group that shows a notable clear gap in its disc.",
-    "art": "c062.webp"
+    "art": "c062.webp",
+    "pt": {
+      "distance": "11 milhões de anos-luz",
+      "trivia": "Um membro do Grupo do Escultor que mostra uma notável abertura limpa em seu disco."
+    }
   },
   {
     "id": "C63",
@@ -1857,7 +2545,11 @@
     "licence": "Public domain",
     "distance": "650 ly",
     "trivia": "One of the closest planetary nebulae to Earth.",
-    "art": "c063.webp"
+    "art": "c063.webp",
+    "pt": {
+      "distance": "650 anos-luz",
+      "trivia": "Uma das nebulosas planetárias mais próximas da Terra."
+    }
   },
   {
     "id": "C64",
@@ -1867,7 +2559,11 @@
     "licence": "CC BY 4.0",
     "distance": "4,800 ly",
     "trivia": "A very young open cluster, only a few million years old, around Tau Canis Majoris.",
-    "art": "c064.webp"
+    "art": "c064.webp",
+    "pt": {
+      "distance": "4.800 anos-luz",
+      "trivia": "Um aglomerado aberto muito jovem, com apenas alguns milhões de anos, ao redor de Tau Canis Majoris."
+    }
   },
   {
     "id": "C65",
@@ -1877,7 +2573,11 @@
     "licence": "CC BY 4.0",
     "distance": "11.4 million ly",
     "trivia": "One of the brightest spiral galaxies in the sky, discovered by Caroline Herschel in 1783.",
-    "art": "c065.webp"
+    "art": "c065.webp",
+    "pt": {
+      "distance": "11,4 milhões de anos-luz",
+      "trivia": "Uma das galáxias espirais mais brilhantes do céu, descoberta por Caroline Herschel em 1783."
+    }
   },
   {
     "id": "C66",
@@ -1893,7 +2593,11 @@
       0,
       0.82,
       1
-    ]
+    ],
+    "pt": {
+      "distance": "~110.000 anos-luz",
+      "trivia": "Descoberto por William Herschel em 1784, fica no halo externo da Via Láctea."
+    }
   },
   {
     "id": "C67",
@@ -1903,7 +2607,11 @@
     "licence": "CC BY 4.0",
     "distance": "45 million ly",
     "trivia": "A barred spiral with a bright starburst ring around its core and a small satellite galaxy.",
-    "art": "c067.webp"
+    "art": "c067.webp",
+    "pt": {
+      "distance": "45 milhões de anos-luz",
+      "trivia": "Uma espiral barrada com um brilhante anel starburst ao redor do núcleo e uma pequena galáxia satélite."
+    }
   },
   {
     "id": "C68",
@@ -1913,7 +2621,11 @@
     "licence": "CC BY 4.0",
     "distance": "~500 ly",
     "trivia": "A comet-shaped nebula in Corona Australis surrounding the variable star R Coronae Australis.",
-    "art": "c068.webp"
+    "art": "c068.webp",
+    "pt": {
+      "distance": "~500 anos-luz",
+      "trivia": "Uma nebulosa em forma de cometa em Coroa Austral que envolve a estrela variável R Coronae Australis."
+    }
   },
   {
     "id": "C69",
@@ -1923,7 +2635,11 @@
     "licence": "Public domain",
     "distance": "~3,800 ly",
     "trivia": "Its central star is among the hottest known, at over 200,000 K.",
-    "art": "c069.webp"
+    "art": "c069.webp",
+    "pt": {
+      "distance": "~3.800 anos-luz",
+      "trivia": "Sua estrela central está entre as mais quentes conhecidas, com mais de 200.000 K."
+    }
   },
   {
     "id": "C70",
@@ -1933,7 +2649,11 @@
     "licence": "CC BY 4.0",
     "distance": "6.1 million ly",
     "trivia": "A member of the Sculptor Group seen almost face-on, one of the nearest spirals beyond the Local Group.",
-    "art": "c070.webp"
+    "art": "c070.webp",
+    "pt": {
+      "distance": "6,1 milhões de anos-luz",
+      "trivia": "Um membro do Grupo do Escultor visto quase de frente, uma das espirais mais próximas além do Grupo Local."
+    }
   },
   {
     "id": "C71",
@@ -1943,7 +2663,11 @@
     "licence": "CC BY 4.0",
     "distance": "~4,000 ly",
     "trivia": "One of the richest open clusters in Puppis, with several hundred stars.",
-    "art": "c071.webp"
+    "art": "c071.webp",
+    "pt": {
+      "distance": "~4.000 anos-luz",
+      "trivia": "Um dos aglomerados abertos mais ricos de Popa, com várias centenas de estrelas."
+    }
   },
   {
     "id": "C72",
@@ -1953,7 +2677,11 @@
     "licence": "CC BY 4.0",
     "distance": "~7 million ly",
     "trivia": "Seen nearly edge-on, it is an irregular barred spiral in the Sculptor Group.",
-    "art": "c072.webp"
+    "art": "c072.webp",
+    "pt": {
+      "distance": "~7 milhões de anos-luz",
+      "trivia": "Vista quase de perfil, é uma espiral barrada irregular no Grupo do Escultor."
+    }
   },
   {
     "id": "C73",
@@ -1963,7 +2691,11 @@
     "licence": "CC BY 2.0",
     "distance": "39,000 ly",
     "trivia": "A dense globular cluster in Columba with evidence of two distinct stellar populations.",
-    "art": "c073.webp"
+    "art": "c073.webp",
+    "pt": {
+      "distance": "39.000 anos-luz",
+      "trivia": "Um aglomerado globular denso em Pomba com indícios de duas populações estelares distintas."
+    }
   },
   {
     "id": "C74",
@@ -1973,7 +2705,11 @@
     "licence": "Public domain",
     "distance": "2,000 ly",
     "trivia": "Webb's 2022 images show the fainter of its two central stars shaped the nebula.",
-    "art": "c074.webp"
+    "art": "c074.webp",
+    "pt": {
+      "distance": "2.000 anos-luz",
+      "trivia": "As imagens do Webb de 2022 mostram que a mais fraca de suas duas estrelas centrais moldou a nebulosa."
+    }
   },
   {
     "id": "C75",
@@ -1983,7 +2719,11 @@
     "licence": "CC BY 4.0",
     "distance": "~1,800 ly",
     "trivia": "A bright open cluster in Scorpius found by Lacaille in 1751-52.",
-    "art": "c075.webp"
+    "art": "c075.webp",
+    "pt": {
+      "distance": "~1.800 anos-luz",
+      "trivia": "Um aglomerado aberto brilhante em Escorpião encontrado por Lacaille em 1751-52."
+    }
   },
   {
     "id": "C76",
@@ -1993,7 +2733,11 @@
     "licence": "CC BY 4.0",
     "distance": "~5,200 ly",
     "trivia": "The heart of the Scorpius OB1 association, packed with luminous O and B stars.",
-    "art": "c076.webp"
+    "art": "c076.webp",
+    "pt": {
+      "distance": "~5.200 anos-luz",
+      "trivia": "O coração da associação Scorpius OB1, repleta de estrelas O e B luminosas."
+    }
   },
   {
     "id": "C77",
@@ -2003,7 +2747,11 @@
     "licence": "CC BY 4.0",
     "distance": "~12 million ly",
     "trivia": "A galaxy merger with a prominent dust lane and a powerful radio jet, and one of the nearest active galaxies.",
-    "art": "c077.webp"
+    "art": "c077.webp",
+    "pt": {
+      "distance": "~12 milhões de anos-luz",
+      "trivia": "Uma fusão de galáxias com uma proeminente faixa de poeira e um poderoso jato de rádio, e uma das galáxias ativas mais próximas."
+    }
   },
   {
     "id": "C78",
@@ -2013,7 +2761,11 @@
     "licence": "Public domain",
     "distance": "22,000 ly",
     "trivia": "A core-collapsed globular cluster in Corona Australis.",
-    "art": "c078.webp"
+    "art": "c078.webp",
+    "pt": {
+      "distance": "22.000 anos-luz",
+      "trivia": "Um aglomerado globular de núcleo colapsado em Coroa Austral."
+    }
   },
   {
     "id": "C79",
@@ -2023,7 +2775,11 @@
     "licence": "CC BY 2.0",
     "distance": "~16,000 ly",
     "trivia": "A stellar-mass black hole was found in it in 2018 by tracking a companion star's motion.",
-    "art": "c079.webp"
+    "art": "c079.webp",
+    "pt": {
+      "distance": "~16.000 anos-luz",
+      "trivia": "Um buraco negro de massa estelar foi encontrado nele em 2018 ao rastrear o movimento de uma estrela companheira."
+    }
   },
   {
     "id": "C80",
@@ -2033,7 +2789,11 @@
     "licence": "CC BY 4.0",
     "distance": "~17,000 ly",
     "trivia": "The most massive globular cluster in the Milky Way, probably the stripped core of a dwarf galaxy.",
-    "art": "c080.webp"
+    "art": "c080.webp",
+    "pt": {
+      "distance": "~17.000 anos-luz",
+      "trivia": "O aglomerado globular mais massivo da Via Láctea, provavelmente o núcleo remanescente de uma galáxia anã."
+    }
   },
   {
     "id": "C81",
@@ -2043,7 +2803,11 @@
     "licence": "Public domain",
     "distance": "~18,000 ly",
     "trivia": "A metal-rich globular cluster in Ara discovered by James Dunlop in 1826.",
-    "art": "c081.webp"
+    "art": "c081.webp",
+    "pt": {
+      "distance": "~18.000 anos-luz",
+      "trivia": "Um aglomerado globular rico em metais em Altar descoberto por James Dunlop em 1826."
+    }
   },
   {
     "id": "C82",
@@ -2058,7 +2822,11 @@
     "level": [
       10,
       82
-    ]
+    ],
+    "pt": {
+      "distance": "~4.300 anos-luz",
+      "trivia": "Suas estrelas quentes iluminam a nebulosa de emissão vizinha NGC 6188."
+    }
   },
   {
     "id": "C83",
@@ -2068,7 +2836,11 @@
     "licence": "CC BY 4.0",
     "distance": "~13 million ly",
     "trivia": "A Milky Way-like barred spiral seen edge-on, with a hidden active nucleus.",
-    "art": "c083.webp"
+    "art": "c083.webp",
+    "pt": {
+      "distance": "~13 milhões de anos-luz",
+      "trivia": "Uma espiral barrada semelhante à Via Láctea vista de perfil, com um núcleo ativo oculto."
+    }
   },
   {
     "id": "C84",
@@ -2078,7 +2850,11 @@
     "licence": "CC BY 2.0",
     "distance": "36,000 ly",
     "trivia": "A globular cluster in Centaurus discovered by James Dunlop in 1826.",
-    "art": "c084.webp"
+    "art": "c084.webp",
+    "pt": {
+      "distance": "36.000 anos-luz",
+      "trivia": "Um aglomerado globular em Centauro descoberto por James Dunlop em 1826."
+    }
   },
   {
     "id": "C85",
@@ -2089,7 +2865,11 @@
     "distance": "~500 ly",
     "trivia": "A bright, nearby open cluster visible to the naked eye.",
     "art": "c085.webp",
-    "file": "C85-ic2391-decaps2.jpg"
+    "file": "C85-ic2391-decaps2.jpg",
+    "pt": {
+      "distance": "~500 anos-luz",
+      "trivia": "Um aglomerado aberto brilhante e próximo, visível a olho nu."
+    }
   },
   {
     "id": "C86",
@@ -2099,7 +2879,11 @@
     "licence": "CC BY 4.0",
     "distance": "7,800 ly",
     "trivia": "Among the closest globular clusters to Earth.",
-    "art": "c086.webp"
+    "art": "c086.webp",
+    "pt": {
+      "distance": "7.800 anos-luz",
+      "trivia": "Entre os aglomerados globulares mais próximos da Terra."
+    }
   },
   {
     "id": "C87",
@@ -2109,7 +2893,11 @@
     "licence": "CC BY 2.0",
     "distance": "~53,000 ly",
     "trivia": "A southern globular cluster in Horologium, discovered by James Dunlop in 1826.",
-    "art": "c087.webp"
+    "art": "c087.webp",
+    "pt": {
+      "distance": "~53.000 anos-luz",
+      "trivia": "Um aglomerado globular do sul em Relógio, descoberto por James Dunlop em 1826."
+    }
   },
   {
     "id": "C88",
@@ -2125,7 +2913,11 @@
       0.14,
       0.6,
       0.72
-    ]
+    ],
+    "pt": {
+      "distance": "~3.900 anos-luz",
+      "trivia": "Um aglomerado aberto rico na constelação austral do Compasso, em um denso campo da Via Láctea."
+    }
   },
   {
     "id": "C89",
@@ -2148,7 +2940,11 @@
       100,
       0.7
     ],
-    "erode": 1.5
+    "erode": 1.5,
+    "pt": {
+      "distance": "3.000 anos-luz",
+      "trivia": "Contém a variável Cefeida S Normae, uma supergigante brilhante membro do aglomerado."
+    }
   },
   {
     "id": "C90",
@@ -2158,7 +2954,11 @@
     "licence": "CC BY 2.0",
     "distance": "~8,000 ly",
     "trivia": "A compact planetary nebula in Carina with a hot central star.",
-    "art": "c090.webp"
+    "art": "c090.webp",
+    "pt": {
+      "distance": "~8.000 anos-luz",
+      "trivia": "Uma nebulosa planetária compacta em Carina com uma estrela central quente."
+    }
   },
   {
     "id": "C91",
@@ -2168,7 +2968,11 @@
     "licence": "CC BY 4.0",
     "distance": "1,300 ly",
     "trivia": "One of the brightest and richest open clusters, with some 400 stars, visible to the naked eye.",
-    "art": "c091.webp"
+    "art": "c091.webp",
+    "pt": {
+      "distance": "1.300 anos-luz",
+      "trivia": "Um dos aglomerados abertos mais brilhantes e ricos, com cerca de 400 estrelas, visível a olho nu."
+    }
   },
   {
     "id": "C92",
@@ -2178,7 +2982,11 @@
     "licence": "CC BY 4.0",
     "distance": "~8,500 ly",
     "trivia": "Contains Eta Carinae, which erupted in the 1840s to become the second-brightest star in the sky.",
-    "art": "c092.webp"
+    "art": "c092.webp",
+    "pt": {
+      "distance": "~8.500 anos-luz",
+      "trivia": "Contém Eta Carinae, que entrou em erupção na década de 1840 e se tornou a segunda estrela mais brilhante do céu."
+    }
   },
   {
     "id": "C93",
@@ -2188,7 +2996,11 @@
     "licence": "CC BY 4.0",
     "distance": "13,000 ly",
     "trivia": "The third-brightest globular cluster in the sky, nicknamed the Great Peacock Globular.",
-    "art": "c093.webp"
+    "art": "c093.webp",
+    "pt": {
+      "distance": "13.000 anos-luz",
+      "trivia": "O terceiro aglomerado globular mais brilhante do céu, apelidado de Grande Globular do Pavão."
+    }
   },
   {
     "id": "C94",
@@ -2198,7 +3010,11 @@
     "licence": "CC BY 4.0",
     "distance": "6,400 ly",
     "trivia": "John Herschel likened its coloured stars to a casket of jewels.",
-    "art": "c094.webp"
+    "art": "c094.webp",
+    "pt": {
+      "distance": "6.400 anos-luz",
+      "trivia": "John Herschel comparou suas estrelas coloridas a um porta-joias."
+    }
   },
   {
     "id": "C95",
@@ -2208,7 +3024,11 @@
     "licence": "CC BY 4.0",
     "distance": "~2,700 ly",
     "trivia": "An open cluster in Triangulum Australe, discovered by Lacaille in 1751-52.",
-    "art": "c095.webp"
+    "art": "c095.webp",
+    "pt": {
+      "distance": "~2.700 anos-luz",
+      "trivia": "Um aglomerado aberto em Triângulo Austral, descoberto por Lacaille em 1751-52."
+    }
   },
   {
     "id": "C96",
@@ -2224,7 +3044,11 @@
       0.07,
       0.64,
       0.86
-    ]
+    ],
+    "pt": {
+      "distance": "1.300 anos-luz",
+      "trivia": "Brilhante o bastante para ser visto a olho nu em Carina."
+    }
   },
   {
     "id": "C97",
@@ -2234,7 +3058,11 @@
     "licence": "CC BY 4.0",
     "distance": "~5,800 ly",
     "trivia": "A young open cluster in Centaurus, about 20 million years old, with many B-type stars.",
-    "art": "c097.webp"
+    "art": "c097.webp",
+    "pt": {
+      "distance": "~5.800 anos-luz",
+      "trivia": "Um aglomerado aberto jovem em Centauro, com cerca de 20 milhões de anos, com muitas estrelas do tipo B."
+    }
   },
   {
     "id": "C98",
@@ -2251,7 +3079,11 @@
       0.35,
       0.56
     ],
-    "level": 45
+    "level": 45,
+    "pt": {
+      "distance": "~4.200 anos-luz",
+      "trivia": "Um pequeno aglomerado aberto no Cruzeiro do Sul, ao lado do Saco de Carvão."
+    }
   },
   {
     "id": "C99",
@@ -2261,7 +3093,11 @@
     "licence": "CC BY 4.0",
     "distance": "~600 ly",
     "trivia": "The most prominent dark nebula in the sky, visible to the naked eye beside the Southern Cross.",
-    "art": "c099.webp"
+    "art": "c099.webp",
+    "pt": {
+      "distance": "~600 anos-luz",
+      "trivia": "A nebulosa escura mais proeminente do céu, visível a olho nu ao lado do Cruzeiro do Sul."
+    }
   },
   {
     "id": "C100",
@@ -2271,7 +3107,11 @@
     "licence": "CC BY 4.0",
     "distance": "~6,000 ly",
     "trivia": "Its dark globules were identified in 1950 by A. D. Thackeray.",
-    "art": "c100.webp"
+    "art": "c100.webp",
+    "pt": {
+      "distance": "~6.000 anos-luz",
+      "trivia": "Seus glóbulos escuros foram identificados em 1950 por A. D. Thackeray."
+    }
   },
   {
     "id": "C101",
@@ -2281,7 +3121,11 @@
     "licence": "CC BY 4.0",
     "distance": "30 million ly",
     "trivia": "Often called a Milky Way twin for its size and structure, in Pavo.",
-    "art": "c101.webp"
+    "art": "c101.webp",
+    "pt": {
+      "distance": "30 milhões de anos-luz",
+      "trivia": "Frequentemente chamada de gêmea da Via Láctea por seu tamanho e estrutura, em Pavão."
+    }
   },
   {
     "id": "C102",
@@ -2291,7 +3135,11 @@
     "licence": "CC BY 2.0",
     "distance": "~480 ly",
     "trivia": "Its brightest star, Theta Carinae, makes the cluster visible to the naked eye.",
-    "art": "c102.webp"
+    "art": "c102.webp",
+    "pt": {
+      "distance": "~480 anos-luz",
+      "trivia": "Sua estrela mais brilhante, Theta Carinae, torna o aglomerado visível a olho nu."
+    }
   },
   {
     "id": "C103",
@@ -2301,7 +3149,11 @@
     "licence": "CC BY 4.0",
     "distance": "160,000 ly",
     "trivia": "The most active starburst region in the Local Group, in the Large Magellanic Cloud.",
-    "art": "c103.webp"
+    "art": "c103.webp",
+    "pt": {
+      "distance": "160.000 anos-luz",
+      "trivia": "A região starburst mais ativa do Grupo Local, na Grande Nuvem de Magalhães."
+    }
   },
   {
     "id": "C104",
@@ -2311,7 +3163,11 @@
     "licence": "CC BY 4.0",
     "distance": "~29,000 ly",
     "trivia": "Appears beside the Small Magellanic Cloud in Tucana but is far closer to us.",
-    "art": "c104.webp"
+    "art": "c104.webp",
+    "pt": {
+      "distance": "~29.000 anos-luz",
+      "trivia": "Aparece ao lado da Pequena Nuvem de Magalhães em Tucano, mas está muito mais perto de nós."
+    }
   },
   {
     "id": "C105",
@@ -2321,7 +3177,11 @@
     "licence": "CC BY 4.0",
     "distance": "21,000 ly",
     "trivia": "A dusty, heavily reddened globular cluster in Musca, found by Lacaille in 1751-52.",
-    "art": "c105.webp"
+    "art": "c105.webp",
+    "pt": {
+      "distance": "21.000 anos-luz",
+      "trivia": "Um aglomerado globular empoeirado e muito avermelhado em Mosca, encontrado por Lacaille em 1751-52."
+    }
   },
   {
     "id": "C106",
@@ -2331,7 +3191,11 @@
     "licence": "CC BY 4.0",
     "distance": "~14,700 ly",
     "trivia": "The second-brightest globular cluster in the sky after Omega Centauri.",
-    "art": "c106.webp"
+    "art": "c106.webp",
+    "pt": {
+      "distance": "~14.700 anos-luz",
+      "trivia": "O segundo aglomerado globular mais brilhante do céu, depois de Ômega Centauri."
+    }
   },
   {
     "id": "C107",
@@ -2341,7 +3205,11 @@
     "licence": "Public domain",
     "distance": "~50,000 ly",
     "trivia": "A remote, loose globular cluster in Apus, discovered by James Dunlop in 1826.",
-    "art": "c107.webp"
+    "art": "c107.webp",
+    "pt": {
+      "distance": "~50.000 anos-luz",
+      "trivia": "Um aglomerado globular remoto e pouco concentrado em Ave do Paraíso, descoberto por James Dunlop em 1826."
+    }
   },
   {
     "id": "C108",
@@ -2363,7 +3231,11 @@
     "level": [
       5,
       90
-    ]
+    ],
+    "pt": {
+      "distance": "~15.000 anos-luz",
+      "trivia": "Um aglomerado globular pouco concentrado em Mosca, perto da nebulosa escura conhecida como Dark Doodad."
+    }
   },
   {
     "id": "C109",
@@ -2373,6 +3245,10 @@
     "licence": "CC BY 2.0",
     "distance": "~5,500 ly",
     "trivia": "A planetary nebula in Chamaeleon, and the last entry in the Caldwell list.",
-    "art": "c109.webp"
+    "art": "c109.webp",
+    "pt": {
+      "distance": "~5.500 anos-luz",
+      "trivia": "Uma nebulosa planetária em Camaleão, e a última entrada da lista Caldwell."
+    }
   }
 ]

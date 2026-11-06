@@ -145,19 +145,29 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
 
     Widget card(PlanningDso d) => AlbumCard(cardFor(d), onAction: () => widget.onImageTarget(d));
 
+    // Simple Mode density (DESIGN.md, Two Densities Rule): 44 px controls, 14 px text.
+    const headerText = TextStyle(fontSize: 14, color: AraColors.textPrimary);
     // Each catalog's count on its chip, so a card in an unselected catalog still shows.
     final catalogChips = Wrap(
       spacing: 8,
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Text(l.albumCatalogs, style: const TextStyle(color: AraColors.textSecondary)),
+        Text(l.albumCatalogs, style: headerText.copyWith(color: AraColors.textSecondary)),
         for (final b in AlbumBook.values)
-          FilterChip(
-            label: Text(l.albumBookCount(
-                b == AlbumBook.messier ? l.albumBookMessier : l.albumBookCaldwell, views[b]?.collected ?? 0)),
-            selected: _catalogs.contains(b),
-            onSelected: (on) => setState(() => _catalogs = on ? {..._catalogs, b} : ({..._catalogs}..remove(b))),
+          // 44 px drawn, not only hit: the chip is the target the eye aims at.
+          SizedBox(
+            height: 44,
+            child: FilterChip(
+              label: Text(l.albumBookCount(
+                  b == AlbumBook.messier ? l.albumBookMessier : l.albumBookCaldwell, views[b]?.collected ?? 0)),
+              selected: _catalogs.contains(b),
+              labelStyle: headerText,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+              onSelected: (on) => setState(() => _catalogs = on ? {..._catalogs, b} : ({..._catalogs}..remove(b))),
+            ),
           ),
       ],
     );
@@ -183,7 +193,7 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
                 builder: (context, box) {
                   final count = Text(
                     l.albumCollected(stats.length, objects.length),
-                    style: Theme.of(context).textTheme.titleMedium,
+                    style: headerText.copyWith(fontWeight: FontWeight.w600),
                   );
                   final tierCounts = Wrap(
                     spacing: 16,
@@ -192,7 +202,7 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
                       for (final t in AlbumTier.values.reversed)
                         Text(
                           l.albumTierCount(albumTierName(context, t), tiers[t]!),
-                          style: TextStyle(color: albumTierColor(t)),
+                          style: headerText.copyWith(color: albumTierColor(t)),
                         ),
                     ],
                   );
@@ -204,6 +214,12 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
                     ],
                     selected: {_filter},
                     showSelectedIcon: false,
+                    style: const ButtonStyle(
+                      // 40 px by default; one density step up draws it at 44.
+                      visualDensity: VisualDensity(vertical: 1),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 14)),
+                    ),
                     onSelectionChanged: (s) => setState(() => _filter = s.single),
                   );
                   // Catalogs left and the filter right while they fit, the count and tier counts

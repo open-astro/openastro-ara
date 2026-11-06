@@ -28,6 +28,9 @@ colors:
   tier-bronze: "#CD853F"
   tier-silver: "#C0C0C0"
   tier-gold: "#FFD54F"
+  on-tier: "#000000"
+  album-art-backdrop: "#000000"
+  album-placeholder-missing: "#808080"
   button-primary: "#1565C0"
   button-secondary: "#424242"
   brand-navy-top: "#272C4D"
@@ -231,6 +234,10 @@ A near-black neutral ramp carries everything; saturated status accents carry mea
 
 ### Sky Album tiers
 - **Bronze, Silver, Gold** (`tier-bronze`, `tier-silver`, `tier-gold`): a Sky Album Card's tier, as its border and the tier name. A category hue, so the State-Only Colour Rule allows it; the tier is also written and spoken, never colour alone. Each reads at 5:1 or better on Panel Grey and Night Floor.
+- **On Tier** (`on-tier`): text on a tier-coloured card-back banner, 7:1 or better on every tier.
+- **Art Backdrop** (`album-art-backdrop`): the black behind a Card's Art, the night sky the picture sits on.
+- **Missing Silhouette** (`album-placeholder-missing`): a missing Card's Placeholder icon, 3.4:1 on Panel Alt (an informative graphic), dimmer than a collected Card's Secondary Grey.
+- **The Sky Album follows Simple Mode's density** (decided 2026-11-06): it opens from Simple Mode, so its controls are 44 px tall, its header and card-back text 14 px, and its Cards' corners 10 px on front and back alike, so the flip keeps one shape. The 130 px binder grid stays: a collection is scanned, not read.
 
 ### Brand
 The app icon's palette, kept apart from the status colours. Only the Ara mark and Simple Mode's no-frame wallpaper use it (#1602).
@@ -319,7 +326,7 @@ Flat. Depth comes from tonal layering: Night Floor, then Panel Grey, then Panel 
 ### Named Rules
 **The Start-Stops Rule.** Whatever starts something also stops it: the shutter that starts a shot, a loop or a routine turns into a red square that stops it, and an Autofocus button turns into Cancel. No second Stop button sits beside it. Simple Mode's Plan is the one variant: a plan runs a whole night, so its shutter starts the plan (a play triangle in a white ring, like every mode but Preview), then pauses it (pause bars), resumes it (a play triangle in an amber ring), and a 2 s hold stops it. In Simple Mode, Done is green (Connected Green), as the one completing action; the full UI keeps its default Done (decided 2026-11-02: the full UI stays as it is).
 
-**The No-Glow Rule.** Surfaces don't cast shadows or glow. A panel is separated by a 1 px Hairline and a tonal step, nothing more. The one exception is Simple Mode's overlays: they float over the image on a translucent scrim, still with no shadow.
+**The No-Glow Rule.** Surfaces don't cast shadows or glow. A panel is separated by a 1 px Hairline and a tonal step, nothing more. The exceptions are Simple Mode's overlays, which float over the image on a translucent scrim, still with no shadow, and a gold Sky Album Card, which carries a soft gold glow (8 px blur at 35 %) as the top tier's reward (decided 2026-11-06, as the album spec asks); bronze and silver Cards do not glow.
 
 ## Shapes
 

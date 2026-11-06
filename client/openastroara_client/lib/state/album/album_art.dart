@@ -12,6 +12,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 const String albumManifestAsset = 'assets/album/manifest.json';
 
+/// A row's distance and "Did you know?" line in one language.
+class AlbumArtText {
+  final String? distance;
+  final String? trivia;
+  const AlbumArtText({this.distance, this.trivia});
+}
+
 class AlbumArt {
   /// The bundled WebP's asset path, null when the Card shows the Placeholder.
   final String? asset;
@@ -21,7 +28,13 @@ class AlbumArt {
   final String? distance;
   final String? trivia;
 
-  const AlbumArt({this.asset, this.credit, this.licence, this.source, this.distance, this.trivia});
+  /// The Portuguese distance and trivia; the English ones stand in where missing.
+  final AlbumArtText? pt;
+
+  const AlbumArt({this.asset, this.credit, this.licence, this.source, this.distance, this.trivia, this.pt});
+
+  String? distanceIn(String languageCode) => (languageCode == 'pt' ? pt?.distance : null) ?? distance;
+  String? triviaIn(String languageCode) => (languageCode == 'pt' ? pt?.trivia : null) ?? trivia;
 
   /// The card back's line, `ESO · CC BY 4.0`; null without art.
   String? get creditLine => asset == null || credit == null ? null : [credit!, ?licence].join(' · ');
@@ -29,6 +42,8 @@ class AlbumArt {
   /// The licence deed CC BY asks the credit to link; null for public domain.
   String? get licenceUrl => switch (licence) {
         'CC0' || 'CC0 1.0' => 'https://creativecommons.org/publicdomain/zero/1.0/',
+        // A source that names no version (AstroBin's "Attribution"): the licence family.
+        'CC BY' => 'https://creativecommons.org/licenses/by/',
         final l? when l.startsWith('CC BY ') => 'https://creativecommons.org/licenses/by/${l.substring(6)}/',
         _ => null,
       };
@@ -52,6 +67,10 @@ Map<String, AlbumArt> parseAlbumManifest(String text) {
         source: _str(r['source']),
         distance: _str(r['distance']),
         trivia: _str(r['trivia']),
+        pt: switch (r['pt']) {
+          final Map<String, dynamic> t => AlbumArtText(distance: _str(t['distance']), trivia: _str(t['trivia'])),
+          _ => null,
+        },
       ),
   };
 }

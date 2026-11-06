@@ -2053,6 +2053,48 @@ class AppLocalizationsPt extends AppLocalizations {
   String get albumBookCaldwell => 'Caldwell';
 
   @override
+  String get dsoTypeGalaxy => 'Galaxy';
+
+  @override
+  String get dsoTypeGalaxyPair => 'Galaxy pair';
+
+  @override
+  String get dsoTypeGalaxyTriplet => 'Galaxy triplet';
+
+  @override
+  String get dsoTypeGalaxyGroup => 'Galaxy group';
+
+  @override
+  String get dsoTypeNebula => 'Nebula';
+
+  @override
+  String get dsoTypeEmissionNebula => 'Emission nebula';
+
+  @override
+  String get dsoTypeReflectionNebula => 'Reflection nebula';
+
+  @override
+  String get dsoTypePlanetaryNebula => 'Planetary nebula';
+
+  @override
+  String get dsoTypeSupernovaRemnant => 'Supernova remnant';
+
+  @override
+  String get dsoTypeCluster => 'Cluster';
+
+  @override
+  String get dsoTypeOpenCluster => 'Open cluster';
+
+  @override
+  String get dsoTypeGlobularCluster => 'Globular cluster';
+
+  @override
+  String get dsoTypeClusterNebula => 'Cluster + nebula';
+
+  @override
+  String get dsoTypeObject => 'Object';
+
+  @override
   String get albumCatalogs => 'Catalogs';
 
   @override
@@ -4223,6 +4265,48 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get albumBookCaldwell => 'Caldwell';
+
+  @override
+  String get dsoTypeGalaxy => 'Galáxia';
+
+  @override
+  String get dsoTypeGalaxyPair => 'Par de galáxias';
+
+  @override
+  String get dsoTypeGalaxyTriplet => 'Trio de galáxias';
+
+  @override
+  String get dsoTypeGalaxyGroup => 'Grupo de galáxias';
+
+  @override
+  String get dsoTypeNebula => 'Nebulosa';
+
+  @override
+  String get dsoTypeEmissionNebula => 'Nebulosa de emissão';
+
+  @override
+  String get dsoTypeReflectionNebula => 'Nebulosa de reflexão';
+
+  @override
+  String get dsoTypePlanetaryNebula => 'Nebulosa planetária';
+
+  @override
+  String get dsoTypeSupernovaRemnant => 'Remanescente de supernova';
+
+  @override
+  String get dsoTypeCluster => 'Aglomerado';
+
+  @override
+  String get dsoTypeOpenCluster => 'Aglomerado aberto';
+
+  @override
+  String get dsoTypeGlobularCluster => 'Aglomerado globular';
+
+  @override
+  String get dsoTypeClusterNebula => 'Aglomerado + nebulosa';
+
+  @override
+  String get dsoTypeObject => 'Objeto';
 
   @override
   String get albumCatalogs => 'Catálogos';

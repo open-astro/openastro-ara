@@ -2053,6 +2053,48 @@ class AppLocalizationsEn extends AppLocalizations {
   String get albumBookCaldwell => 'Caldwell';
 
   @override
+  String get dsoTypeGalaxy => 'Galaxy';
+
+  @override
+  String get dsoTypeGalaxyPair => 'Galaxy pair';
+
+  @override
+  String get dsoTypeGalaxyTriplet => 'Galaxy triplet';
+
+  @override
+  String get dsoTypeGalaxyGroup => 'Galaxy group';
+
+  @override
+  String get dsoTypeNebula => 'Nebula';
+
+  @override
+  String get dsoTypeEmissionNebula => 'Emission nebula';
+
+  @override
+  String get dsoTypeReflectionNebula => 'Reflection nebula';
+
+  @override
+  String get dsoTypePlanetaryNebula => 'Planetary nebula';
+
+  @override
+  String get dsoTypeSupernovaRemnant => 'Supernova remnant';
+
+  @override
+  String get dsoTypeCluster => 'Cluster';
+
+  @override
+  String get dsoTypeOpenCluster => 'Open cluster';
+
+  @override
+  String get dsoTypeGlobularCluster => 'Globular cluster';
+
+  @override
+  String get dsoTypeClusterNebula => 'Cluster + nebula';
+
+  @override
+  String get dsoTypeObject => 'Object';
+
+  @override
   String get albumCatalogs => 'Catalogs';
 
   @override

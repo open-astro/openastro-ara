@@ -16,7 +16,6 @@ import '../../state/album/album_matching.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/reduce_motion.dart';
-import '../sky_atlas/tonight_sky_panel.dart' show dsoTypeLabel;
 
 /// Cards are trading-card shaped: 2.5 wide by 3.5 tall.
 const double albumCardAspect = 2.5 / 3.5;
@@ -67,13 +66,40 @@ class AlbumCardData {
   AlbumTier? get tier => stats?.tier;
 }
 
-/// Turns the Art grey while the Card is missing.
-const ColorFilter _greyscale = ColorFilter.matrix(<double>[
+/// Turns the Art grey and 45 % opaque while the Card is missing: the dimming is in
+/// the matrix, so a missing Card costs one compositing layer, not two.
+const ColorFilter _greyscaleDim = ColorFilter.matrix(<double>[
   0.2126, 0.7152, 0.0722, 0, 0, //
   0.2126, 0.7152, 0.0722, 0, 0,
   0.2126, 0.7152, 0.0722, 0, 0,
-  0, 0, 0, 1, 0,
+  0, 0, 0, 0.45, 0,
 ]);
+
+/// The Card's corner, Simple Mode's 10 px, front and back alike so the flip
+/// keeps one shape.
+const double albumCardRadius = 10;
+
+/// Card back text: Simple Mode's 14 px body.
+const TextStyle _backText = TextStyle(fontSize: 14, color: AraColors.textSecondary);
+
+/// The object type in the user's language.
+String albumTypeLabel(AppLocalizations l, String t) => switch (t) {
+      'galaxy' || 'G' => l.dsoTypeGalaxy,
+      'GPair' => l.dsoTypeGalaxyPair,
+      'GTrpl' => l.dsoTypeGalaxyTriplet,
+      'GGroup' => l.dsoTypeGalaxyGroup,
+      'nebula' || 'Neb' => l.dsoTypeNebula,
+      'HII' || 'EmN' => l.dsoTypeEmissionNebula,
+      'RfN' => l.dsoTypeReflectionNebula,
+      'PN' => l.dsoTypePlanetaryNebula,
+      'SNR' => l.dsoTypeSupernovaRemnant,
+      'cluster' => l.dsoTypeCluster,
+      'OCl' => l.dsoTypeOpenCluster,
+      'GCl' => l.dsoTypeGlobularCluster,
+      'Cl+N' => l.dsoTypeClusterNebula,
+      '' => l.dsoTypeObject,
+      _ => t[0].toUpperCase() + t.substring(1),
+    };
 
 /// The card front: the Art filling the picture (dimmed to grey while missing) or
 /// the Placeholder, the label and the name, bordered in the tier's colour
@@ -93,13 +119,13 @@ class AlbumCardFront extends StatelessWidget {
       key: const Key('album-placeholder'),
       color: AraColors.bgPanelAlt,
       child: Icon(albumSilhouette(card.dso.type),
-          size: 32, color: missing ? AraColors.textDisabled : AraColors.textSecondary),
+          size: 32, color: missing ? AraColors.albumPlaceholderMissing : AraColors.textSecondary),
     );
     final asset = card.art?.asset;
     return Container(
       decoration: BoxDecoration(
         color: AraColors.bgPanel,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(albumCardRadius),
         border: Border.all(color: albumTierColor(tier), width: missing ? 1 : 2),
         boxShadow: [
           if (tier == AlbumTier.gold)
@@ -110,11 +136,12 @@ class AlbumCardFront extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Expanded(
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(5),
+            // The card's corner less its 4 px inset.
+            borderRadius: BorderRadius.circular(albumCardRadius - 4),
             child: asset == null
                 ? placeholder
                 : ColoredBox(
-                    color: Colors.black,
+                    color: AraColors.albumArtBackdrop,
                     child: LayoutBuilder(builder: (context, box) {
                       final image = Image.asset(asset,
                           key: Key(missing ? 'album-art-dimmed' : 'album-art'),
@@ -124,9 +151,7 @@ class AlbumCardFront extends StatelessWidget {
                           // Decode at the slot's width: a Book holds 110 cards.
                           cacheWidth: (box.maxWidth * MediaQuery.devicePixelRatioOf(context)).round(),
                           errorBuilder: (_, _, _) => placeholder);
-                      return missing
-                          ? Opacity(opacity: 0.45, child: ColorFiltered(colorFilter: _greyscale, child: image))
-                          : image;
+                      return missing ? ColorFiltered(colorFilter: _greyscaleDim, child: image) : image;
                     }),
                   ),
           ),
@@ -165,15 +190,16 @@ class AlbumCardBack extends StatelessWidget {
     final d = card.dso;
     final banner = tier == null ? AraColors.bgPanelAlt : albumTierColor(tier);
     // Tier colours are light: dark text on them, light text on the missing grey.
-    final onBanner = tier == null ? AraColors.textPrimary : Colors.black;
+    final onBanner = tier == null ? AraColors.textPrimary : AraColors.onTier;
+    final lang = Localizations.localeOf(context).languageCode;
     final bio = [
-      dsoTypeLabel(d.type),
+      albumTypeLabel(l, d.type),
       ?d.constellation,
       if (d.magnitude case final m?) 'V ${m.toStringAsFixed(1)}',
       if (d.sizeMajArcmin case final a?) '${a < 10 ? a.toStringAsFixed(1) : a.round()}′',
-      ?art?.distance,
+      ?art?.distanceIn(lang),
     ].join(' · ');
-    final cell = AraText.caption.copyWith(color: AraColors.textPrimary);
+    final cell = _backText.copyWith(color: AraColors.textPrimary);
     TableRow tableRow(List<String> cells, TextStyle style) => TableRow(children: [
           for (final (i, c) in cells.indexed)
             Padding(
@@ -209,8 +235,8 @@ class AlbumCardBack extends StatelessWidget {
                 Text(d.name.toUpperCase(),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: AraText.body.copyWith(color: onBanner, fontWeight: FontWeight.w700)),
-                Text(l.albumSetNumber(card.number, card.bookSize), style: AraText.caption.copyWith(color: onBanner)),
+                    style: AraText.title.copyWith(color: onBanner, fontWeight: FontWeight.w700)),
+                Text(l.albumSetNumber(card.number, card.bookSize), style: _backText.copyWith(color: onBanner)),
               ]),
             ),
           ]),
@@ -219,17 +245,17 @@ class AlbumCardBack extends StatelessWidget {
       Padding(
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(bio, style: AraText.caption),
+          Text(bio, style: _backText),
           const SizedBox(height: 8),
           if (s == null)
-            Text(l.albumNotCollected, style: const TextStyle(color: AraColors.textSecondary))
+            Text(l.albumNotCollected, style: _backText)
           else
             Table(
               // The figures take what they need; the Night column the rest.
               defaultColumnWidth: const IntrinsicColumnWidth(),
               columnWidths: const {0: FlexColumnWidth()},
               children: [
-                tableRow([l.albumNight, l.albumLights, l.albumSub, l.albumHours], AraText.caption),
+                tableRow([l.albumNight, l.albumLights, l.albumSub, l.albumHours], _backText),
                 for (final n in s.nights.take(nightRows))
                   tableRow([
                     MaterialLocalizations.of(context).formatShortMonthDay(DateTime.parse(n.key)),
@@ -245,10 +271,10 @@ class AlbumCardBack extends StatelessWidget {
                 ], cell.copyWith(fontWeight: FontWeight.w700)),
               ],
             ),
-          if (art?.trivia case final trivia?) ...[
+          if (art?.triviaIn(lang) case final trivia?) ...[
             const SizedBox(height: 8),
-            Text(l.albumDidYouKnow, style: AraText.caption.copyWith(fontWeight: FontWeight.w700)),
-            Text(trivia, style: AraText.caption.copyWith(color: AraColors.textPrimary)),
+            Text(l.albumDidYouKnow, style: _backText.copyWith(fontWeight: FontWeight.w700)),
+            Text(trivia, style: _backText.copyWith(color: AraColors.textPrimary)),
           ],
         ]),
       ),
@@ -282,7 +308,7 @@ class AlbumCardBack extends StatelessWidget {
               ]),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: AraText.caption,
+              style: _backText,
             ),
           ),
         ],
@@ -291,7 +317,7 @@ class AlbumCardBack extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AraColors.bgPanel,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(albumCardRadius),
         border: Border.all(color: albumTierColor(tier), width: 2),
       ),
       clipBehavior: Clip.antiAlias,
@@ -329,7 +355,7 @@ class AlbumCard extends StatelessWidget {
         label: context.l10n.albumCardSemantics(card.label, card.dso.name,
             card.tier == null ? context.l10n.albumNotCollected : albumTierName(context, card.tier!)),
         child: InkWell(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(albumCardRadius),
           onTap: () => _flip(context),
           child: ExcludeSemantics(child: AlbumCardFront(card)),
         ),
@@ -352,7 +378,8 @@ class AlbumCard extends StatelessWidget {
         // landscape phone limits the card by its height, not its width.
         final left = insets.left + 16, right = screen.width - insets.right - 16;
         final top = insets.top + 16, bottom = screen.height - insets.bottom - 16;
-        final width = math.min(280.0, math.min(right - left, (bottom - top) * albumCardAspect));
+        // 320 px holds the back's 14 px text; a smaller screen limits it.
+        final width = math.min(320.0, math.min(right - left, (bottom - top) * albumCardAspect));
         final size = Size(width, width / albumCardAspect);
         final centre = Offset(
           from.center.dx.clamp(left + size.width / 2, math.max(left + size.width / 2, right - size.width / 2)),
