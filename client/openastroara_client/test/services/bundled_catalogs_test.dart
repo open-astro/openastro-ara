@@ -259,6 +259,13 @@ void main() {
       expect(rows.length, 109);
     });
 
+    test('every card carries its constellation for the card back (#1595)', () {
+      final rows = bundle.where((d) => d.messierNum != null || d.caldwellNum != null);
+      final m31 = rows.firstWhere((d) => d.messierNum == 31);
+      expect(m31.constellation, 'And');
+      expect([for (final d in rows) if (d.constellation == null) d.id], isEmpty);
+    });
+
     test('search finds M45 and C14 offline', () {
       expect(findCatalogObject(bundle, 'M45')!.messierNum, 45);
       expect(findCatalogObject(bundle, 'Pleiades')!.messierNum, 45);

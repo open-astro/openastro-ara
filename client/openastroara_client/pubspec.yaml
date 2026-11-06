@@ -89,6 +89,10 @@ flutter:
     # search, Tonight's Sky and the planetarium's Catalogs overlays all read
     # these — no daemon needed. See lib/services/bundled_catalogs.dart.
     - assets/catalogs/
+    # Sky Album card Art and its manifest (credits, distances, trivia), written
+    # by scripts/album-art.py from assets/album/manifest.json.
+    - assets/album/
+    - assets/album/art/
     # §36 Planetarium — the Stellarium Web Engine (AGPL, built from pristine
     # source: github.com/Stellarium/stellarium-web-engine; see
     # assets/stellarium/LICENSE-AGPL-3.0.txt) plus the offline sky data served to

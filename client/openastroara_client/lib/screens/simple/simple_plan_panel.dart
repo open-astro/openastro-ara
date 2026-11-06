@@ -27,7 +27,7 @@ import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../services/dso_catalog_service.dart'
-    show DsoSuggestion, designationKey, searchSuggestions;
+    show DsoSuggestion, PlanningDso, designationKey, searchSuggestions;
 import '../../state/sky_atlas/dso_catalog_state.dart'
     show bundledCatalogProvider;
 import '../../services/tonight_sky_api.dart';
@@ -366,6 +366,34 @@ PlanetariumSelection simpleSelectionOf(TonightSkyObject o) =>
       rise: o.windowStartUtc?.toLocal(),
       designations: [o.id, ...o.aliases],
     );
+
+/// A catalog object (a Sky Album card) as the selection: the ranker's row
+/// when it lists the object under any designation, so altitude and rise come
+/// with it; else the catalog position only, with no altitude and the transit
+/// altitude from [latitudeDeg]. Pure — unit-tested.
+PlanetariumSelection simpleSelectionOfDso(
+  PlanningDso d,
+  List<TonightSkyObject> ranked, {
+  required double latitudeDeg,
+}) {
+  final keys = {for (final n in [d.id, ...d.aliases]) designationKey(n)};
+  final row = ranked
+      .where(
+        (o) => [o.id, ...o.aliases].any((n) => keys.contains(designationKey(n))),
+      )
+      .firstOrNull;
+  if (row != null) return simpleSelectionOf(row);
+  return PlanetariumSelection(
+    name: d.name,
+    kind: d.type,
+    raHours: d.raDeg / 15,
+    decDeg: d.decDeg,
+    raJ2000Hours: d.raDeg / 15,
+    decJ2000Deg: d.decDeg,
+    maxAltDeg: 90 - (latitudeDeg - d.decDeg).abs(),
+    designations: [d.id, ...d.aliases],
+  );
+}
 
 const _tagOrder = ['M', 'NGC', 'IC', 'SH2', 'B', 'LBN'];
 final _tagKey = RegExp(r'^(M|NGC|IC|SH2|B|LBN)-?(\d+[A-Z]?)$');

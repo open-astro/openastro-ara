@@ -1,10 +1,15 @@
-/// Sky Album state (docs/specs/sky-album-v1.md, "Client / State"): a cache of
-/// the daemon's album rows per connection, refreshed with `since`, and each
-/// Book's Cards matched against the full bundled catalog.
+/// Sky Album state (docs/specs/sky-album-v1.md, "Client / State"): the
+/// device's collection cache of album rows, merged across every rig and kept
+/// in a JSON file (ADR 0001: a high-water mark), and each Book's Cards matched
+/// against the full bundled catalog.
 library;
+
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../services/dso_catalog_service.dart';
 import '../sky_atlas/dso_catalog_state.dart';
@@ -12,7 +17,7 @@ import 'album_frame.dart';
 import 'album_matching.dart';
 
 /// One `GET /api/v1/stats/album-frames` reply: the rows asked for, plus the
-/// daemon's count of every album light (the reload check).
+/// daemon's count of every album light (informational only).
 class AlbumFramesPage {
   final int totalLights;
   final List<AlbumFrame> frames;
@@ -50,36 +55,97 @@ Future<AlbumFramesPage> fetchAlbumFrames(String baseUrl, {DateTime? since}) asyn
   }
 }
 
-/// The album rows of the server at the family's base URL, keyed by frame id.
-/// Kept for the app's life so reopening the album, or switching back to a
-/// server, fetches only what changed.
-final albumFramesProvider =
-    AsyncNotifierProvider.family<AlbumFramesNotifier, Map<String, AlbumFrame>, String>(AlbumFramesNotifier.new);
+/// The device's collection: every album row any rig has served, by frame id,
+/// and per rig (base URL) the newest updated time it served, its next `since`.
+class AlbumCollection {
+  final Map<String, AlbumFrame> frames;
+  final Map<String, DateTime> since;
+  const AlbumCollection({this.frames = const {}, this.since = const {}});
+}
 
-class AlbumFramesNotifier extends AsyncNotifier<Map<String, AlbumFrame>> {
-  AlbumFramesNotifier(this.baseUrl);
-  final String baseUrl;
+/// The collection cache file in the app support directory, the pattern the
+/// safety alarm prefs use. A missing or unreadable file is an empty collection.
+class AlbumCollectionStore {
+  AlbumCollectionStore({Future<Directory> Function()? supportDir})
+      : _supportDir = supportDir ?? getApplicationSupportDirectory;
 
-  @override
-  Future<Map<String, AlbumFrame>> build() => _sync(const {});
+  final Future<Directory> Function() _supportDir;
+  static const _fileName = 'album_collection.json';
+  Future<void> _chain = Future<void>.value();
 
-  /// Fetches what changed since the newest row held. Swaps the result in only
-  /// on success: a failure rethrows and the cached rows stay.
-  Future<void> refresh() async {
-    final next = await _sync(state.value ?? const {});
-    state = AsyncData(next);
+  Future<File> _file() async => File('${(await _supportDir()).path}/$_fileName');
+
+  Future<AlbumCollection> load() async {
+    try {
+      final f = await _file();
+      if (!await f.exists()) return const AlbumCollection();
+      final decoded = jsonDecode(await f.readAsString());
+      if (decoded is! Map) return const AlbumCollection();
+      final rows = decoded['frames'];
+      final since = decoded['since'];
+      return AlbumCollection(
+        frames: {
+          if (rows is List)
+            for (final r in rows.whereType<Map<String, dynamic>>())
+              if (r['frame_id'] is String) r['frame_id'] as String: AlbumFrame.fromJson(r),
+        },
+        since: {
+          if (since is Map)
+            for (final MapEntry(:key, :value) in since.entries)
+              if (key is String && value is String && DateTime.tryParse(value) != null)
+                key: DateTime.parse(value).toUtc(),
+        },
+      );
+    } catch (_) {
+      return const AlbumCollection();
+    }
   }
 
-  Future<Map<String, AlbumFrame>> _sync(Map<String, AlbumFrame> cache) async {
-    final fetch = ref.read(albumFetcherProvider);
-    final since = albumSince(cache);
-    final page = await fetch(baseUrl, since: since);
-    // A reply without since is the whole set: it replaces the cache, so deleted frames leave.
-    if (since == null) return mergeAlbumRows(const {}, page.frames);
-    final merged = mergeAlbumRows(cache, page.frames);
-    if (!needsFullReload(merged, totalLights: page.totalLights)) return merged;
-    final full = await fetch(baseUrl);
-    return mergeAlbumRows(const {}, full.frames);
+  Future<void> save(AlbumCollection c) {
+    final task = _chain.then((_) async {
+      final f = await _file();
+      await f.parent.create(recursive: true);
+      // Write beside, then rename: a kill mid-write leaves the old file whole (ADR 0001).
+      final part = File('${f.path}.part');
+      await part.writeAsString(
+          jsonEncode({
+            'frames': [for (final r in c.frames.values) r.toJson()],
+            'since': {for (final MapEntry(:key, :value) in c.since.entries) key: value.toUtc().toIso8601String()},
+          }),
+          flush: true);
+      await part.rename(f.path);
+    });
+    // A failed write must not wedge the next one.
+    _chain = task.catchError((_) {});
+    return task;
+  }
+}
+
+final albumCollectionStoreProvider = Provider<AlbumCollectionStore>((ref) => AlbumCollectionStore());
+
+/// The collection, loaded from the cache file and grown by [AlbumFramesNotifier.refresh].
+final albumFramesProvider =
+    AsyncNotifierProvider<AlbumFramesNotifier, AlbumCollection>(AlbumFramesNotifier.new);
+
+class AlbumFramesNotifier extends AsyncNotifier<AlbumCollection> {
+  @override
+  Future<AlbumCollection> build() => ref.read(albumCollectionStoreProvider).load();
+
+  /// Fetches what the rig at [baseUrl] changed since its newest row held,
+  /// merges it in and saves. A failure rethrows and the collection stays.
+  Future<void> refresh(String baseUrl) async {
+    final held = await future;
+    final page = await ref.read(albumFetcherProvider)(baseUrl, since: held.since[baseUrl]);
+    final newest = [held.since[baseUrl], albumSince(page.frames)].nonNulls;
+    final next = AlbumCollection(
+      frames: mergeAlbumRows(held.frames, page.frames),
+      since: {
+        ...held.since,
+        if (newest.isNotEmpty) baseUrl: newest.reduce((a, b) => a.isAfter(b) ? a : b),
+      },
+    );
+    state = AsyncData(next);
+    await ref.read(albumCollectionStoreProvider).save(next);
   }
 }
 
@@ -93,11 +159,10 @@ class AlbumBookView {
   int get collected => stats.length;
 }
 
-/// [book] for the server at the base URL, matched against the full bundled
-/// catalog (not the culled planning list, so every Book object is present).
-final albumBookProvider = FutureProvider.family<AlbumBookView, (String, AlbumBook)>((ref, key) async {
-  final (baseUrl, book) = key;
+/// [book] matched against the full bundled catalog (not the culled planning
+/// list, so every Book object is present).
+final albumBookProvider = FutureProvider.family<AlbumBookView, AlbumBook>((ref, book) async {
   final objects = bookObjects(await ref.watch(bundledCatalogProvider.future), book);
-  final frames = await ref.watch(albumFramesProvider(baseUrl).future);
-  return AlbumBookView(objects: objects, stats: aggregateBook(frames.values, objects));
+  final collection = await ref.watch(albumFramesProvider.future);
+  return AlbumBookView(objects: objects, stats: aggregateBook(collection.frames.values, objects));
 });
