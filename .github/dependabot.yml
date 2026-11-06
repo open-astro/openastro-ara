@@ -117,3 +117,11 @@ updates:
       docker:
         patterns:
           - "*"
+
+  # The DESIGN.md linter pinned in tools/design-lint (run by the sanity job).
+  - package-ecosystem: npm
+    directory: /tools/design-lint
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci

@@ -1197,7 +1197,7 @@ As it is on `master` (reconciled 2026-09-19, #1026 — this table describes the 
 
 | Job id | Context | Runner | Steps | Gated by |
 |---|---|---|---|---|
-| `sanity` | `Sanity (design docs)` ✅ required | `ubuntu-latest` | verify the required design docs exist; install gojq (the engine behind `gh --jq`, #1173) so the Flutter-bump selector cross-check runs on it; Python tooling tests (`scripts/tests/`); DUT1 table freshness | never skipped |
+| `sanity` | `Sanity (design docs)` ✅ required | `ubuntu-latest` | verify the required design docs exist; install gojq (the engine behind `gh --jq`, #1173) so the Flutter-bump selector cross-check runs on it; Python tooling tests (`scripts/tests/`); DUT1 table freshness; lint `DESIGN.md` with `@google/design.md` (fails on errors or any contrast-ratio finding, #1600) | never skipped |
 | `changes` | `Changed paths` | `ubuntu-latest` | classify the PR diff into `docs_only` / `dotnet` / `client` outputs (fails open: an error runs everything, and both steps are `continue-on-error` so a checkout flake or a wedged clone leaves the job green with an annotation; only the outer 5-minute job timeout can still report failure — #1024; job-level `continue-on-error` was measured on #1043 to still publish a red check) | never skipped |
 | `alpaca-sim-smoke` | `Alpaca simulator harness (smoke)` | `ubuntu-latest` | download + verify the pinned Alpaca simulators; smoke-test the Alpaca API | `docs_only`, `dotnet` |
 | `alpaca-sim-integration` | `Alpaca discovery integration test` | `ubuntu-latest` | simulators + `dotnet test` of the discovery integration test | `docs_only`, `dotnet` |
@@ -11292,18 +11292,13 @@ docs/DEPLOY.md (per §34.6) documents:
 - **Home network**: trust your own LAN. Standard deployment.
 - **Star party / shared LAN**: same posture as ASIAir. Standard deployment is fine. If you want isolation, run the Pi in AP mode (§32.6) so only your devices connect, or use the Pi's Ethernet interface with a dedicated cable.
 - **Public Wi-Fi (coffee shop, airport, hotel)**: don't. Image on private networks.
-- **Remote observatory access (over internet)**: out of scope for the initial release — use a VPN. A future release may add an opt-in remote-access mode with TLS + token auth.
+- **Remote observatory access (over internet)**: use a VPN (WireGuard, Tailscale or the router's own). ARA does not plan a remote-access mode (§67.4).
 
-### 67.4 Remote-access mode (deferred — see the `P1`–`P5` issue backlog)
+### 67.4 Remote-access mode (not planned)
 
-When users want to image from a remote observatory over the internet, the open-LAN model breaks down — the internet has actual adversaries. The ROADMAP adds an opt-in **remote-access mode**:
+**Decided 2026-11-06 (#1163): not planned.** ARA stays LAN-only with no API auth, and a VPN is the supported way to reach a rig from outside its network. The reasoning is in `.out-of-scope/remote-access-mode.md`. Encrypted backups (§28.14, #1175) are not built for the same reason.
 
-- TLS termination (Let's Encrypt or self-signed)
-- Token authentication (re-introduces the auth that the initial release dropped)
-- Rate limiting + optional IP allowlist
-- Binds on a separate interface so internal LAN access stays unauthenticated
-
-Remote-access mode is **opt-in** — users explicitly enable it in Settings. Default deployment stays unauthenticated.
+The design that was deferred here, kept for the record: an opt-in mode with TLS termination (Let's Encrypt or self-signed), token authentication, rate limiting with an optional IP allowlist, bound on a separate interface so LAN access stayed unauthenticated. Other mentions of a "future" or "planned" remote-access mode elsewhere in this playbook describe that shelved design, not a commitment.
 
 ### 67.5 What ARA does NOT do (current anti-features)
 

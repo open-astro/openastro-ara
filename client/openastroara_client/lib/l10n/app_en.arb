@@ -2771,9 +2771,9 @@
   "@searchWordsGuideScope": {
     "description": "Simple search: other words that find the guide scope rows (not shown)"
   },
-  "shellModeGuide": "Guide",
+  "shellModeGuide": "Guider",
   "@shellModeGuide": {
-    "description": "Guide mode: guiding with the guide camera, started by the shutter"
+    "description": "Guider mode: the guider's settings and guiding with the guide camera, started by the shutter"
   },
   "guidedNextGuide": "Next: Guide",
   "@guidedNextGuide": {
@@ -2856,6 +2856,78 @@
   "@albumBookCaldwell": {
     "description": "Sky Album: Book switch segment for the Caldwell catalog"
   },
+  "dsoTypeGalaxy": "Galaxy",
+  "@dsoTypeGalaxy": {
+    "description": "Deep-sky object type on a Sky Album card back's bio line"
+  },
+  "dsoTypeGalaxyPair": "Galaxy pair",
+  "@dsoTypeGalaxyPair": {
+    "description": "Deep-sky object type on a Sky Album card back's bio line"
+  },
+  "dsoTypeGalaxyTriplet": "Galaxy triplet",
+  "@dsoTypeGalaxyTriplet": {
+    "description": "Deep-sky object type on a Sky Album card back's bio line"
+  },
+  "dsoTypeGalaxyGroup": "Galaxy group",
+  "@dsoTypeGalaxyGroup": {
+    "description": "Deep-sky object type on a Sky Album card back's bio line"
+  },
+  "dsoTypeNebula": "Nebula",
+  "@dsoTypeNebula": {
+    "description": "Deep-sky object type on a Sky Album card back's bio line"
+  },
+  "dsoTypeEmissionNebula": "Emission nebula",
+  "@dsoTypeEmissionNebula": {
+    "description": "Deep-sky object type on a Sky Album card back's bio line"
+  },
+  "dsoTypeReflectionNebula": "Reflection nebula",
+  "@dsoTypeReflectionNebula": {
+    "description": "Deep-sky object type on a Sky Album card back's bio line"
+  },
+  "dsoTypePlanetaryNebula": "Planetary nebula",
+  "@dsoTypePlanetaryNebula": {
+    "description": "Deep-sky object type on a Sky Album card back's bio line"
+  },
+  "dsoTypeSupernovaRemnant": "Supernova remnant",
+  "@dsoTypeSupernovaRemnant": {
+    "description": "Deep-sky object type on a Sky Album card back's bio line"
+  },
+  "dsoTypeCluster": "Cluster",
+  "@dsoTypeCluster": {
+    "description": "Deep-sky object type on a Sky Album card back's bio line"
+  },
+  "dsoTypeOpenCluster": "Open cluster",
+  "@dsoTypeOpenCluster": {
+    "description": "Deep-sky object type on a Sky Album card back's bio line"
+  },
+  "dsoTypeGlobularCluster": "Globular cluster",
+  "@dsoTypeGlobularCluster": {
+    "description": "Deep-sky object type on a Sky Album card back's bio line"
+  },
+  "dsoTypeClusterNebula": "Cluster + nebula",
+  "@dsoTypeClusterNebula": {
+    "description": "Deep-sky object type on a Sky Album card back's bio line"
+  },
+  "dsoTypeObject": "Object",
+  "@dsoTypeObject": {
+    "description": "Deep-sky object type on a Sky Album card back's bio line"
+  },
+  "albumCatalogs": "Catalogs",
+  "@albumCatalogs": {
+    "description": "Sky Album: label before the catalog filter chips (none selected shows every catalog)"
+  },
+  "albumBookCount": "{book} · {collected}",
+  "@albumBookCount": {
+    "description": "Sky Album: a catalog filter chip, the catalog's name and how many of its cards are collected, so a card in an unselected catalog still shows",
+    "placeholders": {
+      "book": {
+        "type": "String"
+      },
+      "collected": {
+        "type": "int"
+      }
+    }
+  },
   "albumCollected": "{collected} / {total} collected",
   "@albumCollected": {
     "description": "Sky Album header: cards collected (bronze or better) out of the Book's cards",
@@ -2905,61 +2977,63 @@
       }
     }
   },
-  "albumFirstCapture": "First capture",
-  "@albumFirstCapture": {
-    "description": "Sky Album card back: label of the first capture date"
+  "albumNotCollected": "Not collected yet",
+  "@albumNotCollected": {
+    "description": "Sky Album card back: shown instead of figures on a missing card"
   },
-  "albumIntegration": "Integration",
-  "@albumIntegration": {
-    "description": "Sky Album card back: label of total exposure and light count"
-  },
-  "albumIntegrationValue": "{hours} h · {lights, plural, =1{1 light} other{{lights} lights}}",
-  "@albumIntegrationValue": {
-    "description": "Sky Album card back: total hours (one decimal) and number of light frames",
+  "albumSetNumber": "{number} / {total}",
+  "@albumSetNumber": {
+    "description": "Sky Album card back: the card's catalog number over the Book's size, as on a trading card",
     "placeholders": {
-      "hours": {
-        "type": "String"
+      "number": {
+        "type": "int"
       },
-      "lights": {
+      "total": {
         "type": "int"
       }
     }
   },
-  "albumFilters": "Filters",
-  "@albumFilters": {
-    "description": "Sky Album card back: label of the filters used"
+  "albumNight": "Night",
+  "@albumNight": {
+    "description": "Sky Album card back: stats table column, the observing night (evening date)"
   },
-  "albumGearProfile": "Gear profile",
-  "@albumGearProfile": {
-    "description": "Sky Album card back: label of the best frame's gear profile"
+  "albumLights": "Lights",
+  "@albumLights": {
+    "description": "Sky Album card back: stats table column, light frames that night"
   },
-  "albumBestScore": "Best frame score",
-  "@albumBestScore": {
-    "description": "Sky Album card back: label of the best frame's quality score"
+  "albumSub": "Sub",
+  "@albumSub": {
+    "description": "Sky Album card back: stats table column, the most common exposure length that night"
   },
-  "albumNextTier": "Next tier",
-  "@albumNextTier": {
-    "description": "Sky Album card back: label of the hours left to the next tier"
+  "albumHours": "Hours",
+  "@albumHours": {
+    "description": "Sky Album card back: stats table column, hours of exposure"
   },
-  "albumNextTierValue": "{hours} h to {tier}",
-  "@albumNextTierValue": {
-    "description": "Sky Album card back: hours left to the next tier, tier in lower case",
+  "albumNightsTotal": "Total · {nights, plural, =1{1 night} other{{nights} nights}}",
+  "@albumNightsTotal": {
+    "description": "Sky Album card back: the totals row's label with the full number of nights",
     "placeholders": {
-      "hours": {
-        "type": "String"
-      },
-      "tier": {
+      "nights": {
+        "type": "int"
+      }
+    }
+  },
+  "albumDidYouKnow": "Did you know?",
+  "@albumDidYouKnow": {
+    "description": "Sky Album card back: heading of the one-line fact about the object"
+  },
+  "albumArtCredit": "Art (cropped): {credit}",
+  "@albumArtCredit": {
+    "description": "Sky Album card back: who made the card's picture; the licence name follows as a link. (cropped) marks it as changed, as CC BY asks",
+    "placeholders": {
+      "credit": {
         "type": "String"
       }
     }
   },
-  "albumGoldReached": "Gold reached",
-  "@albumGoldReached": {
-    "description": "Sky Album card back: next-tier line when the card is gold"
-  },
-  "albumNotCollected": "Not collected yet",
-  "@albumNotCollected": {
-    "description": "Sky Album card back: shown instead of figures on a missing card"
+  "shellAlbum": "Sky Album",
+  "@shellAlbum": {
+    "description": "Simple Mode left rail: opens the Sky Album"
   },
   "albumImageThis": "Image this target",
   "@albumImageThis": {
