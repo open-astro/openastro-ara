@@ -1,5 +1,6 @@
 /// One light frame Ara captured, as `GET /api/v1/stats/album-frames` serves it
-/// (Sky Album, docs/specs/sky-album-v1.md). Snake_case wire; defensive parse.
+/// (Sky Album, docs/specs/sky-album-v1.md), and as the collection cache keeps
+/// it. Snake_case wire; defensive parse.
 library;
 
 import '../../models/stats/stats_time.dart';
@@ -24,8 +25,6 @@ class AlbumFrame {
   final double exposureSeconds;
   final String? filterName;
   final String targetName;
-  final double? compositeScore;
-  final String? profileId;
 
   /// Whether the frame can be matched by position: J2000 pointing, a pixel
   /// scale and a size. Without, it falls back to its target name.
@@ -46,8 +45,6 @@ class AlbumFrame {
     this.exposureSeconds = 0,
     this.filterName,
     this.targetName = '',
-    this.compositeScore,
-    this.profileId,
     this.updatedUtc,
   });
 
@@ -62,8 +59,21 @@ class AlbumFrame {
         exposureSeconds: _dbl(json['exposure_seconds']) ?? 0,
         filterName: _str(json['filter_name']),
         targetName: _str(json['target_name']) ?? '',
-        compositeScore: _dbl(json['composite_score']),
-        profileId: _str(json['profile_id']),
         updatedUtc: parseStatsUtc(json['updated_utc']),
       );
+
+  /// The wire shape again, for the collection cache file.
+  Map<String, dynamic> toJson() => {
+        'frame_id': frameId,
+        'ra_deg': raDeg,
+        'dec_deg': decDeg,
+        'width': width,
+        'height': height,
+        'pixel_scale_arcsec': pixelScaleArcsec,
+        'captured_utc': capturedUtc?.toUtc().toIso8601String(),
+        'exposure_seconds': exposureSeconds,
+        'filter_name': filterName,
+        'target_name': targetName,
+        'updated_utc': updatedUtc?.toUtc().toIso8601String(),
+      };
 }

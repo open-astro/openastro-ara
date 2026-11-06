@@ -508,6 +508,29 @@ void main() {
     expect(simpleSelectionOf(later).belowHorizon, isTrue);
   });
 
+  test('an album card becomes the selection: the ranker row when listed, else the catalog position', () {
+    const m31 = PlanningDso(
+        id: 'NGC0224', name: 'Andromeda Galaxy', type: 'G', magnitude: 3.4, raDeg: 10.68, decDeg: 41.27,
+        aliases: ['M 31']);
+    final ranked = [
+      TonightSkyObject(
+          id: 'M31', name: 'Andromeda Galaxy', type: 'G', magnitude: 3.4, raDeg: 10.68, decDeg: 41.27,
+          altitudeDeg: 55, maxAltitudeDeg: 70, windowStartUtc: DateTime.utc(2026, 11, 2, 8)),
+    ];
+    final listed = simpleSelectionOfDso(m31, ranked, latitudeDeg: -36.8);
+    expect(listed.altDeg, 55, reason: 'found under its alias, with the ranker altitude');
+    expect(listed.maxAltDeg, 70);
+
+    final unlisted = simpleSelectionOfDso(m31, const [], latitudeDeg: -36.8);
+    expect(unlisted.altDeg, isNull, reason: 'no altitude from the catalog position alone');
+    expect(unlisted.rise, isNull);
+    expect(unlisted.raJ2000Hours, closeTo(10.68 / 15, 1e-9));
+    expect(unlisted.decJ2000Deg, 41.27);
+    expect(unlisted.maxAltDeg, closeTo(90 - (41.27 + 36.8), 1e-9));
+    expect(unlisted.designations, ['NGC0224', 'M 31']);
+    expect(simpleSelectionOfDso(m31, const [], latitudeDeg: -60).neverRises, isTrue);
+  });
+
   test('durations read in hours and minutes', () {
     expect(simpleRunDuration(45 * 60), '45 min');
     expect(simpleRunDuration(6 * 3600 + 20 * 60), '6 h 20 min');

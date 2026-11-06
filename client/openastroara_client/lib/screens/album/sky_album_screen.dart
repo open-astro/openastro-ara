@@ -9,9 +9,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../services/dso_catalog_service.dart';
+import '../../state/album/album_art.dart';
 import '../../state/album/album_matching.dart';
 import '../../state/album/album_state.dart';
-import '../../state/profile_cache_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/sky_atlas/dso_catalog_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
@@ -41,28 +41,33 @@ class SkyAlbumScreen extends ConsumerStatefulWidget {
 }
 
 class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
-  AlbumBook _book = AlbumBook.messier;
+  /// The catalogs shown; none selected shows every catalog.
+  Set<AlbumBook> _catalogs = const {};
   AlbumFilter _filter = AlbumFilter.all;
   Object? _refreshError;
+
+  /// Whether this open's fetch has come back; until then an empty collection
+  /// may only mean nothing has loaded.
+  bool _synced = false;
 
   @override
   void initState() {
     super.initState();
-    // Reopening the album fetches what changed; the first open's build fetches everything.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshIfCached());
+    // Every open fetches what the rig changed since the newest row it served.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refresh());
   }
 
-  Future<void> _refreshIfCached() async {
+  Future<void> _refresh() async {
     final server = ref.read(activeServerProvider);
     if (!mounted || server == null) return;
-    final provider = albumFramesProvider(server.baseUrl);
-    final current = ref.read(provider);
-    // A first fetch that failed stays failed in the kept-alive cache: start it over.
-    if (current.hasError && !current.hasValue) return ref.invalidate(provider);
-    if (!current.hasValue) return;
     try {
-      await ref.read(provider.notifier).refresh();
-      if (mounted) setState(() => _refreshError = null);
+      await ref.read(albumFramesProvider.notifier).refresh(server.baseUrl);
+      if (mounted) {
+        setState(() {
+          _refreshError = null;
+          _synced = true;
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _refreshError = e);
     }
@@ -73,35 +78,56 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
     final l = context.l10n;
     final server = ref.watch(activeServerProvider);
     final catalog = ref.watch(bundledCatalogProvider).value ?? const <PlanningDso>[];
-    final frames = server == null ? null : ref.watch(albumFramesProvider(server.baseUrl));
-    final view = server == null ? null : ref.watch(albumBookProvider((server.baseUrl, _book))).value;
-    // On a failed first fetch the Book still shows, all grey.
-    final objects = view?.objects ?? bookObjects(catalog, _book);
-    final stats = view?.stats ?? const <String, CardStats>{};
-    final profiles = ref.watch(cachedProfilesProvider).value?.profiles ?? const [];
+    final collection = ref.watch(albumFramesProvider).value;
+    // Every catalog with none selected, else the selected ones; Messier first.
+    final books = [
+      for (final b in AlbumBook.values)
+        if (_catalogs.isEmpty || _catalogs.contains(b)) b,
+    ];
+    final views = {for (final b in AlbumBook.values) b: ref.watch(albumBookProvider(b)).value};
+    // Before a Book is matched its cards still show, all grey.
+    final bookOf = <String, AlbumBook>{};
+    final bookSize = <AlbumBook, int>{};
+    final objects = <PlanningDso>[];
+    for (final b in books) {
+      final list = views[b]?.objects ?? bookObjects(catalog, b);
+      bookSize[b] = list.length;
+      for (final d in list) {
+        bookOf[d.id] = b;
+        objects.add(d);
+      }
+    }
+    final stats = <String, CardStats>{
+      for (final b in books) ...?views[b]?.stats,
+    };
+    final view = books.every((b) => views[b] != null) ? views : null;
+    final manifest = ref.watch(albumManifestProvider).value ?? const <String, AlbumArt>{};
 
     AlbumCardData cardFor(PlanningDso d) {
-      final s = stats[d.id];
-      final n = _book == AlbumBook.messier ? d.messierNum : d.caldwellNum;
+      final book = bookOf[d.id]!;
+      final n = (book == AlbumBook.messier ? d.messierNum : d.caldwellNum)!;
+      final label = book == AlbumBook.messier ? 'M $n' : 'C $n';
       return AlbumCardData(
         dso: d,
-        label: _book == AlbumBook.messier ? 'M $n' : 'C $n',
-        stats: s,
-        thumbnailUrl: s == null || server == null ? null : '${server.baseUrl}/api/v1/frames/${s.bestFrameId}/thumbnail',
-        profileName: s?.profileId == null ? '' : profiles.where((p) => p.id == s!.profileId).firstOrNull?.name ?? '',
+        label: label,
+        number: n,
+        bookSize: bookSize[book]!,
+        stats: stats[d.id],
+        art: manifest[albumArtId(label)],
       );
     }
 
     final error = server == null
         ? l.albumNoServer
-        : switch (frames?.error ?? _refreshError) {
+        : switch (_refreshError) {
             null => null,
             final e => l.albumLoadFailed(friendlyError(l, e)),
           };
-    final noLights = frames?.value?.isEmpty ?? false;
+    final noLights = _synced && (collection?.frames.isEmpty ?? false);
     // Without rows, or before the Book is matched against them, every card looks missing,
     // so a shelf would offer collected cards.
-    final shelf = (frames?.hasValue ?? false) && view != null && _filter != AlbumFilter.collected
+    final loaded = _synced || (collection?.frames.isNotEmpty ?? false);
+    final shelf = loaded && view != null && _filter != AlbumFilter.collected
         ? _shelf(objects, stats)
         : const <PlanningDso>[];
     final shown = switch (_filter) {
@@ -119,15 +145,21 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
 
     Widget card(PlanningDso d) => AlbumCard(cardFor(d), onAction: () => widget.onImageTarget(d));
 
-    final phone = MediaQuery.sizeOf(context).width < 600;
-    final bookSwitch = SegmentedButton<AlbumBook>(
-      segments: [
-        ButtonSegment(value: AlbumBook.messier, label: Text(l.albumBookMessier)),
-        ButtonSegment(value: AlbumBook.caldwell, label: Text(l.albumBookCaldwell)),
+    // Each catalog's count on its chip, so a card in an unselected catalog still shows.
+    final catalogChips = Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text(l.albumCatalogs, style: const TextStyle(color: AraColors.textSecondary)),
+        for (final b in AlbumBook.values)
+          FilterChip(
+            label: Text(l.albumBookCount(
+                b == AlbumBook.messier ? l.albumBookMessier : l.albumBookCaldwell, views[b]?.collected ?? 0)),
+            selected: _catalogs.contains(b),
+            onSelected: (on) => setState(() => _catalogs = on ? {..._catalogs, b} : ({..._catalogs}..remove(b))),
+          ),
       ],
-      selected: {_book},
-      showSelectedIcon: false,
-      onSelectionChanged: (s) => setState(() => _book = s.single),
     );
 
     return Scaffold(
@@ -135,15 +167,12 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
       appBar: AppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
-          // The Book switch takes the bar's width on a phone; the title gives way, not overflows.
           children: [
             const Icon(albumIcon),
             const SizedBox(width: 8),
             Flexible(child: Text(l.albumTitle, overflow: TextOverflow.ellipsis)),
           ],
         ),
-        // Under 600 px the switch moves into the header, where it has the full width.
-        actions: [if (!phone) Padding(padding: const EdgeInsets.only(right: 12), child: bookSwitch)],
       ),
       body: CustomScrollView(
         slivers: [
@@ -177,32 +206,23 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
                     showSelectedIcon: false,
                     onSelectionChanged: (s) => setState(() => _filter = s.single),
                   );
-                  // One row, filter centred between equal sides; a phone stacks the filter below.
-                  if (box.maxWidth < 720) {
-                    return Column(
-                      children: [
-                        if (phone) ...[bookSwitch, const SizedBox(height: 8)],
-                        // Count and tier counts share a line while they fit; large text breaks them in two.
-                        SizedBox(
-                          width: double.infinity,
-                          child: Wrap(
-                            alignment: WrapAlignment.spaceBetween,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            spacing: 16,
-                            runSpacing: 4,
-                            children: [count, tierCounts],
-                          ),
+                  // Catalogs left and the filter right while they fit, the count and tier counts
+                  // below; a narrow window or large text wraps each line instead of overflowing.
+                  Widget line(List<Widget> children) => SizedBox(
+                        width: double.infinity,
+                        child: Wrap(
+                          alignment: WrapAlignment.spaceBetween,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 16,
+                          runSpacing: 8,
+                          children: children,
                         ),
-                        const SizedBox(height: 8),
-                        filter,
-                      ],
-                    );
-                  }
-                  return Row(
+                      );
+                  return Column(
                     children: [
-                      Expanded(child: Align(alignment: Alignment.centerLeft, child: count)),
-                      filter,
-                      Expanded(child: Align(alignment: Alignment.centerRight, child: tierCounts)),
+                      line([catalogChips, filter]),
+                      const SizedBox(height: 8),
+                      line([count, tierCounts]),
                     ],
                   );
                 },

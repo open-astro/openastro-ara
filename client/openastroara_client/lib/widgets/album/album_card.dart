@@ -1,18 +1,22 @@
 /// Sky Album cards (docs/specs/sky-album-v1.md, "Layout"): the front shown in
-/// the binder grid and the shelf, the back with the Card's figures, and the
-/// in-place flip that scales a card up over its neighbours.
+/// the binder grid and the shelf, the baseball-card back, and the in-place
+/// flip that scales a card up over its neighbours.
 library;
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../l10n/l10n.dart';
 import '../../services/dso_catalog_service.dart';
+import '../../state/album/album_art.dart';
 import '../../state/album/album_matching.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/reduce_motion.dart';
+import '../sky_atlas/tonight_sky_panel.dart' show dsoTypeLabel;
 
 /// Cards are trading-card shaped: 2.5 wide by 3.5 tall.
 const double albumCardAspect = 2.5 / 3.5;
@@ -30,7 +34,7 @@ String albumTierName(BuildContext context, AlbumTier tier) => switch (tier) {
       AlbumTier.gold => context.l10n.albumTierGold,
     };
 
-/// A grey stand-in per object type for a card with no frame to show.
+/// The Placeholder: a grey stand-in per object type for a card with no Art.
 IconData albumSilhouette(String type) => switch (type) {
       'G' || 'GPair' || 'GTrpl' || 'GGroup' => Icons.blur_circular,
       'OCl' || '*' || '**' => Icons.grain,
@@ -41,30 +45,39 @@ IconData albumSilhouette(String type) => switch (type) {
       _ => Icons.cloud,
     };
 
-/// What one card shows: its object, catalog label, figures (null when
-/// missing) and the best frame's thumbnail.
+/// What one card shows: its object, catalog label and number in the Book,
+/// figures (null when missing) and its manifest row (null when it has none).
 class AlbumCardData {
   final PlanningDso dso;
   final String label;
+  final int number;
+  final int bookSize;
   final CardStats? stats;
-  final String? thumbnailUrl;
-
-  /// The best frame's gear profile name, blank when the profile is gone.
-  final String profileName;
+  final AlbumArt? art;
 
   const AlbumCardData({
     required this.dso,
     required this.label,
+    required this.number,
+    required this.bookSize,
     this.stats,
-    this.thumbnailUrl,
-    this.profileName = '',
+    this.art,
   });
 
   AlbumTier? get tier => stats?.tier;
 }
 
-/// The card front: the best frame (or a silhouette), the label and the name,
-/// bordered in the tier's colour with a soft glow on gold.
+/// Turns the Art grey while the Card is missing.
+const ColorFilter _greyscale = ColorFilter.matrix(<double>[
+  0.2126, 0.7152, 0.0722, 0, 0, //
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0, 0, 0, 1, 0,
+]);
+
+/// The card front: the Art filling the picture (dimmed to grey while missing) or
+/// the Placeholder, the label and the name, bordered in the tier's colour
+/// with a soft glow on gold.
 class AlbumCardFront extends StatelessWidget {
   const AlbumCardFront(this.card, {super.key});
   final AlbumCardData card;
@@ -74,8 +87,15 @@ class AlbumCardFront extends StatelessWidget {
     final tier = card.tier;
     final missing = tier == null;
     // A missing card is still tappable, so its text keeps 4.5:1; the grey border and
-    // silhouette say "missing".
+    // dimmed Art say "missing".
     final textColor = missing ? AraColors.textSecondary : AraColors.textPrimary;
+    final placeholder = ColoredBox(
+      key: const Key('album-placeholder'),
+      color: AraColors.bgPanelAlt,
+      child: Icon(albumSilhouette(card.dso.type),
+          size: 32, color: missing ? AraColors.textDisabled : AraColors.textSecondary),
+    );
+    final asset = card.art?.asset;
     return Container(
       decoration: BoxDecoration(
         color: AraColors.bgPanel,
@@ -91,22 +111,24 @@ class AlbumCardFront extends StatelessWidget {
         Expanded(
           child: ClipRRect(
             borderRadius: BorderRadius.circular(5),
-            child: Stack(fit: StackFit.expand, children: [
-              ColoredBox(
-                color: AraColors.bgPanelAlt,
-                child: Icon(albumSilhouette(card.dso.type),
-                    size: 32, color: missing ? AraColors.textDisabled : AraColors.textSecondary),
-              ),
-              if (card.thumbnailUrl != null)
-                LayoutBuilder(
-                  builder: (context, box) => Image.network(card.thumbnailUrl!,
-                      fit: BoxFit.cover,
-                      // Decode at the slot's width: a Book holds 110 cards and the files are wider.
-                      cacheWidth: (box.maxWidth * MediaQuery.devicePixelRatioOf(context)).round(),
-                      // Keep the silhouette when the thumbnail is missing or the rig is away.
-                      errorBuilder: (_, _, _) => const SizedBox.shrink()),
-                ),
-            ]),
+            child: asset == null
+                ? placeholder
+                : ColoredBox(
+                    color: Colors.black,
+                    child: LayoutBuilder(builder: (context, box) {
+                      final image = Image.asset(asset,
+                          key: Key(missing ? 'album-art-dimmed' : 'album-art'),
+                          // The Art is cut to the slot's shape already; cover trims the last few
+                          // pixels so no black bar shows.
+                          fit: BoxFit.cover,
+                          // Decode at the slot's width: a Book holds 110 cards.
+                          cacheWidth: (box.maxWidth * MediaQuery.devicePixelRatioOf(context)).round(),
+                          errorBuilder: (_, _, _) => placeholder);
+                      return missing
+                          ? Opacity(opacity: 0.45, child: ColorFiltered(colorFilter: _greyscale, child: image))
+                          : image;
+                    }),
+                  ),
           ),
         ),
         const SizedBox(height: 4),
@@ -123,79 +145,171 @@ class AlbumCardFront extends StatelessWidget {
   }
 }
 
-/// The card back: the Card's figures and its one action.
+/// The card back, a baseball-card back: name banner in the Tier colour, bio
+/// line, the latest Nights and a totals row, the "Did you know?" line, the one
+/// action and the Art credit.
 class AlbumCardBack extends StatelessWidget {
   const AlbumCardBack(this.card, {super.key, required this.onAction});
   final AlbumCardData card;
   final VoidCallback onAction;
+
+  /// The back lists at most this many Nights above the totals row.
+  static const int nightRows = 4;
 
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
     final s = card.stats;
     final tier = card.tier;
-    Widget row(String k, String v) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(k, style: AraText.caption),
-            Text(v, style: AraText.body),
+    final art = card.art;
+    final d = card.dso;
+    final banner = tier == null ? AraColors.bgPanelAlt : albumTierColor(tier);
+    // Tier colours are light: dark text on them, light text on the missing grey.
+    final onBanner = tier == null ? AraColors.textPrimary : Colors.black;
+    final bio = [
+      dsoTypeLabel(d.type),
+      ?d.constellation,
+      if (d.magnitude case final m?) 'V ${m.toStringAsFixed(1)}',
+      if (d.sizeMajArcmin case final a?) '${a < 10 ? a.toStringAsFixed(1) : a.round()}′',
+      ?art?.distance,
+    ].join(' · ');
+    final cell = AraText.caption.copyWith(color: AraColors.textPrimary);
+    TableRow tableRow(List<String> cells, TextStyle style) => TableRow(children: [
+          for (final (i, c) in cells.indexed)
+            Padding(
+              padding: EdgeInsets.only(left: i == 0 ? 0 : 8, top: 1, bottom: 1),
+              // Bounded lines: a narrow card or large text shortens a row, never stretches it.
+              child: Text(c,
+                  maxLines: i == 0 ? 2 : 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: style,
+                  textAlign: i == 0 ? TextAlign.start : TextAlign.end),
+            ),
+        ]);
+    String hours(double h) => h.toStringAsFixed(1);
+    String sub(double sec) => '${sec.round()} s';
+
+    final top = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      ColoredBox(
+        color: banner,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(children: [
+            DecoratedBox(
+              decoration: BoxDecoration(color: AraColors.bgPanel, borderRadius: BorderRadius.circular(4)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                child: Text(card.label, style: AraText.caption.copyWith(color: AraColors.textPrimary)),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // The set number under the name, not beside it: large text keeps the width.
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(d.name.toUpperCase(),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AraText.body.copyWith(color: onBanner, fontWeight: FontWeight.w700)),
+                Text(l.albumSetNumber(card.number, card.bookSize), style: AraText.caption.copyWith(color: onBanner)),
+              ]),
+            ),
           ]),
-        );
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(bio, style: AraText.caption),
+          const SizedBox(height: 8),
+          if (s == null)
+            Text(l.albumNotCollected, style: const TextStyle(color: AraColors.textSecondary))
+          else
+            Table(
+              // The figures take what they need; the Night column the rest.
+              defaultColumnWidth: const IntrinsicColumnWidth(),
+              columnWidths: const {0: FlexColumnWidth()},
+              children: [
+                tableRow([l.albumNight, l.albumLights, l.albumSub, l.albumHours], AraText.caption),
+                for (final n in s.nights.take(nightRows))
+                  tableRow([
+                    MaterialLocalizations.of(context).formatShortMonthDay(DateTime.parse(n.key)),
+                    '${n.lights}',
+                    sub(n.subSeconds),
+                    hours(n.hours),
+                  ], cell),
+                tableRow([
+                  l.albumNightsTotal(s.nights.length),
+                  '${s.frameCount}',
+                  '',
+                  hours(s.integrationHours),
+                ], cell.copyWith(fontWeight: FontWeight.w700)),
+              ],
+            ),
+          if (art?.trivia case final trivia?) ...[
+            const SizedBox(height: 8),
+            Text(l.albumDidYouKnow, style: AraText.caption.copyWith(fontWeight: FontWeight.w700)),
+            Text(trivia, style: AraText.caption.copyWith(color: AraColors.textPrimary)),
+          ],
+        ]),
+      ),
+    ]);
+    final bottom = Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        FilledButton(
+          onPressed: onAction,
+          child: Text(s == null ? l.albumImageThis : l.albumAddTime, textAlign: TextAlign.center),
+        ),
+        if (art != null && art.creditLine != null) ...[
+          const SizedBox(height: 4),
+          // The licence name links its deed, as CC BY asks; the whole line is the tap target.
+          InkWell(
+            key: const Key('album-art-credit'),
+            onTap: switch (art.licenceUrl) {
+              null => null,
+              final url => () => unawaited(launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)
+                  .catchError((_) => false)),
+            },
+            child: Text.rich(
+              TextSpan(text: l.albumArtCredit(art.credit!), children: [
+                if (art.licence case final licence?) ...[
+                  const TextSpan(text: ' · '),
+                  TextSpan(
+                    text: licence,
+                    style: art.licenceUrl == null ? null : const TextStyle(decoration: TextDecoration.underline),
+                  ),
+                ],
+              ]),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AraText.caption,
+            ),
+          ),
+        ],
+      ]),
+    );
     return Container(
       decoration: BoxDecoration(
         color: AraColors.bgPanel,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: albumTierColor(tier), width: 2),
       ),
-      padding: const EdgeInsets.all(12),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('${card.label} · ${card.dso.name}',
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: AraText.title),
-        if (tier != null)
-          Text(albumTierName(context, tier), style: AraText.caption.copyWith(color: albumTierColor(tier))),
-        const SizedBox(height: 6),
-        Expanded(
-          child: SingleChildScrollView(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              if (s == null)
-                Text(l.albumNotCollected, style: const TextStyle(color: AraColors.textSecondary))
-              else ...[
-                row(l.albumFirstCapture, switch (s.firstCaptureUtc) {
-                  null => _unknown,
-                  final first => MaterialLocalizations.of(context).formatMediumDate(first.toLocal()),
-                }),
-                row(l.albumIntegration, l.albumIntegrationValue(s.integrationHours.toStringAsFixed(1), s.frameCount)),
-                row(l.albumFilters, s.filters.isEmpty ? _unknown : s.filters.join(', ')),
-                row(l.albumGearProfile, card.profileName.isEmpty ? _unknown : card.profileName),
-                row(l.albumBestScore, s.bestScore?.toStringAsFixed(2) ?? _unknown),
-                row(l.albumNextTier, _nextTier(context, s)),
-              ],
-            ]),
+      clipBehavior: Clip.antiAlias,
+      // The action sits at the foot of the card; when large text needs more than the card
+      // has, the whole back scrolls instead of overflowing.
+      child: LayoutBuilder(
+        builder: (context, box) => SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: box.maxHeight),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [top, bottom],
+            ),
           ),
         ),
-        const SizedBox(height: 8),
-        FilledButton(
-          onPressed: onAction,
-          child: Text(s == null ? l.albumImageThis : l.albumAddTime, textAlign: TextAlign.center),
-        ),
-      ]),
+      ),
     );
-  }
-
-  /// Shown for a field the frames do not tell (no filter, profile or score).
-  static const _unknown = '—';
-
-  static String _nextTier(BuildContext context, CardStats s) {
-    final (next, hoursAt) = switch (s.tier) {
-      AlbumTier.gold => (null, 0.0),
-      AlbumTier.silver => (AlbumTier.gold, albumGoldHours),
-      _ => (AlbumTier.silver, albumSilverHours),
-    };
-    if (next == null) return context.l10n.albumGoldReached;
-    final left = math.max(0.0, hoursAt - s.integrationHours);
-    return context.l10n.albumNextTierValue(left.toStringAsFixed(1), albumTierName(context, next).toLowerCase());
   }
 }
 

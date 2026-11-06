@@ -2053,6 +2053,14 @@ class AppLocalizationsPt extends AppLocalizations {
   String get albumBookCaldwell => 'Caldwell';
 
   @override
+  String get albumCatalogs => 'Catalogs';
+
+  @override
+  String albumBookCount(String book, int collected) {
+    return '$book · $collected';
+  }
+
+  @override
   String albumCollected(int collected, int total) {
     return '$collected / $total collected';
   }
@@ -2086,44 +2094,46 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get albumFirstCapture => 'First capture';
-
-  @override
-  String get albumIntegration => 'Integration';
-
-  @override
-  String albumIntegrationValue(String hours, int lights) {
-    String _temp0 = intl.Intl.pluralLogic(
-      lights,
-      locale: localeName,
-      other: '$lights lights',
-      one: '1 light',
-    );
-    return '$hours h · $_temp0';
-  }
-
-  @override
-  String get albumFilters => 'Filters';
-
-  @override
-  String get albumGearProfile => 'Gear profile';
-
-  @override
-  String get albumBestScore => 'Best frame score';
-
-  @override
-  String get albumNextTier => 'Next tier';
-
-  @override
-  String albumNextTierValue(String hours, String tier) {
-    return '$hours h to $tier';
-  }
-
-  @override
-  String get albumGoldReached => 'Gold reached';
-
-  @override
   String get albumNotCollected => 'Not collected yet';
+
+  @override
+  String albumSetNumber(int number, int total) {
+    return '$number / $total';
+  }
+
+  @override
+  String get albumNight => 'Night';
+
+  @override
+  String get albumLights => 'Lights';
+
+  @override
+  String get albumSub => 'Sub';
+
+  @override
+  String get albumHours => 'Hours';
+
+  @override
+  String albumNightsTotal(int nights) {
+    String _temp0 = intl.Intl.pluralLogic(
+      nights,
+      locale: localeName,
+      other: '$nights nights',
+      one: '1 night',
+    );
+    return 'Total · $_temp0';
+  }
+
+  @override
+  String get albumDidYouKnow => 'Did you know?';
+
+  @override
+  String albumArtCredit(String credit) {
+    return 'Art (cropped): $credit';
+  }
+
+  @override
+  String get shellAlbum => 'Sky Album';
 
   @override
   String get albumImageThis => 'Image this target';
@@ -4215,6 +4225,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get albumBookCaldwell => 'Caldwell';
 
   @override
+  String get albumCatalogs => 'Catálogos';
+
+  @override
+  String albumBookCount(String book, int collected) {
+    return '$book · $collected';
+  }
+
+  @override
   String albumCollected(int collected, int total) {
     return '$collected / $total coletados';
   }
@@ -4248,44 +4266,46 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String get albumFirstCapture => 'Primeira captura';
-
-  @override
-  String get albumIntegration => 'Integração';
-
-  @override
-  String albumIntegrationValue(String hours, int lights) {
-    String _temp0 = intl.Intl.pluralLogic(
-      lights,
-      locale: localeName,
-      other: '$lights quadros',
-      one: '1 quadro',
-    );
-    return '$hours h · $_temp0';
-  }
-
-  @override
-  String get albumFilters => 'Filtros';
-
-  @override
-  String get albumGearProfile => 'Perfil de equipamento';
-
-  @override
-  String get albumBestScore => 'Nota do melhor quadro';
-
-  @override
-  String get albumNextTier => 'Próximo nível';
-
-  @override
-  String albumNextTierValue(String hours, String tier) {
-    return '$hours h para $tier';
-  }
-
-  @override
-  String get albumGoldReached => 'Ouro alcançado';
-
-  @override
   String get albumNotCollected => 'Ainda não coletado';
+
+  @override
+  String albumSetNumber(int number, int total) {
+    return '$number / $total';
+  }
+
+  @override
+  String get albumNight => 'Noite';
+
+  @override
+  String get albumLights => 'Quadros';
+
+  @override
+  String get albumSub => 'Sub';
+
+  @override
+  String get albumHours => 'Horas';
+
+  @override
+  String albumNightsTotal(int nights) {
+    String _temp0 = intl.Intl.pluralLogic(
+      nights,
+      locale: localeName,
+      other: '$nights noites',
+      one: '1 noite',
+    );
+    return 'Total · $_temp0';
+  }
+
+  @override
+  String get albumDidYouKnow => 'Você sabia?';
+
+  @override
+  String albumArtCredit(String credit) {
+    return 'Arte (recortada): $credit';
+  }
+
+  @override
+  String get shellAlbum => 'Álbum do Céu';
 
   @override
   String get albumImageThis => 'Fotografar este alvo';

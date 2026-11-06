@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/screens/album/sky_album_screen.dart';
 import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
@@ -640,7 +641,7 @@ Future<bool> _tabToLabel(WidgetTester tester, String label, {int max = 60}) asyn
 
 void main() {
   for (final size in const [Size(1024, 768), Size(1024, 744), Size(1470, 854)]) {
-    testWidgets('at $size: compact right rail (mode, settings, shutter), Stop below, left rail (Sky, Info, Library)',
+    testWidgets('at $size: compact right rail (mode, settings, shutter), Stop below, left rail (Sky, Info, Library, Sky Album)',
         (tester) async {
       await _pump(tester, size, steps: _someSteps);
       expect(tester.takeException(), isNull, reason: 'no overflow');
@@ -663,7 +664,7 @@ void main() {
       expect(right.bottom, lessThan(stop.top));
       final left = _panelOf(tester, find.byKey(const Key('simple-sky')));
       expect(left.left, kSimpleInset);
-      for (final key in ['simple-info', 'simple-library']) {
+      for (final key in ['simple-info', 'simple-library', 'simple-album']) {
         expect(_panelOf(tester, find.byKey(Key(key))), left, reason: '$key on the left rail');
       }
     });
@@ -1080,6 +1081,29 @@ void main() {
     expect(find.byType(SimpleRunSheet), findsNothing);
     expect(find.byKey(const Key('sky')), findsOneWidget);
     expect(find.byKey(const Key('simple-sky-image-this')), findsOneWidget);
+  });
+
+  testWidgets('Sky Album on the left rail; a card\'s action closes it on Plan\'s sheet with the card picked',
+      (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    await _frame(tester, container);
+    await tester.tap(find.byKey(const Key('simple-album')));
+    await tester.pumpAndSettle();
+    expect(find.byType(SkyAlbumScreen), findsOneWidget);
+
+    const m31 = PlanningDso(
+        id: 'NGC0224', name: 'Andromeda Galaxy', type: 'G', magnitude: 3.4, raDeg: 10.68, decDeg: 41.27,
+        messierNum: 31, aliases: ['M 31']);
+    tester.widget<SkyAlbumScreen>(find.byType(SkyAlbumScreen)).onImageTarget(m31);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(SkyAlbumScreen), findsNothing, reason: 'the album hands over and closes');
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Plan')), findsOneWidget);
+    expect(find.byType(SimpleRunSheet), findsOneWidget);
+    final sel = container.read(planetariumSelectionProvider)!;
+    expect(sel.name, 'Andromeda Galaxy');
+    expect(sel.decJ2000Deg, 41.27);
+    expect(container.read(simpleRunProvider).targets, isEmpty, reason: 'nothing queued');
   });
 
   // Falsified by: simple_shell.dart _SkyPick onImage, pick(plan) unconditionally (the old `_mode = plan`).

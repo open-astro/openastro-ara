@@ -2,7 +2,7 @@
 
 A collector's album for imaged targets. Every catalog is a **Book** of **Cards**; a card you have imaged shows its **Art** in colour and a **Tier**, a card you have not imaged yet shows the same Art dimmed. The point is to make you want to go out and fill the gaps.
 
-Status: slices 1 to 5 built; slice 6 open. Revised 2026-11-05 by [#1535](https://github.com/open-astro/openastro-ara/issues/1535): premade Art on the front, a client-side collection cache, and the baseball-card back. Produced by the wayfinder map in [#1489](https://github.com/open-astro/openastro-ara/issues/1489); each section links the ticket that settled it. Implementation follows the slices in the last section.
+Status: slices 1 to 8 built. Revised 2026-11-05 by [#1535](https://github.com/open-astro/openastro-ara/issues/1535): premade Art on the front, a client-side collection cache, and the baseball-card back. Produced by the wayfinder map in [#1489](https://github.com/open-astro/openastro-ara/issues/1489); each section links the ticket that settled it. Implementation follows the slices in the last section.
 
 ## Vocabulary
 
@@ -106,17 +106,18 @@ The collection is the user's, not the rig's ([#1535](https://github.com/open-ast
 
 Files: `screens/album/`, `state/album/`, `widgets/album/`. Nothing imported from `screens/simple/`; the only shell-specific behaviour arrives as the callback below.
 
-- App bar: the album icon and "Sky Album", a segmented Book switch (Messier / Caldwell).
-- A filter beside the header counts: All / Collected / Missing (decided 2026-11-05). It narrows the grid only; the counts stay the Book's, and the shelf hides under Collected.
-- Header line: `n / total collected` with per-tier counts.
+- App bar: the album icon and "Sky Album".
+- Catalog filter (decided 2026-11-06, replacing a one-Book switch that hid a card collected in the other Book): chips "Messier · n" and "Caldwell · n", multi-select, each with its own collected count. None selected shows every catalog, Messier first; any selected shows only those. Each card keeps its own catalog label and number over its catalog's size.
+- A filter on the same row, right of the catalogs: All / Collected / Missing (decided 2026-11-05). It narrows the grid only; the counts stay the catalogs shown, and the shelf hides under Collected.
+- Header line, below: `n / total collected` over the catalogs shown, with per-tier counts. Each line wraps on a narrow window or at large text.
 - Tonight shelf (see tie-in) above the grid when it has cards.
-- Binder grid: cards at 2.5:3.5, max about 130 px wide. Card front ([#1535](https://github.com/open-astro/openastro-ara/issues/1535)): the Card's Art shown whole on black (never cropped), in colour when Collected and dimmed to grey while missing; the Placeholder, a grey silhouette icon per object type, when the Card has no Art; catalog label (`M 31`, `C 14`); name. Border colour per tier, a subtle glow on gold, grey text on missing cards.
-- Card back ([#1535](https://github.com/open-astro/openastro-ara/issues/1535), the baseball-card back): in-place flip, the flipped card scaling up over its neighbours. From top: a name banner in the Tier colour with the catalog-number badge, the name in capitals and the set number (catalog number over Book size, `63 / 109`); a bio line from the bundled catalog row and the manifest (type, constellation, V magnitude, major axis, distance); the stats table, one row per Night (night, lights, sub, hours), the latest four Nights, then a totals row stating the full count (`Total · 9 nights`); a "Did you know?" line from the manifest; one action button, "Image this target" on a missing card, "Add more time" on a collected one; the art credit line (`Art: ESO · CC BY 4.0`). Tapping outside it, or on the card again, flips it back.
+- Binder grid: cards at 2.5:3.5, max about 130 px wide. Card front ([#1535](https://github.com/open-astro/openastro-ara/issues/1535)): the Card's Art filling the picture, in colour when Collected and dimmed to grey while missing; the Placeholder, a grey silhouette icon per object type, when the Card has no Art; catalog label (`M 31`, `C 14`); name. Border colour per tier, a subtle glow on gold, grey text on missing cards.
+- Card back ([#1535](https://github.com/open-astro/openastro-ara/issues/1535), the baseball-card back): in-place flip, the flipped card scaling up over its neighbours. From top: a name banner in the Tier colour with the catalog-number badge, the name in capitals and the set number (catalog number over Book size, `63 / 109`); a bio line from the bundled catalog row and the manifest (type, constellation, V magnitude, major axis, distance); the stats table, one row per Night (night, lights, sub, hours), the latest four Nights, then a totals row stating the full count (`Total · 9 nights`); a "Did you know?" line from the manifest; one action button, "Image this target" on a missing card, "Add more time" on a collected one; the art credit line (`Art (cropped): ESO · CC BY 4.0`, "cropped" marking the change CC BY asks to be stated, the licence name a link to its deed). Tapping outside it, or on the card again, flips it back.
 - Empty and failure states ([#1502](https://github.com/open-astro/openastro-ara/issues/1502)): with no lights at all the grid is fully grey with one caption, "Image a target to collect your first card"; the shelf still shows. If the fetch fails, show cached rows when present, else grey cards plus the app's usual error pill.
 
 ### Tonight's Sky tie-in ([#1501](https://github.com/open-astro/openastro-ara/issues/1501))
 
-- The shelf is `tonightSkyProvider` (the ranking Simple Mode already shows as Tonight's best) filtered to the open Book's missing cards, in ranker order, capped at 8. No extra threshold. Hidden when the ranker returns nothing, when no album rows have loaded (every card would look missing) and under the Collected filter. Title: "N missing cards well placed tonight". Shelf cards flip like grid cards; there is no separate start button.
+- The shelf is `tonightSkyProvider` (the ranking Simple Mode already shows as Tonight's best) filtered to the missing cards of the catalogs shown, in ranker order, capped at 8. No extra threshold. Hidden when the ranker returns nothing, when no album rows have loaded (every card would look missing) and under the Collected filter. Title: "N missing cards well placed tonight". Shelf cards flip like grid cards; there is no separate start button.
 - Callback contract: the shell passes `void Function(PlanningDso target)`. The album fires it from the card back's action button, grid and shelf alike.
 - Simple Mode's implementation: pop the album, set the planetarium selection the way `simpleSelectionOf` does for a Tonight's best tap (altitude and rise from the ranker when the object is in it, else from the catalog position only), and open the plan sheet with the target picked. Nothing is queued automatically.
 
@@ -127,11 +128,11 @@ A "Sky Album" item in the Simple Mode rail menu beside Library and Stats, pushin
 ## Art and data ([#1535](https://github.com/open-astro/openastro-ara/issues/1535))
 
 - **Licences:** CC BY (any version), CC0 and public domain only, amateur Wikimedia Commons photos included. No ShareAlike, NonCommercial or NoDerivatives: the card crops and dims the Art.
-- **Framing:** cut to the card's picture shape (5:6) with the whole object inside, on black. Wide objects are turned upright. A source photo that crops the object itself is rejected.
+- **Framing:** zoomed to fill the card's picture shape (5:6), no black bars (decided 2026-11-06 at card review). Wide objects are turned upright first so less is trimmed. A Card whose object the fill would cut is reframed with a crop box or kept whole on black (`fit: contain`). A source photo that crops the object itself is rejected.
 - **Coverage:** decided per object. A Card with no acceptable Art shows the Placeholder.
 - **Format:** one WebP per Card at 560×672 (about 31 KB each, about 7 MB for 219 Cards), bundled with the app so the album works offline.
 - **Manifest:** one JSON row per object: source URL, credit, licence, crop box, distance, the "Did you know?" line. A script in `scripts/` downloads, crops and writes the WebP from it; the outputs are committed, so builds need no network. Trivia and distances are drafted from the OpenNGC notes and standard references and reviewed per Card from a contact sheet.
-- **Credits:** the line on each Card's back, and every credit with its source link registered with Flutter's licence registry, so the existing About page lists them.
+- **Credits:** the line on each Card's back, and every credit with its source link, licence link (CC BY and CC0) and a "Cropped and resized" note registered with Flutter's licence registry, so the existing About page lists them. Every licence allows commercial use (decided 2026-11-06 for the paid Ara Pro tier).
 
 ## Catalog data fix ([#1500](https://github.com/open-astro/openastro-ara/issues/1500))
 

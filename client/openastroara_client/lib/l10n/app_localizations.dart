@@ -3621,6 +3621,18 @@ abstract class AppLocalizations {
   /// **'Caldwell'**
   String get albumBookCaldwell;
 
+  /// Sky Album: label before the catalog filter chips (none selected shows every catalog)
+  ///
+  /// In en, this message translates to:
+  /// **'Catalogs'**
+  String get albumCatalogs;
+
+  /// Sky Album: a catalog filter chip, the catalog's name and how many of its cards are collected, so a card in an unselected catalog still shows
+  ///
+  /// In en, this message translates to:
+  /// **'{book} · {collected}'**
+  String albumBookCount(String book, int collected);
+
   /// Sky Album header: cards collected (bronze or better) out of the Book's cards
   ///
   /// In en, this message translates to:
@@ -3663,65 +3675,65 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 missing card well placed tonight} other{{count} missing cards well placed tonight}}'**
   String albumShelfTitle(int count);
 
-  /// Sky Album card back: label of the first capture date
-  ///
-  /// In en, this message translates to:
-  /// **'First capture'**
-  String get albumFirstCapture;
-
-  /// Sky Album card back: label of total exposure and light count
-  ///
-  /// In en, this message translates to:
-  /// **'Integration'**
-  String get albumIntegration;
-
-  /// Sky Album card back: total hours (one decimal) and number of light frames
-  ///
-  /// In en, this message translates to:
-  /// **'{hours} h · {lights, plural, =1{1 light} other{{lights} lights}}'**
-  String albumIntegrationValue(String hours, int lights);
-
-  /// Sky Album card back: label of the filters used
-  ///
-  /// In en, this message translates to:
-  /// **'Filters'**
-  String get albumFilters;
-
-  /// Sky Album card back: label of the best frame's gear profile
-  ///
-  /// In en, this message translates to:
-  /// **'Gear profile'**
-  String get albumGearProfile;
-
-  /// Sky Album card back: label of the best frame's quality score
-  ///
-  /// In en, this message translates to:
-  /// **'Best frame score'**
-  String get albumBestScore;
-
-  /// Sky Album card back: label of the hours left to the next tier
-  ///
-  /// In en, this message translates to:
-  /// **'Next tier'**
-  String get albumNextTier;
-
-  /// Sky Album card back: hours left to the next tier, tier in lower case
-  ///
-  /// In en, this message translates to:
-  /// **'{hours} h to {tier}'**
-  String albumNextTierValue(String hours, String tier);
-
-  /// Sky Album card back: next-tier line when the card is gold
-  ///
-  /// In en, this message translates to:
-  /// **'Gold reached'**
-  String get albumGoldReached;
-
   /// Sky Album card back: shown instead of figures on a missing card
   ///
   /// In en, this message translates to:
   /// **'Not collected yet'**
   String get albumNotCollected;
+
+  /// Sky Album card back: the card's catalog number over the Book's size, as on a trading card
+  ///
+  /// In en, this message translates to:
+  /// **'{number} / {total}'**
+  String albumSetNumber(int number, int total);
+
+  /// Sky Album card back: stats table column, the observing night (evening date)
+  ///
+  /// In en, this message translates to:
+  /// **'Night'**
+  String get albumNight;
+
+  /// Sky Album card back: stats table column, light frames that night
+  ///
+  /// In en, this message translates to:
+  /// **'Lights'**
+  String get albumLights;
+
+  /// Sky Album card back: stats table column, the most common exposure length that night
+  ///
+  /// In en, this message translates to:
+  /// **'Sub'**
+  String get albumSub;
+
+  /// Sky Album card back: stats table column, hours of exposure
+  ///
+  /// In en, this message translates to:
+  /// **'Hours'**
+  String get albumHours;
+
+  /// Sky Album card back: the totals row's label with the full number of nights
+  ///
+  /// In en, this message translates to:
+  /// **'Total · {nights, plural, =1{1 night} other{{nights} nights}}'**
+  String albumNightsTotal(int nights);
+
+  /// Sky Album card back: heading of the one-line fact about the object
+  ///
+  /// In en, this message translates to:
+  /// **'Did you know?'**
+  String get albumDidYouKnow;
+
+  /// Sky Album card back: who made the card's picture; the licence name follows as a link. (cropped) marks it as changed, as CC BY asks
+  ///
+  /// In en, this message translates to:
+  /// **'Art (cropped): {credit}'**
+  String albumArtCredit(String credit);
+
+  /// Simple Mode left rail: opens the Sky Album
+  ///
+  /// In en, this message translates to:
+  /// **'Sky Album'**
+  String get shellAlbum;
 
   /// Sky Album card back: action on a missing card; hands the object to the planner
   ///
