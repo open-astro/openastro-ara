@@ -4,6 +4,7 @@
 /// [SkyAlbumScreen.onImageTarget].
 library;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -188,6 +189,7 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
           reveal: !_revealed.contains(d.id),
           revealFrom: _revealFrom[d.id],
           onRevealed: () => setState(() => _revealed.add(d.id)),
+          news: _revealFrom[d.id] == null ? l.albumCardNew : l.albumCardTierUp,
         );
     // A titled row of cards above the grid: the new cards, then tonight's missing ones.
     List<Widget> shelfRow(Key key, String title, List<PlanningDso> cards, Widget Function(PlanningDso) build) => [
@@ -198,13 +200,17 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
           SliverToBoxAdapter(
             child: SizedBox(
               height: 130 / albumCardAspect,
-              child: ListView.separated(
-                key: key,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                scrollDirection: Axis.horizontal,
-                itemCount: cards.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 10),
-                itemBuilder: (_, i) => SizedBox(width: 130, child: build(cards[i])),
+              // A plain wheel scrolls the page, so a mouse drags the shelf sideways.
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(context).copyWith(dragDevices: PointerDeviceKind.values.toSet()),
+                child: ListView.separated(
+                  key: key,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: cards.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 10),
+                  itemBuilder: (_, i) => SizedBox(width: 130, child: build(cards[i])),
+                ),
               ),
             ),
           ),

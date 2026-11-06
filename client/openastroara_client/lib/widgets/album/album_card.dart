@@ -181,21 +181,23 @@ class AlbumCardFront extends StatelessWidget {
                 : ColoredBox(
                     color: AraColors.albumArtBackdrop,
                     child: LayoutBuilder(builder: (context, box) {
-                      Image image({Key? key}) => Image.asset(asset,
+                      Image image({Key? key, Animation<double>? opacity}) => Image.asset(asset,
                           key: key,
+                          opacity: opacity,
                           // The Art is cut to the slot's shape already; cover trims the last few
                           // pixels so no black bar shows.
                           fit: BoxFit.cover,
                           // Decode at the slot's width: a Book holds 110 cards.
                           cacheWidth: (box.maxWidth * MediaQuery.devicePixelRatioOf(context)).round(),
                           errorBuilder: (_, _, _) => placeholder);
-                      final art = image(key: Key(missing ? 'album-art-dimmed' : 'album-art'));
-                      if (missing) return ColorFiltered(colorFilter: _greyscaleDim, child: art);
-                      if (!fromMissing) return art;
-                      // Collected since the last open: the colour Art fades in over its grey self.
+                      final key = Key(missing ? 'album-art-dimmed' : 'album-art');
+                      if (missing) return ColorFiltered(colorFilter: _greyscaleDim, child: image(key: key));
+                      if (!fromMissing) return image(key: key);
+                      // Collected since the last open: the colour Art fades in over its grey self, by
+                      // the Image's own opacity (an Opacity widget adds a layer per fading card).
                       return Stack(fit: StackFit.expand, children: [
                         ColorFiltered(colorFilter: _greyscaleDim, child: image()),
-                        Opacity(opacity: t, child: art),
+                        image(key: key, opacity: AlwaysStoppedAnimation(t)),
                       ]);
                     }),
                   ),
@@ -393,8 +395,12 @@ class AlbumCardBack extends StatelessWidget {
 /// A tappable card front that flips in place to its back.
 class AlbumCard extends StatelessWidget {
   const AlbumCard(this.card,
-      {super.key, required this.onAction, this.reveal = false, this.revealFrom, this.onRevealed});
+      {super.key, required this.onAction, this.reveal = false, this.revealFrom, this.onRevealed, this.news});
   final AlbumCardData card;
+
+  /// What changed since the last open ("new", "up a tier"), said after the tier: on screen
+  /// only the new shelf's title says it.
+  final String? news;
 
   /// Plays the front's reveal from [revealFrom]; see [AlbumCardFront].
   final bool reveal;
@@ -410,7 +416,8 @@ class AlbumCard extends StatelessWidget {
         // The tier is a border colour on screen; say it too. The front's own texts stay
         // out, or the label and name are read twice.
         label: context.l10n.albumCardSemantics(card.label, card.dso.name,
-            card.tier == null ? context.l10n.albumNotCollected : albumTierName(context, card.tier!)),
+            card.tier == null ? context.l10n.albumNotCollected : albumTierName(context, card.tier!)) +
+            (news == null ? '' : ', $news'),
         child: InkWell(
           borderRadius: BorderRadius.circular(albumCardRadius),
           onTap: () => _flip(context),
@@ -420,6 +427,8 @@ class AlbumCard extends StatelessWidget {
       );
 
   void _flip(BuildContext context) {
+    // The flip draws the plain front, so a reveal still running ends here, not mid-colour.
+    onRevealed?.call();
     final box = context.findRenderObject()! as RenderBox;
     final from = box.localToGlobal(Offset.zero) & box.size;
     showGeneralDialog<void>(

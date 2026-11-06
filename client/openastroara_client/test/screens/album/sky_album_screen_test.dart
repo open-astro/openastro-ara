@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -481,13 +482,12 @@ void main() {
     await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null)));
     await tester.pump();
     await tester.pump();
-    double colour() => tester
-        .widget<Opacity>(find.ancestor(
-            of: find.descendant(of: find.byKey(const Key('album-shelf-new')), matching: find.byKey(const Key('album-art'))),
-            matching: find.byType(Opacity)))
-        .opacity;
+    final colourArt = find.descendant(of: find.byKey(const Key('album-shelf-new')), matching: find.byKey(const Key('album-art')));
+    // The fade is the Image's own opacity: an Opacity widget would add a layer per fading card.
+    double colour() => tester.widget<Image>(colourArt).opacity!.value;
     await tester.pump(const Duration(milliseconds: 400));
     expect(colour(), lessThan(0.05), reason: 'still grey while the page settles');
+    expect(find.ancestor(of: colourArt, matching: find.byType(Opacity)), findsNothing);
     await tester.pump(const Duration(milliseconds: 800));
     expect(colour(), allOf(greaterThan(0.2), lessThan(0.95)), reason: 'fading in where the eye can follow it');
     await tester.pumpAndSettle();
@@ -513,6 +513,42 @@ void main() {
       }
     }
     expect(widths, hasLength(1));
+  });
+
+  testWidgets('tapping a card mid-reveal finishes it, so the flip shows the card as it ends', (tester) async {
+    // The flip draws a plain front; a reveal still running underneath would jump to colour.
+    var served = const <AlbumFrame>[];
+    final container = await _pump(tester,
+        frames: const [],
+        fetcher: (baseUrl, {since}) async => AlbumFramesPage(totalLights: served.length, frames: served));
+    served = _m31Frames;
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null, open: false)));
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byKey(const Key('album-card-reveal')), findsOneWidget);
+    await tester.tap(_onNewShelf('Andromeda Galaxy'));
+    await tester.pump();
+    expect(find.byKey(const Key('album-card-reveal')), findsNothing);
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('a screen reader hears that a card on the new shelf is new or up a tier', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, frames: _m31Frames, seen: false);
+    final onShelf = find.descendant(of: find.byKey(const Key('album-shelf-new')), matching: find.byType(AlbumCard));
+    expect(tester.getSemantics(onShelf).label, 'M 31 Andromeda Galaxy, Silver, new');
+    handle.dispose();
+  });
+
+  testWidgets('a mouse drags the shelves sideways on desktop', (tester) async {
+    // A plain wheel scrolls the page, so dragging is the mouse's way along a shelf.
+    await _pump(tester, frames: const [], tonight: [_m42, _c14, _m31, _m1], size: const Size(400, 900));
+    final shelf = find.byKey(const Key('album-shelf-tonight'));
+    await tester.dragFrom(tester.getCenter(shelf), const Offset(-200, 0), kind: PointerDeviceKind.mouse);
+    await tester.pumpAndSettle();
+    final position = tester.state<ScrollableState>(find.descendant(of: shelf, matching: find.byType(Scrollable))).position;
+    expect(position.pixels, greaterThan(0));
   });
 
   testWidgets('with reduced motion a new card shows in colour at once', (tester) async {

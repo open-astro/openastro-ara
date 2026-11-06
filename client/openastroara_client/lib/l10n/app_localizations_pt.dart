@@ -2225,6 +2225,12 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get albumCardNew => 'new';
+
+  @override
+  String get albumCardTierUp => 'up a tier';
+
+  @override
   String albumSinceLastVisit(String changes) {
     return '$changes since your last visit';
   }
@@ -4462,6 +4468,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
     );
     return '$_temp0';
   }
+
+  @override
+  String get albumCardNew => 'nova';
+
+  @override
+  String get albumCardTierUp => 'subiu de nível';
 
   @override
   String albumSinceLastVisit(String changes) {

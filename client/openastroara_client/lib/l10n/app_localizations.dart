@@ -3873,6 +3873,18 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 tier up} other{{count} tiers up}}'**
   String albumTiersUp(int count);
 
+  /// Sky Album: said by screen readers after a new-shelf card's tier, for a card collected since the last open
+  ///
+  /// In en, this message translates to:
+  /// **'new'**
+  String get albumCardNew;
+
+  /// Sky Album: said by screen readers after a new-shelf card's tier, for a card that moved up a tier since the last open
+  ///
+  /// In en, this message translates to:
+  /// **'up a tier'**
+  String get albumCardTierUp;
+
   /// Sky Album header after a sync brought cards; {changes} is albumNewCards and/or albumTiersUp joined by ' · '
   ///
   /// In en, this message translates to:
