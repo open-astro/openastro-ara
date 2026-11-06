@@ -267,7 +267,8 @@ class AlbumCardBack extends StatelessWidget {
                   l.albumNightsTotal(s.nights.length),
                   '${s.frameCount}',
                   '',
-                  hours(s.integrationHours),
+                  // The total carries its unit, like the Sub column's seconds.
+                  '${hours(s.integrationHours)} h',
                 ], cell.copyWith(fontWeight: FontWeight.w700)),
               ],
             ),

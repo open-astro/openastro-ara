@@ -131,7 +131,7 @@ void main() {
     expect(find.text('ANDROMEDA GALAXY'), findsOneWidget, reason: 'the banner');
     expect(find.text('31 / 3'), findsOneWidget, reason: 'catalog number over the Book size');
     expect(find.text('Total · 4 nights'), findsOneWidget);
-    expect(find.text('2.0'), findsOneWidget, reason: 'total hours');
+    expect(find.text('2.0 h'), findsOneWidget, reason: 'total hours, with its unit');
     expect(find.text('1800 s'), findsNWidgets(4), reason: 'one row per Night with its sub');
 
     await tester.tap(find.text('Add more time'));
