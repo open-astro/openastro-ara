@@ -14,7 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/library/live_library_state.dart' show libraryFilterProvider;
 import '../../state/time_sync_state.dart' show timeSyncApiProvider;
 import '../../state/sky_atlas/tonight_sky_state.dart'
-    show planningSettingsBootstrapProvider;
+    show planningSettingsBootstrapProvider, tonightSkyProvider;
 import '../../models/frame_histogram.dart';
 import '../../models/guider_status.dart';
 import '../../services/equipment_device_api.dart' show describeEquipmentError;
@@ -103,6 +103,7 @@ import 'simple_guide_panel.dart'
         simpleGuideActive,
         simpleGuideSummary;
 import 'simple_polar_panel.dart';
+import '../album/sky_album_screen.dart';
 import 'simple_plan_panel.dart';
 import 'simple_preview_panel.dart';
 import 'simple_wallpaper.dart';
@@ -495,6 +496,49 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         );
     }
   }
+
+  /// The Sky Album; a card's action closes it and opens Plan's sheet with
+  /// the card's object picked, as Image this does from the sky. Nothing is
+  /// queued.
+  void _openAlbum() => unawaited(
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (albumContext) => SkyAlbumScreen(
+          onImageTarget: (d) {
+            // Read while the album still watches the ranker (it auto-disposes).
+            final sel = simpleSelectionOfDso(
+              d,
+              ref.read(tonightSkyProvider).value ?? const [],
+              latitudeDeg: ref.read(siteSettingsProvider).latitudeDeg,
+            );
+            Navigator.of(albumContext).pop();
+            ref.read(planetariumSelectionProvider.notifier).set(sel);
+            _imagePick();
+          },
+        ),
+      ),
+    ),
+  );
+
+  /// Image this, from the sky's card or the album: Plan's sheet on the
+  /// selection.
+  void _imagePick() => setState(() {
+    final shown = ref.read(simpleShowingProvider);
+    final runActive =
+        shown == SimpleModeScreen.plan &&
+        (ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false);
+    // Plan shows already in Night Setup's plan step; from any other screen the
+    // pick goes to Plan and leaves Night Setup.
+    if (shown != SimpleModeScreen.plan) {
+      ref.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.plan);
+    }
+    // An edit left open is over: the sheet plans the pick.
+    _closeSheet();
+    // Over a run, the sheet adds to its queue.
+    _popover = runActive ? _Popover.none : _Popover.settings;
+    _adding = runActive;
+    _sky = false;
+  });
 
   int? _discardAsk;
 
@@ -996,6 +1040,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       onInfo: () =>
                                           setState(() => _info = !_info),
                                       onSky: () => setState(() => _sky = !_sky),
+                                      onAlbum: _openAlbum,
                                     ),
                                   ),
                                 ),
@@ -1141,23 +1186,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   child: Center(
                                     child: _SkyPick(
                                       selection: sel,
-                                      onImage: () => setState(() {
-                                        // Plan shows already in Night Setup's plan step; from any
-                                        // other screen the pick goes to Plan and leaves Night Setup.
-                                        if (shown != SimpleModeScreen.plan) {
-                                          ref
-                                              .read(simpleShowingProvider.notifier)
-                                              .pick(SimpleModeScreen.plan);
-                                        }
-                                        // An edit left open is over: the sheet plans the pick.
-                                        _closeSheet();
-                                        // Over a run, the sheet adds to its queue.
-                                        _popover = runActive
-                                            ? _Popover.none
-                                            : _Popover.settings;
-                                        _adding = runActive;
-                                        _sky = false;
-                                      }),
+                                      onImage: _imagePick,
                                     ),
                                   ),
                                 ),
@@ -1656,12 +1685,14 @@ class _LeftRail extends StatelessWidget {
     required this.sky,
     required this.onInfo,
     required this.onSky,
+    required this.onAlbum,
   });
 
   final bool info;
   final bool sky;
   final VoidCallback onInfo;
   final VoidCallback? onSky;
+  final VoidCallback onAlbum;
 
   @override
   Widget build(BuildContext context) => SimplePanel(
@@ -1691,6 +1722,12 @@ class _LeftRail extends StatelessWidget {
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
           ),
+        ),
+        _RailButton(
+          key: const Key('simple-album'),
+          icon: albumIcon,
+          label: context.l10n.shellAlbum,
+          onTap: onAlbum,
         ),
       ],
     ),

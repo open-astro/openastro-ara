@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-06T00:37:33+13:00",
+  "generatedAt": "2026-11-06T16:02:12+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -492,6 +492,51 @@
           "#BBC0DD",
           "#EFF0F5"
         ]
+      },
+      "on-tier": {
+        "role": "category",
+        "displayName": "On Tier",
+        "canonical": "#000000",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "album-art-backdrop": {
+        "role": "neutral",
+        "displayName": "Art Backdrop",
+        "canonical": "#000000",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "album-placeholder-missing": {
+        "role": "neutral",
+        "displayName": "Missing Silhouette",
+        "canonical": "#808080",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(26% 0 0)",
+          "oklch(38% 0 0)",
+          "oklch(49% 0 0)",
+          "oklch(61% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(95% 0 0)"
+        ]
       }
     },
     "typographyMeta": {
@@ -525,7 +570,7 @@
       },
       "body-simple": {
         "displayName": "Body (Simple Mode)",
-        "purpose": "Default text in Simple Mode."
+        "purpose": "Default text in Simple Mode. Shared as kSimpleText (lib/theme/ara_metrics.dart) by Simple Mode and the Sky Album."
       },
       "readout-simple": {
         "displayName": "Readout (Simple Mode)",
@@ -712,6 +757,14 @@
       "description": "Ara Navy gradient with three star layers; the hint stays centred. Parallax on tilt on iPad and iPhone only.",
       "html": "<div class=\"ds-wallpaper\"><span class=\"ds-wallpaper-hint\">Tap the shutter to take a frame</span></div>",
       "css": ".ds-wallpaper { position: relative; width: 100%; height: 240px; border-radius: 10px; overflow: hidden; display: grid; place-items: center; background: radial-gradient(1.6px 1.6px at 22% 30%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 64% 22%, rgba(255,255,255,.7) 50%, transparent 51%), radial-gradient(1px 1px at 80% 70%, rgba(255,255,255,.6) 50%, transparent 51%), radial-gradient(.8px .8px at 40% 80%, rgba(255,255,255,.4) 50%, transparent 51%), radial-gradient(.8px .8px at 12% 62%, rgba(255,255,255,.35) 50%, transparent 51%), linear-gradient(#272C4D 0%, #171B3B 45%, #070914 100%); } .ds-wallpaper-hint { color: #A0A0A0; font: 20px system-ui, sans-serif; letter-spacing: 2px; }"
+    },
+    {
+      "name": "Sky Album Card",
+      "kind": "card",
+      "refersTo": "album-card",
+      "description": "A collected Card in the binder grid: Art, catalog label, name, a gold-tier border with the one sanctioned glow.",
+      "html": "<button class=\"ds-album-card ds-album-gold\"><span class=\"ds-album-art\"></span><span class=\"ds-album-label\">M 31</span><span class=\"ds-album-name\">Andromeda Galaxy</span></button>",
+      "css": ".ds-album-card{display:flex;flex-direction:column;width:130px;padding:4px;background:#262626;border:2px solid #404040;border-radius:10px;cursor:pointer;text-align:left;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;transition:transform .2s} .ds-album-gold{border-color:#FFD54F;box-shadow:0 0 8px rgba(255,213,79,.35)} .ds-album-art{display:block;aspect-ratio:5/6;border-radius:6px;background:radial-gradient(circle at 50% 45%,#d9c8a0 0,#5a4a30 18%,#000 46%)} .ds-album-label{margin-top:4px;font-size:13px;font-weight:600;color:#E0E0E0} .ds-album-name{font-size:11.5px;color:#A0A0A0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .ds-album-card:hover{transform:translateY(-1px)} .ds-album-card:focus-visible{outline:2px solid #42A5F5;outline-offset:2px}"
     }
   ],
   "narrative": {
@@ -749,7 +802,7 @@
       },
       {
         "name": "The Two Densities Rule",
-        "body": "The full UI is dense: 11–15 px type and 4–8 px corners. Simple Mode is roomy and image-first: the frame fills the window, controls float on translucent overlays, every interactive target is at least 44 px tall, corners are 10 px, and body text is 14 px. Both densities share the same colours, the same named rules and the same Emergency Stop hold; Simple Mode's Stop fills with `emergency-stop` (#D32F2F) so its label reads at 4.5:1. Phones run Companion Mode, which builds on Simple Mode, so phones always get the roomy density. Simple Mode ships on master behind an experimental toggle (Settings → System → Experimental); this is its target.",
+        "body": "The full UI is dense: 11–15 px type and 4–8 px corners. Simple Mode is roomy and image-first: the frame fills the window, controls float on translucent overlays, every interactive target is at least 44 px tall, corners are 10 px, and body text is 14 px. Both densities share the same colours, the same named rules and the same Emergency Stop hold; both densities' Stop fills with `emergency-stop` (#D32F2F) so its label reads at 4.5:1. Phones run Companion Mode, which builds on Simple Mode, so phones always get the roomy density. Simple Mode ships on master behind an experimental toggle (Settings → System → Experimental); this is its target.",
         "section": "layout"
       },
       {
@@ -759,7 +812,7 @@
       },
       {
         "name": "The No-Glow Rule",
-        "body": "Surfaces don't cast shadows or glow. A panel is separated by a 1 px Hairline and a tonal step, nothing more. The one exception is Simple Mode's overlays: they float over the image on a translucent scrim, still with no shadow.",
+        "body": "Surfaces don't cast shadows or glow. A panel is separated by a 1 px Hairline and a tonal step, nothing more. The exceptions are Simple Mode's overlays, which float over the image on a translucent scrim, still with no shadow, and a gold Sky Album Card, which carries a soft gold glow (8 px blur at 35 %) as the top tier's reward (decided 2026-11-06, as the album spec asks); bronze and silver Cards do not glow.",
         "section": "elevation"
       },
       {

@@ -110,6 +110,22 @@ jobs:
       - name: DUT1 table freshness
         run: python3 scripts/check-dut1-freshness.py
 
+      # #1600 — lint the repo-root DESIGN.md with @google/design.md (exact version and
+      # integrity hashes in tools/design-lint/package-lock.json; no npx, no lifecycle scripts).
+      # Pass/fail comes from the JSON via jq, not the linter's exit code: fail on any error
+      # or any contrast-ratio finding; orphaned-tokens, missing-primary and token-summary
+      # are ignored. Node is preinstalled on ubuntu-latest.
+      - name: Lint DESIGN.md
+        working-directory: tools/design-lint
+        run: |
+          npm ci --ignore-scripts
+          ./node_modules/.bin/design.md lint ../../DESIGN.md --format json > "$RUNNER_TEMP/design-lint.json" || true
+          jq -c .summary "$RUNNER_TEMP/design-lint.json"
+          jq -r '.findings[] | select(.rule == "contrast-ratio" or .severity == "error")
+            | "::error file=DESIGN.md::\(.path // "-"): \(.message)"' "$RUNNER_TEMP/design-lint.json"
+          jq -e '.summary.errors == 0 and ([.findings[] | select(.rule == "contrast-ratio")] | length) == 0' \
+            "$RUNNER_TEMP/design-lint.json" > /dev/null
+
       # NOTE: We intentionally don't yaml-lint workflow files here.
       # GitHub Actions' own parser is the ultimate validator — a malformed
       # workflow won't run at all. A lint step is duplicate work.
@@ -828,6 +844,32 @@ jobs:
           CC=aarch64-linux-gnu-gcc ./scripts/build-astrometry-natives.sh ./publish/arm64
           for lib in liberfa.so libsupernovas.so; do
             file "./publish/arm64/$lib" | tee /dev/stderr | grep -q 'ARM aarch64'
+          done
+
+      # The natives must load in the runtime image (Dockerfile base, Ubuntu 24.04 noble chiseled),
+      # whatever glibc the runner builds with. Fail here, with the cause, instead of at the container
+      # probe. GLIBC_FLOOR follows the Dockerfile base image: raise it only when that base moves.
+      - name: Guard astrometry natives against the runtime image glibc
+        env:
+          GLIBC_FLOOR: "2.39"  # noble; keep in step with the Dockerfile FROM
+          ALLOWED_NEEDED: "libm.so.6 libc.so.6 libgcc_s.so.1 ld-linux-aarch64.so.1"
+        run: |
+          set -e
+          for lib in liberfa.so libsupernovas.so; do
+            f="./publish/arm64/$lib"
+            newest="$(aarch64-linux-gnu-objdump -T "$f" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -1)"
+            echo "$lib needs glibc <= ${newest:-none} (floor $GLIBC_FLOOR)"
+            if [ -n "$newest" ] && [ "$(printf '%s\n%s\n' "$newest" "$GLIBC_FLOOR" | sort -V | tail -1)" != "$GLIBC_FLOOR" ]; then
+              echo "::error::$lib needs GLIBC_$newest, newer than the runtime image's $GLIBC_FLOOR"
+              aarch64-linux-gnu-objdump -T "$f" | grep "GLIBC_$newest" || true
+              exit 1
+            fi
+            for needed in $(aarch64-linux-gnu-objdump -p "$f" | awk '/NEEDED/ {print $2}'); do
+              case " $ALLOWED_NEEDED " in
+                *" $needed "*) ;;
+                *) echo "::error::$lib needs $needed, which the runtime image does not ship"; exit 1 ;;
+              esac
+            done
           done
 
       # Build the arm64 Docker image via buildx. Buildx + qemu lets the
