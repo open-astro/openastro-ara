@@ -12,7 +12,6 @@ import '../../state/sky_atlas/dso_catalog_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import 'simple_plan_panel.dart' show SimpleSuggestion;
-import 'simple_preview_panel.dart' show kSimpleText;
 import 'simple_shell.dart'
     show SimplePanel, SimpleModeScreen, SimpleModeScreenLabels;
 

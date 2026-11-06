@@ -237,7 +237,7 @@ A near-black neutral ramp carries everything; saturated status accents carry mea
 - **On Tier** (`on-tier`): text on a tier-coloured card-back banner, 7:1 or better on every tier.
 - **Art Backdrop** (`album-art-backdrop`): the black behind a Card's Art, the night sky the picture sits on.
 - **Missing Silhouette** (`album-placeholder-missing`): a missing Card's Placeholder icon, 3.4:1 on Panel Alt (an informative graphic), dimmer than a collected Card's Secondary Grey.
-- **The Sky Album follows Simple Mode's density** (decided 2026-11-06): it opens from Simple Mode, so its controls are 44 px tall, its header and card-back text 14 px, and its Cards' corners 10 px on front and back alike, so the flip keeps one shape. The 130 px binder grid stays: a collection is scanned, not read.
+- **The Sky Album follows Simple Mode's density** (decided 2026-11-06): it opens from Simple Mode, so its controls are 44 px tall, its header and card-back text 14 px, and its Cards' corners 10 px on front and back alike, so the flip keeps one shape. The 130 px binder grid stays: a collection is scanned, not read, so a front keeps the dense ramp (13 px label, 11.5 px name) at that size on purpose; everything the user reads or taps (the header, the flipped back, its 44 px action and credit rows) uses Simple Mode's 14 px `kSimpleText`.
 
 ### Brand
 The app icon's palette, kept apart from the status colours. Only the Ara mark and Simple Mode's no-frame wallpaper use it (#1602).

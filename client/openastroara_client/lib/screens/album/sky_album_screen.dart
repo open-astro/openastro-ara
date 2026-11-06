@@ -16,6 +16,7 @@ import '../../state/saved_server_state.dart';
 import '../../state/sky_atlas/dso_catalog_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../widgets/album/album_card.dart';
 
@@ -146,7 +147,7 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
     Widget card(PlanningDso d) => AlbumCard(cardFor(d), onAction: () => widget.onImageTarget(d));
 
     // Simple Mode density (DESIGN.md, Two Densities Rule): 44 px controls, 14 px text.
-    const headerText = TextStyle(fontSize: 14, color: AraColors.textPrimary);
+    const headerText = kSimpleText;
     // Each catalog's count on its chip, so a card in an unselected catalog still shows.
     final catalogChips = Wrap(
       spacing: 8,

@@ -178,6 +178,8 @@ void main() {
     await tester.tap(find.byKey(const Key('album-art-credit')));
     await tester.pump();
     expect(launcher.launched, 'https://creativecommons.org/licenses/by/2.0/');
+    // A 44 px row, not an inline line of text: a cold hand at the telescope still hits it.
+    expect(tester.getSize(find.byKey(const Key('album-art-credit'))).height, greaterThanOrEqualTo(44));
   });
 
   testWidgets('a card front: the Placeholder without Art, dimmed Art while missing, colour when collected',

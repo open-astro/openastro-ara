@@ -79,8 +79,8 @@ const ColorFilter _greyscaleDim = ColorFilter.matrix(<double>[
 /// keeps one shape.
 const double albumCardRadius = 10;
 
-/// Card back text: Simple Mode's 14 px body.
-const TextStyle _backText = TextStyle(fontSize: 14, color: AraColors.textSecondary);
+/// Card back text: Simple Mode's 14 px body, secondary by default.
+final TextStyle _backText = kSimpleText.copyWith(color: AraColors.textSecondary);
 
 /// The object type in the user's language.
 String albumTypeLabel(AppLocalizations l, String t) => switch (t) {
@@ -287,8 +287,7 @@ class AlbumCardBack extends StatelessWidget {
           child: Text(s == null ? l.albumImageThis : l.albumAddTime, textAlign: TextAlign.center),
         ),
         if (art != null && art.creditLine != null) ...[
-          const SizedBox(height: 4),
-          // The licence name links its deed, as CC BY asks; the whole line is the tap target.
+          // The licence name links its deed, as CC BY asks; the whole 44 px row is the tap target.
           InkWell(
             key: const Key('album-art-credit'),
             onTap: switch (art.licenceUrl) {
@@ -296,19 +295,25 @@ class AlbumCardBack extends StatelessWidget {
               final url => () => unawaited(launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)
                   .catchError((_) => false)),
             },
-            child: Text.rich(
-              TextSpan(text: l.albumArtCredit(art.credit!), children: [
-                if (art.licence case final licence?) ...[
-                  const TextSpan(text: ' · '),
-                  TextSpan(
-                    text: licence,
-                    style: art.licenceUrl == null ? null : const TextStyle(decoration: TextDecoration.underline),
-                  ),
-                ],
-              ]),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: _backText,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text.rich(
+                  TextSpan(text: l.albumArtCredit(art.credit!), children: [
+                    if (art.licence case final licence?) ...[
+                      const TextSpan(text: ' · '),
+                      TextSpan(
+                        text: licence,
+                        style: art.licenceUrl == null ? null : const TextStyle(decoration: TextDecoration.underline),
+                      ),
+                    ],
+                  ]),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: _backText,
+                ),
+              ),
             ),
           ),
         ],
