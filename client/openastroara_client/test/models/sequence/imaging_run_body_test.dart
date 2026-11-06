@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/sequence/condition_catalog.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
@@ -871,6 +872,107 @@ void main() {
           conditionsOf(target)
               .any((c) => (c[r'$type'] as String).contains('AboveHorizonCondition')),
           isTrue);
+    });
+  });
+
+  group('stop at dawn and park at the end (#1560)', () {
+    Map<String, dynamic> session({String? dawn, bool park = false, List<FilterPlanStep>? plan}) =>
+        buildImagingRunBody(
+          raDeg: 10,
+          decDeg: 41,
+          targetName: 'M31',
+          exposureSeconds: 120,
+          frameCount: 10,
+          warmAtEnd: true,
+          filterPlan: plan,
+          stopAtDawn: dawn,
+          parkAtEnd: park,
+        );
+    const lrgb = [
+      FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 10),
+      FilterPlanStep(filterName: 'R', exposureSeconds: 120, frameCount: 5),
+    ];
+    String type(Map<String, dynamic> n) => n[r'$type'] as String;
+    List<Map<String, dynamic>> dawnsOf(Map<String, dynamic> n) =>
+        [for (final c in conditionsOf(n)) if (type(c) == timeConditionType) c];
+    // Every node in the tree, the root first.
+    Iterable<Map<String, dynamic>> all(Map<String, dynamic> n) sync* {
+      yield n;
+      for (final c in childrenOf(n)) {
+        yield* all(c);
+      }
+    }
+    List<Map<String, dynamic>> loopsOf(Map<String, dynamic> block) =>
+        [for (final c in childrenOf(block)) if ((c['Name'] as String? ?? '').endsWith('Imaging')) c];
+
+    test('by default: no dawn condition and no park anywhere (the Full UI body stays as it is)', () {
+      final b = session(plan: lrgb);
+      expect(all(b).where((n) => dawnsOf(n).isNotEmpty), isEmpty);
+      expect(all(b).where((n) => type(n) == parkScopeType), isEmpty);
+    });
+
+    for (final label in ['Civil Dawn', 'Nautical Dawn', 'Astronomical Dawn']) {
+      test('$label: one dawn condition on the target block and on each imaging loop', () {
+        final block = childrenOf(session(dawn: label, plan: lrgb)).singleWhere((c) => c['Name'] == 'M31');
+        final loops = loopsOf(block);
+        expect(loops, hasLength(2));
+        for (final n in [block, ...loops]) {
+          final d = dawnsOf(n);
+          expect(d, hasLength(1), reason: n['Name'] as String);
+          expect(d.single['SelectedProvider'], {r'$type': timeProviders[label]});
+        }
+      });
+    }
+
+    test('park at the end: Park Scope after the targets, before Warm Camera', () {
+      final kids = childrenOf(session(park: true)).map(type).toList();
+      expect(kids.sublist(kids.length - 2), [parkScopeType, warmCameraType]);
+      expect(kids.where((t) => t == parkScopeType), hasLength(1));
+      final noWarm = buildImagingRunBody(
+          raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10, parkAtEnd: true);
+      expect(type(childrenOf(noWarm).last), parkScopeType);
+    });
+
+    test('an appended target lands above the park and carries the dawn condition too', () {
+      final grown = appendTargetToRunBody(
+        session(dawn: 'Nautical Dawn', park: true),
+        buildTargetBlock(
+            raDeg: 83.8, decDeg: -5.4, targetName: 'M42', exposureSeconds: 60, frameCount: 5,
+            stopAtDawn: 'Nautical Dawn'),
+      );
+      final kids = childrenOf(grown);
+      final m42 = kids.indexWhere((c) => c['Name'] == 'M42');
+      expect(m42, kids.indexWhere((c) => type(c) == parkScopeType) - 1);
+      for (final n in [kids[m42], ...loopsOf(kids[m42])]) {
+        expect(dawnsOf(n).single['SelectedProvider'], {r'$type': timeProviders['Nautical Dawn']});
+      }
+    });
+
+    test('withDawnStop sets, switches and clears the dawn on every block and loop; the rest stays', () {
+      final two = appendTargetToRunBody(
+        session(park: true, plan: lrgb),
+        buildTargetBlock(raDeg: 83.8, decDeg: -5.4, targetName: 'M42', exposureSeconds: 60, frameCount: 5),
+      );
+      List<Object?> provs(Map<String, dynamic> b) => [
+            for (final c in childrenOf(b).where(isContainer))
+              for (final n in [c, ...childrenOf(c).where(isContainer)])
+                for (final d in dawnsOf(n)) d['SelectedProvider'],
+          ];
+      final civil = withDawnStop(two, 'Civil Dawn');
+      // M31's block and its two loops, M42's block and its loop.
+      expect(provs(civil), List.filled(5, {r'$type': timeProviders['Civil Dawn']}));
+      final nautical = withDawnStop(civil, 'Nautical Dawn');
+      expect(provs(nautical), List.filled(5, {r'$type': timeProviders['Nautical Dawn']}), reason: 'replaced, not added');
+      final none = withDawnStop(nautical, null);
+      expect(provs(none), isEmpty);
+      expect(none, two, reason: 'clearing gives back the body it started from');
+    });
+
+    test('a scheduled start keeps the park and the dawn conditions', () {
+      final b = session(dawn: 'Astronomical Dawn', park: true);
+      final s = scheduleRunBody(b, DateTime(2026, 11, 2, 21, 47));
+      expect(type(childrenOf(s).first), waitForTimeType);
+      expect(childrenOf(s).skip(1).toList(), childrenOf(b));
     });
   });
 }

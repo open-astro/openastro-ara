@@ -1088,6 +1088,14 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String planStopsAtDawn(String time) {
+    return 'Stops at dawn · $time';
+  }
+
+  @override
+  String get planSquareParks => 'Parks';
+
+  @override
   String planStartsAt(String time) {
     return 'Starts at $time';
   }
@@ -1171,6 +1179,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get planNightDone => 'Night done';
+
+  @override
+  String get planStoppedAtDawn => 'stopped at dawn';
 
   @override
   String get planStopped => 'stopped';
@@ -3282,6 +3293,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String planStopsAtDawn(String time) {
+    return 'Para ao amanhecer · $time';
+  }
+
+  @override
+  String get planSquareParks => 'Estaciona';
+
+  @override
   String planStartsAt(String time) {
     return 'Começa às $time';
   }
@@ -3365,6 +3384,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get planNightDone => 'Noite concluída';
+
+  @override
+  String get planStoppedAtDawn => 'parada ao amanhecer';
 
   @override
   String get planStopped => 'parada';

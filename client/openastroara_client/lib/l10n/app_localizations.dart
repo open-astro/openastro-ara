@@ -2007,6 +2007,18 @@ abstract class AppLocalizations {
   /// **'Starts at dark ({time})'**
   String planStartsAtDark(String time);
 
+  /// Plan sheet: imaging stops at dawn (HH:MM, the site's twilight definition) and the mount parks
+  ///
+  /// In en, this message translates to:
+  /// **'Stops at dawn · {time}'**
+  String planStopsAtDawn(String time);
+
+  /// Plan square caption on the queue's last target: the mount parks once the queue ends. One short word: the square has 60 px for it at 11.5 px
+  ///
+  /// In en, this message translates to:
+  /// **'Parks'**
+  String get planSquareParks;
+
   /// Plan sheet: the run starts at a picked time (HH:MM)
   ///
   /// In en, this message translates to:
@@ -2132,6 +2144,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Night done'**
   String get planNightDone;
+
+  /// Night done summary, lowercase: dawn ended the run before its frames ran out
+  ///
+  /// In en, this message translates to:
+  /// **'stopped at dawn'**
+  String get planStoppedAtDawn;
 
   /// Night done summary, lowercase: the run was stopped
   ///
