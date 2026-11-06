@@ -566,7 +566,7 @@
   "shellGuideFocalLength": "Distância focal da luneta guia",
   "shellGuidePixelSize": "Pixel da câmera de guia",
   "searchWordsGuideScope": "luneta guia guiagem câmera pixel distância focal polar guide scope",
-  "shellModeGuide": "Guiagem",
+  "shellModeGuide": "Guia",
   "guidedNextGuide": "Próximo: Guiagem",
   "guideStart": "Iniciar guiagem",
   "guideStop": "Parar guiagem",

@@ -2792,9 +2792,9 @@
   "@searchWordsGuideScope": {
     "description": "Simple search: other words that find the guide scope rows (not shown)"
   },
-  "shellModeGuide": "Guide",
+  "shellModeGuide": "Guider",
   "@shellModeGuide": {
-    "description": "Guide mode: guiding with the guide camera, started by the shutter"
+    "description": "Guider mode: the guider's settings and guiding with the guide camera, started by the shutter"
   },
   "guidedNextGuide": "Next: Guide",
   "@guidedNextGuide": {

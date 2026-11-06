@@ -1985,7 +1985,7 @@ class AppLocalizationsPt extends AppLocalizations {
       'guide scope guider camera pixel focal polar';
 
   @override
-  String get shellModeGuide => 'Guide';
+  String get shellModeGuide => 'Guider';
 
   @override
   String get guidedNextGuide => 'Next: Guide';
@@ -4198,7 +4198,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'luneta guia guiagem câmera pixel distância focal polar guide scope';
 
   @override
-  String get shellModeGuide => 'Guiagem';
+  String get shellModeGuide => 'Guia';
 
   @override
   String get guidedNextGuide => 'Próximo: Guiagem';

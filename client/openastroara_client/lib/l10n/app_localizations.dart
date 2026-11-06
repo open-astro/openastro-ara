@@ -3495,10 +3495,10 @@ abstract class AppLocalizations {
   /// **'guide scope guider camera pixel focal polar'**
   String get searchWordsGuideScope;
 
-  /// Guide mode: guiding with the guide camera, started by the shutter
+  /// Guider mode: the guider's settings and guiding with the guide camera, started by the shutter
   ///
   /// In en, this message translates to:
-  /// **'Guide'**
+  /// **'Guider'**
   String get shellModeGuide;
 
   /// Guided Run button moving on to the Guide step

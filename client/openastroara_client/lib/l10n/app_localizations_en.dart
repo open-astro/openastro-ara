@@ -1985,7 +1985,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'guide scope guider camera pixel focal polar';
 
   @override
-  String get shellModeGuide => 'Guide';
+  String get shellModeGuide => 'Guider';
 
   @override
   String get guidedNextGuide => 'Next: Guide';

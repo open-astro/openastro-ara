@@ -964,7 +964,8 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mode-guide')));
     await tester.pump();
-    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Guide')), findsOneWidget);
+    // The mode holds the guider's settings, so it reads Guider (user, 2026-11-06).
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Guider')), findsOneWidget);
     expect(find.byType(SimpleGuideShutter), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
@@ -2075,12 +2076,12 @@ void main() {
     await search('dither');
     final row = find.byKey(const Key('simple-search-setting-0'));
     expect(find.descendant(of: row, matching: find.text('Dither')), findsOneWidget);
-    expect(find.descendant(of: row, matching: find.text('Guide')), findsOneWidget,
-        reason: 'Dither is in Guide mode, not the Guide Camera window (user, 2026-11-05)');
+    expect(find.descendant(of: row, matching: find.text('Guider')), findsOneWidget,
+        reason: 'Dither is in the Guider mode, not the Guide Camera window (user, 2026-11-05)');
     await tester.tap(row);
     await tester.pump();
     expect(find.byKey(const Key('simple-search')), findsNothing);
-    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Guide')), findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Guider')), findsOneWidget);
   });
 
   testWidgets('Search opens on its own: no mode panel beside the rail', (tester) async {
