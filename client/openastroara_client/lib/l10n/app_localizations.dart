@@ -753,18 +753,6 @@ abstract class AppLocalizations {
   /// **'No focuser connected'**
   String get focusNoFocuser;
 
-  /// Simple Mode Polar align panel: loop mode segment (shoots frames on its own); also the rail chip caption
-  ///
-  /// In en, this message translates to:
-  /// **'Loop'**
-  String get polarLoop;
-
-  /// Simple Mode Polar align panel: single mode segment (waits for a tap before each frame); also the rail chip caption
-  ///
-  /// In en, this message translates to:
-  /// **'Single'**
-  String get polarSingle;
-
   /// Polar align shutter button's spoken label when idle
   ///
   /// In en, this message translates to:
@@ -794,12 +782,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'save the polar-align settings'**
   String get polarActionSave;
-
-  /// Simple Mode Polar align panel: error message tail after "Couldn't " when taking a frame fails; lower-case, no period
-  ///
-  /// In en, this message translates to:
-  /// **'take a frame'**
-  String get polarActionCapture;
 
   /// Simple Mode Polar align panel: error message tail after "Couldn't " when finishing the routine fails; lower-case, no period
   ///
@@ -855,23 +837,17 @@ abstract class AppLocalizations {
   /// **'{axis} got worse. Turn that bolt back past where you started.'**
   String polarBoltWorse(String axis);
 
-  /// Simple Mode Polar align panel: warning when frames fail to plate-solve
+  /// Polar align panel: shown while the routine is paused because the guider lost the star
   ///
   /// In en, this message translates to:
-  /// **'No solve ({count} in a row). Check the sky.'**
-  String polarNoSolve(int count);
+  /// **'The guider cannot see the star. Check the sky.'**
+  String get polarStarLost;
 
   /// Simple Mode Polar align panel: exposure picker tile label
   ///
   /// In en, this message translates to:
   /// **'Exposure'**
   String get polarExposure;
-
-  /// Simple Mode Polar align panel: button that shoots the next frame in Single mode
-  ///
-  /// In en, this message translates to:
-  /// **'Take frame'**
-  String get polarTakeFrame;
 
   /// Simple Mode Polar align panel: button that finishes polar alignment
   ///

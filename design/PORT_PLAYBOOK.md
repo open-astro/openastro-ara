@@ -6365,7 +6365,7 @@ Given:
 - `P_solved` = where the mount's optical axis currently points (RA/Dec from plate solve)
 - `P_mount_axis` = direction the RA axis is pointing (≠ P_solved if mount isn't perfectly polar-aligned)
 
-To find `P_mount_axis`, server captures two frames with the mount rotated in RA by Δ (e.g., 30°). The two solved positions form a great-circle arc; the center of that arc is `P_mount_axis`. Difference between `P_mount_axis` and `P_pole` is the alignment error, decomposed into altitude + azimuth components per the user's site latitude.
+(Superseded 2026-11-05, #1611: the guider's Static PA finds the axis from the star track.) To find `P_mount_axis`, server captures two frames with the mount rotated in RA by Δ (e.g., 30°). The two solved positions form a great-circle arc; the center of that arc is `P_mount_axis`. Difference between `P_mount_axis` and `P_pole` is the alignment error, decomposed into altitude + azimuth components per the user's site latitude.
 
 Once `P_mount_axis` is known (after the initial 2-frame seed), subsequent single frames update the estimate via plate-solve + reverse-projection (no need to re-rotate the mount continuously).
 
@@ -6452,7 +6452,7 @@ Failure events:
 
 | Failure | Handling |
 |---|---|
-| Plate solve fails (clouds, no stars) | Loop pauses; WILMA shows "No solve — check sky and try again" with retry counter. After 5 consecutive failures, suggest user check focus / point closer to pole |
+| Star not seen by the guider (clouds, no stars) | Loop pauses after 5 polls without a readout; the client reads "The guider cannot see the star — check sky and focus"; resumes on the next sighting (#1611; was "No solve" with a retry counter) |
 | Mount can't rotate in RA for initial 30° seed | Cap to whatever rotation is possible; user shown warning that estimate may be less precise |
 | Camera reports cooler instability mid-PA | Notify, recapture dark, continue |
 | User's site latitude too far from pole (extreme polar latitudes) | Workflow allows; bullseye math still works; just narrower workable window |
