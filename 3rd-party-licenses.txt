@@ -781,7 +781,7 @@ License:        MIT
 License source: https://pub.dev/packages/dio/license
 
 ------------------------------------------------------------------------
-Package:        file_picker 13.1.0
+Package:        file_picker 13.3.2
 Copyright:      Copyright (c) 2018 Miguel Ruivo
 License:        MIT
 License source: https://pub.dev/packages/file_picker/license
