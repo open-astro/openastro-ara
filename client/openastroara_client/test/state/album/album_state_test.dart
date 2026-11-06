@@ -85,6 +85,14 @@ void main() {
     expect(sinces, [DateTime.utc(2026, 3, 2)], reason: 'the rig\'s since came back with the rows');
   });
 
+  test('a failed write leaves the saved collection whole', () async {
+    final s = store();
+    await s.save(AlbumCollection(frames: {'a': row('a', 1)}));
+    Directory('${dir.path}/album_collection.json.part').createSync();
+    await expectLater(s.save(AlbumCollection(frames: {'b': row('b', 2)})), throwsA(anything));
+    expect((await store().load()).frames.keys, ['a']);
+  });
+
   test('a missing or corrupt cache file is an empty collection', () async {
     expect((await store().load()).frames, isEmpty);
     File('${dir.path}/album_collection.json').writeAsStringSync('{not json');

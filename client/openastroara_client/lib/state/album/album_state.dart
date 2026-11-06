@@ -105,12 +105,15 @@ class AlbumCollectionStore {
     final task = _chain.then((_) async {
       final f = await _file();
       await f.parent.create(recursive: true);
-      await f.writeAsString(
+      // Write beside, then rename: a kill mid-write leaves the old file whole (ADR 0001).
+      final part = File('${f.path}.part');
+      await part.writeAsString(
           jsonEncode({
             'frames': [for (final r in c.frames.values) r.toJson()],
             'since': {for (final MapEntry(:key, :value) in c.since.entries) key: value.toUtc().toIso8601String()},
           }),
           flush: true);
+      await part.rename(f.path);
     });
     // A failed write must not wedge the next one.
     _chain = task.catchError((_) {});

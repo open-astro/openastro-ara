@@ -517,18 +517,20 @@ void main() {
           id: 'M31', name: 'Andromeda Galaxy', type: 'G', magnitude: 3.4, raDeg: 10.68, decDeg: 41.27,
           altitudeDeg: 55, maxAltitudeDeg: 70, windowStartUtc: DateTime.utc(2026, 11, 2, 8)),
     ];
-    final listed = simpleSelectionOfDso(m31, ranked, latitudeDeg: -36.8);
+    final listed = simpleSelectionOfDso(m31, ranked, latitudeDeg: -33.856784);
     expect(listed.altDeg, 55, reason: 'found under its alias, with the ranker altitude');
     expect(listed.maxAltDeg, 70);
 
-    final unlisted = simpleSelectionOfDso(m31, const [], latitudeDeg: -36.8);
+    final unlisted = simpleSelectionOfDso(m31, const [], latitudeDeg: -33.856784);
     expect(unlisted.altDeg, isNull, reason: 'no altitude from the catalog position alone');
     expect(unlisted.rise, isNull);
     expect(unlisted.raJ2000Hours, closeTo(10.68 / 15, 1e-9));
     expect(unlisted.decJ2000Deg, 41.27);
-    expect(unlisted.maxAltDeg, closeTo(90 - (41.27 + 36.8), 1e-9));
+    expect(unlisted.maxAltDeg, closeTo(90 - (41.27 + 33.856784), 1e-9));
     expect(unlisted.designations, ['NGC0224', 'M 31']);
-    expect(simpleSelectionOfDso(m31, const [], latitudeDeg: -60).neverRises, isTrue);
+    final southern = PlanningDso(
+        id: 'NGC5128', name: 'Centaurus A', type: 'G', magnitude: 6.8, raDeg: 201.37, decDeg: -47.48);
+    expect(simpleSelectionOfDso(southern, const [], latitudeDeg: 51.477833).neverRises, isTrue);
   });
 
   test('durations read in hours and minutes', () {
@@ -882,9 +884,9 @@ void main() {
     });
 
     group('a scheduled start', () {
-      // 20:00 UTC on Jan 14 at an Atlanta-ish site: daylight, dark falls that evening.
+      // 20:00 UTC on Jan 14 at the Sydney site (07:00 on Jan 15 there): daylight, dark falls that evening.
       final nowUtc = DateTime.utc(2026, 1, 14, 20);
-      const site = SiteSettings(latitudeDeg: 34, longitudeDeg: -84, twilightDefinition: TwilightDefinition.astronomical);
+      const site = SiteSettings(latitudeDeg: -33.856784, longitudeDeg: 151.215297, twilightDefinition: TwilightDefinition.astronomical);
       final dark = darkStart(site, nowUtc)!.toLocal();
       String hhmm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
       final overrides = <Object>[
@@ -953,14 +955,14 @@ void main() {
     });
 
     testWidgets('from the night\'s end until sunrise: Start now only, no start time to pick', (tester) async {
-      // 11:30 UTC Jan 15: 06:30 local, morning twilight at the Atlanta-ish site.
-      final morning = DateTime.utc(2026, 1, 15, 11, 30);
+      // 18:00 UTC Jan 14: 05:00 in Sydney, morning twilight before sunrise.
+      final morning = DateTime.utc(2026, 1, 14, 18);
       final seq = _Seq();
       await _pump(tester, seq,
           SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
           overrides: [
             siteSettingsProvider.overrideWith(() => _SiteAt(
-                const SiteSettings(latitudeDeg: 34, longitudeDeg: -84, twilightDefinition: TwilightDefinition.astronomical))),
+                const SiteSettings(latitudeDeg: -33.856784, longitudeDeg: 151.215297, twilightDefinition: TwilightDefinition.astronomical))),
             clockProvider.overrideWithValue(() => morning.toLocal()),
           ]);
       expect((tester.widget<FilledButton>(find.byKey(const Key('simple-run-start'))).child! as Text).data, 'Create and start');
