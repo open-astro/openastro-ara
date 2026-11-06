@@ -36,6 +36,27 @@ CC="${CC:-cc}"
 # word-splitting silently).
 CFLAGS=(-O2 -fPIC -fno-strict-aliasing)
 
+# glibc 2.43 (Ubuntu 26.04) added a new default version of libm remainder(), GLIBC_2.43, which
+# SuperNOVAS calls. A library linked there cannot load on older glibc (the runtime image is
+# Ubuntu 24.04 noble, glibc 2.39), so bind remainder() to the oldest version of the target
+# architecture, which every glibc keeps. Only the Linux targets we ship need it; the guard step in
+# ci.yml fails if a future glibc leaks another new version.
+REMAINDER_SYMVER=""
+case "$("$CC" -dumpmachine)" in
+    aarch64*-linux*) REMAINDER_SYMVER="GLIBC_2.17" ;;
+    x86_64*-linux*)  REMAINDER_SYMVER="GLIBC_2.2.5" ;;
+esac
+# Never empty: bash < 4.4 (macOS /bin/bash 3.2) treats "${a[@]}" of an empty array as unbound
+# under set -u.
+SNOVAS_CFLAGS=("${CFLAGS[@]}")
+if [ -n "$REMAINDER_SYMVER" ]; then
+    # In $OUT (ours already) rather than a temp dir; removed on exit so it never ships.
+    SYMVER_H="$OUT/.remainder-symver.h"
+    trap 'rm -f "$SYMVER_H"' EXIT
+    echo "__asm__(\".symver remainder,remainder@$REMAINDER_SYMVER\");" >"$SYMVER_H"
+    SNOVAS_CFLAGS+=(-include "$SYMVER_H")
+fi
+
 # ERFA — every source except the t_erfa_c*.c validation drivers (they carry main()).
 # erfaversion.c reads its version macros from autotools' config.h; we have no configure run,
 # so take them from configure.ac the way the autotools build would (eraVersion() is what the
@@ -81,7 +102,7 @@ fi
 # the build if a bump ever brings it back.
 SNOVAS_SRC+=("$SNOVAS/legacy/solsys1.c" "$SNOVAS/legacy/eph_manager.c")
 echo "building libsupernovas.$EXT"
-"$CC" "${CFLAGS[@]}" $SHARED -I"$SNOVAS/include" -I"$SNOVAS/legacy" -DWITHOUT_CURL -DUSER_SOLSYS=1 \
+"$CC" "${SNOVAS_CFLAGS[@]}" $SHARED -I"$SNOVAS/include" -I"$SNOVAS/legacy" -DWITHOUT_CURL -DUSER_SOLSYS=1 \
     -o "$OUT/libsupernovas.$EXT" "${SNOVAS_SRC[@]}" -lm
 
 echo "built into $OUT:"

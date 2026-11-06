@@ -8,7 +8,6 @@ import '../../theme/ara_colors.dart';
 import '../../widgets/emergency_stop_button.dart'
     show localEmergencyStopProvider;
 import '../../theme/ara_metrics.dart';
-import 'simple_preview_panel.dart' show kSimpleText;
 
 /// Simple Mode's safety alarm over every screen: MaterialApp's builder puts
 /// it above the Navigator, so the Image Library or the full Settings page

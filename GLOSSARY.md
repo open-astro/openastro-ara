@@ -27,7 +27,7 @@ The small camera on the guide scope or off-axis guider that watches a guide star
 _Avoid_: guider camera, guiding camera
 
 **Guider**:
-The guiding program that reads the Guide Camera and corrects the mount: PHD2 or openastro-guider, reached through the daemon. The device chip, the status pill ("Guider · Calibrating") and the guider window name the program.
+The guiding program that reads the Guide Camera and corrects the mount: PHD2 or openastro-guider, reached through the daemon. The device chip, the status pill ("Guider · Calibrating") and the guider window name the program. Simple Mode's **Guider** mode holds its settings (exposure, gain, dither) and starts and stops it, so it carries the same name (2026-11-06).
 _Avoid_: guide (for the program), guider camera
 
 ### Connection

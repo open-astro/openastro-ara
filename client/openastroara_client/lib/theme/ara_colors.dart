@@ -78,6 +78,16 @@ class AraColors {
   static const tierSilver = Color(0xFFC0C0C0);
   static const tierGold = Color(0xFFFFD54F);
 
+  /// Text on a tier-coloured banner: 7:1 or better on every tier.
+  static const onTier = Color(0xFF000000);
+
+  /// Behind a Card's Art, the night sky the picture sits on.
+  static const albumArtBackdrop = Color(0xFF000000);
+
+  /// A missing Card's Placeholder silhouette: 3.4:1 on [bgPanelAlt], an
+  /// informative graphic, and dimmer than a collected Card's.
+  static const albumPlaceholderMissing = Color(0xFF808080);
+
   // Selection / buttons
   static const selectionBg = Color(0xFF1976D2);
 

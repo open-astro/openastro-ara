@@ -27,16 +27,19 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 HELPER = REPO_ROOT / "packaging" / "debian" / "opt" / "openastroara" / "scripts" / "configure-storage.sh"
 
 
-def block_devices() -> list[str]:
+def block_devices(dev_dir: str = "/dev") -> list[str]:
     try:
-        names = sorted(os.listdir("/dev"))
+        names = sorted(os.listdir(dev_dir))
     except OSError:
         return []
     found = []
     for name in names:
-        path = f"/dev/{name}"
+        path = f"{dev_dir}/{name}"
         try:
-            if stat.S_ISBLK(os.stat(path).st_mode):
+            # lstat, not stat: a link (ubuntu-26.04's /dev/gpt-auto-root) must not pass as a
+            # block node. The helper canonicalises it to another name, so it can't stand in
+            # for a drive the shims look up by name.
+            if stat.S_ISBLK(os.lstat(path).st_mode):
                 found.append(path)
         except OSError:
             continue
@@ -184,6 +187,18 @@ class HelperRig(unittest.TestCase):
     def copy_mounted(self) -> list[str]:
         return [line.split()[0] for line in self.mounts.read_text().splitlines()
                 if line.split()[1:] == [self.copy_point]]
+
+
+class StandInDevices(unittest.TestCase):
+
+    @unittest.skipIf(not DEVICES, "needs a block node in /dev to link to")
+    def test_a_symlinked_block_node_is_not_a_stand_in(self) -> None:
+        # ubuntu-26.04 runners list /dev/gpt-auto-root, a link to the root partition. The
+        # helper canonicalises the store's source, so a link stand-in never matches the
+        # drive table and the previous store is never put back.
+        with tempfile.TemporaryDirectory() as dev_dir:
+            os.symlink(DEVICES[0], f"{dev_dir}/gpt-auto-root")
+            self.assertEqual(block_devices(dev_dir), [])
 
 
 class ConfigureStorageSwitch(HelperRig):

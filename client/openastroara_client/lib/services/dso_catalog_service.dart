@@ -29,6 +29,9 @@ class PlanningDso {
   final int? messierNum;
   final int? caldwellNum;
 
+  /// IAU constellation abbreviation ("And"), bundled catalogs only.
+  final String? constellation;
+
   /// The object's other designations and names (#1267 item 4): the
   /// catalog's cross-identifications, further common names, and the ids of
   /// rows folded into this one by [mergeDuplicates]. Any of them finds the
@@ -48,6 +51,7 @@ class PlanningDso {
     this.surfaceBrightness,
     this.messierNum,
     this.caldwellNum,
+    this.constellation,
     this.aliases = const [],
   });
 
