@@ -557,11 +557,31 @@ Map<String, dynamic> inheritDawnStop(
 ) {
   final dawn = dawnStopOf(root);
   if (dawn == null || _dawnOf(targetBlock) != null) return targetBlock;
-  Map<String, dynamic> stops(Map<String, dynamic> n) =>
-      withConditions(n, [...conditionsOf(n), _dawnCondition(dawn)]);
+  return _blockDawn(targetBlock, dawn);
+}
+
+/// #1560 — [root] with every target block (and its imaging loops) stopping at
+/// [dawn], or at no dawn when null. The daemon reads a dawn condition against
+/// the dusk rollover, so a block that starts between dawn and sunset sees this
+/// morning's dawn as passed and is skipped: Simple Mode settles the dawn stop
+/// when the queue starts, from the start time.
+Map<String, dynamic> withDawnStop(Map<String, dynamic> root, String? dawn) =>
+    withChildren(root, [
+      for (final c in childrenOf(root))
+        isContainer(c) ? _blockDawn(c, dawn) : c,
+    ]);
+
+/// [block] and its child containers without their dawn conditions, then with
+/// [dawn]'s when given.
+Map<String, dynamic> _blockDawn(Map<String, dynamic> block, String? dawn) {
+  Map<String, dynamic> stops(Map<String, dynamic> n) => withConditions(n, [
+    for (final c in conditionsOf(n))
+      if (_dawnLabel(c) == null) c,
+    if (dawn != null) _dawnCondition(dawn),
+  ]);
   return stops(
-    withChildren(targetBlock, [
-      for (final c in childrenOf(targetBlock)) isContainer(c) ? stops(c) : c,
+    withChildren(block, [
+      for (final c in childrenOf(block)) isContainer(c) ? stops(c) : c,
     ]),
   );
 }
@@ -580,11 +600,16 @@ String? dawnStopOf(Map<String, dynamic> root) {
 /// The dawn label of [node]'s own dawn `TimeCondition`, or null.
 String? _dawnOf(Map<String, dynamic> node) {
   for (final c in conditionsOf(node)) {
-    if (c[r'$type'] != timeConditionType) continue;
-    final label = timeProviderLabel(c['SelectedProvider']);
-    if (label.endsWith(' Dawn')) return label;
+    if (_dawnLabel(c) case final label?) return label;
   }
   return null;
+}
+
+/// The dawn label ('Civil Dawn' …) when [condition] is a dawn `TimeCondition`.
+String? _dawnLabel(Map<String, dynamic> condition) {
+  if (condition[r'$type'] != timeConditionType) return null;
+  final label = timeProviderLabel(condition['SelectedProvider']);
+  return label.endsWith(' Dawn') ? label : null;
 }
 
 Map<String, dynamic> _dawnCondition(String label) {

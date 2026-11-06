@@ -522,7 +522,8 @@ class SimpleRun {
   final DateTime? startAt;
 
   /// #1560 — the dawn every target block stops at (a `TimeCondition`
-  /// provider label), or null: decided when the queue is made, kept by the
+  /// provider label), or null: guessed when the queue is made, settled from
+  /// the start time when it starts ([SimpleRunNotifier.start]), kept by the
   /// targets added to it.
   final String? dawnStop;
 
@@ -544,6 +545,9 @@ class SimpleRun {
     bool noStorage = false,
     DateTime? startAt,
     bool startNow = false,
+    // The dawn stop the queue starts with; null with [settleDawn] = none.
+    String? dawnStop,
+    bool settleDawn = false,
   }) => SimpleRun(
     sequenceId: sequenceId,
     targets: targets ?? this.targets,
@@ -553,7 +557,7 @@ class SimpleRun {
     error: error,
     noStorage: noStorage,
     startAt: startNow ? null : startAt ?? this.startAt,
-    dawnStop: dawnStop,
+    dawnStop: settleDawn ? dawnStop : this.dawnStop,
   );
 }
 
@@ -984,12 +988,41 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     return start();
   }
 
-  /// The shutter's actions.
-  Future<bool> start() => _op(
-    (api, id) => api.start(id),
-    (l) => l.planActionStart,
-    before: state.copyWith(started: true),
-  );
+  /// The shutter's actions. Starting settles the dawn stop first.
+  Future<bool> start() async {
+    if (!await _settleDawn()) return false;
+    return _op(
+      (api, id) => api.start(id),
+      (l) => l.planActionStart,
+      before: state.copyWith(started: true),
+    );
+  }
+
+  /// #1560 — every target stops at dawn only when the queue starts in the
+  /// dark: the daemon would read a dawn stop started in daylight as already
+  /// past and skip every target. Rewrites the queue on the rig when the start
+  /// differs from the guess it was made with. True when it can start.
+  Future<bool> _settleDawn() async {
+    final api = ref.read(sequenceApiProvider);
+    final id = state.sequenceId;
+    final active =
+        ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false;
+    if (api == null || id == null || active || state.busy) return true;
+    final dawn = dawnStopFor(
+      ref.read(siteSettingsProvider),
+      (state.startAt ?? ref.read(clockProvider)()).toUtc(),
+    );
+    if (dawn == state.dawnStop) return true;
+    try {
+      final body = (await api.getSequenceDetail(id)).body;
+      await api.updateSequence(id, body: withDawnStop(body, dawn));
+      state = state.copyWith(dawnStop: dawn, settleDawn: true);
+      return true;
+    } catch (e) {
+      _fail(_why(e, (l) => l.planActionStart));
+      return false;
+    }
+  }
   Future<void> pause() => _op(
     (api, id) => api.pause(id),
     (l) => l.planActionPause,
@@ -1705,13 +1738,11 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     return (dawn, dark);
   }
 
-  /// When the plan stops at dawn, or null when it won't: a new queue stops
-  /// when it starts in the dark; a queue already on the rig keeps the dawn
-  /// stop it was made with.
-  DateTime? _stopsAtDawn(SimpleRun run, DateTime start) {
+  /// When the plan stops at dawn, or null when it won't: a queue stops at
+  /// dawn when it starts in the dark (settled at the start).
+  DateTime? _stopsAtDawn(DateTime start) {
     final (dawn, dark) = _nightOf(start);
-    final stops = run.sequenceId == null ? dark : run.dawnStop != null;
-    return stops ? dawn : null;
+    return dark ? dawn : null;
   }
 
   @override
@@ -2186,7 +2217,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 ),
             ],
           ),
-          if (_stopsAtDawn(run, startAt ?? now) case final dawn?)
+          if (_stopsAtDawn(startAt ?? now) case final dawn?)
             Text(context.l10n.planStopsAtDawn(_hhmm(dawn)), style: _dim),
           if (_picking && canSchedule)
             SizedBox(
@@ -2584,9 +2615,11 @@ class _NightDone extends ConsumerWidget {
     final stoppedAt = info.state == SequenceRunState.completed
         ? null
         : info.currentInstructionDescription;
-    // #1560 — a queue with a dawn stop completed after that night's dawn: the
-    // dawn stop ended it, not its frame counts. A run waiting for dark started
-    // in daylight, so its night begins at dark.
+    // #1560 — a queue with a dawn stop completed short of its frames, within a
+    // sub of that night's dawn: the dawn stop ended it. The daemon starts no
+    // frame that would end after dawn, so such a run ends up to a sub early (2
+    // min more for the client's sun model and the park). A run waiting for
+    // dark started in daylight, so its night begins at dark.
     final site = ref.watch(siteSettingsProvider);
     final dawn = start == null || run.dawnStop == null
         ? null
@@ -2594,11 +2627,22 @@ class _NightDone extends ConsumerWidget {
             site,
             darkStart(site, start.toUtc()) ?? start.toUtc(),
           );
+    final longestSub = run.steps.fold(
+      0.0,
+      (s, p) => math.max(s, p.exposureSeconds),
+    );
+    final short =
+        info.framesCaptured < run.steps.fold(0, (n, s) => n + s.frameCount);
     final atDawn =
         info.state == SequenceRunState.completed &&
+        short &&
         dawn != null &&
         end != null &&
-        !end.isBefore(dawn);
+        !end.isBefore(
+          dawn.subtract(
+            Duration(seconds: longestSub.round()) + const Duration(minutes: 2),
+          ),
+        );
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,

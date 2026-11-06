@@ -948,6 +948,26 @@ void main() {
       }
     });
 
+    test('withDawnStop sets, switches and clears the dawn on every block and loop; the rest stays', () {
+      final two = appendTargetToRunBody(
+        session(park: true, plan: lrgb),
+        buildTargetBlock(raDeg: 83.8, decDeg: -5.4, targetName: 'M42', exposureSeconds: 60, frameCount: 5),
+      );
+      List<Object?> provs(Map<String, dynamic> b) => [
+            for (final c in childrenOf(b).where(isContainer))
+              for (final n in [c, ...childrenOf(c).where(isContainer)])
+                for (final d in dawnsOf(n)) d['SelectedProvider'],
+          ];
+      final civil = withDawnStop(two, 'Civil Dawn');
+      // M31's block and its two loops, M42's block and its loop.
+      expect(provs(civil), List.filled(5, {r'$type': timeProviders['Civil Dawn']}));
+      final nautical = withDawnStop(civil, 'Nautical Dawn');
+      expect(provs(nautical), List.filled(5, {r'$type': timeProviders['Nautical Dawn']}), reason: 'replaced, not added');
+      final none = withDawnStop(nautical, null);
+      expect(provs(none), isEmpty);
+      expect(none, two, reason: 'clearing gives back the body it started from');
+    });
+
     test('a scheduled start keeps the park and the dawn conditions', () {
       final b = session(dawn: 'Astronomical Dawn', park: true);
       final s = scheduleRunBody(b, DateTime(2026, 11, 2, 21, 47));

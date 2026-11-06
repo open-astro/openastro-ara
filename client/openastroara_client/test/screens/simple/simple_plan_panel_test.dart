@@ -989,23 +989,35 @@ void main() {
         expect(dawns(body), hasLength(5));
       });
 
-      // Audit of #1654: once a queue exists, the line follows the queue's own dawn stop.
-      testWidgets('a queue that stops at dawn says so even when started now in daylight', (tester) async {
-        final dawn = nightEnd(site, dark.toUtc())!.toLocal();
-        await _pump(tester, _Seq(),
+      // Review of #1654: the daemon resolves a dawn condition against the dusk
+      // rollover, so a block started after dawn and before sunset reads this
+      // morning's dawn as passed and skips every target. The dawn stop is
+      // therefore settled when the queue starts, and the sheet line says what
+      // that start will do.
+      testWidgets('a queue made before dark, started now in daylight: no dawn stop, and the sheet says none',
+          (tester) async {
+        final seq = _Seq();
+        final c = await _pump(tester, seq,
             SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
             overrides: overrides);
         await tester.tap(find.byKey(const Key('simple-run-queue')));
         await tester.pumpAndSettle();
+        expect(dawns(seq.bodies['seq-1']!), isNotEmpty, reason: 'queued for Night Setup, which starts at dark');
         await tester.tap(find.byKey(const Key('simple-run-start-now')));
         await tester.pump();
-        expect(find.text('Stops at dawn · ${hhmm(dawn)}'), findsOneWidget);
+        expect(find.textContaining('Stops at dawn'), findsNothing);
+        expect(await c.read(simpleRunProvider.notifier).start(), isTrue);
+        expect(dawns(seq.bodies['seq-1']!), isEmpty, reason: 'started in daylight: every target would be skipped');
+        expect(parks(seq.bodies['seq-1']!), isTrue);
+        expect(c.read(simpleRunProvider).dawnStop, isNull);
+        expect(seq.calls.last, 'start seq-1');
       });
 
-      testWidgets('a queue made without a dawn stop never promises one', (tester) async {
+      testWidgets('a queue made after dawn, started in the dark: it stops at dawn, as the sheet says', (tester) async {
         // Queued at 05:00 in Sydney (after dawn, before sunrise): no dawn stop. Then night falls.
         var at = DateTime.utc(2026, 1, 14, 18);
-        final c = await _pump(tester, _Seq(),
+        final seq = _Seq();
+        final c = await _pump(tester, seq,
             SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
             overrides: [siteSettingsProvider.overrideWith(() => _SiteAt(site)), clockProvider.overrideWithValue(() => at.toLocal())]);
         await tester.tap(find.byKey(const Key('simple-run-queue')));
@@ -1014,7 +1026,11 @@ void main() {
         at = DateTime.utc(2026, 1, 15, 11); // 22:00, dark
         c.read(planetariumSelectionProvider.notifier).set(_m42);
         await tester.pumpAndSettle();
-        expect(find.textContaining('Stops at dawn'), findsNothing);
+        final dawn = nightEnd(site, at)!.toLocal();
+        expect(find.text('Stops at dawn · ${hhmm(dawn)}'), findsOneWidget);
+        expect(await c.read(simpleRunProvider.notifier).start(), isTrue);
+        expect(dawns(seq.bodies['seq-1']!), List.filled(5, timeProviders['Astronomical Dawn']));
+        expect(c.read(simpleRunProvider).dawnStop, 'Astronomical Dawn');
       });
 
       testWidgets('the start-time wheel takes the arrow keys: Down is 5 minutes later', (tester) async {
@@ -1298,21 +1314,34 @@ void main() {
       siteSettingsProvider.overrideWith(() => _SiteAt(sydney)),
       clockProvider.overrideWithValue(() => morning.toLocal()),
     ]);
+    // Five-minute subs, more than the night holds.
+    c.read(simpleRunPlanProvider.notifier).load(const [FilterPlanStep(filterName: 'L', exposureSeconds: 300, frameCount: 200)]);
+    await tester.pump();
     await create(tester);
     expect(c.read(simpleRunProvider).dawnStop, 'Astronomical Dawn');
-    await c.read(simpleRunProvider.notifier).start();
     // Started at once, in daylight, waiting on the rig for dark.
+    expect(await c.read(simpleRunProvider.notifier).startQueue(startAt: darkStart(sydney, morning)!.toLocal()), isTrue);
+    expect(c.read(simpleRunProvider).dawnStop, 'Astronomical Dawn', reason: 'it images from dark');
     SequenceRunStateInfo ended(DateTime end) => SequenceRunStateInfo(
         sequenceId: 'seq-1',
         state: SequenceRunState.completed,
         framesCaptured: 20,
         startedUtc: morning,
         completedUtc: end);
+    // The daemon starts no frame that would end after dawn, so a run dawn cut
+    // short completes before it: up to one sub early (plus the park).
+    await imaging(tester, c, seq, ended(dawn.subtract(const Duration(minutes: 3))));
+    expect(find.textContaining('stopped at dawn'), findsOneWidget, reason: 'frames short, ended within a sub of dawn');
     await imaging(tester, c, seq, ended(dawn.add(const Duration(minutes: 4))));
-    expect(find.textContaining('stopped at dawn'), findsOneWidget);
+    expect(find.textContaining('stopped at dawn'), findsOneWidget, reason: 'a frame interrupted at dawn');
     await imaging(tester, c, seq, ended(dawn.subtract(const Duration(hours: 1))));
     expect(find.text('Night done'), findsOneWidget);
     expect(find.textContaining('stopped at dawn'), findsNothing, reason: 'the frames ran out first');
+    final planned = c.read(simpleRunProvider).steps.fold(0, (n, s) => n + s.frameCount);
+    await imaging(tester, c, seq, SequenceRunStateInfo(
+        sequenceId: 'seq-1', state: SequenceRunState.completed, framesCaptured: planned,
+        startedUtc: morning, completedUtc: dawn.subtract(const Duration(minutes: 1))));
+    expect(find.textContaining('stopped at dawn'), findsNothing, reason: 'every frame was taken, just before dawn');
   });
 
   testWidgets('the last plan square says the mount parks at the end (#1560)', (tester) async {
