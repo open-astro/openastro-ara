@@ -291,6 +291,7 @@ List<PlanningDso> mergeDuplicates(
         surfaceBrightness: primary.surfaceBrightness,
         messierNum: firstInt((d) => d.messierNum),
         caldwellNum: firstInt((d) => d.caldwellNum),
+        constellation: primary.constellation,
         aliases: aliases,
       ),
     );

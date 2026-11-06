@@ -22,6 +22,7 @@ import 'services/client_error_log.dart';
 import 'util/perf_log.dart';
 import 'services/window_mode.dart';
 import 'state/client_gps_state.dart';
+import 'state/album/album_art.dart';
 import 'state/backup/backup_stream_state.dart';
 import 'state/launch_gate_state.dart';
 import 'state/sky_atlas/dso_catalog_state.dart';
@@ -41,6 +42,7 @@ Future<void> main() async {
   final errorLog = ClientErrorLog();
   ClientErrorHandlers.install(errorLog);
   unawaited(_noteLaunch(errorLog));
+  registerAlbumArtLicenses();
   runApp(
     ProviderScope(
       overrides: [clientErrorLogProvider.overrideWithValue(errorLog)],

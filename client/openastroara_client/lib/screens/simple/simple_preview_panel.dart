@@ -51,12 +51,9 @@ import 'simple_shell.dart'
         kSimpleStatusMaxWidth,
         simpleFrost;
 
-/// Simple Mode body text: 14 px minimum (brief), tabular for live numbers.
-const kSimpleText = TextStyle(
-  fontSize: 14,
-  color: AraColors.textPrimary,
-  fontFeatures: [FontFeature.tabularFigures()],
-);
+// kSimpleText moved to the theme so the Sky Album shares it; re-exported for Simple Mode's panels.
+export '../../theme/ara_metrics.dart' show kSimpleText;
+
 
 /// Single takes a saved frame (the daemon registers every Take One); Loop
 /// runs live view, whose frames are not saved.
