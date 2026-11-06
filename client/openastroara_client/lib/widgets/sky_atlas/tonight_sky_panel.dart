@@ -360,7 +360,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     final mag = _object.magnitude;
     final magText = mag == null ? 'mag —' : 'mag ${mag.toStringAsFixed(1)}';
     final subtitle =
-        '${_typeLabel(_object.type)} · $magText · '
+        '${dsoTypeLabel(_object.type)} · $magText · '
         'max ${_object.maxAltitudeDeg.toStringAsFixed(0)}°'
         '${aliasSuffix(_object.aliases)}';
     final timing = _timingLine(_object);
@@ -770,7 +770,7 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
   void _showDetails(BuildContext context) {
     final o = _object;
     final rows = <Widget>[
-      _detailLine('Type', _typeLabel(o.type)),
+      _detailLine('Type', dsoTypeLabel(o.type)),
       _detailLine(
         'Coordinates',
         '${formatRaHms(o.raDeg / 15)} · ${formatDecDms(o.decDeg)}',
@@ -888,25 +888,6 @@ class _ObjectRowState extends ConsumerState<_ObjectRow> {
     }
   }
 
-  // Friendly names for both the starter catalog's plain types and the OpenNGC
-  // codes the real catalog (and now the starter's emission targets) carry.
-  static String _typeLabel(String t) => switch (t) {
-    'galaxy' || 'G' => 'Galaxy',
-    'GPair' => 'Galaxy pair',
-    'GTrpl' => 'Galaxy triplet',
-    'GGroup' => 'Galaxy group',
-    'nebula' || 'Neb' => 'Nebula',
-    'HII' || 'EmN' => 'Emission nebula',
-    'RfN' => 'Reflection nebula',
-    'PN' => 'Planetary nebula',
-    'SNR' => 'Supernova remnant',
-    'cluster' => 'Cluster',
-    'OCl' => 'Open cluster',
-    'GCl' => 'Globular cluster',
-    'Cl+N' => 'Cluster + nebula',
-    '' => 'Object',
-    _ => t[0].toUpperCase() + t.substring(1),
-  };
 
   /// Compact local-time timing summary, e.g. "20:14–04:32 · 6.0 h dark ·
   /// 3.2 h left · transit 01:10". Null when the server sent no timing at all,
@@ -1229,3 +1210,23 @@ int? _rankOf(String d) {
   }
   return null;
 }
+
+/// Friendly names for both the starter catalog's plain types and the OpenNGC
+/// codes the real catalog (and now the starter's emission targets) carry.
+String dsoTypeLabel(String t) => switch (t) {
+  'galaxy' || 'G' => 'Galaxy',
+  'GPair' => 'Galaxy pair',
+  'GTrpl' => 'Galaxy triplet',
+  'GGroup' => 'Galaxy group',
+  'nebula' || 'Neb' => 'Nebula',
+  'HII' || 'EmN' => 'Emission nebula',
+  'RfN' => 'Reflection nebula',
+  'PN' => 'Planetary nebula',
+  'SNR' => 'Supernova remnant',
+  'cluster' => 'Cluster',
+  'OCl' => 'Open cluster',
+  'GCl' => 'Globular cluster',
+  'Cl+N' => 'Cluster + nebula',
+  '' => 'Object',
+  _ => t[0].toUpperCase() + t.substring(1),
+};

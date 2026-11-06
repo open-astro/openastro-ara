@@ -68,7 +68,7 @@ List<PlanningDso> parseOpenNgcCsv(String text) {
   final iName = idx('Name'), iType = idx('Type'), iRa = idx('RA'), iDec = idx('Dec');
   final iV = idx('V-Mag'), iB = idx('B-Mag'), iM = idx('M'), iId = idx('Identifiers');
   final iMaj = idx('MajAx'), iMin = idx('MinAx'), iPa = idx('PosAng'), iSb = idx('SurfBr');
-  final iCommon = idx('Common names');
+  final iCommon = idx('Common names'), iConst = idx('Const');
   final iNgc = idx('NGC'), iIc = idx('IC');
   if (iName < 0 || iRa < 0 || iDec < 0) return const [];
   final out = <PlanningDso>[];
@@ -163,6 +163,7 @@ List<PlanningDso> parseOpenNgcCsv(String text) {
       surfaceBrightness: num(iSb),
       messierNum: messier,
       caldwellNum: caldwell,
+      constellation: iConst >= 0 && f.length > iConst && f[iConst].trim().isNotEmpty ? f[iConst].trim() : null,
       aliases: aliases,
     ));
   }
@@ -184,6 +185,7 @@ List<PlanningDso> parseOpenNgcCsv(String text) {
             surfaceBrightness: d.surfaceBrightness,
             messierNum: d.messierNum,
             caldwellNum: d.caldwellNum,
+            constellation: d.constellation,
             aliases: [...d.aliases, ...dups],
           ),
       },

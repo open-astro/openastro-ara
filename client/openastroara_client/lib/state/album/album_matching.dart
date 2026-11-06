@@ -4,6 +4,7 @@ library;
 
 import 'dart:math' as math;
 
+import '../../models/preflight_checklist.dart';
 import '../../services/dso_catalog_service.dart';
 import '../../util/dedupe_catalog.dart';
 import 'album_frame.dart';
@@ -54,28 +55,33 @@ AlbumTier? tierFor({required int lights, required double hours}) {
   return AlbumTier.bronze;
 }
 
+/// One observing Night of a Card: its lights, the most common exposure
+/// length (the "sub") and the hours.
+class AlbumNight {
+  /// The evening's local date, `yyyy-mm-dd`, by the noon rule.
+  final String key;
+  final int lights;
+  final double subSeconds;
+  final double hours;
+  const AlbumNight({required this.key, required this.lights, required this.subSeconds, required this.hours});
+}
+
 /// One Card's figures, derived from the lights that contain its object.
 class CardStats {
   final int frameCount;
   final double integrationHours;
   final DateTime? firstCaptureUtc;
-  final String bestFrameId;
-
-  /// The best frame's composite score, null when no frame is scored yet.
-  final double? bestScore;
-
-  /// The best frame's gear profile id; the screen resolves it to a name.
-  final String? profileId;
   final List<String> filters;
+
+  /// Newest first; lights with no capture time are in the totals only.
+  final List<AlbumNight> nights;
 
   const CardStats({
     required this.frameCount,
     required this.integrationHours,
     required this.firstCaptureUtc,
-    required this.bestFrameId,
-    this.bestScore,
-    required this.profileId,
     required this.filters,
+    this.nights = const [],
   });
 
   AlbumTier? get tier => tierFor(lights: frameCount, hours: integrationHours);
@@ -87,7 +93,7 @@ class CardStats {
 Map<String, CardStats> aggregateBook(Iterable<AlbumFrame> frames, List<PlanningDso> book) {
   final epoch = DateTime.utc(0);
   final ordered = frames.toList()
-    // frameId breaks capture-time ties so the best frame doesn't depend on the reply's order.
+    // frameId breaks capture-time ties so the order doesn't depend on the reply's.
     ..sort((a, b) {
       final t = (a.capturedUtc ?? epoch).compareTo(b.capturedUtc ?? epoch);
       return t != 0 ? t : a.frameId.compareTo(b.frameId);
@@ -106,11 +112,6 @@ Map<String, CardStats> aggregateBook(Iterable<AlbumFrame> frames, List<PlanningD
 }
 
 CardStats _stats(List<AlbumFrame> fs) {
-  // fs is in capture order: the last of equal scores is the latest capture.
-  var best = fs.first;
-  for (final f in fs) {
-    if ((f.compositeScore ?? -1) >= (best.compositeScore ?? -1)) best = f;
-  }
   final filters = <String>[];
   for (final f in fs) {
     final name = f.filterName;
@@ -120,28 +121,61 @@ CardStats _stats(List<AlbumFrame> fs) {
     frameCount: fs.length,
     integrationHours: fs.fold(0.0, (h, f) => h + f.exposureSeconds) / 3600,
     firstCaptureUtc: fs.map((f) => f.capturedUtc).nonNulls.firstOrNull,
-    bestFrameId: best.frameId,
-    bestScore: best.compositeScore,
-    profileId: best.profileId,
     filters: filters,
+    nights: albumNights(fs),
   );
 }
 
-/// [cache] with [rows] merged in by frame id (a `since` reply carries changed
-/// rows that may already be cached).
-Map<String, AlbumFrame> mergeAlbumRows(Map<String, AlbumFrame> cache, Iterable<AlbumFrame> rows) =>
-    {...cache, for (final r in rows) r.frameId: r};
+/// [frames] grouped by Night (the `preflightNightKey` noon rule on the
+/// device's local time), newest first.
+// shortcut: device time zone, not the site's; the client has no zone database. Upgrade if a
+// remote device in another zone splits Nights wrongly.
+List<AlbumNight> albumNights(Iterable<AlbumFrame> frames) {
+  final byNight = <String, List<AlbumFrame>>{};
+  for (final f in frames) {
+    final t = f.capturedUtc;
+    if (t != null) byNight.putIfAbsent(preflightNightKey(t.toLocal()), () => []).add(f);
+  }
+  final keys = byNight.keys.toList()..sort((a, b) => b.compareTo(a));
+  return [
+    for (final k in keys)
+      AlbumNight(
+        key: k,
+        lights: byNight[k]!.length,
+        subSeconds: _commonest(byNight[k]!.map((f) => f.exposureSeconds)),
+        hours: byNight[k]!.fold(0.0, (h, f) => h + f.exposureSeconds) / 3600,
+      ),
+  ];
+}
 
-/// The `since` for the next fetch: the newest updated time held, or null.
-DateTime? albumSince(Map<String, AlbumFrame> cache) {
+/// The most common value; the longer one on a tie, so the answer doesn't depend on order.
+double _commonest(Iterable<double> values) {
+  final counts = <double, int>{};
+  for (final v in values) {
+    counts[v] = (counts[v] ?? 0) + 1;
+  }
+  return counts.entries.reduce((a, b) => b.value > a.value || (b.value == a.value && b.key > a.key) ? b : a).key;
+}
+
+/// [cache] with [rows] merged in by frame id: a row replaces the cached one
+/// unless it is older (a pointing backfill can add objects to a frame).
+/// Nothing is removed: the collection is a high-water mark (ADR 0001).
+Map<String, AlbumFrame> mergeAlbumRows(Map<String, AlbumFrame> cache, Iterable<AlbumFrame> rows) {
+  final out = {...cache};
+  for (final r in rows) {
+    final held = out[r.frameId]?.updatedUtc;
+    final next = r.updatedUtc;
+    if (held == null || (next != null && !next.isBefore(held))) out[r.frameId] = r;
+  }
+  return out;
+}
+
+/// The newest updated time among [rows], or null: the next fetch's `since`.
+DateTime? albumSince(Iterable<AlbumFrame> rows) {
   DateTime? newest;
-  for (final f in cache.values) {
+  for (final f in rows) {
     final u = f.updatedUtc;
     if (u != null && (newest == null || u.isAfter(newest))) newest = u;
   }
   return newest;
 }
-
-/// A merged count that differs from the daemon's total means rows were
-/// deleted (or missed): refetch everything.
-bool needsFullReload(Map<String, AlbumFrame> merged, {required int totalLights}) => merged.length != totalLights;
