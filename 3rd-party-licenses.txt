@@ -538,7 +538,7 @@ License source: https://licenses.nuget.org/MIT
 Project:        https://dot.net/
 
 ------------------------------------------------------------------------
-Package:        Scalar.AspNetCore 2.18.7
+Package:        Scalar.AspNetCore 2.19.0
 Authors:        Scalar
 License:        MIT
 License source: https://licenses.nuget.org/MIT
@@ -781,7 +781,7 @@ License:        MIT
 License source: https://pub.dev/packages/dio/license
 
 ------------------------------------------------------------------------
-Package:        file_picker 13.1.0
+Package:        file_picker 13.3.2
 Copyright:      Copyright (c) 2018 Miguel Ruivo
 License:        MIT
 License source: https://pub.dev/packages/file_picker/license

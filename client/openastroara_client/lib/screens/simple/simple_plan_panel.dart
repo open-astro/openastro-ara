@@ -38,7 +38,8 @@ import '../../theme/ara_metrics.dart';
 import '../../l10n/l10n.dart';
 import '../../state/app_locale_state.dart';
 import '../../util/friendly_error.dart';
-import '../../util/tonight_sky_local.dart' show darkStart, scheduleAllowed;
+import '../../util/tonight_sky_local.dart'
+    show darkStart, dawnStopFor, nightEnd, scheduleAllowed;
 import '../../widgets/sequencer/target_plan_dialog.dart'
     show planFrameCount, planOptionsAvailable, suggestedSubSeconds;
 import '../../state/ws/ws_providers.dart';
@@ -502,6 +503,7 @@ class SimpleRun {
     this.error,
     this.noStorage = false,
     this.startAt,
+    this.dawnStop,
   });
 
   final String? sequenceId;
@@ -518,6 +520,12 @@ class SimpleRun {
 
   /// A scheduled start: the run waits on the rig until then.
   final DateTime? startAt;
+
+  /// #1560 — the dawn every target block stops at (a `TimeCondition`
+  /// provider label), or null: guessed when the queue is made, settled from
+  /// the start time when it starts ([SimpleRunNotifier.start]), kept by the
+  /// targets added to it.
+  final String? dawnStop;
 
   /// Every target's rows, in order.
   List<FilterPlanStep> get steps => [for (final t in targets) ...t.steps];
@@ -537,6 +545,9 @@ class SimpleRun {
     bool noStorage = false,
     DateTime? startAt,
     bool startNow = false,
+    // The dawn stop the queue starts with; null with [settleDawn] = none.
+    String? dawnStop,
+    bool settleDawn = false,
   }) => SimpleRun(
     sequenceId: sequenceId,
     targets: targets ?? this.targets,
@@ -546,6 +557,7 @@ class SimpleRun {
     error: error,
     noStorage: noStorage,
     startAt: startNow ? null : startAt ?? this.startAt,
+    dawnStop: settleDawn ? dawnStop : this.dawnStop,
   );
 }
 
@@ -602,8 +614,10 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
 
   /// Add to queue: the picked target joins the end of the queue (the one
   /// sequence; live when it is imaging), or makes it. [first] puts it at the
-  /// front instead (Start now). True once on the rig.
-  Future<bool> create({bool first = false}) async {
+  /// front instead (Start now). A new queue stops at dawn when it starts in
+  /// the dark: at [startsAt], else when Night Setup starts it (at dark before
+  /// dark, else now). True once on the rig.
+  Future<bool> create({bool first = false, DateTime? startsAt}) async {
     final sel = ref.read(planetariumSelectionProvider);
     final steps = ref.read(simpleRunPlanProvider);
     final gain = ref.read(simpleRunGainProvider);
@@ -622,6 +636,17 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       return queued == 0 || await reorder(queued, 0);
     }
     final queue = state.sequenceId;
+    final dawn = queue != null
+        ? state.dawnStop
+        : dawnStopFor(
+            ref.read(siteSettingsProvider),
+            (startsAt ??
+                    (ref.read(simpleScheduleAllowedProvider)
+                        ? ref.read(simpleDarkStartProvider)
+                        : null) ??
+                    ref.read(clockProvider)())
+                .toUtc(),
+          );
     state = state.copyWith(busy: true);
     try {
       // The append goes to the selected sequence.
@@ -641,6 +666,8 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         exposureSeconds: steps.first.exposureSeconds,
         frameCount: steps.first.frameCount,
         gain: gain,
+        stopAtDawn: dawn,
+        parkAtEnd: true,
       );
       if (r == null || r.draft) {
         _fail(l10nFor(ref.read(appLocaleProvider)).planRigUnreachable);
@@ -670,7 +697,11 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         gain: gain,
       );
       if (queue == null) {
-        state = SimpleRun(sequenceId: r.sequenceId, targets: [target]);
+        state = SimpleRun(
+          sequenceId: r.sequenceId,
+          targets: [target],
+          dawnStop: dawn,
+        );
       } else if (first && state.targets.isNotEmpty) {
         await _moveBefore(queue, target.name, state.targets.first.name);
         state = state.copyWith(
@@ -742,6 +773,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         exposureSeconds: steps.first.exposureSeconds,
         frameCount: steps.first.frameCount,
         gain: gain,
+        stopAtDawn: state.dawnStop,
       );
       if (r == null || r.draft || r.sequenceId != id) {
         throw StateError("the rig didn't take the edited plan");
@@ -823,6 +855,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         exposureSeconds: t.steps.first.exposureSeconds,
         frameCount: t.steps.first.frameCount,
         gain: t.gain,
+        stopAtDawn: state.dawnStop,
       );
       if (r == null || r.draft || r.sequenceId != id) {
         throw StateError("the rig didn't take it back");
@@ -908,7 +941,10 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   /// queue, Start now: the target goes first. With [startAt] the run starts
   /// at once but waits on the rig until then (cooling 15 min before).
   Future<bool> createAndStart({DateTime? startAt}) async {
-    if (!await create(first: state.sequenceId != null)) return false;
+    final startsAt = startAt ?? ref.read(clockProvider)();
+    if (!await create(first: state.sequenceId != null, startsAt: startsAt)) {
+      return false;
+    }
     return startQueue(startAt: startAt);
   }
 
@@ -952,12 +988,41 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     return start();
   }
 
-  /// The shutter's actions.
-  Future<bool> start() => _op(
-    (api, id) => api.start(id),
-    (l) => l.planActionStart,
-    before: state.copyWith(started: true),
-  );
+  /// The shutter's actions. Starting settles the dawn stop first.
+  Future<bool> start() async {
+    if (!await _settleDawn()) return false;
+    return _op(
+      (api, id) => api.start(id),
+      (l) => l.planActionStart,
+      before: state.copyWith(started: true),
+    );
+  }
+
+  /// #1560 — every target stops at dawn only when the queue starts in the
+  /// dark: the daemon would read a dawn stop started in daylight as already
+  /// past and skip every target. Rewrites the queue on the rig when the start
+  /// differs from the guess it was made with. True when it can start.
+  Future<bool> _settleDawn() async {
+    final api = ref.read(sequenceApiProvider);
+    final id = state.sequenceId;
+    final active =
+        ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false;
+    if (api == null || id == null || active || state.busy) return true;
+    final dawn = dawnStopFor(
+      ref.read(siteSettingsProvider),
+      (state.startAt ?? ref.read(clockProvider)()).toUtc(),
+    );
+    if (dawn == state.dawnStop) return true;
+    try {
+      final body = (await api.getSequenceDetail(id)).body;
+      await api.updateSequence(id, body: withDawnStop(body, dawn));
+      state = state.copyWith(dawnStop: dawn, settleDawn: true);
+      return true;
+    } catch (e) {
+      _fail(_why(e, (l) => l.planActionStart));
+      return false;
+    }
+  }
   Future<void> pause() => _op(
     (api, id) => api.pause(id),
     (l) => l.planActionPause,
@@ -1135,7 +1200,11 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
     final progress = simpleTargetProgress(run.targets, frames);
     final cur = simpleCurrentTarget(run.targets, frames);
     final now = DateTime.now();
-    Widget square(int i) {
+    // #1560 — Simple Mode's queue parks the mount after its last target.
+    final parks = phase == SimpleRunPhase.done
+        ? null
+        : context.l10n.planSquareParks;
+    Widget square(int i, {String? foot}) {
       final t = run.targets[i];
       final done = progress[i];
       final got = done.fold(0, (a, b) => a + b);
@@ -1169,6 +1238,7 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
         fraction: inHand && phase != SimpleRunPhase.ready && total > 0
             ? got / total
             : null,
+        foot: foot,
         onTap: widget.onTap,
       );
     }
@@ -1214,10 +1284,12 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
                   ),
                 ),
                 color: AraColors.accentConnected,
+                foot: parks,
                 onTap: widget.onTap,
               ),
             // The queue runs right to left: the first target sits in the corner.
-            for (final i in shown.reversed) square(i),
+            for (final i in shown.reversed)
+              square(i, foot: rest.isEmpty && i == all - 1 ? parks : null),
           ],
         );
       },
@@ -1243,6 +1315,7 @@ class _PlanSquare extends StatelessWidget {
     required this.color,
     this.paused = false,
     this.fraction,
+    this.foot,
     required this.onTap,
   });
 
@@ -1256,6 +1329,9 @@ class _PlanSquare extends StatelessWidget {
   final Color color;
   final bool paused;
   final double? fraction;
+
+  /// A last line under [last] ("Parks" on the queue's last square).
+  final String? foot;
   final VoidCallback onTap;
 
   @override
@@ -1283,33 +1359,45 @@ class _PlanSquare extends StatelessWidget {
             height: kSimplePlanSquareHeight * simpleRailScale(context),
             child: Stack(
               children: [
-                // A long name or time shrinks to fit, clear of the border.
+                // A long name or time shrinks to fit, clear of the border; so
+                // does the whole column when its lines outgrow the square's
+                // height (five lines past 1.1x text), all by the same amount.
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 6),
                   child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      spacing: 2,
-                      children: [
-                        for (final (text, style) in [
-                          (
-                            name,
-                            kSimpleText.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                          (frames, kSimpleText),
-                          if (sub != null) (sub!, small),
-                          (
-                            last,
-                            paused
-                                ? small.copyWith(color: color)
-                                : small,
-                          ),
-                        ])
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(text, style: style, maxLines: 1),
-                          ),
-                      ],
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: SizedBox(
+                        width: kSimpleRailWidth * simpleRailScale(context) - 12,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          spacing: 2,
+                          children: [
+                            for (final (text, style) in [
+                              (
+                                name,
+                                kSimpleText.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              (frames, kSimpleText),
+                              if (sub != null) (sub!, small),
+                              (
+                                last,
+                                paused
+                                    ? small.copyWith(color: color)
+                                    : small,
+                              ),
+                              // One short word: the square has 60 px for it.
+                              if (foot != null) (foot!, small),
+                            ])
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(text, style: style, maxLines: 1),
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -1625,6 +1713,37 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
   /// (it reads its initial time once); a finger's turn leaves it alone.
   int _timeKeyed = 0;
   bool _picking = false;
+
+  // #1560 — the dawn of the night a start at [start] runs into (local), and
+  // whether it starts in the dark; a minute-by-minute sun scan, so worked out
+  // once per minute and site (Start now is a new instant on every rebuild).
+  (DateTime, SiteSettings, DateTime?, bool)? _night;
+  (DateTime?, bool) _nightOf(DateTime start) {
+    final site = ref.read(siteSettingsProvider);
+    final minute = DateTime(
+      start.year,
+      start.month,
+      start.day,
+      start.hour,
+      start.minute,
+    );
+    if (_night case (final m, final s, final dawn, final dark)
+        when m == minute && identical(s, site)) {
+      return (dawn, dark);
+    }
+    final darkAt = darkStart(site, minute.toUtc());
+    final dawn = nightEnd(site, darkAt ?? minute.toUtc())?.toLocal();
+    final dark = darkAt == null && dawn != null;
+    _night = (minute, site, dawn, dark);
+    return (dawn, dark);
+  }
+
+  /// When the plan stops at dawn, or null when it won't: a queue stops at
+  /// dawn when it starts in the dark (settled at the start).
+  DateTime? _stopsAtDawn(DateTime start) {
+    final (dawn, dark) = _nightOf(start);
+    return dark ? dawn : null;
+  }
 
   @override
   void initState() {
@@ -2098,6 +2217,8 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 ),
             ],
           ),
+          if (_stopsAtDawn(startAt ?? now) case final dawn?)
+            Text(context.l10n.planStopsAtDawn(_hhmm(dawn)), style: _dim),
           if (_picking && canSchedule)
             SizedBox(
               key: const Key('simple-run-time-picker'),
@@ -2494,6 +2615,34 @@ class _NightDone extends ConsumerWidget {
     final stoppedAt = info.state == SequenceRunState.completed
         ? null
         : info.currentInstructionDescription;
+    // #1560 — a queue with a dawn stop completed short of its frames, within a
+    // sub of that night's dawn: the dawn stop ended it. The daemon starts no
+    // frame that would end after dawn, so such a run ends up to a sub early (2
+    // min more for the client's sun model and the park). A run waiting for
+    // dark started in daylight, so its night begins at dark.
+    final site = ref.watch(siteSettingsProvider);
+    final dawn = start == null || run.dawnStop == null
+        ? null
+        : nightEnd(
+            site,
+            darkStart(site, start.toUtc()) ?? start.toUtc(),
+          );
+    final longestSub = run.steps.fold(
+      0.0,
+      (s, p) => math.max(s, p.exposureSeconds),
+    );
+    final short =
+        info.framesCaptured < run.steps.fold(0, (n, s) => n + s.frameCount);
+    final atDawn =
+        info.state == SequenceRunState.completed &&
+        short &&
+        dawn != null &&
+        end != null &&
+        !end.isBefore(
+          dawn.subtract(
+            Duration(seconds: longestSub.round()) + const Duration(minutes: 2),
+          ),
+        );
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2507,6 +2656,7 @@ class _NightDone extends ConsumerWidget {
               '${_hhmm(start)} – ${_hhmm(end)}',
               simpleRunDuration(end.difference(start).inSeconds.toDouble()),
             ],
+            if (atDawn) context.l10n.planStoppedAtDawn,
             if (info.state == SequenceRunState.stopped)
               context.l10n.planStopped,
             if (info.state == SequenceRunState.failed) context.l10n.planFailed,

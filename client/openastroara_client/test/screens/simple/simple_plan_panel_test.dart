@@ -15,9 +15,10 @@ import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
 import 'package:dio/dio.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
-import 'package:openastroara/models/sequence/nina_dom.dart' show childrenOf;
-import 'package:openastroara/models/sequence/instruction_catalog.dart' show waitForTimeType;
-import 'package:openastroara/util/tonight_sky_local.dart' show darkStart;
+import 'package:openastroara/models/sequence/nina_dom.dart' show childrenOf, conditionsOf;
+import 'package:openastroara/models/sequence/instruction_catalog.dart' show parkScopeType, waitForTimeType;
+import 'package:openastroara/models/sequence/condition_catalog.dart' show timeConditionType, timeProviders;
+import 'package:openastroara/util/tonight_sky_local.dart' show darkStart, nightEnd;
 import 'package:openastroara/models/sky_model_calibration.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/l10n/l10n.dart';
@@ -935,6 +936,103 @@ void main() {
         expect(seq.calls, ['create M31', 'start seq-1'], reason: 'starting now leaves the plan as it was');
       });
 
+      // #1560 — what the rig gets: the dawn conditions and the park.
+      List<String> dawns(Map<String, dynamic> body) => [
+            for (final c in childrenOf(body))
+              for (final n in [c, ...childrenOf(c)])
+                for (final k in conditionsOf(n))
+                  if (k[r'$type'] == timeConditionType) (k['SelectedProvider'] as Map)[r'$type'] as String,
+          ];
+      bool parks(Map<String, dynamic> body) => childrenOf(body).any((c) => c[r'$type'] == parkScopeType);
+
+      testWidgets('waiting for dark: the plan stops at dawn and parks; the sheet says when', (tester) async {
+        final dawn = nightEnd(site, dark.toUtc())!.toLocal();
+        final seq = _Seq();
+        await _pump(tester, seq,
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            overrides: overrides);
+        expect(find.text('Stops at dawn · ${hhmm(dawn)}'), findsOneWidget);
+        await tester.tap(find.byKey(const Key('simple-run-start')));
+        await tester.pumpAndSettle();
+        final body = seq.bodies['seq-1']!;
+        expect(parks(body), isTrue);
+        // The target block and its four LRGB loops.
+        expect(dawns(body), List.filled(5, timeProviders['Astronomical Dawn']));
+      });
+
+      testWidgets('Start now in daylight: it parks at the end but has no dawn stop (an indoor test runs on)',
+          (tester) async {
+        final seq = _Seq();
+        await _pump(tester, seq,
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            overrides: overrides);
+        await tester.tap(find.byKey(const Key('simple-run-start-now')));
+        await tester.pump();
+        expect(find.textContaining('Stops at dawn'), findsNothing);
+        await tester.tap(find.byKey(const Key('simple-run-start')));
+        await tester.pumpAndSettle();
+        final body = seq.bodies['seq-1']!;
+        expect(parks(body), isTrue);
+        expect(dawns(body), isEmpty);
+      });
+
+      testWidgets('Add to queue before dark: the queue stops at dawn (Night Setup starts it at dark)',
+          (tester) async {
+        final seq = _Seq();
+        await _pump(tester, seq,
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            overrides: overrides);
+        await tester.tap(find.byKey(const Key('simple-run-queue')));
+        await tester.pumpAndSettle();
+        final body = seq.bodies['seq-1']!;
+        expect(parks(body), isTrue);
+        expect(dawns(body), hasLength(5));
+      });
+
+      // Review of #1654: the daemon resolves a dawn condition against the dusk
+      // rollover, so a block started after dawn and before sunset reads this
+      // morning's dawn as passed and skips every target. The dawn stop is
+      // therefore settled when the queue starts, and the sheet line says what
+      // that start will do.
+      testWidgets('a queue made before dark, started now in daylight: no dawn stop, and the sheet says none',
+          (tester) async {
+        final seq = _Seq();
+        final c = await _pump(tester, seq,
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            overrides: overrides);
+        await tester.tap(find.byKey(const Key('simple-run-queue')));
+        await tester.pumpAndSettle();
+        expect(dawns(seq.bodies['seq-1']!), isNotEmpty, reason: 'queued for Night Setup, which starts at dark');
+        await tester.tap(find.byKey(const Key('simple-run-start-now')));
+        await tester.pump();
+        expect(find.textContaining('Stops at dawn'), findsNothing);
+        expect(await c.read(simpleRunProvider.notifier).start(), isTrue);
+        expect(dawns(seq.bodies['seq-1']!), isEmpty, reason: 'started in daylight: every target would be skipped');
+        expect(parks(seq.bodies['seq-1']!), isTrue);
+        expect(c.read(simpleRunProvider).dawnStop, isNull);
+        expect(seq.calls.last, 'start seq-1');
+      });
+
+      testWidgets('a queue made after dawn, started in the dark: it stops at dawn, as the sheet says', (tester) async {
+        // Queued at 05:00 in Sydney (after dawn, before sunrise): no dawn stop. Then night falls.
+        var at = DateTime.utc(2026, 1, 14, 18);
+        final seq = _Seq();
+        final c = await _pump(tester, seq,
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            overrides: [siteSettingsProvider.overrideWith(() => _SiteAt(site)), clockProvider.overrideWithValue(() => at.toLocal())]);
+        await tester.tap(find.byKey(const Key('simple-run-queue')));
+        await tester.pumpAndSettle();
+        expect(c.read(simpleRunProvider).dawnStop, isNull);
+        at = DateTime.utc(2026, 1, 15, 11); // 22:00, dark
+        c.read(planetariumSelectionProvider.notifier).set(_m42);
+        await tester.pumpAndSettle();
+        final dawn = nightEnd(site, at)!.toLocal();
+        expect(find.text('Stops at dawn · ${hhmm(dawn)}'), findsOneWidget);
+        expect(await c.read(simpleRunProvider.notifier).start(), isTrue);
+        expect(dawns(seq.bodies['seq-1']!), List.filled(5, timeProviders['Astronomical Dawn']));
+        expect(c.read(simpleRunProvider).dawnStop, 'Astronomical Dawn');
+      });
+
       testWidgets('the start-time wheel takes the arrow keys: Down is 5 minutes later', (tester) async {
         await _pump(tester, _Seq(),
             SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
@@ -1204,6 +1302,60 @@ void main() {
     expect(find.text('6 × 5 s'), findsOneWidget);
     expect(find.text('2 × 5 s'), findsOneWidget);
     expect(find.text('0 × 5 s'), findsOneWidget);
+  });
+
+  testWidgets('Night done: a plan that dawn ended says so (#1560)', (tester) async {
+    const sydney = SiteSettings(
+        latitudeDeg: -33.856784, longitudeDeg: 151.215297, twilightDefinition: TwilightDefinition.astronomical);
+    // 07:00 in Sydney: queued before dark, so the queue stops at dawn.
+    final morning = DateTime.utc(2026, 1, 14, 20);
+    final dawn = nightEnd(sydney, darkStart(sydney, morning)!)!;
+    final (c, seq) = await run(tester, overrides: [
+      siteSettingsProvider.overrideWith(() => _SiteAt(sydney)),
+      clockProvider.overrideWithValue(() => morning.toLocal()),
+    ]);
+    // Five-minute subs, more than the night holds.
+    c.read(simpleRunPlanProvider.notifier).load(const [FilterPlanStep(filterName: 'L', exposureSeconds: 300, frameCount: 200)]);
+    await tester.pump();
+    await create(tester);
+    expect(c.read(simpleRunProvider).dawnStop, 'Astronomical Dawn');
+    // Started at once, in daylight, waiting on the rig for dark.
+    expect(await c.read(simpleRunProvider.notifier).startQueue(startAt: darkStart(sydney, morning)!.toLocal()), isTrue);
+    expect(c.read(simpleRunProvider).dawnStop, 'Astronomical Dawn', reason: 'it images from dark');
+    SequenceRunStateInfo ended(DateTime end) => SequenceRunStateInfo(
+        sequenceId: 'seq-1',
+        state: SequenceRunState.completed,
+        framesCaptured: 20,
+        startedUtc: morning,
+        completedUtc: end);
+    // The daemon starts no frame that would end after dawn, so a run dawn cut
+    // short completes before it: up to one sub early (plus the park).
+    await imaging(tester, c, seq, ended(dawn.subtract(const Duration(minutes: 3))));
+    expect(find.textContaining('stopped at dawn'), findsOneWidget, reason: 'frames short, ended within a sub of dawn');
+    await imaging(tester, c, seq, ended(dawn.add(const Duration(minutes: 4))));
+    expect(find.textContaining('stopped at dawn'), findsOneWidget, reason: 'a frame interrupted at dawn');
+    await imaging(tester, c, seq, ended(dawn.subtract(const Duration(hours: 1))));
+    expect(find.text('Night done'), findsOneWidget);
+    expect(find.textContaining('stopped at dawn'), findsNothing, reason: 'the frames ran out first');
+    final planned = c.read(simpleRunProvider).steps.fold(0, (n, s) => n + s.frameCount);
+    await imaging(tester, c, seq, SequenceRunStateInfo(
+        sequenceId: 'seq-1', state: SequenceRunState.completed, framesCaptured: planned,
+        startedUtc: morning, completedUtc: dawn.subtract(const Duration(minutes: 1))));
+    expect(find.textContaining('stopped at dawn'), findsNothing, reason: 'every frame was taken, just before dawn');
+  });
+
+  testWidgets('the last plan square says the mount parks at the end (#1560)', (tester) async {
+    final (c, _) = await run(tester);
+    await create(tester);
+    final tracker = find.byKey(const Key('simple-run-tracker'));
+    expect(find.descendant(of: tracker, matching: find.text('Parks')), findsOneWidget);
+    c.read(planetariumSelectionProvider.notifier).set(_m42);
+    await tester.pumpAndSettle();
+    await create(tester);
+    // The queue runs right to left: the caption sits on M42's square, the leftmost.
+    final caption = tester.getRect(find.descendant(of: tracker, matching: find.text('Parks')));
+    expect(find.descendant(of: tracker, matching: find.text('Parks')), findsOneWidget);
+    expect(caption.center.dx, closeTo(tester.getRect(find.descendant(of: tracker, matching: find.text('M42'))).center.dx, 1));
   });
 
   test('progress fills the queue in order, target by target', () {

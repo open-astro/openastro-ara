@@ -259,8 +259,6 @@ Future<Uri?> Function(String fileName, Uint8List bytes) frameExportSaver =
     (fileName, bytes) => FilePicker.saveFile(
           dialogTitle: 'Export frames',
           fileName: fileName,
-          type: FileType.custom,
-          allowedExtensions: const ['tar'],
           bytes: bytes,
         );
 
