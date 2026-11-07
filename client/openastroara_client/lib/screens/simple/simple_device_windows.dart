@@ -1979,8 +1979,9 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
   double? _asking;
 
   /// A Sync while a plan runs asks first too: it shifts the sky angle the
-  /// plan frames by (#1670 re-audit).
-  bool _askingSync = false;
+  /// plan frames by (#1670 re-audit). Holds the angle asked about, as
+  /// [_asking] does, so turning the dial meanwhile cannot change what syncs.
+  double? _askingSync;
 
   final _dialFocus = FocusNode(debugLabel: 'simple-rotator-dial');
   bool _dialFocused = false;
@@ -2013,6 +2014,14 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
   /// there is nothing to do, so the target clears; across the far side, 180°
   /// away, it keeps counting.
   void _nudge(double sky, int n) {
+    // One pan update can report several detents; each one is a click, so a
+    // run that passes through the rotator's angle clears the target there.
+    for (var i = 0; i < n.abs(); i++) {
+      _step(sky, n.sign);
+    }
+  }
+
+  void _step(double sky, int n) {
     final shown = sky.roundToDouble();
     final old = _target;
     final t = _snap(old ?? shown, n);
@@ -2040,8 +2049,8 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
     }
   }
 
-  Future<void> _sync() async {
-    final t = _target;
+  Future<void> _sync([double? asked]) async {
+    final t = asked ?? _target;
     if (t == null) return;
     setState(() => _target = null);
     final notify = userNotifier(context, origin: SimpleStatusOrigin.rotator);
@@ -2271,15 +2280,16 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
           ),
         );
       }
-      if (_askingSync) {
+      if (_askingSync != null) {
+        final asked = _askingSync!;
         children.add(
           simpleWindowConfirm(
             question: l10n.devicePlanRunningSync,
             confirm: l10n.deviceSyncAnyway,
-            onCancel: () => setState(() => _askingSync = false),
+            onCancel: () => setState(() => _askingSync = null),
             onConfirm: () {
-              setState(() => _askingSync = false);
-              _sync();
+              setState(() => _askingSync = null);
+              _sync(asked);
             },
           ),
         );
@@ -2291,7 +2301,9 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
           key: const Key('simple-rotator-sync'),
           label: target == null ? l10n.deviceSync : l10n.deviceSyncTo(target),
           onTap: enabled && _target != null
-              ? () => planRunning ? setState(() => _askingSync = true) : _sync()
+              ? () => planRunning
+                    ? setState(() => _askingSync = _target)
+                    : _sync()
               : null,
         ),
       ]);

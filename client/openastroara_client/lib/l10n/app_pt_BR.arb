@@ -411,7 +411,7 @@
   "estopLabel": "Parada de emergência",
   "estopPressAgainAnnouncement": "Pressione de novo em até 3 segundos para parar tudo",
   "estopConfirmTitle": "Parar tudo agora?",
-  "estopConfirmBody": "Isto aborta a sequência em andamento e a exposição atual, para a guiagem, estaciona a montagem e desliga a luz do painel de flat e a refrigeração da câmera. Não pode ser desfeito — a sequência não é retomada.",
+  "estopConfirmBody": "Isto aborta a sequência em andamento e a exposição atual, para a guiagem, para o rotador, estaciona a montagem e desliga a luz do painel de flat e a refrigeração da câmera. Não pode ser desfeito — a sequência não é retomada.",
   "estopCancel": "Cancelar",
   "estopConfirm": "PARADA DE EMERGÊNCIA",
   "estopNoServer": "Nenhum servidor conectado — nada para parar.",

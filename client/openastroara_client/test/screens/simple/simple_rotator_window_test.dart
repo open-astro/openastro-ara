@@ -48,9 +48,13 @@ class _Rotator extends RotatorNotifier {
     return true;
   }
 
+  /// The rotator refuses the next halt.
+  bool refuseHalt = false;
+
   @override
   Future<bool> halt() async {
     calls.add('halt');
+    if (refuseHalt) throw StateError('Rotator did not answer');
     return true;
   }
 }
@@ -354,6 +358,45 @@ void main() {
     await tester.pump();
     expect(r.calls, ['sync 75.0']);
     expect(_syncLabel(tester), 'Sync');
+  });
+
+  testWidgets('a failed Stop says so in a pill', (tester) async {
+    final (c, r) = await _pump(tester, _wire(runtime: 'moving'));
+    r.refuseHalt = true;
+    await tester.tap(_hub);
+    await tester.pump();
+    expect(r.calls, ['halt']);
+    final pill = c.read(simpleMessagesProvider).single;
+    expect((pill.kind, pill.title), (SimpleMessageKind.error, "Couldn't stop the rotator"));
+  });
+
+  testWidgets('Sync anyway syncs the angle asked, not one turned to meanwhile', (tester) async {
+    final (_, r) = await _pump(tester, _wire(), planRunning: true);
+    await tester.pump();
+    await _turn(tester, 17.5);
+    await tester.tap(_sync);
+    await tester.pump();
+    expect(find.text('A plan is running. Sync anyway?'), findsOneWidget);
+    await _turn(tester, 5.5); // the dial moves on while the question is open
+    expect(_syncLabel(tester), 'Sync to 70°');
+    await tester.tap(find.text('Sync anyway'));
+    await tester.pump();
+    expect(r.calls, ['sync 75.0']);
+  });
+
+  testWidgets('one trackpad update of several clicks passing the rotator angle steps one click at a time', (tester) async {
+    await _pump(tester, _wire()); // sky 92
+    final at = tester.getCenter(_dial) + const Offset(60, 0);
+    final g = await tester.startGesture(at, kind: PointerDeviceKind.trackpad);
+    await g.panZoomUpdate(at, pan: const Offset(0, -22.5)); // 3 clicks up: 93, 94, 95
+    await tester.pump();
+    expect(_syncLabel(tester), 'Sync to 95°');
+    // 5 clicks down in one update: 94, 93, 92 (back at the rotator: cleared), 91, 90.
+    await g.panZoomUpdate(at, pan: const Offset(0, 15));
+    await tester.pump();
+    await g.panZoomEnd();
+    await tester.pump();
+    expect(_syncLabel(tester), 'Sync to 90°');
   });
 
   testWidgets('a refused sync says why in a pill', (tester) async {

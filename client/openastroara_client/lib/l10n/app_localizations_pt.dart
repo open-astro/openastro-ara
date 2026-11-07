@@ -1422,7 +1422,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get estopConfirmBody =>
-      'This aborts the running sequence and the in-flight exposure, stops guiding, parks the mount, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.';
+      'This aborts the running sequence and the in-flight exposure, stops guiding, halts the rotator, parks the mount, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.';
 
   @override
   String get estopCancel => 'Cancel';
@@ -3776,7 +3776,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get estopConfirmBody =>
-      'Isto aborta a sequência em andamento e a exposição atual, para a guiagem, estaciona a montagem e desliga a luz do painel de flat e a refrigeração da câmera. Não pode ser desfeito — a sequência não é retomada.';
+      'Isto aborta a sequência em andamento e a exposição atual, para a guiagem, para o rotador, estaciona a montagem e desliga a luz do painel de flat e a refrigeração da câmera. Não pode ser desfeito — a sequência não é retomada.';
 
   @override
   String get estopCancel => 'Cancelar';

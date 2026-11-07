@@ -1422,7 +1422,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get estopConfirmBody =>
-      'This aborts the running sequence and the in-flight exposure, stops guiding, parks the mount, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.';
+      'This aborts the running sequence and the in-flight exposure, stops guiding, halts the rotator, parks the mount, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.';
 
   @override
   String get estopCancel => 'Cancel';

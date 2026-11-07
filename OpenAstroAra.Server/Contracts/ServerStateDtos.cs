@@ -163,7 +163,7 @@ public sealed record EmergencyStopResultDto(
     bool ParkRequested,
     bool FlatPanelLightOff,
     // Rungs that were ATTEMPTED and faulted (tokens: abort_runs,
-    // abort_exposure, stop_guiding, park, flat_panel_light_off, cooler_off). A device
+    // halt_rotator, abort_exposure, stop_guiding, park, flat_panel_light_off, cooler_off). A device
     // that isn't connected at all reads false above but is NOT listed here —
     // a rig without a flat panel is not a failure.
     System.Collections.Generic.IReadOnlyList<string> FailedRungs,
