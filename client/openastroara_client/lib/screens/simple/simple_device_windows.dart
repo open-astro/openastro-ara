@@ -2705,6 +2705,10 @@ class _SimpleFlatPanelWindowState extends ConsumerState<SimpleFlatPanelWindow> {
   /// The brightness under the finger, then sent, until the command lands.
   int? _level;
 
+  /// A command is on its way: a second ask says busy and leaves
+  /// [_pendingLight] and [_level] to the first.
+  bool _applying = false;
+
   /// A change asked for while a plan runs: the window asks first.
   ({bool? openCover, bool? lightOn, int? brightness})? _asking;
 
@@ -2893,7 +2897,8 @@ class _SimpleFlatPanelWindowState extends ConsumerState<SimpleFlatPanelWindow> {
                   // Slider needs max > min: held at 1 and disabled until the
                   // panel reports its range.
                   max: (max > 0 ? max : 1).toDouble(),
-                  semanticFormatterCallback: (v) => _percent(v.round(), max),
+                  semanticFormatterCallback: (v) =>
+                      max == 0 ? '—' : _percent(v.round(), max),
                   onChanged: max == 0 || asking
                       ? null
                       : (v) => setState(() => _level = v.round()),
@@ -2931,12 +2936,16 @@ class _SimpleFlatPanelWindowState extends ConsumerState<SimpleFlatPanelWindow> {
   /// A level as a percent of the panel's maximum ("50 %"); anything above
   /// 0 reads at least 1 %, so a lit panel never reads 0 %. The panel is still
   /// sent its own units.
-  static String _percent(int level, int max) =>
-      '${level == 0 ? 0 : math.max(1, (level * 100 / max).round())} %';
+  static String _percent(int level, int max) {
+    assert(max > 0);
+    return '${level == 0 ? 0 : math.max(1, (level * 100 / max).round())} %';
+  }
 
   Future<void> _apply({bool? openCover, bool? lightOn, int? brightness}) async {
     final notify = userNotifier(context, origin: SimpleStatusOrigin.flatPanel);
     final l10n = context.l10n;
+    if (_applying) return _sayBusy(ref, l10n);
+    _applying = true;
     // A level alone sets the light too: above 0 on, 0 off (as the daemon does).
     final light = lightOn ?? (brightness == null ? null : brightness > 0);
     setState(() {
@@ -2967,6 +2976,7 @@ class _SimpleFlatPanelWindowState extends ConsumerState<SimpleFlatPanelWindow> {
       );
     } finally {
       // The panel's own reading takes over again, landed or not.
+      _applying = false;
       if (mounted) {
         setState(() {
           _pendingLight = null;

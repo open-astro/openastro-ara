@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,6 +24,9 @@ class _Panel extends FlatPanelNotifier {
   /// Another command still in flight: asks are dropped (the notifier's re-entrancy guard).
   bool busy = false;
 
+  /// When set, the next command stays in flight until this completes.
+  Completer<bool>? hold;
+
   /// The panel refuses the next command.
   bool refuse = false;
 
@@ -44,6 +49,11 @@ class _Panel extends FlatPanelNotifier {
       ].join(' '),
     );
     if (refuse) throw StateError('Cover is moving');
+    final held = hold;
+    if (held != null) {
+      hold = null;
+      return held.future;
+    }
     return !busy;
   }
 
@@ -246,6 +256,33 @@ void main() {
       await _pump(tester, _wire(max: 0));
       expect(tester.widget<Slider>(_key('brightness')).onChanged, isNull);
       expect(find.text('—'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a tap while a brightness command runs says busy and leaves it be',
+    (tester) async {
+      final (c, panel) = await _pump(tester, _wire(light: true));
+      final hold = panel.hold = Completer<bool>();
+      await tester.drag(_key('brightness'), const Offset(-400, 0));
+      await tester.pump();
+      expect(panel.calls, ['brightness=0']);
+      await tester.tap(_key('cover-open'));
+      await tester.pump();
+      expect(panel.calls, [
+        'brightness=0',
+      ], reason: 'the second ask is not sent');
+      expect(tester.widget<Slider>(_key('brightness')).value, 0);
+      expect(
+        tester.widget<SimpleSegment>(_key('light-on')).onTap,
+        isNull,
+        reason: 'the light stays locked while the first command runs',
+      );
+      expect(c.read(simpleMessagesProvider).single.title, 'Still busy');
+      hold.complete(true);
+      await tester.pump();
+      expect(tester.widget<Slider>(_key('brightness')).value, 128);
+      await tester.pump(const Duration(seconds: 11)); // the pill fades
     },
   );
 
