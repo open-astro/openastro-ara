@@ -30,6 +30,7 @@ import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
 import '../../widgets/status_indicator.dart'
     show StatusBlink, StatusDot, StatusLevel;
 import '../../state/equipment/camera_state.dart';
+import '../../state/equipment/filter_wheel_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
@@ -1069,6 +1070,9 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     _coolStart = cooling ? (_coolStart ?? ccd) : null;
     // A park or unpark asked for in Simple Mode, until the mount gets there.
     final parking = ref.watch(simpleMountMotionProvider);
+    // The filter wheel turning, or a manual wheel waiting for its hand swap.
+    final wheel = ref.watch(filterWheelProvider).value;
+    final swap = wheel != null && wheel.isAwaitingUser ? wheel.pending : null;
     // The guider's routine, or Guiding with its RMS, when nothing else is on.
     final guider = ref.watch(guiderStatusProvider).value;
     final guiding = simpleGuiding(guider);
@@ -1157,6 +1161,25 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           null,
           AraColors.accentInfo,
           ring: true,
+        ),
+      // Moving is working: blinking green, as the wheel's dot and window
+      // show it (DESIGN.md status rule).
+      if (wheel != null && wheel.isConnected && wheel.isMoving)
+        _PillData(
+          SimpleStatusOrigin.filterWheel,
+          l10n.shellFilterWheel,
+          l10n.deviceMoving,
+          AraColors.accentConnected,
+          working: true,
+        )
+      else if (swap != null)
+        _PillData(
+          SimpleStatusOrigin.filterWheel,
+          l10n.shellFilterWheel,
+          l10n.deviceSwapIn(
+            swap.name.isEmpty ? l10n.deviceSlot(swap.position) : swap.name,
+          ),
+          AraColors.accentBusy,
         ),
       // A cooler turned on by hand (a plan's own cooling shows as its step).
       if (cooling && !planActive)

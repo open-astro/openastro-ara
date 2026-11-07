@@ -189,6 +189,50 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceCouldntMoveFocuser => 'Couldn\'t move the focuser';
 
   @override
+  String get deviceFilter => 'Filter';
+
+  @override
+  String deviceSlot(int position) {
+    return 'Slot $position';
+  }
+
+  @override
+  String deviceFilterInSlot(String filter, int position) {
+    return '$filter (slot $position)';
+  }
+
+  @override
+  String deviceSlotFilter(int position, String filter) {
+    return '$position · $filter';
+  }
+
+  @override
+  String get deviceNoFilters => 'This wheel reports no filters.';
+
+  @override
+  String get deviceCouldntChangeFilter => 'Couldn\'t change the filter';
+
+  @override
+  String get devicePlanRunningChangeFilter =>
+      'A plan is running. Change the filter anyway?';
+
+  @override
+  String get deviceChangeAnyway => 'Change anyway';
+
+  @override
+  String deviceSwapIn(String filter) {
+    return 'Swap in $filter, then confirm.';
+  }
+
+  @override
+  String deviceFilterIsIn(String filter) {
+    return '$filter is in';
+  }
+
+  @override
+  String get deviceCancelSwap => 'Cancel swap';
+
+  @override
   String get deviceCouldntSaveThat => 'Couldn\'t save that';
 
   @override
@@ -2420,6 +2464,50 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get deviceCouldntMoveFocuser => 'Não foi possível mover o focalizador';
+
+  @override
+  String get deviceFilter => 'Filtro';
+
+  @override
+  String deviceSlot(int position) {
+    return 'Posição $position';
+  }
+
+  @override
+  String deviceFilterInSlot(String filter, int position) {
+    return '$filter (posição $position)';
+  }
+
+  @override
+  String deviceSlotFilter(int position, String filter) {
+    return '$position · $filter';
+  }
+
+  @override
+  String get deviceNoFilters => 'Esta roda não informa filtros.';
+
+  @override
+  String get deviceCouldntChangeFilter => 'Não foi possível trocar o filtro';
+
+  @override
+  String get devicePlanRunningChangeFilter =>
+      'Há um plano em andamento. Trocar o filtro mesmo assim?';
+
+  @override
+  String get deviceChangeAnyway => 'Trocar mesmo assim';
+
+  @override
+  String deviceSwapIn(String filter) {
+    return 'Coloque o filtro $filter e confirme.';
+  }
+
+  @override
+  String deviceFilterIsIn(String filter) {
+    return '$filter está colocado';
+  }
+
+  @override
+  String get deviceCancelSwap => 'Cancelar troca';
 
   @override
   String get deviceCouldntSaveThat => 'Não foi possível salvar';

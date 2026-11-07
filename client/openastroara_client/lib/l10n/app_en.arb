@@ -228,6 +228,81 @@
   "@deviceCouldntMoveFocuser": {
     "description": "Error message when the focuser refused a move"
   },
+  "deviceFilter": "Filter",
+  "@deviceFilter": {
+    "description": "Filter wheel window row: the filter in place"
+  },
+  "deviceSlot": "Slot {position}",
+  "@deviceSlot": {
+    "description": "Filter wheel window: a slot the wheel gives no name, by its number",
+    "placeholders": {
+      "position": {
+        "type": "int"
+      }
+    }
+  },
+  "deviceFilterInSlot": "{filter} (slot {position})",
+  "@deviceFilterInSlot": {
+    "description": "Filter wheel window, Filter row: the filter in place and its slot number, as the full UI shows it",
+    "placeholders": {
+      "filter": {
+        "type": "String"
+      },
+      "position": {
+        "type": "int"
+      }
+    }
+  },
+  "deviceSlotFilter": "{position} · {filter}",
+  "@deviceSlotFilter": {
+    "description": "Filter wheel window: a filter's segment, its slot number then its name (e.g. 1 · Ha)",
+    "placeholders": {
+      "position": {
+        "type": "int"
+      },
+      "filter": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceNoFilters": "This wheel reports no filters.",
+  "@deviceNoFilters": {
+    "description": "Filter wheel window: the wheel reports no slots"
+  },
+  "deviceCouldntChangeFilter": "Couldn't change the filter",
+  "@deviceCouldntChangeFilter": {
+    "description": "Error message when the filter wheel refused a change"
+  },
+  "devicePlanRunningChangeFilter": "A plan is running. Change the filter anyway?",
+  "@devicePlanRunningChangeFilter": {
+    "description": "Filter wheel window: asked when a filter is tapped while a plan runs"
+  },
+  "deviceChangeAnyway": "Change anyway",
+  "@deviceChangeAnyway": {
+    "description": "Filter wheel window button: change the filter even though a plan runs"
+  },
+  "deviceSwapIn": "Swap in {filter}, then confirm.",
+  "@deviceSwapIn": {
+    "description": "Filter wheel window, manual wheel: asks the user to put the chosen filter in by hand",
+    "placeholders": {
+      "filter": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceFilterIsIn": "{filter} is in",
+  "@deviceFilterIsIn": {
+    "description": "Filter wheel window, manual wheel button: the chosen filter is now in",
+    "placeholders": {
+      "filter": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceCancelSwap": "Cancel swap",
+  "@deviceCancelSwap": {
+    "description": "Filter wheel window, manual wheel button: drop the swap asked for"
+  },
   "deviceCouldntSaveThat": "Couldn't save that",
   "@deviceCouldntSaveThat": {
     "description": "Error message when a focuser or guider setting could not be saved"

@@ -328,6 +328,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     'eq.camera': SimpleCameraWindow(),
     'eq.mount': SimpleMountWindow(),
     'eq.focuser': SimpleFocuserWindow(),
+    'eq.filterwheel': SimpleFilterWheelWindow(),
     'eq.guider': SimpleGuiderWindow(),
   };
 
@@ -432,6 +433,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       SimpleStatusOrigin.mount => 'eq.mount',
       SimpleStatusOrigin.camera => 'eq.camera',
       SimpleStatusOrigin.focuser => 'eq.focuser',
+      SimpleStatusOrigin.filterWheel => 'eq.filterwheel',
       SimpleStatusOrigin.guiderCamera => 'eq.guider',
       _ => null,
     };
@@ -1198,12 +1200,22 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 Positioned(
                                   left: kSimpleInset,
                                   top: railTop,
+                                  // Never past the bottom row: a tall window
+                                  // (a many-slot filter wheel) scrolls.
+                                  bottom: aboveRow,
                                   width:
                                       kSimpleDeviceWindowWidth *
                                       simpleRailScale(context),
-                                  child: SimplePanel(
-                                    padding: const EdgeInsets.all(AraSpace.s16),
-                                    child: _deviceWindows[_device]!,
+                                  child: Align(
+                                    alignment: Alignment.topLeft,
+                                    child: SimplePanel(
+                                      child: SingleChildScrollView(
+                                        padding: const EdgeInsets.all(
+                                          AraSpace.s16,
+                                        ),
+                                        child: _deviceWindows[_device]!,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               // Search drops from the strip, centred.
@@ -2194,10 +2206,14 @@ class SimpleSegment extends StatelessWidget {
     required this.radius,
     this.onTap,
     this.alignment = Alignment.center,
+    this.padding = const EdgeInsets.symmetric(horizontal: 14),
   });
 
   final String label;
   final Alignment alignment;
+
+  /// Around the label; a list sets it to line its labels up.
+  final EdgeInsetsGeometry padding;
   final bool selected;
   final double radius;
   final VoidCallback? onTap;
@@ -2205,6 +2221,9 @@ class SimpleSegment extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
+    // A segment that takes no tap is read as disabled, not as a button; the
+    // selected one stays enabled, read as selected (a native segmented control).
+    enabled: onTap != null || selected,
     selected: selected,
     child: Material(
       color: selected ? AraColors.selectionBg : Colors.transparent,
@@ -2214,11 +2233,12 @@ class SimpleSegment extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         child: Container(
           height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: padding,
           alignment: alignment,
           child: Text(
             label,
             maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: kSimpleText.copyWith(
               color: selected ? AraColors.selectionFg : AraColors.textSecondary,
             ),
@@ -2397,6 +2417,13 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
           (c) => glyph(Icons.center_focus_strong, c),
           true,
         ),
+      if (ref.watch(filterWheelProvider.select((v) => v.value != null)))
+        (
+          'Filter wheel',
+          l10n.shellFilterWheel,
+          (c) => EquipmentGlyph.filterWheel(size: 20, color: c),
+          true,
+        ),
       if (ref.watch(guiderStatusProvider.select((v) => v.value != null)))
         (
           'Guider',
@@ -2484,6 +2511,9 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 'Camera' => const SimpleCameraWindow(inSettings: true),
                 'Mount' => const SimpleMountWindow(inSettings: true),
                 'Focuser' => const SimpleFocuserWindow(inSettings: true),
+                'Filter wheel' => const SimpleFilterWheelWindow(
+                  inSettings: true,
+                ),
                 'Guider' => const SimpleGuiderWindow(inSettings: true),
                 _ => _Gear(onOpen: (id) => setState(() => _section = id)),
               },
@@ -2548,6 +2578,7 @@ class _Gear extends ConsumerWidget {
           id: 'filterwheel',
           type: l10n.shellFilterWheel,
           provider: filterWheelProvider,
+          onOpen: () => onOpen('Filter wheel'),
         ),
         _GearRow(
           id: 'rotator',
