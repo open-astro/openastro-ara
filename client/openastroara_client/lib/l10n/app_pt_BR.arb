@@ -54,6 +54,7 @@
   "deviceCouldntMoveFocuser": "Não foi possível mover o focalizador",
   "deviceFilter": "Filtro",
   "deviceSlot": "Posição {position}",
+  "deviceFilterInSlot": "{filter} (posição {position})",
   "deviceNoFilters": "Esta roda não informa filtros.",
   "deviceCouldntChangeFilter": "Não foi possível trocar o filtro",
   "devicePlanRunningChangeFilter": "Há um plano em andamento. Trocar o filtro mesmo assim?",

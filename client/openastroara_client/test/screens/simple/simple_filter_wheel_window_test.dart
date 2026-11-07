@@ -54,6 +54,7 @@ Map<String, dynamic> _wire({
   int current = 0,
   bool manual = false,
   int? pending,
+  String ha = 'Ha',
 }) =>
     {
       'device_id': 'w',
@@ -62,7 +63,7 @@ Map<String, dynamic> _wire({
       'manual': manual,
       'slots': [
         {'position': 0, 'name': 'L'},
-        {'position': 1, 'name': 'Ha'},
+        {'position': 1, 'name': ha},
         {'position': 2, 'name': ''},
       ],
       'runtime': {'state': runtime, 'current_slot': current, 'pending_slot': ?pending},
@@ -75,7 +76,7 @@ class _Running extends SequenceRunStateNotifier {
 }
 
 Future<(ProviderContainer, _Wheel)> _pump(WidgetTester tester, Map<String, dynamic> wire,
-    {bool inSettings = false, DeviceDriver? driver, bool planRunning = false}) async {
+    {bool inSettings = false, DeviceDriver? driver, bool planRunning = false, double? width}) async {
   await tester.pumpWidget(const SizedBox());
   await tester.pump();
   final wheel = _Wheel(wire);
@@ -88,7 +89,14 @@ Future<(ProviderContainer, _Wheel)> _pump(WidgetTester tester, Map<String, dynam
   addTearDown(c.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: c,
-    child: MaterialApp(home: Scaffold(body: SimpleFilterWheelWindow(inSettings: inSettings))),
+    child: MaterialApp(
+      home: Scaffold(
+        body: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(width: width, child: SimpleFilterWheelWindow(inSettings: inSettings)),
+        ),
+      ),
+    ),
   ));
   await tester.pump();
   return (c, wheel);
@@ -100,6 +108,7 @@ void main() {
   testWidgets('the filter in place by name; a tap on a filter moves the wheel to it', (tester) async {
     final (_, wheel) = await _pump(tester, _wire());
     expect(find.text('Filter wheel · EFW 7'), findsOneWidget);
+    expect(find.text('L (slot 0)'), findsOneWidget, reason: 'the filter and its position, as the full UI shows it');
     expect(tester.widget<SimpleSegment>(_slot(0)).selected, isTrue);
     expect(find.text('Slot 2'), findsOneWidget, reason: 'an unnamed slot by its number');
     await tester.tap(_slot(1));
@@ -200,5 +209,54 @@ void main() {
     await _pump(tester, _wire(state: 'disconnected'));
     expect(find.text('Not connected'), findsOneWidget);
     expect(_slot(0), findsNothing);
+  });
+
+  testWidgets('an unnamed filter in place reads by its slot alone', (tester) async {
+    await _pump(tester, _wire(current: 2));
+    expect(find.text('Slot 2'), findsWidgets);
+    expect(find.textContaining('(slot 2)'), findsNothing);
+  });
+
+  testWidgets('a change accepted but never seen moving clears Moving to … and frees the filters', (tester) async {
+    // #1666 audit P1: accepted (202), then the wheel stays idle on the old slot.
+    final (_, wheel) = await _pump(tester, _wire());
+    await tester.tap(_slot(1));
+    await tester.pump();
+    expect(find.text('Moving to Ha…'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 11));
+    expect(find.text('Moving to Ha…'), findsNothing);
+    expect(find.text('L (slot 0)'), findsOneWidget);
+    await tester.tap(_slot(1));
+    await tester.pump();
+    expect(wheel.calls, ['change 1', 'change 1'], reason: 'the filters take a tap again');
+    await tester.pump(const Duration(seconds: 11));
+  });
+
+  testWidgets('locked filters are read as disabled', (tester) async {
+    // #1666 audit P2: while the wheel turns, a screen reader must not hear working buttons.
+    final semantics = tester.ensureSemantics();
+    await _pump(tester, _wire(runtime: 'moving', current: -1));
+    expect(tester.getSemantics(_slot(0)), isSemantics(isButton: true, hasEnabledState: true, isEnabled: false));
+    await _pump(tester, _wire());
+    expect(tester.getSemantics(_slot(1)), isSemantics(isButton: true, hasEnabledState: true, isEnabled: true));
+    semantics.dispose();
+  });
+
+  testWidgets('on a narrow window the plan question sits over its buttons', (tester) async {
+    // #1666 audit P2: beside two buttons the question wrapped a few words a line.
+    await _pump(tester, _wire(), planRunning: true, width: 280);
+    await tester.pump();
+    await tester.tap(_slot(1));
+    await tester.pump();
+    final question = tester.getRect(find.textContaining('A plan is running'));
+    expect(tester.getTopLeft(find.text('Change anyway')).dy, greaterThanOrEqualTo(question.bottom));
+    expect(tester.getTopLeft(find.text('Cancel')).dy, greaterThanOrEqualTo(question.bottom));
+  });
+
+  testWidgets('a long filter name ends in an ellipsis, not a silent cut', (tester) async {
+    // #1666 audit P3.
+    await _pump(tester, _wire(ha: 'Hydrogen-alpha 3 nm narrowband 2 inch mounted'), width: 280);
+    final label = tester.widget<Text>(find.descendant(of: _slot(1), matching: find.byType(Text)));
+    expect(label.overflow, TextOverflow.ellipsis);
   });
 }

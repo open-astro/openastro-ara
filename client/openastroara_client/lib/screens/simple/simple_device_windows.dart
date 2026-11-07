@@ -368,6 +368,39 @@ Widget simpleWindowRow(String label, Widget value, {required String id}) =>
             ),
     );
 
+/// A window's ask before a move that would disturb a running plan: the
+/// question with Cancel and [confirm]. Too narrow for the question beside
+/// its buttons (as [simpleWindowRow]), the buttons go under it.
+Widget simpleWindowConfirm({
+  required String question,
+  required String confirm,
+  required VoidCallback onCancel,
+  required VoidCallback onConfirm,
+}) => LayoutBuilder(
+  builder: (context, box) {
+    final text = Text(
+      question,
+      style: kSimpleText.copyWith(color: AraColors.accentBusy),
+    );
+    final buttons = [
+      TextButton(onPressed: onCancel, child: Text(context.l10n.deviceCancel)),
+      TextButton(onPressed: onConfirm, child: Text(confirm)),
+    ];
+    return box.maxWidth < kSimpleWindowControlWidth + 96
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              text,
+              Wrap(alignment: WrapAlignment.end, children: buttons),
+            ],
+          )
+        : Row(
+            spacing: AraSpace.s8,
+            children: [Expanded(child: text), ...buttons],
+          );
+  },
+);
+
 /// On / Off as named segments, never a bare toggle (DESIGN.md); [labels]
 /// names them otherwise ("Auto" / "Off"), [ids] their Keys in English.
 class _OnOff extends StatelessWidget {
@@ -664,27 +697,14 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
       );
       if (_asking) {
         children.add(
-          Row(
-            spacing: AraSpace.s8,
-            children: [
-              Expanded(
-                child: Text(
-                  context.l10n.devicePlanRunningParkAnyway,
-                  style: kSimpleText.copyWith(color: AraColors.accentBusy),
-                ),
-              ),
-              TextButton(
-                onPressed: () => setState(() => _asking = false),
-                child: Text(context.l10n.deviceCancel),
-              ),
-              TextButton(
-                onPressed: () {
-                  setState(() => _asking = false);
-                  _park(context, true);
-                },
-                child: Text(context.l10n.deviceParkAnyway),
-              ),
-            ],
+          simpleWindowConfirm(
+            question: context.l10n.devicePlanRunningParkAnyway,
+            confirm: context.l10n.deviceParkAnyway,
+            onCancel: () => setState(() => _asking = false),
+            onConfirm: () {
+              setState(() => _asking = false);
+              _park(context, true);
+            },
           ),
         );
       }
@@ -1520,11 +1540,33 @@ class _SimpleFilterWheelWindowState
   int? _sent;
   bool _sawMove = false;
 
+  /// A change the wheel accepted but never seen turning (it failed on the
+  /// rig, or turned and landed between two polls) stops reading Moving to …
+  /// after this, so the filters never stay locked.
+  static const _settle = Duration(seconds: 10);
+  Timer? _settleTimer;
+
   /// A filter tapped while a plan runs: the window asks first.
   int? _asking;
 
+  @override
+  void dispose() {
+    _settleTimer?.cancel();
+    super.dispose();
+  }
+
+  void _clearSent() {
+    _settleTimer?.cancel();
+    if (mounted) setState(() => _sent = null);
+  }
+
   String _name(FilterSlot slot) =>
       slot.name.isEmpty ? context.l10n.deviceSlot(slot.position) : slot.name;
+
+  /// The filter in place with its position, as the full UI shows it.
+  String _placed(FilterSlot slot) => slot.name.isEmpty
+      ? context.l10n.deviceSlot(slot.position)
+      : context.l10n.deviceFilterInSlot(slot.name, slot.position);
 
   @override
   Widget build(BuildContext context) {
@@ -1538,7 +1580,7 @@ class _SimpleFilterWheelWindowState
           w.isAwaitingUser ||
           w.currentSlot == _sent ||
           _sawMove) {
-        setState(() => _sent = null);
+        _clearSent();
       }
     });
     final l10n = context.l10n;
@@ -1578,7 +1620,7 @@ class _SimpleFilterWheelWindowState
                   ? l10n.deviceMoving
                   : w.current == null
                   ? '—'
-                  : _name(w.current!),
+                  : _placed(w.current!),
               style: kSimpleText.copyWith(
                 color: moving ? AraColors.accentConnected : null,
               ),
@@ -1589,27 +1631,14 @@ class _SimpleFilterWheelWindowState
       if (_asking != null) {
         final slot = _asking!;
         children.add(
-          Row(
-            spacing: AraSpace.s8,
-            children: [
-              Expanded(
-                child: Text(
-                  l10n.devicePlanRunningChangeFilter,
-                  style: kSimpleText.copyWith(color: AraColors.accentBusy),
-                ),
-              ),
-              TextButton(
-                onPressed: () => setState(() => _asking = null),
-                child: Text(l10n.deviceCancel),
-              ),
-              TextButton(
-                onPressed: () {
-                  setState(() => _asking = null);
-                  _change(slot);
-                },
-                child: Text(l10n.deviceChangeAnyway),
-              ),
-            ],
+          simpleWindowConfirm(
+            question: l10n.devicePlanRunningChangeFilter,
+            confirm: l10n.deviceChangeAnyway,
+            onCancel: () => setState(() => _asking = null),
+            onConfirm: () {
+              setState(() => _asking = null);
+              _change(slot);
+            },
           ),
         );
       }
@@ -1687,9 +1716,11 @@ class _SimpleFilterWheelWindowState
       _sent = position;
       _sawMove = false;
     });
-    if (!await _run((n) => n.changeFilter(position)) && mounted) {
-      setState(() => _sent = null);
-    }
+    _settleTimer?.cancel();
+    _settleTimer = Timer(_settle, () {
+      if (!_sawMove) _clearSent();
+    });
+    if (!await _run((n) => n.changeFilter(position))) _clearSent();
   }
 
   /// False when the wheel refused or dropped it (a pill says why).

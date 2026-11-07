@@ -2207,6 +2207,8 @@ class SimpleSegment extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
+    // A segment that takes no tap is read as disabled, not as a button.
+    enabled: onTap != null,
     selected: selected,
     child: Material(
       color: selected ? AraColors.selectionBg : Colors.transparent,
@@ -2221,6 +2223,7 @@ class SimpleSegment extends StatelessWidget {
           child: Text(
             label,
             maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: kSimpleText.copyWith(
               color: selected ? AraColors.selectionFg : AraColors.textSecondary,
             ),
