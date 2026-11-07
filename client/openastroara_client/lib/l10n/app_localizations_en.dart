@@ -189,6 +189,50 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceCouldntMoveFocuser => 'Couldn\'t move the focuser';
 
   @override
+  String get deviceFilter => 'Filter';
+
+  @override
+  String deviceSlot(int position) {
+    return 'Slot $position';
+  }
+
+  @override
+  String deviceFilterInSlot(String filter, int position) {
+    return '$filter (slot $position)';
+  }
+
+  @override
+  String deviceSlotFilter(int position, String filter) {
+    return '$position · $filter';
+  }
+
+  @override
+  String get deviceNoFilters => 'This wheel reports no filters.';
+
+  @override
+  String get deviceCouldntChangeFilter => 'Couldn\'t change the filter';
+
+  @override
+  String get devicePlanRunningChangeFilter =>
+      'A plan is running. Change the filter anyway?';
+
+  @override
+  String get deviceChangeAnyway => 'Change anyway';
+
+  @override
+  String deviceSwapIn(String filter) {
+    return 'Swap in $filter, then confirm.';
+  }
+
+  @override
+  String deviceFilterIsIn(String filter) {
+    return '$filter is in';
+  }
+
+  @override
+  String get deviceCancelSwap => 'Cancel swap';
+
+  @override
   String get deviceCouldntSaveThat => 'Couldn\'t save that';
 
   @override

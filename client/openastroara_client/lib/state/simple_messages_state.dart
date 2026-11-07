@@ -38,6 +38,7 @@ enum SimpleStatusOrigin {
   mount,
   camera,
   focuser,
+  filterWheel,
   guiderCamera,
   focus,
   polar,

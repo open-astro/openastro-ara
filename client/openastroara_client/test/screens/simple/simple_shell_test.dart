@@ -32,7 +32,7 @@ import 'package:openastroara/models/bahtinov_focus.dart';
 import 'package:openastroara/state/focus/guide_focus_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/models/guider_status.dart';
-import 'package:openastroara/widgets/status_indicator.dart' show StatusDot, StatusLevel;
+import 'package:openastroara/widgets/status_indicator.dart' show StatusBlink, StatusDot, StatusLevel;
 import 'package:openastroara/widgets/equipment/equipment_status_chip.dart' show TopEquipmentChips;
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import 'package:openastroara/state/app_locale_state.dart';
@@ -74,10 +74,12 @@ import 'package:openastroara/services/server_maintenance_api.dart';
 import 'package:openastroara/services/plate_solve_database_api.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
+import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/equipment/equipment_device_state.dart';
+import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
@@ -224,6 +226,24 @@ class _Focuser extends FocuserNotifier with _Calls<FocuserStatus> {
   final EquipmentConnectionState state0;
   @override
   Future<FocuserStatus?> build() async => FocuserStatus.fromJson(_wire('EAF', state0));
+}
+
+class _FilterWheel extends FilterWheelNotifier with _Calls<FilterWheelStatus> {
+  _FilterWheel(this.state0, {this.slots = 0});
+  final EquipmentConnectionState state0;
+  final int slots;
+  Map<String, dynamic> _json(Map<String, dynamic> runtime, {bool manual = false}) => {
+        ..._wire('EFW', state0),
+        'manual': manual,
+        'slots': [for (var i = 0; i < slots; i++) {'position': i, 'name': 'F$i'}],
+        'runtime': runtime,
+      };
+  @override
+  Future<FilterWheelStatus?> build() async => FilterWheelStatus.fromJson(_json({'state': 'idle', 'current_slot': 0}));
+
+  /// What the wheel reports next ("moving", "awaiting_user", "idle").
+  void report(Map<String, dynamic> runtime, {bool manual = false}) =>
+      state = AsyncData(FilterWheelStatus.fromJson(_json(runtime, manual: manual)));
 }
 
 class _Mount extends MountNotifier with _Calls<MountStatus> {
@@ -2696,6 +2716,54 @@ void main() {
         findsOneWidget);
   });
 
+  testWidgets('the filter wheel\'s dot opens its window and closes it again; Settings lists it under Devices',
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      filterWheelProvider.overrideWith(() => _FilterWheel(EquipmentConnectionState.connected)),
+    ]);
+    Future<void> dot() async {
+      c.read(selectedSettingsPanelProvider.notifier).select('eq.filterwheel');
+      c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+      await tester.pumpAndSettle();
+    }
+    await dot();
+    expect(find.byKey(const Key('simple-device-filterwheel')), findsOneWidget);
+    expect(find.byType(SettingsShell), findsNothing, reason: 'never the full UI\'s Settings page');
+    await dot();
+    expect(find.byKey(const Key('simple-device-filterwheel')), findsNothing);
+    await _openSection(tester, 'Devices');
+    await tester.tap(find.textContaining('EFW'));
+    await tester.pump();
+    expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-filterwheel'))),
+        findsOneWidget, reason: 'its Devices row opens the same window');
+    await _openSection(tester, 'Filter wheel');
+    expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-filterwheel'))),
+        findsOneWidget);
+  });
+
+  testWidgets('on a short window a tall device window stops above the bottom and scrolls', (tester) async {
+    // #1666 re-audit P2: an 8-slot wheel's list ran off a landscape phone with no way to reach it.
+    final c = await _pump(tester, const Size(1024, 520), linkUp: true, gear: [
+      filterWheelProvider.overrideWith(() => _FilterWheel(EquipmentConnectionState.connected, slots: 8)),
+    ]);
+    c.read(selectedSettingsPanelProvider.notifier).select('eq.filterwheel');
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    await tester.pumpAndSettle();
+    final panel = find.ancestor(of: find.byKey(const Key('simple-device-filterwheel')), matching: find.byType(SimplePanel));
+    expect(tester.getRect(panel).bottom, lessThanOrEqualTo(520));
+    final last = find.byKey(const Key('simple-filterwheel-slot-7'));
+    await tester.ensureVisible(last);
+    await tester.pumpAndSettle();
+    expect(tester.getRect(last).bottom, lessThanOrEqualTo(tester.getRect(panel).bottom));
+  });
+
+  testWidgets('Settings lists the filter wheel only while the rig knows one', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true);
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-menu-nav-Filter wheel')), findsNothing);
+  });
+
   testWidgets('the guider\'s dot opens the Guider window; Settings lists it under Devices', (tester) async {
     final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
       guiderStatusProvider.overrideWith(() => _GuiderUp()),
@@ -3236,6 +3304,28 @@ void main() {
     await tester.pump();
     expect(find.descendant(of: pill, matching: find.textContaining('Cooling')), findsNothing,
         reason: 'at the target (within half a degree) the pill has nothing to say');
+  });
+
+  testWidgets('a filter change shows in the status pill until the wheel lands; a hand swap asks there too', (tester) async {
+    final wheel = _FilterWheel(EquipmentConnectionState.connected, slots: 3);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [filterWheelProvider.overrideWith(() => wheel)]);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Filter wheel')), findsNothing);
+    wheel.report({'state': 'moving', 'current_slot': -1});
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Filter wheel')), findsOneWidget);
+    expect(find.descendant(of: pill, matching: find.textContaining('Moving…')), findsOneWidget);
+    // Re-audit 2: moving is working, blinking green, as the wheel's dot and window show it (DESIGN.md status rule).
+    final dot = tester.widget<StatusDot>(find.descendant(of: pill, matching: find.byType(StatusDot)));
+    expect((dot.color, dot.ring), (AraColors.accentConnected, false));
+    expect(tester.widget<StatusBlink>(find.descendant(of: pill, matching: find.byType(StatusBlink))).on, isTrue);
+    wheel.report({'state': 'idle', 'current_slot': 1});
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Filter wheel')), findsNothing, reason: 'landed');
+    wheel.report({'state': 'awaiting_user', 'current_slot': 1, 'pending_slot': 2}, manual: true);
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Swap in F2, then confirm.')), findsOneWidget);
   });
 
   testWidgets('a scheduled plan waiting on the rig: the pill says when it starts', (tester) async {

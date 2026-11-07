@@ -66,7 +66,7 @@ class _Running extends SequenceRunStateNotifier {
 }
 
 Future<(ProviderContainer, _Mount)> _pump(WidgetTester tester, Map<String, dynamic> wire,
-    {bool inSettings = false, DeviceDriver? driver, bool planRunning = false}) async {
+    {bool inSettings = false, DeviceDriver? driver, bool planRunning = false, double? width}) async {
   await tester.pumpWidget(const SizedBox());
   await tester.pump();
   final mount = _Mount(wire);
@@ -78,7 +78,14 @@ Future<(ProviderContainer, _Mount)> _pump(WidgetTester tester, Map<String, dynam
   addTearDown(c.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: c,
-    child: MaterialApp(home: Scaffold(body: SimpleMountWindow(inSettings: inSettings))),
+    child: MaterialApp(
+      home: Scaffold(
+        body: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(width: width, child: SimpleMountWindow(inSettings: inSettings)),
+        ),
+      ),
+    ),
   ));
   await tester.pump();
   return (c, mount);
@@ -225,6 +232,16 @@ void main() {
     await tester.tap(find.text('Park anyway'));
     await tester.pump();
     expect(mount.calls, ['park']);
+  });
+
+  testWidgets('on a narrow window the Park question sits over its buttons', (tester) async {
+    // #1666 audit P2: the same row as the Filter wheel window's.
+    await _pump(tester, _wire(), planRunning: true, width: 280);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mount-park-parked')));
+    await tester.pump();
+    final question = tester.getRect(find.textContaining('A plan is running'));
+    expect(tester.getTopLeft(find.text('Park anyway')).dy, greaterThanOrEqualTo(question.bottom));
   });
 
   testWidgets('in Settings it ends with the mount\'s versions (firmware here); from the dot, none', (tester) async {

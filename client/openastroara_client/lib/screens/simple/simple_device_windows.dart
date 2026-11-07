@@ -10,9 +10,11 @@ import '../../l10n/l10n.dart';
 import '../../models/equipment_device_status.dart';
 import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../services/equipment_driver_api.dart';
+import '../../models/filter_wheel_status.dart';
 import '../../models/focuser_status.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../models/guider_status.dart';
+import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/guider/guider_equipment_state.dart';
 import '../../state/guider/guider_state.dart';
@@ -366,6 +368,42 @@ Widget simpleWindowRow(String label, Widget value, {required String id}) =>
             ),
     );
 
+/// A window's ask before a move that would disturb a running plan: the
+/// question with Cancel and [confirm]. Too narrow for the question beside
+/// its buttons (as [simpleWindowRow]), the buttons go under it.
+Widget simpleWindowConfirm({
+  required String question,
+  required String confirm,
+  required VoidCallback onCancel,
+  required VoidCallback onConfirm,
+}) => LayoutBuilder(
+  builder: (context, box) {
+    final text = Text(
+      question,
+      style: kSimpleText.copyWith(color: AraColors.accentBusy),
+    );
+    final buttons = [
+      TextButton(onPressed: onCancel, child: Text(context.l10n.deviceCancel)),
+      TextButton(onPressed: onConfirm, child: Text(confirm)),
+    ];
+    return box.maxWidth < kSimpleWindowControlWidth + 96
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              text,
+              Wrap(alignment: WrapAlignment.end, children: buttons),
+            ],
+          )
+        : Row(
+            spacing: AraSpace.s8,
+            children: [
+              Expanded(child: text),
+              ...buttons,
+            ],
+          );
+  },
+);
+
 /// On / Off as named segments, never a bare toggle (DESIGN.md); [labels]
 /// names them otherwise ("Auto" / "Off"), [ids] their Keys in English.
 class _OnOff extends StatelessWidget {
@@ -662,27 +700,14 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
       );
       if (_asking) {
         children.add(
-          Row(
-            spacing: AraSpace.s8,
-            children: [
-              Expanded(
-                child: Text(
-                  context.l10n.devicePlanRunningParkAnyway,
-                  style: kSimpleText.copyWith(color: AraColors.accentBusy),
-                ),
-              ),
-              TextButton(
-                onPressed: () => setState(() => _asking = false),
-                child: Text(context.l10n.deviceCancel),
-              ),
-              TextButton(
-                onPressed: () {
-                  setState(() => _asking = false);
-                  _park(context, true);
-                },
-                child: Text(context.l10n.deviceParkAnyway),
-              ),
-            ],
+          simpleWindowConfirm(
+            question: context.l10n.devicePlanRunningParkAnyway,
+            confirm: context.l10n.deviceParkAnyway,
+            onCancel: () => setState(() => _asking = false),
+            onConfirm: () {
+              setState(() => _asking = false);
+              _park(context, true);
+            },
           ),
         );
       }
@@ -1494,5 +1519,269 @@ class _SimpleGuideGainSliderState extends ConsumerState<SimpleGuideGainSlider> {
         ),
       ],
     );
+  }
+}
+
+/// The filter wheel's window: the filter in place, and a tap on a filter
+/// moves to it. A manual wheel asks the user to swap it by hand and confirm.
+/// Names, offsets and labels stay in the full UI.
+class SimpleFilterWheelWindow extends ConsumerStatefulWidget {
+  const SimpleFilterWheelWindow({super.key, this.inSettings = false});
+
+  /// In Settings the window ends with the wheel's versions.
+  final bool inSettings;
+
+  @override
+  ConsumerState<SimpleFilterWheelWindow> createState() =>
+      _SimpleFilterWheelWindowState();
+}
+
+class _SimpleFilterWheelWindowState
+    extends ConsumerState<SimpleFilterWheelWindow> {
+  /// The slot asked for, until the wheel lands: it reads Moving to … at once,
+  /// before the poll sees the wheel turn.
+  int? _sent;
+  bool _sawMove = false;
+
+  /// A change the wheel accepted but never seen turning (it failed on the
+  /// rig, or turned and landed between two polls) stops reading Moving to …
+  /// after this, so the filters never stay locked.
+  static const _settle = Duration(seconds: 10);
+  Timer? _settleTimer;
+
+  /// A filter tapped while a plan runs: the window asks first.
+  int? _asking;
+
+  @override
+  void dispose() {
+    _settleTimer?.cancel();
+    super.dispose();
+  }
+
+  void _clearSent() {
+    _settleTimer?.cancel();
+    if (mounted) setState(() => _sent = null);
+  }
+
+  String _name(FilterSlot slot) =>
+      slot.name.isEmpty ? context.l10n.deviceSlot(slot.position) : slot.name;
+
+  /// A filter's segment: its position first, as the full UI's list shows
+  /// it, so the slot is known before the tap.
+  String _labelled(FilterSlot slot) => slot.name.isEmpty
+      ? context.l10n.deviceSlot(slot.position)
+      : context.l10n.deviceSlotFilter(slot.position, slot.name);
+
+  /// The filter in place with its position, as the full UI shows it.
+  String _placed(FilterSlot slot) => slot.name.isEmpty
+      ? context.l10n.deviceSlot(slot.position)
+      : context.l10n.deviceFilterInSlot(slot.name, slot.position);
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(filterWheelProvider, (_, next) {
+      final w = next.value;
+      if (_sent == null) return;
+      if (w != null && w.isMoving) {
+        _sawMove = true;
+      } else if (w == null ||
+          !w.isConnected ||
+          w.isAwaitingUser ||
+          w.currentSlot == _sent ||
+          _sawMove) {
+        _clearSent();
+      }
+    });
+    final l10n = context.l10n;
+    final w = ref.watch(filterWheelProvider).value;
+    final children = <Widget>[
+      SimpleDeviceHeader(type: l10n.shellFilterWheel, status: w),
+    ];
+    if (w == null || !w.isConnected) {
+      children.add(
+        Text(
+          w?.isConnecting ?? false
+              ? l10n.deviceConnecting
+              : l10n.deviceNotConnected,
+          style: AraText.caption,
+        ),
+      );
+    } else {
+      // Watched, so it's known by the time a filter is tapped.
+      final planRunning =
+          ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
+      final sent = _sent == null
+          ? null
+          : w.slots.where((s) => s.position == _sent).firstOrNull;
+      final moving = sent != null || w.isMoving;
+      final pending = w.isAwaitingUser ? w.pending : null;
+      children.add(
+        simpleWindowRow(
+          l10n.deviceFilter,
+          id: 'Filter',
+          // Moving is working: blinking green (DESIGN.md status rule).
+          StatusBlink(
+            on: moving,
+            child: Text(
+              sent != null
+                  ? l10n.deviceMovingTo(_name(sent))
+                  : w.isMoving
+                  ? l10n.deviceMoving
+                  : w.current == null
+                  ? '—'
+                  : _placed(w.current!),
+              style: kSimpleText.copyWith(
+                color: moving ? AraColors.accentConnected : null,
+              ),
+            ),
+          ),
+        ),
+      );
+      if (_asking != null) {
+        final slot = _asking!;
+        children.add(
+          simpleWindowConfirm(
+            question: l10n.devicePlanRunningChangeFilter,
+            confirm: l10n.deviceChangeAnyway,
+            onCancel: () => setState(() => _asking = null),
+            onConfirm: () {
+              setState(() => _asking = null);
+              _change(slot);
+            },
+          ),
+        );
+      }
+      if (pending != null) {
+        children.addAll([
+          Text(
+            l10n.deviceSwapIn(_name(pending)),
+            style: kSimpleText.copyWith(color: AraColors.accentBusy),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            spacing: AraSpace.s8,
+            children: [
+              TextButton(
+                onPressed: () => _run((n) => n.cancelManualSwap()),
+                child: Text(l10n.deviceCancelSwap),
+              ),
+              TextButton(
+                onPressed: () =>
+                    _run((n) => n.reportInstalled(pending.position)),
+                child: Text(l10n.deviceFilterIsIn(_name(pending))),
+              ),
+            ],
+          ),
+        ]);
+      }
+      children.add(
+        w.slots.isEmpty
+            ? Text(l10n.deviceNoFilters, style: AraText.caption)
+            : LayoutBuilder(
+                builder: (context, box) {
+                  // Full-width rows; the labels left-justified and centred as
+                  // a block, so the slot numbers line up.
+                  final scaler = MediaQuery.textScalerOf(context);
+                  final widest = w.slots
+                      .map((slot) {
+                        final painter = TextPainter(
+                          text: TextSpan(
+                            text: _labelled(slot),
+                            style: kSimpleText,
+                          ),
+                          textScaler: scaler,
+                          maxLines: 1,
+                          textDirection: Directionality.of(context),
+                        )..layout();
+                        final width = painter.width;
+                        painter.dispose();
+                        return width;
+                      })
+                      .reduce(math.max);
+                  final inset = math.max(14.0, (box.maxWidth - widest) / 2);
+                  return DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: AraColors.tileFill,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final slot in w.slots)
+                          SimpleSegment(
+                            key: Key(
+                              'simple-filterwheel-slot-${slot.position}',
+                            ),
+                            alignment: Alignment.centerLeft,
+                            padding: EdgeInsetsDirectional.only(
+                              start: inset,
+                              end: 14,
+                            ),
+                            label: _labelled(slot),
+                            selected: (_sent ?? w.currentSlot) == slot.position,
+                            radius: 8,
+                            onTap:
+                                moving ||
+                                    pending != null ||
+                                    slot.position == w.currentSlot
+                                ? null
+                                : () => planRunning
+                                      ? setState(() => _asking = slot.position)
+                                      : _change(slot.position),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+      );
+    }
+    if (widget.inSettings) {
+      children.addAll(
+        _versions(
+          context,
+          ref.watch(deviceDriverProvider('filterwheel')).value,
+        ),
+      );
+    }
+    return Column(
+      key: const Key('simple-device-filterwheel'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s4,
+      children: children,
+    );
+  }
+
+  Future<void> _change(int position) async {
+    setState(() {
+      _sent = position;
+      _sawMove = false;
+    });
+    _settleTimer?.cancel();
+    _settleTimer = Timer(_settle, () {
+      if (!_sawMove) _clearSent();
+    });
+    if (!await _run((n) => n.changeFilter(position))) _clearSent();
+  }
+
+  /// False when the wheel refused or dropped it (a pill says why).
+  Future<bool> _run(Future<bool> Function(FilterWheelNotifier) action) async {
+    final notify = userNotifier(
+      context,
+      origin: SimpleStatusOrigin.filterWheel,
+    );
+    final l10n = context.l10n;
+    try {
+      final performed = await action(ref.read(filterWheelProvider.notifier));
+      if (!performed) _sayBusy(ref, l10n);
+      return performed;
+    } catch (e) {
+      notify(
+        l10n.deviceCouldntChangeFilter,
+        detail: describeEquipmentError(e),
+        error: true,
+      );
+      return false;
+    }
   }
 }
