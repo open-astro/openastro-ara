@@ -230,6 +230,20 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceNothingToSwitch => 'Nothing to switch';
 
   @override
+  String get deviceModeManual => 'Manual';
+
+  @override
+  String get deviceModeSwitch => 'Switch';
+
+  @override
+  String get deviceSetAutomatically => 'Set automatically';
+
+  @override
+  String deviceSwitchPortOnDevice(String port, String device) {
+    return '$port ($device)';
+  }
+
+  @override
   String deviceSwitchLevel(String port, String level) {
     return '$port · $level';
   }
@@ -2605,6 +2619,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get deviceNothingToSwitch => 'Nada para ligar ou desligar';
+
+  @override
+  String get deviceModeManual => 'Manual';
+
+  @override
+  String get deviceModeSwitch => 'Liga/desliga';
+
+  @override
+  String get deviceSetAutomatically => 'Ajustado automaticamente';
+
+  @override
+  String deviceSwitchPortOnDevice(String port, String device) {
+    return '$port ($device)';
+  }
 
   @override
   String deviceSwitchLevel(String port, String level) {

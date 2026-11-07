@@ -230,6 +230,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceNothingToSwitch => 'Nothing to switch';
 
   @override
+  String get deviceModeManual => 'Manual';
+
+  @override
+  String get deviceModeSwitch => 'Switch';
+
+  @override
+  String get deviceSetAutomatically => 'Set automatically';
+
+  @override
+  String deviceSwitchPortOnDevice(String port, String device) {
+    return '$port ($device)';
+  }
+
+  @override
   String deviceSwitchLevel(String port, String level) {
     return '$port · $level';
   }

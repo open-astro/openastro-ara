@@ -36,7 +36,15 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../widgets/equipment/equipment_status_chip.dart' show switchChipLevel;
 import '../../widgets/equipment/switch_port_layout.dart'
-    show snapToSwitchStep, switchSliderDivisions, usableSwitchStep;
+    show
+        SwitchPortKind,
+        classifySwitchPort,
+        findModePort,
+        isAutoRegulating,
+        isDewModePort,
+        snapToSwitchStep,
+        switchSliderDivisions,
+        usableSwitchStep;
 import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot;
 import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment, simpleRailScale;
@@ -2688,11 +2696,16 @@ String _simpleLevel(double v) {
       : r.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '');
 }
 
-/// A slider port's level as a percent of its range ("50 %"); anything above
-/// the bottom reads at least 1 %. The rig is still sent its own value.
+/// A slider port's level as a percent of its range ("50 %"); anything off
+/// the bottom reads at least 1 % and anything short of the top at most 99 %,
+/// so only the ends read 0 % and 100 %. The rig is still sent its own value.
 String _switchPercent(SwitchPort p, double v) {
-  final pct = (v - p.min) * 100 / (p.max - p.min);
-  return '${v <= p.min ? 0 : math.max(1, pct.round())} %';
+  final pct = v <= p.min
+      ? 0
+      : v >= p.max
+      ? 100
+      : ((v - p.min) * 100 / (p.max - p.min)).round().clamp(1, 99);
+  return '$pct %';
 }
 
 /// A port the rig can't set, as Settings › Switches lists it: On / Off for an
@@ -2744,18 +2757,32 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
   Timer? _dimTimer;
   static const _dimAfter = Duration(milliseconds: 300);
 
-  void _syncDim(bool locked) {
-    if (!locked) {
-      _dimTimer?.cancel();
-      _dimTimer = null;
-      _dim = false;
-    } else if (_dimTimer == null && !_dim) {
-      _dimTimer = Timer(_dimAfter, () {
+  /// Called whenever the lock may have changed (a write asked or answered,
+  /// the notifier busy or free), never from build.
+  void _relock() {
+    if (!mounted) return;
+    final locked = ref.read(switchActingProvider) || _asked != null;
+    setState(() {
+      if (!locked) {
+        _dimTimer?.cancel();
         _dimTimer = null;
-        if (mounted) setState(() => _dim = true);
-      });
-    }
+        _dim = false;
+        return;
+      }
+      // A drag the lock cut short sends nothing: show the rig's value again.
+      _drag = null;
+      if (_dimTimer == null && !_dim) {
+        _dimTimer = Timer(_dimAfter, () {
+          _dimTimer = null;
+          if (mounted) setState(() => _dim = true);
+        });
+      }
+    });
   }
+
+  /// A dew output whose mode port reads Auto: the controller sets it.
+  static bool _autoRegulated(SwitchDevice d, SwitchPort p) =>
+      isAutoRegulating(findModePort(p, d.ports));
 
   @override
   void dispose() {
@@ -2796,13 +2823,19 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
           device: d,
           ports: [
             for (final p in d.ports)
-              // A range of one value has nothing to set.
-              if (p.canWrite && p.max > p.min && !isThermalSwitchFanPort(d, p))
+              // A range of one value has nothing to set. A dew output its
+              // controller regulates shows, as a readout, even when the
+              // driver reports it read-only meanwhile.
+              if (!isThermalSwitchFanPort(d, p) &&
+                  (p.canWrite && p.max > p.min || _autoRegulated(d, p)))
                 p,
           ],
           readings: [
             for (final p in d.ports)
-              if (!p.canWrite && !isThermalSwitchFanPort(d, p)) p,
+              if (!p.canWrite &&
+                  !isThermalSwitchFanPort(d, p) &&
+                  !_autoRegulated(d, p))
+                p,
           ],
         ),
     ].where((e) => widget.inSettings || e.ports.isNotEmpty).toList();
@@ -2828,11 +2861,9 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
         ),
       );
     }
+    ref.listen(switchActingProvider, (_, _) => _relock());
     // The notifier drops a write while another is on its way: lock them all.
     final locked = acting || _asked != null;
-    _syncDim(locked);
-    // A drag the lock cut short sends nothing: show the rig's value again.
-    if (locked) _drag = null;
     for (final (i, (:device, :ports, :readings)) in devices.indexed) {
       final name = device.name.isEmpty ? l10n.shellSwitches : device.name;
       children.add(
@@ -2901,7 +2932,51 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     // stays bright.
     final dimmed = locked && _dim && asked == null;
     final Widget control;
-    if (p.isBoolean) {
+    if (_autoRegulated(d, p)) {
+      // The full UI's readout: fighting the regulation helps nobody.
+      control = Text(
+        l10n.deviceSetAutomatically,
+        style: kSimpleText.copyWith(color: AraColors.textSecondary),
+      );
+    } else if (classifySwitchPort(p) == SwitchPortKind.mode) {
+      // A few named states (a dew channel's Auto / Manual / Switch, a fan's
+      // speeds) are segments, as the full UI's mode picker, not a level.
+      final lo = p.min.round();
+      final names = isDewModePort(p)
+          ? [l10n.deviceAuto, l10n.deviceModeManual, l10n.deviceModeSwitch]
+          : [for (var v = lo; v <= p.max.round(); v++) '$v'];
+      final on = (asked ?? p.value).round();
+      control = Semantics(
+        label: p.label,
+        container: true,
+        child: Opacity(
+          opacity: dimmed ? AraOpacity.locked : 1,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: AraColors.tileFill,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final (i, name) in names.indexed)
+                  Flexible(
+                    child: SimpleSegment(
+                      key: Key('simple-switch-$id-${lo + i}'),
+                      label: name,
+                      selected: on == lo + i,
+                      radius: 8,
+                      onTap: on == lo + i || locked
+                          ? null
+                          : () => _write(d, p, (lo + i).toDouble()),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } else if (p.isBoolean) {
       control = Semantics(
         label: p.label,
         container: true,
@@ -2964,7 +3039,22 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     final notify = userNotifier(context, origin: SimpleStatusOrigin.switches);
     final setting = ref.read(simpleSwitchSettingProvider.notifier);
     setState(() => _asked = (port: '${d.deviceId}-${p.id}', value: v));
-    setting.set(p.label);
+    _relock();
+    // Two devices with a port of this name: the pill says which device.
+    final shared = (ref.read(switchListProvider).value ?? const []).any(
+      (o) =>
+          o.deviceId != d.deviceId &&
+          o.isConnected &&
+          o.ports.any((q) => q.label == p.label),
+    );
+    setting.set(
+      shared
+          ? l10n.deviceSwitchPortOnDevice(
+              p.label,
+              d.name.isEmpty ? l10n.shellSwitches : d.name,
+            )
+          : p.label,
+    );
     try {
       // Re-reads the list once the rig takes it.
       final performed = await ref
@@ -2979,7 +3069,10 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
       );
     } finally {
       setting.set(null);
-      if (mounted) setState(() => _asked = null);
+      if (mounted) {
+        setState(() => _asked = null);
+        _relock();
+      }
     }
   }
 }

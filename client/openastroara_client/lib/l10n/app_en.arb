@@ -293,6 +293,30 @@
   "@deviceNothingToSwitch": {
     "description": "Switches window: the connected switch devices have no port that can be set (only readings, which Simple Mode leaves out)"
   },
+  "deviceModeManual": "Manual",
+  "@deviceModeManual": {
+    "description": "Switches window: a dew channel's mode segment, the duty set by hand"
+  },
+  "deviceModeSwitch": "Switch",
+  "@deviceModeSwitch": {
+    "description": "Switches window: a dew channel's mode segment, plain on/off"
+  },
+  "deviceSetAutomatically": "Set automatically",
+  "@deviceSetAutomatically": {
+    "description": "Switches window: a dew output its controller regulates (mode Auto)"
+  },
+  "deviceSwitchPortOnDevice": "{port} ({device})",
+  "@deviceSwitchPortOnDevice": {
+    "description": "Switches status pill: a port named with its device, when two devices have a port of that name",
+    "placeholders": {
+      "port": {
+        "type": "String"
+      },
+      "device": {
+        "type": "String"
+      }
+    }
+  },
   "deviceSwitchLevel": "{port} · {level}",
   "@deviceSwitchLevel": {
     "description": "Switches window: a slider port's name with the level it is set to, as a percent of the port's range (e.g. 60 %)",

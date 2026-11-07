@@ -143,6 +143,60 @@ void main() {
     expect(find.text('PWM · 1 %'), findsOneWidget, reason: 'never 0 % while it is above the bottom');
   });
 
+  testWidgets('only the top of the range reads 100 %', (tester) async {
+    await _pump(tester, [
+      _box(ports: [_port(0, 'PWM A', 254, max: 255), _port(1, 'PWM B', 255, max: 255)]),
+    ]);
+    expect(find.text('PWM A · 99 %'), findsOneWidget, reason: 'just under the top is not full');
+    expect(find.text('PWM B · 100 %'), findsOneWidget);
+  });
+
+  testWidgets("a dew channel's mode port is Auto / Manual / Switch segments, not a percent slider", (tester) async {
+    // #1678 audit P1: a 0..2 mode port read "DEW6 Mode · 50 %".
+    final (_, rig) = await _pump(tester, [
+      _box(ports: [_port(0, 'DEW6', 40, max: 100), _port(1, 'DEW6 Mode', 1, max: 2)]),
+    ]);
+    expect(find.textContaining('DEW6 Mode ·'), findsNothing);
+    expect(_slider('box-1'), findsNothing);
+    expect(find.text('DEW6 Mode'), findsOneWidget);
+    expect(tester.widget<SimpleSegment>(_segment('box-1', '1')).selected, isTrue);
+    expect(find.descendant(of: _segment('box-1', '0'), matching: find.text('Auto')), findsOneWidget);
+    expect(find.descendant(of: _segment('box-1', '1'), matching: find.text('Manual')), findsOneWidget);
+    expect(find.descendant(of: _segment('box-1', '2'), matching: find.text('Switch')), findsOneWidget);
+    await tester.tap(_segment('box-1', '2'));
+    await tester.pumpAndSettle();
+    expect(rig.writes, ['box/1=2.0']);
+  });
+
+  testWidgets('another small mode (a 0..3 fan speed) is numbered segments', (tester) async {
+    await _pump(tester, [
+      _box(ports: [_port(0, 'Fan speed', 2, max: 3)]),
+    ]);
+    expect(_slider('box-0'), findsNothing);
+    for (final v in ['0', '1', '2', '3']) {
+      expect(find.descendant(of: _segment('box-0', v), matching: find.text(v)), findsOneWidget);
+    }
+    expect(tester.widget<SimpleSegment>(_segment('box-0', '2')).selected, isTrue);
+  });
+
+  testWidgets('a dew output in Auto reads Set automatically and takes no write', (tester) async {
+    // #1678 audit P2: the full UI shows a self-regulating channel as a readout.
+    await _pump(tester, [
+      _box(ports: [
+        _port(0, 'DEW6', 40, max: 100),
+        _port(1, 'DEW6 Mode', 0, max: 2),
+        // A driver that reports the output read-only while in Auto still shows it.
+        _port(2, 'DEW7', 1, write: false),
+        _port(3, 'DEW7 Mode', 0, max: 2),
+      ]),
+    ]);
+    expect(_slider('box-0'), findsNothing);
+    expect(_segment('box-2', 'on'), findsNothing);
+    expect(find.text('DEW6'), findsOneWidget);
+    expect(find.text('DEW7'), findsOneWidget);
+    expect(find.text('Set automatically'), findsNWidgets(2));
+  });
+
   testWidgets('a narrow range is written to 0.01', (tester) async {
     final (_, rig) = await _pump(tester, [
       _box(ports: [_port(4, 'Heater', 2.5, max: 5)]),
@@ -378,5 +432,19 @@ void main() {
     await tester.tap(_segment('box-0', 'off'));
     await tester.pumpAndSettle();
     expect(rig.reads, 3);
+  });
+
+  testWidgets('the pill names the device too when two devices have a port of that name', (tester) async {
+    // #1678 audit P3.
+    final (c, rig) = await _pump(tester, [
+      _box(ports: [_port(0, 'DC1', 1)]),
+      _box(id: 'b2', name: 'Gemini', ports: [_port(0, 'DC1', 1)]),
+    ]);
+    rig.hold = Completer();
+    await tester.tap(_segment('b2-0', 'off'));
+    await tester.pump();
+    expect(c.read(simpleSwitchSettingProvider), 'DC1 (Gemini)');
+    rig.hold!.complete();
+    await tester.pumpAndSettle();
   });
 }

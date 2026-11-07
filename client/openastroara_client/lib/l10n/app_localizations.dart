@@ -465,6 +465,30 @@ abstract class AppLocalizations {
   /// **'Nothing to switch'**
   String get deviceNothingToSwitch;
 
+  /// Switches window: a dew channel's mode segment, the duty set by hand
+  ///
+  /// In en, this message translates to:
+  /// **'Manual'**
+  String get deviceModeManual;
+
+  /// Switches window: a dew channel's mode segment, plain on/off
+  ///
+  /// In en, this message translates to:
+  /// **'Switch'**
+  String get deviceModeSwitch;
+
+  /// Switches window: a dew output its controller regulates (mode Auto)
+  ///
+  /// In en, this message translates to:
+  /// **'Set automatically'**
+  String get deviceSetAutomatically;
+
+  /// Switches status pill: a port named with its device, when two devices have a port of that name
+  ///
+  /// In en, this message translates to:
+  /// **'{port} ({device})'**
+  String deviceSwitchPortOnDevice(String port, String device);
+
   /// Switches window: a slider port's name with the level it is set to, as a percent of the port's range (e.g. 60 %)
   ///
   /// In en, this message translates to:
