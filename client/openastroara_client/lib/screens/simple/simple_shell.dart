@@ -333,6 +333,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     'eq.rotator': SimpleRotatorWindow(),
     'eq.switch': SimpleSwitchesWindow(),
     'eq.flat': SimpleFlatPanelWindow(),
+    'eq.weather': SimpleWeatherWindow(),
     'eq.guider': SimpleGuiderWindow(),
   };
 
@@ -2449,6 +2450,13 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
           (c) => EquipmentGlyph.flatPanel(size: 20, color: c),
           true,
         ),
+      if (ref.watch(weatherProvider.select((v) => v.value != null)))
+        (
+          'Weather',
+          l10n.shellWeather,
+          (c) => glyph(Icons.cloud_outlined, c),
+          true,
+        ),
       if (ref.watch(guiderStatusProvider.select((v) => v.value != null)))
         (
           'Guider',
@@ -2542,6 +2550,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 'Rotator' => const SimpleRotatorWindow(inSettings: true),
                 'Switches' => const SimpleSwitchesWindow(inSettings: true),
                 'Flat panel' => const SimpleFlatPanelWindow(inSettings: true),
+                'Weather' => const SimpleWeatherWindow(inSettings: true),
                 'Guider' => const SimpleGuiderWindow(inSettings: true),
                 _ => _Gear(onOpen: (id) => setState(() => _section = id)),
               },
@@ -2624,6 +2633,7 @@ class _Gear extends ConsumerWidget {
           id: 'weather',
           type: l10n.shellWeather,
           provider: weatherProvider,
+          onOpen: () => onOpen('Weather'),
         ),
       ],
     );

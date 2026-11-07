@@ -489,12 +489,6 @@ abstract class AppLocalizations {
   /// **'{port} ({device})'**
   String deviceSwitchPortOnDevice(String port, String device);
 
-  /// Switches window: a slider port's name with the level it is set to, as a percent of the port's range (e.g. 60 %)
-  ///
-  /// In en, this message translates to:
-  /// **'{port} · {level}'**
-  String deviceSwitchLevel(String port, String level);
-
   /// Error message when a switch device refused a port change
   ///
   /// In en, this message translates to:
@@ -608,6 +602,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Check the cover isn\'t jammed and the panel isn\'t busy.'**
   String get deviceFlatPanelUnconfirmedDetail;
+
+  /// Weather window: the station's last read failed, so no readings show
+  ///
+  /// In en, this message translates to:
+  /// **'Sensor read failed — check the device.'**
+  String get deviceSensorReadFailed;
+
+  /// Weather window tile: cloud cover in %
+  ///
+  /// In en, this message translates to:
+  /// **'Cloud cover'**
+  String get deviceCloudCover;
+
+  /// Weather window tile: sky quality (SQM) in mag/arcsec²
+  ///
+  /// In en, this message translates to:
+  /// **'Sky quality'**
+  String get deviceSkyQuality;
+
+  /// Weather window tile: dew point
+  ///
+  /// In en, this message translates to:
+  /// **'Dew point'**
+  String get deviceDewPoint;
+
+  /// Weather window tile: relative humidity
+  ///
+  /// In en, this message translates to:
+  /// **'Humidity'**
+  String get deviceHumidity;
+
+  /// Weather window tile: rain rate
+  ///
+  /// In en, this message translates to:
+  /// **'Rain'**
+  String get deviceRain;
+
+  /// Weather window tile: wind speed
+  ///
+  /// In en, this message translates to:
+  /// **'Wind'**
+  String get deviceWind;
+
+  /// Weather window wind tile caption: the gust speed, same unit as the tile's number
+  ///
+  /// In en, this message translates to:
+  /// **'gusts {speed}'**
+  String deviceGusts(String speed);
+
+  /// Weather window wind tile caption: the wind's compass point (8 points)
+  ///
+  /// In en, this message translates to:
+  /// **'{point, select, n{N} ne{NE} e{E} se{SE} s{S} sw{SW} w{W} other{NW}}'**
+  String deviceCompass(String point);
+
+  /// Weather window tile caption when the reading is past the rig's safety limit, e.g. 'limit 85 %'
+  ///
+  /// In en, this message translates to:
+  /// **'limit {value}'**
+  String deviceLimit(String value);
+
+  /// Weather window dew point caption when the air is closer to the dew point than the safety margin, e.g. 'margin 2 °C'
+  ///
+  /// In en, this message translates to:
+  /// **'margin {value}'**
+  String deviceMargin(String value);
+
+  /// Screen reader text after a weather reading past the rig's safety limit
+  ///
+  /// In en, this message translates to:
+  /// **'past the safety limit'**
+  String get devicePastLimit;
+
+  /// Weather window: how old the readings are, e.g. 'Updated 8 s ago'
+  ///
+  /// In en, this message translates to:
+  /// **'Updated {age} ago'**
+  String deviceUpdatedAgo(String age);
+
+  /// Weather window, amber: the readings are over a minute old, e.g. 'Last reading 4 min ago'
+  ///
+  /// In en, this message translates to:
+  /// **'Last reading {age} ago'**
+  String deviceLastReadingAgo(String age);
+
+  /// Weather window tile: the moon's lit fraction, computed (not a station reading)
+  ///
+  /// In en, this message translates to:
+  /// **'Moon'**
+  String get deviceMoon;
+
+  /// Weather window moon tile caption: the moon's phase
+  ///
+  /// In en, this message translates to:
+  /// **'{phase, select, newMoon{New moon} waxingCrescent{Waxing crescent} firstQuarter{First quarter} waxingGibbous{Waxing gibbous} fullMoon{Full moon} waningGibbous{Waning gibbous} lastQuarter{Last quarter} other{Waning crescent}}'**
+  String deviceMoonPhase(String phase);
+
+  /// Weather window, amber, under the tiles: the rig's safety limits could not be read, so no reading is marked past them
+  ///
+  /// In en, this message translates to:
+  /// **'Safety limits not loaded: nothing is marked.'**
+  String get deviceSafetyLimitsNotLoaded;
 
   /// Error message when a focuser or guider setting could not be saved
   ///

@@ -113,6 +113,16 @@ Future<(ProviderContainer, _Rig)> _pump(WidgetTester tester, List<SwitchDevice> 
 Finder _segment(String port, String which) => find.byKey(Key('simple-switch-$port-$which'));
 Finder _slider(String port) => find.byKey(Key('simple-switch-$port'));
 
+/// The level after a port's slider ("60 %"), in that port's row.
+Finder _level(String port, String percent) => find.descendant(
+      of: find.ancestor(
+        of: find.text(port),
+        matching: find.byWidgetPredicate(
+            (w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('simple-window-row-')),
+      ),
+      matching: find.text(percent),
+    );
+
 void main() {
   testWidgets('an on/off port is On / Off segments, and a tap writes 1 or 0', (tester) async {
     final (_, rig) = await _pump(tester, [_box()]);
@@ -125,11 +135,11 @@ void main() {
 
   testWidgets('a port with a range is a slider with its level by the name; release writes a whole number', (tester) async {
     final (_, rig) = await _pump(tester, [_box()]);
-    expect(find.text('Dew 1 · 60 %'), findsOneWidget);
+    expect(_level('Dew 1', '60 %'), findsOneWidget);
     final slider = tester.widget<Slider>(_slider('box-1'));
     slider.onChanged!(37.4);
     await tester.pump();
-    expect(find.text('Dew 1 · 37 %'), findsOneWidget, reason: 'the level follows the drag');
+    expect(_level('Dew 1', '37 %'), findsOneWidget, reason: 'the level follows the drag');
     expect(rig.writes, isEmpty, reason: 'nothing is sent while dragging');
     slider.onChangeEnd!(37.4);
     await tester.pumpAndSettle();
@@ -140,16 +150,25 @@ void main() {
     await _pump(tester, [
       _box(ports: [_port(0, 'Flat', 20, min: 10, max: 30), _port(1, 'PWM', 1, max: 4095)]),
     ]);
-    expect(find.text('Flat · 50 %'), findsOneWidget, reason: 'halfway from 10 to 30');
-    expect(find.text('PWM · 1 %'), findsOneWidget, reason: 'never 0 % while it is above the bottom');
+    expect(_level('Flat', '50 %'), findsOneWidget, reason: 'halfway from 10 to 30');
+    expect(_level('PWM', '1 %'), findsOneWidget, reason: 'never 0 % while it is above the bottom');
   });
 
   testWidgets('only the top of the range reads 100 %', (tester) async {
     await _pump(tester, [
       _box(ports: [_port(0, 'PWM A', 254, max: 255), _port(1, 'PWM B', 255, max: 255)]),
     ]);
-    expect(find.text('PWM A · 99 %'), findsOneWidget, reason: 'just under the top is not full');
-    expect(find.text('PWM B · 100 %'), findsOneWidget);
+    expect(_level('PWM A', '99 %'), findsOneWidget, reason: 'just under the top is not full');
+    expect(_level('PWM B', '100 %'), findsOneWidget);
+  });
+
+  testWidgets('a slider keeps its width from 0 % to 100 %', (tester) async {
+    await _pump(tester, [
+      _box(ports: [_port(0, 'PWM A', 0, max: 255), _port(1, 'PWM B', 255, max: 255)]),
+    ]);
+    expect(tester.getSize(_slider('box-0')).width, tester.getSize(_slider('box-1')).width);
+    final full = tester.widget<Text>(find.byKey(const Key('simple-switch-box-1-level')));
+    expect((full.data, full.maxLines, full.softWrap), ('100 %', 1, false), reason: '"100 %" never wraps');
   });
 
   testWidgets("a dew channel's mode port is Auto / Manual / Switch segments, not a percent slider", (tester) async {
@@ -212,7 +231,7 @@ void main() {
     final (_, rig) = await _pump(tester, [
       _box(ports: [_port(4, 'Heater', 2.5, max: 5)]),
     ]);
-    expect(find.text('Heater · 50 %'), findsOneWidget);
+    expect(_level('Heater', '50 %'), findsOneWidget);
     tester.widget<Slider>(_slider('box-4')).onChangeEnd!(1.23456);
     await tester.pumpAndSettle();
     expect(rig.writes, ['box/4=1.23']);
@@ -226,7 +245,7 @@ void main() {
     expect(light.divisions, 10);
     light.onChanged!(37);
     await tester.pump();
-    expect(find.text('Light Box · 40 %'), findsOneWidget, reason: 'the level reads the value that will be sent');
+    expect(_level('Light Box', '40 %'), findsOneWidget, reason: 'the level reads the value that will be sent');
     light.onChangeEnd!(37);
     await tester.pumpAndSettle();
     tester.widget<Slider>(_slider('box-1')).onChangeEnd!(8.47);
@@ -258,14 +277,14 @@ void main() {
     final box = find.byKey(const Key('simple-switch-device-box'));
     expect(find.descendant(of: box, matching: find.text('Sensors')), findsOneWidget);
     expect(find.descendant(of: box, matching: find.text('Input voltage')), findsOneWidget);
-    expect(find.descendant(of: box, matching: find.text('12.4')), findsOneWidget);
+    expect(find.descendant(of: box, matching: find.text('12.4 V')), findsOneWidget, reason: 'its unit from its name (#1683)');
     for (final t in ['Driver', '2.1', 'Firmware', '1.4', 'Serial number', 'PB-77']) {
       expect(find.descendant(of: box, matching: find.text(t)), findsOneWidget, reason: t);
     }
     final meter = find.byKey(const Key('simple-switch-device-meter'));
     expect(find.descendant(of: meter, matching: find.text('Weather meter')), findsOneWidget,
         reason: 'a device with only readings is still listed in Settings');
-    expect(find.descendant(of: meter, matching: find.text('21.3')), findsOneWidget);
+    expect(find.descendant(of: meter, matching: find.text('21.3')), findsOneWidget, reason: 'no unit in the name: a bare number');
     expect(find.text('Nothing to switch'), findsNothing);
   });
 
@@ -302,7 +321,7 @@ void main() {
     expect(find.text('Pegasus Powerbox · 2 ports'), findsOneWidget);
     expect(find.text('ToupTek Thermal Switch · 1 port'), findsOneWidget);
     expect(find.text('Fan'), findsNothing);
-    expect(find.text('Heater · 0 %'), findsOneWidget);
+    expect(_level('Heater', '0 %'), findsOneWidget);
   });
 
   testWidgets('a disconnected device is not listed', (tester) async {
@@ -346,7 +365,7 @@ void main() {
     // or the Settings copy of the window).
     tester.widget<Slider>(_slider('box-1')).onChanged!(80);
     await tester.pump();
-    expect(find.text('Dew 1 · 80 %'), findsOneWidget);
+    expect(_level('Dew 1', '80 %'), findsOneWidget);
     rig.hold = Completer();
     final other = c.read(switchListProvider.notifier).setValue(deviceId: 'box', portId: 0, value: 0);
     await tester.pump();
@@ -356,7 +375,7 @@ void main() {
     await other;
     await tester.pumpAndSettle();
     expect(rig.writes, ['box/0=0.0'], reason: 'locked: the release sends nothing');
-    expect(find.text('Dew 1 · 60 %'), findsOneWidget, reason: "the slider shows the rig's value, not the dropped drag");
+    expect(_level('Dew 1', '60 %'), findsOneWidget, reason: "the slider shows the rig's value, not the dropped drag");
   });
 
   testWidgets("a write puts no ring by the port: the name doesn't move, the status pill says it", (tester) async {
@@ -421,7 +440,7 @@ void main() {
     expect(opacity(), AraOpacity.locked);
     await tester.drag(_slider('box-1'), const Offset(-100, 0));
     await tester.pump();
-    expect(find.text('Dew 1 · 60 %'), findsOneWidget, reason: 'locked: the drag moves nothing');
+    expect(_level('Dew 1', '60 %'), findsOneWidget, reason: 'locked: the drag moves nothing');
     rig.hold!.complete();
     await tester.pumpAndSettle();
     expect(opacity(), 1);
@@ -463,6 +482,18 @@ void main() {
     expect(simpleSwitchReading(l10n, reading(1.23)), '1.23');
   });
 
+  test('a reading carries the unit its name gives, as the full UI shows it (#1683)', () {
+    SwitchPort reading(String name, double v) => _port(0, name, v, max: 100, write: false);
+    final l10n = lookupAppLocalizations(const Locale('en'));
+    expect(simpleSwitchReading(l10n, reading('Input voltage', 12.4)), '12.4 V');
+    expect(simpleSwitchReading(l10n, reading('Total current', 1.5)), '1.5 A');
+    expect(simpleSwitchReading(l10n, reading('Total power', 18)), '18 W');
+    expect(simpleSwitchReading(l10n, reading('Humidity', 70)), '70 %');
+    expect(simpleSwitchReading(l10n, reading('Temperature', 8.4)), '8.4 °C');
+    expect(simpleSwitchReading(l10n, reading('Sky quality', 21.3)), '21.3', reason: 'no unit recognised');
+    expect(simpleSwitchReading(l10n, reading('Lamp', 3)), '3', reason: 'whole words only: not amps');
+  });
+
   testWidgets('a refused write says why in a pill and the port keeps what the rig reports', (tester) async {
     final (c, rig) = await _pump(tester, [_box()]);
     rig.refuse = StateError('port over its current limit');
@@ -472,7 +503,7 @@ void main() {
     expect(m.kind, SimpleMessageKind.error);
     expect(m.title, "Couldn't set Dew 1");
     expect(m.detail, contains('current limit'));
-    expect(find.text('Dew 1 · 60 %'), findsOneWidget);
+    expect(_level('Dew 1', '60 %'), findsOneWidget);
   });
 
   testWidgets('the window re-reads the ports when it opens and after each write', (tester) async {
