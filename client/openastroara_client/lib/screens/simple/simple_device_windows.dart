@@ -2891,7 +2891,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     final asked = _asked?.port == id ? _asked!.value : null;
     var label = p.label;
     // Locked past [_dimAfter], the other ports read locked; the asked one
-    // stays bright beside its ring.
+    // stays bright.
     final dimmed = locked && _dim && asked == null;
     final Widget control;
     if (p.isBoolean) {
