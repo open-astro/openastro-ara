@@ -440,19 +440,19 @@ Then:
   for i in $(seq 1 180); do   # up to 90 min: the queue's 60 min check timeout plus entries ahead
     S=$(gh api graphql -F n=<N> -f query='query($n:Int!){repository(owner:"open-astro",name:"openastro-ara"){pullRequest(number:$n){state isInMergeQueue autoMergeRequest{enabledAt}}}}' \
       --jq '.data.repository.pullRequest | "\(.state) \(.isInMergeQueue) \(.autoMergeRequest != null)"')
-    case "$S" in
-      "MERGED "*) echo merged; break ;;
-      "OPEN false false"|"CLOSED "*) echo "left the queue: $S"; break ;;
-    esac
+    case "$S" in "MERGED "*|"OPEN false false"|"CLOSED "*) break ;; esac
     sleep 30
   done
+  echo "$S"
+  [ "${S%% *}" = MERGED ]   # non-zero unless it landed, so a chain cannot run on
   }
   ```
   Take no merge method and no `--delete-branch`: the queue squashes everything, `gh` rejects `-d`
   on a queue branch, and the repo's delete-on-merge setting removes a same-repo head and leaves a
-  fork head alone (#1031). Anything other than `merged` means it did not land. `left the queue`
-  is a real failure against the latest master or a queue timeout: read the run (`gh run list
-  --event merge_group --limit 5`), fix it in the PR and go back to Step 2. Do not push to a queued
+  fork head alone (#1031). The block exits 0 only on `MERGED`. `OPEN false false` means the PR left
+  the queue, on a real failure against the latest master or a timeout: read the run (`gh run list
+  --event merge_group --limit 5`), fix it in the PR and go back to Step 2. `OPEN true …` means it
+  is still queued after 90 minutes: check the queue before doing anything else. Do not push to a queued
   PR unless you mean to pull it: a push drops it from the queue.
 
   `--admin` bypasses the queue and merges directly, and needs a method flag:
