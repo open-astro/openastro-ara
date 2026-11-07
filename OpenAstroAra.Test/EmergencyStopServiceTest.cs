@@ -109,6 +109,62 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Execute_HaltsAConnectedRotator() {
+            // A rotator turning when Stop is pressed (from Simple Mode, the full UI or a plan's
+            // rotate) must stop where it is: aborting the run only stops the sequencer waiting.
+            var rotator = new Mock<IRotatorService>();
+            rotator.Setup(r => r.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new RotatorDto("r1", "Rotator", EquipmentConnectionState.Connected, null,
+                    new RotatorStateDto("moving", 88, 92, false)));
+            rotator.Setup(r => r.HaltAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Accepted);
+
+            var result = await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                rotator: rotator.Object).ExecuteAsync();
+
+            rotator.Verify(r => r.HaltAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(result.FailedRungs, Is.Empty);
+        }
+
+        [Test]
+        public async Task Execute_ARotatorThatRefusesToHalt_IsCalledOut_AndTheLadderGoesOn() {
+            var rotator = new Mock<IRotatorService>();
+            rotator.Setup(r => r.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new RotatorDto("r1", "Rotator", EquipmentConnectionState.Connected, null,
+                    new RotatorStateDto("moving", 88, 92, false)));
+            rotator.Setup(r => r.HaltAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("rotator driver hung"));
+
+            var result = await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                rotator: rotator.Object).ExecuteAsync();
+
+            Assert.Multiple(() => {
+                Assert.That(result.FailedRungs, Has.Count.EqualTo(1).And.Contains("halt_rotator"));
+                Assert.That(result.ExposureAborted, Is.True, "the rungs after it still run");
+                Assert.That(result.FlatPanelLightOff, Is.True);
+            });
+        }
+
+        [Test]
+        public async Task Execute_ADisconnectedRotator_IsNotPoked() {
+            var rotator = new Mock<IRotatorService>();
+            rotator.Setup(r => r.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new RotatorDto("r1", "Rotator", EquipmentConnectionState.Disconnected, null,
+                    new RotatorStateDto("", null, null, false)));
+
+            var result = await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                rotator: rotator.Object).ExecuteAsync();
+
+            Assert.That(result.FailedRungs, Is.Empty);
+            rotator.Verify(r => r.HaltAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
         public async Task Execute_SwitchesACooledCamerasCoolerOff() {
             // User, 2026-11-02: the stop left the cooler on.
             camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new CameraDto(

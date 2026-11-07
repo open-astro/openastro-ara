@@ -26,8 +26,9 @@ Simple Mode covers the top 90 % most used features, for 90 % of the people, 90 %
 |---|---|---|
 | Camera | Cooler on/off, target, current temperature, gain (the profile's, what plans shoot at; user, 2026-11-03) | Warm-up (End of night), electronics |
 | Mount | Tracking (On / Off), Park now / Unpark ("Parked" when parked), meridian flip (Auto / Off, the profile's) | Flip timing, refocus after a flip, pointing readout, limits |
-| Focuser | Position, four move buttons, refocus when it cools by N °C | Frame-count and filter-change triggers, backlash |
+| Focuser | Position, temperature, coarse and fine knobs (a click scales to the travel; #1662), Autofocus, refocus when it cools by N °C | Frame-count and filter-change triggers, backlash |
 | Filter wheel | Filter in place, tap a filter to move; a manual wheel asks for the swap and its confirmation (#1662) | Renaming filters, focus offsets, slot labels for sequences |
+| Rotator | Sky angle (and mechanical angle when it differs), a sky-angle dial in 1° clicks with Start / Stop in its middle, Sync to the dial's target (#1662) | Reverse |
 | Guider | RMS, dither every N frames | Graph (bottom row), settle, tuning, calibration |
 | Site | Location (this device's GPS or typed), time zone | Clock check, horizon, Bortle/SQM |
 | Storage | Which drive, free space | Copy to another disk, file names |
@@ -35,7 +36,7 @@ Simple Mode covers the top 90 % most used features, for 90 % of the people, 90 %
 | Alerts | Safety alarm sound, silent delay | Where alerts go (in-app only today, §46) |
 | Rig | System figures, Change profile / Change rig, permanent pier, Simple Mode switch, version, logs & bug report | Profile editing, wizard, sky data |
 
-Devices lists only the devices the profile has, each with its state. Every Alpaca device the profile has gets a window of its own (#1662, 2026-11-07, reversing the 2026-11-03 decision that the flat panel, dome, weather and safety monitor have none); the rotator, flat panel, dome, weather and safety monitor windows join this brief as each is built. ASIAir's settings stay the reference for how much control to give (user, 2026-11-03: "we need to give SOME control to the user").
+Devices lists only the devices the profile has, each with its state. Every Alpaca device the profile has gets a window of its own (#1662, 2026-11-07, reversing the 2026-11-03 decision that the flat panel, dome, weather and safety monitor have none); the flat panel, dome, weather and safety monitor windows join this brief as each is built. ASIAir's settings stay the reference for how much control to give (user, 2026-11-03: "we need to give SOME control to the user").
 
 ## States
 

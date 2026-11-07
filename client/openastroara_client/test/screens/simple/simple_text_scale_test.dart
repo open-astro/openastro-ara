@@ -232,12 +232,12 @@ void main() {
           await tester.pump();
           expect(find.byKey(const Key('simple-device-camera')), findsOneWidget);
         } else if (open == 'Settings Focuser') {
-          // Its page in Settings: the dial and the step segments.
+          // Its page in Settings: the coarse and fine knobs.
           await tester.tap(find.byTooltip(l.shellSettings));
           await tester.pump();
           await tester.tap(find.byKey(const Key('simple-menu-nav-Focuser')));
           await tester.pump();
-          expect(find.byKey(const Key('simple-focuser-knob')), findsOneWidget);
+          expect(find.byKey(const Key('simple-focuser-coarse')), findsOneWidget);
         } else if (open.startsWith('Wheels')) {
           // Settings › Rig with a wheel row open: every wheel inside the
           // sheet, every digit whole in its slot.

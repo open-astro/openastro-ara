@@ -139,7 +139,7 @@ class EmergencyStopResult {
   final bool flatPanelLightOff;
 
   /// Rungs that were ATTEMPTED and faulted (wire tokens: abort_runs,
-  /// abort_exposure, stop_guiding, park, flat_panel_light_off, cooler_off). A device
+  /// halt_rotator, abort_exposure, stop_guiding, park, flat_panel_light_off, cooler_off). A device
   /// that isn't connected reads false above but is NOT listed here.
   final List<String> failedRungs;
 

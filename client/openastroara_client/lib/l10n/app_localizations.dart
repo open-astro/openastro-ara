@@ -513,29 +513,143 @@ abstract class AppLocalizations {
   /// **'Moving…'**
   String get deviceMoving;
 
-  /// Screen-reader label of the focuser's dial
-  ///
-  /// In en, this message translates to:
-  /// **'Focus position'**
-  String get deviceFocusPosition;
-
-  /// Focuser window row: how far one dial click moves
-  ///
-  /// In en, this message translates to:
-  /// **'Step'**
-  String get deviceStep;
-
-  /// Button in the middle of the focuser dial: runs autofocus
+  /// Full-width button under the focuser knobs: runs autofocus
   ///
   /// In en, this message translates to:
   /// **'Autofocus'**
   String get deviceAutofocus;
 
-  /// Screen-reader label of the focuser dial's middle button while autofocus runs
+  /// The focuser's Autofocus button while autofocus runs: stops it
   ///
   /// In en, this message translates to:
   /// **'Cancel autofocus'**
   String get deviceCancelAutofocus;
+
+  /// Focuser window, above the knobs: rolling a knob up moves the focuser in
+  ///
+  /// In en, this message translates to:
+  /// **'In'**
+  String get deviceIn;
+
+  /// Focuser window, under the knobs: rolling a knob down moves the focuser out
+  ///
+  /// In en, this message translates to:
+  /// **'Out'**
+  String get deviceOut;
+
+  /// The focuser window's big knob, which moves in large clicks
+  ///
+  /// In en, this message translates to:
+  /// **'Coarse'**
+  String get deviceCoarse;
+
+  /// The focuser window's small knob, which moves in small clicks
+  ///
+  /// In en, this message translates to:
+  /// **'Fine'**
+  String get deviceFine;
+
+  /// Screen-reader label of the focuser's coarse knob
+  ///
+  /// In en, this message translates to:
+  /// **'Coarse focus'**
+  String get deviceCoarseFocus;
+
+  /// Screen-reader label of the focuser's fine knob
+  ///
+  /// In en, this message translates to:
+  /// **'Fine focus'**
+  String get deviceFineFocus;
+
+  /// Rotator window button with no target set on the dial (disabled)
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate'**
+  String get deviceRotate;
+
+  /// Rotator window button: move the rotator to the angle set on the dial, e.g. 'Rotate to 75°'
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate to {angle}'**
+  String deviceRotateTo(String angle);
+
+  /// Rotator window button with no target set on the dial (disabled)
+  ///
+  /// In en, this message translates to:
+  /// **'Sync'**
+  String get deviceSync;
+
+  /// Rotator window button: tell the rotator it is at the angle set on the dial, without moving it, e.g. 'Sync to 75°'
+  ///
+  /// In en, this message translates to:
+  /// **'Sync to {angle}'**
+  String deviceSyncTo(String angle);
+
+  /// Error pill when the rotator refused or failed a sync
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t sync the rotator'**
+  String get deviceCouldntSyncRotator;
+
+  /// Rotator window: asked before a sync while a plan runs
+  ///
+  /// In en, this message translates to:
+  /// **'A plan is running. Sync anyway?'**
+  String get devicePlanRunningSync;
+
+  /// Rotator window: confirms a sync while a plan runs
+  ///
+  /// In en, this message translates to:
+  /// **'Sync anyway'**
+  String get deviceSyncAnyway;
+
+  /// Rotator window: the camera's angle on the sky (position angle), and the dial's screen-reader label
+  ///
+  /// In en, this message translates to:
+  /// **'Sky angle'**
+  String get deviceSkyAngle;
+
+  /// Rotator window: the rotator's own angle, shown when it differs from the sky angle
+  ///
+  /// In en, this message translates to:
+  /// **'Mechanical angle'**
+  String get deviceMechanicalAngle;
+
+  /// Error pill when the rotator refused or failed a move
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t move the rotator'**
+  String get deviceCouldntMoveRotator;
+
+  /// Error pill when a stop never reached the rotator
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t stop the rotator'**
+  String get deviceCouldntStopRotator;
+
+  /// Screen-reader label of the red stop square in the middle of the rotator dial
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the rotator'**
+  String get deviceStopRotator;
+
+  /// Rotator window: asked before a move while a plan runs
+  ///
+  /// In en, this message translates to:
+  /// **'A plan is running. Rotate anyway?'**
+  String get devicePlanRunningRotate;
+
+  /// Rotator window: confirms a move while a plan runs
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate anyway'**
+  String get deviceRotateAnyway;
+
+  /// Screen-reader hint on the focuser's knobs: increase (the bigger number) moves the focuser out, though rolling the knob up or the Up key moves it in
+  ///
+  /// In en, this message translates to:
+  /// **'Increase moves out, decrease moves in'**
+  String get deviceKnobHint;
 
   /// Guider window row: what the guider is doing
   ///
@@ -567,7 +681,7 @@ abstract class AppLocalizations {
   /// **'{percent} % power'**
   String devicePowerPercent(int percent);
 
-  /// Focuser window caption while the dial turns; position is a step count like 12 000
+  /// Focuser window caption while a knob rolls; position is a step count like 12 000
   ///
   /// In en, this message translates to:
   /// **'Let go to move to {position}'**
@@ -2454,7 +2568,7 @@ abstract class AppLocalizations {
   /// Emergency Stop confirm dialog: what the stop does
   ///
   /// In en, this message translates to:
-  /// **'This aborts the running sequence and the in-flight exposure, stops guiding, parks the mount, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.'**
+  /// **'This aborts the running sequence and the in-flight exposure, stops guiding, halts the rotator, parks the mount, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.'**
   String get estopConfirmBody;
 
   /// Emergency Stop confirm dialog: cancel button
@@ -2570,6 +2684,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'MOUNT PARK FAILED — verify it manually'**
   String get estopFailPark;
+
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'ROTATOR HALT FAILED — it may still be turning'**
+  String get estopFailRotator;
 
   /// Emergency Stop failed step
   ///
