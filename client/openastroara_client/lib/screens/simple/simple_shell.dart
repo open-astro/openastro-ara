@@ -332,6 +332,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     'eq.filterwheel': SimpleFilterWheelWindow(),
     'eq.rotator': SimpleRotatorWindow(),
     'eq.switch': SimpleSwitchesWindow(),
+    'eq.flat': SimpleFlatPanelWindow(),
     'eq.guider': SimpleGuiderWindow(),
   };
 
@@ -439,6 +440,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       SimpleStatusOrigin.filterWheel => 'eq.filterwheel',
       SimpleStatusOrigin.rotator => 'eq.rotator',
       SimpleStatusOrigin.switches => 'eq.switch',
+      SimpleStatusOrigin.flatPanel => 'eq.flat',
       SimpleStatusOrigin.guiderCamera => 'eq.guider',
       _ => null,
     };
@@ -2440,6 +2442,13 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
         switchListProvider.select((v) => v.value?.isNotEmpty ?? false),
       ))
         ('Switches', l10n.shellSwitches, (c) => glyph(Icons.toggle_on, c), true),
+      if (ref.watch(flatPanelProvider.select((v) => v.value != null)))
+        (
+          'Flat panel',
+          l10n.shellFlatPanel,
+          (c) => EquipmentGlyph.flatPanel(size: 20, color: c),
+          true,
+        ),
       if (ref.watch(guiderStatusProvider.select((v) => v.value != null)))
         (
           'Guider',
@@ -2532,6 +2541,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 ),
                 'Rotator' => const SimpleRotatorWindow(inSettings: true),
                 'Switches' => const SimpleSwitchesWindow(inSettings: true),
+                'Flat panel' => const SimpleFlatPanelWindow(inSettings: true),
                 'Guider' => const SimpleGuiderWindow(inSettings: true),
                 _ => _Gear(onOpen: (id) => setState(() => _section = id)),
               },
@@ -2606,6 +2616,7 @@ class _Gear extends ConsumerWidget {
           id: 'flat',
           type: l10n.shellFlatPanel,
           provider: flatPanelProvider,
+          onOpen: () => onOpen('Flat panel'),
         ),
         _SwitchGearRows(onOpen: () => onOpen('Switches')),
         _GearRow(id: 'dome', type: l10n.shellDome, provider: domeProvider),

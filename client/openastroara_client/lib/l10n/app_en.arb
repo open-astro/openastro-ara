@@ -377,6 +377,54 @@
   "@deviceCancelSwap": {
     "description": "Filter wheel window, manual wheel button: drop the swap asked for"
   },
+  "deviceCover": "Cover",
+  "@deviceCover": {
+    "description": "Flat panel window: the cover row's label"
+  },
+  "deviceOpen": "Open",
+  "@deviceOpen": {
+    "description": "Flat panel window: the cover's open segment"
+  },
+  "deviceClosed": "Closed",
+  "@deviceClosed": {
+    "description": "Flat panel window: the cover's closed segment"
+  },
+  "deviceLight": "Light",
+  "@deviceLight": {
+    "description": "Flat panel window: the light row's label"
+  },
+  "deviceBrightness": "Brightness",
+  "@deviceBrightness": {
+    "description": "Flat panel window: the brightness slider's label"
+  },
+  "deviceWarmingUp": "Warming up…",
+  "@deviceWarmingUp": {
+    "description": "Flat panel window: the light row while the panel's light warms up"
+  },
+  "deviceCoverMoving": "Cover moving…",
+  "@deviceCoverMoving": {
+    "description": "Status pill detail while the flat panel's cover moves"
+  },
+  "deviceLightWarmingUp": "Light warming up…",
+  "@deviceLightWarmingUp": {
+    "description": "Status pill detail while the flat panel's light warms up"
+  },
+  "devicePlanRunningChangeFlatPanel": "A plan is running. Change the flat panel anyway?",
+  "@devicePlanRunningChangeFlatPanel": {
+    "description": "Flat panel window: asked before a cover, light or brightness change while a plan runs"
+  },
+  "deviceCouldntChangeFlatPanel": "Couldn't change the flat panel",
+  "@deviceCouldntChangeFlatPanel": {
+    "description": "Error message when the flat panel refused a command"
+  },
+  "deviceFlatPanelUnconfirmed": "The flat panel didn't make that change",
+  "@deviceFlatPanelUnconfirmed": {
+    "description": "Error message when the flat panel took a command but never showed it"
+  },
+  "deviceFlatPanelUnconfirmedDetail": "Check the cover isn't jammed and the panel isn't busy.",
+  "@deviceFlatPanelUnconfirmedDetail": {
+    "description": "Detail under the flat panel's unconfirmed-change message"
+  },
   "deviceCouldntSaveThat": "Couldn't save that",
   "@deviceCouldntSaveThat": {
     "description": "Error message when a focuser or guider setting could not be saved"

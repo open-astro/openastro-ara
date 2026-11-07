@@ -84,6 +84,8 @@ import 'package:openastroara/state/equipment/equipment_device_state.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/equipment/rotator_state.dart';
 import 'package:openastroara/models/rotator_status.dart';
+import 'package:openastroara/models/flat_panel_status.dart';
+import 'package:openastroara/state/equipment/flat_panel_state.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
@@ -296,6 +298,21 @@ SwitchDevice _switch(String id, String name, SwitchConnectionState state) => Swi
     name: name,
     connectionState: state,
     ports: const [SwitchPort(id: 0, name: 'Dew 1', value: 0, min: 0, max: 100, canWrite: true)]);
+
+class _FlatPanel extends FlatPanelNotifier with _Calls<FlatPanelStatus> {
+  _FlatPanel(this.state0);
+  final EquipmentConnectionState state0;
+  Map<String, dynamic> _json(String runtime, {bool warming = false}) => {
+        ..._wire('Flip-Flat', state0),
+        'runtime': {'state': runtime, 'max_brightness': 255, 'light_warming': warming},
+      };
+  @override
+  Future<FlatPanelStatus?> build() async => FlatPanelStatus.fromJson(_json('cover_closed'));
+
+  /// What the panel reports next ("cover_moving", "cover_closed", "light_on").
+  void report(String runtime, {bool warming = false}) =>
+      state = AsyncData(FlatPanelStatus.fromJson(_json(runtime, warming: warming)));
+}
 
 class _Mount extends MountNotifier with _Calls<MountStatus> {
   _Mount(this.state0);
@@ -2833,6 +2850,38 @@ void main() {
         findsOneWidget);
   });
 
+  testWidgets('the flat panel\'s dot opens its window and closes it again; Settings lists it under Devices',
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      flatPanelProvider.overrideWith(() => _FlatPanel(EquipmentConnectionState.connected)),
+    ]);
+    Future<void> dot() async {
+      c.read(selectedSettingsPanelProvider.notifier).select('eq.flat');
+      c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+      await tester.pumpAndSettle();
+    }
+    await dot();
+    expect(find.byKey(const Key('simple-device-flat')), findsOneWidget);
+    expect(find.byType(SettingsShell), findsNothing, reason: 'never the full UI\'s Settings page');
+    await dot();
+    expect(find.byKey(const Key('simple-device-flat')), findsNothing);
+    await _openSection(tester, 'Devices');
+    await tester.tap(find.textContaining('Flip-Flat'));
+    await tester.pump();
+    expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-flat'))),
+        findsOneWidget, reason: 'its Devices row opens the same window');
+    await _openSection(tester, 'Flat panel');
+    expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-flat'))),
+        findsOneWidget);
+  });
+
+  testWidgets('Settings lists the flat panel only while the rig knows one', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true);
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-menu-nav-Flat panel')), findsNothing);
+  });
+
   testWidgets('Settings lists the filter wheel only while the rig knows one', (tester) async {
     await _pump(tester, const Size(1024, 768), linkUp: true);
     await tester.tap(find.byTooltip('Settings'));
@@ -3541,6 +3590,34 @@ void main() {
     rotator.report('idle');
     await tester.pump();
     expect(find.descendant(of: pill, matching: find.textContaining('Rotator')), findsNothing, reason: 'stopped');
+  });
+
+  testWidgets('the flat panel\'s cover moving and light warming show in the status pill; a tap opens its window',
+      (tester) async {
+    final flat = _FlatPanel(EquipmentConnectionState.connected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [flatPanelProvider.overrideWith(() => flat)]);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Flat panel')), findsNothing);
+    flat.report('cover_moving', warming: true);
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Cover moving…')), findsOneWidget,
+        reason: 'the cover moving wins over the light warming up');
+    var dot = tester.widget<StatusDot>(find.descendant(of: pill, matching: find.byType(StatusDot)));
+    expect((dot.color, dot.ring), (AraColors.accentConnected, false));
+    expect(tester.widget<StatusBlink>(find.descendant(of: pill, matching: find.byType(StatusBlink))).on, isTrue);
+    await tester.tap(find.descendant(of: pill, matching: find.textContaining('Flat panel')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const Key('simple-device-flat')), findsOneWidget, reason: 'the pill opens its window');
+    flat.report('light_on', warming: true);
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Light warming up…')), findsOneWidget);
+    dot = tester.widget<StatusDot>(find.descendant(of: pill, matching: find.byType(StatusDot)));
+    expect((dot.color, dot.ring), (AraColors.accentInfo, true));
+    flat.report('light_on');
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Flat panel')), findsNothing, reason: 'ready');
   });
 
   testWidgets('a scheduled plan waiting on the rig: the pill says when it starts', (tester) async {

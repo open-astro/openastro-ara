@@ -279,6 +279,45 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceCancelSwap => 'Cancel swap';
 
   @override
+  String get deviceCover => 'Cover';
+
+  @override
+  String get deviceOpen => 'Open';
+
+  @override
+  String get deviceClosed => 'Closed';
+
+  @override
+  String get deviceLight => 'Light';
+
+  @override
+  String get deviceBrightness => 'Brightness';
+
+  @override
+  String get deviceWarmingUp => 'Warming up…';
+
+  @override
+  String get deviceCoverMoving => 'Cover moving…';
+
+  @override
+  String get deviceLightWarmingUp => 'Light warming up…';
+
+  @override
+  String get devicePlanRunningChangeFlatPanel =>
+      'A plan is running. Change the flat panel anyway?';
+
+  @override
+  String get deviceCouldntChangeFlatPanel => 'Couldn\'t change the flat panel';
+
+  @override
+  String get deviceFlatPanelUnconfirmed =>
+      'The flat panel didn\'t make that change';
+
+  @override
+  String get deviceFlatPanelUnconfirmedDetail =>
+      'Check the cover isn\'t jammed and the panel isn\'t busy.';
+
+  @override
   String get deviceCouldntSaveThat => 'Couldn\'t save that';
 
   @override
@@ -2668,6 +2707,46 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get deviceCancelSwap => 'Cancelar troca';
+
+  @override
+  String get deviceCover => 'Tampa';
+
+  @override
+  String get deviceOpen => 'Aberta';
+
+  @override
+  String get deviceClosed => 'Fechada';
+
+  @override
+  String get deviceLight => 'Luz';
+
+  @override
+  String get deviceBrightness => 'Brilho';
+
+  @override
+  String get deviceWarmingUp => 'Aquecendo…';
+
+  @override
+  String get deviceCoverMoving => 'Tampa em movimento…';
+
+  @override
+  String get deviceLightWarmingUp => 'Luz aquecendo…';
+
+  @override
+  String get devicePlanRunningChangeFlatPanel =>
+      'Há um plano em andamento. Alterar o painel de flat mesmo assim?';
+
+  @override
+  String get deviceCouldntChangeFlatPanel =>
+      'Não foi possível alterar o painel de flat';
+
+  @override
+  String get deviceFlatPanelUnconfirmed =>
+      'O painel de flat não fez essa alteração';
+
+  @override
+  String get deviceFlatPanelUnconfirmedDetail =>
+      'Verifique se a tampa não está travada e se o painel não está ocupado.';
 
   @override
   String get deviceCouldntSaveThat => 'Não foi possível salvar';

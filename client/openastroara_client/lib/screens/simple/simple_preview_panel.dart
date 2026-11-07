@@ -32,6 +32,7 @@ import '../../widgets/status_indicator.dart'
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/equipment/focuser_state.dart';
+import '../../state/equipment/flat_panel_state.dart';
 import '../../state/equipment/rotator_state.dart';
 import '../../state/equipment/switch_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
@@ -1082,6 +1083,8 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final swap = wheel != null && wheel.isAwaitingUser ? wheel.pending : null;
     // The rotator turning, whoever turned it (#1668).
     final rotator = ref.watch(rotatorProvider).value;
+    // The flat panel's cover moving or its light warming up (#1668).
+    final flat = ref.watch(flatPanelProvider).value;
     // The focuser moving, whoever moved it; autofocus has its own pill.
     final focuser = ref.watch(focuserProvider).value;
     final settingPort = ref.watch(switchActingProvider)
@@ -1222,6 +1225,23 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           SimpleStatusOrigin.switches,
           l10n.shellSwitches,
           l10n.deviceSettingPort(settingPort),
+          AraColors.accentInfo,
+          ring: true,
+        ),
+      // The cover moving wins over the light warming up.
+      if (flat != null && flat.isConnected && flat.isMoving)
+        _PillData(
+          SimpleStatusOrigin.flatPanel,
+          l10n.shellFlatPanel,
+          l10n.deviceCoverMoving,
+          AraColors.accentConnected,
+          working: true,
+        )
+      else if (flat != null && flat.isConnected && flat.lightWarming)
+        _PillData(
+          SimpleStatusOrigin.flatPanel,
+          l10n.shellFlatPanel,
+          l10n.deviceLightWarmingUp,
           AraColors.accentInfo,
           ring: true,
         ),
