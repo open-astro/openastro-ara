@@ -276,5 +276,6 @@ void main() {
     final window = tester.getRect(find.byKey(const Key('simple-device-filterwheel')));
     final widest = [label(0), label(1), label(2)].reduce((a, b) => a.width >= b.width ? a : b);
     expect(widest.center.dx, moreOrLessEquals(window.center.dx, epsilon: 1));
+    expect(tester.getRect(_slot(0)).width, window.width, reason: 'each row fills the window');
   });
 }

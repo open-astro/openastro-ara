@@ -1677,11 +1677,26 @@ class _SimpleFilterWheelWindowState
       children.add(
         w.slots.isEmpty
             ? Text(l10n.deviceNoFilters, style: AraText.caption)
-            : Center(
-                // As wide as the longest label: the labels are left-justified
-                // and the list sits centred, like the full UI's.
-                child: IntrinsicWidth(
-                  child: DecoratedBox(
+            : LayoutBuilder(
+                builder: (context, box) {
+                  // Full-width rows; the labels left-justified and centred as
+                  // a block, so the slot numbers line up.
+                  final scaler = MediaQuery.textScalerOf(context);
+                  final widest = w.slots
+                      .map(
+                        (slot) => (TextPainter(
+                          text: TextSpan(
+                            text: _labelled(slot),
+                            style: kSimpleText,
+                          ),
+                          textScaler: scaler,
+                          maxLines: 1,
+                          textDirection: Directionality.of(context),
+                        )..layout()).width,
+                      )
+                      .reduce(math.max);
+                  final inset = math.max(14.0, (box.maxWidth - widest) / 2);
+                  return DecoratedBox(
                     decoration: BoxDecoration(
                       color: AraColors.tileFill,
                       borderRadius: BorderRadius.circular(8),
@@ -1695,6 +1710,10 @@ class _SimpleFilterWheelWindowState
                               'simple-filterwheel-slot-${slot.position}',
                             ),
                             alignment: Alignment.centerLeft,
+                            padding: EdgeInsetsDirectional.only(
+                              start: inset,
+                              end: 14,
+                            ),
                             label: _labelled(slot),
                             selected: (_sent ?? w.currentSlot) == slot.position,
                             radius: 8,
@@ -1709,8 +1728,8 @@ class _SimpleFilterWheelWindowState
                           ),
                       ],
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
       );
     }

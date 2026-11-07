@@ -2196,10 +2196,14 @@ class SimpleSegment extends StatelessWidget {
     required this.radius,
     this.onTap,
     this.alignment = Alignment.center,
+    this.padding = const EdgeInsets.symmetric(horizontal: 14),
   });
 
   final String label;
   final Alignment alignment;
+
+  /// Around the label; a list sets it to line its labels up.
+  final EdgeInsetsGeometry padding;
   final bool selected;
   final double radius;
   final VoidCallback? onTap;
@@ -2218,7 +2222,7 @@ class SimpleSegment extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         child: Container(
           height: 44,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: padding,
           alignment: alignment,
           child: Text(
             label,
