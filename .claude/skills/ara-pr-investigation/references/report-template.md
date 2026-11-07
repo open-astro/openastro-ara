@@ -62,7 +62,7 @@ before the code findings, so nobody polishes something that will not land.
 
 ### Recommended next step
 One of: apply `safe-to-review` and let the bot run; request changes (list);
-merge under §19.1 (`gh pr merge` without `--delete-branch` for a fork head);
+merge under §19.1 (`gh pr merge <N>`, which hands it to the merge queue);
 hold for human review — with the reason.
 ```
 

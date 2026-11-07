@@ -435,7 +435,7 @@ Then:
   Then hand it to the merge queue and wait for it to land. Run this with `run_in_background`, as
   part of the same chain: the wait can last 90 minutes.
   ```bash
-  gh pr merge <N>
+  gh pr merge <N> && {
   sleep 15   # the entry takes a moment to show up
   for i in $(seq 1 180); do   # up to 90 min: the queue's 60 min check timeout plus entries ahead
     S=$(gh api graphql -F n=<N> -f query='query($n:Int!){repository(owner:"open-astro",name:"openastro-ara"){pullRequest(number:$n){state isInMergeQueue autoMergeRequest{enabledAt}}}}' \
@@ -446,6 +446,7 @@ Then:
     esac
     sleep 30
   done
+  }
   ```
   Take no merge method and no `--delete-branch`: the queue squashes everything, `gh` rejects `-d`
   on a queue branch, and the repo's delete-on-merge setting removes a same-repo head and leaves a
