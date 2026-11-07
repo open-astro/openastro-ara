@@ -591,6 +591,18 @@ abstract class AppLocalizations {
   /// **'Couldn\'t sync the rotator'**
   String get deviceCouldntSyncRotator;
 
+  /// Rotator window: asked before a sync while a plan runs
+  ///
+  /// In en, this message translates to:
+  /// **'A plan is running. Sync anyway?'**
+  String get devicePlanRunningSync;
+
+  /// Rotator window: confirms a sync while a plan runs
+  ///
+  /// In en, this message translates to:
+  /// **'Sync anyway'**
+  String get deviceSyncAnyway;
+
   /// Rotator window: the camera's angle on the sky (position angle), and the dial's screen-reader label
   ///
   /// In en, this message translates to:

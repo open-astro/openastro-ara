@@ -83,6 +83,8 @@
   "deviceSync": "Sincronizar",
   "deviceSyncTo": "Sincronizar em {angle}",
   "deviceCouldntSyncRotator": "Não foi possível sincronizar o rotacionador",
+  "devicePlanRunningSync": "Há um plano em andamento. Sincronizar mesmo assim?",
+  "deviceSyncAnyway": "Sincronizar mesmo assim",
   "deviceSkyAngle": "Ângulo no céu",
   "deviceMechanicalAngle": "Ângulo mecânico",
   "deviceCouldntMoveRotator": "Não foi possível mover o rotacionador",

@@ -294,6 +294,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceCouldntSyncRotator => 'Couldn\'t sync the rotator';
 
   @override
+  String get devicePlanRunningSync => 'A plan is running. Sync anyway?';
+
+  @override
+  String get deviceSyncAnyway => 'Sync anyway';
+
+  @override
   String get deviceSkyAngle => 'Sky angle';
 
   @override
@@ -2629,6 +2635,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get deviceCouldntSyncRotator =>
       'Não foi possível sincronizar o rotacionador';
+
+  @override
+  String get devicePlanRunningSync =>
+      'Há um plano em andamento. Sincronizar mesmo assim?';
+
+  @override
+  String get deviceSyncAnyway => 'Sincronizar mesmo assim';
 
   @override
   String get deviceSkyAngle => 'Ângulo no céu';

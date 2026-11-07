@@ -294,6 +294,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceCouldntSyncRotator => 'Couldn\'t sync the rotator';
 
   @override
+  String get devicePlanRunningSync => 'A plan is running. Sync anyway?';
+
+  @override
+  String get deviceSyncAnyway => 'Sync anyway';
+
+  @override
   String get deviceSkyAngle => 'Sky angle';
 
   @override

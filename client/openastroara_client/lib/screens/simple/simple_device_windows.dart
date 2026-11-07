@@ -1977,6 +1977,10 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
   /// A Rotate while a plan runs: the window asks first.
   double? _asking;
 
+  /// A Sync while a plan runs asks first too: it shifts the sky angle the
+  /// plan frames by (#1670 re-audit).
+  bool _askingSync = false;
+
   final _dialFocus = FocusNode(debugLabel: 'simple-rotator-dial');
   bool _dialFocused = false;
 
@@ -2256,13 +2260,28 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
           ),
         );
       }
+      if (_askingSync) {
+        children.add(
+          simpleWindowConfirm(
+            question: l10n.devicePlanRunningSync,
+            confirm: l10n.deviceSyncAnyway,
+            onCancel: () => setState(() => _askingSync = false),
+            onConfirm: () {
+              setState(() => _askingSync = false);
+              _sync();
+            },
+          ),
+        );
+      }
       final target = _target == null ? null : simpleDegrees(_target!);
       children.addAll([
         const SizedBox(height: AraSpace.s12),
         _RotatorButton(
           key: const Key('simple-rotator-sync'),
           label: target == null ? l10n.deviceSync : l10n.deviceSyncTo(target),
-          onTap: enabled && _target != null ? _sync : null,
+          onTap: enabled && _target != null
+              ? () => planRunning ? setState(() => _askingSync = true) : _sync()
+              : null,
         ),
       ]);
     }

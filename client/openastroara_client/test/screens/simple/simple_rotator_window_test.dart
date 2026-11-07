@@ -307,6 +307,26 @@ void main() {
     expect(find.descendant(of: _hub, matching: find.byType(SimpleStopSquare)), findsNothing);
   });
 
+  testWidgets('while a plan runs, Sync asks first, in the window', (tester) async {
+    final (_, r) = await _pump(tester, _wire(), planRunning: true);
+    await tester.pump(); // the run state arrives
+    await _turn(tester, 17.5);
+    await tester.tap(_sync);
+    await tester.pump();
+    expect(r.calls, isEmpty);
+    expect(find.text('A plan is running. Sync anyway?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pump();
+    expect(r.calls, isEmpty);
+    expect(_syncLabel(tester), 'Sync to 75.0°', reason: 'Cancel keeps the target');
+    await tester.tap(_sync);
+    await tester.pump();
+    await tester.tap(find.text('Sync anyway'));
+    await tester.pump();
+    expect(r.calls, ['sync 75.0']);
+    expect(_syncLabel(tester), 'Sync');
+  });
+
   testWidgets('a refused sync says why in a pill', (tester) async {
     final (c, r) = await _pump(tester, _wire());
     r.refuseSync = true;

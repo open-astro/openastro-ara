@@ -389,6 +389,14 @@
   "@deviceCouldntSyncRotator": {
     "description": "Error pill when the rotator refused or failed a sync"
   },
+  "devicePlanRunningSync": "A plan is running. Sync anyway?",
+  "@devicePlanRunningSync": {
+    "description": "Rotator window: asked before a sync while a plan runs"
+  },
+  "deviceSyncAnyway": "Sync anyway",
+  "@deviceSyncAnyway": {
+    "description": "Rotator window: confirms a sync while a plan runs"
+  },
   "deviceSkyAngle": "Sky angle",
   "@deviceSkyAngle": {
     "description": "Rotator window: the camera's angle on the sky (position angle), and the dial's screen-reader label"
