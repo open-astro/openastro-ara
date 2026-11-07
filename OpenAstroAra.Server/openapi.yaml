@@ -73,6 +73,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeviceDriverDto'
+  '/api/v1/equipment/driver/switch/{id}':
+    get:
+      tags:
+        - Equipment
+      summary: 'A switch device''s driver, SDK and firmware versions, by its id.'
+      operationId: GetSwitchDriver
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceDriverDto'
   '/api/v1/equipment/driver/{type}':
     get:
       tags:

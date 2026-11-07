@@ -273,6 +273,80 @@
   "@deviceCouldntChangeFilter": {
     "description": "Error message when the filter wheel refused a change"
   },
+  "deviceSwitchPorts": "{device} · {count, plural, =1{1 port} other{{count} ports}}",
+  "@deviceSwitchPorts": {
+    "description": "Switches window: a device's section title, with how many ports it lists",
+    "placeholders": {
+      "device": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "deviceSensors": "Sensors",
+  "@deviceSensors": {
+    "description": "Settings › Switches: the title over a switch device's readings (ports that can't be set: voltage, temperature, a cover state)"
+  },
+  "deviceNothingToSwitch": "Nothing to switch",
+  "@deviceNothingToSwitch": {
+    "description": "Switches window: the connected switch devices have no port that can be set (only readings, which Simple Mode leaves out)"
+  },
+  "deviceModeManual": "Manual",
+  "@deviceModeManual": {
+    "description": "Switches window: a dew channel's mode segment, the duty set by hand"
+  },
+  "deviceModeSwitch": "Switch",
+  "@deviceModeSwitch": {
+    "description": "Switches window: a dew channel's mode segment, plain on/off"
+  },
+  "deviceSetAutomatically": "Set automatically",
+  "@deviceSetAutomatically": {
+    "description": "Switches window: a dew output its controller regulates (mode Auto)"
+  },
+  "deviceSwitchPortOnDevice": "{port} ({device})",
+  "@deviceSwitchPortOnDevice": {
+    "description": "Switches status pill: a port named with its device, when two devices have a port of that name",
+    "placeholders": {
+      "port": {
+        "type": "String"
+      },
+      "device": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceSwitchLevel": "{port} · {level}",
+  "@deviceSwitchLevel": {
+    "description": "Switches window: a slider port's name with the level it is set to, as a percent of the port's range (e.g. 60 %)",
+    "placeholders": {
+      "port": {
+        "type": "String"
+      },
+      "level": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceCouldntSetPort": "Couldn't set {port}",
+  "@deviceCouldntSetPort": {
+    "description": "Error message when a switch device refused a port change",
+    "placeholders": {
+      "port": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceSettingPort": "Setting {port}…",
+  "@deviceSettingPort": {
+    "description": "Simple Mode status pill: a switch port change on its way to the rig",
+    "placeholders": {
+      "port": {
+        "type": "String"
+      }
+    }
+  },
   "devicePlanRunningChangeFilter": "A plan is running. Change the filter anyway?",
   "@devicePlanRunningChangeFilter": {
     "description": "Filter wheel window: asked when a filter is tapped while a plan runs"
@@ -1278,6 +1352,10 @@
   "shellFilterWheel": "Filter wheel",
   "@shellFilterWheel": {
     "description": "Simple Mode Settings › Devices row: the filter wheel"
+  },
+  "shellSwitches": "Switches",
+  "@shellSwitches": {
+    "description": "Simple Mode: the switch devices (power boxes, dew outputs): their window's title, Settings section and status pill"
   },
   "shellRotator": "Rotator",
   "@shellRotator": {

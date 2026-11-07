@@ -14,6 +14,12 @@ class AraSpace {
   static const double s24 = 24;
 }
 
+/// A locked control's dim (DESIGN.md, the Switches window): Material's
+/// disabled opacity.
+class AraOpacity {
+  static const double locked = 0.38;
+}
+
 /// Backdrop blur (DESIGN.md `panel-simple`, value in .impeccable/design.json):
 /// Simple Mode's panels blur the image behind their 90 % scrim, so their words
 /// stand off a busy frame.

@@ -97,8 +97,8 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         public AlpacaSwitch? Client { get; set; }
         public EquipmentConnectionState State { get; set; } = EquipmentConnectionState.Disconnected;
         public DateTimeOffset LastTransition { get; set; } = DateTimeOffset.UtcNow;
-        // Full per-port snapshot (superset of SwitchPortDto: + Description/StepSize, which the
-        // ISwitchMediator surface needs for SetSwitchValue.Validate). ProjectPorts projects the DTO view.
+        // Full per-port snapshot (superset of SwitchPortDto: + Description, for the ISwitchMediator
+        // surface). ProjectPorts projects the DTO view.
         public IReadOnlyList<SwitchPortSnapshot> CachedSnapshots { get; set; } = Array.Empty<SwitchPortSnapshot>();
         public long Generation { get; set; }
         public int DeviceNumber => Device.AlpacaDeviceNumber;
@@ -191,6 +191,14 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
             return Task.FromResult(_connections.TryGetValue(deviceId, out var conn) ? ProjectDto(conn) : null);
+        }
+    }
+
+    public DiscoveredDeviceDto? GetDevice(string deviceId) {
+        ArgumentException.ThrowIfNullOrEmpty(deviceId);
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return _connections.TryGetValue(deviceId, out var conn) ? conn.Device : null;
         }
     }
 
@@ -640,10 +648,10 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         }
     }
 
-    private static List<SwitchPortDto> ProjectPorts(IReadOnlyList<SwitchPortSnapshot> snapshots) {
+    internal static List<SwitchPortDto> ProjectPorts(IReadOnlyList<SwitchPortSnapshot> snapshots) {
         var ports = new List<SwitchPortDto>(snapshots.Count);
         foreach (var s in snapshots) {
-            ports.Add(new SwitchPortDto(s.Id, s.Name, s.Value, s.Min, s.Max, s.CanWrite));
+            ports.Add(new SwitchPortDto(s.Id, s.Name, s.Value, s.Min, s.Max, s.CanWrite, s.StepSize));
         }
         return ports;
     }

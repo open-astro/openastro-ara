@@ -32,7 +32,7 @@ namespace OpenAstroAra.Test {
     /// Rig and the About panel: the board, OpenAstro Guider, each Alpaca server (AlpacaBridge) and ASTAP.</summary>
     [TestFixture]
     public class RigVersionsTest {
-        private static readonly string[] ExpectedServers = ["10.0.30.223:6800", "station:11111"];
+        private static readonly string[] ExpectedServers = ["192.0.2.10:6800", "station:11111"];
 
         [Test]
         public void The_board_model_drops_the_device_trees_trailing_nul_and_is_null_when_absent() {
@@ -88,15 +88,15 @@ namespace OpenAstroAra.Test {
             var d = AlpacaManagementClient.ParseDescription(json);
             Assert.That(d, Is.EqualTo(new AlpacaServerDescription("AlpacaHTTP", "OpenAstro.net", "6.0.0~nightly202610301026.g34986ef")));
             Assert.That(AlpacaManagementClient.ParseDescription("{\"Value\":[]}"), Is.Null);
-            Assert.That(AlpacaManagementClient.ManagementUri("10.0.30.223", 6800, "description").ToString(),
-                Is.EqualTo("http://10.0.30.223:6800/management/v1/description"));
+            Assert.That(AlpacaManagementClient.ManagementUri("192.0.2.10", 6800, "description").ToString(),
+                Is.EqualTo("http://192.0.2.10:6800/management/v1/description"));
         }
 
         [Test]
         public async Task The_description_is_fetched_from_the_management_api() {
             using var handler = new FakeHandler("""{"Value":{"ServerName":"AlpacaHTTP","Manufacturer":"OpenAstro.net","ManufacturerVersion":"6.0.0"}}""");
             using var client = new AlpacaManagementClient(handler: handler);
-            var d = await client.GetDescriptionAsync("10.0.30.223", 6800, CancellationToken.None);
+            var d = await client.GetDescriptionAsync("192.0.2.10", 6800, CancellationToken.None);
             Assert.That(d?.Version, Is.EqualTo("6.0.0"));
             Assert.That(handler.LastUri?.AbsolutePath, Is.EqualTo("/management/v1/description"));
         }
@@ -107,8 +107,8 @@ namespace OpenAstroAra.Test {
             guider.SetupGet(g => g.GuiderVersion).Returns("2.6.13dev7");
             var selections = new Mock<IEquipmentSelectionStore>();
             selections.Setup(s => s.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<DiscoveredDeviceDto> {
-                new("c", "ZWO ASI2600MM", DeviceType.Camera, "rig.local", "10.0.30.223", 6800, 0, false),
-                new("m", "AM5", DeviceType.Telescope, "rig.local", "10.0.30.223", 6800, 0, false),
+                new("c", "ZWO ASI2600MM", DeviceType.Camera, "rig.local", "192.0.2.10", 6800, 0, false),
+                new("m", "AM5", DeviceType.Telescope, "rig.local", "192.0.2.10", 6800, 0, false),
                 new("w", "Weather", DeviceType.ObservingConditions, "station", "", 11111, 0, false),
             });
             var asked = new List<string>();
@@ -130,7 +130,7 @@ namespace OpenAstroAra.Test {
             Assert.That(asked.OrderBy(a => a), Is.EqualTo(ExpectedServers), "each server asked once");
             Assert.That(v.AlpacaServers, Has.Count.EqualTo(2));
             var bridge = v.AlpacaServers.Single(s => s.Port == 6800);
-            Assert.That(bridge, Is.EqualTo(new AlpacaServerVersionDto("10.0.30.223", 6800, "AlpacaHTTP", "OpenAstro.net", "6.0.0")));
+            Assert.That(bridge, Is.EqualTo(new AlpacaServerVersionDto("192.0.2.10", 6800, "AlpacaHTTP", "OpenAstro.net", "6.0.0")));
             var silent = v.AlpacaServers.Single(s => s.Port == 11111);
             Assert.That(silent.Version, Is.Null, "a server that doesn't answer is listed without a version");
         }
@@ -160,11 +160,11 @@ namespace OpenAstroAra.Test {
             var dto = new ApiVersionsDto("1.0.0.0", "abc", "10.0.14", "Debian GNU/Linux 13 (trixie)", "arm64", "2.1.0", "0.4.6",
                 Array.Empty<ApiSurfaceVersionDto>(),
                 BoardModel: "Raspberry Pi 5 Model B Rev 1.1", GuiderVersion: "2.6.13",
-                AlpacaServers: new[] { new AlpacaServerVersionDto("10.0.30.223", 6800, "AlpacaHTTP", "OpenAstro.net", "6.0.0") },
+                AlpacaServers: new[] { new AlpacaServerVersionDto("192.0.2.10", 6800, "AlpacaHTTP", "OpenAstro.net", "6.0.0") },
                 AstapVersion: "CLI-2026.09.01");
             var json = JsonSerializer.Serialize(dto, OpenAstroAra.Server.AraJsonSerializerContext.Default.ApiVersionsDto);
             Assert.That(json, Does.Contain("\"board_model\":\"Raspberry Pi 5 Model B Rev 1.1\""));
-            Assert.That(json, Does.Contain("\"alpaca_servers\":[{\"host\":\"10.0.30.223\",\"port\":6800"));
+            Assert.That(json, Does.Contain("\"alpaca_servers\":[{\"host\":\"192.0.2.10\",\"port\":6800"));
             Assert.That(json, Does.Contain("\"astap_version\":\"CLI-2026.09.01\""));
         }
 

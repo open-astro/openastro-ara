@@ -34,7 +34,8 @@ class DeviceDriver {
 }
 
 /// The versions of the selected device of [type] ("camera", "telescope",
-/// "focuser"…); null with no rig, nothing selected or an older daemon.
+/// "focuser"…), or of one switch device by id (`switch/<encoded id>`: there
+/// can be several); null with no rig, nothing selected or an older daemon.
 final deviceDriverProvider = FutureProvider.autoDispose
     .family<DeviceDriver?, String>((ref, type) async {
       // The guide camera is the guider's: ask again when it (dis)connects.

@@ -34,6 +34,10 @@ class SwitchPort {
   final double max;
   final bool canWrite;
 
+  /// The device's step size (ASCOM `SwitchStep`); 0 = unknown, as from a
+  /// daemon older than #1680.
+  final double step;
+
   const SwitchPort({
     required this.id,
     required this.name,
@@ -41,6 +45,7 @@ class SwitchPort {
     required this.min,
     required this.max,
     required this.canWrite,
+    this.step = 0,
   });
 
   /// Display name, falling back to the port selector when the driver reports
@@ -50,8 +55,8 @@ class SwitchPort {
   /// A two-state on/off port (range [0,1]) as opposed to a value/PWM port. ASCOM
   /// hardware can report the bounds with float noise (e.g. 0.9999999), so compare
   /// with a small epsilon rather than `==`. (A 0..1 PWM port is indistinguishable
-  /// from boolean on min/max alone — the REST port DTO doesn't carry step size — so
-  /// the UI treats any [0,1] range as a toggle.)
+  /// from boolean on min/max alone, so the UI treats any [0,1] range as a toggle,
+  /// whatever its [step].)
   bool get isBoolean => min.abs() < 1e-6 && (max - 1).abs() < 1e-6;
 
   factory SwitchPort.fromJson(Map<String, dynamic> json) {
@@ -70,6 +75,7 @@ class SwitchPort {
       min: dbl('min'),
       max: dbl('max'),
       canWrite: json['can_write'] as bool? ?? false,
+      step: dbl('step'),
     );
   }
 
@@ -82,10 +88,11 @@ class SwitchPort {
           other.value == value &&
           other.min == min &&
           other.max == max &&
-          other.canWrite == canWrite);
+          other.canWrite == canWrite &&
+          other.step == step);
 
   @override
-  int get hashCode => Object.hash(id, name, value, min, max, canWrite);
+  int get hashCode => Object.hash(id, name, value, min, max, canWrite, step);
 }
 
 /// A connected (or known-but-disconnected) Switch device and its ports.
