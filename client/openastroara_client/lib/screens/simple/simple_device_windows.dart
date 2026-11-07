@@ -2215,10 +2215,14 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
                     value: sky == null ? null : simpleDegrees(shown),
                     increasedValue: sky == null
                         ? null
-                        : simpleDegrees(_snap(_target ?? sky.roundToDouble(), 1)),
+                        : simpleDegrees(
+                            _snap(_target ?? sky.roundToDouble(), 1),
+                          ),
                     decreasedValue: sky == null
                         ? null
-                        : simpleDegrees(_snap(_target ?? sky.roundToDouble(), -1)),
+                        : simpleDegrees(
+                            _snap(_target ?? sky.roundToDouble(), -1),
+                          ),
                     enabled: enabled,
                     onIncrease: enabled ? () => _nudge(sky, 1) : null,
                     onDecrease: enabled ? () => _nudge(sky, -1) : null,
