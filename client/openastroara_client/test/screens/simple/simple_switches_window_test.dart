@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/models/switch_device.dart';
@@ -194,7 +195,12 @@ void main() {
     expect(tester.widget<StatusDot>(ring).ring, isTrue);
     expect(tester.widget<SimpleSegment>(_segment('box-0', 'off')).selected, isTrue, reason: 'shows what was asked');
     expect(tester.widget<SimpleSegment>(_segment('box-0', 'on')).onTap, isNull);
-    expect(tester.widget<Slider>(_slider('box-1')).onChanged, isNull);
+    // The slider keeps its look for the first 300 ms, but takes nothing.
+    tester.widget<Slider>(_slider('box-1')).onChangeEnd!(10);
+    await tester.pump();
+    expect(rig.writes, ['box/0=0.0'], reason: 'locked: no second write');
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.widget<Slider>(_slider('box-1')).onChanged, isNull, reason: 'a slow answer: the slider reads locked');
     expect(c.read(simpleSwitchSettingProvider), '12V Out 1', reason: 'the status pill names the port');
     rig.devices = [
       _box(ports: [_port(0, '12V Out 1', 0), _port(1, 'Dew 1', 60, max: 100)]),
@@ -206,22 +212,54 @@ void main() {
     expect(c.read(simpleSwitchSettingProvider), isNull);
   });
 
-  testWidgets('locked On / Off segments look dimmed, not only untappable', (tester) async {
+  testWidgets('a slow answer dims the other ports after 300 ms; a fast one never does', (tester) async {
     final (_, rig) = await _pump(tester, [
       _box(ports: [_port(0, '12V Out 1', 1), _port(1, '12V Out 2', 0)]),
     ]);
-    double opacity(String port) {
-      final o = find.ancestor(of: _segment(port, 'on'), matching: find.byType(Opacity));
-      return o.evaluate().isEmpty ? 1 : tester.widget<Opacity>(o.first).opacity;
-    }
-    expect(opacity('box-1'), 1);
+    double opacity(String port) => find
+        .ancestor(of: _segment(port, 'on'), matching: find.byType(Opacity))
+        .evaluate()
+        .map((e) => (e.widget as Opacity).opacity)
+        .fold(1.0, (a, b) => a * b);
     rig.hold = Completer();
     await tester.tap(_segment('box-0', 'off'));
     await tester.pump();
-    expect(opacity('box-1'), lessThan(1), reason: 'the other port waits, and shows it');
+    expect(opacity('box-1'), 1, reason: 'no flash on each write');
+    await tester.pump(const Duration(milliseconds: 299));
+    expect(opacity('box-1'), 1);
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(opacity('box-1'), lessThan(1), reason: 'still waiting: the other port shows it');
+    expect(opacity('box-0'), 1, reason: 'the asked port stays bright beside its ring');
     rig.hold!.complete();
     await tester.pumpAndSettle();
     expect(opacity('box-1'), 1);
+    // The rig answers within 300 ms: nothing dims.
+    rig.hold = Completer();
+    await tester.tap(_segment('box-1', 'on'));
+    await tester.pump(const Duration(milliseconds: 100));
+    rig.hold!.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(opacity('box-0'), 1);
+  });
+
+  testWidgets('a port whose range is one value is not offered', (tester) async {
+    await _pump(tester, [
+      _box(ports: [_port(0, 'Fixed', 5, min: 5, max: 5), _port(1, '12V Out 1', 1)]),
+    ]);
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('Fixed'), findsNothing);
+    expect(find.text('Pegasus Powerbox · 1 port'), findsOneWidget);
+  });
+
+  test('a reading shows no ".0" however close it is to a whole number', () {
+    SwitchPort reading(double v) => _port(0, 'V', v, max: 20, write: false);
+    final l10n = lookupAppLocalizations(const Locale('en'));
+    expect(simpleSwitchReading(l10n, reading(0.999)), '1');
+    expect(simpleSwitchReading(l10n, reading(12.996)), '13');
+    expect(simpleSwitchReading(l10n, reading(0.004)), '0');
+    expect(simpleSwitchReading(l10n, reading(12.4)), '12.4');
+    expect(simpleSwitchReading(l10n, reading(1.23)), '1.23');
   });
 
   testWidgets('a refused write says why in a pill and the port keeps what the rig reports', (tester) async {

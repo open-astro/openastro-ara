@@ -136,6 +136,14 @@ void main() {
     expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-mount-park-parked'))).selected, isTrue);
   });
 
+  testWidgets("Tracking locked while the mount moves keeps its look (only the Switches window dims)", (tester) async {
+    await _pump(tester, _wire(runtime: 'unparking', tracking: false));
+    final seg = find.byKey(const Key('simple-mount-tracking-on'));
+    expect(tester.widget<SimpleSegment>(seg).onTap, isNull, reason: 'locked while it moves');
+    final dims = find.ancestor(of: seg, matching: find.byType(Opacity));
+    expect(dims.evaluate().map((e) => (e.widget as Opacity).opacity).where((o) => o < 1), isEmpty);
+  });
+
   testWidgets('a park that stops short clears Parking… and says so', (tester) async {
     final (c, mount) = await _pump(tester, _wire());
     await tester.tap(find.byKey(const Key('simple-mount-park-parked')));

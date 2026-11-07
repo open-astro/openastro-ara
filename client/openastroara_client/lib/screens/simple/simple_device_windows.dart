@@ -441,31 +441,26 @@ class _OnOff extends StatelessWidget {
   final bool enabled;
 
   @override
-  Widget build(BuildContext context) => Opacity(
-    // Locked looks locked: the selected segment would otherwise stay as
-    // bright as a live one (Material's disabled opacity).
-    opacity: enabled ? 1 : 0.38,
-    child: DecoratedBox(
-      decoration: BoxDecoration(
-        color: AraColors.tileFill,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final (v, key, word) in [
-            (true, ids.$1, labels?.$1 ?? context.l10n.deviceOn),
-            (false, ids.$2, labels?.$2 ?? context.l10n.deviceOff),
-          ])
-            SimpleSegment(
-              key: Key('$id-$key'),
-              label: word,
-              selected: on == v,
-              radius: 8,
-              onTap: on == v || !enabled ? null : () => onChanged(v),
-            ),
-        ],
-      ),
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: AraColors.tileFill,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final (v, key, word) in [
+          (true, ids.$1, labels?.$1 ?? context.l10n.deviceOn),
+          (false, ids.$2, labels?.$2 ?? context.l10n.deviceOff),
+        ])
+          SimpleSegment(
+            key: Key('$id-$key'),
+            label: word,
+            selected: on == v,
+            radius: 8,
+            onTap: on == v || !enabled ? null : () => onChanged(v),
+          ),
+      ],
     ),
   );
 }
@@ -2695,9 +2690,12 @@ class _SimpleFilterWheelWindowState
 
 /// A switch port's level or reading as Simple Mode shows it: no ".0", at
 /// most 2 places.
-String _simpleLevel(double v) => v == v.roundToDouble()
-    ? v.toStringAsFixed(0)
-    : v.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '');
+String _simpleLevel(double v) {
+  final r = (v * 100).roundToDouble() / 100;
+  return r == r.roundToDouble()
+      ? r.toStringAsFixed(0)
+      : r.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '');
+}
 
 /// A port the rig can't set, as Settings › Rig lists it: On / Off for an
 /// on/off reading, else its value.
@@ -2739,6 +2737,31 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
   /// A slider being dragged, and where.
   ({String port, double value})? _drag;
 
+  /// Locked for longer than [_dimAfter]: the other ports dim. A rig that
+  /// answers sooner never dims them, so a write doesn't flash the window.
+  bool _dim = false;
+  Timer? _dimTimer;
+  static const _dimAfter = Duration(milliseconds: 300);
+
+  void _syncDim(bool locked) {
+    if (!locked) {
+      _dimTimer?.cancel();
+      _dimTimer = null;
+      _dim = false;
+    } else if (_dimTimer == null && !_dim) {
+      _dimTimer = Timer(_dimAfter, () {
+        _dimTimer = null;
+        if (mounted) setState(() => _dim = true);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _dimTimer?.cancel();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -2769,7 +2792,9 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
           device: d,
           ports: [
             for (final p in d.ports)
-              if (p.canWrite && !isThermalSwitchFanPort(d, p)) p,
+              // A range of one value has nothing to set.
+              if (p.canWrite && p.max > p.min && !isThermalSwitchFanPort(d, p))
+                p,
           ],
         ),
     ].where((e) => e.ports.isNotEmpty).toList();
@@ -2797,6 +2822,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     }
     // The notifier drops a write while another is on its way: lock them all.
     final locked = acting || _asked != null;
+    _syncDim(locked);
     for (final (:device, :ports) in devices) {
       children.add(
         Padding(
@@ -2830,16 +2856,22 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     final id = '${d.deviceId}-${p.id}';
     final asked = _asked?.port == id ? _asked!.value : null;
     var label = p.label;
+    // Locked past [_dimAfter], the other ports read locked; the asked one
+    // stays bright beside its ring.
+    final dimmed = locked && _dim && asked == null;
     final Widget control;
     if (p.isBoolean) {
       control = Semantics(
         label: p.label,
         container: true,
-        child: _OnOff(
-          id: 'simple-switch-$id',
-          on: (asked ?? p.value) >= 0.5,
-          enabled: !locked,
-          onChanged: (on) => _write(d, p, on ? 1 : 0),
+        child: Opacity(
+          opacity: dimmed ? AraOpacity.locked : 1,
+          child: _OnOff(
+            id: 'simple-switch-$id',
+            on: (asked ?? p.value) >= 0.5,
+            enabled: !locked,
+            onChanged: (on) => _write(d, p, on ? 1 : 0),
+          ),
         ),
       );
     } else {
@@ -2858,12 +2890,17 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
             max: p.max,
             value: v,
             semanticFormatterCallback: (x) => _simpleLevel(_round(p, x)),
-            onChanged: locked
-                ? null
-                : (x) => setState(() => _drag = (port: id, value: x)),
-            onChangeEnd: locked
+            // Locked: it takes nothing; it reads disabled (greyed) only once
+            // dimmed, so a fast answer doesn't flash it.
+            onChanged: dimmed
                 ? null
                 : (x) {
+                    if (!locked) setState(() => _drag = (port: id, value: x));
+                  },
+            onChangeEnd: dimmed
+                ? null
+                : (x) {
+                    if (locked) return;
                     setState(() => _drag = null);
                     _write(d, p, x);
                   },
