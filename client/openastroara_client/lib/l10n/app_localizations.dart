@@ -489,12 +489,6 @@ abstract class AppLocalizations {
   /// **'{port} ({device})'**
   String deviceSwitchPortOnDevice(String port, String device);
 
-  /// Switches window: a slider port's name with the level it is set to, as a percent of the port's range (e.g. 60 %)
-  ///
-  /// In en, this message translates to:
-  /// **'{port} · {level}'**
-  String deviceSwitchLevel(String port, String level);
-
   /// Error message when a switch device refused a port change
   ///
   /// In en, this message translates to:

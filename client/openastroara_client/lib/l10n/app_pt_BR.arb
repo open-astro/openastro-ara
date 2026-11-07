@@ -65,7 +65,6 @@
   "deviceModeSwitch": "Liga/desliga",
   "deviceSetAutomatically": "Ajustado automaticamente",
   "deviceSwitchPortOnDevice": "{port} ({device})",
-  "deviceSwitchLevel": "{port} · {level}",
   "deviceCouldntSetPort": "Não foi possível ajustar {port}",
   "deviceSettingPort": "Ajustando {port}…",
   "devicePlanRunningChangeFilter": "Há um plano em andamento. Trocar o filtro mesmo assim?",

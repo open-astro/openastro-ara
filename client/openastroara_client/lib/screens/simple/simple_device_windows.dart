@@ -2950,7 +2950,6 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     final l10n = context.l10n;
     final id = '${d.deviceId}-${p.id}';
     final asked = _asked?.port == id ? _asked!.value : null;
-    var label = p.label;
     // Locked past [_dimAfter], the other ports read locked; the asked one
     // stays bright.
     final dimmed = locked && _dim && asked == null;
@@ -3005,44 +3004,64 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
         p.min,
         p.max,
       );
-      label = l10n.deviceSwitchLevel(p.label, _switchPercent(p, _round(p, v)));
+      // The level after the slider, as the Flat panel window's brightness:
+      // after the name it wrapped "Light Box · 60 %" onto two lines.
       control = SizedBox(
         width: kSimpleWindowControlWidth,
-        child: Opacity(
-          opacity: dimmed ? AraOpacity.locked : 1,
-          child: IgnorePointer(
-            ignoring: dimmed,
-            child: Semantics(
-              label: p.label,
-              child: Slider(
-                key: Key('simple-switch-$id'),
-                min: p.min,
-                max: p.max,
-                divisions: usableSwitchStep(p) == null
-                    ? null
-                    : switchSliderDivisions(p),
-                value: v,
-                semanticFormatterCallback: (x) =>
-                    _switchPercent(p, _round(p, x)),
-                // Locked: it takes nothing; once dimmed it fades as the
-                // segments do and takes no touch or screen-reader action, so a
-                // fast answer doesn't flash it.
-                onChanged: (x) {
-                  if (!locked) setState(() => _drag = (port: id, value: x));
-                },
-                onChangeEnd: (x) {
-                  if (locked) return;
-                  setState(() => _drag = null);
-                  _write(d, p, x);
-                },
+        child: Row(
+          children: [
+            Expanded(
+              child: Opacity(
+                opacity: dimmed ? AraOpacity.locked : 1,
+                child: IgnorePointer(
+                  ignoring: dimmed,
+                  child: Semantics(
+                    label: p.label,
+                    child: Slider(
+                      key: Key('simple-switch-$id'),
+                      min: p.min,
+                      max: p.max,
+                      divisions: usableSwitchStep(p) == null
+                          ? null
+                          : switchSliderDivisions(p),
+                      value: v,
+                      semanticFormatterCallback: (x) =>
+                          _switchPercent(p, _round(p, x)),
+                      // Locked: it takes nothing; once dimmed it fades as
+                      // the segments do and takes no touch or screen-reader
+                      // action, so a fast answer doesn't flash it.
+                      onChanged: (x) {
+                        if (!locked) {
+                          setState(() => _drag = (port: id, value: x));
+                        }
+                      },
+                      onChangeEnd: (x) {
+                        if (locked) return;
+                        setState(() => _drag = null);
+                        _write(d, p, x);
+                      },
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
+            // The slider already reads its level to a screen reader.
+            ExcludeSemantics(
+              child: Opacity(
+                opacity: dimmed ? AraOpacity.locked : 1,
+                child: Text(
+                  _switchPercent(p, _round(p, v)),
+                  key: Key('simple-switch-$id-level'),
+                  style: kSimpleText,
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }
     return simpleWindowRow(
-      label,
+      p.label,
       control,
       id: 'switch-$id',
       // The readout has no name of its own: the row's label says it.

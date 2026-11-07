@@ -244,11 +244,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String deviceSwitchLevel(String port, String level) {
-    return '$port · $level';
-  }
-
-  @override
   String deviceCouldntSetPort(String port) {
     return 'Couldn\'t set $port';
   }
