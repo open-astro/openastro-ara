@@ -52,12 +52,12 @@ namespace OpenAstroAra.Test {
         public async Task The_route_answers_the_selected_devices_driver_sdk_and_firmware() {
             var selections = new Mock<IEquipmentSelectionStore>();
             selections.Setup(s => s.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<DiscoveredDeviceDto> {
-                new("u1", "ZWO ASI533MC Pro", DeviceType.Camera, "rig.local", "10.0.30.223", 6800, 1, false),
+                new("u1", "ZWO ASI533MC Pro", DeviceType.Camera, "rig.local", "192.0.2.10", 6800, 1, false),
             });
             var alpaca = new Mock<IAlpacaManagementClient>();
-            alpaca.Setup(a => a.GetConfiguredDevicesAsync("10.0.30.223", 6800, It.IsAny<CancellationToken>()))
+            alpaca.Setup(a => a.GetConfiguredDevicesAsync("192.0.2.10", 6800, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(AlpacaManagementClient.ParseConfiguredDevices(Devices));
-            alpaca.Setup(a => a.GetDriverVersionAsync("10.0.30.223", 6800, "camera", 1, It.IsAny<CancellationToken>()))
+            alpaca.Setup(a => a.GetDriverVersionAsync("192.0.2.10", 6800, "camera", 1, It.IsAny<CancellationToken>()))
                 .ReturnsAsync("6.0.0~nightly");
 
             var result = await EquipmentEndpoints.GetDeviceDriverAsync("camera", selections.Object, alpaca.Object, CancellationToken.None);
@@ -71,12 +71,12 @@ namespace OpenAstroAra.Test {
             // FlatDevice is NINA's name for the device; Alpaca only knows covercalibrator.
             var selections = new Mock<IEquipmentSelectionStore>();
             selections.Setup(s => s.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<DiscoveredDeviceDto> {
-                new("u3", "Flat panel", DeviceType.FlatDevice, "rig.local", "10.0.30.223", 6800, 0, false),
+                new("u3", "Flat panel", DeviceType.FlatDevice, "rig.local", "192.0.2.10", 6800, 0, false),
             });
             var alpaca = new Mock<IAlpacaManagementClient>();
-            alpaca.Setup(a => a.GetConfiguredDevicesAsync("10.0.30.223", 6800, It.IsAny<CancellationToken>()))
+            alpaca.Setup(a => a.GetConfiguredDevicesAsync("192.0.2.10", 6800, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(AlpacaManagementClient.ParseConfiguredDevices(Devices));
-            alpaca.Setup(a => a.GetDriverVersionAsync("10.0.30.223", 6800, "covercalibrator", 0, It.IsAny<CancellationToken>()))
+            alpaca.Setup(a => a.GetDriverVersionAsync("192.0.2.10", 6800, "covercalibrator", 0, It.IsAny<CancellationToken>()))
                 .ReturnsAsync("1.2.0");
 
             var result = await EquipmentEndpoints.GetDeviceDriverAsync("flatdevice", selections.Object, alpaca.Object, CancellationToken.None);
@@ -88,11 +88,11 @@ namespace OpenAstroAra.Test {
         public async Task The_guide_camera_route_answers_the_guiders_alpaca_camera_with_its_name() {
             var profiles = new Mock<IProfileStore>();
             profiles.Setup(p => p.GetPhd2Settings()).Returns(new Phd2SettingsDto(
-                "localhost", 4400, "Default", true, 3, 5.0, 1.5, 10, 60, false, GuiderCamera: "Alpaca Camera [10.0.30.223:6800/1]"));
+                "localhost", 4400, "Default", true, 3, 5.0, 1.5, 10, 60, false, GuiderCamera: "Alpaca Camera [192.0.2.10:6800/1]"));
             var alpaca = new Mock<IAlpacaManagementClient>();
-            alpaca.Setup(a => a.GetConfiguredDevicesAsync("10.0.30.223", 6800, It.IsAny<CancellationToken>()))
+            alpaca.Setup(a => a.GetConfiguredDevicesAsync("192.0.2.10", 6800, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(AlpacaManagementClient.ParseConfiguredDevices(Devices));
-            alpaca.Setup(a => a.GetDriverVersionAsync("10.0.30.223", 6800, "camera", 1, It.IsAny<CancellationToken>()))
+            alpaca.Setup(a => a.GetDriverVersionAsync("192.0.2.10", 6800, "camera", 1, It.IsAny<CancellationToken>()))
                 .ReturnsAsync("6.0.0");
 
             var result = await EquipmentEndpoints.GetGuideCameraDriverAsync(profiles.Object, alpaca.Object, Mock.Of<IGuiderService>(), CancellationToken.None);
@@ -215,12 +215,12 @@ namespace OpenAstroAra.Test {
             // Switches are many at once (one per power box), so they are asked by id, not by the one selection.
             var switches = new Mock<ISwitchService>();
             switches.Setup(s => s.GetDevice("box")).Returns(
-                new DiscoveredDeviceDto("box", "Pegasus Powerbox", DeviceType.Switch, "rig.local", "10.0.30.223", 6800, 0, false));
+                new DiscoveredDeviceDto("box", "Pegasus Powerbox", DeviceType.Switch, "rig.local", "192.0.2.10", 6800, 0, false));
             var alpaca = new Mock<IAlpacaManagementClient>();
-            alpaca.Setup(a => a.GetConfiguredDevicesAsync("10.0.30.223", 6800, It.IsAny<CancellationToken>()))
+            alpaca.Setup(a => a.GetConfiguredDevicesAsync("192.0.2.10", 6800, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(AlpacaManagementClient.ParseConfiguredDevices(
                     "{\"Value\":[{\"DeviceType\":\"Switch\",\"DeviceNumber\":0,\"DeviceName\":\"Pegasus Powerbox\",\"UniqueID\":\"box\",\"Firmware\":\"1.4\"}]}"));
-            alpaca.Setup(a => a.GetDriverVersionAsync("10.0.30.223", 6800, "switch", 0, It.IsAny<CancellationToken>()))
+            alpaca.Setup(a => a.GetDriverVersionAsync("192.0.2.10", 6800, "switch", 0, It.IsAny<CancellationToken>()))
                 .ReturnsAsync("2.1");
 
             var result = await EquipmentEndpoints.GetSwitchDriverAsync("box", switches.Object, alpaca.Object, CancellationToken.None);

@@ -1871,7 +1871,7 @@ void main() {
           'board_model': 'Raspberry Pi 5 Model B Rev 1.1',
           'guider_version': '2.6.13dev7',
           'alpaca_servers': [
-            {'host': '10.0.30.223', 'port': 6800, 'server_name': 'AlpacaHTTP', 'manufacturer': 'OpenAstro.net', 'version': '6.0.0~nightly'},
+            {'host': '192.0.2.10', 'port': 6800, 'server_name': 'AlpacaHTTP', 'manufacturer': 'OpenAstro.net', 'version': '6.0.0~nightly'},
           ],
           'astap_version': 'CLI-2026.09.01',
         }),
