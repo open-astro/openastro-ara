@@ -224,6 +224,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get deviceSensors => 'Sensors';
+
+  @override
   String get deviceNothingToSwitch => 'Nothing to switch';
 
   @override

@@ -2678,6 +2678,53 @@ class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
   }
 }
 
+/// The switch devices' readings (ports the rig can't set: voltage, current,
+/// temperature), one table per device; the Switches window has only what can
+/// be switched. Read fresh when Rig opens: the list has no live updates.
+class _RigSensors extends ConsumerStatefulWidget {
+  const _RigSensors();
+
+  @override
+  ConsumerState<_RigSensors> createState() => _RigSensorsState();
+}
+
+class _RigSensorsState extends ConsumerState<_RigSensors> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => ref.read(switchListProvider.notifier).refresh());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final devices = ref.watch(switchListProvider).value ?? const [];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final d in devices)
+          if (d.isConnected)
+            if ([
+              for (final p in d.ports)
+                if (!p.canWrite && !isThermalSwitchFanPort(d, p)) p,
+            ] case final readings when readings.isNotEmpty) ...[
+              const Divider(height: AraSpace.s16),
+              SimpleVersions(
+                key: Key('simple-sensors-${d.deviceId}'),
+                title: d.name.isEmpty
+                    ? l10n.deviceSensors
+                    : l10n.shellGearTitle(l10n.deviceSensors, d.name),
+                rows: [
+                  for (final p in readings)
+                    (p.label, simpleSwitchReading(l10n, p)),
+                ],
+              ),
+            ],
+      ],
+    );
+  }
+}
+
 /// One row per switch device: their own state type, all opening the one
 /// Switches window.
 class _SwitchGearRows extends ConsumerWidget {
@@ -3321,6 +3368,7 @@ class _ThisRig extends ConsumerWidget {
             ),
           ],
         ),
+        const _RigSensors(),
         const Divider(height: AraSpace.s16),
         // Every version on the rig, for a bug report or a support question;
         // a part the rig can't read is left out.

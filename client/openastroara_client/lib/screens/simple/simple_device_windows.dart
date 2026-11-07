@@ -2693,6 +2693,18 @@ class _SimpleFilterWheelWindowState
   }
 }
 
+/// A switch port's level or reading as Simple Mode shows it: no ".0", at
+/// most 2 places.
+String _simpleLevel(double v) => v == v.roundToDouble()
+    ? v.toStringAsFixed(0)
+    : v.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '');
+
+/// A port the rig can't set, as Settings › Rig lists it: On / Off for an
+/// on/off reading, else its value.
+String simpleSwitchReading(AppLocalizations l10n, SwitchPort p) => p.isBoolean
+    ? (p.value >= 0.5 ? l10n.deviceOn : l10n.deviceOff)
+    : _simpleLevel(p.value);
+
 /// The port a Switches window write is on its way to, for the status pill
 /// (#1668); null when none.
 class SimpleSwitchSettingNotifier extends Notifier<String?> {
@@ -2709,8 +2721,8 @@ final simpleSwitchSettingProvider =
 
 /// The switch devices' window (#1651): each connected device's ports by
 /// name, as On / Off or a level slider. Readings (ports the rig can't set)
-/// and the camera's cooling fan, which the rig runs with the cooler, are left
-/// out.
+/// are in Settings › Rig; the camera's cooling fan, which the rig runs with
+/// the cooler, is left out.
 class SimpleSwitchesWindow extends ConsumerStatefulWidget {
   const SimpleSwitchesWindow({super.key});
 
@@ -2739,10 +2751,6 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
       ? v.roundToDouble()
       : (v * 100).roundToDouble() / 100;
 
-  /// A level as the window shows it: no ".0", at most 2 places.
-  static String _level(double v) => v == v.roundToDouble()
-      ? v.toStringAsFixed(0)
-      : v.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '');
 
   @override
   Widget build(BuildContext context) {
@@ -2753,9 +2761,8 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
       for (final d in async.value ?? const <SwitchDevice>[])
         if (d.isConnected) d,
     ];
-    // Only what can be switched: a port the rig can't set is a reading, and
-    // Simple Mode leaves readings to the Full UI's Switch panel (user,
-    // 2026-11-07).
+    // Only what can be switched: a port the rig can't set is a reading,
+    // shown in Settings › Rig (user, 2026-11-07).
     final devices = [
       for (final d in connected)
         (
@@ -2840,7 +2847,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
         p.min,
         p.max,
       );
-      label = l10n.deviceSwitchLevel(p.label, _level(_round(p, v)));
+      label = l10n.deviceSwitchLevel(p.label, _simpleLevel(_round(p, v)));
       control = SizedBox(
         width: kSimpleWindowControlWidth,
         child: Semantics(
@@ -2850,7 +2857,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
             min: p.min,
             max: p.max,
             value: v,
-            semanticFormatterCallback: (x) => _level(_round(p, x)),
+            semanticFormatterCallback: (x) => _simpleLevel(_round(p, x)),
             onChanged: locked
                 ? null
                 : (x) => setState(() => _drag = (port: id, value: x)),

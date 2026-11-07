@@ -285,6 +285,10 @@
       }
     }
   },
+  "deviceSensors": "Sensors",
+  "@deviceSensors": {
+    "description": "Settings › Rig: the title over a switch device's readings (ports that can't be set: voltage, temperature, a cover state)"
+  },
   "deviceNothingToSwitch": "Nothing to switch",
   "@deviceNothingToSwitch": {
     "description": "Switches window: the connected switch devices have no port that can be set (only readings, which Simple Mode leaves out)"

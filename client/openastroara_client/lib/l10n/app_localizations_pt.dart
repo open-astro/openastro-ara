@@ -224,6 +224,9 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get deviceSensors => 'Sensors';
+
+  @override
   String get deviceNothingToSwitch => 'Nothing to switch';
 
   @override
@@ -2596,6 +2599,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
     );
     return '$device · $_temp0';
   }
+
+  @override
+  String get deviceSensors => 'Sensores';
 
   @override
   String get deviceNothingToSwitch => 'Nada para ligar ou desligar';
