@@ -229,10 +229,21 @@ class _Focuser extends FocuserNotifier with _Calls<FocuserStatus> {
 }
 
 class _FilterWheel extends FilterWheelNotifier with _Calls<FilterWheelStatus> {
-  _FilterWheel(this.state0);
+  _FilterWheel(this.state0, {this.slots = 0});
   final EquipmentConnectionState state0;
+  final int slots;
+  Map<String, dynamic> _json(Map<String, dynamic> runtime, {bool manual = false}) => {
+        ..._wire('EFW', state0),
+        'manual': manual,
+        'slots': [for (var i = 0; i < slots; i++) {'position': i, 'name': 'F$i'}],
+        'runtime': runtime,
+      };
   @override
-  Future<FilterWheelStatus?> build() async => FilterWheelStatus.fromJson(_wire('EFW', state0));
+  Future<FilterWheelStatus?> build() async => FilterWheelStatus.fromJson(_json({'state': 'idle', 'current_slot': 0}));
+
+  /// What the wheel reports next ("moving", "awaiting_user", "idle").
+  void report(Map<String, dynamic> runtime, {bool manual = false}) =>
+      state = AsyncData(FilterWheelStatus.fromJson(_json(runtime, manual: manual)));
 }
 
 class _Mount extends MountNotifier with _Calls<MountStatus> {
@@ -2730,6 +2741,22 @@ void main() {
         findsOneWidget);
   });
 
+  testWidgets('on a short window a tall device window stops above the bottom and scrolls', (tester) async {
+    // #1666 re-audit P2: an 8-slot wheel's list ran off a landscape phone with no way to reach it.
+    final c = await _pump(tester, const Size(1024, 520), linkUp: true, gear: [
+      filterWheelProvider.overrideWith(() => _FilterWheel(EquipmentConnectionState.connected, slots: 8)),
+    ]);
+    c.read(selectedSettingsPanelProvider.notifier).select('eq.filterwheel');
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    await tester.pumpAndSettle();
+    final panel = find.ancestor(of: find.byKey(const Key('simple-device-filterwheel')), matching: find.byType(SimplePanel));
+    expect(tester.getRect(panel).bottom, lessThanOrEqualTo(520));
+    final last = find.byKey(const Key('simple-filterwheel-slot-7'));
+    await tester.ensureVisible(last);
+    await tester.pumpAndSettle();
+    expect(tester.getRect(last).bottom, lessThanOrEqualTo(tester.getRect(panel).bottom));
+  });
+
   testWidgets('Settings lists the filter wheel only while the rig knows one', (tester) async {
     await _pump(tester, const Size(1024, 768), linkUp: true);
     await tester.tap(find.byTooltip('Settings'));
@@ -3277,6 +3304,24 @@ void main() {
     await tester.pump();
     expect(find.descendant(of: pill, matching: find.textContaining('Cooling')), findsNothing,
         reason: 'at the target (within half a degree) the pill has nothing to say');
+  });
+
+  testWidgets('a filter change shows in the status pill until the wheel lands; a hand swap asks there too', (tester) async {
+    final wheel = _FilterWheel(EquipmentConnectionState.connected, slots: 3);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [filterWheelProvider.overrideWith(() => wheel)]);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Filter wheel')), findsNothing);
+    wheel.report({'state': 'moving', 'current_slot': -1});
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Filter wheel')), findsOneWidget);
+    expect(find.descendant(of: pill, matching: find.textContaining('Moving…')), findsOneWidget);
+    wheel.report({'state': 'idle', 'current_slot': 1});
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Filter wheel')), findsNothing, reason: 'landed');
+    wheel.report({'state': 'awaiting_user', 'current_slot': 1, 'pending_slot': 2}, manual: true);
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Swap in F2, then confirm.')), findsOneWidget);
   });
 
   testWidgets('a scheduled plan waiting on the rig: the pill says when it starts', (tester) async {

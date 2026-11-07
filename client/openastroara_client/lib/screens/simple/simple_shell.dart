@@ -1200,12 +1200,22 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 Positioned(
                                   left: kSimpleInset,
                                   top: railTop,
+                                  // Never past the bottom row: a tall window
+                                  // (a many-slot filter wheel) scrolls.
+                                  bottom: aboveRow,
                                   width:
                                       kSimpleDeviceWindowWidth *
                                       simpleRailScale(context),
-                                  child: SimplePanel(
-                                    padding: const EdgeInsets.all(AraSpace.s16),
-                                    child: _deviceWindows[_device]!,
+                                  child: Align(
+                                    alignment: Alignment.topLeft,
+                                    child: SimplePanel(
+                                      child: SingleChildScrollView(
+                                        padding: const EdgeInsets.all(
+                                          AraSpace.s16,
+                                        ),
+                                        child: _deviceWindows[_device]!,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               // Search drops from the strip, centred.
@@ -2211,8 +2221,9 @@ class SimpleSegment extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
-    // A segment that takes no tap is read as disabled, not as a button.
-    enabled: onTap != null,
+    // A segment that takes no tap is read as disabled, not as a button; the
+    // selected one stays enabled, read as selected (a native segmented control).
+    enabled: onTap != null || selected,
     selected: selected,
     child: Material(
       color: selected ? AraColors.selectionBg : Colors.transparent,

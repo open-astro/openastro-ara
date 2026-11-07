@@ -242,6 +242,9 @@ void main() {
     expect(tester.getSemantics(_slot(0)), isSemantics(isButton: true, hasEnabledState: true, isEnabled: false));
     await _pump(tester, _wire());
     expect(tester.getSemantics(_slot(1)), isSemantics(isButton: true, hasEnabledState: true, isEnabled: true));
+    // Re-audit P2: the filter in place takes no tap but is selected, not dimmed (as a native segmented control).
+    expect(tester.getSemantics(_slot(0)),
+        isSemantics(isButton: true, isSelected: true, hasEnabledState: true, isEnabled: true));
     semantics.dispose();
   });
 
