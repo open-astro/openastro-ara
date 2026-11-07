@@ -795,11 +795,13 @@ class ProbePins(unittest.TestCase):
     """Every runnable `$DEL` probe is byte-identical to the §3b reference (#1050).
 
     `MirrorPin` hashes only the reference (`text`) copy. The runnable copies --
-    three in SKILL.md §3b and three in `/pr-checker` Step 4, one per merge
-    path -- could each be inverted to `= "true"` with the suite green. So each
-    file's copies are counted and compared, whitespace-normalised and with the
-    `<PR>`/`<N>` placeholder unified, against the reference. Counts are pinned
-    too: a dropped copy is a merge path that lost its probe.
+    three in SKILL.md §3b, one per merge path -- could each be inverted to
+    `= "true"` with the suite green. So each copy is counted and compared,
+    whitespace-normalised and with the `<PR>`/`<N>` placeholder unified, against
+    the reference. Counts are pinned too: a dropped copy is a merge path that
+    lost its probe. `/pr-checker` carries none: `master` merges through the merge
+    queue, where `gh` rejects `--delete-branch` and the repo setting deletes the
+    head, so a same-repo/fork probe has nothing left to decide.
     """
 
     PROBE = re.compile(
@@ -810,7 +812,7 @@ class ProbePins(unittest.TestCase):
         '[ "$(gh pr view <PR> --json isCrossRepository --jq .isCrossRepository)" = "false" ] '
         "&& DEL=--delete-branch || DEL="
     )
-    EXPECTED_COPIES = {SKILL: 4, PR_CHECKER: 3}  # the reference plus 3; 2 fences plus the inline chain
+    EXPECTED_COPIES = {SKILL: 4}  # the reference plus 3
 
     @classmethod
     def normalise(cls, probe: str) -> str:
@@ -835,6 +837,12 @@ class ProbePins(unittest.TestCase):
             with self.subTest(file=path.name):
                 text = self.PROBE.sub("", path.read_text())
                 self.assertNotIn("DEL=--delete-branch", text)
+
+    def test_pr_checker_never_passes_delete_branch_to_the_queue(self):
+        # `gh pr merge -d` fails outright on a merge-queue branch.
+        for line in PR_CHECKER.read_text().splitlines():
+            if "gh pr merge" in line:
+                self.assertNotIn("--delete-branch", line.replace("`--delete-branch`", ""))
 
 
 if __name__ == "__main__":

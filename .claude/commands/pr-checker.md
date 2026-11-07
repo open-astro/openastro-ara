@@ -68,17 +68,11 @@ Checks to make before waiting on anything:
    gh api -X DELETE repos/open-astro/openastro-ara/issues/<N>/labels/safe-to-review
    gh api -X POST   repos/open-astro/openastro-ara/issues/<N>/labels -f 'labels[]=safe-to-review'
    ```
-3. **Branch is behind master** (`gh api "repos/open-astro/openastro-ara/compare/master...$OWNER:$BRANCH" --jq .behind_by`
-   is non-zero; `$OWNER`/`$BRANCH` validated in Step 0). Branch protection is strict, so it must be
-   updated before it can merge, and updating re-runs CI + the bot. Do this **now** rather than
-   after the verdict so you do not pay for two bot rounds:
-   ```bash
-   gh api -X PUT repos/open-astro/openastro-ara/pulls/<N>/update-branch
-   ```
-   **Check the result before polling for a verdict**: `update-branch` returns HTTP 422 on a merge
-   conflict, and a chain that ignores that then waits 30 minutes for a verdict that never comes.
-   GitHub recomputes mergeability asynchronously, so the first read after the call is usually
-   `UNKNOWN`; poll until it settles and treat a timeout as a conflict, never as "fine":
+3. **Branch conflicts with master.** `master` merges through the merge queue, which rebuilds every
+   PR on the latest master and re-runs CI there, so a branch that is merely behind needs no action
+   and updating it only buys an extra bot round. Only a conflict blocks the merge. GitHub recomputes
+   mergeability asynchronously, so the first read can be `UNKNOWN`; poll until it settles and treat
+   a timeout as a conflict, never as "fine":
    ```bash
    for i in $(seq 1 12); do   # up to 2 min
      m=$(gh pr view <N> --json mergeable --jq .mergeable)   # MERGEABLE | CONFLICTING | UNKNOWN
@@ -89,8 +83,6 @@ Checks to make before waiting on anything:
    `CONFLICTING` (or still `UNKNOWN` after the loop) -> resolve locally on the head branch now
    (Step 3 mechanics: fetch the head, `git merge origin/master`, keep both sides when two PRs
    added adjacent CI jobs or gates, validate syntax, push), then poll. `MERGEABLE` -> Step 2.
-   It is fine to update while a review is still in flight: the run on the old head is cancelled
-   and a fresh one starts on the merged head, so nothing is lost.
 4. **Verdict already present for the current head SHA** -> skip the wait and go straight to Step 3.
    "Belongs to the current head" is the same rule as the Step 2 poll, so run **one pass** of that
    block with `BUDGET=0` (the loop checks before it sleeps, so `BUDGET=0` is exactly one check):
@@ -100,7 +92,7 @@ Checks to make before waiting on anything:
    `0` prints the verdict (Step 3); `2` or `3` are the Step 3 "no verdict" cases; `1` from a
    `BUDGET=0` pass only means **no verdict yet** (the normal state right after a push): go to
    Step 2. It is not a timeout and does not count toward the "two consecutive timeouts" hard stop.
-   **Skip this check if Step 1.1, 1.2 or 1.3 just acted**: a relabel or update-branch re-triggers
+   **Skip this check if Step 1.1, 1.2 or 1.3 just acted**: a relabel or conflict push re-triggers
    the bot on the same head, and for a few seconds the only check-run is the old one, which the
    pre-check would report as skipped, failed or cancelled. Go straight to Step 2, whose first look
    comes after one tick.
@@ -121,7 +113,7 @@ Never foreground-sleep. Run this with `run_in_background` and a 30-minute deadli
 PR=<N>; REPO=open-astro/openastro-ara; TICK=${TICK:-180}; DEADLINE=$(( $(date +%s) + ${BUDGET:-1800} ))
 # ISO-8601 -> epoch, portable: `date -u -d` is GNU and this repo is driven from macOS.
 iso2epoch() { python3 -c 'import sys,datetime;print(int(datetime.datetime.strptime(sys.argv[1],"%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc).timestamp()))' "$1"; }
-# A re-trigger on the same head (relabel, update-branch) takes a few seconds to show a
+# A re-trigger on the same head (relabel) takes a few seconds to show a
 # new check-run; a first look inside that window classifies the OLD run as final. So a
 # real poll sleeps one tick before it looks. BUDGET=0 is the one-pass pre-check, which
 # is only valid when nothing was just re-triggered, and looks at once.
@@ -197,8 +189,7 @@ one. Every non-zero exit prints nothing on stdout, so a chained `poll && merge` 
 merge.
 
 When several PRs are queued, poll them all in one background loop and act on whichever verdict
-lands first, but **merge strictly in ascending number order** so the update-branch dance is
-predictable.
+lands first, but **merge strictly in ascending number order** so the queue order is predictable.
 
 On exit `3`, or a timeout: open the run URL (or `gh run list --workflow=claude-review.yml
 --limit 5`) and read the failing job. Known stalls: the workflow triggers only on `opened`,
@@ -402,14 +393,14 @@ All four must hold, per `design/COMMIT-PR-RULES.md` §19.1:
 Then:
 
 - `draft=true` -> `gh pr ready <N>` first (`gh pr merge` refuses drafts).
-- `state=BEHIND` -> `update-branch` (Step 1.3) and go back to Step 2; the merge commit re-runs the bot.
 - `state=BLOCKED` with checks still running -> `gh pr checks <N> --watch`, then merge.
 - otherwise, **settle the merge method before running any merge fence** — the tag check and the
   boundary decision come first, so a top-down reader cannot merge ahead of them:
 
-  **A PR carrying a phase or sub-phase tag always takes `--merge`**, never
-  `--squash`: squashing rewrites the head the tag points at, so the tag is left
-  on a commit that is not reachable from `master` (COMMIT-PR-RULES.md steps 6-7).
+  **A PR carrying a phase or sub-phase tag always takes `--admin --merge`**, never
+  the queue: the queue squashes, which rewrites the head the tag points at, so the
+  tag is left on a commit that is not reachable from `master` (COMMIT-PR-RULES.md
+  steps 6-7).
   Check for a tag on the head:
   ```bash
   HEAD_OID=$(gh pr view <N> --json headRefOid --jq .headRefOid)
@@ -420,14 +411,14 @@ Then:
   # before a `reset --hard`, and one of those on the head is not a phase tag.
   git ls-remote --tags origin \
     | grep -E "^$HEAD_OID[[:space:]]+refs/tags/phase-" \
-    && echo "tagged -> use --merge"
+    && echo "tagged -> use --admin --merge"
   ```
   **Phase-boundary PR with no tag on its head -> do not merge yet (#1029).** The probe above only
   detects a tag that is already pushed; nothing else in this command pushes one, and under the
   port-driver's §3b ordering the tag goes on immediately before the merge. The question only
   arises for a `phase/*` or `prep-*` head (#1040; the head name is the `headRefName` Step 1
   recorded). `prep-*` is included because the `prep-ci` placeholder grows at phase boundaries
-  (0.5p, 4, 11 per playbook §19.1) and a tagged `prep-ci` PR is exactly what §3b's `--merge`
+  (0.5p, 4, 11 per playbook §19.1) and a tagged `prep-ci` PR is exactly what the merge-commit
   rule exists for. A `chore/*`, `rules-*`, contributor or Dependabot PR is never a phase
   boundary, so for those skip this paragraph rather than stopping on a question that has no
   answer. For a `phase/*` or `prep-*` head, decide whether this PR closes a phase or
@@ -436,29 +427,35 @@ Then:
   sub-split tables and the PR body), exactly as §3b does. If it does and the probe found no
   `phase-*` tag, run the §3b tag block from `.claude/skills/port-driver/SKILL.md` verbatim —
   `git fetch origin pull/<N>/head`, tag the `headRefOid`, both pre-push verifications, then
-  `git push origin <tag>` (the named ref, never `--tags`) — and only then merge with `--merge`.
+  `git push origin <tag>` (the named ref, never `--tags`) — and only then merge with
+  `--admin --merge`.
   Merging it untagged silently skips §19.1's phase-boundary gate item. If a `phase/*` or `prep-*` PR cannot be
   placed in the plan, that is ambiguous: **Hard stop** with `Held for human review`.
 
-  Then merge. Multi-commit PR landing as one logical change:
+  Then hand it to the merge queue and wait for it to land:
   ```bash
-  # Same invocation as the merge: shell state does not survive between blocks.
-  # Fails safe -- an empty/errored probe is != "false", so the flag is omitted.
-  [ "$(gh pr view <N> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
-    && DEL=--delete-branch || DEL=
-  gh pr merge <N> --squash $DEL
+  gh pr merge <N>
+  sleep 15   # the entry takes a moment to show up
+  for i in $(seq 1 180); do   # up to 90 min: the queue's 60 min check timeout plus entries ahead
+    S=$(gh api graphql -F n=<N> -f query='query($n:Int!){repository(owner:"open-astro",name:"openastro-ara"){pullRequest(number:$n){state isInMergeQueue autoMergeRequest{enabledAt}}}}' \
+      --jq '.data.repository.pullRequest | "\(.state) \(.isInMergeQueue) \(.autoMergeRequest != null)"')
+    case "$S" in
+      "MERGED "*) echo merged; break ;;
+      "OPEN false false"|"CLOSED "*) echo "left the queue: $S"; break ;;
+    esac
+    sleep 30
+  done
   ```
-  When per-commit granularity matters (§19.1), or the PR carries a phase tag (below):
-  ```bash
-  # Same invocation as the merge: shell state does not survive between blocks.
-  # Fails safe -- an empty/errored probe is != "false", so the flag is omitted.
-  [ "$(gh pr view <N> --json isCrossRepository --jq .isCrossRepository)" = "false" ] \
-    && DEL=--delete-branch || DEL=
-  gh pr merge <N> --merge $DEL
-  ```
-  Confirm `state=MERGED` afterwards. `--delete-branch` removes an `origin` head branch in the same
-  step; a fork head belongs to the contributor and is never deleted from here (`isCrossRepository`
-  true -> omit `--delete-branch`; the port-driver's §3b carries the same rule, #1031).
+  Take no merge method and no `--delete-branch`: the queue squashes everything, `gh` rejects `-d`
+  on a queue branch, and the repo's delete-on-merge setting removes a same-repo head and leaves a
+  fork head alone (#1031). Anything other than `merged` means it did not land. `left the queue`
+  is a real failure against the latest master or a queue timeout: read the run (`gh run list
+  --event merge_group --limit 5`), fix it in the PR and go back to Step 2. Do not push to a queued
+  PR unless you mean to pull it: a push drops it from the queue.
+
+  `--admin` bypasses the queue and merges directly, and needs a method flag:
+  `gh pr merge <N> --admin --squash`. Use it only for a tagged PR (`--merge`, above) or with
+  explicit approval from the maintainer.
 
 If any gate condition is ambiguous, post `Held for human review @joeytroy — <reason>` and treat it
 as a **Hard stop** for that PR.
@@ -472,8 +469,8 @@ loop at invocation time and can interrupt at any round. The guardrails that keep
 ones above: every fork input validated, every finding fixed in-PR rather than waived, every adopted
 contributor diff read in full, and the **Hard stops** below, which override this authorization.
 
-After a merge, every remaining PR in the queue is now behind master: run Step 1.3 on the **next**
-PR right away so its refresh round starts while you tidy up.
+After a merge, run the Step 1.3 conflict check on the **next** PR right away: the merge may have
+landed something that conflicts with it.
 
 **Contributor pushes during the loop are read, not just merged.** Whenever a head moves between the
 verdict you acted on and the merge, diff it against the last reviewed head (`git diff
@@ -497,17 +494,16 @@ The loop ends only when every PR is merged or a **Hard stop** below applies. In 
   Do not build the server or the client for it.
 - **A bot round with new findings** is the normal case, not a reason to report back. Fix, run the
   step 5 gates, push, poll, repeat. Report only in the wrap-up, or when a hard stop is hit.
-- **Waiting is never a stopping point.** Every wait (step 5 gates, verdict poll, CI checks,
-  update-branch) runs as ONE background chain that continues into the next action on its own:
-  `run_gates && push && poll` for a fix round, `update-branch && poll && merge` for a refresh.
+- **Waiting is never a stopping point.** Every wait (step 5 gates, verdict poll, CI checks, the
+  merge queue) runs as ONE background chain that continues into the next action on its own:
+  `run_gates && push && poll` for a fix round, `poll && merge` once it is quiet.
   Never end the turn with "I'll push when the build finishes"; chain it. Every poll exit other than
-  a verdict is non-zero (Step 2), so `poll && merge` cannot merge on an empty verdict; a refresh
+  a verdict is non-zero (Step 2), so `poll && merge` cannot merge on an empty verdict; a later
   verdict can still carry new Defects, so the merge half gates on the printed verdict's **last**
   line (the prompt defines the sign-off as the last line, and a review can quote either string in
   its body) — with `poll` = the Step 2 block saved to a file:
-  `V=$(mktemp); bash poll.sh > "$V" && [ "$(sed -e 's/[[:space:]]*$//' "$V" | grep -v '^$' | tail -n 1)" = "✅ Approved" ] && { [ "$(gh pr view <N> --json isCrossRepository --jq .isCrossRepository)" = "false" ] && DEL=--delete-branch || DEL=; gh pr merge <N> --squash $DEL; }`
-  (the fork probe sits inside the same chain so an unset `$DEL` cannot silently drop the flag)
-  (`--merge` instead when the PR carries a phase tag, as above — and a phase-boundary PR must be tagged per Step 4 before this line runs).
+  `V=$(mktemp); bash poll.sh > "$V" && [ "$(sed -e 's/[[:space:]]*$//' "$V" | grep -v '^$' | tail -n 1)" = "✅ Approved" ] && gh pr merge <N>`
+  (`--admin --merge` instead when the PR carries a phase tag, as above — and a phase-boundary PR must be tagged per Step 4 before this line runs).
 - **A Defect you disagree with** is still fixed or wired into the skill/docs when there is any
   reasonable change that satisfies it. Only a Defect that would require a wrong or unsafe change
   becomes a hard stop. A Note you disagree with is a wrap-up line, not a change.
@@ -551,6 +547,6 @@ loop (a fix that introduced the next finding), and what probe would have caught 
 push. If the answer repeats across PRs, the fix belongs in this file's "Prove it before you push"
 list or in `design/COMMIT-PR-RULES.md`, in the same session.
 
-Then a single line naming anything the next session should know (e.g. an `update-branch` still
-running on a PR outside the list). Update memory only if the loop mechanics themselves changed (new
+Then a single line naming anything the next session should know (e.g. a PR still sitting in the
+merge queue). Update memory only if the loop mechanics themselves changed (new
 bot login, new label, new stall trick); the per-PR outcome does not belong in memory.

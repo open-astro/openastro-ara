@@ -139,6 +139,7 @@ GITHUB_RULES = {
     ".github/workflows/claude-review.yml": NONE,
     ".github/workflows/codeql.yml": NONE,
     ".github/workflows/label-trusted-authors.yml": NONE,
+    ".github/workflows/merge-queue.yml": NONE,
     ".github/dependabot.yml": NONE,
     ".github/FUNDING.yml": NONE,
     ".github/pull_request_template.md": NONE,

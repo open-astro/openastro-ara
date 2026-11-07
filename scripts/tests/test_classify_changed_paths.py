@@ -257,6 +257,7 @@ class ClassifyTest(unittest.TestCase):
             ".github/workflows/claude-review.yml",
             ".github/workflows/codeql.yml",
             ".github/workflows/label-trusted-authors.yml",
+            ".github/workflows/merge-queue.yml",
             ".github/dependabot.yml",
             ".github/FUNDING.yml",
             ".github/pull_request_template.md",
