@@ -15,7 +15,7 @@ class EquipmentGlyph extends StatelessWidget {
   /// A filter wheel: round housing with the motor box below, five filter holes.
   const EquipmentGlyph.filterWheel({super.key, this.size = 28, required this.color}) : _paint = _filterWheel;
 
-  /// A flat panel seen face on: a frame round a lit panel.
+  /// A flat panel seen face on: the round lit panel on the tube's rim, hinge on top.
   const EquipmentGlyph.flatPanel({super.key, this.size = 28, required this.color}) : _paint = _flatPanel;
 
   /// An observatory dome on its wall, with the shutter slit open.
@@ -70,12 +70,16 @@ class EquipmentGlyph extends StatelessWidget {
 
   static void _flatPanel(Canvas c, Size s, Paint stroke, Paint fill) {
     final u = s.width / 24;
-    final frame = Path()
+    // Panels are round, the size of the dew shield: the lit panel face on,
+    // the tube's rim as a thin ring outside it, the cover's hinge on top.
+    final centre = Offset(12 * u, 13 * u);
+    final rim = Path()
       ..fillType = PathFillType.evenOdd
-      ..addRect(Rect.fromLTRB(3 * u, 5 * u, 21 * u, 19 * u))
-      ..addRect(Rect.fromLTRB(5 * u, 7 * u, 19 * u, 17 * u));
-    c.drawPath(frame, fill);
-    c.drawRect(Rect.fromLTRB(7 * u, 9 * u, 17 * u, 15 * u), fill);
+      ..addOval(Rect.fromCircle(center: centre, radius: 10 * u))
+      ..addOval(Rect.fromCircle(center: centre, radius: 8.6 * u));
+    c.drawPath(rim, fill);
+    c.drawCircle(centre, 7 * u, fill);
+    c.drawRRect(RRect.fromLTRBR(9.5 * u, 1.5 * u, 14.5 * u, 4.1 * u, Radius.circular(0.8 * u)), fill);
   }
 
   static void _dome(Canvas c, Size s, Paint stroke, Paint fill) {

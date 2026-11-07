@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flat Panel Icon</title>
+<style>
+  /* Layout: options as columns, each shown in the top bar, a Settings row, the chip size and large.
+     Single dark look on purpose: DESIGN.md tokens, as the other design/preview mocks. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+    --ok: #4CAF50; --info: #42A5F5; --sel: #1976D2; --tile: #383838; --warn: #FFB300;
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys);
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+  body.night { filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(.75); }
+  .page { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 80ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .opt { border: 1px solid var(--border); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-width: 0; background: var(--bg); }
+  .opt.now { border-style: dashed; }
+  .opt h2 { font-size: 15px; margin: 0; }
+  .opt p { margin: 0; color: var(--text2); font-size: 13px; }
+  .big { display: grid; place-items: center; height: 120px; background: #111; border-radius: 10px; }
+  .strip { display: flex; align-items: center; gap: 14px; height: 48px; padding: 0 12px; border-radius: 10px; background: rgba(26,26,26,.9); border: 1px solid #2a2a2a; overflow: hidden; }
+  .chip { position: relative; display: inline-grid; place-items: center; }
+  .chip i { position: absolute; right: -3px; top: -2px; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .chip.hot { outline: 1.5px solid var(--sel); outline-offset: 4px; border-radius: 6px; }
+  .row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 12px; border-radius: 8px; background: var(--tile); font-size: 14px; }
+  .row span { flex: 1; } .row small { color: var(--text2); }
+  .pick { align-self: flex-start; }
+  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--warn); color: var(--warn); margin-left: 6px; vertical-align: 2px; }
+  svg { display: block; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <h1>Flat panel icon</h1>
+  <p class="note">The flat panel's icon today is a square frame round a square panel. Real panels are round, the size of the scope's dew shield, so every option below is round. Each one is drawn on the same 24-unit grid as the app's other device glyphs and shown in the top bar beside them (with its status dot), at 20 pt in a Settings row, and large. Option A matches the drawing in the new Flat panel window.</p>
+  <div class="controls">
+    <span class="lbl">View</span>
+    <div class="seg" role="group" aria-label="View" id="view">
+      <button aria-pressed="true" data-v="day">Normal</button>
+      <button aria-pressed="false" data-v="night">Night (red)</button>
+    </div>
+  </div>
+  <div class="grid" id="grid"></div>
+</div>
+
+<script>
+(() => {
+  const C = 'currentColor';
+  // Neighbours in the bar, translated from lib/widgets/equipment/equipment_glyphs.dart.
+  const holes = [0,1,2,3,4].map(i => { const a = -Math.PI/2 + i*2*Math.PI/5; return [12+6*Math.cos(a), 11+6*Math.sin(a)]; });
+  const ring = (cx, cy, r) => `M${cx-r} ${cy}a${r} ${r} 0 1 0 ${2*r} 0a${r} ${r} 0 1 0 ${-2*r} 0Z`;
+  const filterWheel = `<path fill-rule="evenodd" fill="${C}" d="${ring(12,11,10.5)} M8 17h8v6.5h-8Z ${holes.map(([x,y]) => ring(x,y,2.9)).join(' ')} ${ring(12,11,0.9)}"/>`;
+  const dome = `<path fill-rule="evenodd" fill="${C}" d="M3 12A9 9 0 0 1 21 12V14H3Z M11 5.1V12H8.2A7 7 0 0 1 11 5.1Z"/><rect x="2" y="16" width="20" height="4" fill="${C}"/>`;
+  const opts = [
+    { id: 'now', name: 'Today', note: 'A square frame round a square panel. Panels are not square.',
+      svg: `<path fill-rule="evenodd" fill="${C}" d="M3 5h18v14H3Z M5 7h14v10H5Z"/><rect x="7" y="9" width="10" height="6" fill="${C}"/>` },
+    { id: 'a', name: 'A · Face on', note: 'A round frame round a lit disc, the panel as you see it on the scope. Matches the window\'s drawing. Simplest; small, it could read as a target.',
+      svg: `<path fill-rule="evenodd" fill="${C}" d="${ring(12,12,10.5)} ${ring(12,12,8.5)}"/><circle cx="12" cy="12" r="6.5" fill="${C}"/>` },
+    { id: 'b', name: 'B · Face on, glowing', note: 'The same round panel with short rays round it, so it reads as a light. Closest to a "light panel" at a glance.',
+      svg: `<circle cx="12" cy="12" r="6" fill="${C}"/>` + [...Array(8)].map((_, i) => { const a = i*Math.PI/4; const x1 = 12+8.5*Math.cos(a), y1 = 12+8.5*Math.sin(a), x2 = 12+11*Math.cos(a), y2 = 12+11*Math.sin(a); return `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="${C}" stroke-width="2" stroke-linecap="round"/>`; }).join('') },
+    { id: 'c', name: 'C · Flip-flat, open', note: 'Side on: the scope\'s tube end, and the round panel swung open on its hinge like a motorised cover. Says "cover" as well as "light"; busier at 20 pt.',
+      svg: `<rect x="2" y="13" width="11" height="8" rx="1" fill="${C}"/><rect x="13" y="12" width="2" height="10" rx=".6" fill="${C}"/><g transform="rotate(-50 15 12)"><rect x="15" y="10.6" width="9" height="2.8" rx="1.2" fill="${C}"/></g><circle cx="15" cy="12" r="1.4" fill="${C}"/>` },
+    { id: 'd', name: 'D · Face on, on the tube', note: 'The round panel face on, with the tube\'s dew shield showing as a thin ring outside it and a small hinge block at the top.',
+      svg: `<path fill-rule="evenodd" fill="${C}" d="${ring(12,13,10)} ${ring(12,13,8.6)}"/><circle cx="12" cy="13" r="7" fill="${C}"/><rect x="9.5" y="1.5" width="5" height="2.6" rx=".8" fill="${C}"/>` },
+  ];
+  const icon = (svg, px) => `<svg width="${px}" height="${px}" viewBox="0 0 24 24" aria-hidden="true" style="color:var(--text)">${svg}</svg>`;
+  const chip = (svg, hot) => `<span class="chip${hot ? ' hot' : ''}">${icon(svg, 28)}<i></i></span>`;
+  document.getElementById('grid').innerHTML = opts.map(o => `
+    <section class="opt${o.id === 'now' ? ' now' : ''}" aria-labelledby="h-${o.id}">
+      <h2 id="h-${o.id}">${o.name}${o.id === 'd' ? '<span class="tag">chosen</span>' : ''}</h2>
+      <div class="big" role="img" aria-label="${o.name} icon, large">${icon(o.svg, 96)}</div>
+      <div class="strip" aria-label="Top bar">${chip(filterWheel)}${chip(o.svg, true)}${chip(dome)}</div>
+      <div class="row">${icon(o.svg, 20)}<span>Flat panel</span><small>Flip-Flat</small></div>
+      <p>${o.note}</p>
+    </section>`).join('');
+  document.getElementById('view').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    document.querySelectorAll('#view button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    document.body.classList.toggle('night', b.dataset.v === 'night');
+  });
+})();
+</script>
+</body>
+</html>

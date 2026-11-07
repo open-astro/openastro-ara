@@ -15,6 +15,7 @@ import '../../models/focuser_status.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../models/guider_status.dart';
 import '../../state/equipment/filter_wheel_state.dart';
+import '../../state/equipment/flat_panel_state.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/equipment/rotator_state.dart';
 import '../../state/guider/guider_equipment_state.dart';
@@ -415,6 +416,7 @@ class _OnOff extends StatelessWidget {
     this.labels,
     this.ids = ('on', 'off'),
     this.enabled = true,
+    this.fill = false,
   });
 
   final String id;
@@ -426,6 +428,9 @@ class _OnOff extends StatelessWidget {
   /// False: both segments show the state but take no tap.
   final bool enabled;
 
+  /// True: the two segments share the width they're given.
+  final bool fill;
+
   @override
   Widget build(BuildContext context) => DecoratedBox(
     decoration: BoxDecoration(
@@ -433,18 +438,21 @@ class _OnOff extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
     ),
     child: Row(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
       children: [
         for (final (v, key, word) in [
           (true, ids.$1, labels?.$1 ?? context.l10n.deviceOn),
           (false, ids.$2, labels?.$2 ?? context.l10n.deviceOff),
         ])
-          SimpleSegment(
-            key: Key('$id-$key'),
-            label: word,
-            selected: on == v,
-            radius: 8,
-            onTap: on == v || !enabled ? null : () => onChanged(v),
+          Flexible(
+            fit: fill ? FlexFit.tight : FlexFit.loose,
+            child: SimpleSegment(
+              key: Key('$id-$key'),
+              label: word,
+              selected: on == v,
+              radius: 8,
+              onTap: on == v || !enabled ? null : () => onChanged(v),
+            ),
           ),
       ],
     ),
@@ -2672,4 +2680,412 @@ class _SimpleFilterWheelWindowState
       return false;
     }
   }
+}
+
+/// The flat panel's window: the cover (Open / Closed), the light (On / Off)
+/// and its brightness, with a drawing of the panel face beside them. Only
+/// the parts the panel has show. Auto-brightness, auto-flats and the
+/// safety policies stay in the full UI.
+class SimpleFlatPanelWindow extends ConsumerStatefulWidget {
+  const SimpleFlatPanelWindow({super.key, this.inSettings = false});
+
+  /// In Settings the window ends with the panel's versions.
+  final bool inSettings;
+
+  @override
+  ConsumerState<SimpleFlatPanelWindow> createState() =>
+      _SimpleFlatPanelWindowState();
+}
+
+class _SimpleFlatPanelWindowState extends ConsumerState<SimpleFlatPanelWindow> {
+  /// The light asked for, while its command is on its way, so the segment
+  /// moves under the finger (the light has no moving state to poll).
+  bool? _pendingLight;
+
+  /// The brightness under the finger, then sent, until the command lands.
+  int? _level;
+
+  /// A command is on its way: a second ask says busy and leaves
+  /// [_pendingLight] and [_level] to the first.
+  bool _applying = false;
+
+  /// A change asked for while a plan runs: the window asks first.
+  ({bool? openCover, bool? lightOn, int? brightness})? _asking;
+
+  /// The panel face's size beside the rows, at most.
+  static const double _face = 140;
+
+  /// The narrowest the rows go beside the face (both segments' words whole).
+  static const double _rowsMin = 176;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final s = ref.watch(flatPanelProvider).value;
+    final children = <Widget>[
+      SimpleDeviceHeader(type: l10n.shellFlatPanel, status: s),
+    ];
+    if (s == null || !s.isConnected) {
+      children.add(
+        Text(
+          s?.isConnecting ?? false
+              ? l10n.deviceConnecting
+              : l10n.deviceNotConnected,
+          style: AraText.caption,
+        ),
+      );
+    } else {
+      // Watched, so it's known by the time a control is used.
+      final planRunning =
+          ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
+      final asking = _asking != null;
+      void send({bool? openCover, bool? lightOn, int? brightness}) =>
+          planRunning
+          ? setState(
+              () => _asking = (
+                openCover: openCover,
+                lightOn: lightOn,
+                brightness: brightness,
+              ),
+            )
+          : _apply(
+              openCover: openCover,
+              lightOn: lightOn,
+              brightness: brightness,
+            );
+      final lightOn = _pendingLight ?? s.lightOn;
+      final max = s.maxBrightness;
+      final level = (_level ?? s.brightness).clamp(0, max);
+      // Each row's label over its segments, a state beside the label (blinking
+      // green Moving…, blue Warming up…) while the segments stay, locked, so
+      // the window keeps its size.
+      Widget row(String label, Widget? state, Widget control) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: AraSpace.s4,
+        children: [
+          Row(
+            spacing: AraSpace.s8,
+            children: [
+              Text(label, style: kSimpleText),
+              if (state != null) Flexible(child: state),
+            ],
+          ),
+          control,
+        ],
+      );
+      final rows = <Widget>[
+        if (s.hasCover)
+          row(
+            l10n.deviceCover,
+            // Moving is working: blinking green (DESIGN.md status rule). The
+            // cover is one motor, so neither segment takes a tap meanwhile.
+            s.isMoving
+                ? StatusBlink(
+                    on: true,
+                    child: Text(
+                      l10n.deviceMoving,
+                      overflow: TextOverflow.ellipsis,
+                      style: kSimpleText.copyWith(
+                        color: AraColors.accentConnected,
+                      ),
+                    ),
+                  )
+                : null,
+            _OnOff(
+              id: 'simple-flat-cover',
+              ids: ('open', 'closed'),
+              labels: (l10n.deviceOpen, l10n.deviceClosed),
+              on: s.coverOpen,
+              enabled: !asking && !s.isMoving,
+              fill: true,
+              onChanged: (open) => send(openCover: open),
+            ),
+          ),
+        if (s.hasCalibrator)
+          row(
+            l10n.deviceLight,
+            // Warming up is a change between two states: blue (status rule).
+            s.lightWarming
+                ? Text(
+                    l10n.deviceWarmingUp,
+                    overflow: TextOverflow.ellipsis,
+                    style: kSimpleText.copyWith(color: AraColors.accentInfo),
+                  )
+                : null,
+            _OnOff(
+              id: 'simple-flat-light',
+              on: lightOn,
+              enabled: !asking && !_applying && !s.lightWarming,
+              fill: true,
+              onChanged: (on) => send(lightOn: on),
+            ),
+          ),
+      ];
+      children.add(
+        LayoutBuilder(
+          builder: (context, box) {
+            // As big as the rows leave room for, up to 140 pt; under 96 pt
+            // (a narrow window, large text) it gives way.
+            final face = math.min(
+              _face,
+              box.maxWidth -
+                  AraSpace.s12 -
+                  MediaQuery.textScalerOf(context).scale(_rowsMin),
+            );
+            final column = Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: AraSpace.s8,
+              children: rows,
+            );
+            return face < 96
+                ? column
+                : Row(
+                    spacing: AraSpace.s12,
+                    children: [
+                      Expanded(child: column),
+                      // Says nothing the rows don't, so screen readers skip it.
+                      ExcludeSemantics(
+                        child: _FlatPanelFace(
+                          key: const Key('simple-flat-face'),
+                          size: face,
+                          hasCover: s.hasCover,
+                          cover: s.isMoving ? 0.5 : (s.coverOpen ? 1 : 0),
+                          glow: !s.hasCalibrator || !lightOn
+                              ? 0
+                              : s.lightWarming
+                              ? 0.25
+                              : max == 0
+                              ? 1
+                              : 0.15 + 0.85 * level / max,
+                        ),
+                      ),
+                    ],
+                  );
+          },
+        ),
+      );
+      if (_asking != null) {
+        final ask = _asking!;
+        children.add(
+          simpleWindowConfirm(
+            question: l10n.devicePlanRunningChangeFlatPanel,
+            confirm: l10n.deviceChangeAnyway,
+            onCancel: () => setState(() {
+              _asking = null;
+              _level = null;
+            }),
+            onConfirm: () {
+              setState(() => _asking = null);
+              _apply(
+                openCover: ask.openCover,
+                lightOn: ask.lightOn,
+                brightness: ask.brightness,
+              );
+            },
+          ),
+        );
+      }
+      if (s.hasCalibrator) {
+        children.addAll([
+          Text(l10n.deviceBrightness, style: kSimpleText),
+          Row(
+            children: [
+              Expanded(
+                child: Slider(
+                  key: const Key('simple-flat-brightness'),
+                  value: level.toDouble(),
+                  // Slider needs max > min: held at 1 and disabled until the
+                  // panel reports its range.
+                  max: (max > 0 ? max : 1).toDouble(),
+                  semanticFormatterCallback: (v) =>
+                      max == 0 ? '—' : _percent(v.round(), max),
+                  onChanged: max == 0 || asking || _applying
+                      ? null
+                      : (v) => setState(() => _level = v.round()),
+                  // Sent on release only: each change is a blocking round
+                  // trip to the panel.
+                  onChangeEnd: max == 0 || asking || _applying
+                      ? null
+                      : (v) => send(brightness: v.round()),
+                ),
+              ),
+              Text(
+                max == 0 ? '—' : _percent(level, max),
+                style: kSimpleText.copyWith(
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+        ]);
+      }
+    }
+    if (widget.inSettings) {
+      children.addAll(
+        _versions(context, ref.watch(deviceDriverProvider('flatdevice')).value),
+      );
+    }
+    return Column(
+      key: const Key('simple-device-flat'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s4,
+      children: children,
+    );
+  }
+
+  /// A level as a percent of the panel's maximum ("50 %"); anything above
+  /// 0 reads at least 1 %, so a lit panel never reads 0 %. The panel is still
+  /// sent its own units.
+  static String _percent(int level, int max) {
+    assert(max > 0);
+    return '${level == 0 ? 0 : math.max(1, (level * 100 / max).round())} %';
+  }
+
+  Future<void> _apply({bool? openCover, bool? lightOn, int? brightness}) async {
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.flatPanel);
+    final l10n = context.l10n;
+    if (_applying) return _sayBusy(ref, l10n);
+    _applying = true;
+    // A level alone sets the light too: above 0 on, 0 off (as the daemon does).
+    final light = lightOn ?? (brightness == null ? null : brightness > 0);
+    setState(() {
+      _pendingLight = light;
+      if (brightness != null) _level = brightness;
+    });
+    try {
+      final notifier = ref.read(flatPanelProvider.notifier);
+      final performed = await notifier.apply(
+        openCover: openCover,
+        lightOn: lightOn,
+        brightness: brightness,
+      );
+      if (!performed) {
+        _sayBusy(ref, l10n);
+      } else if (!notifier.lastApplyConfirmed) {
+        notify(
+          l10n.deviceFlatPanelUnconfirmed,
+          detail: l10n.deviceFlatPanelUnconfirmedDetail,
+          error: true,
+        );
+      }
+    } catch (e) {
+      notify(
+        l10n.deviceCouldntChangeFlatPanel,
+        detail: describeEquipmentError(e),
+        error: true,
+      );
+    } finally {
+      // The panel's own reading takes over again, landed or not.
+      _applying = false;
+      if (mounted) {
+        setState(() {
+          _pendingLight = null;
+          _level = null;
+        });
+      }
+    }
+  }
+}
+
+/// The panel face as it sits on the scope: two lids that slide apart as the
+/// cover opens ([cover] 0 closed to 1 open), over a face that lights up with
+/// the brightness ([glow] 0 dark to 1 full).
+class _FlatPanelFace extends StatelessWidget {
+  const _FlatPanelFace({
+    super.key,
+    required this.size,
+    required this.hasCover,
+    required this.cover,
+    required this.glow,
+  });
+
+  final double size;
+  final bool hasCover;
+  final double cover;
+  final double glow;
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    tween: Tween(end: cover),
+    duration: MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 600),
+    curve: Curves.easeInOut,
+    builder: (context, open, _) => CustomPaint(
+      size: Size.square(size),
+      painter: _FlatPanelFacePainter(
+        open: hasCover ? open : 1,
+        hasCover: hasCover,
+        glow: glow,
+      ),
+    ),
+  );
+}
+
+class _FlatPanelFacePainter extends CustomPainter {
+  _FlatPanelFacePainter({
+    required this.open,
+    required this.hasCover,
+    required this.glow,
+  });
+
+  final double open;
+  final bool hasCover;
+  final double glow;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = size.shortestSide / 2;
+    final face = Rect.fromCircle(center: c, radius: r - 5);
+    canvas.drawCircle(c, r - 5, Paint()..color = const Color(0xFF111111));
+    if (glow > 0) {
+      canvas.drawCircle(
+        c,
+        r - 5,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [
+              const Color(0xFFFFFBE8).withValues(alpha: glow),
+              const Color(0xFFB8B29A).withValues(alpha: glow),
+            ],
+          ).createShader(face),
+      );
+    }
+    if (hasCover && open < 1) {
+      canvas.save();
+      canvas.clipPath(Path()..addOval(face));
+      final lid = Paint()..color = const Color(0xFF303030);
+      final seam = Paint()
+        ..color = const Color(0xFF242424)
+        ..strokeWidth = 1;
+      final shift = face.width / 2 * open;
+      for (final (left, dir) in [(face.left, -1.0), (face.center.dx, 1.0)]) {
+        final half = Rect.fromLTWH(
+          left + dir * shift,
+          face.top,
+          face.width / 2,
+          face.height,
+        );
+        canvas.drawRect(half, lid);
+        // Ribs across each lid, so the two halves read as hinged panels.
+        for (var x = half.left + 6; x < half.right; x += 6) {
+          canvas.drawLine(Offset(x, half.top), Offset(x, half.bottom), seam);
+        }
+      }
+      canvas.restore();
+    }
+    canvas.drawCircle(
+      c,
+      r - 3,
+      Paint()
+        ..color = AraColors.border
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_FlatPanelFacePainter old) =>
+      old.open != open || old.hasCover != hasCover || old.glow != glow;
 }
