@@ -2688,7 +2688,7 @@ String _simpleLevel(double v) {
       : r.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '');
 }
 
-/// A port the rig can't set, as Settings › Rig lists it: On / Off for an
+/// A port the rig can't set, as Settings › Switches lists it: On / Off for an
 /// on/off reading, else its value.
 String simpleSwitchReading(AppLocalizations l10n, SwitchPort p) => p.isBoolean
     ? (p.value >= 0.5 ? l10n.deviceOn : l10n.deviceOff)
@@ -2768,7 +2768,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
   static double _round(SwitchPort p, double v) =>
       snapToSwitchStep(p, v) ??
       (p.max - p.min >= 10
-          ? v.roundToDouble()
+          ? (p.min + (v - p.min).roundToDouble()).clamp(p.min, p.max)
           : (v * 100).roundToDouble() / 100);
 
 

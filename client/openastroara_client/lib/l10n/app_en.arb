@@ -287,7 +287,7 @@
   },
   "deviceSensors": "Sensors",
   "@deviceSensors": {
-    "description": "Settings › Rig: the title over a switch device's readings (ports that can't be set: voltage, temperature, a cover state)"
+    "description": "Settings › Switches: the title over a switch device's readings (ports that can't be set: voltage, temperature, a cover state)"
   },
   "deviceNothingToSwitch": "Nothing to switch",
   "@deviceNothingToSwitch": {

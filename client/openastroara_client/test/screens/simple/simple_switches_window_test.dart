@@ -161,6 +161,17 @@ void main() {
     expect(rig.writes, ['box/0=40.0', 'box/1=8.5']);
   });
 
+  testWidgets("a port with no step rounds on its own grid and never past max", (tester) async {
+    final (_, rig) = await _pump(tester, [
+      _box(ports: [_port(0, 'A', 1, min: 0.5, max: 20.5), _port(1, 'B', 1, max: 99.6)]),
+    ]);
+    tester.widget<Slider>(_slider('box-0')).onChangeEnd!(3.2);
+    await tester.pumpAndSettle();
+    tester.widget<Slider>(_slider('box-1')).onChangeEnd!(99.6);
+    await tester.pumpAndSettle();
+    expect(rig.writes, ['box/0=3.5', 'box/1=99.6']);
+  });
+
   testWidgets("in Settings each device ends with its readings under Sensors and its versions, like any device", (tester) async {
     await _pump(
       tester,

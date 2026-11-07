@@ -453,7 +453,7 @@ abstract class AppLocalizations {
   /// **'{device} · {count, plural, =1{1 port} other{{count} ports}}'**
   String deviceSwitchPorts(String device, int count);
 
-  /// Settings › Rig: the title over a switch device's readings (ports that can't be set: voltage, temperature, a cover state)
+  /// Settings › Switches: the title over a switch device's readings (ports that can't be set: voltage, temperature, a cover state)
   ///
   /// In en, this message translates to:
   /// **'Sensors'**
