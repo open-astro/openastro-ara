@@ -263,12 +263,18 @@ void main() {
     expect(label.overflow, TextOverflow.ellipsis);
   });
 
-  testWidgets('the filters are one list, each label on the left, like the full UI\'s', (tester) async {
+  testWidgets('the filters are one list, labels lined up on the left and centred as a column', (tester) async {
     await _pump(tester, _wire(), width: 400);
     final first = tester.getRect(_slot(0));
     final second = tester.getRect(_slot(1));
     expect(second.top, greaterThanOrEqualTo(first.bottom), reason: 'one filter a line');
     expect((second.left, second.width), (first.left, first.width), reason: 'all one width');
     expect(tester.widget<SimpleSegment>(_slot(1)).alignment, Alignment.centerLeft);
+    // Labels line up on the left with each other, and the column of them sits centred.
+    Rect label(int p) => tester.getRect(find.descendant(of: _slot(p), matching: find.byType(Text)));
+    expect(label(1).left, label(0).left);
+    final window = tester.getRect(find.byKey(const Key('simple-device-filterwheel')));
+    final widest = [label(0), label(1), label(2)].reduce((a, b) => a.width >= b.width ? a : b);
+    expect(widest.center.dx, moreOrLessEquals(window.center.dx, epsilon: 1));
   });
 }

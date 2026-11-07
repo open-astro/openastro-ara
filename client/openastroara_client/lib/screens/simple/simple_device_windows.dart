@@ -396,7 +396,10 @@ Widget simpleWindowConfirm({
           )
         : Row(
             spacing: AraSpace.s8,
-            children: [Expanded(child: text), ...buttons],
+            children: [
+              Expanded(child: text),
+              ...buttons,
+            ],
           );
   },
 );
@@ -1674,33 +1677,39 @@ class _SimpleFilterWheelWindowState
       children.add(
         w.slots.isEmpty
             ? Text(l10n.deviceNoFilters, style: AraText.caption)
-            : DecoratedBox(
-                decoration: BoxDecoration(
-                  color: AraColors.tileFill,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                // One filter a line, its label on the left, like the full
-                // UI's list.
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (final slot in w.slots)
-                      SimpleSegment(
-                        key: Key('simple-filterwheel-slot-${slot.position}'),
-                        alignment: Alignment.centerLeft,
-                        label: _labelled(slot),
-                        selected: (_sent ?? w.currentSlot) == slot.position,
-                        radius: 8,
-                        onTap:
-                            moving ||
-                                pending != null ||
-                                slot.position == w.currentSlot
-                            ? null
-                            : () => planRunning
-                                  ? setState(() => _asking = slot.position)
-                                  : _change(slot.position),
-                      ),
-                  ],
+            : Center(
+                // As wide as the longest label: the labels are left-justified
+                // and the list sits centred, like the full UI's.
+                child: IntrinsicWidth(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: AraColors.tileFill,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final slot in w.slots)
+                          SimpleSegment(
+                            key: Key(
+                              'simple-filterwheel-slot-${slot.position}',
+                            ),
+                            alignment: Alignment.centerLeft,
+                            label: _labelled(slot),
+                            selected: (_sent ?? w.currentSlot) == slot.position,
+                            radius: 8,
+                            onTap:
+                                moving ||
+                                    pending != null ||
+                                    slot.position == w.currentSlot
+                                ? null
+                                : () => planRunning
+                                      ? setState(() => _asking = slot.position)
+                                      : _change(slot.position),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
       );
