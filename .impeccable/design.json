@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-07T20:22:26+13:00",
+  "generatedAt": "2026-11-07T20:25:08+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -616,6 +616,11 @@
         "name": "immersive-fade",
         "value": "220ms ease-out",
         "purpose": "Simple Mode panels fading out for the immersive view; instant with reduced motion."
+      },
+      {
+        "name": "locked-dim-delay",
+        "value": "300ms, then instant",
+        "purpose": "Switches window: the other ports dim only when the rig takes longer than this to answer a write, so a fast answer doesn't flash the window (#1651)."
       }
     ],
     "breakpoints": [
@@ -641,6 +646,13 @@
         "name": "panel-simple",
         "value": "5px",
         "purpose": "Simple Mode's panels blur the image behind their 90 % scrim; one shared BackdropGroup for all panels (AraBlur.panel in code)."
+      }
+    ],
+    "opacity": [
+      {
+        "name": "locked",
+        "value": "0.38",
+        "purpose": "Switches window: ports locked behind a change still on its way, past the 300 ms delay (AraOpacity.locked in code; Material's disabled opacity)."
       }
     ]
   },
