@@ -1946,8 +1946,9 @@ class _SimpleGuideGainSliderState extends ConsumerState<SimpleGuideGainSlider> {
   }
 }
 
-/// A rotator angle as the window shows it: one decimal and a degree sign.
-String simpleDegrees(double a) => '${a.toStringAsFixed(1)}°';
+/// A rotator angle as the window shows it: whole degrees, as the dial sets
+/// them (user, 2026-11-07; the full UI keeps the decimals), 359.6 reading 0°.
+String simpleDegrees(double a) => '${a.round() % 360}°';
 
 /// The rotator's window: the sky angle big on the left (the mechanical angle
 /// under it when they differ) and a dial on the right whose face is the sky
@@ -2155,7 +2156,7 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
                       ),
                       if (sky != null &&
                           mech != null &&
-                          (_norm(sky - mech) + 0.05) % 360 >= 0.1) ...[
+                          simpleDegrees(sky) != simpleDegrees(mech)) ...[
                         const SizedBox(height: AraSpace.s8),
                         Text(
                           l10n.deviceMechanicalAngle,
@@ -2300,7 +2301,7 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
 }
 
 /// Sync under the rotator's dial, full width, carrying the target ("Sync to
-/// 75.0°"); dimmed and taking no tap with no target.
+/// 75°"); dimmed and taking no tap with no target.
 class _RotatorButton extends StatelessWidget {
   const _RotatorButton({super.key, required this.label, required this.onTap});
 

@@ -365,7 +365,7 @@
   },
   "deviceRotateTo": "Rotate to {angle}",
   "@deviceRotateTo": {
-    "description": "Rotator window button: move the rotator to the angle set on the dial, e.g. 'Rotate to 75.0°'",
+    "description": "Rotator window button: move the rotator to the angle set on the dial, e.g. 'Rotate to 75°'",
     "placeholders": {
       "angle": {
         "type": "String"
@@ -378,7 +378,7 @@
   },
   "deviceSyncTo": "Sync to {angle}",
   "@deviceSyncTo": {
-    "description": "Rotator window button: tell the rotator it is at the angle set on the dial, without moving it, e.g. 'Sync to 75.0°'",
+    "description": "Rotator window button: tell the rotator it is at the angle set on the dial, without moving it, e.g. 'Sync to 75°'",
     "placeholders": {
       "angle": {
         "type": "String"

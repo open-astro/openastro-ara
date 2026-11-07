@@ -144,10 +144,22 @@ void main() {
       (tester) async {
     await _pump(tester, _wire());
     expect(find.text('Rotator · Falcon'), findsOneWidget);
-    expect(find.text('92.0°'), findsOneWidget);
-    expect(find.text('88.0°'), findsOneWidget);
-    expect(tester.getRect(_dial).left, greaterThan(tester.getRect(find.text('92.0°')).right));
+    expect(find.text('92°'), findsOneWidget);
+    expect(find.text('88°'), findsOneWidget);
+    expect(tester.getRect(_dial).left, greaterThan(tester.getRect(find.text('92°')).right));
     expect(find.byKey(const Key('simple-rotator-steps')), findsNothing, reason: 'one step: 1°');
+  });
+
+  testWidgets('angles read in whole degrees, as the dial sets them (user, 2026-11-07)', (tester) async {
+    await _pump(tester, _wire(sky: 359.6, mech: 92.4));
+    expect(find.text('0°'), findsOneWidget, reason: '359.6 rounds round to 0');
+    expect(find.text('92°'), findsOneWidget);
+    expect(find.textContaining('.'), findsNothing);
+  });
+
+  testWidgets('a mechanical angle that rounds to the sky angle is not shown', (tester) async {
+    await _pump(tester, _wire(sky: 92.4, mech: 92.3));
+    expect(find.text('Mechanical angle'), findsNothing);
   });
 
   testWidgets('with the mechanical angle the same as the sky angle, only the sky angle shows', (tester) async {
@@ -161,8 +173,8 @@ void main() {
     await _turn(tester, 17.5);
     // Clockwise brings lower numbers under the mark: 17 clicks from 92 is 75.
     expect(r.calls, isEmpty, reason: 'letting go no longer moves it');
-    expect(_goLabel(tester), 'Rotate to 75.0°');
-    expect(find.text('92.0°'), findsOneWidget, reason: 'the reading stays where the rotator is');
+    expect(_goLabel(tester), 'Rotate to 75°');
+    expect(find.text('92°'), findsOneWidget, reason: 'the reading stays where the rotator is');
     await tester.tap(_go);
     await tester.pump();
     expect(r.calls, ['move 75.0 sky']);
@@ -172,9 +184,9 @@ void main() {
   testWidgets('turning on adds to the target; turning back to where it is clears it', (tester) async {
     final (_, r) = await _pump(tester, _wire());
     await _turn(tester, -2.5); // two clicks counter-clockwise: up
-    expect(_goLabel(tester), 'Rotate to 94.0°');
+    expect(_goLabel(tester), 'Rotate to 94°');
     await _turn(tester, -1.5);
-    expect(_goLabel(tester), 'Rotate to 95.0°', reason: 'from the target, not the rotator');
+    expect(_goLabel(tester), 'Rotate to 95°', reason: 'from the target, not the rotator');
     await _turn(tester, 3.5);
     expect(_goLabel(tester), 'Rotate', reason: 'back at 92: nothing to do');
     await tester.tap(_go);
@@ -185,9 +197,9 @@ void main() {
   testWidgets('on a fractional angle, a click out and back clears the target (#1670 re-audit P2)', (tester) async {
     await _pump(tester, _wire(sky: 92.4, mech: 92.4));
     await _turn(tester, -1.5); // one click up: 93
-    expect(_syncLabel(tester), 'Sync to 93.0°');
+    expect(_syncLabel(tester), 'Sync to 93°');
     await _turn(tester, 1.5); // and back
-    expect(_syncLabel(tester), 'Sync', reason: 'back where it is: no 92.0° target to sync to');
+    expect(_syncLabel(tester), 'Sync', reason: 'back where it is: no 92° target to sync to');
   });
 
   testWidgets('Rotate anyway spends the target, as a plain Start does (#1670 re-audit P2)', (tester) async {
@@ -207,7 +219,7 @@ void main() {
     await tester.sendEventToBinding(mouse.hover(tester.getCenter(_dial) + const Offset(60, 0)));
     await tester.sendEventToBinding(mouse.scroll(const Offset(0, -50)));
     await tester.pump();
-    expect(_syncLabel(tester), 'Sync to 93.0°');
+    expect(_syncLabel(tester), 'Sync to 93°');
   });
 
   testWidgets('a two-finger trackpad scroll over the dial sets the target', (tester) async {
@@ -220,7 +232,7 @@ void main() {
     }
     await g.panZoomEnd();
     await tester.pump();
-    expect(_syncLabel(tester), 'Sync to 94.0°', reason: '7 pt a degree');
+    expect(_syncLabel(tester), 'Sync to 94°', reason: '7 pt a degree');
   });
 
   testWidgets('the angle wraps through 0', (tester) async {
@@ -241,10 +253,10 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
-    expect(_goLabel(tester), 'Rotate to 94.0°');
+    expect(_goLabel(tester), 'Rotate to 94°');
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.pump();
-    expect(_goLabel(tester), 'Rotate to 93.0°');
+    expect(_goLabel(tester), 'Rotate to 93°');
     expect(r.calls, isEmpty);
     await tester.tap(_go);
     await tester.pump();
@@ -265,19 +277,19 @@ void main() {
     final (_, r) = await _pump(tester, _wire());
     final node = tester.getSemantics(_dial);
     expect(node.label, contains('Sky angle'));
-    expect(node.value, '92.0°');
+    expect(node.value, '92°');
     node.owner!.performAction(node.id, SemanticsAction.increase);
     await tester.pump();
     expect(r.calls, isEmpty);
-    expect(_goLabel(tester), 'Rotate to 93.0°');
-    expect(tester.getSemantics(_dial).value, '93.0°', reason: 'the dial reads its target');
+    expect(_goLabel(tester), 'Rotate to 93°');
+    expect(tester.getSemantics(_dial).value, '93°', reason: 'the dial reads its target');
   });
 
   testWidgets('Sync tells the rotator it is at the target, without moving it', (tester) async {
     final (_, r) = await _pump(tester, _wire());
     expect(_syncLabel(tester), 'Sync');
     await _turn(tester, 17.5);
-    expect(_syncLabel(tester), 'Sync to 75.0°');
+    expect(_syncLabel(tester), 'Sync to 75°');
     await tester.tap(_sync);
     await tester.pump();
     expect(r.calls, ['sync 75.0']);
@@ -318,7 +330,7 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pump();
     expect(r.calls, isEmpty);
-    expect(_syncLabel(tester), 'Sync to 75.0°', reason: 'Cancel keeps the target');
+    expect(_syncLabel(tester), 'Sync to 75°', reason: 'Cancel keeps the target');
     await tester.tap(_sync);
     await tester.pump();
     await tester.tap(find.text('Sync anyway'));
@@ -352,7 +364,7 @@ void main() {
     await tester.pump();
     r.set(_wire(runtime: 'moving'));
     await tester.pump();
-    expect(find.text('Moving to 75.0°…'), findsOneWidget);
+    expect(find.text('Moving to 75°…'), findsOneWidget);
     final square = tester.widget<SimpleStopSquare>(find.descendant(of: _hub, matching: find.byType(SimpleStopSquare)));
     expect(square.color, AraColors.accentError, reason: 'Start became Stop');
     expect(_goLabel(tester), 'Stop the rotator');
@@ -421,7 +433,7 @@ void main() {
       await g.moveTo(_rim(tester, i * 0.5));
       await tester.pump();
     }
-    expect(_goLabel(tester), 'Rotate to 75.0°');
+    expect(_goLabel(tester), 'Rotate to 75°');
     await g.moveTo(tester.getCenter(_dial) + Offset(tester.getSize(_dial).width, 0));
     await tester.pump();
     await g.up();
@@ -463,6 +475,6 @@ void main() {
     await _pump(tester, _wire(), width: 260);
     expect(tester.takeException(), isNull);
     expect(tester.getRect(_dial).right, lessThanOrEqualTo(260));
-    expect(tester.renderObject<RenderParagraph>(find.text('92.0°')).didExceedMaxLines, isFalse);
+    expect(tester.renderObject<RenderParagraph>(find.text('92°')).didExceedMaxLines, isFalse);
   });
 }

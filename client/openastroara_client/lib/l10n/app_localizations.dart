@@ -567,7 +567,7 @@ abstract class AppLocalizations {
   /// **'Rotate'**
   String get deviceRotate;
 
-  /// Rotator window button: move the rotator to the angle set on the dial, e.g. 'Rotate to 75.0°'
+  /// Rotator window button: move the rotator to the angle set on the dial, e.g. 'Rotate to 75°'
   ///
   /// In en, this message translates to:
   /// **'Rotate to {angle}'**
@@ -579,7 +579,7 @@ abstract class AppLocalizations {
   /// **'Sync'**
   String get deviceSync;
 
-  /// Rotator window button: tell the rotator it is at the angle set on the dial, without moving it, e.g. 'Sync to 75.0°'
+  /// Rotator window button: tell the rotator it is at the angle set on the dial, without moving it, e.g. 'Sync to 75°'
   ///
   /// In en, this message translates to:
   /// **'Sync to {angle}'**
