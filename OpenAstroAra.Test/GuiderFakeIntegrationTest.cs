@@ -69,9 +69,12 @@ namespace OpenAstroAra.Test {
             await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
                 .ConfigureAwait(false);
 
-            // The real client drove the PHD2 JSON-RPC handshake through the fake.
-            var spoke = await WaitUntilAsync(() => fake.ReceivedMethods.Count > 0).ConfigureAwait(false);
-            Assert.That(spoke, Is.True, "the real guider client never opened/queried the fake guider");
+            // The real client drove the PHD2 JSON-RPC handshake through the fake. get_version
+            // always lands first and the profile query follows it, so wait for that query itself:
+            // waiting on "any method" raced it on a slow runner.
+            var spoke = await WaitUntilAsync(() => fake.ReceivedMethods.Any(
+                m => m.StartsWith("get_profile", StringComparison.OrdinalIgnoreCase))).ConfigureAwait(false);
+            Assert.That(spoke, Is.True, "the real guider client never queried the fake guider's profiles");
             Assert.That(fake.ReceivedMethods, Does.Contain("get_profile").IgnoreCase
                 .Or.Contain("get_profiles").IgnoreCase,
                 "the connect handshake should query the guider's profiles");
