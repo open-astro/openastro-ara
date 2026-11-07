@@ -2682,6 +2682,12 @@ abstract class AppLocalizations {
   /// Emergency Stop failed step
   ///
   /// In en, this message translates to:
+  /// **'ROTATOR HALT FAILED — it may still be turning'**
+  String get estopFailRotator;
+
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
   /// **'FLAT PANEL LIGHT-OFF FAILED'**
   String get estopFailFlatPanel;
 

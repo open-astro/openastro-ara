@@ -182,6 +182,24 @@ void main() {
     expect(title, contains('1 sequence run(s) aborted'), reason: 'what worked still follows');
   });
 
+  testWidgets('a rotator that would not halt is called out by name (#1671)', (tester) async {
+    await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true);
+    fake.result = const EmergencyStopResult(
+      alreadyInProgress: false,
+      runsAborted: 0,
+      exposureAborted: true,
+      guidingStopped: true,
+      parkRequested: true,
+      flatPanelLightOff: false,
+      failedRungs: ['halt_rotator'],
+    );
+    await activateWithoutPointer(tester);
+    await activateWithoutPointer(tester);
+    await tester.pumpAndSettle();
+    final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
+    expect(container.read(simpleMessagesProvider).first.title, startsWith('CHECK THE RIG: ROTATOR HALT FAILED'));
+  });
+
   testWidgets('Simple Mode: a stop that went through stays in its pill until closed (user, 2026-11-04: 6 s was too fast)',
       (tester) async {
     await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true, pills: true);
