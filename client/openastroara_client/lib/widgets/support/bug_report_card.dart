@@ -23,7 +23,19 @@ class BugReportCard extends ConsumerStatefulWidget {
   final Future<String?> Function(String dialogTitle, String suggestedName)?
       savePathPicker;
 
-  const BugReportCard({super.key, this.savePathPicker});
+  /// How often a whole-rig bundle's packing is polled (test seam).
+  final Duration pollInterval;
+
+  /// How long packing may take before the card gives up (a night of logs on a
+  /// Pi packs in well under a minute; this only stops a wedged daemon).
+  final Duration packingTimeout;
+
+  const BugReportCard({
+    super.key,
+    this.savePathPicker,
+    this.pollInterval = const Duration(seconds: 1),
+    this.packingTimeout = const Duration(minutes: 15),
+  });
 
   @override
   ConsumerState<BugReportCard> createState() => _BugReportCardState();
@@ -36,18 +48,60 @@ const bugReportSharingModes = <(String wire, String label, String detail)>[
   ('redacted', 'Redact all sensitive items', 'coordinates, serials, hostnames, usernames in paths, private IPs, tokens'),
 ];
 
+/// What the bundle covers: Ara's newest logs only, or the whole rig's logs
+/// (Ara, its NINA layer, AlpacaBridge, the guider, package history and the
+/// journal) written in the range. "Last night" is the default: it is what a
+/// report about a night at the rig needs.
+const bugReportRanges = <(Duration? range, String label)>[
+  (Duration(hours: 24), 'Last night (whole rig)'),
+  (Duration(days: 3), 'Last 3 days (whole rig)'),
+  (Duration(days: 7), 'Last 7 days (whole rig)'),
+  (null, 'Ara logs only'),
+];
+
+/// The disclosure's name for each source the daemon's manifest reports.
+const bugReportSourceLabels = <String, String>{
+  'ara': 'Ara\'s own logs',
+  'ara-nina': 'Ara\'s NINA-layer logs',
+  'alpacabridge': 'AlpacaBridge logs (camera, mount, focuser, wheel)',
+  'guider': 'guider (PHD2) debug and guide logs',
+  'system': 'package install history',
+  'journal': 'system journal (Ara, AlpacaBridge, the guider, the kernel)',
+};
+
 class _BugReportCardState extends ConsumerState<BugReportCard> {
   bool _busy = false;
   // §54.3 — the spec's default is "Include everything"; the user picks before preparing.
   String _mode = 'full';
+  int _rangeIndex = 0;
+  // Bytes read so far while a whole-rig bundle packs; null when not packing.
+  int? _packed;
 
   Future<void> _run() async {
     final api = ref.read(bugReportApiProvider);
     if (api == null) return;
     setState(() => _busy = true);
     try {
-      final prep = await api.prepare(mode: _mode);
+      final range = bugReportRanges[_rangeIndex].$1;
+      var prep = await api.prepare(
+          mode: _mode,
+          since: range == null ? null : DateTime.now().toUtc().subtract(range));
+      // A whole-rig bundle packs in the background on the daemon: poll it.
+      final deadline = DateTime.now().add(widget.packingTimeout);
+      while (prep.isPreparing) {
+        if (!mounted) return;
+        setState(() => _packed = prep.estimatedSizeBytes);
+        if (DateTime.now().isAfter(deadline)) {
+          throw const _PackingFailed('the rig is still packing the logs; try again in a moment');
+        }
+        await Future<void>.delayed(widget.pollInterval);
+        prep = await api.status(prep.preparationId);
+      }
       if (!mounted) return;
+      setState(() => _packed = null);
+      if (prep.isFailed) {
+        throw _PackingFailed(prep.error ?? 'the rig could not pack the logs');
+      }
 
       // PII gate: the user must see what's in the bundle before it's downloaded.
       final proceed = await _showDisclosure(prep);
@@ -79,7 +133,12 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
         SnackBar(content: Text('Bug report failed: ${_friendly(e)}')),
       );
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _packed = null;
+        });
+      }
     }
   }
 
@@ -112,7 +171,8 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
             children: [
             const Text('The bundle contains:'),
             const SizedBox(height: 8),
-            const Text('• Ara\'s recent log files'),
+            if (prep.sources.isEmpty) const Text('• Ara\'s recent log files'),
+            for (final s in prep.sources) Text(_sourceLine(s)),
             Text(switch (prep.sharingMode) {
               'redacted' =>
                 '• your profile with coordinates, serial numbers, hostnames, '
@@ -180,9 +240,35 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                       style: theme.textTheme.titleSmall),
                   const SizedBox(height: 2),
                   Text(
-                    'Bundles Ara logs + your profile + system info into a '
+                    'Bundles the rig\'s logs (Ara, AlpacaBridge, the guider, '
+                    'the system journal) + your profile + system info into a '
                     'ZIP you can attach to a report.',
                     style: theme.textTheme.bodySmall,
+                  ),
+                  if (_packed != null)
+                    Text('Packing the logs on the rig… ${_humanSize(_packed!)} read',
+                        style: theme.textTheme.bodySmall),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text('Covers: ', style: theme.textTheme.bodySmall),
+                      Flexible(
+                        child: DropdownButton<int>(
+                          value: _rangeIndex,
+                          isDense: true,
+                          isExpanded: true,
+                          style: theme.textTheme.bodySmall,
+                          onChanged: _busy ? null : (v) => setState(() => _rangeIndex = v ?? 0),
+                          items: [
+                            for (var i = 0; i < bugReportRanges.length; i++)
+                              DropdownMenuItem(
+                                value: i,
+                                child: Text(bugReportRanges[i].$2, overflow: TextOverflow.ellipsis),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
                   // §54.3 sharing mode: chosen before the bundle is built, so the
@@ -231,6 +317,8 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
 
   // Short, user-facing message — don't leak Dio's verbose toString (URLs etc.).
   static String _friendly(Object e) {
+    // The card's own failures (packing failed or timed out) already read as a sentence for the user.
+    if (e is _PackingFailed) return e.message;
     if (e is DioException) {
       return switch (e.type) {
         DioExceptionType.connectionTimeout ||
@@ -247,10 +335,29 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
     return 'an unexpected error occurred.';
   }
 
+  // "• AlpacaBridge logs (camera, mount, focuser, wheel): 2 files, 31.2 MB, cut to
+  // the newest part" — or why a source is not there.
+  static String _sourceLine(BugReportSourceSummary s) {
+    final label = bugReportSourceLabels[s.source] ?? s.source;
+    if (s.files == 0) {
+      return '• $label: none${s.note == null ? '' : ' (${s.note})'}';
+    }
+    final files = s.files == 1 ? '1 file' : '${s.files} files';
+    final cut = s.truncated ? ', the largest cut to their newest part' : '';
+    final note = s.note == null ? '' : ' (${s.note})';
+    return '• $label: $files, ${_humanSize(s.bytes)}$cut$note';
+  }
+
   static String _humanSize(int bytes) {
     if (bytes < 1024) return '$bytes B';
     final kb = bytes / 1024;
     if (kb < 1024) return '${kb.toStringAsFixed(0)} KB';
     return '${(kb / 1024).toStringAsFixed(1)} MB';
   }
+}
+
+/// A whole-rig bundle that failed or timed out on the daemon: [message] is shown as is.
+class _PackingFailed implements Exception {
+  final String message;
+  const _PackingFailed(this.message);
 }

@@ -41,4 +41,23 @@ void main() {
       );
     });
   });
+
+  test('a whole-rig preparation carries its sources, range and error', () {
+    final p = BugReportPreparation.fromJson({
+      'preparation_id': 'x',
+      'status': 'ready',
+      'estimated_size_bytes': 10,
+      'since_utc': '2026-10-28T03:00:00Z',
+      'sources': [
+        {'source': 'guider', 'files': 3, 'bytes': 99, 'truncated': true, 'note': null},
+      ],
+      'error': null,
+    });
+    expect(p.sources.single.source, 'guider');
+    expect(p.sources.single.truncated, isTrue);
+    expect(p.sinceUtc, DateTime.utc(2026, 10, 28, 3));
+    expect(p.isPreparing, isFalse);
+    expect(BugReportPreparation.fromJson({'preparation_id': 'y', 'status': 'preparing'}).isPreparing, isTrue);
+    expect(BugReportPreparation.fromJson({'preparation_id': 'z', 'status': 'failed', 'error': 'disk'}).error, 'disk');
+  });
 }
