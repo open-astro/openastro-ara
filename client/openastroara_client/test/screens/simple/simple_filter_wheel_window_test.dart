@@ -262,4 +262,13 @@ void main() {
     final label = tester.widget<Text>(find.descendant(of: _slot(1), matching: find.byType(Text)));
     expect(label.overflow, TextOverflow.ellipsis);
   });
+
+  testWidgets('the filters are one list, each label on the left, like the full UI\'s', (tester) async {
+    await _pump(tester, _wire(), width: 400);
+    final first = tester.getRect(_slot(0));
+    final second = tester.getRect(_slot(1));
+    expect(second.top, greaterThanOrEqualTo(first.bottom), reason: 'one filter a line');
+    expect((second.left, second.width), (first.left, first.width), reason: 'all one width');
+    expect(tester.widget<SimpleSegment>(_slot(1)).alignment, Alignment.centerLeft);
+  });
 }

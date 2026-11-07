@@ -1679,11 +1679,15 @@ class _SimpleFilterWheelWindowState
                   color: AraColors.tileFill,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Wrap(
+                // One filter a line, its label on the left, like the full
+                // UI's list.
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     for (final slot in w.slots)
                       SimpleSegment(
                         key: Key('simple-filterwheel-slot-${slot.position}'),
+                        alignment: Alignment.centerLeft,
                         label: _labelled(slot),
                         selected: (_sent ?? w.currentSlot) == slot.position,
                         radius: 8,
