@@ -402,6 +402,22 @@ Widget simpleWindowRow(
         ),
 );
 
+/// A slider's level after it ("60 %"), as wide as "100 %", so the slider
+/// keeps its width as the level changes.
+Widget simpleSliderLevel(BuildContext context, String level, {Key? key}) {
+  final widest = TextPainter(
+    text: const TextSpan(text: '100 %', style: kSimpleText),
+    textDirection: TextDirection.ltr,
+    textScaler: MediaQuery.textScalerOf(context),
+  )..layout();
+  final width = widest.width;
+  widest.dispose();
+  return SizedBox(
+    width: width,
+    child: Text(level, key: key, textAlign: TextAlign.end, style: kSimpleText),
+  );
+}
+
 /// A window's ask before a move that would disturb a running plan: the
 /// question with Cancel and [confirm]. Too narrow for the question beside
 /// its buttons (as [simpleWindowRow]), the buttons go under it.
@@ -3054,10 +3070,10 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
             ExcludeSemantics(
               child: Opacity(
                 opacity: dimmed ? AraOpacity.locked : 1,
-                child: Text(
+                child: simpleSliderLevel(
+                  context,
                   _switchPercent(p, _round(p, v)),
                   key: Key('simple-switch-$id-level'),
-                  style: kSimpleText,
                 ),
               ),
             ),
@@ -3345,12 +3361,7 @@ class _SimpleFlatPanelWindowState extends ConsumerState<SimpleFlatPanelWindow> {
                       : (v) => send(brightness: v.round()),
                 ),
               ),
-              Text(
-                max == 0 ? '—' : _percent(level, max),
-                style: kSimpleText.copyWith(
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
+              simpleSliderLevel(context, max == 0 ? '—' : _percent(level, max)),
             ],
           ),
         ]);

@@ -162,6 +162,13 @@ void main() {
     expect(_level('PWM B', '100 %'), findsOneWidget);
   });
 
+  testWidgets('a slider keeps its width from 0 % to 100 %', (tester) async {
+    await _pump(tester, [
+      _box(ports: [_port(0, 'PWM A', 0, max: 255), _port(1, 'PWM B', 255, max: 255)]),
+    ]);
+    expect(tester.getSize(_slider('box-0')).width, tester.getSize(_slider('box-1')).width);
+  });
+
   testWidgets("a dew channel's mode port is Auto / Manual / Switch segments, not a percent slider", (tester) async {
     // #1678 audit P1: a 0..2 mode port read "DEW6 Mode · 50 %".
     final (_, rig) = await _pump(tester, [

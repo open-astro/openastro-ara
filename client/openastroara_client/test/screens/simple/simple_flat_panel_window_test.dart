@@ -162,6 +162,15 @@ void main() {
     expect(panel.calls, ['cover=true', 'light=true']);
   });
 
+  testWidgets('the brightness slider keeps its width from 0 % to 100 %', (
+    tester,
+  ) async {
+    await _pump(tester, _wire(brightness: 0));
+    final empty = tester.getSize(_key('brightness')).width;
+    await _pump(tester, _wire(brightness: 255, light: true));
+    expect(tester.getSize(_key('brightness')).width, empty);
+  });
+
   testWidgets('the brightness is sent once, when the slider is let go', (
     tester,
   ) async {
