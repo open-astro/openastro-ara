@@ -3927,7 +3927,6 @@ class _WeatherTile extends StatelessWidget {
     final amber = caption.copyWith(color: AraColors.accentWarning);
     final parts = [
       TextSpan(text: label),
-      if (!unitBeside && unit.isNotEmpty) TextSpan(text: unit),
       for (final (shown, _, over) in details)
         TextSpan(text: shown, style: over ? amber : null),
     ];
@@ -3997,6 +3996,8 @@ class _WeatherTile extends StatelessWidget {
                     if (i > 0) const TextSpan(text: ' · '),
                     part,
                   ],
+                  // On its own line: after the name it broke at its slash.
+                  if (!unitBeside && unit.isNotEmpty) TextSpan(text: '\n$unit'),
                 ],
               ),
               maxLines: warn ? 1 : 2,

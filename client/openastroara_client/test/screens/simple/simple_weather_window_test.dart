@@ -136,9 +136,9 @@ void main() {
         reason: 'the value next to the name, then its unit',
       );
       expect(
-        find.textContaining('Sky quality · mag/arcsec²'),
+        find.textContaining('Sky quality\nmag/arcsec²'),
         findsOneWidget,
-        reason: 'the long unit goes under the number, so the number never ellipsises',
+        reason: 'the long unit on its own line under the name, whole',
       );
       expect(_said(tester, 'temperature'), startsWith('Temperature 8.4 °C'));
       expect(_said(tester, 'rain'), 'Rain None');
