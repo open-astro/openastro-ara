@@ -1,0 +1,23 @@
+name: Merge queue
+
+# The merge queue waits for every required check to report on the `merge_group`
+# event and fails a PR that times out. ci.yml covers its own contexts there;
+# this file covers `review`, which classic branch protection requires on master.
+#
+# claude-review.yml cannot report it. The review runs against a PR's diff and has
+# no PR to read on a merge group, and the review action skips itself on any PR that
+# edits its workflow, so this stays a separate file. The real `review` check and
+# its verdict have already passed by the time a PR can enter the queue, and a
+# merge group holds nothing new for the bot to read.
+
+on:
+  merge_group:
+    types: [checks_requested]
+
+permissions: {}
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Reviewed on the pull request; nothing to review on a merge group."

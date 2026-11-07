@@ -42,6 +42,9 @@ name: CI
 
 on:
   pull_request:
+  # The merge queue needs every required context here too, or it times the PR out.
+  merge_group:
+    types: [checks_requested]
   push:
     branches:
       - master
@@ -174,9 +177,9 @@ jobs:
       client: ${{ steps.classify.outputs.client }}
     steps:
       - name: Checkout (no LFS, full history for the merge-base diff)
-        # Only a pull_request needs the diff at all; every other event short
-        # -circuits to docs_only=false below, so skip the clone entirely.
-        if: github.event_name == 'pull_request'
+        # Only a pull_request or a merge group needs the diff at all; every other
+        # event short-circuits to docs_only=false below, so skip the clone entirely.
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
         continue-on-error: true  # a flaked or timed-out clone leaves no repo; the classify step's ERR trap then emits docs_only=false (#1024)
         timeout-minutes: 4  # under the job's 5, so a wedged fetch fails THIS step (continued) rather than the job
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x pinned per zizmor immutable-ref policy
@@ -194,8 +197,11 @@ jobs:
           # Via env, not ${{ }} interpolation into the script body — zizmor
           # template-injection policy.
           EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # A merge group's base is its parent (master, or the entry ahead of it
+          # in the queue), so the diff is this entry's change alone and a docs
+          # PR does not hold the queue for a full matrix.
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
         run: |
           set -uo pipefail
 
@@ -206,10 +212,10 @@ jobs:
           trap 'echo "classifier failed -> running everything"; echo "docs_only=false" >> "$GITHUB_OUTPUT"; exit 0' ERR
           set -e
 
-          # Fail safe: anything that is not a PR (push to master,
-          # workflow_dispatch) runs the full matrix.
-          if [ "$EVENT_NAME" != "pull_request" ]; then
-            echo "not a pull_request event -> running everything"
+          # Fail safe: anything that is not a PR or a merge group (push to
+          # master, workflow_dispatch) runs the full matrix.
+          if [ "$EVENT_NAME" != "pull_request" ] && [ "$EVENT_NAME" != "merge_group" ]; then
+            echo "not a pull_request or merge_group event -> running everything"
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi

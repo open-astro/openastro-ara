@@ -11,7 +11,8 @@ description: RETIRED 2026-09-28 — the port is complete; invoking it stops imme
 > `gh issue list --label P1` … `--label P5` for open work and `/pr-checker` for driving PRs, and
 > **stop without calling `ScheduleWakeup`**. The procedure below is kept for reference only:
 > `/pr-checker` reuses the §3b tag block and `scripts/tests/test_port_driver_guards.py` pins the
-> §2/§5 git-state guards against this text.
+> §2/§5 git-state guards against this text. Its `gh pr merge` lines predate the merge queue and
+> fail on `master` now: `/pr-checker` Step 4 has the current merge.
 
 **You are driving the openastro-ara port autonomously.** The user is offline / may disconnect. Your job is to make forward progress every iteration without losing state. The canonical references are:
 
