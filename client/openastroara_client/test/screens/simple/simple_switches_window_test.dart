@@ -88,7 +88,7 @@ SwitchDevice _box({String id = 'box', String name = 'Pegasus Powerbox', List<Swi
     );
 
 Future<(ProviderContainer, _Rig)> _pump(WidgetTester tester, List<SwitchDevice> devices,
-    {bool inSettings = false, Map<String, DeviceDriver> drivers = const {}}) async {
+    {bool inSettings = false, Map<String, DeviceDriver> drivers = const {}, double? width}) async {
   final rig = _Rig(devices);
   final c = ProviderContainer(overrides: [
     savedServerServiceProvider.overrideWithValue(_Servers()),
@@ -103,7 +103,7 @@ Future<(ProviderContainer, _Rig)> _pump(WidgetTester tester, List<SwitchDevice> 
   await tester.pumpWidget(UncontrolledProviderScope(
     container: c,
     child: MaterialApp(
-      home: Scaffold(body: Align(alignment: Alignment.topLeft, child: SimpleSwitchesWindow(inSettings: inSettings))),
+      home: Scaffold(body: Align(alignment: Alignment.topLeft, child: SizedBox(width: width, child: SimpleSwitchesWindow(inSettings: inSettings)))),
     ),
   ));
   await tester.pumpAndSettle();
@@ -167,6 +167,16 @@ void main() {
     await tester.tap(_segment('box-1', '2'));
     await tester.pumpAndSettle();
     expect(rig.writes, ['box/1=2.0']);
+  });
+
+  testWidgets('in a narrow row the mode segments shrink and ellipsize, they do not overflow', (tester) async {
+    final (_, _) = await _pump(tester, [
+      _box(ports: [_port(0, 'DEW6', 40, max: 100), _port(1, 'DEW6 Mode', 1, max: 2)]),
+    ], width: 200);
+    expect(tester.takeException(), isNull);
+    for (final id in ['0', '1', '2']) {
+      expect(tester.getRect(_segment('box-1', id)).right, lessThanOrEqualTo(200));
+    }
   });
 
   testWidgets('another small mode (a 0..3 fan speed) is numbered segments', (tester) async {

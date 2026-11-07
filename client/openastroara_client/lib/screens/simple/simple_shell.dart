@@ -2294,7 +2294,7 @@ class SimpleSegments<T> extends StatelessWidget {
                   ? null
                   : () => onPick!(value),
             );
-            return expand ? Expanded(child: segment) : segment;
+            return expand ? Expanded(child: segment) : Flexible(child: segment);
           }(),
       ],
     ),
