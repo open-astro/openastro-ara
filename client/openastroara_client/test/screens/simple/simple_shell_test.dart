@@ -86,6 +86,8 @@ import 'package:openastroara/state/equipment/rotator_state.dart';
 import 'package:openastroara/models/rotator_status.dart';
 import 'package:openastroara/models/flat_panel_status.dart';
 import 'package:openastroara/state/equipment/flat_panel_state.dart';
+import 'package:openastroara/models/weather_status.dart';
+import 'package:openastroara/state/equipment/weather_state.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
@@ -298,6 +300,14 @@ SwitchDevice _switch(String id, String name, SwitchConnectionState state) => Swi
     name: name,
     connectionState: state,
     ports: const [SwitchPort(id: 0, name: 'Dew 1', value: 0, min: 0, max: 100, canWrite: true)]);
+
+class _Weather extends WeatherNotifier with _Calls<WeatherStatus> {
+  _Weather(this.state0);
+  final EquipmentConnectionState state0;
+  @override
+  Future<WeatherStatus?> build() async =>
+      WeatherStatus.fromJson({..._wire('CloudWatcher', state0), 'temperature_c': 8.4});
+}
 
 class _FlatPanel extends FlatPanelNotifier with _Calls<FlatPanelStatus> {
   _FlatPanel(this.state0);
@@ -2873,6 +2883,38 @@ void main() {
     await _openSection(tester, 'Flat panel');
     expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-flat'))),
         findsOneWidget);
+  });
+
+  testWidgets('the weather station\'s dot opens its window and closes it again; Settings lists it under Devices',
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      weatherProvider.overrideWith(() => _Weather(EquipmentConnectionState.connected)),
+    ]);
+    Future<void> dot() async {
+      c.read(selectedSettingsPanelProvider.notifier).select('eq.weather');
+      c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+      await tester.pumpAndSettle();
+    }
+    await dot();
+    expect(find.byKey(const Key('simple-device-weather')), findsOneWidget);
+    expect(find.byType(SettingsShell), findsNothing, reason: 'never the full UI\'s Settings page');
+    await dot();
+    expect(find.byKey(const Key('simple-device-weather')), findsNothing);
+    await _openSection(tester, 'Devices');
+    await tester.tap(find.textContaining('CloudWatcher'));
+    await tester.pump();
+    expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-weather'))),
+        findsOneWidget, reason: 'its Devices row opens the same window');
+    await _openSection(tester, 'Weather');
+    expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-weather'))),
+        findsOneWidget);
+  });
+
+  testWidgets('Settings lists the weather station only while the rig knows one', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true);
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-menu-nav-Weather')), findsNothing);
   });
 
   testWidgets('Settings lists the flat panel only while the rig knows one', (tester) async {

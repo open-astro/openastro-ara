@@ -425,6 +425,109 @@
   "@deviceFlatPanelUnconfirmedDetail": {
     "description": "Detail under the flat panel's unconfirmed-change message"
   },
+  "deviceSensorReadFailed": "Sensor read failed — check the device.",
+  "@deviceSensorReadFailed": {
+    "description": "Weather window: the station's last read failed, so no readings show"
+  },
+  "deviceCloudCover": "Cloud cover",
+  "@deviceCloudCover": {
+    "description": "Weather window tile: cloud cover in %"
+  },
+  "deviceSkyQuality": "Sky quality",
+  "@deviceSkyQuality": {
+    "description": "Weather window tile: sky quality (SQM) in mag/arcsec²"
+  },
+  "deviceDewPoint": "Dew point",
+  "@deviceDewPoint": {
+    "description": "Weather window tile: dew point"
+  },
+  "deviceHumidity": "Humidity",
+  "@deviceHumidity": {
+    "description": "Weather window tile: relative humidity"
+  },
+  "deviceRain": "Rain",
+  "@deviceRain": {
+    "description": "Weather window tile: rain rate"
+  },
+  "deviceRainNone": "None",
+  "@deviceRainNone": {
+    "description": "Weather window rain tile when the rain rate is 0"
+  },
+  "deviceWind": "Wind",
+  "@deviceWind": {
+    "description": "Weather window tile: wind speed"
+  },
+  "deviceGusts": "gusts {speed}",
+  "@deviceGusts": {
+    "description": "Weather window wind tile caption: the gust speed, same unit as the tile's number",
+    "placeholders": {
+      "speed": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceCompass": "{point, select, n{N} ne{NE} e{E} se{SE} s{S} sw{SW} w{W} other{NW}}",
+  "@deviceCompass": {
+    "description": "Weather window wind tile caption: the wind's compass point (8 points)",
+    "placeholders": {
+      "point": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceLimit": "limit {value}",
+  "@deviceLimit": {
+    "description": "Weather window tile caption when the reading is past the rig's safety limit, e.g. 'limit 85 %'",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceMargin": "margin {value}",
+  "@deviceMargin": {
+    "description": "Weather window dew point caption when the air is closer to the dew point than the safety margin, e.g. 'margin 2 °C'",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "devicePastLimit": "past the safety limit",
+  "@devicePastLimit": {
+    "description": "Screen reader text after a weather reading past the rig's safety limit"
+  },
+  "deviceUpdatedAgo": "Updated {age} ago",
+  "@deviceUpdatedAgo": {
+    "description": "Weather window: how old the readings are, e.g. 'Updated 8 s ago'",
+    "placeholders": {
+      "age": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceLastReadingAgo": "Last reading {age} ago",
+  "@deviceLastReadingAgo": {
+    "description": "Weather window, amber: the readings are over a minute old, e.g. 'Last reading 4 min ago'",
+    "placeholders": {
+      "age": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceMoon": "Moon",
+  "@deviceMoon": {
+    "description": "Weather window tile: the moon's lit fraction, computed (not a station reading)"
+  },
+  "deviceMoonPhase": "{phase, select, newMoon{New moon} waxingCrescent{Waxing crescent} firstQuarter{First quarter} waxingGibbous{Waxing gibbous} fullMoon{Full moon} waningGibbous{Waning gibbous} lastQuarter{Last quarter} other{Waning crescent}}",
+  "@deviceMoonPhase": {
+    "description": "Weather window moon tile caption: the moon's phase",
+    "placeholders": {
+      "phase": {
+        "type": "String"
+      }
+    }
+  },
   "deviceCouldntSaveThat": "Couldn't save that",
   "@deviceCouldntSaveThat": {
     "description": "Error message when a focuser or guider setting could not be saved"

@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weather Window</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0,0">
+<style>
+  /* Layout: one iPad-sized stage with the Simple Mode Weather window over the image.
+     Single dark look on purpose: DESIGN.md tokens (lib/theme/ara_colors.dart), as the other design/preview mocks. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+    --ok: #4CAF50; --info: #42A5F5; --sel: #1976D2; --tile: #383838; --warn: #FFB300; --err: #E53935;
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys);
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+  body.night { filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(.75); }
+  .page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 80ch; }
+  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--warn); color: var(--warn); margin-left: 6px; vertical-align: 3px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  .group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+  .stage-wrap { overflow-x: auto; }
+  .ipad { width: 1024px; height: 640px; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 60% 45%, #3a3f4c 0, #12141a 55%, #08090c 100%); }
+  .strip { position: absolute; left: 16px; right: 16px; top: 16px; height: 56px; background: rgba(26,26,26,.9); border-radius: 10px;
+           display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 13px; color: var(--text2); }
+  .dot { display: inline-flex; align-items: center; gap: 6px; } .dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .dot.hot { outline: 1.5px solid var(--sel); outline-offset: 4px; border-radius: 6px; color: var(--text); }
+  .dot.off i { background: #666; } .dot.err i { background: var(--err); }
+
+  .win { position: absolute; left: 16px; top: 88px; width: 360px; background: rgba(26,26,26,.9); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+         border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+  .head { display: flex; align-items: center; gap: 8px; font-weight: 600; min-height: 32px; }
+  .head i { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
+  .head.off i { background: #666; } .head.err i { background: var(--err); }
+  .r { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+  .r .l { flex: 1; } .v { font-variant-numeric: tabular-nums; text-align: right; }
+  .r .v small { color: var(--text2); font-size: 12px; }
+  .caption { color: var(--text2); font-size: 12px; padding-top: 6px; }
+  .warn { color: var(--warn); } .err { color: #FF8A80; }
+  .ver { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 10px; display: grid; grid-template-columns: auto 1fr; gap: 2px 24px; }
+  .ver b { grid-column: 1 / -1; margin-bottom: 4px; } .ver span:nth-child(even) { color: var(--text2); }
+
+  /* Layout B: tiles, two across */
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .t { background: rgba(56,56,56,.55); border-radius: 10px; padding: 8px 12px; height: 80px; display: flex; flex-direction: column; justify-content: center; }
+  .t .n { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
+  .t .n small { font-size: 13px; font-weight: 400; color: var(--text2); margin-left: 2px; }
+  .t .k { font-size: 12px; color: var(--text2); }
+  .t.wide { grid-column: 1 / -1; }
+  .ms { font-family: 'Material Symbols Outlined'; font-weight: normal; font-style: normal; line-height: 1; letter-spacing: normal; text-transform: none; white-space: nowrap; direction: ltr; -webkit-font-smoothing: antialiased; font-feature-settings: 'liga'; color: var(--text2); }
+  .t .k { display: flex; align-items: center; gap: 4px; }
+  .t .k > span:last-child { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .t .k .ms { font-size: 16px; }
+  .t { position: relative; }
+  .t .n .ms { font-size: 22px; vertical-align: -3px; margin-right: 6px; }
+  .t > .ms.corner { position: absolute; top: 8px; right: 10px; font-size: 22px; }
+  .t.over .ms { color: var(--warn); }
+  .t.over { box-shadow: inset 0 0 0 1.5px var(--warn); } .t.over .n { color: var(--warn); }
+
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .notes div { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+  .notes h2 { font-size: 14px; margin: 0 0 4px; }
+  .notes p { margin: 0; color: var(--text2); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <h1>Weather window <span class="tag" id="chosenTag">B chosen</span></h1>
+  <p class="note">The Simple Mode window for a weather station (#1662). Read-only: the station's current readings and how old they are. A reading the station doesn't report has no row or tile. The age counts up live here; switch State to see a stale station, a failed read and a disconnected one.</p>
+
+  <div class="controls">
+    <div class="group"><span class="lbl">Layout</span>
+      <div class="seg" role="group" aria-label="Layout" id="layout">
+        <button aria-pressed="false" data-v="a">A · Rows</button>
+        <button aria-pressed="true" data-v="b">B · Tiles (chosen)</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">Station</span>
+      <div class="seg" role="group" aria-label="Station" id="kind">
+        <button aria-pressed="true" data-v="full">Full station</button>
+        <button aria-pressed="false" data-v="cloud">Cloud sensor</button>
+        <button aria-pressed="false" data-v="sqm">SQM only</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">State</span>
+      <div class="seg" role="group" aria-label="State" id="state">
+        <button aria-pressed="true" data-v="live">Live</button>
+        <button aria-pressed="false" data-v="stale">Stale</button>
+        <button aria-pressed="false" data-v="error">Read failed</button>
+        <button aria-pressed="false" data-v="off">Not connected</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">Icons</span>
+      <div class="seg" role="group" aria-label="Icons" id="icons">
+        <button aria-pressed="true" data-v="value">Before the value (chosen)</button>
+        <button aria-pressed="false" data-v="name">Beside the name</button>
+        <button aria-pressed="false" data-v="corner">Top-right corner</button>
+        <button aria-pressed="false" data-v="none">None</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">Past safety limits</span>
+      <div class="seg" role="group" aria-label="Past safety limits" id="limits">
+        <button aria-pressed="true" data-v="mark">Mark in amber</button>
+        <button aria-pressed="false" data-v="plain">Don't mark</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">Wind in</span>
+      <div class="seg" role="group" aria-label="Wind units" id="units">
+        <button aria-pressed="true" data-v="kmh">km/h (as the safety policy)</button>
+        <button aria-pressed="false" data-v="ms">m/s (as the full UI)</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">Opened from</span>
+      <div class="seg" role="group" aria-label="Opened from" id="from">
+        <button aria-pressed="true" data-v="dot">Dot</button>
+        <button aria-pressed="false" data-v="settings">Settings</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">View</span>
+      <div class="seg" role="group" aria-label="View" id="view">
+        <button aria-pressed="true" data-v="day">Normal</button>
+        <button aria-pressed="false" data-v="night">Night (red)</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-wrap">
+    <div class="ipad">
+      <div class="strip">
+        <span class="dot"><i></i>Camera</span><span class="dot"><i></i>Mount</span>
+        <span class="dot"><i></i>Focuser</span><span class="dot"><i></i>Guider</span>
+        <span class="dot"><i></i>Filter wheel</span>
+        <span class="dot hot" id="stripDot"><i></i>Weather</span>
+      </div>
+      <div class="win" id="win"></div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div><h2>Readings</h2><p>The seven the issue names, in this order: cloud cover, sky quality, temperature, dew point, humidity, rain, wind (speed, direction and gusts), then the moon (lit and its phase, computed, not read; added 2026-11-08). Tiles go two across; with an odd count the last one spans the row, so there is never a hole. Pressure, sky temperature and the other computed rows (sun, moon altitude, NELM) stay in the full UI. A NaN or missing reading is left out.</p></div>
+    <div><h2>Age</h2><p>"Updated 8 s ago" under the readings, counting up once a second from the daemon's capture time. The daemon reads every 2 s and Ara asks every 15 s, so a live station never shows more than about 20 s. Past 60 s it turns amber: "Last reading 4 min ago". Under a minute it shows seconds, then minutes, then hours.</p></div>
+    <div><h2>Past safety limits</h2><p>Wind, humidity and the dew-point margin are checked against the rig's safety policy (the same numbers the full UI's Thresholds rows show). A reading past its limit turns amber, so you see why the safety monitor might say Unsafe. Only when "Weather triggers safety" is on.</p></div>
+    <div><h2>Read failed / not connected</h2><p>A failed read says "Sensor read failed — check the device." in the error colour and shows no numbers, so old readings can't pass for live ones. Not connected shows only "Not connected". Connect stays on the Devices row in Settings.</p></div>
+    <div><h2>Icons</h2><p>Material outlined icons in Text Secondary, amber with the tile when past a limit; screen readers skip them. Cloud, stars (sky quality), thermometer, dew point, drop (humidity), a cloud with rain (rain), air (wind), crescent (moon). Chosen: in front of the value, 22 pt like the number (user, 2026-11-08). Every tile is the same height (80 pt), room for the number and two caption lines; a longer caption ends in an ellipsis.</p></div>
+    <div><h2>No pill, no controls</h2><p>The weather station has nothing to move, so no status pill (#1668) and no plan guard. Everything here is a reading.</p></div>
+    <div><h2>Stays in the full UI</h2><p>"Weather triggers safety", the wind / humidity / dew-point limits, auto-connect, and the computed sky rows.</p></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const S = { icons: 'value', layout: 'b', kind: 'full', conn: 'live', limits: 'mark', units: 'kmh', from: 'dot', view: 'day' };
+  const POLICY = { on: true, windKmh: 30, humidityPct: 85, dewMarginC: 2 };
+  const win = document.getElementById('win');
+  let capturedAt = Date.now() - 3000;
+  const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+
+  // Readings by station kind; null = the station doesn't report it.
+  function reading() {
+    const all = { cloud: 12, sqm: 21.34, temp: 8.4, dew: 6.9, hum: 88, wind: 4.2, gust: 7.5, dir: 315, rain: 0 };
+    const keep = { full: Object.keys(all), cloud: ['cloud', 'temp', 'rain'], sqm: ['sqm'] }[S.kind];
+    return Object.fromEntries(Object.entries(all).map(([k, v]) => [k, keep.includes(k) ? v : null]));
+  }
+  const num = v => (v === Math.round(v) ? String(v) : v.toFixed(1));
+  function age(ms) {
+    const s = Math.max(0, Math.round(ms / 1000));
+    if (s < 60) return s + ' s';
+    if (s < 3600) return Math.floor(s / 60) + ' min';
+    return Math.floor(s / 3600) + ' h';
+  }
+
+  function items(w) {
+    const kmh = S.units === 'kmh', f = kmh ? 3.6 : 1, u = kmh ? 'km/h' : 'm/s';
+    const mark = S.limits === 'mark' && POLICY.on;
+    const out = [];
+    if (w.cloud != null) out.push({ i: 'cloud', k: 'Cloud cover', n: num(w.cloud), u: '%' });
+    if (w.sqm != null) out.push({ i: 'auto_awesome', k: 'Sky quality', n: w.sqm.toFixed(2), u: 'mag/arcsec²' });
+    if (w.temp != null) out.push({ i: 'thermostat', k: 'Temperature', n: num(w.temp), u: '°C' });
+    if (w.dew != null) out.push({ i: 'dew_point', k: 'Dew point', n: num(w.dew), u: '°C',
+      over: mark && w.temp != null && w.temp - w.dew < POLICY.dewMarginC, why: `margin ${POLICY.dewMarginC} °C` });
+    if (w.hum != null) out.push({ i: 'water_drop', k: 'Humidity', n: num(w.hum), u: '%', over: mark && w.hum > POLICY.humidityPct, why: `limit ${POLICY.humidityPct} %` });
+    if (w.rain != null) out.push({ i: 'rainy', k: 'Rain', n: w.rain > 0 ? num(w.rain) : 'None', u: w.rain > 0 ? 'mm/h' : '' });
+    // Wind is checked against the worse of speed and gust, as the daemon does.
+    if (w.wind != null) {
+      const extra = [w.dir != null ? DIRS[Math.round(w.dir / 45) % 8] : null, w.gust != null ? `gusts ${num(w.gust * f)}` : null].filter(Boolean).join(' · ');
+      out.push({ i: 'air', k: 'Wind', n: num(w.wind * f), u: u, extra, over: mark && Math.max(w.wind, w.gust ?? 0) * 3.6 > POLICY.windKmh, why: `limit ${POLICY.windKmh} km/h` });
+    }
+    // Computed, not read: the moon after the readings.
+    out.push({ i: 'nightlight', k: 'Moon', n: '3', u: '%', extra: 'Waning crescent' });
+    // An odd count would leave a hole: the last tile spans the row.
+    if (out.length % 2 === 1) out[out.length - 1].wide = true;
+    return out;
+  }
+
+  function render() {
+    const off = S.conn === 'off', err = S.conn === 'error';
+    const dot = document.getElementById('stripDot');
+    dot.classList.toggle('off', off); dot.classList.toggle('err', err);
+    win.innerHTML = '';
+    const head = document.createElement('div'); head.className = 'head' + (off ? ' off' : err ? ' err' : '');
+    head.innerHTML = '<i></i>Weather · AAG CloudWatcher';
+    win.append(head);
+    if (off) {
+      win.insertAdjacentHTML('beforeend', '<div class="caption">Not connected</div>');
+    } else if (err) {
+      win.insertAdjacentHTML('beforeend', '<div class="r err">Sensor read failed — check the device.</div>');
+    } else {
+      const list = items(reading());
+      if (S.layout === 'a') {
+        for (const it of list) {
+          const r = document.createElement('div'); r.className = 'r';
+          r.setAttribute('aria-label', `${it.k} ${it.n} ${it.u}${it.extra ? ', ' + it.extra : ''}${it.over ? ', past the safety limit' : ''}`);
+          r.innerHTML = `<span class="l">${it.k}</span><span class="v ${it.over ? 'warn' : ''}">${it.n}${it.u ? ' ' + it.u : ''}${it.extra ? ` <small>· ${it.extra}</small>` : ''}</span>`;
+          win.append(r);
+        }
+      } else {
+        const g = document.createElement('div'); g.className = 'tiles';
+        for (const it of list) {
+          const t = document.createElement('div'); t.className = 't' + (it.wide ? ' wide' : '') + (it.over ? ' over' : '');
+          t.setAttribute('role', 'group');
+          t.setAttribute('aria-label', `${it.k} ${it.n} ${it.u}${it.extra ? ', ' + it.extra : ''}${it.over ? ', past the safety limit' : ''}`);
+          const ic = `<span class="ms${S.icons === 'corner' ? ' corner' : ''}" aria-hidden="true">${it.i}</span>`;
+          t.innerHTML = (S.icons === 'corner' ? ic : '') + `<span class="n">${S.icons === 'value' ? ic : ''}${it.n}${it.u ? `<small>${it.u}</small>` : ''}</span><span class="k">${S.icons === 'name' ? ic : ''}<span>${it.k}${it.extra ? ' · ' + it.extra : ''}${it.over ? ' · ' + it.why : ''}</span></span>`;
+          g.append(t);
+        }
+        win.append(g);
+      }
+      const ms = Date.now() - capturedAt, stale = ms > 60000;
+      const c = document.createElement('div'); c.className = 'caption' + (stale ? ' warn' : ''); c.id = 'age';
+      c.textContent = stale ? `Last reading ${age(ms)} ago` : `Updated ${age(ms)} ago`;
+      win.append(c);
+    }
+    if (S.from === 'settings') {
+      win.insertAdjacentHTML('beforeend', '<div class="ver"><b>Versions</b><span>Driver</span><span>AAG CloudWatcher 7.2.4</span><span>Interface</span><span>ObservingConditions v2</span></div>');
+    }
+  }
+
+  function bind(id, key, after) {
+    const el = document.getElementById(id);
+    el.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      S[key] = b.dataset.v; after && after(); render();
+    });
+  }
+  bind('icons', 'icons'); bind('layout', 'layout'); bind('kind', 'kind'); bind('limits', 'limits'); bind('units', 'units'); bind('from', 'from');
+  bind('state', 'conn', () => { capturedAt = Date.now() - (S.conn === 'stale' ? 4 * 60000 + 12000 : 3000); });
+  bind('view', 'view', () => document.body.classList.toggle('night', S.view === 'night'));
+  // Live: a fresh reading every 15 s (Ara's poll); stale: none arrive.
+  setInterval(() => { if (S.conn === 'live' && Date.now() - capturedAt > 15000) capturedAt = Date.now() - 1000; render(); }, 1000);
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:clock/clock.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart' show HapticFeedback, LogicalKeyboardKey;
@@ -13,6 +15,7 @@ import '../../services/equipment_driver_api.dart';
 import '../../models/filter_wheel_status.dart';
 import '../../models/focuser_status.dart';
 import '../../models/switch_device.dart';
+import '../../models/weather_status.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../models/guider_status.dart';
 import '../../state/equipment/filter_wheel_state.dart';
@@ -20,6 +23,7 @@ import '../../state/equipment/flat_panel_state.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/equipment/rotator_state.dart';
 import '../../state/equipment/switch_state.dart';
+import '../../state/equipment/weather_state.dart';
 import '../../state/guider/guider_equipment_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
@@ -35,6 +39,7 @@ import '../../state/app_locale_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../util/tonight_sky_local.dart' show moonPhase;
 import '../../widgets/equipment/equipment_status_chip.dart'
     show switchChipLevel;
 import '../../widgets/equipment/switch_port_layout.dart'
@@ -3500,4 +3505,369 @@ class _FlatPanelFacePainter extends CustomPainter {
   @override
   bool shouldRepaint(_FlatPanelFacePainter old) =>
       old.open != open || old.hasCover != hasCover || old.glow != glow;
+}
+
+/// The weather station's window: its current readings as tiles, two across,
+/// the moon after them, and how old the readings are. Read-only, so no pill
+/// and no plan guard (#1662, mock `design/preview/simple-weather-mock.html`).
+class SimpleWeatherWindow extends ConsumerStatefulWidget {
+  const SimpleWeatherWindow({super.key, this.inSettings = false});
+
+  /// In Settings the window ends with the station's versions.
+  final bool inSettings;
+
+  @override
+  ConsumerState<SimpleWeatherWindow> createState() =>
+      _SimpleWeatherWindowState();
+}
+
+class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
+  /// Older readings than this read amber: the daemon reads every 2 s and Ara
+  /// asks every 15 s, so a live station never gets near it.
+  static const Duration _stale = Duration(seconds: 60);
+
+  /// Redraws the readings' age once a second.
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+    // The safety limits the tiles are checked against: Simple Mode never
+    // opens the policies page that loads them otherwise.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final api = ref.read(profileApiProvider);
+      if (api == null || !mounted) return;
+      try {
+        await ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api);
+      } catch (_) {
+        // Unreachable: the defaults mark nothing (weather triggers off).
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final s = ref.watch(weatherProvider).value;
+    final children = <Widget>[
+      SimpleDeviceHeader(type: l10n.shellWeather, status: s),
+    ];
+    if (s?.connectionState == EquipmentConnectionState.error) {
+      // A failed read shows no numbers, so old ones can't pass for live.
+      children.add(
+        Text(
+          l10n.deviceSensorReadFailed,
+          style: kSimpleText.copyWith(color: AraColors.errorText),
+        ),
+      );
+    } else if (s == null || !s.isConnected) {
+      children.add(
+        Text(
+          s?.isConnecting ?? false
+              ? l10n.deviceConnecting
+              : l10n.deviceNotConnected,
+          style: AraText.caption,
+        ),
+      );
+    } else {
+      children.add(_tiles(context, s));
+      final at = s.capturedAt;
+      if (at != null) {
+        final age = clock.now().toUtc().difference(at);
+        final stale = age > _stale;
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(top: AraSpace.s4),
+            child: Text(
+              stale
+                  ? l10n.deviceLastReadingAgo(_age(age))
+                  : l10n.deviceUpdatedAgo(_age(age)),
+              key: const Key('simple-weather-age'),
+              style: AraText.caption.copyWith(
+                fontSize: 12,
+                color: stale ? AraColors.accentWarning : null,
+              ),
+            ),
+          ),
+        );
+      }
+    }
+    if (widget.inSettings) {
+      children.addAll(
+        _versions(
+          context,
+          ref.watch(deviceDriverProvider('observingconditions')).value,
+        ),
+      );
+    }
+    return Column(
+      key: const Key('simple-device-weather'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s4,
+      children: children,
+    );
+  }
+
+  /// "8 s", "4 min", "2 h".
+  static String _age(Duration d) {
+    final s = math.max(0, d.inSeconds);
+    if (s < 60) return '$s s';
+    if (s < 3600) return '${s ~/ 60} min';
+    return '${s ~/ 3600} h';
+  }
+
+  /// A reading as the tiles show it: whole numbers bare, otherwise one
+  /// decimal, a real minus sign.
+  static String _num(double v, {int decimals = 1}) =>
+      (v == v.roundToDouble() && decimals == 1
+              ? v.toStringAsFixed(0)
+              : v.toStringAsFixed(decimals))
+          .replaceFirst('-', '−');
+
+  static bool _ok(double? v) => v != null && v.isFinite;
+
+  Widget _tiles(BuildContext context, WeatherStatus s) {
+    final l10n = context.l10n;
+    final p = ref.watch(safetyPoliciesProvider);
+    // Marked only when these limits act (the daemon's same checks, §35.1).
+    final mark = p.weatherTriggersEnabled;
+    final t = s.temperatureC, dew = s.dewPointC, hum = s.humidityPct;
+    final speed = s.windSpeedMs, gust = s.windGustMs;
+    final tiles = <_WeatherTile>[
+      if (_ok(s.cloudCoverPct))
+        _WeatherTile(
+          'cloud',
+          Icons.cloud_outlined,
+          _num(s.cloudCoverPct!),
+          '%',
+          l10n.deviceCloudCover,
+        ),
+      if (_ok(s.skyQualityMagArcsec2))
+        _WeatherTile(
+          'sqm',
+          Icons.auto_awesome_outlined,
+          _num(s.skyQualityMagArcsec2!, decimals: 2),
+          'mag/arcsec²',
+          l10n.deviceSkyQuality,
+        ),
+      if (_ok(t))
+        _WeatherTile(
+          'temperature',
+          Icons.thermostat,
+          _num(t!),
+          '°C',
+          l10n.deviceTemperature,
+        ),
+      if (_ok(dew))
+        _WeatherTile(
+          'dew',
+          Icons.dew_point,
+          _num(dew!),
+          '°C',
+          l10n.deviceDewPoint,
+          past: mark && _ok(t) && t! - dew < p.minDewDeltaC
+              ? l10n.deviceMargin('${_num(p.minDewDeltaC)} °C')
+              : null,
+        ),
+      if (_ok(hum))
+        _WeatherTile(
+          'humidity',
+          Icons.water_drop_outlined,
+          _num(hum!),
+          '%',
+          l10n.deviceHumidity,
+          past: mark && hum > p.maxHumidityPct
+              ? l10n.deviceLimit('${p.maxHumidityPct} %')
+              : null,
+        ),
+      if (_ok(s.rainRate))
+        s.rainRate! > 0
+            ? _WeatherTile(
+                'rain',
+                CupertinoIcons.cloud_rain,
+                _num(s.rainRate!),
+                'mm/h',
+                l10n.deviceRain,
+              )
+            : _WeatherTile(
+                'rain',
+                CupertinoIcons.cloud_rain,
+                l10n.deviceRainNone,
+                '',
+                l10n.deviceRain,
+              ),
+    ];
+    // Wind is checked as the daemon does: the worse of speed and gust.
+    if (_ok(speed) || _ok(gust)) {
+      final worst = math.max(
+        _ok(speed) ? speed! : 0.0,
+        _ok(gust) ? gust! : 0.0,
+      );
+      final dir = s.windDirectionDeg;
+      const points = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
+      tiles.add(
+        _WeatherTile(
+          'wind',
+          Icons.air,
+          _num((_ok(speed) ? speed! : gust!) * 3.6),
+          'km/h',
+          [
+            l10n.deviceWind,
+            if (_ok(dir)) l10n.deviceCompass(points[(dir! / 45).round() % 8]),
+            if (_ok(speed) && _ok(gust)) l10n.deviceGusts(_num(gust! * 3.6)),
+          ].join(' · '),
+          past: mark && worst * 3.6 > p.maxWindKmh
+              ? l10n.deviceLimit('${p.maxWindKmh} km/h')
+              : null,
+        ),
+      );
+    }
+    // Computed, not read: how much moon washes out the sky tonight.
+    final moon = moonPhase(clock.now().toUtc());
+    final phase = moon.phaseName.split(' ');
+    tiles.add(
+      _WeatherTile(
+        'moon',
+        Icons.nightlight_outlined,
+        '${(moon.illuminatedFraction * 100).round()}',
+        '%',
+        [
+          l10n.deviceMoon,
+          l10n.deviceMoonPhase(
+            phase[0] + phase[1][0].toUpperCase() + phase[1].substring(1),
+          ),
+        ].join(' · '),
+      ),
+    );
+    final rows = <Widget>[
+      for (var i = 0; i < tiles.length; i += 2)
+        // An odd count's last tile spans the row, so no row has a hole.
+        i + 1 < tiles.length
+            ? Row(
+                spacing: AraSpace.s8,
+                children: [
+                  Expanded(child: tiles[i]),
+                  Expanded(child: tiles[i + 1]),
+                ],
+              )
+            : tiles[i],
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
+      children: rows,
+    );
+  }
+}
+
+/// One reading: the number big with its unit, its name under it, and why
+/// it is amber when past the rig's safety limit.
+class _WeatherTile extends StatelessWidget {
+  const _WeatherTile(
+    this.id,
+    this.icon,
+    this.value,
+    this.unit,
+    this.label, {
+    this.past,
+  });
+
+  final String id;
+
+  /// In front of the value, as large as its number.
+  final IconData icon;
+  final String value;
+  final String unit;
+  final String label;
+
+  /// The limit it is past ("limit 85 %"), or null.
+  final String? past;
+
+  @override
+  Widget build(BuildContext context) {
+    final warn = past != null;
+    final caption = [label, ?past].join(' · ');
+    return Semantics(
+      key: Key('simple-weather-$id'),
+      container: true,
+      label: [
+        '$label $value${unit.isEmpty ? '' : ' $unit'}',
+        if (warn) context.l10n.devicePastLimit,
+      ].join(', '),
+      excludeSemantics: true,
+      child: Container(
+        // One height for every tile: the number and two caption lines.
+        height: MediaQuery.textScalerOf(context).scale(80),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AraSpace.s12,
+          vertical: AraSpace.s8,
+        ),
+        decoration: BoxDecoration(
+          color: AraColors.tileFill,
+          borderRadius: BorderRadius.circular(10),
+          border: warn
+              ? Border.all(color: AraColors.accentWarning, width: 1.5)
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              spacing: AraSpace.s4,
+              children: [
+                Icon(
+                  icon,
+                  size: 22,
+                  color: warn
+                      ? AraColors.accentWarning
+                      : AraColors.textSecondary,
+                ),
+                Flexible(
+                  child: Text.rich(
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    TextSpan(
+                      children: [
+                        TextSpan(text: value),
+                        if (unit.isNotEmpty)
+                          TextSpan(
+                            text: ' $unit',
+                            style: kSimpleText.copyWith(
+                              fontSize: 13,
+                              color: AraColors.textSecondary,
+                            ),
+                          ),
+                      ],
+                    ),
+                    style: kSimpleText.copyWith(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                      color: warn ? AraColors.accentWarning : null,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              caption,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AraText.caption.copyWith(fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
