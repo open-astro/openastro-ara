@@ -331,9 +331,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceRain => 'Rain';
 
   @override
-  String get deviceRainNone => 'None';
-
-  @override
   String get deviceWind => 'Wind';
 
   @override
@@ -2845,9 +2842,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get deviceRain => 'Chuva';
-
-  @override
-  String get deviceRainNone => 'Nenhuma';
 
   @override
   String get deviceWind => 'Vento';

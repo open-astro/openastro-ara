@@ -437,10 +437,6 @@
   "@deviceRain": {
     "description": "Weather window tile: rain rate"
   },
-  "deviceRainNone": "None",
-  "@deviceRainNone": {
-    "description": "Weather window rain tile when the rain rate is 0"
-  },
   "deviceWind": "Wind",
   "@deviceWind": {
     "description": "Weather window tile: wind speed"

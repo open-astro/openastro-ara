@@ -141,7 +141,12 @@ void main() {
         reason: 'the long unit on its own line under the name, whole',
       );
       expect(_said(tester, 'temperature'), startsWith('Temperature 8.4 °C'));
-      expect(_said(tester, 'rain'), 'Rain None');
+      expect(
+        _said(tester, 'rain'),
+        'Rain 0 mm/h',
+        reason:
+            'a number, not a word: "Nenhuma" did not fit a narrow half tile',
+      );
       expect(
         find.textContaining('Wind · NW · gusts 27'),
         findsOneWidget,

@@ -3725,22 +3725,15 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
               ? l10n.deviceLimit('${p.maxHumidityPct} %')
               : null,
         ),
+      // A number even when dry: "Nenhuma" didn't fit a narrow half tile.
       if (_ok(s.rainRate))
-        s.rainRate! > 0
-            ? _WeatherTile(
-                'rain',
-                _icon(CupertinoIcons.cloud_rain),
-                _num(s.rainRate!),
-                'mm/h',
-                l10n.deviceRain,
-              )
-            : _WeatherTile(
-                'rain',
-                _icon(CupertinoIcons.cloud_rain),
-                l10n.deviceRainNone,
-                '',
-                l10n.deviceRain,
-              ),
+        _WeatherTile(
+          'rain',
+          _icon(CupertinoIcons.cloud_rain),
+          _num(s.rainRate!),
+          'mm/h',
+          l10n.deviceRain,
+        ),
     ];
     if (_ok(speed) || _ok(gust)) {
       // Checked as the daemon does: the worse of speed and gust, and nothing

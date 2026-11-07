@@ -90,7 +90,6 @@
   "deviceDewPoint": "Ponto de orvalho",
   "deviceHumidity": "Umidade",
   "deviceRain": "Chuva",
-  "deviceRainNone": "Nenhuma",
   "deviceWind": "Vento",
   "deviceGusts": "rajadas {speed}",
   "deviceCompass": "{point, select, n{N} ne{NE} e{L} se{SE} s{S} sw{SO} w{O} other{NO}}",

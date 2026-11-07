@@ -331,9 +331,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceRain => 'Rain';
 
   @override
-  String get deviceRainNone => 'None';
-
-  @override
   String get deviceWind => 'Wind';
 
   @override

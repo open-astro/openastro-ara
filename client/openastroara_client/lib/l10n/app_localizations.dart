@@ -639,12 +639,6 @@ abstract class AppLocalizations {
   /// **'Rain'**
   String get deviceRain;
 
-  /// Weather window rain tile when the rain rate is 0
-  ///
-  /// In en, this message translates to:
-  /// **'None'**
-  String get deviceRainNone;
-
   /// Weather window tile: wind speed
   ///
   /// In en, this message translates to:
