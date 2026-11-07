@@ -38,7 +38,6 @@ at the top. This happens in the same commit that pushes the release tag.
 ### Fixed
 
 - Emergency Stop now halts a turning rotator where it is (#1671). Before, the stop never reached the rotator: a move started from a window kept going, and a plan's rotate only stopped being waited on. A rotator that refuses the halt is called out as "ROTATOR HALT FAILED — it may still be turning". The Emergency Stop confirmation lists the rotator among what it does.
-- Polar Align turns tracking on before the guider's RA turn when the mount is not tracking, keeps it on if it drops while the guider is still measuring (between its slews), and puts it back on exit (#1611). The iOptron refused the guider's slew with "requires Tracking to be true", which ended the routine as `fit_failed`.
 - The daemon keeps one log: Polar Align runs and every plate solve are now in `logs/` and in the bug report, not a separate `NINA/Logs` file (#1591). Core log lines now read `File.cs|Member|42|message`, without quotes around each value.
 
 ### Added

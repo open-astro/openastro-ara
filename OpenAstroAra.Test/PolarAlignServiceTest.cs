@@ -107,8 +107,6 @@ namespace OpenAstroAra.Test {
             public ConcurrentQueue<int> MeasureRequests { get; } = new();
             public double AltArcmin { get; set; } = 3.5;
             public double AzArcmin { get; set; } = -1.2;
-            /// <summary>Auto mode: the guider reports its own slew in flight.</summary>
-            public bool Slewing { get; set; }
 
             public void Calc() { lock (_gate) { _calced = true; } }
             public void LoseStar(bool lost) { lock (_gate) { _starVisible = !lost; } }
@@ -160,9 +158,6 @@ namespace OpenAstroAra.Test {
                         pts.Add(new JsonObject { ["position"] = p, ["x"] = 10.0, ["y"] = 10.0 });
                     }
                     o["measured_points"] = pts;
-                    if (!_calced && _auto && !_aborted) {
-                        o["rotation"] = new JsonObject { ["required_deg"] = 2.3, ["rotated_deg"] = 0.5, ["step"] = 1, ["required_steps"] = 17, ["slewing"] = Slewing };
-                    }
                     o["calced"] = _calced;
                     if (!_calced) {
                         return o;
@@ -211,23 +206,11 @@ namespace OpenAstroAra.Test {
             return (fake, tool);
         }
 
-        /// <param name="trackingSticks">False = the mount reports tracking off again after the switch-on
-        /// (a reconnect dropped it), until the next SetTrackingEnabled(true).</param>
-        private static Mock<ITelescopeMediator> NewMount(bool connected = true, bool tracking = true, bool trackingSticks = true) {
+        private static Mock<ITelescopeMediator> NewMount(bool connected = true) {
             var mount = new Mock<ITelescopeMediator>();
-            var trackingNow = tracking;
-            var reads = 0;
-            mount.Setup(m => m.GetInfo()).Returns(() => {
-                // A dropped tracking state shows up a few reads after the first switch-on, once.
-                if (!trackingSticks && trackingNow && ++reads == 6) {
-                    trackingNow = false;
-                    trackingSticks = true;
-                }
-                return new TelescopeInfo { Connected = connected, SiderealTime = 20.0, TrackingEnabled = trackingNow };
+            mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo {
+                Connected = connected, SiderealTime = 20.0, TrackingEnabled = true,
             });
-            mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>()))
-                .Callback<bool>(on => trackingNow = on)
-                .Returns(true);
             var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
             mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
@@ -250,8 +233,6 @@ namespace OpenAstroAra.Test {
             new(guider, NullLogger<PolarAlignService>.Instance, (mount ?? NewMount()).Object, NewStore(), ws, log,
                 new FakeFrameFetcher(), guideFocus: guideFocus is null ? null : () => guideFocus) {
                 FrameWaitSlack = TimeSpan.FromMilliseconds(10),
-                TrackingConfirmTimeout = TimeSpan.FromMilliseconds(500),
-                TrackingConfirmPoll = TimeSpan.FromMilliseconds(10),
             };
 
         private static async Task<GuiderService> ConnectGuiderAsync(FakeGuider fake) {
@@ -468,128 +449,6 @@ namespace OpenAstroAra.Test {
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
         }
 
-        [Test]
-        public async Task A_mount_that_is_not_tracking_is_set_tracking_before_the_tool_starts_and_restored_after() {
-            // The iOptron refused the guider's RA slew with "SlewToCoordinatesAsync requires Tracking to
-            // be true" (CM4, 2026-11-05): the routine turns tracking on first and hands it back on exit.
-            var paCalls = new ConcurrentQueue<bool>();
-            var (fake, tool) = StartFake(paCalls);
-            await using var _f = fake;
-            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
-            var mount = NewMount(tracking: false);
-            using var svc = NewService(guider, mount);
-            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
-            await WaitForRpcAsync(fake, "staticpa_start").ConfigureAwait(false);
-
-            mount.Verify(m => m.SetTrackingEnabled(true), Times.Once, "tracking goes on before the guider slews");
-            tool.Calc();
-            await PollStateAsync(svc, "adjusting").ConfigureAwait(false);
-            mount.Verify(m => m.SetTrackingEnabled(false), Times.Never, "tracking stays on while adjusting");
-
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
-            mount.Verify(m => m.SetTrackingEnabled(false), Times.Once, "the user's tracking-off is restored");
-        }
-
-        [Test]
-        public async Task Tracking_dropped_while_the_guider_rotates_is_turned_back_on() {
-            var paCalls = new ConcurrentQueue<bool>();
-            var (fake, tool) = StartFake(paCalls);
-            await using var _f = fake;
-            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
-            var mount = NewMount(tracking: false, trackingSticks: false);
-            using var svc = NewService(guider, mount);
-            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
-            await WaitForRpcAsync(fake, "staticpa_get_status", atLeast: 10).ConfigureAwait(false);
-
-            mount.Verify(m => m.SetTrackingEnabled(true), Times.AtLeast(2), "the drop during the RA turn is re-asserted");
-            tool.Calc();
-            await PollStateAsync(svc, "adjusting").ConfigureAwait(false);
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
-            mount.Verify(m => m.SetTrackingEnabled(false), Times.Once);
-        }
-
-        [TestCase("never-reported")]
-        [TestCase("refused")]
-        [TestCase("throws")]
-        public async Task A_mount_that_will_not_start_tracking_fails_as_tracking_off(string how) {
-            var paCalls = new ConcurrentQueue<bool>();
-            var (fake, _) = StartFake(paCalls);
-            await using var _f = fake;
-            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
-            var mount = NewMount(tracking: false);
-            switch (how) {
-                case "never-reported": mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns(true); break; // accepted, never reported
-                case "refused": mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns(false); break;
-                default: mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Throws(new InvalidOperationException("driver fault")); break;
-            }
-            var ws = new WsRecorder();
-            using var svc = NewService(guider, mount, ws: ws);
-            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
-
-            await PollStateAsync(svc, "failed").ConfigureAwait(false);
-            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
-            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("tracking_off"));
-            Assert.That(fake.ReceivedMethods, Does.Not.Contain("staticpa_start"));
-            mount.Verify(m => m.SetTrackingEnabled(false), Times.Never, "nothing to restore: tracking was never turned on");
-        }
-
-        [Test]
-        public async Task Tracking_reported_off_during_the_guider_own_slew_is_not_re_asserted() {
-            // The iOptron reports tracking off while it slews; a re-assert per step would only add
-            // a write per step and fight the mount. The guard waits for the slew to finish.
-            var paCalls = new ConcurrentQueue<bool>();
-            var (fake, tool) = StartFake(paCalls);
-            await using var _f = fake;
-            tool.Slewing = true;
-            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
-            var mount = NewMount(tracking: false, trackingSticks: false);
-            using var svc = NewService(guider, mount);
-            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
-            await WaitForRpcAsync(fake, "staticpa_get_status", atLeast: 12).ConfigureAwait(false);
-
-            int TurnOns() => mount.Invocations.Count(i => i.Method.Name == nameof(ITelescopeMediator.SetTrackingEnabled) && Equals(i.Arguments[0], true));
-            Assert.That(TurnOns(), Is.EqualTo(1), "the drop seen mid-slew is left for the step to finish");
-            tool.Slewing = false;
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            while (TurnOns() < 2) {
-                await Task.Delay(50, cts.Token).ConfigureAwait(false);
-            }
-            Assert.That(TurnOns(), Is.GreaterThanOrEqualTo(2), "re-asserted once the guider's slew is over");
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
-        }
-
-        [Test]
-        public async Task A_mount_tracking_at_start_that_drops_mid_turn_is_turned_back_on_and_left_on() {
-            var paCalls = new ConcurrentQueue<bool>();
-            var (fake, tool) = StartFake(paCalls);
-            await using var _f = fake;
-            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
-            var mount = NewMount(tracking: true, trackingSticks: false);
-            using var svc = NewService(guider, mount);
-            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
-            await WaitForRpcAsync(fake, "staticpa_get_status", atLeast: 10).ConfigureAwait(false);
-
-            mount.Verify(m => m.SetTrackingEnabled(true), Times.AtLeastOnce, "the drop is re-asserted");
-            tool.Calc();
-            await PollStateAsync(svc, "adjusting").ConfigureAwait(false);
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
-            mount.Verify(m => m.SetTrackingEnabled(false), Times.Never, "it was tracking when the user started: left on");
-        }
-
-        [Test]
-        public async Task A_mount_already_tracking_is_left_alone() {
-            var paCalls = new ConcurrentQueue<bool>();
-            var (fake, _) = StartFake(paCalls);
-            await using var _f = fake;
-            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
-            var mount = NewMount(tracking: true);
-            using var svc = NewService(guider, mount);
-            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
-            await WaitForRpcAsync(fake, "staticpa_start").ConfigureAwait(false);
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
-            mount.Verify(m => m.SetTrackingEnabled(It.IsAny<bool>()), Times.Never);
-        }
-
         // ── manual mode ──────────────────────────────────────────────────────────────────────
 
         [Test]
@@ -625,16 +484,14 @@ namespace OpenAstroAra.Test {
             var (fake, _) = StartFake(paCalls, starFound: false);
             await using var _f = fake;
             using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
-            var mount = NewMount(tracking: false);
             var ws = new WsRecorder();
-            using var svc = NewService(guider, mount, ws: ws);
+            using var svc = NewService(guider, ws: ws);
             await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             var status = await PollStateAsync(svc, "failed").ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("no_star"));
             Assert.That(fake.ReceivedMethods, Does.Not.Contain("staticpa_start"));
-            mount.Verify(m => m.SetTrackingEnabled(false), Times.Once, "tracking turned on for the run is handed back on failure too");
             Assert.That(status.State, Is.EqualTo("failed"));
         }
 
