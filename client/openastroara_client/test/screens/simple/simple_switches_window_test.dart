@@ -17,6 +17,7 @@ import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
+import 'package:openastroara/theme/ara_metrics.dart' show AraOpacity;
 import 'package:openastroara/widgets/status_indicator.dart' show StatusDot;
 
 class _Servers implements SavedServerService {
@@ -318,14 +319,14 @@ void main() {
     await tester.pump();
     expect(rig.writes, ['box/0=0.0'], reason: 'locked: no second write');
     await tester.pump(const Duration(milliseconds: 300));
-    expect(tester.widget<Slider>(_slider('box-1')).onChanged, isNull, reason: 'a slow answer: the slider reads locked');
+    expect(tester.widget<IgnorePointer>(find.ancestor(of: _slider('box-1'), matching: find.byType(IgnorePointer)).first).ignoring, isTrue, reason: 'a slow answer: the slider reads locked');
     expect(c.read(simpleSwitchSettingProvider), '12V Out 1', reason: 'the status pill names the port');
     rig.devices = [
       _box(ports: [_port(0, '12V Out 1', 0), _port(1, 'Dew 1', 60, max: 100)]),
     ];
     rig.hold!.complete();
     await tester.pumpAndSettle();
-    expect(tester.widget<Slider>(_slider('box-1')).onChanged, isNotNull);
+    expect(tester.widget<IgnorePointer>(find.ancestor(of: _slider('box-1'), matching: find.byType(IgnorePointer)).first).ignoring, isFalse);
     expect(c.read(simpleSwitchSettingProvider), isNull);
   });
 
@@ -393,6 +394,44 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(opacity('box-0'), 1);
+  });
+
+  testWidgets('a slow answer dims a slider as it dims the segments, and it takes nothing meanwhile', (tester) async {
+    // #1678 audit P3: the slider went grey (Material disabled) while the
+    // segments faded to AraOpacity.locked.
+    final (_, rig) = await _pump(tester, [_box()]);
+    double opacity() => find
+        .ancestor(of: _slider('box-1'), matching: find.byType(Opacity))
+        .evaluate()
+        .map((e) => (e.widget as Opacity).opacity)
+        .fold(1.0, (a, b) => a * b);
+    rig.hold = Completer();
+    await tester.tap(_segment('box-0', 'off'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(opacity(), AraOpacity.locked);
+    await tester.drag(_slider('box-1'), const Offset(-100, 0));
+    await tester.pump();
+    expect(find.text('Dew 1 · 60 %'), findsOneWidget, reason: 'locked: the drag moves nothing');
+    rig.hold!.complete();
+    await tester.pumpAndSettle();
+    expect(opacity(), 1);
+    expect(rig.writes, ['box/0=0.0']);
+  });
+
+  testWidgets("a screen reader hears each port's name once, on its control", (tester) async {
+    // #1678 audit P3: the row's text and the control's label were both read.
+    final handle = tester.ensureSemantics();
+    await _pump(tester, [
+      _box(ports: [
+        _port(0, '12V Out 1', 1),
+        _port(1, 'Dew 1', 60, max: 100),
+        _port(2, 'DEW6 Mode', 1, max: 2),
+      ]),
+    ]);
+    expect(find.bySemanticsLabel(RegExp('12V Out 1')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('Dew 1')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('DEW6 Mode')), findsOneWidget);
+    handle.dispose();
   });
 
   testWidgets('a port whose range is one value is not offered', (tester) async {

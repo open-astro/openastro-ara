@@ -34,7 +34,8 @@ import '../../state/app_locale_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
-import '../../widgets/equipment/equipment_status_chip.dart' show switchChipLevel;
+import '../../widgets/equipment/equipment_status_chip.dart'
+    show switchChipLevel;
 import '../../widgets/equipment/switch_port_layout.dart'
     show
         SwitchPortKind,
@@ -47,7 +48,7 @@ import '../../widgets/equipment/switch_port_layout.dart'
         usableSwitchStep;
 import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot;
 import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
-import 'simple_shell.dart' show SimpleSegment, simpleRailScale;
+import 'simple_shell.dart' show SimpleSegment, SimpleSegments, simpleRailScale;
 
 /// One window per device in Simple Mode (design/briefs/simple-mode-settings.md):
 /// the same widget opens from the device's dot in the top bar and as its page
@@ -358,29 +359,42 @@ Widget simpleWindowStepper({
 /// One height for every row of a device window (the 44 pt of its controls),
 /// so a text-only row keeps the rhythm. [id] (English) names its Key. Too
 /// narrow for label and control side by side (a one-third Split View), the
-/// label goes over the control.
-Widget simpleWindowRow(String label, Widget value, {required String id}) =>
-    LayoutBuilder(
-      key: Key('simple-window-row-$id'),
-      builder: (context, box) => box.maxWidth < kSimpleWindowControlWidth + 96
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: AraSpace.s4,
-              children: [
-                Text(label, style: kSimpleText),
-                value,
-              ],
-            )
-          : ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 44),
-              child: Row(
-                children: [
-                  Expanded(child: Text(label, style: kSimpleText)),
-                  value,
-                ],
-              ),
+/// label goes over the control. [labelInControl]: the control says the name
+/// to a screen reader, so the label isn't read a second time.
+Widget simpleWindowRow(
+  String label,
+  Widget value, {
+  required String id,
+  bool labelInControl = false,
+}) => LayoutBuilder(
+  key: Key('simple-window-row-$id'),
+  builder: (context, box) => box.maxWidth < kSimpleWindowControlWidth + 96
+      ? Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: AraSpace.s4,
+          children: [
+            ExcludeSemantics(
+              excluding: labelInControl,
+              child: Text(label, style: kSimpleText),
             ),
-    );
+            value,
+          ],
+        )
+      : ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Row(
+            children: [
+              Expanded(
+                child: ExcludeSemantics(
+                  excluding: labelInControl,
+                  child: Text(label, style: kSimpleText),
+                ),
+              ),
+              value,
+            ],
+          ),
+        ),
+);
 
 /// A window's ask before a move that would disturb a running plan: the
 /// question with Cancel and [confirm]. Too narrow for the question beside
@@ -2805,7 +2819,6 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
           ? (p.min + (v - p.min).roundToDouble()).clamp(p.min, p.max)
           : (v * 100).roundToDouble() / 100);
 
-
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
@@ -2856,7 +2869,9 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     if (devices.isEmpty) {
       children.add(
         Text(
-          connected.isEmpty ? l10n.deviceNotConnected : l10n.deviceNothingToSwitch,
+          connected.isEmpty
+              ? l10n.deviceNotConnected
+              : l10n.deviceNothingToSwitch,
           style: AraText.caption,
         ),
       );
@@ -2951,28 +2966,15 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
         container: true,
         child: Opacity(
           opacity: dimmed ? AraOpacity.locked : 1,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: AraColors.tileFill,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final (i, name) in names.indexed)
-                  Flexible(
-                    child: SimpleSegment(
-                      key: Key('simple-switch-$id-${lo + i}'),
-                      label: name,
-                      selected: on == lo + i,
-                      radius: 8,
-                      onTap: on == lo + i || locked
-                          ? null
-                          : () => _write(d, p, (lo + i).toDouble()),
-                    ),
-                  ),
-              ],
-            ),
+          child: SimpleSegments<int>(
+            options: [
+              for (final (i, name) in names.indexed)
+                (lo + i, name, '${lo + i}'),
+            ],
+            selected: on,
+            onPick: locked ? null : (v) => _write(d, p, v.toDouble()),
+            keyPrefix: 'simple-switch-$id',
+            expand: false,
           ),
         ),
       );
@@ -2998,30 +3000,35 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
       label = l10n.deviceSwitchLevel(p.label, _switchPercent(p, _round(p, v)));
       control = SizedBox(
         width: kSimpleWindowControlWidth,
-        child: Semantics(
-          label: p.label,
-          child: Slider(
-            key: Key('simple-switch-$id'),
-            min: p.min,
-            max: p.max,
-            divisions:
-                usableSwitchStep(p) == null ? null : switchSliderDivisions(p),
-            value: v,
-            semanticFormatterCallback: (x) => _switchPercent(p, _round(p, x)),
-            // Locked: it takes nothing; it reads disabled (greyed) only once
-            // dimmed, so a fast answer doesn't flash it.
-            onChanged: dimmed
-                ? null
-                : (x) {
-                    if (!locked) setState(() => _drag = (port: id, value: x));
-                  },
-            onChangeEnd: dimmed
-                ? null
-                : (x) {
-                    if (locked) return;
-                    setState(() => _drag = null);
-                    _write(d, p, x);
-                  },
+        child: Opacity(
+          opacity: dimmed ? AraOpacity.locked : 1,
+          child: IgnorePointer(
+            ignoring: dimmed,
+            child: Semantics(
+              label: p.label,
+              child: Slider(
+                key: Key('simple-switch-$id'),
+                min: p.min,
+                max: p.max,
+                divisions: usableSwitchStep(p) == null
+                    ? null
+                    : switchSliderDivisions(p),
+                value: v,
+                semanticFormatterCallback: (x) =>
+                    _switchPercent(p, _round(p, x)),
+                // Locked: it takes nothing; once dimmed it fades as the
+                // segments do and takes no touch or screen-reader action, so a
+                // fast answer doesn't flash it.
+                onChanged: (x) {
+                  if (!locked) setState(() => _drag = (port: id, value: x));
+                },
+                onChangeEnd: (x) {
+                  if (locked) return;
+                  setState(() => _drag = null);
+                  _write(d, p, x);
+                },
+              ),
+            ),
           ),
         ),
       );
@@ -3030,6 +3037,8 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
       label,
       control,
       id: 'switch-$id',
+      // The readout has no name of its own: the row's label says it.
+      labelInControl: !_autoRegulated(d, p),
     );
   }
 
