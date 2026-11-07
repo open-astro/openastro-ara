@@ -202,6 +202,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String deviceSlotFilter(int position, String filter) {
+    return '$position · $filter';
+  }
+
+  @override
   String get deviceNoFilters => 'This wheel reports no filters.';
 
   @override

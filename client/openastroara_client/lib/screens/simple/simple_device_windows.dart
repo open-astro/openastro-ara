@@ -1563,6 +1563,12 @@ class _SimpleFilterWheelWindowState
   String _name(FilterSlot slot) =>
       slot.name.isEmpty ? context.l10n.deviceSlot(slot.position) : slot.name;
 
+  /// A filter's segment: its position first, as the full UI's list shows
+  /// it, so the slot is known before the tap.
+  String _labelled(FilterSlot slot) => slot.name.isEmpty
+      ? context.l10n.deviceSlot(slot.position)
+      : context.l10n.deviceSlotFilter(slot.position, slot.name);
+
   /// The filter in place with its position, as the full UI shows it.
   String _placed(FilterSlot slot) => slot.name.isEmpty
       ? context.l10n.deviceSlot(slot.position)
@@ -1678,7 +1684,7 @@ class _SimpleFilterWheelWindowState
                     for (final slot in w.slots)
                       SimpleSegment(
                         key: Key('simple-filterwheel-slot-${slot.position}'),
-                        label: _name(slot),
+                        label: _labelled(slot),
                         selected: (_sent ?? w.currentSlot) == slot.position,
                         radius: 8,
                         onTap:

@@ -202,6 +202,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String deviceSlotFilter(int position, String filter) {
+    return '$position · $filter';
+  }
+
+  @override
   String get deviceNoFilters => 'This wheel reports no filters.';
 
   @override
@@ -2471,6 +2476,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String deviceFilterInSlot(String filter, int position) {
     return '$filter (posição $position)';
+  }
+
+  @override
+  String deviceSlotFilter(int position, String filter) {
+    return '$position · $filter';
   }
 
   @override

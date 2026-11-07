@@ -429,6 +429,12 @@ abstract class AppLocalizations {
   /// **'{filter} (slot {position})'**
   String deviceFilterInSlot(String filter, int position);
 
+  /// Filter wheel window: a filter's segment, its slot number then its name (e.g. 1 · Ha)
+  ///
+  /// In en, this message translates to:
+  /// **'{position} · {filter}'**
+  String deviceSlotFilter(int position, String filter);
+
   /// Filter wheel window: the wheel reports no slots
   ///
   /// In en, this message translates to:

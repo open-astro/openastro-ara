@@ -111,6 +111,9 @@ void main() {
     expect(find.text('L (slot 0)'), findsOneWidget, reason: 'the filter and its position, as the full UI shows it');
     expect(tester.widget<SimpleSegment>(_slot(0)).selected, isTrue);
     expect(find.text('Slot 2'), findsOneWidget, reason: 'an unnamed slot by its number');
+    // Each filter shows its position before it's tapped, as the full UI's list does.
+    expect(find.descendant(of: _slot(0), matching: find.text('0 · L')), findsOneWidget);
+    expect(find.descendant(of: _slot(1), matching: find.text('1 · Ha')), findsOneWidget);
     await tester.tap(_slot(1));
     await tester.pump();
     expect(wheel.calls, ['change 1']);
