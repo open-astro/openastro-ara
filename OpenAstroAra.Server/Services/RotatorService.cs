@@ -234,6 +234,25 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
         return Task.FromResult(Accepted("rotator.sync", idempotencyKey));
     }
 
+    // §57 panic-stop shape (as DomeService.AbortSlewAsync): send Halt NOW and await it, so the 202
+    // means the stop reached the driver. CancellationToken.None: Task.Run with an already-cancelled
+    // token never runs the lambda, so an HTTP timeout would silently skip the stop.
+    public async Task<OperationAcceptedDto> HaltAsync(string? idempotencyKey, CancellationToken ct) {
+        AlpacaRotator? client;
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            client = _state == EquipmentConnectionState.Connected ? _client : null;
+        }
+        if (client is null) {
+            throw new InvalidOperationException("rotator is not connected");
+        }
+        await Task.Run(() => client.Halt(), CancellationToken.None).ConfigureAwait(false);
+        // Stopped short of the move's target: the drift watch must not re-issue that move.
+        ResetDriftIfLive(client);
+        RefreshCacheOnce();
+        return Accepted("rotator.halt", idempotencyKey);
+    }
+
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background reverse boundary: the blocking ASCOM Reverse setter can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
     private void SetReverseInBackground(AlpacaRotator client, bool reverse) {

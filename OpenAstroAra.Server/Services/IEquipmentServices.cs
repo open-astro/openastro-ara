@@ -157,6 +157,9 @@ public interface IRotatorService {
     Task<OperationAcceptedDto> MoveAsync(RotatorMoveRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> SetReverseAsync(RotatorReverseRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> SyncAsync(RotatorSyncRequestDto request, string? idempotencyKey, CancellationToken ct);
+    /// <summary>Stop the rotator where it is (ASCOM <c>Halt</c>). Awaited, so the 202 means the
+    /// stop reached the driver. Throws InvalidOperationException (→ 409) when not connected.</summary>
+    Task<OperationAcceptedDto> HaltAsync(string? idempotencyKey, CancellationToken ct);
 }
 
 public interface IDomeService {

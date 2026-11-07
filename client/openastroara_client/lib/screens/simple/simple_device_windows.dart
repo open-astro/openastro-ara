@@ -12,10 +12,12 @@ import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../services/equipment_driver_api.dart';
 import '../../models/filter_wheel_status.dart';
 import '../../models/focuser_status.dart';
+import '../../models/rotator_status.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../models/guider_status.dart';
 import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/equipment/focuser_state.dart';
+import '../../state/equipment/rotator_state.dart';
 import '../../state/guider/guider_equipment_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
@@ -857,9 +859,11 @@ String simpleSteps(int n) => n
     .replaceAllMapped(RegExp(r'\B(?=(\d{3})+$)'), (_) => ' ')
     .padLeft(n < 0 ? 1 : 0, '−');
 
-/// The focuser's window: where it is, its temperature, and a knob to move
-/// it. A detent (30°) is one step of the size picked under it; the target
-/// shows while turning and the focuser goes there on letting go.
+/// The focuser's window: where it is and its temperature on the left, and a
+/// coarse and a fine knob on the right, upright like a focuser's knobs seen
+/// from the side. Rolling a knob up goes in and down goes out, as the
+/// drawtube does; the target shows while rolling and the focuser goes there
+/// on letting go.
 class SimpleFocuserWindow extends ConsumerStatefulWidget {
   const SimpleFocuserWindow({super.key, this.inSettings = false});
 
@@ -871,23 +875,38 @@ class SimpleFocuserWindow extends ConsumerStatefulWidget {
       _SimpleFocuserWindowState();
 }
 
-class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
-  int _step = 100;
+/// How far a finger or a scroll rolls a focus knob for one click.
+const double kSimpleFocusClick = 14;
 
-  /// While the knob turns: where it will send the focuser.
+class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
+  /// While a knob rolls: where it will send the focuser.
   int? _target;
 
   /// The last place sent, for "Moving to …".
   int? _sent;
 
-  /// The knob takes Tab like any control; the arrows move it a step.
-  final _dialFocus = FocusNode(debugLabel: 'simple-focuser-dial');
-  bool _dialFocused = false;
+  /// Each knob takes Tab like any control; Up moves it in a click, Down out.
+  final _coarseFocus = FocusNode(debugLabel: 'simple-focuser-coarse');
+  final _fineFocus = FocusNode(debugLabel: 'simple-focuser-fine');
+  FocusNode? _highlighted;
 
   @override
   void dispose() {
-    _dialFocus.dispose();
+    _coarseFocus.dispose();
+    _fineFocus.dispose();
     super.dispose();
+  }
+
+  /// One click of each knob: coarse about 1 % of the travel, fine a tenth of
+  /// that; 100 and 10 for a focuser with no travel to scale by (a relative
+  /// one).
+  (int, int) _clicks(FocuserStatus s) {
+    final c = s.capabilities;
+    if (c == null || !c.absoluteFocuser || c.maxPosition <= c.minPosition) {
+      return (100, 10);
+    }
+    final coarse = math.max(1, ((c.maxPosition - c.minPosition) / 100).round());
+    return (coarse, math.max(1, (coarse / 10).round()));
   }
 
   int _clamp(int v, FocuserStatus s) {
@@ -897,8 +916,8 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
         : v.clamp(c.minPosition, c.maxPosition);
   }
 
-  /// The dial moves nothing while autofocus runs (a touch would spoil its
-  /// curve) or while the position is unknown (a turn would jump from 0).
+  /// The knobs move nothing while autofocus runs (a touch would spoil its
+  /// curve) or while the position is unknown (a roll would jump from 0).
   bool _locked(FocuserStatus s) =>
       s.position == null || ref.read(autofocusLiveProvider).run.isRunning;
 
@@ -977,6 +996,77 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     }
   }
 
+  /// One knob with its click size under it ("Coarse · 600"): a slider to
+  /// screen readers, Up and Down a click from the keyboard.
+  Widget _knob(
+    FocuserStatus s,
+    String id,
+    String name,
+    String label,
+    int step,
+    FocusNode focus,
+    Size size,
+  ) {
+    final pos = s.position ?? 0;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      spacing: AraSpace.s4,
+      children: [
+        FocusableActionDetector(
+          focusNode: focus,
+          onShowFocusHighlight: (v) =>
+              setState(() => _highlighted = v ? focus : null),
+          // Up goes in, like the knob rolled up.
+          shortcuts: const {
+            SingleActivator(LogicalKeyboardKey.arrowUp): _DialStep(-1),
+            SingleActivator(LogicalKeyboardKey.arrowDown): _DialStep(1),
+          },
+          actions: {
+            _DialStep: CallbackAction<_DialStep>(
+              onInvoke: (i) => _go(s, _clamp(pos + i.dir * step, s)),
+            ),
+          },
+          child: Semantics(
+            slider: true,
+            label: label,
+            value: simpleSteps(pos),
+            increasedValue: simpleSteps(_clamp(pos + step, s)),
+            decreasedValue: simpleSteps(_clamp(pos - step, s)),
+            onIncrease: () => _go(s, _clamp(pos + step, s)),
+            onDecrease: () => _go(s, _clamp(pos - step, s)),
+            child: _FocusThumbwheel(
+              key: Key('simple-focuser-$id'),
+              size: size,
+              focused: _highlighted == focus,
+              enabled:
+                  s.position != null &&
+                  !ref.watch(
+                    autofocusLiveProvider.select((l) => l.run.isRunning),
+                  ),
+              onClicks: (n) {
+                HapticFeedback.selectionClick();
+                setState(
+                  () => _target = _clamp((_target ?? pos) + n * step, s),
+                );
+              },
+              onRelease: () {
+                final t = _target;
+                setState(() => _target = null);
+                if (t != null) _go(s, t);
+              },
+              // The system took the finger: nothing moves.
+              onCancel: () => setState(() => _target = null),
+            ),
+          ),
+        ),
+        Text(
+          context.l10n.deviceClickSize(name, simpleSteps(step)),
+          style: AraText.caption,
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = ref.watch(focuserProvider).value;
@@ -994,121 +1084,89 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
       );
     } else {
       final pos = s.position ?? 0;
+      final (coarse, fine) = _clicks(s);
+      final l10n = context.l10n;
+      final scale = simpleRailScale(context);
       children.addAll([
-        // Where the focuser is; where it will go shows above the dial.
-        simpleWindowRow(
-          context.l10n.devicePosition,
-          id: 'Position',
-          Text(simpleSteps(pos), style: kSimpleText),
-        ),
-        if (s.temperature != null)
-          simpleWindowRow(
-            context.l10n.deviceTemperature,
-            id: 'Temperature',
-            Text(simpleCelsius(s.temperature!), style: kSimpleText),
-          ),
-        SizedBox(
-          height: 18,
-          // Moving is working: blinking green (DESIGN.md status rule).
-          child: StatusBlink(
-            on: _target == null && s.isMoving,
-            child: Text(
-            _target != null
-                ? context.l10n.deviceLetGoToMoveTo(simpleSteps(_target!))
-                : s.isMoving
-                ? (_sent != null
-                      ? context.l10n.deviceMovingTo(simpleSteps(_sent!))
-                      : context.l10n.deviceMoving)
-                : '',
-            textAlign: TextAlign.center,
-            style: AraText.caption.copyWith(color: AraColors.accentConnected),
-          ),
-          ),
-        ),
-        LayoutBuilder(
-          builder: (context, box) => Center(
-            child: FocusableActionDetector(
-              focusNode: _dialFocus,
-              onShowFocusHighlight: (v) => setState(() => _dialFocused = v),
-              // Up or right turns it out, like the dial clockwise.
-              shortcuts: const {
-                SingleActivator(LogicalKeyboardKey.arrowUp): _DialStep(1),
-                SingleActivator(LogicalKeyboardKey.arrowRight): _DialStep(1),
-                SingleActivator(LogicalKeyboardKey.arrowDown): _DialStep(-1),
-                SingleActivator(LogicalKeyboardKey.arrowLeft): _DialStep(-1),
-              },
-              actions: {
-                _DialStep: CallbackAction<_DialStep>(
-                  onInvoke: (i) => _go(s, _clamp(pos + i.dir * _step, s)),
-                ),
-              },
-              child: Semantics(
-                slider: true,
-                label: context.l10n.deviceFocusPosition,
-                value: simpleSteps(pos),
-                increasedValue: simpleSteps(_clamp(pos + _step, s)),
-                decreasedValue: simpleSteps(_clamp(pos - _step, s)),
-                onIncrease: () => _go(s, _clamp(pos + _step, s)),
-                onDecrease: () => _go(s, _clamp(pos - _step, s)),
-                child: _FocusKnob(
-                  key: const Key('simple-focuser-knob'),
-                  focused: _dialFocused,
-                  enabled:
-                      s.position != null &&
-                      !ref.watch(
-                        autofocusLiveProvider.select((l) => l.run.isRunning),
-                      ),
-                  // Grows with the text like the rails, so the label in its
-                  // middle fits; never wider than the window.
-                  size: math.min(220 * simpleRailScale(context), box.maxWidth),
-                  onDetent: (d) {
-                    HapticFeedback.selectionClick();
-                    setState(
-                      () => _target = _clamp((_target ?? pos) + d * _step, s),
-                    );
-                  },
-                  onRelease: () {
-                    final t = _target;
-                    setState(() => _target = null);
-                    if (t != null) _go(s, t);
-                  },
-                  // The system took the finger: nothing moves.
-                  onCancel: () => setState(() => _target = null),
-                  // The middle runs autofocus (its square cancels it).
-                  centre: const _AutofocusButton(),
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: AraSpace.s16),
-        // Rows like the Guider window's: label left, control right.
-        simpleWindowRow(
-          context.l10n.deviceStep,
-          id: 'Step',
-          Container(
-            key: const Key('simple-focuser-steps'),
-            width: kSimpleWindowControlWidth,
-            decoration: BoxDecoration(
-              color: AraColors.tileFill,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                for (final n in const [10, 100, 1000])
-                  Expanded(
-                    child: SimpleSegment(
-                      key: Key('simple-focuser-step-$n'),
-                      label: '$n',
-                      selected: _step == n,
-                      radius: 8,
-                      onTap: () => setState(() => _step = n),
+        Row(
+          spacing: AraSpace.s12,
+          children: [
+            // Where the focuser is, big; where it will go shows under it.
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                spacing: 2,
+                children: [
+                  Text(l10n.devicePosition, style: AraText.caption),
+                  Text(
+                    simpleSteps(pos),
+                    style: kSimpleText.copyWith(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w600,
+                      fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
+                  // Moving is working: blinking green (DESIGN.md status rule).
+                  StatusBlink(
+                    on: _target == null && s.isMoving,
+                    child: Text(
+                      _target != null
+                          ? l10n.deviceLetGoToMoveTo(simpleSteps(_target!))
+                          : s.isMoving
+                          ? (_sent != null
+                                ? l10n.deviceMovingTo(simpleSteps(_sent!))
+                                : l10n.deviceMoving)
+                          : '',
+                      style: AraText.caption.copyWith(
+                        color: AraColors.accentConnected,
+                      ),
+                    ),
+                  ),
+                  if (s.temperature != null) ...[
+                    const SizedBox(height: AraSpace.s8),
+                    Text(l10n.deviceTemperature, style: AraText.caption),
+                    Text(simpleCelsius(s.temperature!), style: kSimpleText),
+                  ],
+                ],
+              ),
+            ),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              spacing: AraSpace.s4,
+              children: [
+                Text(l10n.deviceIn, style: AraText.caption),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  spacing: AraSpace.s8,
+                  children: [
+                    _knob(
+                      s,
+                      'coarse',
+                      l10n.deviceCoarse,
+                      l10n.deviceCoarseFocus,
+                      coarse,
+                      _coarseFocus,
+                      Size(72 * scale, 180 * scale),
+                    ),
+                    _knob(
+                      s,
+                      'fine',
+                      l10n.deviceFine,
+                      l10n.deviceFineFocus,
+                      fine,
+                      _fineFocus,
+                      Size(56 * scale, 140 * scale),
+                    ),
+                  ],
+                ),
+                Text(l10n.deviceOut, style: AraText.caption),
               ],
             ),
-          ),
+          ],
         ),
+        const SizedBox(height: AraSpace.s12),
+        const _AutofocusButton(),
         ..._refocus(),
       ]);
     }
@@ -1126,26 +1184,35 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
   }
 }
 
-/// A focuser knob drawn like a safe's dial: the whole face turns under a
-/// fixed mark, reporting each 30° detent (clockwise out, +1;
-/// counter-clockwise in, −1), then the release. [centre] sits in the middle
-/// and takes its own taps. It claims the finger at once (no drag slop), so
-/// the dial follows from the first touch. iOS has no rotary control of its
-/// own.
-class _FocusKnob extends StatefulWidget {
-  const _FocusKnob({
+/// A dial drawn like a safe's: the whole face turns under a fixed mark,
+/// reporting each [detent] turned (clockwise +1, counter-clockwise −1), then
+/// the release. A scroll over it turns it the same way and counts as let go
+/// once the scrolling stops. [angle] turns the face to the reading the mark
+/// shows; [centre] sits in the middle and takes its own taps. It claims the
+/// finger at once (no drag slop), so the dial follows from the first touch.
+/// iOS has no rotary control of its own.
+class _Dial extends StatefulWidget {
+  const _Dial({
     super.key,
+    required this.detent,
+    required this.angle,
+    required this.painter,
     required this.onDetent,
     required this.onRelease,
     required this.onCancel,
     required this.centre,
+    required this.size,
     this.focused = false,
-    this.size = 220,
     this.enabled = true,
   });
 
-  /// The dial's diameter: 220, more with large text, less in a narrow
-  /// window.
+  /// One click's turn, in radians.
+  final double detent;
+
+  /// The face's turn at rest, in radians; the parent moves it a detent at
+  /// each click, so the face keeps only the part of a turn not yet a click.
+  final double angle;
+  final CustomPainter painter;
   final double size;
 
   final ValueChanged<int> onDetent;
@@ -1162,34 +1229,45 @@ class _FocusKnob extends StatefulWidget {
   final bool focused;
 
   @override
-  State<_FocusKnob> createState() => _FocusKnobState();
+  State<_Dial> createState() => _DialState();
 }
 
-class _FocusKnobState extends State<_FocusKnob> {
+class _DialState extends State<_Dial> {
   double get _size => widget.size;
-  static const _detent = math.pi / 6;
 
-  /// The face's angle, and the turn not yet a whole detent.
-  double _angle = 0;
+  /// The turn not yet a whole detent, and the finger's last angle.
   double _pending = 0;
   double? _last;
 
+  /// A scroll counts as let go this long after its last tick.
+  static const _scrollRest = Duration(milliseconds: 350);
+  Timer? _scrollTimer;
+
+  @override
+  void dispose() {
+    _scrollTimer?.cancel();
+    super.dispose();
+  }
+
   double _at(Offset p) => math.atan2(p.dy - _size / 2, p.dx - _size / 2);
 
-  void _turn(Offset p) {
+  void _turnBy(double d) {
     if (!widget.enabled) return;
+    setState(() => _pending += d);
+    final whole = (_pending / widget.detent).truncate();
+    if (whole != 0) {
+      _pending -= whole * widget.detent;
+      widget.onDetent(whole);
+    }
+  }
+
+  void _turn(Offset p) {
     final a = _at(p);
     var d = a - (_last ?? a);
     if (d > math.pi) d -= 2 * math.pi;
     if (d < -math.pi) d += 2 * math.pi;
     _last = a;
-    setState(() => _angle += d);
-    _pending += d;
-    final whole = (_pending / _detent).truncate();
-    if (whole != 0) {
-      _pending -= whole * _detent;
-      widget.onDetent(whole);
-    }
+    _turnBy(d);
   }
 
   /// Set by a pointer cancel, which reaches the pan as an ordinary end.
@@ -1198,9 +1276,23 @@ class _FocusKnobState extends State<_FocusKnob> {
   void _end() {
     if (_last == null) return;
     _last = null;
-    _pending = 0;
+    setState(() => _pending = 0);
     _cancelled ? widget.onCancel() : widget.onRelease();
     _cancelled = false;
+  }
+
+  void _scroll(PointerSignalEvent e) {
+    if (e is! PointerScrollEvent || !widget.enabled) return;
+    // Claimed, so the sheet under the window doesn't scroll as well.
+    GestureBinding.instance.pointerSignalResolver.register(e, (e) {
+      // A tenth of a degree a pixel: one 5° click is a short flick.
+      _turnBy((e as PointerScrollEvent).scrollDelta.dy * math.pi / 1800);
+      _scrollTimer?.cancel();
+      _scrollTimer = Timer(_scrollRest, () {
+        setState(() => _pending = 0);
+        widget.onRelease();
+      });
+    });
   }
 
   @override
@@ -1222,6 +1314,7 @@ class _FocusKnobState extends State<_FocusKnob> {
         Listener(
           onPointerDown: (_) => _cancelled = false,
           onPointerCancel: (_) => _cancelled = true,
+          onPointerSignal: _scroll,
           child: RawGestureDetector(
             gestures: {
               _EagerPan: GestureRecognizerFactoryWithHandlers<_EagerPan>(
@@ -1248,11 +1341,10 @@ class _FocusKnobState extends State<_FocusKnob> {
             child: Opacity(
               opacity: widget.enabled ? 1 : 0.4,
               child: Transform.rotate(
-                key: const Key('simple-focuser-dial-face'),
-                angle: _angle,
+                angle: widget.angle + _pending,
                 child: CustomPaint(
                   size: Size.square(_size),
-                  painter: const _DialPainter(),
+                  painter: widget.painter,
                 ),
               ),
             ),
@@ -1269,13 +1361,216 @@ class _FocusKnobState extends State<_FocusKnob> {
             ),
           ),
         ),
-        SizedBox.square(dimension: _size * 0.42, child: widget.centre),
+        SizedBox.square(dimension: _size * 0.36, child: widget.centre),
       ],
     ),
   );
 }
 
-/// One keyboard step of the focuser knob: +1 out, −1 in.
+/// A focus knob seen from the side: an upright knurled cylinder whose ridges
+/// roll with the finger, reporting each click ([kSimpleFocusClick] of
+/// travel: down +1, out; up −1, in), then the release. A scroll over it
+/// rolls it the same way and counts as let go once the scrolling stops. It
+/// claims the finger at once (no drag slop), so it follows from the first
+/// touch.
+class _FocusThumbwheel extends StatefulWidget {
+  const _FocusThumbwheel({
+    super.key,
+    required this.size,
+    required this.onClicks,
+    required this.onRelease,
+    required this.onCancel,
+    this.focused = false,
+    this.enabled = true,
+  });
+
+  final Size size;
+  final ValueChanged<int> onClicks;
+  final VoidCallback onRelease;
+
+  /// A roll the system cut off (a pointer cancel), instead of [onRelease].
+  final VoidCallback onCancel;
+
+  /// Off: dimmed, and it rolls nothing.
+  final bool enabled;
+
+  /// Keyboard focus: a ring round it.
+  final bool focused;
+
+  @override
+  State<_FocusThumbwheel> createState() => _FocusThumbwheelState();
+}
+
+class _FocusThumbwheelState extends State<_FocusThumbwheel> {
+  /// How far the surface has rolled, and the roll not yet a whole click.
+  double _rolled = 0;
+  double _pending = 0;
+  bool _dragging = false;
+
+  /// Set by a pointer cancel, which reaches the drag as an ordinary end.
+  bool _cancelled = false;
+
+  /// A scroll counts as let go this long after its last tick.
+  static const _scrollRest = Duration(milliseconds: 350);
+  Timer? _scrollTimer;
+
+  @override
+  void dispose() {
+    _scrollTimer?.cancel();
+    super.dispose();
+  }
+
+  void _roll(double dy) {
+    if (!widget.enabled) return;
+    setState(() => _rolled += dy);
+    _pending += dy;
+    final whole = (_pending / kSimpleFocusClick).truncate();
+    if (whole != 0) {
+      _pending -= whole * kSimpleFocusClick;
+      widget.onClicks(whole);
+    }
+  }
+
+  void _end() {
+    if (!_dragging) return;
+    _dragging = false;
+    _pending = 0;
+    _cancelled ? widget.onCancel() : widget.onRelease();
+    _cancelled = false;
+  }
+
+  void _scroll(PointerSignalEvent e) {
+    if (e is! PointerScrollEvent || !widget.enabled) return;
+    // Claimed, so the sheet under the window doesn't scroll as well.
+    GestureBinding.instance.pointerSignalResolver.register(e, (e) {
+      _roll((e as PointerScrollEvent).scrollDelta.dy);
+      _scrollTimer?.cancel();
+      _scrollTimer = Timer(_scrollRest, () {
+        _pending = 0;
+        widget.onRelease();
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => Listener(
+    onPointerDown: (_) => _cancelled = false,
+    onPointerCancel: (_) => _cancelled = true,
+    onPointerSignal: _scroll,
+    child: RawGestureDetector(
+      gestures: {
+        _EagerPan: GestureRecognizerFactoryWithHandlers<_EagerPan>(
+          _EagerPan.new,
+          (r) {
+            r
+              ..dragStartBehavior = DragStartBehavior.down
+              ..onStart = (_) {
+                _dragging = true;
+              }
+              ..onUpdate = (d) {
+                _roll(d.delta.dy);
+              }
+              ..onEnd = (_) {
+                _end();
+              }
+              ..onCancel = () {
+                _cancelled = true;
+                _end();
+              };
+          },
+        ),
+      },
+      child: Opacity(
+        opacity: widget.enabled ? 1 : 0.4,
+        child: CustomPaint(
+          size: widget.size,
+          painter: _ThumbwheelPainter(_rolled, focused: widget.focused),
+        ),
+      ),
+    ),
+  );
+}
+
+/// The knob's side: a shaded cylinder with ridges round it at a fixed pitch,
+/// drawn where they face the viewer, and the fixed marks it rolls past.
+class _ThumbwheelPainter extends CustomPainter {
+  const _ThumbwheelPainter(this.rolled, {this.focused = false});
+
+  /// How far the surface has rolled, in logical pixels (down positive).
+  final double rolled;
+  final bool focused;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final body = RRect.fromRectAndRadius(
+      Rect.fromLTWH(6, 0, size.width - 12, size.height),
+      const Radius.circular(12),
+    );
+    canvas.drawRRect(
+      body,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            AraColors.bgPrimary,
+            AraColors.tileFill,
+            AraColors.bgPrimary,
+          ],
+        ).createShader(body.outerRect),
+    );
+    canvas.drawRRect(
+      body,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..color = focused ? AraColors.accentInfo : AraColors.border
+        ..strokeWidth = focused ? 2 : 1,
+    );
+    final r = size.height / 2 - 6;
+    final cy = size.height / 2;
+    // A ridge every 1.4 clicks of surface, rolling with the finger.
+    final n = (2 * math.pi * r / (kSimpleFocusClick * 1.4)).round();
+    final pitch = 2 * math.pi / n;
+    final turned = -rolled / r;
+    for (var i = 0; i < n; i++) {
+      final a = turned + i * pitch;
+      final facing = math.cos(a);
+      if (facing <= 0.05) continue;
+      final y = cy - math.sin(a) * r;
+      canvas.drawLine(
+        Offset(14, y),
+        Offset(size.width - 14, y),
+        Paint()
+          ..color = AraColors.textPrimary.withValues(
+            alpha: 0.08 + 0.32 * facing,
+          )
+          ..strokeWidth = 1 + 2.2 * facing,
+      );
+    }
+    // The fixed marks either side that the ridges roll past.
+    final mark = Paint()..color = AraColors.accentInfo;
+    canvas.drawPath(
+      Path()
+        ..moveTo(0, cy - 6)
+        ..lineTo(7, cy)
+        ..lineTo(0, cy + 6),
+      mark,
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(size.width, cy - 6)
+        ..lineTo(size.width - 7, cy)
+        ..lineTo(size.width, cy + 6),
+      mark,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_ThumbwheelPainter old) =>
+      old.rolled != rolled || old.focused != focused;
+}
+
+/// One keyboard step of a knob or dial (+1 or −1).
 class _DialStep extends Intent {
   const _DialStep(this.dir);
   final int dir;
@@ -1293,10 +1588,10 @@ class _EagerPan extends PanGestureRecognizer {
   }
 }
 
-/// The dial's face: a knurled rim and graduations, every 30° (a detent)
-/// long, every 6° short.
-class _DialPainter extends CustomPainter {
-  const _DialPainter();
+/// The rotator dial's face: a knurled rim, a tick every 5°, and a long one
+/// with its number every 30°, running clockwise from 0 at the top.
+class _AngleScalePainter extends CustomPainter {
+  const _AngleScalePainter();
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1312,25 +1607,42 @@ class _DialPainter extends CustomPainter {
       final dir = Offset(math.cos(a), math.sin(a));
       canvas.drawLine(c + dir * (r - 6), c + dir * r, grip);
     }
-    for (var i = 0; i < 60; i++) {
-      final a = i * math.pi / 30 - math.pi / 2;
+    for (var deg = 0; deg < 360; deg += 5) {
+      final a = (deg - 90) * math.pi / 180;
       final dir = Offset(math.cos(a), math.sin(a));
-      final major = i % 5 == 0;
+      final major = deg % 30 == 0;
       canvas.drawLine(
-        c + dir * (r - (major ? 26 : 16)),
-        c + dir * (r - 10),
+        c + dir * (r - (major ? 22 : 15)),
+        c + dir * (r - 9),
         Paint()
           ..color = major ? AraColors.textPrimary : AraColors.textSecondary
-          ..strokeWidth = major ? 3 : 1.5,
+          ..strokeWidth = major ? 2.5 : 1.2,
       );
+      if (!major) continue;
+      final label = TextPainter(
+        text: TextSpan(
+          text: '$deg',
+          style: AraText.caption.copyWith(
+            color: AraColors.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      label.paint(
+        canvas,
+        c + dir * (r - 32) - Offset(label.width / 2, label.height / 2),
+      );
+      label.dispose();
     }
   }
 
   @override
-  bool shouldRepaint(_DialPainter old) => false;
+  bool shouldRepaint(_AngleScalePainter old) => false;
 }
 
-/// The dial's middle: Autofocus, a square to cancel while it runs.
+/// Autofocus under the knobs, full width; it turns into the stop square and
+/// Cancel autofocus while it runs.
 class _AutofocusButton extends ConsumerWidget {
   const _AutofocusButton();
 
@@ -1339,33 +1651,39 @@ class _AutofocusButton extends ConsumerWidget {
     final live = ref.watch(autofocusLiveProvider);
     final running = live.run.isRunning;
     final af = ref.read(autofocusLiveProvider.notifier);
+    final label = running
+        ? context.l10n.deviceCancelAutofocus
+        : context.l10n.deviceAutofocus;
     return Material(
-      color: AraColors.bgPrimary,
-      shape: const CircleBorder(side: BorderSide(color: AraColors.border)),
+      color: AraColors.tileFill,
+      borderRadius: BorderRadius.circular(10),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         key: const Key('simple-focuser-autofocus'),
         onTap: live.busy ? null : (running ? af.cancel : af.start),
         child: Semantics(
           button: true,
-          label: running
-              ? context.l10n.deviceCancelAutofocus
-              : context.l10n.deviceAutofocus,
+          label: label,
           excludeSemantics: true,
-          child: Center(
-            child: running
-                ? const SimpleStopSquare()
-                : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.center_focus_strong, size: 26),
-                      Text(
-                        context.l10n.deviceAutofocus,
-                        style: AraText.caption,
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 48),
+            padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              spacing: AraSpace.s8,
+              children: [
+                if (running)
+                  const SimpleStopSquare()
+                else
+                  const Icon(Icons.center_focus_strong, size: 22),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
                   ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1520,6 +1838,346 @@ class _SimpleGuideGainSliderState extends ConsumerState<SimpleGuideGainSlider> {
       ],
     );
   }
+}
+
+/// A rotator angle as the window shows it: one decimal and a degree sign.
+String simpleDegrees(double a) => '${a.toStringAsFixed(1)}°';
+
+/// The rotator's window: the sky angle big on the left (the mechanical angle
+/// under it when they differ) and a dial on the right whose face is the sky
+/// angle. The number under its mark is where the rotator is or, while
+/// turning, where it will go; each click is a step of the size picked under
+/// it, and the rotator goes there on letting go. The middle stops it while it
+/// turns. Reverse, sync and the step size stay in the full UI.
+class SimpleRotatorWindow extends ConsumerStatefulWidget {
+  const SimpleRotatorWindow({super.key, this.inSettings = false});
+
+  /// In Settings the window ends with the rotator's versions.
+  final bool inSettings;
+
+  @override
+  ConsumerState<SimpleRotatorWindow> createState() =>
+      _SimpleRotatorWindowState();
+}
+
+class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
+  double _step = 5;
+
+  /// While the dial turns: where it will send the rotator.
+  double? _target;
+
+  /// The last angle sent, for "Moving to …"; cleared once it stops.
+  double? _sent;
+
+  /// A move let go while a plan runs: the window asks first.
+  double? _asking;
+
+  final _dialFocus = FocusNode(debugLabel: 'simple-rotator-dial');
+  bool _dialFocused = false;
+
+  @override
+  void dispose() {
+    _dialFocus.dispose();
+    super.dispose();
+  }
+
+  static double _norm(double a) => (a % 360 + 360) % 360;
+
+  /// [n] marks of the step from [from]: the first is the next mark that way
+  /// (92 at 5°: up 95, down 90), each one after a whole step.
+  double _snap(double from, int n) {
+    final at = from / _step;
+    final first = n > 0 ? (at + 1e-6).floor() : (at - 1e-6).ceil();
+    return _norm((first + n) * _step);
+  }
+
+  /// Moves while a plan runs ask first; a move to where it is does nothing.
+  void _request(RotatorStatus s, double target, bool planRunning) {
+    if (s.skyAngleDeg == null || s.isMoving) return;
+    if ((_norm(target - s.skyAngleDeg!) + 0.05) % 360 < 0.1) return;
+    planRunning ? setState(() => _asking = target) : _go(target);
+  }
+
+  Future<void> _go(double target) async {
+    setState(() => _sent = target);
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.rotator);
+    final l10n = context.l10n;
+    try {
+      final performed = await ref
+          .read(rotatorProvider.notifier)
+          .move(target, useSkyAngle: true);
+      if (!performed) _sayBusy(ref, l10n);
+    } catch (e) {
+      notify(
+        l10n.deviceCouldntMoveRotator,
+        detail: describeEquipmentError(e),
+        error: true,
+      );
+    }
+  }
+
+  Future<void> _halt() async {
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.rotator);
+    final l10n = context.l10n;
+    try {
+      await ref.read(rotatorProvider.notifier).halt();
+    } catch (e) {
+      notify(
+        l10n.deviceCouldntStopRotator,
+        detail: describeEquipmentError(e),
+        error: true,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(rotatorProvider, (prev, next) {
+      if ((prev?.value?.isMoving ?? false) &&
+          !(next.value?.isMoving ?? false)) {
+        setState(() => _sent = null);
+      }
+    });
+    final l10n = context.l10n;
+    final s = ref.watch(rotatorProvider).value;
+    final children = <Widget>[
+      SimpleDeviceHeader(type: l10n.shellRotator, status: s),
+    ];
+    if (s == null || !s.isConnected) {
+      children.add(
+        Text(
+          s?.isConnecting ?? false
+              ? l10n.deviceConnecting
+              : l10n.deviceNotConnected,
+          style: AraText.caption,
+        ),
+      );
+    } else {
+      // Watched, so it's known by the time the dial is let go.
+      final planRunning =
+          ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
+      final sky = s.skyAngleDeg;
+      final mech = s.mechanicalAngleDeg;
+      final enabled = sky != null && !s.isMoving;
+      final shown = _target ?? sky ?? 0;
+      final scale = simpleRailScale(context);
+      children.add(
+        LayoutBuilder(
+          // 180 pt, more with large text; never more than about half a narrow
+          // window, so the reading keeps its room.
+          builder: (context, box) {
+            final dial = math.min(180 * scale, box.maxWidth * 0.55);
+            return Row(
+              spacing: AraSpace.s12,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    spacing: 2,
+                    children: [
+                      Text(l10n.deviceSkyAngle, style: AraText.caption),
+                      // Shrinks in a narrow window rather than wrap.
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: AlignmentDirectional.centerStart,
+                        child: Text(
+                          sky == null ? '—' : simpleDegrees(sky),
+                          maxLines: 1,
+                          style: kSimpleText.copyWith(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w600,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ),
+                      // Moving is working: blinking green (DESIGN.md status rule).
+                      StatusBlink(
+                        on: _target == null && s.isMoving,
+                        child: Text(
+                          _target != null
+                              ? l10n.deviceLetGoToMoveTo(
+                                  simpleDegrees(_target!),
+                                )
+                              : s.isMoving
+                              ? (_sent != null
+                                    ? l10n.deviceMovingTo(simpleDegrees(_sent!))
+                                    : l10n.deviceMoving)
+                              : '',
+                          style: AraText.caption.copyWith(
+                            color: AraColors.accentConnected,
+                          ),
+                        ),
+                      ),
+                      if (sky != null &&
+                          mech != null &&
+                          (_norm(sky - mech) + 0.05) % 360 >= 0.1) ...[
+                        const SizedBox(height: AraSpace.s8),
+                        Text(
+                          l10n.deviceMechanicalAngle,
+                          style: AraText.caption,
+                        ),
+                        Text(simpleDegrees(mech), style: kSimpleText),
+                      ],
+                    ],
+                  ),
+                ),
+                FocusableActionDetector(
+                  focusNode: _dialFocus,
+                  onShowFocusHighlight: (v) => setState(() => _dialFocused = v),
+                  // Up or right a step up, as the screen reader's increase.
+                  shortcuts: const {
+                    SingleActivator(LogicalKeyboardKey.arrowUp): _DialStep(1),
+                    SingleActivator(LogicalKeyboardKey.arrowRight): _DialStep(
+                      1,
+                    ),
+                    SingleActivator(LogicalKeyboardKey.arrowDown): _DialStep(
+                      -1,
+                    ),
+                    SingleActivator(LogicalKeyboardKey.arrowLeft): _DialStep(
+                      -1,
+                    ),
+                  },
+                  actions: {
+                    _DialStep: CallbackAction<_DialStep>(
+                      onInvoke: (i) => sky == null
+                          ? null
+                          : _request(s, _snap(sky, i.dir), planRunning),
+                    ),
+                  },
+                  child: Semantics(
+                    slider: true,
+                    label: l10n.deviceSkyAngle,
+                    value: sky == null ? null : simpleDegrees(sky),
+                    increasedValue: sky == null
+                        ? null
+                        : simpleDegrees(_snap(sky, 1)),
+                    decreasedValue: sky == null
+                        ? null
+                        : simpleDegrees(_snap(sky, -1)),
+                    onIncrease: sky == null
+                        ? null
+                        : () => _request(s, _snap(sky, 1), planRunning),
+                    onDecrease: sky == null
+                        ? null
+                        : () => _request(s, _snap(sky, -1), planRunning),
+                    child: _Dial(
+                      key: const Key('simple-rotator-dial'),
+                      size: dial,
+                      detent: _step * math.pi / 180,
+                      // The reading sits under the mark at the top.
+                      angle: -shown * math.pi / 180,
+                      painter: const _AngleScalePainter(),
+                      focused: _dialFocused,
+                      enabled: enabled,
+                      // Clockwise brings lower numbers under the mark.
+                      onDetent: (d) {
+                        HapticFeedback.selectionClick();
+                        setState(() => _target = _snap(_target ?? sky!, -d));
+                      },
+                      onRelease: () {
+                        final t = _target;
+                        setState(() => _target = null);
+                        if (t != null) _request(s, t, planRunning);
+                      },
+                      // The system took the finger: nothing moves.
+                      onCancel: () => setState(() => _target = null),
+                      centre: _RotatorStop(onStop: s.isMoving ? _halt : null),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+      if (_asking != null) {
+        final target = _asking!;
+        children.add(
+          simpleWindowConfirm(
+            question: l10n.devicePlanRunningRotate,
+            confirm: l10n.deviceRotateAnyway,
+            onCancel: () => setState(() => _asking = null),
+            onConfirm: () {
+              setState(() => _asking = null);
+              _go(target);
+            },
+          ),
+        );
+      }
+      children.addAll([
+        const SizedBox(height: AraSpace.s12),
+        simpleWindowRow(
+          l10n.deviceStep,
+          id: 'Step',
+          Container(
+            key: const Key('simple-rotator-steps'),
+            width: kSimpleWindowControlWidth,
+            decoration: BoxDecoration(
+              color: AraColors.tileFill,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                for (final n in const [1, 5, 15])
+                  Expanded(
+                    child: SimpleSegment(
+                      key: Key('simple-rotator-step-$n'),
+                      label: '$n°',
+                      selected: _step == n,
+                      radius: 8,
+                      onTap: () => setState(() => _step = n.toDouble()),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ]);
+    }
+    if (widget.inSettings) {
+      children.addAll(
+        _versions(context, ref.watch(deviceDriverProvider('rotator')).value),
+      );
+    }
+    return Column(
+      key: const Key('simple-device-rotator'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s4,
+      children: children,
+    );
+  }
+}
+
+/// The rotator dial's middle: the shutter's stop square. Grey and taking no
+/// tap at rest; red while the rotator turns, and a tap stops it.
+class _RotatorStop extends StatelessWidget {
+  const _RotatorStop({this.onStop});
+
+  final VoidCallback? onStop;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    color: AraColors.bgPrimary,
+    shape: const CircleBorder(side: BorderSide(color: AraColors.border)),
+    clipBehavior: Clip.antiAlias,
+    child: Semantics(
+      button: true,
+      enabled: onStop != null,
+      label: context.l10n.deviceStopRotator,
+      excludeSemantics: true,
+      child: InkWell(
+        key: const Key('simple-rotator-stop'),
+        onTap: onStop,
+        child: Center(
+          child: SimpleStopSquare(
+            color: onStop == null
+                ? AraColors.textDisabled
+                : AraColors.accentError,
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 /// The filter wheel's window: the filter in place, and a tap on a filter

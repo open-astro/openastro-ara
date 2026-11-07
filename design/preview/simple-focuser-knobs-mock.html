@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Focuser Thumbwheel</title>
+<style>
+  /* Layout: one iPad-sized stage with the Simple Mode Focuser window over the image; layout picker above it.
+     Single dark look on purpose: these are DESIGN.md tokens (lib/theme/ara_colors.dart), same as design/preview/simple-focuser-mock.html. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+    --ok: #4CAF50; --info: #42A5F5; --sel: #1976D2; --tile: #383838; --warn: #FFB300;
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys);
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+  body.night { filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(.75); }
+  .page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 80ch; }
+  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--warn); color: var(--warn); margin-left: 6px; vertical-align: 3px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  .group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible, canvas:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+  .stage-wrap { overflow-x: auto; }
+  .ipad { width: 1024px; height: 720px; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 60% 45%, #3a3f4c 0, #12141a 55%, #08090c 100%); }
+  .star { position: absolute; left: 660px; top: 330px; width: 26px; height: 26px; border-radius: 50%;
+          background: radial-gradient(circle, #fff 0, #fff8 30%, transparent 70%); transition: filter .25s, transform .25s; }
+  .strip { position: absolute; left: 16px; right: 16px; top: 16px; height: 56px; background: rgba(26,26,26,.9); border-radius: 10px;
+           display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 13px; color: var(--text2); }
+  .dot { display: inline-flex; align-items: center; gap: 6px; } .dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .dot.hot { outline: 1.5px solid var(--sel); outline-offset: 4px; border-radius: 6px; color: var(--text); }
+  .dot.off i { background: #666; }
+
+  .win { position: absolute; left: 16px; top: 88px; width: 360px; background: rgba(26,26,26,.9); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+         border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+  .head { display: flex; align-items: center; gap: 8px; font-weight: 600; min-height: 32px; }
+  .head i { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
+  .head.off i { background: #666; }
+  .r { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+  .r .l { flex: 1; } .v { font-variant-numeric: tabular-nums; }
+  .caption { color: var(--text2); font-size: 12px; }
+  .status { color: var(--ok); font-size: 12px; text-align: center; min-height: 18px; font-variant-numeric: tabular-nums; }
+  .blink { animation: blink 1s steps(2, start) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
+
+  /* The knob pair: coarse (big) and fine (small) side by side, like a dual-speed Crayford seen from the side */
+  .wheelbox { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 6px 0; }
+  .pair { display: flex; align-items: center; gap: 10px; }
+  .knob { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .knob .caption { font-variant-numeric: tabular-nums; }
+  .wheel { display: block; touch-action: none; cursor: grab; border-radius: 12px; }
+  .wheel.locked { opacity: .4; cursor: not-allowed; }
+  .wheel:active { cursor: grabbing; }
+  .arrows { display: flex; flex-direction: column; justify-content: space-between; height: 200px; color: var(--text2); font-size: 12px; padding-bottom: 22px; }
+  .readout { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+  .readout .big { font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .gauge { width: 8px; height: 200px; border-radius: 4px; background: var(--tile); position: relative; margin-bottom: 22px; }
+  .gauge .now { position: absolute; left: -4px; width: 16px; height: 3px; border-radius: 2px; background: var(--text); }
+  .gauge .tgt { position: absolute; left: -6px; width: 20px; height: 3px; border-radius: 2px; background: var(--ok); }
+  .gauge .ends { position: absolute; left: 14px; font-size: 11px; color: var(--text2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  .af { height: 48px; border: 0; border-radius: 10px; background: var(--tile); color: var(--text); font: 600 15px var(--sys); cursor: pointer;
+        display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .af .sq { width: 12px; height: 12px; background: currentColor; border-radius: 2px; }
+  .af.running { color: var(--ok); }
+  .slider { width: 168px; accent-color: var(--sel); }
+
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .notes div { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+  .notes h2 { font-size: 14px; margin: 0 0 4px; }
+  .notes p { margin: 0; color: var(--text2); font-size: 13px; }
+  @media (prefers-reduced-motion: reduce) { .blink { animation: none; } .star { transition: none; } }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <h1>Focuser window: coarse and fine knobs <span class="tag">proposed</span></h1>
+  <p class="note">The round dial goes to the Rotator. The Focuser gets two upright knurled knobs side by side, like a dual-speed focuser seen from the side: a big coarse knob and a small fine one. Roll a knob up to go in and down to go out, the way a real focuser's drawtube travels. Each ridge is one click and gives a haptic tick. A click scales to the focuser's travel: coarse is about 1 % of it and fine a tenth of that, so 300 and 30 steps for this 30 000-step focuser. A relative focuser, which has no travel, falls back to 100 and 10. A mouse or trackpad scroll over a knob rolls it too, and the focuser moves once the scrolling stops. The target shows while you roll, and the focuser moves when you let go. The two knobs replace the 10 / 100 / 1000 step picker. Everything here works: drag a knob, use the mouse wheel over it, or focus it and press the arrow keys. The star sharpens near best focus (12 400).</p>
+
+  <div class="controls">
+    <div class="group"><span class="lbl">Layout</span>
+      <div class="seg" role="group" aria-label="Layout" id="layout">
+        <button aria-pressed="false" data-v="a">A · Centred</button>
+        <button aria-pressed="true" data-v="b">B · Beside the reading (chosen)</button>
+        <button aria-pressed="false" data-v="c">C · With travel gauge</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">State</span>
+      <div class="seg" role="group" aria-label="State" id="state">
+        <button aria-pressed="true" data-v="on">Connected</button>
+        <button aria-pressed="false" data-v="off">Not connected</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">View</span>
+      <div class="seg" role="group" aria-label="View" id="view">
+        <button aria-pressed="true" data-v="day">Normal</button>
+        <button aria-pressed="false" data-v="night">Night (red)</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-wrap">
+    <div class="ipad">
+      <div class="star" id="star"></div>
+      <div class="strip">
+        <span class="dot"><i></i>Camera</span><span class="dot"><i></i>Mount</span>
+        <span class="dot hot" id="stripDot"><i></i>Focuser</span><span class="dot"><i></i>Guider</span>
+        <span class="dot"><i></i>Rotator</span>
+      </div>
+      <div class="win" id="win"></div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div><h2>A · Centred</h2><p>Closest to today's window: rows on top, the two knobs in the middle with In above and Out below, then Autofocus.</p></div>
+    <div><h2>B · Beside the reading</h2><p>The position sits large on the left and the knobs on the right, where your thumb rests. It's the shortest window and covers the least of the image.</p></div>
+    <div><h2>C · With travel gauge</h2><p>Like A, plus a thin bar showing where the focuser sits in its travel and where the target lands. In is at the top, matching the knobs. Absolute focusers only; a relative one hides the bar.</p></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const BEST = 12400, MIN = 0, MAX = 30000, RIDGE = Math.PI / 14, PX_PER_RIDGE = 14;
+  // Coarse is the big knob, fine the small one, as on a dual-speed focuser.
+  // A click scales to the focuser's travel: coarse about 1 %, fine a tenth of that (30 000 travel: 300 / 30).
+  const COARSE = Math.max(1, Math.round((MAX - MIN) / 100)), FINE = Math.max(1, Math.round(COARSE / 10));
+  const KNOBS = [
+    { id: 'coarse', name: 'Coarse', step: COARSE, w: 84, h: 200, angle: 0, pending: 0 },
+    { id: 'fine', name: 'Fine', step: FINE, w: 60, h: 150, angle: 0, pending: 0 },
+  ];
+  const S = { layout: 'b', on: true, pos: 12000, target: null, sent: null, moving: false, af: false, refocus: 2 };
+  let drag = null;
+
+  const fmt = n => String(Math.abs(n)).replace(/\B(?=(\d{3})+$)/g, ' ');
+  const clamp = v => Math.max(MIN, Math.min(MAX, v));
+  const $ = s => document.querySelector(s);
+
+  function seg(id, fn) {
+    $(id).addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      $(id).querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+      fn(b.dataset.v); render();
+    });
+  }
+  seg('#layout', v => S.layout = v);
+  seg('#state', v => { S.on = v === 'on'; S.target = null; });
+  seg('#view', v => document.body.classList.toggle('night', v === 'night'));
+
+  const locked = () => S.af;
+
+  function statusText() {
+    if (S.target != null) return { t: `Let go to move to ${fmt(S.target)}`, blink: false };
+    if (S.af) return { t: 'Autofocus running…', blink: true };
+    if (S.moving) return { t: `Moving to ${fmt(S.sent)}`, blink: true };
+    return { t: '', blink: false };
+  }
+
+  const arrows = `<div class="arrows" aria-hidden="true"><span>▲ In</span><span>▼ Out</span></div>`;
+  function gauge() {
+    // In (low numbers) at the top, like the knobs.
+    const y = v => (v - MIN) / (MAX - MIN) * 200;
+    return `<div class="gauge" aria-hidden="true">
+      <span class="ends" style="top:-6px">${fmt(MIN)}</span><span class="ends" style="bottom:-6px">${fmt(MAX)}</span>
+      <div class="now" style="top:${y(S.pos) - 1}px"></div>
+      ${S.target != null ? `<div class="tgt" style="top:${y(S.target) - 1}px"></div>` : ''}</div>`;
+  }
+  function pair() {
+    return `<div class="pair">${KNOBS.map(k => `<div class="knob">
+      <canvas class="wheel ${locked() ? 'locked' : ''}" id="w-${k.id}" data-k="${k.id}" width="${k.w}" height="${k.h}" tabindex="0"
+        role="slider" aria-label="${k.name} focus, ${k.step} steps a click" aria-valuenow="${S.pos}" aria-valuemin="${MIN}" aria-valuemax="${MAX}"
+        aria-valuetext="${fmt(S.pos)} steps" aria-disabled="${locked()}"></canvas>
+      <span class="caption">${k.name} · ${k.step}</span></div>`).join('')}</div>`;
+  }
+
+  function render() {
+    $('#stripDot').classList.toggle('off', !S.on);
+    const st = statusText();
+    const head = `<div class="head ${S.on ? '' : 'off'}"><i></i>Focuser</div>`;
+    if (!S.on) { $('#win').innerHTML = head + `<div class="caption">Not connected</div>`; blur(); return; }
+    let body;
+    if (S.layout === 'b') {
+      body = `<div class="wheelbox" style="justify-content:space-between">
+        <div class="readout"><span class="caption">Position</span><span class="big">${fmt(S.pos)}</span>
+          <span class="status ${st.blink ? 'blink' : ''}" style="text-align:left">${st.t}</span>
+          <span class="caption" style="margin-top:8px">Temperature</span><span class="v">4.6 °C</span></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><span class="caption">▲ In</span>${pair()}<span class="caption">▼ Out</span></div></div>`;
+    } else {
+      body = `<div class="r"><span class="l">Position</span><span class="v" id="posv">${fmt(S.pos)}</span></div>
+        <div class="r"><span class="l">Temperature</span><span class="v">4.6 °C</span></div>
+        <div class="status ${st.blink ? 'blink' : ''}">${st.t}</div>
+        <div class="wheelbox">${S.layout === 'c' ? gauge() + '<span style="width:34px"></span>' : ''}${pair()}${arrows}</div>`;
+    }
+    const af = `<button class="af ${S.af ? 'running' : ''}" id="af">${S.af ? '<span class="sq"></span>Stop autofocus' : 'Autofocus'}</button>`;
+    const refocus = `<div class="r"><span class="l">Refocus temp</span><span class="v" id="refv">${S.refocus ? S.refocus + ' °C' : 'Never'}</span></div>
+      <div class="r" style="min-height:28px;justify-content:flex-end"><input class="slider" id="refocus" type="range" min="0" max="10" step="1" value="${S.refocus}" aria-label="Refocus temperature"></div>`;
+    $('#win').innerHTML = head + body + af + refocus;
+    wire(); KNOBS.forEach(draw); blur();
+  }
+
+  // A cylinder seen from the side: ridges round its circumference, spaced by sin and shaded by cos.
+  function draw(k) {
+    const c = $('#w-' + k.id); if (!c) return;
+    const g = c.getContext('2d'), w = c.width, h = c.height, R = h / 2 - 6, cy = h / 2;
+    g.clearRect(0, 0, w, h);
+    const body = g.createLinearGradient(0, 0, 0, h);
+    body.addColorStop(0, '#141414'); body.addColorStop(.5, '#4a4a4a'); body.addColorStop(1, '#141414');
+    g.fillStyle = body; roundRect(g, 4, 0, w - 8, h, 12); g.fill();
+    g.strokeStyle = '#555'; g.lineWidth = 1; roundRect(g, 4.5, .5, w - 9, h - 1, 12); g.stroke();
+    // Ridges sit at a fixed pitch along the surface, so the small knob shows fewer of them.
+    const n = Math.round(2 * Math.PI * R / (PX_PER_RIDGE * 1.4)), pitch = 2 * Math.PI / n;
+    for (let i = 0; i < n; i++) {
+      const a = k.angle + i * pitch;
+      const s = Math.sin(a), q = Math.cos(a);
+      if (q <= 0.05) continue;
+      const y = cy - s * R;
+      g.strokeStyle = `rgba(255,255,255,${0.08 + 0.32 * q})`;
+      g.lineWidth = 1 + 2.2 * q;
+      g.beginPath(); g.moveTo(12, y); g.lineTo(w - 12, y); g.stroke();
+      g.strokeStyle = `rgba(0,0,0,${0.5 * q})`; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(12, y + 1.5 + q); g.lineTo(w - 12, y + 1.5 + q); g.stroke();
+    }
+    // The fixed index marks the knob rolls past.
+    g.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--info');
+    g.beginPath(); g.moveTo(0, cy - 6); g.lineTo(7, cy); g.lineTo(0, cy + 6); g.fill();
+    g.beginPath(); g.moveTo(w, cy - 6); g.lineTo(w - 7, cy); g.lineTo(w, cy + 6); g.fill();
+  }
+  function roundRect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+
+  // Up is in (lower position), down is out, like a real drawtube.
+  function clicks(k, n) {
+    if (!n) return;
+    S.target = clamp((S.target ?? S.pos) + n * k.step);
+    if (navigator.vibrate) try { navigator.vibrate(5); } catch (e) {}
+    const st = statusText(), el = $('.status');
+    if (el) { el.textContent = st.t; el.classList.toggle('blink', st.blink); }
+    if (S.layout === 'c') { const gz = $('.gauge'); if (gz) gz.outerHTML = gauge(); }
+  }
+
+  function roll(k, dy) { // the surface follows the finger: finger down rolls the front face down
+    const R = k.h / 2 - 6;
+    k.angle -= dy / R;
+    k.pending += dy;
+    const whole = Math.trunc(k.pending / PX_PER_RIDGE);
+    if (whole) { k.pending -= whole * PX_PER_RIDGE; clicks(k, whole); }
+    draw(k);
+  }
+
+  function release() {
+    const t = S.target; S.target = null; KNOBS.forEach(k => k.pending = 0);
+    if (t == null || t === S.pos) { render(); return; }
+    go(t);
+  }
+  function go(t) {
+    S.sent = t; S.moving = true; render();
+    const from = S.pos, start = performance.now(), dur = Math.min(2200, 400 + Math.abs(t - from) / 2);
+    (function tick(now) {
+      const p = Math.min(1, (now - start) / dur);
+      S.pos = Math.round(from + (t - from) * p); blur();
+      const pv = $('#posv'); if (pv) pv.textContent = fmt(S.pos);
+      const big = $('.big'); if (big) big.textContent = fmt(S.pos);
+      if (p < 1) requestAnimationFrame(tick); else { S.moving = false; render(); }
+    })(start);
+  }
+
+  function wire() {
+    document.querySelectorAll('.wheel').forEach(c => {
+      const k = KNOBS.find(x => x.id === c.dataset.k);
+      c.addEventListener('pointerdown', e => { if (locked()) return; c.setPointerCapture(e.pointerId); drag = { k, y: e.clientY }; e.preventDefault(); });
+      c.addEventListener('pointermove', e => { if (!drag || drag.k !== k) return; roll(k, e.clientY - drag.y); drag.y = e.clientY; });
+      const end = cancel => { if (!drag) return; drag = null; if (cancel) { S.target = null; render(); } else release(); };
+      c.addEventListener('pointerup', () => end(false));
+      c.addEventListener('pointercancel', () => end(true));
+      let t;
+      c.addEventListener('wheel', e => { if (locked()) return; e.preventDefault(); roll(k, e.deltaY * 0.6); clearTimeout(t); t = setTimeout(release, 450); }, { passive: false });
+      c.addEventListener('keydown', e => {
+        if (locked()) return;
+        const d = { ArrowUp: -1, ArrowDown: 1 }[e.key]; if (!d) return;
+        e.preventDefault(); k.angle -= d * RIDGE; draw(k); go(clamp(S.pos + d * k.step));
+      });
+    });
+    $('#af').addEventListener('click', () => {
+      if (S.af) { S.af = false; render(); return; }
+      S.af = true; render();
+      setTimeout(() => { if (!S.af) return; S.af = false; go(BEST); }, 3500);
+    });
+    $('#refocus').addEventListener('change', e => { S.refocus = +e.target.value; render(); });
+    $('#refocus').addEventListener('input', e => { S.refocus = +e.target.value; $('#refv').textContent = S.refocus ? S.refocus + ' °C' : 'Never'; });
+  }
+
+  function blur() {
+    const d = Math.abs(S.pos - BEST);
+    $('#star').style.filter = `blur(${Math.min(9, d / 220)}px)`;
+    $('#star').style.transform = `scale(${1 + Math.min(2.2, d / 900)})`;
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

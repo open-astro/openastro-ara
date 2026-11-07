@@ -80,6 +80,8 @@ import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/equipment/equipment_device_state.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
+import 'package:openastroara/state/equipment/rotator_state.dart';
+import 'package:openastroara/models/rotator_status.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
@@ -244,6 +246,20 @@ class _FilterWheel extends FilterWheelNotifier with _Calls<FilterWheelStatus> {
   /// What the wheel reports next ("moving", "awaiting_user", "idle").
   void report(Map<String, dynamic> runtime, {bool manual = false}) =>
       state = AsyncData(FilterWheelStatus.fromJson(_json(runtime, manual: manual)));
+}
+
+class _Rotator extends RotatorNotifier with _Calls<RotatorStatus> {
+  _Rotator(this.state0);
+  final EquipmentConnectionState state0;
+  Map<String, dynamic> _json(String runtime) => {
+        ..._wire('Falcon', state0),
+        'runtime': {'state': runtime, 'sky_angle_deg': 92, 'mechanical_angle_deg': 92},
+      };
+  @override
+  Future<RotatorStatus?> build() async => RotatorStatus.fromJson(_json('idle'));
+
+  /// What the rotator reports next ("moving", "idle").
+  void report(String runtime) => state = AsyncData(RotatorStatus.fromJson(_json(runtime)));
 }
 
 class _Mount extends MountNotifier with _Calls<MountStatus> {
@@ -2757,6 +2773,31 @@ void main() {
     expect(tester.getRect(last).bottom, lessThanOrEqualTo(tester.getRect(panel).bottom));
   });
 
+  testWidgets('the rotator\'s dot opens its window and closes it again; Settings lists it under Devices',
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      rotatorProvider.overrideWith(() => _Rotator(EquipmentConnectionState.connected)),
+    ]);
+    Future<void> dot() async {
+      c.read(selectedSettingsPanelProvider.notifier).select('eq.rotator');
+      c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+      await tester.pumpAndSettle();
+    }
+    await dot();
+    expect(find.byKey(const Key('simple-device-rotator')), findsOneWidget);
+    expect(find.byType(SettingsShell), findsNothing, reason: 'never the full UI\'s Settings page');
+    await dot();
+    expect(find.byKey(const Key('simple-device-rotator')), findsNothing);
+    await _openSection(tester, 'Devices');
+    await tester.tap(find.textContaining('Falcon'));
+    await tester.pump();
+    expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-rotator'))),
+        findsOneWidget, reason: 'its Devices row opens the same window');
+    await _openSection(tester, 'Rotator');
+    expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-rotator'))),
+        findsOneWidget);
+  });
+
   testWidgets('Settings lists the filter wheel only while the rig knows one', (tester) async {
     await _pump(tester, const Size(1024, 768), linkUp: true);
     await tester.tap(find.byTooltip('Settings'));
@@ -3326,6 +3367,29 @@ void main() {
     wheel.report({'state': 'awaiting_user', 'current_slot': 1, 'pending_slot': 2}, manual: true);
     await tester.pump();
     expect(find.descendant(of: pill, matching: find.textContaining('Swap in F2, then confirm.')), findsOneWidget);
+  });
+
+  testWidgets('the rotator turning shows in the status pill, blinking green, until it stops; a tap opens its window',
+      (tester) async {
+    final rotator = _Rotator(EquipmentConnectionState.connected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [rotatorProvider.overrideWith(() => rotator)]);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Rotator')), findsNothing);
+    rotator.report('moving');
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Rotator')), findsOneWidget);
+    expect(find.descendant(of: pill, matching: find.textContaining('Moving…')), findsOneWidget);
+    final dot = tester.widget<StatusDot>(find.descendant(of: pill, matching: find.byType(StatusDot)));
+    expect((dot.color, dot.ring), (AraColors.accentConnected, false));
+    expect(tester.widget<StatusBlink>(find.descendant(of: pill, matching: find.byType(StatusBlink))).on, isTrue);
+    await tester.tap(find.descendant(of: pill, matching: find.textContaining('Rotator')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const Key('simple-device-rotator')), findsOneWidget, reason: 'the pill opens its window');
+    rotator.report('idle');
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Rotator')), findsNothing, reason: 'stopped');
   });
 
   testWidgets('a scheduled plan waiting on the rig: the pill says when it starts', (tester) async {

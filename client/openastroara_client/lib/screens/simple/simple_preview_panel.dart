@@ -31,6 +31,7 @@ import '../../widgets/status_indicator.dart'
     show StatusBlink, StatusDot, StatusLevel;
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
+import '../../state/equipment/rotator_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
@@ -1073,6 +1074,8 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     // The filter wheel turning, or a manual wheel waiting for its hand swap.
     final wheel = ref.watch(filterWheelProvider).value;
     final swap = wheel != null && wheel.isAwaitingUser ? wheel.pending : null;
+    // The rotator turning, whoever turned it (#1668).
+    final rotator = ref.watch(rotatorProvider).value;
     // The guider's routine, or Guiding with its RMS, when nothing else is on.
     final guider = ref.watch(guiderStatusProvider).value;
     final guiding = simpleGuiding(guider);
@@ -1180,6 +1183,15 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
             swap.name.isEmpty ? l10n.deviceSlot(swap.position) : swap.name,
           ),
           AraColors.accentBusy,
+        ),
+      // Moving is working: blinking green, as the rotator's dot and window.
+      if (rotator != null && rotator.isConnected && rotator.isMoving)
+        _PillData(
+          SimpleStatusOrigin.rotator,
+          l10n.shellRotator,
+          l10n.deviceMoving,
+          AraColors.accentConnected,
+          working: true,
         ),
       // A cooler turned on by hand (a plan's own cooling shows as its step).
       if (cooling && !planActive)

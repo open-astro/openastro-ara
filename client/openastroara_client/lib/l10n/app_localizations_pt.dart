@@ -251,9 +251,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceMoving => 'Moving…';
 
   @override
-  String get deviceFocusPosition => 'Focus position';
-
-  @override
   String get deviceStep => 'Step';
 
   @override
@@ -261,6 +258,50 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get deviceCancelAutofocus => 'Cancel autofocus';
+
+  @override
+  String get deviceIn => 'In';
+
+  @override
+  String get deviceOut => 'Out';
+
+  @override
+  String get deviceCoarse => 'Coarse';
+
+  @override
+  String get deviceFine => 'Fine';
+
+  @override
+  String get deviceCoarseFocus => 'Coarse focus';
+
+  @override
+  String get deviceFineFocus => 'Fine focus';
+
+  @override
+  String get deviceSkyAngle => 'Sky angle';
+
+  @override
+  String get deviceMechanicalAngle => 'Mechanical angle';
+
+  @override
+  String get deviceCouldntMoveRotator => 'Couldn\'t move the rotator';
+
+  @override
+  String get deviceCouldntStopRotator => 'Couldn\'t stop the rotator';
+
+  @override
+  String get deviceStopRotator => 'Stop the rotator';
+
+  @override
+  String get devicePlanRunningRotate => 'A plan is running. Rotate anyway?';
+
+  @override
+  String get deviceRotateAnyway => 'Rotate anyway';
+
+  @override
+  String deviceClickSize(String knob, String steps) {
+    return '$knob · $steps';
+  }
 
   @override
   String get deviceState => 'State';
@@ -2528,9 +2569,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get deviceMoving => 'Movendo…';
 
   @override
-  String get deviceFocusPosition => 'Posição do foco';
-
-  @override
   String get deviceStep => 'Passo';
 
   @override
@@ -2538,6 +2576,53 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get deviceCancelAutofocus => 'Cancelar foco automático';
+
+  @override
+  String get deviceIn => 'Para dentro';
+
+  @override
+  String get deviceOut => 'Para fora';
+
+  @override
+  String get deviceCoarse => 'Grosso';
+
+  @override
+  String get deviceFine => 'Fino';
+
+  @override
+  String get deviceCoarseFocus => 'Foco grosso';
+
+  @override
+  String get deviceFineFocus => 'Foco fino';
+
+  @override
+  String get deviceSkyAngle => 'Ângulo no céu';
+
+  @override
+  String get deviceMechanicalAngle => 'Ângulo mecânico';
+
+  @override
+  String get deviceCouldntMoveRotator =>
+      'Não foi possível mover o rotacionador';
+
+  @override
+  String get deviceCouldntStopRotator =>
+      'Não foi possível parar o rotacionador';
+
+  @override
+  String get deviceStopRotator => 'Parar o rotacionador';
+
+  @override
+  String get devicePlanRunningRotate =>
+      'Há um plano em andamento. Girar mesmo assim?';
+
+  @override
+  String get deviceRotateAnyway => 'Girar mesmo assim';
+
+  @override
+  String deviceClickSize(String knob, String steps) {
+    return '$knob · $steps';
+  }
 
   @override
   String get deviceState => 'Estado';

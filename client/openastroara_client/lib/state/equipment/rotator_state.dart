@@ -55,6 +55,17 @@ class RotatorNotifier extends EquipmentDeviceNotifier<RotatorStatus> {
         }),
       );
 
+  /// Stop the rotator where it is. Bypasses the [performAction] re-entrancy
+  /// guard like the mount's abortSlew: a stop must never be dropped because
+  /// another command is still in flight. True if dispatched (false only when
+  /// no active server); a transport failure throws so the caller can say so.
+  Future<bool> halt() async {
+    final api = readClient();
+    if (api == null) return false;
+    await api.command('halt');
+    return true;
+  }
+
   /// Set the rotator's Reverse flag.
   Future<bool> setReverse(bool reverse) =>
       performAction((api) => api.command('reverse', {'reverse': reverse}));

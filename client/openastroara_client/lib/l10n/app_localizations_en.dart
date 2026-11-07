@@ -251,9 +251,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceMoving => 'Moving…';
 
   @override
-  String get deviceFocusPosition => 'Focus position';
-
-  @override
   String get deviceStep => 'Step';
 
   @override
@@ -261,6 +258,50 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deviceCancelAutofocus => 'Cancel autofocus';
+
+  @override
+  String get deviceIn => 'In';
+
+  @override
+  String get deviceOut => 'Out';
+
+  @override
+  String get deviceCoarse => 'Coarse';
+
+  @override
+  String get deviceFine => 'Fine';
+
+  @override
+  String get deviceCoarseFocus => 'Coarse focus';
+
+  @override
+  String get deviceFineFocus => 'Fine focus';
+
+  @override
+  String get deviceSkyAngle => 'Sky angle';
+
+  @override
+  String get deviceMechanicalAngle => 'Mechanical angle';
+
+  @override
+  String get deviceCouldntMoveRotator => 'Couldn\'t move the rotator';
+
+  @override
+  String get deviceCouldntStopRotator => 'Couldn\'t stop the rotator';
+
+  @override
+  String get deviceStopRotator => 'Stop the rotator';
+
+  @override
+  String get devicePlanRunningRotate => 'A plan is running. Rotate anyway?';
+
+  @override
+  String get deviceRotateAnyway => 'Rotate anyway';
+
+  @override
+  String deviceClickSize(String knob, String steps) {
+    return '$knob · $steps';
+  }
 
   @override
   String get deviceState => 'State';

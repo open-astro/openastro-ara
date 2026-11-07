@@ -513,29 +513,107 @@ abstract class AppLocalizations {
   /// **'Moving…'**
   String get deviceMoving;
 
-  /// Screen-reader label of the focuser's dial
-  ///
-  /// In en, this message translates to:
-  /// **'Focus position'**
-  String get deviceFocusPosition;
-
-  /// Focuser window row: how far one dial click moves
+  /// Rotator window row: how far one dial click turns (1°, 5° or 15°)
   ///
   /// In en, this message translates to:
   /// **'Step'**
   String get deviceStep;
 
-  /// Button in the middle of the focuser dial: runs autofocus
+  /// Full-width button under the focuser knobs: runs autofocus
   ///
   /// In en, this message translates to:
   /// **'Autofocus'**
   String get deviceAutofocus;
 
-  /// Screen-reader label of the focuser dial's middle button while autofocus runs
+  /// The focuser's Autofocus button while autofocus runs: stops it
   ///
   /// In en, this message translates to:
   /// **'Cancel autofocus'**
   String get deviceCancelAutofocus;
+
+  /// Focuser window, above the knobs: rolling a knob up moves the focuser in
+  ///
+  /// In en, this message translates to:
+  /// **'In'**
+  String get deviceIn;
+
+  /// Focuser window, under the knobs: rolling a knob down moves the focuser out
+  ///
+  /// In en, this message translates to:
+  /// **'Out'**
+  String get deviceOut;
+
+  /// The focuser window's big knob, which moves in large clicks
+  ///
+  /// In en, this message translates to:
+  /// **'Coarse'**
+  String get deviceCoarse;
+
+  /// The focuser window's small knob, which moves in small clicks
+  ///
+  /// In en, this message translates to:
+  /// **'Fine'**
+  String get deviceFine;
+
+  /// Screen-reader label of the focuser's coarse knob
+  ///
+  /// In en, this message translates to:
+  /// **'Coarse focus'**
+  String get deviceCoarseFocus;
+
+  /// Screen-reader label of the focuser's fine knob
+  ///
+  /// In en, this message translates to:
+  /// **'Fine focus'**
+  String get deviceFineFocus;
+
+  /// Rotator window: the camera's angle on the sky (position angle), and the dial's screen-reader label
+  ///
+  /// In en, this message translates to:
+  /// **'Sky angle'**
+  String get deviceSkyAngle;
+
+  /// Rotator window: the rotator's own angle, shown when it differs from the sky angle
+  ///
+  /// In en, this message translates to:
+  /// **'Mechanical angle'**
+  String get deviceMechanicalAngle;
+
+  /// Error pill when the rotator refused or failed a move
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t move the rotator'**
+  String get deviceCouldntMoveRotator;
+
+  /// Error pill when a stop never reached the rotator
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t stop the rotator'**
+  String get deviceCouldntStopRotator;
+
+  /// Screen-reader label of the red stop square in the middle of the rotator dial
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the rotator'**
+  String get deviceStopRotator;
+
+  /// Rotator window: asked before a move while a plan runs
+  ///
+  /// In en, this message translates to:
+  /// **'A plan is running. Rotate anyway?'**
+  String get devicePlanRunningRotate;
+
+  /// Rotator window: confirms a move while a plan runs
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate anyway'**
+  String get deviceRotateAnyway;
+
+  /// Under a focuser knob: its name and how many steps one click moves, e.g. 'Coarse · 600'
+  ///
+  /// In en, this message translates to:
+  /// **'{knob} · {steps}'**
+  String deviceClickSize(String knob, String steps);
 
   /// Guider window row: what the guider is doing
   ///
@@ -567,7 +645,7 @@ abstract class AppLocalizations {
   /// **'{percent} % power'**
   String devicePowerPercent(int percent);
 
-  /// Focuser window caption while the dial turns; position is a step count like 12 000
+  /// Device window caption while a knob or dial turns; position is a step count like 12 000 or an angle like 105.0°
   ///
   /// In en, this message translates to:
   /// **'Let go to move to {position}'**
