@@ -123,8 +123,9 @@
     </div>
     <div class="group"><span class="lbl">Read-only ports</span>
       <div class="seg" role="group" aria-label="Read-only ports" id="sensors">
-        <button aria-pressed="true" data-v="sub">A · Sensors subsection (proposed)</button>
-        <button aria-pressed="false" data-v="mixed">B · Mixed in (built today)</button>
+        <button aria-pressed="true" data-v="hide">C · Hidden (chosen)</button>
+        <button aria-pressed="false" data-v="sub">A · Sensors subsection (dropped)</button>
+        <button aria-pressed="false" data-v="mixed">B · Mixed in (dropped)</button>
       </div>
     </div>
     <div class="group"><span class="lbl">Rig answer</span>
@@ -166,7 +167,7 @@
     <div><h2>Refused</h2><p>The rig's reason shows as an error pill on the left (red outline, fades after 20 s or on ×). The port goes back to the value the rig reports.</p></div>
     <div><h2>Several devices</h2><p>Each connected device gets a titled section with the number of ports it shows, in the switch list's order. The Thermal Switch's cooling fan is left out (the rig runs it with the cooler), so that device shows 1 port.</p></div>
     <div><h2>Narrow</h2><p>Under 312 pt the label goes over its control, as in every device window. The window stops above the bottom row and scrolls when it's taller.</p></div>
-    <div><h2>Sensors (proposed)</h2><p>A port the rig can't set is a reading, not a switch. Each device lists the ports you can set first, then its readings under a small <b>Sensors</b> heading (voltage, current, temperature, a cover or park state). A device with no readings has no heading. Try <b>The rig's simulator</b>: six of its ten ports are readings.</p></div>
+    <div><h2>Readings hidden (chosen)</h2><p>A port the rig can't set is a reading, not a switch, so Simple Mode leaves it out; the full UI's Switch panel keeps the readings. The count is of the ports listed, and a device with nothing to switch isn't listed. Try <b>The rig's simulator</b>: four of its ten ports remain.</p></div>
     <div><h2>Not in this window</h2><p>Connect / Disconnect (Settings › Devices has them), renaming or grouping ports, automatic dew control, live updates. The dew warning pill's Switches button opens this window.</p></div>
   </div>
 </div>
@@ -206,7 +207,7 @@
       { id: 9, name: 'Raining', min: 0, max: 1, value: 0, w: false },
     ] },
   ];
-  const S = { devs: 'one', sensors: 'sub', style: 'seg', refuse: false, width: 360, acting: null, msg: null };
+  const S = { devs: 'one', sensors: 'hide', style: 'seg', refuse: false, width: 360, acting: null, msg: null };
   let msgTimer;
 
   const isBool = p => Math.abs(p.min) < 1e-6 && Math.abs(p.max - 1) < 1e-6;
@@ -286,7 +287,7 @@
     win.classList.toggle('narrow', S.width < 312 + 32);
     let html = `<div class="head"><i class="sd ${S.acting ? 'ring' : ''}"></i>Switches</div>`;
     list.forEach((d, di) => {
-      const ports = d.ports.filter(p => !isFan(d, p));
+      const ports = d.ports.filter(p => !isFan(d, p) && (S.sensors !== 'hide' || p.w));
       html += `<div class="dev">${d.name} <small>· ${ports.length} ${ports.length === 1 ? 'port' : 'ports'}</small></div>`;
       if (S.sensors === 'sub') {
         const set = ports.filter(p => p.w), read = ports.filter(p => !p.w);

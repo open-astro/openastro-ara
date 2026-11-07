@@ -141,26 +141,23 @@ void main() {
     expect(rig.writes, ['box/4=1.23']);
   });
 
-  testWidgets('a port that cannot be written shows its value', (tester) async {
-    await _pump(tester, [
-      _box(ports: [_port(2, 'Input voltage', 12.4, max: 20, write: false), _port(3, 'Hub', 1, write: false)]),
-    ]);
-    expect(find.text('12.4'), findsOneWidget);
-    expect(find.text('On'), findsOneWidget, reason: 'a read-only on/off reads On or Off');
-    expect(find.byType(Slider), findsNothing);
-    expect(find.byType(SimpleSegment), findsNothing);
-  });
-
-  testWidgets("the ports that can't be set come last, under Sensors; a device without any has no heading", (tester) async {
+  testWidgets("a port that can't be set isn't listed: the window shows what you can switch", (tester) async {
     await _pump(tester, [
       _box(ports: [_port(2, 'Input voltage', 12.4, max: 20, write: false), _port(0, '12V Out 1', 1)]),
-      _box(id: 'hub', name: 'USB hub', ports: [_port(0, 'Port 1', 1)]),
+      _box(id: 'env', name: 'Env box', ports: [_port(0, 'Humidity', 70, max: 100, write: false)]),
     ]);
-    expect(find.text('Sensors'), findsOneWidget, reason: 'one heading, for the box that has readings');
-    double y(String text) => tester.getTopLeft(find.text(text)).dy;
-    expect(y('12V Out 1'), lessThan(y('Sensors')));
-    expect(y('Sensors'), lessThan(y('Input voltage')));
-    expect(y('Input voltage'), lessThan(y('USB hub · 1 port')), reason: 'under its own device');
+    expect(find.text('Input voltage'), findsNothing);
+    expect(find.text('12.4'), findsNothing);
+    expect(find.text('Pegasus Powerbox · 1 port'), findsOneWidget, reason: 'the count is of what it lists');
+    expect(find.textContaining('Env box'), findsNothing, reason: 'nothing to switch on it');
+  });
+
+  testWidgets('connected devices with nothing to switch say so', (tester) async {
+    await _pump(tester, [
+      _box(id: 'env', name: 'Env box', ports: [_port(0, 'Humidity', 70, max: 100, write: false)]),
+    ]);
+    expect(find.text('Nothing to switch'), findsOneWidget);
+    expect(find.text('Not connected'), findsNothing);
   });
 
   testWidgets("the camera's cooling fan isn't listed; each device has its titled section", (tester) async {
@@ -168,7 +165,7 @@ void main() {
       _box(),
       _box(id: 'ts', name: 'ToupTek Thermal Switch', ports: [_port(0, 'Fan', 1), _port(1, 'Heater', 0, max: 5)]),
     ]);
-    expect(find.text('Pegasus Powerbox · 3 ports'), findsOneWidget);
+    expect(find.text('Pegasus Powerbox · 2 ports'), findsOneWidget);
     expect(find.text('ToupTek Thermal Switch · 1 port'), findsOneWidget);
     expect(find.text('Fan'), findsNothing);
     expect(find.text('Heater · 0'), findsOneWidget);

@@ -2708,8 +2708,9 @@ final simpleSwitchSettingProvider =
     );
 
 /// The switch devices' window (#1651): each connected device's ports by
-/// name, as On / Off or a level slider, then its readings under Sensors.
-/// The camera's cooling fan is left out: the rig runs it with the cooler.
+/// name, as On / Off or a level slider. Readings (ports the rig can't set)
+/// and the camera's cooling fan, which the rig runs with the cooler, are left
+/// out.
 class SimpleSwitchesWindow extends ConsumerStatefulWidget {
   const SimpleSwitchesWindow({super.key});
 
@@ -2738,7 +2739,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
       ? v.roundToDouble()
       : (v * 100).roundToDouble() / 100;
 
-  /// A level or reading as the window shows it: no ".0", at most 2 places.
+  /// A level as the window shows it: no ".0", at most 2 places.
   static String _level(double v) => v == v.roundToDouble()
       ? v.toStringAsFixed(0)
       : v.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '');
@@ -2748,10 +2749,23 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     final l10n = context.l10n;
     final async = ref.watch(switchListProvider);
     final acting = ref.watch(switchActingProvider);
-    final devices = [
+    final connected = [
       for (final d in async.value ?? const <SwitchDevice>[])
         if (d.isConnected) d,
     ];
+    // Only what can be switched: a port the rig can't set is a reading, and
+    // Simple Mode leaves readings to the Full UI's Switch panel (user,
+    // 2026-11-07).
+    final devices = [
+      for (final d in connected)
+        (
+          device: d,
+          ports: [
+            for (final p in d.ports)
+              if (p.canWrite && !isThermalSwitchFanPort(d, p)) p,
+          ],
+        ),
+    ].where((e) => e.ports.isNotEmpty).toList();
     final children = <Widget>[
       Row(
         spacing: AraSpace.s8,
@@ -2767,21 +2781,22 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
       ),
     ];
     if (devices.isEmpty) {
-      children.add(Text(l10n.deviceNotConnected, style: AraText.caption));
+      children.add(
+        Text(
+          connected.isEmpty ? l10n.deviceNotConnected : l10n.deviceNothingToSwitch,
+          style: AraText.caption,
+        ),
+      );
     }
     // The notifier drops a write while another is on its way: lock them all.
     final locked = acting || _asked != null;
-    for (final d in devices) {
-      final ports = [
-        for (final p in d.ports)
-          if (!isThermalSwitchFanPort(d, p)) p,
-      ];
+    for (final (:device, :ports) in devices) {
       children.add(
         Padding(
           padding: const EdgeInsets.only(top: AraSpace.s12),
           child: Text(
             l10n.deviceSwitchPorts(
-              d.name.isEmpty ? l10n.shellSwitches : d.name,
+              device.name.isEmpty ? l10n.shellSwitches : device.name,
               ports.length,
             ),
             style: kSimpleText.copyWith(
@@ -2791,28 +2806,8 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
           ),
         ),
       );
-      // A port the rig can't set is a reading: under Sensors, after the
-      // ones that can be.
-      final readings = [
-        for (final p in ports)
-          if (!p.canWrite) p,
-      ];
       for (final p in ports) {
-        if (p.canWrite) children.add(_port(d, p, locked));
-      }
-      if (readings.isNotEmpty) {
-        children.add(
-          Padding(
-            padding: const EdgeInsets.only(top: AraSpace.s8),
-            child: Text(
-              l10n.deviceSensors,
-              style: AraText.caption.copyWith(fontWeight: FontWeight.w600),
-            ),
-          ),
-        );
-        for (final p in readings) {
-          children.add(_port(d, p, locked));
-        }
+        children.add(_port(device, p, locked));
       }
     }
     return Column(
@@ -2829,14 +2824,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     final asked = _asked?.port == id ? _asked!.value : null;
     var label = p.label;
     final Widget control;
-    if (!p.canWrite) {
-      control = Text(
-        p.isBoolean
-            ? (p.value >= 0.5 ? l10n.deviceOn : l10n.deviceOff)
-            : _level(p.value),
-        style: kSimpleText,
-      );
-    } else if (p.isBoolean) {
+    if (p.isBoolean) {
       control = Semantics(
         label: p.label,
         container: true,
@@ -2876,13 +2864,12 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
         ),
       );
     }
-    final row = simpleWindowRow(
+    return simpleWindowRow(
       label,
       control,
       id: 'switch-$id',
       leading: asked == null ? null : StatusDot.of(StatusLevel.changing),
     );
-    return p.canWrite ? row : MergeSemantics(child: row);
   }
 
   Future<void> _write(SwitchDevice d, SwitchPort p, double value) async {

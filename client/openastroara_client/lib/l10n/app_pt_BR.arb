@@ -59,7 +59,7 @@
   "deviceNoFilters": "Esta roda não informa filtros.",
   "deviceCouldntChangeFilter": "Não foi possível trocar o filtro",
   "deviceSwitchPorts": "{device} · {count, plural, =1{1 porta} other{{count} portas}}",
-  "deviceSensors": "Sensores",
+  "deviceNothingToSwitch": "Nada para ligar ou desligar",
   "deviceSwitchLevel": "{port} · {level}",
   "deviceCouldntSetPort": "Não foi possível ajustar {port}",
   "deviceSettingPort": "Ajustando {port}…",

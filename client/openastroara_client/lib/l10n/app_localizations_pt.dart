@@ -224,7 +224,7 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get deviceSensors => 'Sensors';
+  String get deviceNothingToSwitch => 'Nothing to switch';
 
   @override
   String deviceSwitchLevel(String port, String level) {
@@ -2598,7 +2598,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String get deviceSensors => 'Sensores';
+  String get deviceNothingToSwitch => 'Nada para ligar ou desligar';
 
   @override
   String deviceSwitchLevel(String port, String level) {

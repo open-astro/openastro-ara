@@ -285,9 +285,9 @@
       }
     }
   },
-  "deviceSensors": "Sensors",
-  "@deviceSensors": {
-    "description": "Switches window: the heading over a device's ports that can't be set (voltage, temperature, a cover state)"
+  "deviceNothingToSwitch": "Nothing to switch",
+  "@deviceNothingToSwitch": {
+    "description": "Switches window: the connected switch devices have no port that can be set (only readings, which Simple Mode leaves out)"
   },
   "deviceSwitchLevel": "{port} · {level}",
   "@deviceSwitchLevel": {

@@ -29,7 +29,7 @@ Simple Mode covers the top 90 % most used features, for 90 % of the people, 90 %
 | Focuser | Position, temperature, coarse and fine knobs (a click scales to the travel; #1662), Autofocus, refocus when it cools by N °C | Frame-count and filter-change triggers, backlash |
 | Filter wheel | Filter in place, tap a filter to move; a manual wheel asks for the swap and its confirmation (#1662) | Renaming filters, focus offsets, slot labels for sequences |
 | Rotator | Sky angle (and mechanical angle when it differs), a sky-angle dial in 1° clicks with Start / Stop in its middle, Sync to the dial's target (#1662) | Reverse |
-| Switches | Each connected switch device's ports by name: On / Off or a level slider, then its readings under Sensors; the camera's cooling fan left out (#1651) | Renaming or grouping ports, automatic dew control, adding switch devices |
+| Switches | Each connected switch device's ports by name: On / Off or a level slider; the camera's cooling fan left out (#1651) | Readings (voltage, current, temperature), renaming or grouping ports, automatic dew control, adding switch devices |
 | Guider | RMS, dither every N frames | Graph (bottom row), settle, tuning, calibration |
 | Site | Location (this device's GPS or typed), time zone | Clock check, horizon, Bortle/SQM |
 | Storage | Which drive, free space | Copy to another disk, file names |
