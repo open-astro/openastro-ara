@@ -249,6 +249,12 @@ void main() {
       expect(quantiseSwitchWrite(_port(0, 'Odd', min: 0.5, max: 3.5, step: 0.5), 1.8), 2);
     });
 
+    test('a max off the step grid is never sent: the top stops on the last step', () {
+      final p = _port(0, 'Coarse', max: 100, step: 40);
+      expect(quantiseSwitchWrite(p, 99), 80);
+      expect(quantiseSwitchWrite(p, 100), 80);
+    });
+
     test('a step finer than 1000 stops over the range is treated as unknown', () {
       expect(quantiseSwitchWrite(_port(0, 'Big', max: 65535, step: 0.01), 41234.87), 41235);
     });

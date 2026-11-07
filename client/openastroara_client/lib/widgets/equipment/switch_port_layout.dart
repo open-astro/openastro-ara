@@ -241,7 +241,10 @@ double? usableSwitchStep(SwitchPort port) =>
 double? snapToSwitchStep(SwitchPort port, double value) {
   final step = usableSwitchStep(port);
   if (step == null) return null;
-  final k = ((value - port.min) / step).round();
+  // Capped at the last step on the grid: a max off it (0..100 in 40s) isn't a
+  // value the device takes.
+  final last = ((port.max - port.min) / step + 1e-9).floor();
+  final k = ((value - port.min) / step).round().clamp(0, last);
   // To the step's decimals: 0.1 * 85 is 8.500000000000002.
   final places = max(_decimals(step), _decimals(port.min));
   return double.parse((port.min + k * step).toStringAsFixed(places))
