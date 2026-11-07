@@ -1891,10 +1891,10 @@ String simpleDegrees(double a) => '${a.toStringAsFixed(1)}°';
 /// The rotator's window: the sky angle big on the left (the mechanical angle
 /// under it when they differ) and a dial on the right whose face is the sky
 /// angle. The number under its mark is where the rotator is or, once turned,
-/// where it will go: each click is a degree, and the target waits for Rotate
-/// (move there) or Sync (tell the rotator it is there, without moving). The
-/// middle stops it while it turns (user, 2026-11-07). Reverse stays in the
-/// full UI.
+/// where it will go: each click is a degree, and the target waits for the
+/// dial's middle, Start (move there), which turns into Stop while the rotator
+/// turns, or for Sync under the dial (tell the rotator it is there, without
+/// moving; user, 2026-11-07). Reverse stays in the full UI.
 class SimpleRotatorWindow extends ConsumerStatefulWidget {
   const SimpleRotatorWindow({super.key, this.inSettings = false});
 
@@ -2148,7 +2148,19 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
                       onRelease: () {},
                       // The system took the finger: the target drops.
                       onCancel: () => setState(() => _target = null),
-                      centre: _RotatorStop(onStop: s.isMoving ? _halt : null),
+                      centre: _RotatorHub(
+                        moving: s.isMoving,
+                        label: s.isMoving
+                            ? l10n.deviceStopRotator
+                            : _target == null
+                            ? l10n.deviceRotate
+                            : l10n.deviceRotateTo(simpleDegrees(_target!)),
+                        onTap: s.isMoving
+                            ? _halt
+                            : enabled && _target != null
+                            ? () => _rotate(planRunning)
+                            : null,
+                      ),
                     ),
                   ),
                 ),
@@ -2171,33 +2183,13 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
           ),
         );
       }
-      final ready = enabled && _target != null;
       final target = _target == null ? null : simpleDegrees(_target!);
       children.addAll([
         const SizedBox(height: AraSpace.s12),
-        Row(
-          spacing: AraSpace.s8,
-          children: [
-            Expanded(
-              child: _RotatorButton(
-                key: const Key('simple-rotator-sync'),
-                label: target == null
-                    ? l10n.deviceSync
-                    : l10n.deviceSyncTo(target),
-                onTap: ready ? _sync : null,
-              ),
-            ),
-            Expanded(
-              child: _RotatorButton(
-                key: const Key('simple-rotator-go'),
-                label: target == null
-                    ? l10n.deviceRotate
-                    : l10n.deviceRotateTo(target),
-                primary: true,
-                onTap: ready ? () => _rotate(planRunning) : null,
-              ),
-            ),
-          ],
+        _RotatorButton(
+          key: const Key('simple-rotator-sync'),
+          label: target == null ? l10n.deviceSync : l10n.deviceSyncTo(target),
+          onTap: enabled && _target != null ? _sync : null,
         ),
       ]);
     }
@@ -2215,20 +2207,13 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
   }
 }
 
-/// Sync or Rotate under the rotator's dial, carrying the target ("Rotate to
-/// 75.0°"): Rotate green with dark words, as Autofocus starts, Sync on the
-/// tile fill; dimmed and taking no tap with no target.
+/// Sync under the rotator's dial, full width, carrying the target ("Sync to
+/// 75.0°"); dimmed and taking no tap with no target.
 class _RotatorButton extends StatelessWidget {
-  const _RotatorButton({
-    super.key,
-    required this.label,
-    required this.onTap,
-    this.primary = false,
-  });
+  const _RotatorButton({super.key, required this.label, required this.onTap});
 
   final String label;
   final VoidCallback? onTap;
-  final bool primary;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -2239,7 +2224,7 @@ class _RotatorButton extends StatelessWidget {
     child: Opacity(
       opacity: onTap == null ? 0.4 : 1,
       child: Material(
-        color: primary ? AraColors.accentConnected : AraColors.tileFill,
+        color: AraColors.tileFill,
         borderRadius: BorderRadius.circular(10),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -2253,7 +2238,7 @@ class _RotatorButton extends StatelessWidget {
               textAlign: TextAlign.center,
               style: kSimpleText.copyWith(
                 fontWeight: FontWeight.w600,
-                color: primary ? AraColors.bgPrimary : AraColors.textPrimary,
+                color: AraColors.textPrimary,
               ),
             ),
           ),
@@ -2263,32 +2248,43 @@ class _RotatorButton extends StatelessWidget {
   );
 }
 
-/// The rotator dial's middle: the shutter's stop square. Grey and taking no
-/// tap at rest; red while the rotator turns, and a tap stops it.
-class _RotatorStop extends StatelessWidget {
-  const _RotatorStop({this.onStop});
+/// The rotator dial's middle, like the shutter: Start (a play triangle,
+/// green with a target to go to, grey and taking no tap without one), which
+/// turns into Stop (the red stop square) while the rotator turns.
+class _RotatorHub extends StatelessWidget {
+  const _RotatorHub({
+    required this.moving,
+    required this.label,
+    required this.onTap,
+  });
 
-  final VoidCallback? onStop;
+  final bool moving;
+  final String label;
+  final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => Material(
-    color: AraColors.bgPrimary,
-    shape: const CircleBorder(side: BorderSide(color: AraColors.border)),
-    clipBehavior: Clip.antiAlias,
-    child: Semantics(
-      button: true,
-      enabled: onStop != null,
-      label: context.l10n.deviceStopRotator,
-      excludeSemantics: true,
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    enabled: onTap != null,
+    label: label,
+    excludeSemantics: true,
+    child: Material(
+      color: AraColors.bgPrimary,
+      shape: const CircleBorder(side: BorderSide(color: AraColors.border)),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        key: const Key('simple-rotator-stop'),
-        onTap: onStop,
+        key: const Key('simple-rotator-hub'),
+        onTap: onTap,
         child: Center(
-          child: SimpleStopSquare(
-            color: onStop == null
-                ? AraColors.textDisabled
-                : AraColors.accentError,
-          ),
+          child: moving
+              ? const SimpleStopSquare()
+              : Icon(
+                  Icons.play_arrow,
+                  size: 40,
+                  color: onTap == null
+                      ? AraColors.textDisabled
+                      : AraColors.accentConnected,
+                ),
         ),
       ),
     ),

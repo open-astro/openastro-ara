@@ -104,8 +104,9 @@ Future<(ProviderContainer, _Rotator)> _pump(WidgetTester tester, Map<String, dyn
 }
 
 final _dial = find.byKey(const Key('simple-rotator-dial'));
-final _stop = find.byKey(const Key('simple-rotator-stop'));
-final _go = find.byKey(const Key('simple-rotator-go'));
+// The dial's middle: Start with a target, Stop while it turns (user, 2026-11-07).
+final _hub = find.byKey(const Key('simple-rotator-hub'));
+final _go = _hub;
 final _sync = find.byKey(const Key('simple-rotator-sync'));
 
 Offset _rim(WidgetTester tester, double deg) {
@@ -136,8 +137,7 @@ Future<void> _turn(WidgetTester tester, double degrees, {bool cancel = false}) a
 String _syncLabel(WidgetTester tester) =>
     tester.widget<Text>(find.descendant(of: _sync, matching: find.byType(Text))).data!;
 
-String _goLabel(WidgetTester tester) =>
-    tester.widget<Text>(find.descendant(of: _go, matching: find.byType(Text))).data!;
+String _goLabel(WidgetTester tester) => tester.getSemantics(_hub).label;
 
 void main() {
   testWidgets('the sky angle big on the left, the mechanical angle under it, the dial on the right; no step picker',
@@ -243,13 +243,27 @@ void main() {
     expect(_syncLabel(tester), 'Sync', reason: 'the target is spent');
   });
 
-  testWidgets('Sync sits beside Rotate, under the dial', (tester) async {
+  testWidgets('Sync is a full-width button under the dial; Start is the dial\'s middle', (tester) async {
     await _pump(tester, _wire(), width: 328);
     final sync = tester.getRect(_sync);
-    final go = tester.getRect(_go);
-    expect(sync.top, greaterThan(tester.getRect(_dial).bottom));
-    expect(go.left, greaterThan(sync.right), reason: 'Sync, then Rotate');
-    expect(go.top, sync.top);
+    final dial = tester.getRect(_dial);
+    expect(sync.top, greaterThan(dial.bottom));
+    expect(sync.width, 328);
+    expect(tester.getCenter(_hub), tester.getCenter(_dial));
+    expect(find.byKey(const Key('simple-rotator-go')), findsNothing, reason: 'no separate Rotate button');
+  });
+
+  testWidgets('the middle shows Start: green play with a target, grey and taking no tap with none', (tester) async {
+    final (_, r) = await _pump(tester, _wire());
+    Icon play() => tester.widget<Icon>(find.descendant(of: _hub, matching: find.byType(Icon)));
+    expect(play().icon, Icons.play_arrow);
+    expect(play().color, isNot(AraColors.accentConnected));
+    await tester.tap(_hub);
+    await tester.pump();
+    expect(r.calls, isEmpty);
+    await _turn(tester, 17.5);
+    expect(play().color, AraColors.accentConnected);
+    expect(find.descendant(of: _hub, matching: find.byType(SimpleStopSquare)), findsNothing);
   });
 
   testWidgets('a refused sync says why in a pill', (tester) async {
@@ -262,7 +276,7 @@ void main() {
     expect((pill.kind, pill.title), (SimpleMessageKind.error, "Couldn't sync the rotator"));
   });
 
-  testWidgets('with no target Rotate and Sync are disabled', (tester) async {
+  testWidgets('with no target Start and Sync are disabled', (tester) async {
     final semantics = tester.ensureSemantics();
     await _pump(tester, _wire());
     expect(tester.getSemantics(_go), isSemantics(isButton: true, hasEnabledState: true, isEnabled: false));
@@ -278,32 +292,20 @@ void main() {
     r.set(_wire(runtime: 'moving'));
     await tester.pump();
     expect(find.text('Moving to 75.0°…'), findsOneWidget);
-    final square = tester.widget<SimpleStopSquare>(find.descendant(of: _stop, matching: find.byType(SimpleStopSquare)));
-    expect(square.color, AraColors.accentError);
-    await tester.tap(_stop);
+    final square = tester.widget<SimpleStopSquare>(find.descendant(of: _hub, matching: find.byType(SimpleStopSquare)));
+    expect(square.color, AraColors.accentError, reason: 'Start became Stop');
+    expect(_goLabel(tester), 'Stop the rotator');
+    await tester.tap(_hub);
     await tester.pump();
     expect(r.calls, ['move 75.0 sky', 'halt']);
-  });
-
-  testWidgets('at rest the stop is grey and takes no tap', (tester) async {
-    final semantics = tester.ensureSemantics();
-    final (_, r) = await _pump(tester, _wire());
-    final square = tester.widget<SimpleStopSquare>(find.descendant(of: _stop, matching: find.byType(SimpleStopSquare)));
-    expect(square.color, isNot(AraColors.accentError));
-    await tester.tap(_stop);
-    await tester.pump();
-    expect(r.calls, isEmpty);
-    expect(tester.getSemantics(_stop), isSemantics(isButton: true, hasEnabledState: true, isEnabled: false));
-    semantics.dispose();
   });
 
   testWidgets('a move started elsewhere reads Moving…, and the dial turns nothing until it stops', (tester) async {
     final (_, r) = await _pump(tester, _wire(runtime: 'moving'));
     expect(find.text('Moving…'), findsOneWidget);
     await _turn(tester, 17.5);
-    expect(_goLabel(tester), 'Rotate');
-    await tester.tap(_go);
-    await tester.pump();
+    expect(_syncLabel(tester), 'Sync', reason: 'no target was set');
+    expect(_goLabel(tester), 'Stop the rotator', reason: 'the middle stops it, whoever turned it');
     expect(r.calls, isEmpty);
   });
 
