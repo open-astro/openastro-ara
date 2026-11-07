@@ -328,6 +328,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     'eq.camera': SimpleCameraWindow(),
     'eq.mount': SimpleMountWindow(),
     'eq.focuser': SimpleFocuserWindow(),
+    'eq.filterwheel': SimpleFilterWheelWindow(),
     'eq.guider': SimpleGuiderWindow(),
   };
 
@@ -432,6 +433,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       SimpleStatusOrigin.mount => 'eq.mount',
       SimpleStatusOrigin.camera => 'eq.camera',
       SimpleStatusOrigin.focuser => 'eq.focuser',
+      SimpleStatusOrigin.filterWheel => 'eq.filterwheel',
       SimpleStatusOrigin.guiderCamera => 'eq.guider',
       _ => null,
     };
@@ -2397,6 +2399,13 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
           (c) => glyph(Icons.center_focus_strong, c),
           true,
         ),
+      if (ref.watch(filterWheelProvider.select((v) => v.value != null)))
+        (
+          'Filter wheel',
+          l10n.shellFilterWheel,
+          (c) => EquipmentGlyph.filterWheel(size: 20, color: c),
+          true,
+        ),
       if (ref.watch(guiderStatusProvider.select((v) => v.value != null)))
         (
           'Guider',
@@ -2484,6 +2493,9 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 'Camera' => const SimpleCameraWindow(inSettings: true),
                 'Mount' => const SimpleMountWindow(inSettings: true),
                 'Focuser' => const SimpleFocuserWindow(inSettings: true),
+                'Filter wheel' => const SimpleFilterWheelWindow(
+                  inSettings: true,
+                ),
                 'Guider' => const SimpleGuiderWindow(inSettings: true),
                 _ => _Gear(onOpen: (id) => setState(() => _section = id)),
               },
@@ -2548,6 +2560,7 @@ class _Gear extends ConsumerWidget {
           id: 'filterwheel',
           type: l10n.shellFilterWheel,
           provider: filterWheelProvider,
+          onOpen: () => onOpen('Filter wheel'),
         ),
         _GearRow(
           id: 'rotator',

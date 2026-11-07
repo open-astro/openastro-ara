@@ -411,6 +411,60 @@ abstract class AppLocalizations {
   /// **'Couldn\'t move the focuser'**
   String get deviceCouldntMoveFocuser;
 
+  /// Filter wheel window row: the filter in place
+  ///
+  /// In en, this message translates to:
+  /// **'Filter'**
+  String get deviceFilter;
+
+  /// Filter wheel window: a slot the wheel gives no name, by its number
+  ///
+  /// In en, this message translates to:
+  /// **'Slot {position}'**
+  String deviceSlot(int position);
+
+  /// Filter wheel window: the wheel reports no slots
+  ///
+  /// In en, this message translates to:
+  /// **'This wheel reports no filters.'**
+  String get deviceNoFilters;
+
+  /// Error message when the filter wheel refused a change
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t change the filter'**
+  String get deviceCouldntChangeFilter;
+
+  /// Filter wheel window: asked when a filter is tapped while a plan runs
+  ///
+  /// In en, this message translates to:
+  /// **'A plan is running. Change the filter anyway?'**
+  String get devicePlanRunningChangeFilter;
+
+  /// Filter wheel window button: change the filter even though a plan runs
+  ///
+  /// In en, this message translates to:
+  /// **'Change anyway'**
+  String get deviceChangeAnyway;
+
+  /// Filter wheel window, manual wheel: asks the user to put the chosen filter in by hand
+  ///
+  /// In en, this message translates to:
+  /// **'Swap in {filter}, then confirm.'**
+  String deviceSwapIn(String filter);
+
+  /// Filter wheel window, manual wheel button: the chosen filter is now in
+  ///
+  /// In en, this message translates to:
+  /// **'{filter} is in'**
+  String deviceFilterIsIn(String filter);
+
+  /// Filter wheel window, manual wheel button: drop the swap asked for
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel swap'**
+  String get deviceCancelSwap;
+
   /// Error message when a focuser or guider setting could not be saved
   ///
   /// In en, this message translates to:

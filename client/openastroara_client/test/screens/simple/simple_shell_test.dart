@@ -74,10 +74,12 @@ import 'package:openastroara/services/server_maintenance_api.dart';
 import 'package:openastroara/services/plate_solve_database_api.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
+import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/equipment/equipment_device_state.dart';
+import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
@@ -224,6 +226,13 @@ class _Focuser extends FocuserNotifier with _Calls<FocuserStatus> {
   final EquipmentConnectionState state0;
   @override
   Future<FocuserStatus?> build() async => FocuserStatus.fromJson(_wire('EAF', state0));
+}
+
+class _FilterWheel extends FilterWheelNotifier with _Calls<FilterWheelStatus> {
+  _FilterWheel(this.state0);
+  final EquipmentConnectionState state0;
+  @override
+  Future<FilterWheelStatus?> build() async => FilterWheelStatus.fromJson(_wire('EFW', state0));
 }
 
 class _Mount extends MountNotifier with _Calls<MountStatus> {
@@ -2694,6 +2703,38 @@ void main() {
     await _openSection(tester, 'Focuser');
     expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-focuser'))),
         findsOneWidget);
+  });
+
+  testWidgets('the filter wheel\'s dot opens its window and closes it again; Settings lists it under Devices',
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      filterWheelProvider.overrideWith(() => _FilterWheel(EquipmentConnectionState.connected)),
+    ]);
+    Future<void> dot() async {
+      c.read(selectedSettingsPanelProvider.notifier).select('eq.filterwheel');
+      c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+      await tester.pumpAndSettle();
+    }
+    await dot();
+    expect(find.byKey(const Key('simple-device-filterwheel')), findsOneWidget);
+    expect(find.byType(SettingsShell), findsNothing, reason: 'never the full UI\'s Settings page');
+    await dot();
+    expect(find.byKey(const Key('simple-device-filterwheel')), findsNothing);
+    await _openSection(tester, 'Devices');
+    await tester.tap(find.textContaining('EFW'));
+    await tester.pump();
+    expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-filterwheel'))),
+        findsOneWidget, reason: 'its Devices row opens the same window');
+    await _openSection(tester, 'Filter wheel');
+    expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-filterwheel'))),
+        findsOneWidget);
+  });
+
+  testWidgets('Settings lists the filter wheel only while the rig knows one', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true);
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-menu-nav-Filter wheel')), findsNothing);
   });
 
   testWidgets('the guider\'s dot opens the Guider window; Settings lists it under Devices', (tester) async {
