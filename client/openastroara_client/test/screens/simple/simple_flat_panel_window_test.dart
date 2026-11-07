@@ -286,6 +286,27 @@ void main() {
     },
   );
 
+  testWidgets('a second drag while a brightness command runs is ignored', (
+    tester,
+  ) async {
+    final (_, panel) = await _pump(tester, _wire(light: true));
+    final hold = panel.hold = Completer<bool>();
+    await tester.drag(_key('brightness'), const Offset(-400, 0));
+    await tester.pump();
+    expect(
+      tester.widget<Slider>(_key('brightness')).onChanged,
+      isNull,
+      reason: 'the slider is locked while the first command runs',
+    );
+    await tester.drag(_key('brightness'), const Offset(400, 0));
+    await tester.pump();
+    expect(tester.widget<Slider>(_key('brightness')).value, 0);
+    expect(panel.calls, ['brightness=0']);
+    hold.complete(true);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 11));
+  });
+
   testWidgets('a refused command says why in a pill', (tester) async {
     final (c, panel) = await _pump(tester, _wire());
     panel.refuse = true;

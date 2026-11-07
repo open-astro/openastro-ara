@@ -2815,7 +2815,7 @@ class _SimpleFlatPanelWindowState extends ConsumerState<SimpleFlatPanelWindow> {
             _OnOff(
               id: 'simple-flat-light',
               on: lightOn,
-              enabled: !asking && _pendingLight == null && !s.lightWarming,
+              enabled: !asking && !_applying && !s.lightWarming,
               fill: true,
               onChanged: (on) => send(lightOn: on),
             ),
@@ -2899,12 +2899,12 @@ class _SimpleFlatPanelWindowState extends ConsumerState<SimpleFlatPanelWindow> {
                   max: (max > 0 ? max : 1).toDouble(),
                   semanticFormatterCallback: (v) =>
                       max == 0 ? '—' : _percent(v.round(), max),
-                  onChanged: max == 0 || asking
+                  onChanged: max == 0 || asking || _applying
                       ? null
                       : (v) => setState(() => _level = v.round()),
                   // Sent on release only: each change is a blocking round
                   // trip to the panel.
-                  onChangeEnd: max == 0 || asking
+                  onChangeEnd: max == 0 || asking || _applying
                       ? null
                       : (v) => send(brightness: v.round()),
                 ),
