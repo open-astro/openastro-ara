@@ -124,22 +124,30 @@ void main() {
 
   testWidgets('a port with a range is a slider with its level by the name; release writes a whole number', (tester) async {
     final (_, rig) = await _pump(tester, [_box()]);
-    expect(find.text('Dew 1 · 60'), findsOneWidget);
+    expect(find.text('Dew 1 · 60 %'), findsOneWidget);
     final slider = tester.widget<Slider>(_slider('box-1'));
     slider.onChanged!(37.4);
     await tester.pump();
-    expect(find.text('Dew 1 · 37'), findsOneWidget, reason: 'the level follows the drag');
+    expect(find.text('Dew 1 · 37 %'), findsOneWidget, reason: 'the level follows the drag');
     expect(rig.writes, isEmpty, reason: 'nothing is sent while dragging');
     slider.onChangeEnd!(37.4);
     await tester.pumpAndSettle();
     expect(rig.writes, ['box/1=37.0']);
   });
 
+  testWidgets('a slider reads as a percent of its range; just above the bottom reads 1 %', (tester) async {
+    await _pump(tester, [
+      _box(ports: [_port(0, 'Flat', 20, min: 10, max: 30), _port(1, 'PWM', 1, max: 4095)]),
+    ]);
+    expect(find.text('Flat · 50 %'), findsOneWidget, reason: 'halfway from 10 to 30');
+    expect(find.text('PWM · 1 %'), findsOneWidget, reason: 'never 0 % while it is above the bottom');
+  });
+
   testWidgets('a narrow range is written to 0.01', (tester) async {
     final (_, rig) = await _pump(tester, [
       _box(ports: [_port(4, 'Heater', 2.5, max: 5)]),
     ]);
-    expect(find.text('Heater · 2.5'), findsOneWidget);
+    expect(find.text('Heater · 50 %'), findsOneWidget);
     tester.widget<Slider>(_slider('box-4')).onChangeEnd!(1.23456);
     await tester.pumpAndSettle();
     expect(rig.writes, ['box/4=1.23']);
@@ -153,7 +161,7 @@ void main() {
     expect(light.divisions, 10);
     light.onChanged!(37);
     await tester.pump();
-    expect(find.text('Light Box · 40'), findsOneWidget, reason: 'the level reads the value that will be sent');
+    expect(find.text('Light Box · 40 %'), findsOneWidget, reason: 'the level reads the value that will be sent');
     light.onChangeEnd!(37);
     await tester.pumpAndSettle();
     tester.widget<Slider>(_slider('box-1')).onChangeEnd!(8.47);
@@ -229,7 +237,7 @@ void main() {
     expect(find.text('Pegasus Powerbox · 2 ports'), findsOneWidget);
     expect(find.text('ToupTek Thermal Switch · 1 port'), findsOneWidget);
     expect(find.text('Fan'), findsNothing);
-    expect(find.text('Heater · 0'), findsOneWidget);
+    expect(find.text('Heater · 0 %'), findsOneWidget);
   });
 
   testWidgets('a disconnected device is not listed', (tester) async {
@@ -273,7 +281,7 @@ void main() {
     // or the Settings copy of the window).
     tester.widget<Slider>(_slider('box-1')).onChanged!(80);
     await tester.pump();
-    expect(find.text('Dew 1 · 80'), findsOneWidget);
+    expect(find.text('Dew 1 · 80 %'), findsOneWidget);
     rig.hold = Completer();
     final other = c.read(switchListProvider.notifier).setValue(deviceId: 'box', portId: 0, value: 0);
     await tester.pump();
@@ -283,7 +291,7 @@ void main() {
     await other;
     await tester.pumpAndSettle();
     expect(rig.writes, ['box/0=0.0'], reason: 'locked: the release sends nothing');
-    expect(find.text('Dew 1 · 60'), findsOneWidget, reason: "the slider shows the rig's value, not the dropped drag");
+    expect(find.text('Dew 1 · 60 %'), findsOneWidget, reason: "the slider shows the rig's value, not the dropped drag");
   });
 
   testWidgets("a write puts no ring by the port: the name doesn't move, the status pill says it", (tester) async {
@@ -361,7 +369,7 @@ void main() {
     expect(m.kind, SimpleMessageKind.error);
     expect(m.title, "Couldn't set Dew 1");
     expect(m.detail, contains('current limit'));
-    expect(find.text('Dew 1 · 60'), findsOneWidget);
+    expect(find.text('Dew 1 · 60 %'), findsOneWidget);
   });
 
   testWidgets('the window re-reads the ports when it opens and after each write', (tester) async {

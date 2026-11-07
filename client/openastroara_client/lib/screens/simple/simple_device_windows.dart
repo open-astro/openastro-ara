@@ -2688,6 +2688,13 @@ String _simpleLevel(double v) {
       : r.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '');
 }
 
+/// A slider port's level as a percent of its range ("50 %"); anything above
+/// the bottom reads at least 1 %. The rig is still sent its own value.
+String _switchPercent(SwitchPort p, double v) {
+  final pct = (v - p.min) * 100 / (p.max - p.min);
+  return '${v <= p.min ? 0 : math.max(1, pct.round())} %';
+}
+
 /// A port the rig can't set, as Settings › Switches lists it: On / Off for an
 /// on/off reading, else its value.
 String simpleSwitchReading(AppLocalizations l10n, SwitchPort p) => p.isBoolean
@@ -2913,7 +2920,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
         p.min,
         p.max,
       );
-      label = l10n.deviceSwitchLevel(p.label, _simpleLevel(_round(p, v)));
+      label = l10n.deviceSwitchLevel(p.label, _switchPercent(p, _round(p, v)));
       control = SizedBox(
         width: kSimpleWindowControlWidth,
         child: Semantics(
@@ -2925,7 +2932,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
             divisions:
                 usableSwitchStep(p) == null ? null : switchSliderDivisions(p),
             value: v,
-            semanticFormatterCallback: (x) => _simpleLevel(_round(p, x)),
+            semanticFormatterCallback: (x) => _switchPercent(p, _round(p, x)),
             // Locked: it takes nothing; it reads disabled (greyed) only once
             // dimmed, so a fast answer doesn't flash it.
             onChanged: dimmed

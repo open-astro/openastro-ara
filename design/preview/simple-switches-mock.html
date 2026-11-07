@@ -162,7 +162,7 @@
   </div>
 
   <div class="notes">
-    <div><h2>Port rows</h2><p>On/off ports are On / Off segments. A port with a range is a slider, and its level sits after the name ("Dew 1 · 60"), with no unit because ASCOM ports don't report one. A read-only port shows its value on the right. The level is sent when you let go: whole numbers when the range spans 10 or more, else 0.01 steps (the Thermal Switch's heater, 0–5).</p></div>
+    <div><h2>Port rows</h2><p>On/off ports are On / Off segments. A port with a range is a slider, and its level sits after the name as a percent of the port's range ("Dew 1 · 60 %"); the rig is still sent its own value, since ASCOM ports report no unit. (The level in this mock still shows the raw value.) A read-only port shows its value on the right. The level is sent when you let go: whole numbers when the range spans 10 or more, else 0.01 steps (the Thermal Switch's heater, 0–5).</p></div>
     <div><h2>While a write is on its way</h2><p>The port being set gets a blue ring before its name, and its slider stays where you let go. Every other control in the window is locked (read as disabled) until the rig answers, because the switch notifier drops a second write. The window then re-reads the ports.</p></div>
     <div><h2>Refused</h2><p>The rig's reason shows as an error pill on the left (red outline, fades after 20 s or on ×). The port goes back to the value the rig reports.</p></div>
     <div><h2>Several devices</h2><p>Each connected device gets a titled section with the number of ports it shows, in the switch list's order. The Thermal Switch's cooling fan is left out (the rig runs it with the cooler), so that device shows 1 port.</p></div>

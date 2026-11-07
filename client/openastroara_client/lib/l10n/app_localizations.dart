@@ -465,7 +465,7 @@ abstract class AppLocalizations {
   /// **'Nothing to switch'**
   String get deviceNothingToSwitch;
 
-  /// Switches window: a slider port's name with the level it is set to (no unit: the rig reports none)
+  /// Switches window: a slider port's name with the level it is set to, as a percent of the port's range (e.g. 60 %)
   ///
   /// In en, this message translates to:
   /// **'{port} · {level}'**
