@@ -996,8 +996,10 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     }
   }
 
-  /// One knob with its click size under it ("Coarse · 600"): a slider to
-  /// screen readers, Up and Down a click from the keyboard.
+  /// One knob with its click size under it ("Coarse (600)"): a slider to
+  /// screen readers, Up and Down a click from the keyboard. It sits centred
+  /// in a slot [slot] tall (the coarse knob's height), so both knobs' marks
+  /// and both captions line up.
   Widget _knob(
     FocuserStatus s,
     String id,
@@ -1006,56 +1008,62 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     int step,
     FocusNode focus,
     Size size,
+    double slot,
   ) {
     final pos = s.position ?? 0;
     return Column(
       mainAxisSize: MainAxisSize.min,
       spacing: AraSpace.s4,
       children: [
-        FocusableActionDetector(
-          focusNode: focus,
-          onShowFocusHighlight: (v) =>
-              setState(() => _highlighted = v ? focus : null),
-          // Up goes in, like the knob rolled up.
-          shortcuts: const {
-            SingleActivator(LogicalKeyboardKey.arrowUp): _DialStep(-1),
-            SingleActivator(LogicalKeyboardKey.arrowDown): _DialStep(1),
-          },
-          actions: {
-            _DialStep: CallbackAction<_DialStep>(
-              onInvoke: (i) => _go(s, _clamp(pos + i.dir * step, s)),
-            ),
-          },
-          child: Semantics(
-            slider: true,
-            label: label,
-            value: simpleSteps(pos),
-            increasedValue: simpleSteps(_clamp(pos + step, s)),
-            decreasedValue: simpleSteps(_clamp(pos - step, s)),
-            onIncrease: () => _go(s, _clamp(pos + step, s)),
-            onDecrease: () => _go(s, _clamp(pos - step, s)),
-            child: _FocusThumbwheel(
-              key: Key('simple-focuser-$id'),
-              size: size,
-              focused: _highlighted == focus,
-              enabled:
-                  s.position != null &&
-                  !ref.watch(
-                    autofocusLiveProvider.select((l) => l.run.isRunning),
-                  ),
-              onClicks: (n) {
-                HapticFeedback.selectionClick();
-                setState(
-                  () => _target = _clamp((_target ?? pos) + n * step, s),
-                );
+        SizedBox(
+          height: slot,
+          child: Center(
+            child: FocusableActionDetector(
+              focusNode: focus,
+              onShowFocusHighlight: (v) =>
+                  setState(() => _highlighted = v ? focus : null),
+              // Up goes in, like the knob rolled up.
+              shortcuts: const {
+                SingleActivator(LogicalKeyboardKey.arrowUp): _DialStep(-1),
+                SingleActivator(LogicalKeyboardKey.arrowDown): _DialStep(1),
               },
-              onRelease: () {
-                final t = _target;
-                setState(() => _target = null);
-                if (t != null) _go(s, t);
+              actions: {
+                _DialStep: CallbackAction<_DialStep>(
+                  onInvoke: (i) => _go(s, _clamp(pos + i.dir * step, s)),
+                ),
               },
-              // The system took the finger: nothing moves.
-              onCancel: () => setState(() => _target = null),
+              child: Semantics(
+                slider: true,
+                label: label,
+                value: simpleSteps(pos),
+                increasedValue: simpleSteps(_clamp(pos + step, s)),
+                decreasedValue: simpleSteps(_clamp(pos - step, s)),
+                onIncrease: () => _go(s, _clamp(pos + step, s)),
+                onDecrease: () => _go(s, _clamp(pos - step, s)),
+                child: _FocusThumbwheel(
+                  key: Key('simple-focuser-$id'),
+                  size: size,
+                  focused: _highlighted == focus,
+                  enabled:
+                      s.position != null &&
+                      !ref.watch(
+                        autofocusLiveProvider.select((l) => l.run.isRunning),
+                      ),
+                  onClicks: (n) {
+                    HapticFeedback.selectionClick();
+                    setState(
+                      () => _target = _clamp((_target ?? pos) + n * step, s),
+                    );
+                  },
+                  onRelease: () {
+                    final t = _target;
+                    setState(() => _target = null);
+                    if (t != null) _go(s, t);
+                  },
+                  // The system took the finger: nothing moves.
+                  onCancel: () => setState(() => _target = null),
+                ),
+              ),
             ),
           ),
         ),
@@ -1148,6 +1156,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
                       coarse,
                       _coarseFocus,
                       Size(72 * scale, 180 * scale),
+                      180 * scale,
                     ),
                     _knob(
                       s,
@@ -1157,6 +1166,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
                       fine,
                       _fineFocus,
                       Size(56 * scale, 140 * scale),
+                      180 * scale,
                     ),
                   ],
                 ),
@@ -1641,8 +1651,9 @@ class _AngleScalePainter extends CustomPainter {
   bool shouldRepaint(_AngleScalePainter old) => false;
 }
 
-/// Autofocus under the knobs, full width; it turns into the stop square and
-/// Cancel autofocus while it runs.
+/// Autofocus under the knobs, full width: green to start, red with Cancel
+/// autofocus while it runs (user, 2026-11-07). Dark words on the green and
+/// white on the red, each the pair that keeps its contrast.
 class _AutofocusButton extends ConsumerWidget {
   const _AutofocusButton();
 
@@ -1654,8 +1665,9 @@ class _AutofocusButton extends ConsumerWidget {
     final label = running
         ? context.l10n.deviceCancelAutofocus
         : context.l10n.deviceAutofocus;
+    final fg = running ? AraColors.selectionFg : AraColors.bgPrimary;
     return Material(
-      color: AraColors.tileFill,
+      color: running ? AraColors.accentError : AraColors.accentConnected,
       borderRadius: BorderRadius.circular(10),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -1672,14 +1684,15 @@ class _AutofocusButton extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               spacing: AraSpace.s8,
               children: [
-                if (running)
-                  const SimpleStopSquare()
-                else
-                  const Icon(Icons.center_focus_strong, size: 22),
+                if (!running)
+                  Icon(Icons.center_focus_strong, size: 22, color: fg),
                 Flexible(
                   child: Text(
                     label,
-                    style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                    style: kSimpleText.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: fg,
+                    ),
                   ),
                 ),
               ],

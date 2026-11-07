@@ -69,10 +69,10 @@
   .gauge .tgt { position: absolute; left: -6px; width: 20px; height: 3px; border-radius: 2px; background: var(--ok); }
   .gauge .ends { position: absolute; left: 14px; font-size: 11px; color: var(--text2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 
-  .af { height: 48px; border: 0; border-radius: 10px; background: var(--tile); color: var(--text); font: 600 15px var(--sys); cursor: pointer;
+  .af { height: 48px; border: 0; border-radius: 10px; background: var(--ok); color: var(--bg); font: 600 15px var(--sys); cursor: pointer;
         display: flex; align-items: center; justify-content: center; gap: 8px; }
   .af .sq { width: 12px; height: 12px; background: currentColor; border-radius: 2px; }
-  .af.running { color: var(--ok); }
+  .af.running { background: #E53935; color: #fff; }
   .slider { width: 168px; accent-color: var(--sel); }
 
   .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
@@ -180,7 +180,7 @@
       <canvas class="wheel ${locked() ? 'locked' : ''}" id="w-${k.id}" data-k="${k.id}" width="${k.w}" height="${k.h}" tabindex="0"
         role="slider" aria-label="${k.name} focus, ${k.step} steps a click" aria-valuenow="${S.pos}" aria-valuemin="${MIN}" aria-valuemax="${MAX}"
         aria-valuetext="${fmt(S.pos)} steps" aria-disabled="${locked()}"></canvas>
-      <span class="caption">${k.name} · ${k.step}</span></div>`).join('')}</div>`;
+      <span class="caption">${k.name} (${k.step})</span></div>`).join('')}</div>`;
   }
 
   function render() {
@@ -201,7 +201,7 @@
         <div class="status ${st.blink ? 'blink' : ''}">${st.t}</div>
         <div class="wheelbox">${S.layout === 'c' ? gauge() + '<span style="width:34px"></span>' : ''}${pair()}${arrows}</div>`;
     }
-    const af = `<button class="af ${S.af ? 'running' : ''}" id="af">${S.af ? '<span class="sq"></span>Stop autofocus' : 'Autofocus'}</button>`;
+    const af = `<button class="af ${S.af ? 'running' : ''}" id="af">${S.af ? 'Cancel autofocus' : 'Autofocus'}</button>`;
     const refocus = `<div class="r"><span class="l">Refocus temp</span><span class="v" id="refv">${S.refocus ? S.refocus + ' °C' : 'Never'}</span></div>
       <div class="r" style="min-height:28px;justify-content:flex-end"><input class="slider" id="refocus" type="range" min="0" max="10" step="1" value="${S.refocus}" aria-label="Refocus temperature"></div>`;
     $('#win').innerHTML = head + body + af + refocus;

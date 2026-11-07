@@ -9,7 +9,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart';
 import 'package:openastroara/models/autofocus_run.dart';
-import 'package:openastroara/screens/simple/simple_preview_panel.dart' show kSimpleStopSquare;
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
@@ -106,23 +105,23 @@ void main() {
 
   testWidgets('a click scales to the travel: coarse about 1 %, fine a tenth of that', (tester) async {
     await _pump(tester, _wire()); // 0-60 000
-    expect(find.text('Coarse · 600'), findsOneWidget);
-    expect(find.text('Fine · 60'), findsOneWidget);
+    expect(find.text('Coarse (600)'), findsOneWidget);
+    expect(find.text('Fine (60)'), findsOneWidget);
     await _pump(tester, _wire(max: 5000));
-    expect(find.text('Coarse · 50'), findsOneWidget);
-    expect(find.text('Fine · 5'), findsOneWidget);
+    expect(find.text('Coarse (50)'), findsOneWidget);
+    expect(find.text('Fine (5)'), findsOneWidget);
     await _pump(tester, _wire(max: 50));
-    expect(find.text('Coarse · 1'), findsOneWidget);
-    expect(find.text('Fine · 1'), findsOneWidget, reason: 'never 0');
+    expect(find.text('Coarse (1)'), findsOneWidget);
+    expect(find.text('Fine (1)'), findsOneWidget, reason: 'never 0');
   });
 
   testWidgets('a relative focuser, or one with no travel, clicks 100 and 10', (tester) async {
     await _pump(tester, _wire(absolute: false));
-    expect(find.text('Coarse · 100'), findsOneWidget);
-    expect(find.text('Fine · 10'), findsOneWidget);
+    expect(find.text('Coarse (100)'), findsOneWidget);
+    expect(find.text('Fine (10)'), findsOneWidget);
     await _pump(tester, _wire(max: 0));
-    expect(find.text('Coarse · 100'), findsOneWidget);
-    expect(find.text('Fine · 10'), findsOneWidget);
+    expect(find.text('Coarse (100)'), findsOneWidget);
+    expect(find.text('Fine (10)'), findsOneWidget);
   });
 
   testWidgets('rolling down goes out and up goes in, as a drawtube; it moves on letting go', (tester) async {
@@ -138,6 +137,12 @@ void main() {
     final knobs = tester.getRect(_knob('coarse'));
     expect(tester.getRect(find.text('In')).bottom, lessThanOrEqualTo(knobs.top));
     expect(tester.getRect(find.text('Out')).top, greaterThanOrEqualTo(knobs.bottom));
+  });
+
+  testWidgets('the two knobs\' marks line up: both centred on one line, their captions on another', (tester) async {
+    await _pump(tester, _wire());
+    expect(tester.getCenter(_knob('fine')).dy, moreOrLessEquals(tester.getCenter(_knob('coarse')).dy, epsilon: 0.5));
+    expect(tester.getRect(find.text('Fine (60)')).top, moreOrLessEquals(tester.getRect(find.text('Coarse (600)')).top, epsilon: 0.5));
   });
 
   testWidgets('the knobs sit beside the position, Autofocus under them', (tester) async {
@@ -192,16 +197,20 @@ void main() {
     expect(f.moves, isEmpty);
   });
 
-  testWidgets('while autofocus runs, its button shows the shutter\'s stop square: same size, red, rounded',
+  testWidgets('Autofocus is green to start; while it runs the button is red, reads Cancel autofocus, and has no stop square',
       (tester) async {
     await _pump(tester, _wire());
+    Color fill() => tester
+        .widget<Material>(find.ancestor(of: find.byKey(const Key('simple-focuser-autofocus')), matching: find.byType(Material)).first)
+        .color!;
+    expect(fill(), AraColors.accentConnected);
     _live.running();
     await tester.pump();
-    final square = find.descendant(
-        of: find.byKey(const Key('simple-focuser-autofocus')), matching: find.byKey(const Key('simple-stop-square')));
-    expect(tester.getSize(square), const Size.square(kSimpleStopSquare));
-    final box = tester.widget<Container>(square).decoration! as BoxDecoration;
-    expect((box.color, box.borderRadius), (AraColors.accentError, BorderRadius.circular(4)));
+    expect(fill(), AraColors.accentError);
+    expect(find.descendant(of: find.byKey(const Key('simple-focuser-autofocus')), matching: find.text('Cancel autofocus')),
+        findsOneWidget);
+    expect(find.descendant(of: find.byKey(const Key('simple-focuser-autofocus')), matching: find.byKey(const Key('simple-stop-square'))),
+        findsNothing);
   });
 
   testWidgets('with its position unknown the knobs move nothing: no blind jump from 0', (tester) async {

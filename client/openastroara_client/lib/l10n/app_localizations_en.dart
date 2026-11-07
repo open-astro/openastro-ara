@@ -300,7 +300,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String deviceClickSize(String knob, String steps) {
-    return '$knob · $steps';
+    return '$knob ($steps)';
   }
 
   @override

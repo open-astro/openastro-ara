@@ -609,10 +609,10 @@ abstract class AppLocalizations {
   /// **'Rotate anyway'**
   String get deviceRotateAnyway;
 
-  /// Under a focuser knob: its name and how many steps one click moves, e.g. 'Coarse · 600'
+  /// Under a focuser knob: its name and, in brackets, how many steps one click moves, e.g. 'Coarse (600)'
   ///
   /// In en, this message translates to:
-  /// **'{knob} · {steps}'**
+  /// **'{knob} ({steps})'**
   String deviceClickSize(String knob, String steps);
 
   /// Guider window row: what the guider is doing

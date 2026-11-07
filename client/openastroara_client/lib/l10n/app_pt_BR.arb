@@ -78,7 +78,7 @@
   "deviceFine": "Fino",
   "deviceCoarseFocus": "Foco grosso",
   "deviceFineFocus": "Foco fino",
-  "deviceClickSize": "{knob} · {steps}",
+  "deviceClickSize": "{knob} ({steps})",
   "deviceSkyAngle": "Ângulo no céu",
   "deviceMechanicalAngle": "Ângulo mecânico",
   "deviceCouldntMoveRotator": "Não foi possível mover o rotacionador",

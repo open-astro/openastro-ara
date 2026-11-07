@@ -391,9 +391,9 @@
   "@deviceRotateAnyway": {
     "description": "Rotator window: confirms a move while a plan runs"
   },
-  "deviceClickSize": "{knob} · {steps}",
+  "deviceClickSize": "{knob} ({steps})",
   "@deviceClickSize": {
-    "description": "Under a focuser knob: its name and how many steps one click moves, e.g. 'Coarse · 600'",
+    "description": "Under a focuser knob: its name and, in brackets, how many steps one click moves, e.g. 'Coarse (600)'",
     "placeholders": {
       "knob": {
         "type": "String"
