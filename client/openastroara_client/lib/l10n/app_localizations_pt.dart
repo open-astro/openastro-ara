@@ -398,6 +398,10 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get deviceSafetyLimitsNotLoaded =>
+      'Safety limits not loaded: nothing is marked.';
+
+  @override
   String get deviceCouldntSaveThat => 'Couldn\'t save that';
 
   @override
@@ -2908,6 +2912,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
     });
     return '$_temp0';
   }
+
+  @override
+  String get deviceSafetyLimitsNotLoaded =>
+      'Limites de segurança não carregados: nada é marcado.';
 
   @override
   String get deviceCouldntSaveThat => 'Não foi possível salvar';

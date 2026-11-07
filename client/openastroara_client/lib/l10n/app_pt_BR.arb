@@ -101,6 +101,7 @@
   "deviceLastReadingAgo": "Última leitura há {age}",
   "deviceMoon": "Lua",
   "deviceMoonPhase": "{phase, select, newMoon{Lua nova} waxingCrescent{Crescente} firstQuarter{Quarto crescente} waxingGibbous{Crescente gibosa} fullMoon{Lua cheia} waningGibbous{Minguante gibosa} lastQuarter{Quarto minguante} other{Minguante}}",
+  "deviceSafetyLimitsNotLoaded": "Limites de segurança não carregados: nada é marcado.",
   "deviceCouldntSaveThat": "Não foi possível salvar",
   "deviceNever": "Nunca",
   "deviceRefocusTemp": "Refocar a cada",

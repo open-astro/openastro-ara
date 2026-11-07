@@ -3567,19 +3567,13 @@ class SimpleWeatherWindow extends ConsumerStatefulWidget {
 }
 
 class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
-  /// Older readings than this read amber: the daemon reads every 2 s and Ara
-  /// asks every 15 s, so a live station never gets near it.
-  static const Duration _stale = Duration(seconds: 60);
-
-  /// Redraws the readings' age once a second.
-  Timer? _tick;
+  /// The safety limits couldn't be read: the defaults mark nothing, so the
+  /// window says so rather than look calm.
+  bool _limitsUnknown = false;
 
   @override
   void initState() {
     super.initState();
-    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
     // The safety limits the tiles are checked against: Simple Mode never
     // opens the policies page that loads them otherwise.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -3588,15 +3582,9 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
       try {
         await ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api);
       } catch (_) {
-        // Unreachable: the defaults mark nothing (weather triggers off).
+        if (mounted) setState(() => _limitsUnknown = true);
       }
     });
-  }
-
-  @override
-  void dispose() {
-    _tick?.cancel();
-    super.dispose();
   }
 
   @override
@@ -3625,23 +3613,23 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
       );
     } else {
       children.add(_tiles(context, s));
+      if (_limitsUnknown) {
+        children.add(
+          Text(
+            l10n.deviceSafetyLimitsNotLoaded,
+            style: AraText.caption.copyWith(
+              fontSize: 12,
+              color: AraColors.accentWarning,
+            ),
+          ),
+        );
+      }
       final at = s.capturedAt;
       if (at != null) {
-        final age = clock.now().toUtc().difference(at);
-        final stale = age > _stale;
         children.add(
           Padding(
             padding: const EdgeInsets.only(top: AraSpace.s4),
-            child: Text(
-              stale
-                  ? l10n.deviceLastReadingAgo(_age(age))
-                  : l10n.deviceUpdatedAgo(_age(age)),
-              key: const Key('simple-weather-age'),
-              style: AraText.caption.copyWith(
-                fontSize: 12,
-                color: stale ? AraColors.accentWarning : null,
-              ),
-            ),
+            child: _WeatherAge(at),
           ),
         );
       }
@@ -3660,14 +3648,6 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
       spacing: AraSpace.s4,
       children: children,
     );
-  }
-
-  /// "8 s", "4 min", "2 h".
-  static String _age(Duration d) {
-    final s = math.max(0, d.inSeconds);
-    if (s < 60) return '$s s';
-    if (s < 3600) return '${s ~/ 60} min';
-    return '${s ~/ 3600} h';
   }
 
   /// A reading as the tiles show it: whole numbers bare, otherwise one
@@ -3710,9 +3690,10 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
           'sqm',
           _icon(Icons.auto_awesome_outlined),
           _num(s.skyQualityMagArcsec2!, decimals: 2),
-          '',
+          'mag/arcsec²',
+          l10n.deviceSkyQuality,
           // Too long beside the number in a half tile: it goes under it.
-          '${l10n.deviceSkyQuality} · mag/arcsec²',
+          unitBeside: false,
         ),
       if (_ok(t))
         _WeatherTile(
@@ -3761,28 +3742,45 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
                 l10n.deviceRain,
               ),
     ];
-    // Wind is checked as the daemon does: the worse of speed and gust.
     if (_ok(speed) || _ok(gust)) {
-      final worst = math.max(
-        _ok(speed) ? speed! : 0.0,
-        _ok(gust) ? gust! : 0.0,
-      );
+      // Checked as the daemon does: the worse of speed and gust, and nothing
+      // when either reads NaN (its Math.Max gives NaN, which breaches nothing).
+      final nan =
+          (speed != null && !speed.isFinite) ||
+          (gust != null && !gust.isFinite);
+      bool over(double? ms) =>
+          mark && !nan && _ok(ms) && ms! * 3.6 > p.maxWindKmh;
+      final shown = _ok(speed) ? speed : gust;
+      final gustOver = _ok(speed) && over(gust);
       final dir = s.windDirectionDeg;
       const points = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
       tiles.add(
         _WeatherTile(
           'wind',
           _icon(Icons.air),
-          _num((_ok(speed) ? speed! : gust!) * 3.6),
+          _num(shown! * 3.6),
           'km/h',
-          [
-            l10n.deviceWind,
-            if (_ok(dir)) l10n.deviceCompass(points[(dir! / 45).round() % 8]),
-            if (_ok(speed) && _ok(gust)) l10n.deviceGusts(_num(gust! * 3.6)),
-          ].join(' · '),
-          past: mark && worst * 3.6 > p.maxWindKmh
+          l10n.deviceWind,
+          details: [
+            if (_ok(dir))
+              (
+                l10n.deviceCompass(points[(dir! / 45).round() % 8]),
+                null,
+                false,
+              ),
+            if (_ok(speed) && _ok(gust))
+              (
+                l10n.deviceGusts(_num(gust! * 3.6)),
+                l10n.deviceGusts('${_num(gust * 3.6)} km/h'),
+                gustOver,
+              ),
+          ],
+          // A gust past the limit marks the tile and its gust, not the lower
+          // sustained speed the number shows.
+          past: over(shown) || gustOver
               ? l10n.deviceLimit('${p.maxWindKmh} km/h')
               : null,
+          numberPast: over(shown),
         ),
       );
     }
@@ -3795,12 +3793,16 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
         _icon(Icons.nightlight_outlined),
         '${(moon.illuminatedFraction * 100).round()}',
         '%',
-        [
-          l10n.deviceMoon,
-          l10n.deviceMoonPhase(
-            phase[0] + phase[1][0].toUpperCase() + phase[1].substring(1),
+        l10n.deviceMoon,
+        details: [
+          (
+            l10n.deviceMoonPhase(
+              phase[0] + phase[1][0].toUpperCase() + phase[1].substring(1),
+            ),
+            null,
+            false,
           ),
-        ].join(' · '),
+        ],
       ),
     );
     final rows = <Widget>[
@@ -3824,8 +3826,65 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
   }
 }
 
-/// One reading: the number big with its unit, its name under it, and why
-/// it is amber when past the rig's safety limit.
+/// How old the readings are, redrawn once a second on its own so the tiles
+/// don't rebuild with it; amber past a minute.
+class _WeatherAge extends StatefulWidget {
+  const _WeatherAge(this.capturedAt);
+
+  final DateTime capturedAt;
+
+  @override
+  State<_WeatherAge> createState() => _WeatherAgeState();
+}
+
+class _WeatherAgeState extends State<_WeatherAge> {
+  /// Older readings than this read amber: the daemon reads every 2 s and Ara
+  /// asks every 15 s, so a live station never gets near it.
+  static const Duration _stale = Duration(seconds: 60);
+
+  late final Timer _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _tick.cancel();
+    super.dispose();
+  }
+
+  /// "8 s", "4 min", "2 h".
+  static String _age(Duration d) {
+    final s = math.max(0, d.inSeconds);
+    if (s < 60) return '$s s';
+    if (s < 3600) return '${s ~/ 60} min';
+    return '${s ~/ 3600} h';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final age = clock.now().toUtc().difference(widget.capturedAt);
+    final stale = age > _stale;
+    return Text(
+      stale
+          ? l10n.deviceLastReadingAgo(_age(age))
+          : l10n.deviceUpdatedAgo(_age(age)),
+      key: const Key('simple-weather-age'),
+      style: AraText.caption.copyWith(
+        fontSize: 12,
+        color: stale ? AraColors.accentWarning : null,
+      ),
+    );
+  }
+}
+
+/// One reading: the number big with its unit, its name and details under it,
+/// and on a line of its own the limit it is past (so the caption can't cut
+/// off why the tile is amber).
 class _WeatherTile extends StatelessWidget {
   const _WeatherTile(
     this.id,
@@ -3833,8 +3892,11 @@ class _WeatherTile extends StatelessWidget {
     this.value,
     this.unit,
     this.label, {
+    this.unitBeside = true,
+    this.details = const [],
     this.past,
-  });
+    bool? numberPast,
+  }) : numberPast = numberPast ?? past != null;
 
   final String id;
 
@@ -3844,23 +3906,43 @@ class _WeatherTile extends StatelessWidget {
   final String unit;
   final String label;
 
+  /// The unit beside the number; else after the name (too long for a half
+  /// tile beside the number: mag/arcsec²).
+  final bool unitBeside;
+
+  /// After the name: what it shows, what a screen reader hears (null: the
+  /// same), and whether it is the part past the limit.
+  final List<(String, String?, bool)> details;
+
   /// The limit it is past ("limit 85 %"), or null.
   final String? past;
+
+  /// The number itself is past the limit (not only a detail, as a gust).
+  final bool numberPast;
 
   @override
   Widget build(BuildContext context) {
     final warn = past != null;
-    final caption = [label, ?past].join(' · ');
+    final caption = AraText.caption.copyWith(fontSize: 12);
+    final amber = caption.copyWith(color: AraColors.accentWarning);
+    final parts = [
+      TextSpan(text: label),
+      if (!unitBeside && unit.isNotEmpty) TextSpan(text: unit),
+      for (final (shown, _, over) in details)
+        TextSpan(text: shown, style: over ? amber : null),
+    ];
     return Semantics(
       key: Key('simple-weather-$id'),
       container: true,
+      // The value next to the name, then its details, then why it's amber.
       label: [
         '$label $value${unit.isEmpty ? '' : ' $unit'}',
-        if (warn) context.l10n.devicePastLimit,
+        for (final (shown, spoken, _) in details) spoken ?? shown,
+        if (warn) '${context.l10n.devicePastLimit} ($past)',
       ].join(', '),
       excludeSemantics: true,
       child: Container(
-        // One height for every tile: the number and two caption lines.
+        // One height for every tile: the number and two lines under it.
         height: MediaQuery.textScalerOf(context).scale(80),
         padding: const EdgeInsets.symmetric(
           horizontal: AraSpace.s12,
@@ -3888,7 +3970,7 @@ class _WeatherTile extends StatelessWidget {
                     TextSpan(
                       children: [
                         TextSpan(text: value),
-                        if (unit.isNotEmpty)
+                        if (unitBeside && unit.isNotEmpty)
                           TextSpan(
                             text: ' $unit',
                             style: kSimpleText.copyWith(
@@ -3902,18 +3984,32 @@ class _WeatherTile extends StatelessWidget {
                       fontSize: 22,
                       fontWeight: FontWeight.w600,
                       height: 1.2,
-                      color: warn ? AraColors.accentWarning : null,
+                      color: numberPast ? AraColors.accentWarning : null,
                     ),
                   ),
                 ),
               ],
             ),
-            Text(
-              caption,
-              maxLines: 2,
+            Text.rich(
+              TextSpan(
+                children: [
+                  for (final (i, part) in parts.indexed) ...[
+                    if (i > 0) const TextSpan(text: ' · '),
+                    part,
+                  ],
+                ],
+              ),
+              maxLines: warn ? 1 : 2,
               overflow: TextOverflow.ellipsis,
-              style: AraText.caption.copyWith(fontSize: 12),
+              style: caption,
             ),
+            if (warn)
+              Text(
+                past!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: amber,
+              ),
           ],
         ),
       ),

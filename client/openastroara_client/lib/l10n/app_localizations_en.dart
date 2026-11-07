@@ -398,6 +398,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get deviceSafetyLimitsNotLoaded =>
+      'Safety limits not loaded: nothing is marked.';
+
+  @override
   String get deviceCouldntSaveThat => 'Couldn\'t save that';
 
   @override

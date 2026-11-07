@@ -1,6 +1,11 @@
+import 'dart:io';
+import 'dart:typed_data' show ByteData;
+
 import 'package:clock/clock.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FontLoader;
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/weather_status.dart';
@@ -8,6 +13,10 @@ import 'package:openastroara/screens/simple/simple_device_windows.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/state/equipment/weather_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
+import 'package:openastroara/models/server.dart';
+import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
 
@@ -62,6 +71,10 @@ Future<void> _pump(
     maxHumidityPct: 85,
     minDewDeltaC: 2,
   ),
+  ProfileApi? api,
+  Locale? locale,
+  double width = 360,
+  String? font,
 }) async {
   await tester.pumpWidget(const SizedBox());
   final c = ProviderContainer(
@@ -71,6 +84,7 @@ Future<void> _pump(
       deviceDriverProvider.overrideWith(
         (ref, type) async => type == 'observingconditions' ? driver : null,
       ),
+      profileApiProvider.overrideWithValue(api),
     ],
   );
   addTearDown(c.dispose);
@@ -78,11 +92,15 @@ Future<void> _pump(
     UncontrolledProviderScope(
       container: c,
       child: MaterialApp(
+        locale: locale,
+        theme: ThemeData(fontFamily: font),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: Align(
             alignment: Alignment.topLeft,
             child: SizedBox(
-              width: 360,
+              width: width,
               child: SimpleWeatherWindow(inSettings: inSettings),
             ),
           ),
@@ -91,6 +109,15 @@ Future<void> _pump(
     ),
   );
   await tester.pump();
+}
+
+/// A rig whose safety policies can't be read.
+class _NoPolicies extends ProfileApi {
+  _NoPolicies() : super(const AraServer(hostname: 'test', port: 1));
+
+  @override
+  Future<SafetyPolicies> getSafetyPolicies() async =>
+      throw StateError('unreachable');
 }
 
 Finder _tile(String id) => find.byKey(Key('simple-weather-$id'));
@@ -105,7 +132,8 @@ void main() {
       expect(_said(tester, 'cloud'), startsWith('Cloud cover 12 %'));
       expect(
         _said(tester, 'sqm'),
-        startsWith('Sky quality · mag/arcsec² 21.34'),
+        'Sky quality 21.34 mag/arcsec²',
+        reason: 'the value next to the name, then its unit',
       );
       expect(
         find.textContaining('Sky quality · mag/arcsec²'),
@@ -121,7 +149,8 @@ void main() {
       );
       expect(
         _said(tester, 'wind'),
-        startsWith('Wind · NW · gusts 27 15.1 km/h'),
+        'Wind 15.1 km/h, NW, gusts 27 km/h',
+        reason: 'the value next to the name, the gust with its unit',
       );
       expect(
         _tile('moon'),
@@ -223,9 +252,19 @@ void main() {
     tester,
   ) async {
     await _pump(tester, _wire());
-    expect(_said(tester, 'humidity'), 'Humidity 88 %, past the safety limit');
-    expect(find.textContaining('Humidity · limit 85 %'), findsOneWidget);
-    expect(find.textContaining('Dew point · margin 2 °C'), findsOneWidget);
+    expect(
+      _said(tester, 'humidity'),
+      'Humidity 88 %, past the safety limit (limit 85 %)',
+    );
+    expect(
+      find.descendant(of: _tile('humidity'), matching: find.text('limit 85 %')),
+      findsOneWidget,
+      reason: 'the limit on its own line, never cut off by the caption',
+    );
+    expect(
+      find.descendant(of: _tile('dew'), matching: find.text('margin 2 °C')),
+      findsOneWidget,
+    );
     expect(_said(tester, 'wind'), isNot(contains('past the safety limit')));
     expect(_said(tester, 'cloud'), isNot(contains('past the safety limit')));
   });
@@ -239,10 +278,154 @@ void main() {
     );
     expect(
       _said(tester, 'wind'),
-      endsWith('past the safety limit'),
+      contains('past the safety limit'),
       reason: '18 km/h sustained, but 36 km/h gusts are over 30',
     );
   });
+
+  testWidgets('a gust past the limit: the gust reads amber, not the lower '
+      'sustained speed', (tester) async {
+    await _pump(
+      tester,
+      _wire(readings: {'wind_speed_ms': 5.0, 'wind_gust_ms': 10.0}),
+    );
+    final number = tester.widget<Text>(
+      find.descendant(of: _tile('wind'), matching: find.byType(Text)).first,
+    );
+    expect(number.textSpan!.toPlainText(), '18 km/h');
+    expect(number.style?.color, isNot(AraColors.accentWarning));
+    final caption = tester
+        .widgetList<Text>(
+          find.descendant(of: _tile('wind'), matching: find.byType(Text)),
+        )
+        .firstWhere(
+          (t) => t.textSpan?.toPlainText().contains('gusts') ?? false,
+        );
+    TextSpan? gust;
+    caption.textSpan!.visitChildren((span) {
+      if (span is TextSpan && span.text == 'gusts 36') gust = span;
+      return gust == null;
+    });
+    expect(gust?.style?.color, AraColors.accentWarning);
+    expect(
+      find.descendant(of: _tile('wind'), matching: find.text('limit 30 km/h')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('sustained wind past the limit: the number reads amber', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _wire(readings: {'wind_speed_ms': 10.0, 'wind_gust_ms': 12.0}),
+    );
+    final number = tester.widget<Text>(
+      find.descendant(of: _tile('wind'), matching: find.byType(Text)).first,
+    );
+    expect(number.style?.color, AraColors.accentWarning);
+  });
+
+  testWidgets('a NaN wind reading marks nothing, as the daemon\'s Math.Max', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _wire(readings: {'wind_speed_ms': double.nan, 'wind_gust_ms': 20.0}),
+    );
+    expect(_said(tester, 'wind'), isNot(contains('past the safety limit')));
+  });
+
+  testWidgets(
+    'safety limits that fail to load say so instead of looking calm',
+    (tester) async {
+      await _pump(tester, _wire(), api: _NoPolicies());
+      await tester.pump();
+      expect(
+        find.text('Safety limits not loaded: nothing is marked.'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  // The test font draws every glyph as a square; fit is measured with the
+  // Roboto the Flutter SDK ships (as simple_text_scale_test does).
+  final fonts =
+      '${Platform.environment['FLUTTER_ROOT']}/bin/cache/artifacts/material_fonts';
+  final hasFonts = File('$fonts/Roboto-Regular.ttf').existsSync();
+  testWidgets(
+    'narrow and in Portuguese, the limit is not cut off',
+    skip: !hasFonts,
+    (tester) async {
+      final roboto = FontLoader('Roboto');
+      for (final f in ['Roboto-Regular.ttf', 'Roboto-Medium.ttf']) {
+        roboto.addFont(
+          Future.value(
+            ByteData.view(File('$fonts/$f').readAsBytesSync().buffer),
+          ),
+        );
+      }
+      await roboto.load();
+      await _pump(
+        tester,
+        _wire(
+          readings: {
+            'wind_speed_ms': 12.5,
+            'wind_gust_ms': 15.0,
+            'wind_direction_deg': 315.0,
+            'humidity_pct': 90.0,
+          },
+        ),
+        locale: const Locale('pt', 'BR'),
+        width: 280,
+        font: 'Roboto',
+      );
+      for (final limit in ['limite 30 km/h', 'limite 85 %']) {
+        final p = tester.renderObject<RenderParagraph>(find.text(limit));
+        expect(p.didExceedMaxLines, isFalse, reason: limit);
+      }
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  for (final scale in [1.3, 2.0]) {
+    testWidgets('at ${scale}x text nothing overflows', skip: !hasFonts, (
+      tester,
+    ) async {
+      final roboto = FontLoader('Roboto');
+      for (final f in ['Roboto-Regular.ttf', 'Roboto-Medium.ttf']) {
+        roboto.addFont(
+          Future.value(
+            ByteData.view(File('$fonts/$f').readAsBytesSync().buffer),
+          ),
+        );
+      }
+      await roboto.load();
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      // The window grows with the text, as the shell sizes it.
+      await _pump(
+        tester,
+        _wire(
+          readings: {
+            'wind_speed_ms': 5.0,
+            'wind_gust_ms': 10.0,
+            'wind_direction_deg': 315.0,
+            'humidity_pct': 90.0,
+            'temperature_c': 8.0,
+            'dew_point_c': 7.0,
+          },
+        ),
+        width: 360 * (scale / 1.1).clamp(1, 2) - 32,
+        font: 'Roboto',
+      );
+      expect(tester.takeException(), isNull);
+      for (final limit in ['limit 30 km/h', 'limit 85 %', 'margin 2 °C']) {
+        final p = tester.renderObject<RenderParagraph>(find.text(limit));
+        expect(p.didExceedMaxLines, isFalse, reason: limit);
+      }
+    });
+  }
 
   testWidgets('nothing is marked while weather does not trigger safety', (
     tester,

@@ -705,6 +705,12 @@ abstract class AppLocalizations {
   /// **'{phase, select, newMoon{New moon} waxingCrescent{Waxing crescent} firstQuarter{First quarter} waxingGibbous{Waxing gibbous} fullMoon{Full moon} waningGibbous{Waning gibbous} lastQuarter{Last quarter} other{Waning crescent}}'**
   String deviceMoonPhase(String phase);
 
+  /// Weather window, amber, under the tiles: the rig's safety limits could not be read, so no reading is marked past them
+  ///
+  /// In en, this message translates to:
+  /// **'Safety limits not loaded: nothing is marked.'**
+  String get deviceSafetyLimitsNotLoaded;
+
   /// Error message when a focuser or guider setting could not be saved
   ///
   /// In en, this message translates to:

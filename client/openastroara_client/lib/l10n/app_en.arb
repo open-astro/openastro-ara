@@ -516,6 +516,10 @@
       }
     }
   },
+  "deviceSafetyLimitsNotLoaded": "Safety limits not loaded: nothing is marked.",
+  "@deviceSafetyLimitsNotLoaded": {
+    "description": "Weather window, amber, under the tiles: the rig's safety limits could not be read, so no reading is marked past them"
+  },
   "deviceCouldntSaveThat": "Couldn't save that",
   "@deviceCouldntSaveThat": {
     "description": "Error message when a focuser or guider setting could not be saved"
