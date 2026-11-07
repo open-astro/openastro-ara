@@ -2080,6 +2080,10 @@
   "@estopFailPark": {
     "description": "Emergency Stop failed step"
   },
+  "estopFailRotator": "ROTATOR HALT FAILED — it may still be turning",
+  "@estopFailRotator": {
+    "description": "Emergency Stop failed step"
+  },
   "estopFailFlatPanel": "FLAT PANEL LIGHT-OFF FAILED",
   "@estopFailFlatPanel": {
     "description": "Emergency Stop failed step"

@@ -1478,6 +1478,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get estopFailPark => 'MOUNT PARK FAILED — verify it manually';
 
   @override
+  String get estopFailRotator =>
+      'ROTATOR HALT FAILED — it may still be turning';
+
+  @override
   String get estopFailFlatPanel => 'FLAT PANEL LIGHT-OFF FAILED';
 
   @override

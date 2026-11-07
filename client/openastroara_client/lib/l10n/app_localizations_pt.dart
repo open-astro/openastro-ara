@@ -1478,6 +1478,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get estopFailPark => 'MOUNT PARK FAILED — verify it manually';
 
   @override
+  String get estopFailRotator =>
+      'ROTATOR HALT FAILED — it may still be turning';
+
+  @override
   String get estopFailFlatPanel => 'FLAT PANEL LIGHT-OFF FAILED';
 
   @override
@@ -3805,6 +3809,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get estopFailPark =>
       'FALHA AO ESTACIONAR A MONTAGEM — verifique manualmente';
+
+  @override
+  String get estopFailRotator =>
+      'FALHA AO PARAR O ROTACIONADOR — ele pode ainda estar girando';
 
   @override
   String get estopFailFlatPanel => 'FALHA AO DESLIGAR A LUZ DO PAINEL DE FLAT';
