@@ -69,8 +69,8 @@ class _Rig implements SwitchClient {
   void close() {}
 }
 
-SwitchPort _port(int id, String name, double value, {double min = 0, double max = 1, bool write = true}) =>
-    SwitchPort(id: id, name: name, value: value, min: min, max: max, canWrite: write);
+SwitchPort _port(int id, String name, double value, {double min = 0, double max = 1, bool write = true, double step = 0}) =>
+    SwitchPort(id: id, name: name, value: value, min: min, max: max, canWrite: write, step: step);
 
 SwitchDevice _box({String id = 'box', String name = 'Pegasus Powerbox', List<SwitchPort>? ports}) => SwitchDevice(
       deviceId: id,
@@ -140,6 +140,22 @@ void main() {
     tester.widget<Slider>(_slider('box-4')).onChangeEnd!(1.23456);
     await tester.pumpAndSettle();
     expect(rig.writes, ['box/4=1.23']);
+  });
+
+  testWidgets("a port with a step stops on it and writes only values on it (#1680)", (tester) async {
+    final (_, rig) = await _pump(tester, [
+      _box(ports: [_port(0, 'Light Box', 40, max: 100, step: 10), _port(1, 'Temperature', 5, max: 15, step: 0.1)]),
+    ]);
+    final light = tester.widget<Slider>(_slider('box-0'));
+    expect(light.divisions, 10);
+    light.onChanged!(37);
+    await tester.pump();
+    expect(find.text('Light Box · 40'), findsOneWidget, reason: 'the level reads the value that will be sent');
+    light.onChangeEnd!(37);
+    await tester.pumpAndSettle();
+    tester.widget<Slider>(_slider('box-1')).onChangeEnd!(8.47);
+    await tester.pumpAndSettle();
+    expect(rig.writes, ['box/0=40.0', 'box/1=8.5']);
   });
 
   testWidgets("a port that can't be set isn't listed: the window shows what you can switch", (tester) async {

@@ -10,6 +10,7 @@ SwitchPort _port(
   double min = 0,
   double max = 1,
   bool canWrite = true,
+  double step = 0,
 }) =>
     SwitchPort(
       id: id,
@@ -18,6 +19,7 @@ SwitchPort _port(
       min: min,
       max: max,
       canWrite: canWrite,
+      step: step,
     );
 
 /// The shape a Gemini Power & Data Hub ADV3 actually reports — the case this
@@ -253,6 +255,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(writes, hasLength(1));
     expect(writes.single, writes.single.roundToDouble());
+  });
+
+  testWidgets("the slider stops on the device's step (#1680)", (tester) async {
+    await _pump(
+      tester,
+      SwitchDevice(
+        deviceId: 'flat',
+        alpacaDeviceNumber: 0,
+        name: 'Flat panel',
+        connectionState: SwitchConnectionState.connected,
+        ports: [_port(3, 'Light Box', value: 40, max: 100, step: 10)],
+      ),
+    );
+    expect(tester.widget<Slider>(find.byType(Slider)).divisions, 10);
   });
 
   testWidgets('an Auto boolean channel reads On/Off, not a bare 1',

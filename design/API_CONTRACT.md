@@ -1219,3 +1219,15 @@ its start and the client has nothing to do with it.
 **Spec ref:** openastro-guider `design/POLAR_ALIGNMENT_DESIGN.md` §4/§8 (corrected alongside), `design/API_REFERENCE.md` Static PA; `OpenAstroAra.Server/Services/PolarAlignService.cs`, `PHD2Guider.PolarAlign.cs` (`StaticPa*Async`).
 
 **Related:** #1611, #1591; tests `PolarAlignServiceTest`.
+
+## 2026-11-07 — Switch ports carry the device's step size: `step` on `SwitchPortDto` (#1680)
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/switch` (and every response that carries `SwitchDto.ports`): each port gains `step` (number, additive).
+
+**Decision:** `step` is the port's ASCOM `SwitchStep`, read with the rest of the port snapshot the daemon already keeps for the sequencer's `SetSwitchValue.Validate`. `0` means unknown; older daemons omit it and clients read that as `0`. Clients snap a slider to `min + k × step` (rounded to the step's decimals) and give it one stop per step; a step that would make more than 1000 stops over the range is treated as unknown, and an unknown step keeps each client's previous rounding. A 0–1 port stays an on/off whatever its step. The write route doesn't validate against the step: the device stays the authority.
+
+**Reasoning:** without it the client guessed (whole numbers over a range of 10 or more, else hundredths), so a slider could send 37 to a light box that takes steps of 10, and the device either refused it or stored something else than the label said.
+
+**Spec ref:** `OpenAstroAra.Server/Contracts/EquipmentDtos.cs` (`SwitchPortDto`), `SwitchService.ProjectPorts`; client `SwitchPort.step`, `snapToSwitchStep` / `switchSliderDivisions`.
+
+**Related:** #1680, #1651 (PR #1678); tests `SwitchMediatorTest.ProjectPorts_carries_each_ports_step_to_the_rest_dto`, `switch_port_layout_test`, `simple_switches_window_test`.

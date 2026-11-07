@@ -35,6 +35,8 @@ import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../widgets/equipment/equipment_status_chip.dart' show switchChipLevel;
+import '../../widgets/equipment/switch_port_layout.dart'
+    show snapToSwitchStep, switchSliderDivisions, usableSwitchStep;
 import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot, StatusLevel;
 import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment, simpleRailScale;
@@ -2769,10 +2771,13 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     Future.microtask(() => ref.read(switchListProvider.notifier).refresh());
   }
 
-  /// Whole numbers over a range of 10 or more, else to 0.01.
-  static double _round(SwitchPort p, double v) => p.max - p.min >= 10
-      ? v.roundToDouble()
-      : (v * 100).roundToDouble() / 100;
+  /// On the device's step (#1680); without one, whole numbers over a range of
+  /// 10 or more, else to 0.01.
+  static double _round(SwitchPort p, double v) =>
+      snapToSwitchStep(p, v) ??
+      (p.max - p.min >= 10
+          ? v.roundToDouble()
+          : (v * 100).roundToDouble() / 100);
 
 
   @override
@@ -2890,6 +2895,8 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
             key: Key('simple-switch-$id'),
             min: p.min,
             max: p.max,
+            divisions:
+                usableSwitchStep(p) == null ? null : switchSliderDivisions(p),
             value: v,
             semanticFormatterCallback: (x) => _simpleLevel(_round(p, x)),
             // Locked: it takes nothing; it reads disabled (greyed) only once

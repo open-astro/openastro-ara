@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import '../../models/switch_device.dart';
 
 /// How a [SwitchPort] should be presented. ASCOM's Switch interface is
@@ -212,6 +214,8 @@ List<String> switchModeLabels(SwitchPort mode) {
 /// Applies regardless of how the slider was rendered — the division cap is a
 /// rendering limit, not a licence to send 41234.87.
 double quantiseSwitchWrite(SwitchPort port, double value) {
+  final stepped = snapToSwitchStep(port, value);
+  if (stepped != null) return stepped;
   final span = port.max - port.min;
   if (span != span.roundToDouble()) return value;
   // Round on the port's OWN grid: a 0.5..3.5 port has a whole span but its
@@ -219,4 +223,46 @@ double quantiseSwitchWrite(SwitchPort port, double value) {
   // value the device never offers — the very thing this exists to prevent.
   return (port.min + (value - port.min).roundToDouble())
       .clamp(port.min, port.max);
+}
+
+/// Slider stops at most: a wide range (a 0..65535 device) must not build tens
+/// of thousands of divisions.
+const _maxSwitchStops = 1000;
+
+/// The device's step when it reports one coarse enough to be slider stops,
+/// else null (#1680).
+double? usableSwitchStep(SwitchPort port) =>
+    port.step > 0 && (port.max - port.min) / port.step <= _maxSwitchStops
+    ? port.step
+    : null;
+
+/// [value] on the device's own step grid (from [SwitchPort.min]), or null when
+/// the device reports no usable step.
+double? snapToSwitchStep(SwitchPort port, double value) {
+  final step = usableSwitchStep(port);
+  if (step == null) return null;
+  final k = ((value - port.min) / step).round();
+  // To the step's decimals: 0.1 * 85 is 8.500000000000002.
+  final places = max(_decimals(step), _decimals(port.min));
+  return double.parse((port.min + k * step).toStringAsFixed(places))
+      .clamp(port.min, port.max);
+}
+
+int _decimals(double x) {
+  for (var d = 0; d < 6; d++) {
+    final scaled = x * pow(10, d);
+    if ((scaled - scaled.roundToDouble()).abs() < 1e-6) return d;
+  }
+  return 6;
+}
+
+/// Slider stops for a port: one per device step when known, else one per whole
+/// unit on a whole-numbered range; null stays continuous.
+int? switchSliderDivisions(SwitchPort port) {
+  final span = port.max - port.min;
+  final step = usableSwitchStep(port) ?? 1;
+  final stops = span / step;
+  final whole = stops.roundToDouble();
+  if ((stops - whole).abs() > 1e-6) return null;
+  return whole >= 1 && whole <= _maxSwitchStops ? whole.toInt() : null;
 }

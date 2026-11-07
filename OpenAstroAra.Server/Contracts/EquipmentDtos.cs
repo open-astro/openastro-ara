@@ -402,7 +402,8 @@ public sealed record SwitchDto(
     EquipmentConnectionState State,
     IReadOnlyList<SwitchPortDto> Ports);
 
-public sealed record SwitchPortDto(int Id, string Name, double Value, double Min, double Max, bool CanWrite);
+/// <param name="Step">The device's <c>SwitchStep</c>; 0 = unknown (#1680).</param>
+public sealed record SwitchPortDto(int Id, string Name, double Value, double Min, double Max, bool CanWrite, double Step = 0);
 
 public sealed record SwitchValueRequestDto(int PortId, double Value);
 

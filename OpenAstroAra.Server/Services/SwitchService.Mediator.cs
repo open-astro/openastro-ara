@@ -35,8 +35,9 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>
 /// Full per-port snapshot cached by the §32.4 refresh. Superset of the REST
-/// <see cref="SwitchPortDto"/>: Description + StepSize exist only on the mediator surface
-/// (<c>SetSwitchValue.Validate</c> reads each writable switch's Minimum/Maximum/StepSize).
+/// <see cref="SwitchPortDto"/>: Description exists only on the mediator surface
+/// (<c>SetSwitchValue.Validate</c> reads each writable switch's Minimum/Maximum/StepSize;
+/// the DTO carries StepSize as <c>step</c> since #1680).
 /// </summary>
 internal readonly record struct SwitchPortSnapshot(
     short Id, string Name, string Description, double Value, double Min, double Max,
