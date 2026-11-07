@@ -9,6 +9,7 @@ import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/state/equipment/weather_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
 
 class _Weather extends WeatherNotifier {
   _Weather(this.json);
@@ -141,7 +142,6 @@ void main() {
       ('cloud', Icons.cloud_outlined),
       ('sqm', Icons.auto_awesome_outlined),
       ('temperature', Icons.thermostat),
-      ('dew', Icons.dew_point),
       ('humidity', Icons.water_drop_outlined),
       ('rain', CupertinoIcons.cloud_rain),
       ('wind', Icons.air),
@@ -153,6 +153,23 @@ void main() {
         reason: id,
       );
     }
+    expect(
+      find.descendant(of: _tile('dew'), matching: find.byType(EquipmentGlyph)),
+      findsOneWidget,
+      reason: 'a leaf with a drop: Material\'s dew point mark reads as a thermometer',
+    );
+    expect(
+      tester
+          .widget<EquipmentGlyph>(
+            find.descendant(
+              of: _tile('dew'),
+              matching: find.byType(EquipmentGlyph),
+            ),
+          )
+          .color,
+      AraColors.accentWarning,
+      reason: 'past its margin, like the number',
+    );
     final humidity = tester.widget<Icon>(
       find.descendant(of: _tile('humidity'), matching: find.byType(Icon)),
     );

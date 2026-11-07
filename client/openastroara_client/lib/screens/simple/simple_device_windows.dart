@@ -53,6 +53,7 @@ import '../../widgets/equipment/switch_port_layout.dart'
         switchPortUnit,
         switchSliderDivisions,
         usableSwitchStep;
+import '../../widgets/equipment/equipment_glyphs.dart' show EquipmentGlyph;
 import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot;
 import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment, SimpleSegments, simpleRailScale;
@@ -3679,6 +3680,15 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
 
   static bool _ok(double? v) => v != null && v.isFinite;
 
+  /// A tile's icon from Material or Cupertino.
+  static Widget Function(Color) _icon(IconData icon) =>
+      (color) => Icon(icon, size: 22, color: color);
+
+  /// Material's dew point mark reads as a second thermometer: a leaf with a
+  /// drop instead (user, 2026-11-08).
+  static Widget _dew(Color color) =>
+      EquipmentGlyph.dewPoint(size: 22, color: color);
+
   Widget _tiles(BuildContext context, WeatherStatus s) {
     final l10n = context.l10n;
     final p = ref.watch(safetyPoliciesProvider);
@@ -3690,7 +3700,7 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
       if (_ok(s.cloudCoverPct))
         _WeatherTile(
           'cloud',
-          Icons.cloud_outlined,
+          _icon(Icons.cloud_outlined),
           _num(s.cloudCoverPct!),
           '%',
           l10n.deviceCloudCover,
@@ -3698,7 +3708,7 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
       if (_ok(s.skyQualityMagArcsec2))
         _WeatherTile(
           'sqm',
-          Icons.auto_awesome_outlined,
+          _icon(Icons.auto_awesome_outlined),
           _num(s.skyQualityMagArcsec2!, decimals: 2),
           '',
           // Too long beside the number in a half tile: it goes under it.
@@ -3707,7 +3717,7 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
       if (_ok(t))
         _WeatherTile(
           'temperature',
-          Icons.thermostat,
+          _icon(Icons.thermostat),
           _num(t!),
           '°C',
           l10n.deviceTemperature,
@@ -3715,7 +3725,7 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
       if (_ok(dew))
         _WeatherTile(
           'dew',
-          Icons.dew_point,
+          _dew,
           _num(dew!),
           '°C',
           l10n.deviceDewPoint,
@@ -3726,7 +3736,7 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
       if (_ok(hum))
         _WeatherTile(
           'humidity',
-          Icons.water_drop_outlined,
+          _icon(Icons.water_drop_outlined),
           _num(hum!),
           '%',
           l10n.deviceHumidity,
@@ -3738,14 +3748,14 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
         s.rainRate! > 0
             ? _WeatherTile(
                 'rain',
-                CupertinoIcons.cloud_rain,
+                _icon(CupertinoIcons.cloud_rain),
                 _num(s.rainRate!),
                 'mm/h',
                 l10n.deviceRain,
               )
             : _WeatherTile(
                 'rain',
-                CupertinoIcons.cloud_rain,
+                _icon(CupertinoIcons.cloud_rain),
                 l10n.deviceRainNone,
                 '',
                 l10n.deviceRain,
@@ -3762,7 +3772,7 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
       tiles.add(
         _WeatherTile(
           'wind',
-          Icons.air,
+          _icon(Icons.air),
           _num((_ok(speed) ? speed! : gust!) * 3.6),
           'km/h',
           [
@@ -3782,7 +3792,7 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
     tiles.add(
       _WeatherTile(
         'moon',
-        Icons.nightlight_outlined,
+        _icon(Icons.nightlight_outlined),
         '${(moon.illuminatedFraction * 100).round()}',
         '%',
         [
@@ -3828,8 +3838,8 @@ class _WeatherTile extends StatelessWidget {
 
   final String id;
 
-  /// In front of the value, as large as its number.
-  final IconData icon;
+  /// In front of the value, as large as its number, in the colour given.
+  final Widget Function(Color color) icon;
   final String value;
   final String unit;
   final String label;
@@ -3870,13 +3880,7 @@ class _WeatherTile extends StatelessWidget {
             Row(
               spacing: AraSpace.s4,
               children: [
-                Icon(
-                  icon,
-                  size: 22,
-                  color: warn
-                      ? AraColors.accentWarning
-                      : AraColors.textSecondary,
-                ),
+                icon(warn ? AraColors.accentWarning : AraColors.textSecondary),
                 Flexible(
                   child: Text.rich(
                     maxLines: 1,
