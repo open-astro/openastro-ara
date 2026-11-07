@@ -3726,11 +3726,12 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
               : null,
         ),
       // A number even when dry: "Nenhuma" didn't fit a narrow half tile.
+      // Drizzle under 0.1 would read "0.0", a hair from dry's "0".
       if (_ok(s.rainRate))
         _WeatherTile(
           'rain',
           _icon(CupertinoIcons.cloud_rain),
-          _num(s.rainRate!),
+          s.rainRate! > 0 && s.rainRate! < 0.1 ? '< 0.1' : _num(s.rainRate!),
           'mm/h',
           l10n.deviceRain,
         ),

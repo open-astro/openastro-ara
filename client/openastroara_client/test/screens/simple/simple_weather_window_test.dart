@@ -220,6 +220,15 @@ void main() {
     }
   });
 
+  testWidgets('drizzle under 0.1 mm/h reads "< 0.1", not almost "0"', (
+    tester,
+  ) async {
+    await _pump(tester, _wire(readings: {'rain_rate': 0.04}));
+    expect(_said(tester, 'rain'), 'Rain < 0.1 mm/h');
+    await _pump(tester, _wire(readings: {'rain_rate': 0.0}));
+    expect(_said(tester, 'rain'), 'Rain 0 mm/h');
+  });
+
   testWidgets('a reading the station does not report has no tile', (
     tester,
   ) async {
