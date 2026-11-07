@@ -747,6 +747,18 @@ paths:
       responses:
         '200':
           description: OK
+  /api/v1/equipment/rotator/halt:
+    post:
+      tags:
+        - Equipment
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
   /api/v1/equipment/rotator/reconnect:
     post:
       tags:

@@ -129,6 +129,8 @@ public sealed class PlaceholderRotatorService : IRotatorService {
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("rotator.reverse", idempotencyKey));
     public Task<OperationAcceptedDto> SyncAsync(RotatorSyncRequestDto request, string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("rotator.sync", idempotencyKey));
+    public Task<OperationAcceptedDto> HaltAsync(string? idempotencyKey, CancellationToken ct) =>
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("rotator.halt", idempotencyKey));
 }
 
 public sealed class PlaceholderDomeService : IDomeService {

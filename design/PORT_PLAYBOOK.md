@@ -4464,7 +4464,7 @@ Server shutdown sequence:
 1. Camera: abort current exposure
 2. Guider (PHD2): stop guiding
 3. Mount: park (or home if no park position configured)
-4. Filter wheel / focuser / rotator: leave in place (no auto-move; user can intervene)
+4. Filter wheel / focuser / rotator: leave in place (no auto-move; user can intervene). A rotator that is turning is halted where it is (ASCOM `Halt`, no target; reported as the failed rung `halt_rotator` when the halt faults), run right after the sequence abort, since aborting a run only stops the sequencer waiting on its move (#1671)
 5. Flat panel: turn off (if connected, and configured to do so)
 6. Camera cooler: switch off (if the camera is connected and its cooler is on; reported as `cooler_off`, a refusal as the failed rung `cooler_off`)
 7. Sequence state → `aborted`

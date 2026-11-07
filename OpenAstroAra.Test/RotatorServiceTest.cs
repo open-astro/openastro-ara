@@ -160,6 +160,19 @@ namespace OpenAstroAra.Test {
                 () => { _ = svc.MoveAsync(new RotatorMoveRequestDto(360), null, CancellationToken.None); });
         }
 
+        [Test]
+        public async Task HaltAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = new RotatorService();
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.HaltAsync(null, CancellationToken.None));
+        }
+
+        [Test]
+        public async Task HaltAsync_after_Dispose_throws_ObjectDisposedException() {
+            var svc = new RotatorService();
+            svc.Dispose();
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => svc.HaltAsync(null, CancellationToken.None));
+        }
+
         private static async Task<RotatorDto?> PollUntilNotConnectingAsync(RotatorService svc) {
             for (var i = 0; i < 150; i++) {
                 var dto = await svc.GetAsync(CancellationToken.None);

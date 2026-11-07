@@ -17,7 +17,7 @@ import '../state/ws/client_session_state.dart';
 /// §35.3 — the persistent big red button, always visible in the bottom
 /// status bar. Press and hold for 2 s ("Hold to confirm", a fill sweeping
 /// across) → the daemon aborts
-/// the running sequence, aborts the in-flight exposure, stops guiding,
+/// the running sequence, halts the rotator, aborts the in-flight exposure, stops guiding,
 /// parks the mount, switches the flat panel light off and the camera's
 /// cooler off. The snackbar
 /// reports honestly what each rung did (a dead mount says so instead of
@@ -224,6 +224,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
         'abort_exposure' => l.estopFailAbortExposure,
         'stop_guiding' => l.estopFailStopGuiding,
         'park' => l.estopFailPark,
+        'halt_rotator' => l.estopFailRotator,
         'flat_panel_light_off' => l.estopFailFlatPanel,
         'cooler_off' => l.estopFailCooler,
         _ => l.estopFailOther(rung),

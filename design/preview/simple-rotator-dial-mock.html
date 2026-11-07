@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rotator Dial</title>
+<style>
+  /* Layout: one iPad-sized stage with the Simple Mode Rotator window over the image and the status pill top right.
+     Single dark look on purpose: DESIGN.md tokens (lib/theme/ara_colors.dart), as the other design/preview mocks. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+    --ok: #4CAF50; --info: #42A5F5; --sel: #1976D2; --tile: #383838; --warn: #FFB300;
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys);
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+  body.night { filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(.75); }
+  .page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 80ch; }
+  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--warn); color: var(--warn); margin-left: 6px; vertical-align: 3px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  .group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible, .dial:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+  .stage-wrap { overflow-x: auto; }
+  .ipad { width: 1024px; height: 720px; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 60% 45%, #3a3f4c 0, #12141a 55%, #08090c 100%); }
+  .frame { position: absolute; left: 560px; top: 250px; width: 260px; height: 180px; border: 1.5px dashed #ffffff55; border-radius: 4px; transition: transform .2s; }
+  .frame::after { content: "frame"; position: absolute; left: 6px; top: 2px; font-size: 11px; color: #ffffff77; }
+  .strip { position: absolute; left: 16px; right: 16px; top: 16px; height: 56px; background: rgba(26,26,26,.9); border-radius: 10px;
+           display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 13px; color: var(--text2); }
+  .dot { display: inline-flex; align-items: center; gap: 6px; } .dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .dot.hot { outline: 1.5px solid var(--sel); outline-offset: 4px; border-radius: 6px; color: var(--text); }
+  .dot.off i { background: #666; }
+  .pill { position: absolute; right: 16px; top: 88px; max-width: 300px; background: rgba(26,26,26,.9); border-radius: 12px; padding: 6px 12px;
+          display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .pill i { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); }
+
+  .win { position: absolute; left: 16px; top: 88px; width: 360px; background: rgba(26,26,26,.9); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+         border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+  .head { display: flex; align-items: center; gap: 8px; font-weight: 600; min-height: 32px; }
+  .head i { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
+  .head.off i { background: #666; }
+  .r { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+  .r .l { flex: 1; } .v { font-variant-numeric: tabular-nums; }
+  .caption { color: var(--text2); font-size: 12px; }
+  .status { color: var(--ok); font-size: 12px; text-align: center; min-height: 18px; font-variant-numeric: tabular-nums; }
+  .blink { animation: blink 1s steps(2, start) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
+
+  .dialwrap { position: relative; width: 220px; height: 220px; margin: 0 auto; }
+  .dial { display: block; touch-action: none; cursor: grab; border-radius: 50%; }
+  .dial.locked { opacity: .4; cursor: not-allowed; }
+  .mark { position: absolute; left: 50%; top: -4px; transform: translateX(-50%); width: 0; height: 0;
+          border-left: 9px solid transparent; border-right: 9px solid transparent; border-top: 14px solid var(--info); pointer-events: none; }
+  .centre { position: absolute; inset: 64px; border-radius: 50%; background: var(--bg); border: 1px solid var(--border);
+            display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; text-align: center; }
+  .centre .big { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  /* The hub's Stop: greyed out at rest, the shutter's red stop square while the rotator turns */
+  .halt { pointer-events: auto; gap: 4px; font: 13px var(--sys); color: var(--text2); cursor: not-allowed; opacity: .45; }
+  .halt .sq { width: 22px; height: 22px; border-radius: 4px; background: var(--text2); }
+  .halt.live { opacity: 1; cursor: pointer; }
+  .halt.live .sq { background: #F44336; }
+  .segs { display: inline-flex; width: 216px; background: var(--tile); border-radius: 8px; overflow: hidden; }
+  .segs button { flex: 1; border: 0; background: transparent; color: var(--text2); min-height: 44px; font: 14px var(--sys); cursor: pointer; }
+  .segs button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  .ask { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 0; }
+  .ask span { flex: 1 1 160px; color: var(--warn); }
+  .ask button { border: 0; background: transparent; color: var(--info); font: 600 14px var(--sys); padding: 8px; cursor: pointer; }
+
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .notes div { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+  .notes h2 { font-size: 14px; margin: 0 0 4px; }
+  .notes p { margin: 0; color: var(--text2); font-size: 13px; }
+  @media (prefers-reduced-motion: reduce) { .blink { animation: none; } .frame { transition: none; } }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <h1>Rotator window: the sky-angle dial <span class="tag">proposed</span></h1>
+  <p class="note">Layout A matches the Focuser window: the sky angle big on the left, with the mechanical angle under it when they differ, and the dial on the right (180 pt so both fit the 360 pt window). Layout B is the first mock, with the dial centred and the angle in its middle. The round dial from today's Focuser window becomes the Rotator's. Its face is a 0–360° sky-angle scale. The number under the blue mark is where the rotator is, or, while you turn, where it will go. Each click is one step of the size picked under the dial, and the angle snaps to that step. The rotator moves when you let go. The middle shows the sky angle, and the mechanical angle under it when they differ. Everything works: turn the dial (drag round it, scroll over it, or focus it and use the arrow keys) and watch the dashed frame on the image turn with it.</p>
+
+  <div class="controls">
+    <div class="group"><span class="lbl">Layout</span>
+      <div class="seg" role="group" aria-label="Layout" id="layout">
+        <button aria-pressed="true" data-v="b">A · Beside the reading (like the Focuser)</button>
+        <button aria-pressed="false" data-v="a">B · Centred dial (first mock)</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">Middle of the dial (A)</span>
+      <div class="seg" role="group" aria-label="Middle of the dial" id="hub">
+        <button aria-pressed="true" data-v="halt">Stop (chosen)</button>
+        <button aria-pressed="false" data-v="photo">1 · Last frame</button>
+        <button aria-pressed="false" data-v="frame">2 · Frame outline</button>
+        <button aria-pressed="false" data-v="compass">3 · North / East</button>
+        <button aria-pressed="false" data-v="flip">4 · Flip 180°</button>
+        <button aria-pressed="false" data-v="stop">5 · Frame + Stop</button>
+        <button aria-pressed="false" data-v="target">6 · Target angle</button>
+        <button aria-pressed="false" data-v="solid">7 · Solid face</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">State</span>
+      <div class="seg" role="group" aria-label="State" id="state">
+        <button aria-pressed="true" data-v="on">Connected</button>
+        <button aria-pressed="false" data-v="plan">Plan running</button>
+        <button aria-pressed="false" data-v="off">Not connected</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">View</span>
+      <div class="seg" role="group" aria-label="View" id="view">
+        <button aria-pressed="true" data-v="day">Normal</button>
+        <button aria-pressed="false" data-v="night">Night (red)</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-wrap">
+    <div class="ipad">
+      <div class="frame" id="frame"></div>
+      <div class="strip">
+        <span class="dot"><i></i>Camera</span><span class="dot"><i></i>Mount</span>
+        <span class="dot"><i></i>Focuser</span><span class="dot"><i></i>Guider</span>
+        <span class="dot hot" id="stripDot"><i></i>Rotator</span>
+      </div>
+      <div class="pill" id="pill" hidden><i class="blink"></i><span><b>Rotator</b> · Moving…</span></div>
+      <div class="win" id="win"></div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div><h2>Stop (chosen)</h2><p>The middle of the dial is the shutter's stop square and nothing else: no word under it. At rest the square is grey, dimmed, and takes no tap. While the rotator turns (a move from this window, a plan or the full UI) it turns red, and a tap stops the rotator where it is. The sky angle on the left then reads where it stopped. Turn the dial and let go, then tap Stop mid-turn to try it.</p></div>
+    <div><h2>Middle of the dial</h2><p><b>1 Last frame:</b> the latest image, turned the way it will come out at the angle under the mark, so you frame on the real target. Empty-sky placeholder before the first frame. <b>2 Frame outline:</b> the frame as it sits on the sky, with the new framing in green over the current one while you turn. <b>3 North / East:</b> where north and east will point in the image. <b>4 Flip 180°:</b> a button that turns the frame half a turn, a common re-frame and the angle after a meridian flip. <b>5 Frame + Stop:</b> the outline at rest, and a red stop square while it turns (needs a halt the rotator's notifier doesn't have yet). <b>6 Target angle</b> and <b>7 Solid face</b> as before.</p></div>
+    <div><h2>Turning</h2><p>Turning the face clockwise brings lower numbers under the mark, the way a printed scale works. Up and Right arrows, and a screen reader's increase, add one step.</p></div>
+    <div><h2>While a plan runs</h2><p>Letting go asks first, in the window: "A plan is running. Rotate anyway?" with Cancel and Rotate anyway, the way Mount's Park and the filter wheel do.</p></div>
+    <div><h2>Status pill</h2><p>"Rotator · Moving…" in blinking green while it turns, whoever turned it (#1668). Tapping it opens this window.</p></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const S = { layout: 'b', hub: 'halt', conn: 'on', sky: 92, offset: 4, target: null, sent: null, moving: false, step: 5, asking: null };
+  let faceAngle = 0, pending = 0, last = null, stopped = false; // degrees of turn not yet a whole click
+  const $ = s => document.querySelector(s);
+  const norm = a => ((a % 360) + 360) % 360;
+  const deg = a => `${norm(a).toFixed(1)}°`;
+  // n marks of the step from `from`: the first is the next mark that way (92 at 5°: up 95, down 90).
+  const snap = (from, n) => { const at = from / S.step; return norm(((n > 0 ? Math.floor(at + 1e-6) : Math.ceil(at - 1e-6)) + n) * S.step); };
+
+  function seg(id, fn) {
+    $(id).addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      $(id).querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+      fn(b.dataset.v); render();
+    });
+  }
+  seg('#layout', v => S.layout = v);
+  seg('#hub', v => S.hub = v);
+  seg('#state', v => { S.conn = v; S.asking = null; S.target = null; });
+  seg('#view', v => document.body.classList.toggle('night', v === 'night'));
+
+  const shown = () => S.target ?? S.sky;
+
+  function render() {
+    $('#stripDot').classList.toggle('off', S.conn === 'off');
+    $('#pill').hidden = !S.moving;
+    const head = `<div class="head ${S.conn === 'off' ? 'off' : ''}"><i></i>Rotator · Falcon</div>`;
+    if (S.conn === 'off') { $('#win').innerHTML = head + '<div class="caption">Not connected</div>'; return; }
+    const mech = norm(S.sky - S.offset);
+    const status = S.target != null ? `Let go to move to ${deg(S.target)}` : S.moving ? `Moving to ${deg(S.sent)}` : '';
+    const ask = S.asking != null ? `<div class="ask"><span>A plan is running. Rotate anyway?</span><button id="no">Cancel</button><button id="yes">Rotate anyway</button></div>` : '';
+    const stepRow = `<div class="r" style="margin-top:12px"><span class="l">Step</span><div class="segs" role="group" aria-label="Step">
+        ${[1, 5, 15].map(n => `<button data-n="${n}" aria-pressed="${S.step === n}">${n}°</button>`).join('')}</div></div>`;
+    if (S.layout === 'b') {
+      // Like the Focuser: the reading big on the left, the dial on the right; the hub stays plain.
+      $('#win').innerHTML = head + `
+        <div style="display:flex;align-items:center;gap:12px;padding:6px 0">
+          <div class="readout" style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
+            <span class="caption">Sky angle</span>
+            <span style="font-size:30px;font-weight:600;font-variant-numeric:tabular-nums">${deg(S.sky)}</span>
+            <span class="status ${S.moving && S.target == null ? 'blink' : ''}" id="status" style="text-align:left">${status}</span>
+            ${Math.abs(S.offset) > 0.05 ? `<span class="caption" style="margin-top:8px">Mechanical angle</span><span class="v">${deg(mech)}</span>` : ''}
+          </div>
+          <div class="dialwrap" style="width:180px;height:180px;margin:0">
+            <canvas class="dial ${S.moving ? 'locked' : ''}" id="dial" width="180" height="180" tabindex="0" role="slider" aria-label="Sky angle"
+              aria-valuenow="${S.sky}" aria-valuemin="0" aria-valuemax="360" aria-valuetext="${deg(S.sky)}"></canvas>
+            <div class="mark"></div>
+            ${S.hub === 'halt' ? `<button id="haltbtn" class="centre halt ${S.moving ? 'live' : ''}" style="inset:50px" ${S.moving ? '' : 'disabled'}
+                aria-label="Stop the rotator"><span class="sq"></span></button>` : ''}
+            ${S.hub === 'flip' ? `<button id="flipbtn" class="centre" style="inset:52px;pointer-events:auto;cursor:pointer;color:var(--text);font:600 13px var(--sys)" ${S.moving ? 'disabled' : ''}>⟲<br>Flip 180°</button>` : ''}
+            ${S.hub === 'stop' && S.moving ? `<button id="stopbtn" class="centre" style="inset:58px;pointer-events:auto;cursor:pointer;display:grid;place-items:center" aria-label="Stop the rotator"><span style="width:18px;height:18px;border-radius:4px;background:#F44336"></span></button>` : ''}
+            ${S.hub === 'target' ? `<div class="centre" style="inset:52px"><span class="caption" id="hubcap">${S.target != null ? 'to' : 'now'}</span><span style="font-size:15px;font-weight:600;font-variant-numeric:tabular-nums" id="cbig">${deg(shown())}</span></div>` : ''}
+          </div>
+        </div>` + ask + stepRow;
+      wire(); draw(); return;
+    }
+    $('#win').innerHTML = head + `
+      <div class="r"><span class="l">Sky angle</span><span class="v">${deg(S.sky)}</span></div>
+      <div class="r"><span class="l">Mechanical angle</span><span class="v">${deg(mech)}</span></div>
+      <div class="status ${S.moving && S.target == null ? 'blink' : ''}" id="status">${status}</div>
+      ${S.asking != null ? `<div class="ask"><span>A plan is running. Rotate anyway?</span><button id="no">Cancel</button><button id="yes">Rotate anyway</button></div>` : ''}
+      <div class="dialwrap">
+        <canvas class="dial ${S.moving ? 'locked' : ''}" id="dial" width="220" height="220" tabindex="0" role="slider" aria-label="Sky angle"
+          aria-valuenow="${S.sky}" aria-valuemin="0" aria-valuemax="360" aria-valuetext="${deg(S.sky)}"></canvas>
+        <div class="mark"></div>
+        <div class="centre"><span class="caption">Sky</span><span class="big" id="cbig">${deg(shown())}</span>
+          ${Math.abs(S.offset) > 0.05 ? `<span class="caption" id="cmech">mech ${deg(shown() - S.offset)}</span>` : ''}</div>
+      </div>
+      <div class="r" style="margin-top:12px"><span class="l">Step</span><div class="segs" role="group" aria-label="Step">
+        ${[1, 5, 15].map(n => `<button data-n="${n}" aria-pressed="${S.step === n}">${n}°</button>`).join('')}</div></div>`;
+    wire(); draw();
+  }
+
+  // The face: a knurled rim, a tick every 5°, a long one and a number every 30°. Numbers run clockwise from 0 at the top.
+  function draw() {
+    const c = $('#dial'); if (!c) return;
+    const g = c.getContext('2d'), s = c.width, ctr = s / 2, r = s / 2 - 14;
+    g.clearRect(0, 0, s, s);
+    g.save(); g.translate(ctr, ctr); g.rotate((faceAngle - shown()) * Math.PI / 180);
+    g.fillStyle = '#383838'; g.beginPath(); g.arc(0, 0, r, 0, 2 * Math.PI); g.fill();
+    g.strokeStyle = '#404040'; g.lineWidth = 2;
+    for (let i = 0; i < 90; i++) { const a = i * 2 * Math.PI / 90; g.beginPath(); g.moveTo(Math.cos(a) * (r - 6), Math.sin(a) * (r - 6)); g.lineTo(Math.cos(a) * r, Math.sin(a) * r); g.stroke(); }
+    g.font = '600 11px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (let d = 0; d < 360; d += 5) {
+      const a = (d - 90) * Math.PI / 180, major = d % 30 === 0;
+      g.strokeStyle = major ? '#E0E0E0' : '#A0A0A0'; g.lineWidth = major ? 2.5 : 1.2;
+      g.beginPath(); g.moveTo(Math.cos(a) * (r - (major ? 22 : 15)), Math.sin(a) * (r - (major ? 22 : 15))); g.lineTo(Math.cos(a) * (r - 9), Math.sin(a) * (r - 9)); g.stroke();
+      if (major) { g.fillStyle = '#E0E0E0'; g.fillText(String(d), Math.cos(a) * (r - 32), Math.sin(a) * (r - 32)); }
+    }
+    g.restore();
+    if (S.layout !== 'b' || ['target', 'solid', 'flip', 'halt'].includes(S.hub)) return;
+    const hub = r - 44;
+    g.fillStyle = '#1A1A1A'; g.strokeStyle = '#404040'; g.lineWidth = 1;
+    g.beginPath(); g.arc(ctr, ctr, hub, 0, 2 * Math.PI); g.fill(); g.stroke();
+    if (S.hub === 'stop' && S.moving) return; // the Stop button sits on top
+    if (S.hub === 'photo') {
+      // The last frame, turned to how it will come out at the angle under the mark.
+      g.save(); g.beginPath(); g.arc(ctr, ctr, hub - 1, 0, 2 * Math.PI); g.clip();
+      g.translate(ctr, ctr); g.rotate(-(shown() - 92) * Math.PI / 180);
+      const sz = hub * 2.4; g.drawImage(photo(), -sz / 2, -sz / 2, sz, sz);
+      g.restore();
+      return;
+    }
+    if (S.hub === 'compass') {
+      // Where north and east are in the frame at the angle under the mark (east 90° counter-clockwise of north, as seen on the sky).
+      const arrow = (a, label, colour) => {
+        const t = (a - 90) * Math.PI / 180, L = hub - 12;
+        g.strokeStyle = colour; g.fillStyle = colour; g.lineWidth = 2;
+        g.beginPath(); g.moveTo(ctr, ctr); g.lineTo(ctr + Math.cos(t) * L, ctr + Math.sin(t) * L); g.stroke();
+        g.font = '600 11px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillText(label, ctr + Math.cos(t) * (L + 7), ctr + Math.sin(t) * (L + 7));
+      };
+      arrow(-shown(), 'N', S.target != null ? '#4CAF50' : '#E0E0E0');
+      arrow(-shown() - 90, 'E', '#A0A0A0');
+      return;
+    }
+    const frame = (angle, colour, dash) => {
+      const w = hub * 1.3, h = w * 2 / 3;
+      g.save(); g.translate(ctr, ctr); g.rotate(angle * Math.PI / 180);
+      g.setLineDash(dash); g.strokeStyle = colour; g.lineWidth = 2;
+      g.strokeRect(-w / 2, -h / 2, w, h);
+      g.setLineDash([]); g.fillStyle = colour;
+      g.beginPath(); g.moveTo(-5, -h / 2 - 1); g.lineTo(5, -h / 2 - 1); g.lineTo(0, -h / 2 - 7); g.fill();
+      g.restore();
+    };
+    if (S.target != null) frame(S.sky, '#A0A0A0', [3, 3]);
+    frame(shown(), S.target != null ? '#4CAF50' : '#E0E0E0', []);
+  }
+
+  // A stand-in for the last frame: a galaxy's tilted glow and stars, drawn once.
+  let photoCanvas;
+  function photo() {
+    if (photoCanvas) return photoCanvas;
+    const c = photoCanvas = document.createElement('canvas'); c.width = c.height = 240;
+    const g = c.getContext('2d');
+    g.fillStyle = '#0b0d14'; g.fillRect(0, 0, 240, 240);
+    g.save(); g.translate(120, 120); g.rotate(0.5); g.scale(1, 0.38);
+    const glow = g.createRadialGradient(0, 0, 4, 0, 0, 90);
+    glow.addColorStop(0, '#fff5d8'); glow.addColorStop(0.25, '#c9b48a99'); glow.addColorStop(1, 'transparent');
+    g.fillStyle = glow; g.beginPath(); g.arc(0, 0, 90, 0, 2 * Math.PI); g.fill(); g.restore();
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 90; i++) { g.fillStyle = `rgba(255,255,255,${0.4 + rnd() * 0.6})`; g.beginPath(); g.arc(rnd() * 240, rnd() * 240, rnd() * 1.4 + 0.3, 0, 2 * Math.PI); g.fill(); }
+    return c;
+  }
+
+  function live() {
+    $('#status').textContent = S.target != null ? `Let go to move to ${deg(S.target)}` : '';
+    const big = $('#cbig'); if (big) big.textContent = deg(shown());
+    const cap = $('#hubcap'); if (cap) cap.textContent = S.target != null ? 'to' : 'now';
+    const m = $('#cmech'); if (m) m.textContent = `mech ${deg(shown() - S.offset)}`;
+  }
+
+  function clicks(n) { // clockwise (+) brings lower numbers under the mark
+    S.target = snap(S.target ?? S.sky, -n);
+    faceAngle = 0; pending = 0;
+    if (navigator.vibrate) try { navigator.vibrate(5); } catch (e) {}
+    live(); draw();
+  }
+
+  function turnBy(d) {
+    pending += d; faceAngle = pending;
+    const whole = Math.trunc(pending / S.step);
+    if (whole) { const rest = pending - whole * S.step; clicks(whole); pending = rest; faceAngle = rest; }
+    draw();
+  }
+
+  function release() {
+    const t = S.target; S.target = null; faceAngle = 0; pending = 0;
+    if (t == null || Math.abs(t - S.sky) < 0.05) { render(); return; }
+    if (S.conn === 'plan') { S.asking = t; render(); return; }
+    go(t);
+  }
+
+  function go(t) {
+    S.sent = t; S.moving = true; S.asking = null; render();
+    const from = S.sky; let d = norm(t - from); if (d > 180) d -= 360;
+    const start = performance.now(), dur = 400 + Math.abs(d) * 25;
+    stopped = false;
+    (function tick(now) {
+      const p = Math.min(1, (now - start) / dur);
+      S.sky = norm(from + d * p);
+      $('#frame').style.transform = `rotate(${S.sky - 92}deg)`;
+      draw();
+      if (stopped) { S.moving = false; render(); return; }
+      if (p < 1) requestAnimationFrame(tick); else { S.sky = t; S.moving = false; render(); }
+    })(start);
+  }
+
+  const at = (c, e) => { const b = c.getBoundingClientRect(); return Math.atan2(e.clientY - b.top - b.height / 2, e.clientX - b.left - b.width / 2) * 180 / Math.PI; };
+
+  function wire() {
+    const c = $('#dial');
+    c.addEventListener('pointerdown', e => { if (S.moving) return; c.setPointerCapture(e.pointerId); last = at(c, e); e.preventDefault(); });
+    c.addEventListener('pointermove', e => {
+      if (last == null) return;
+      const a = at(c, e); let d = a - last; if (d > 180) d -= 360; if (d < -180) d += 360; last = a; turnBy(d);
+    });
+    const end = cancel => { if (last == null) return; last = null; if (cancel) { S.target = null; faceAngle = 0; pending = 0; render(); } else release(); };
+    c.addEventListener('pointerup', () => end(false));
+    c.addEventListener('pointercancel', () => end(true));
+    let t;
+    c.addEventListener('wheel', e => { if (S.moving) return; e.preventDefault(); turnBy(e.deltaY * 0.1); clearTimeout(t); t = setTimeout(release, 450); }, { passive: false });
+    c.addEventListener('keydown', e => {
+      if (S.moving) return;
+      const d = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1 }[e.key]; if (!d) return;
+      e.preventDefault(); S.target = snap(S.sky, d); release();
+    });
+    document.querySelectorAll('.segs button').forEach(b => b.addEventListener('click', () => { S.step = +b.dataset.n; render(); }));
+    const flip = $('#flipbtn');
+    if (flip) flip.addEventListener('click', () => { S.target = norm(S.sky + 180); release(); });
+    const halt = $('#haltbtn');
+    if (halt) halt.addEventListener('click', () => { stopped = true; });
+    const stop = $('#stopbtn');
+    if (stop) stop.addEventListener('click', () => { stopped = true; });
+    const yes = $('#yes'), no = $('#no');
+    if (yes) yes.addEventListener('click', () => go(S.asking));
+    if (no) no.addEventListener('click', () => { S.asking = null; render(); });
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>

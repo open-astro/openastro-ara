@@ -20,9 +20,10 @@ namespace OpenAstroAra.Server.Services;
 /// §35.3 emergency stop — the one-button "make everything stop moving NOW"
 /// path behind <c>POST /api/v1/server/emergency-stop</c>. Rungs, in order:
 /// abort active sequence runs FIRST (so a still-running instruction can't
-/// start a fresh exposure or slew behind the stop), then abort the in-flight
-/// exposure, stop guiding, park the mount, switch the flat panel's light
-/// off, and switch the camera's cooler off. Every rung is best-effort — a
+/// start a fresh exposure or slew behind the stop), then halt the rotator
+/// where it is (aborting a run only stops the sequencer waiting on its move,
+/// #1671), abort the in-flight exposure, stop guiding, park the mount, switch
+/// the flat panel's light off, and switch the camera's cooler off. Every rung is best-effort — a
 /// dead device must never block the remaining rungs — and the result reports honestly what each rung did.
 /// The <c>safety.emergency_stop</c> WS event fires up-front so WILMA can
 /// show the stop banner while the daemon works.
@@ -35,6 +36,7 @@ public sealed partial class EmergencyStopService {
     private readonly IGuiderService? _guider;
     private readonly ITelescopeService? _telescope;
     private readonly IFlatDeviceService? _flatDevice;
+    private readonly IRotatorService? _rotator;
     private readonly INotificationService? _notifications;
     private readonly IWsBroadcaster? _ws;
     private readonly ILogger<EmergencyStopService> _logger;
@@ -60,12 +62,14 @@ public sealed partial class EmergencyStopService {
             IFlatDeviceService? flatDevice = null,
             INotificationService? notifications = null,
             IWsBroadcaster? ws = null,
-            ILogger<EmergencyStopService>? logger = null) {
+            ILogger<EmergencyStopService>? logger = null,
+            IRotatorService? rotator = null) {
         _camera = camera;
         _sequencerResolver = sequencerResolver;
         _guider = guider;
         _telescope = telescope;
         _flatDevice = flatDevice;
+        _rotator = rotator;
         _notifications = notifications;
         _ws = ws;
         _logger = logger ?? NullLogger<EmergencyStopService>.Instance;
@@ -106,6 +110,11 @@ public sealed partial class EmergencyStopService {
 
         var (runsAborted, abortRunsOutcome) = await AbortRunsQuietlyAsync().ConfigureAwait(false);
         if (abortRunsOutcome is RungOutcome.Failed) { failedRungs.Add("abort_runs"); }
+        // Left where it stops (§35.3 step 4): Halt sends no target, so a turning rotator just stops.
+        var rotatorOutcome = await RungAsync("halt rotator",
+            _rotator is null ? null : async () => (await _rotator.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
+            _rotator is null ? null : async ct => await _rotator.HaltAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);
+        if (rotatorOutcome is RungOutcome.Failed) { failedRungs.Add("halt_rotator"); }
         var exposureOutcome = await RungAsync("abort exposure",
             _camera is null ? null : async () => (await _camera.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _camera is null ? null : ct => _camera.AbortExposureAsync(ct)).ConfigureAwait(false);
