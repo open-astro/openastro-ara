@@ -31,6 +31,7 @@ import '../../widgets/status_indicator.dart'
     show StatusBlink, StatusDot, StatusLevel;
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
+import '../../state/equipment/focuser_state.dart';
 import '../../state/equipment/rotator_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
@@ -1076,6 +1077,8 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final swap = wheel != null && wheel.isAwaitingUser ? wheel.pending : null;
     // The rotator turning, whoever turned it (#1668).
     final rotator = ref.watch(rotatorProvider).value;
+    // The focuser moving, whoever moved it; autofocus has its own pill.
+    final focuser = ref.watch(focuserProvider).value;
     // The guider's routine, or Guiding with its RMS, when nothing else is on.
     final guider = ref.watch(guiderStatusProvider).value;
     final guiding = simpleGuiding(guider);
@@ -1185,6 +1188,17 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           AraColors.accentBusy,
         ),
       // Moving is working: blinking green, as the rotator's dot and window.
+      if (focuser != null &&
+          focuser.isConnected &&
+          focuser.isMoving &&
+          !af.isRunning)
+        _PillData(
+          SimpleStatusOrigin.focuser,
+          l10n.deviceFocuser,
+          l10n.deviceMoving,
+          AraColors.accentConnected,
+          working: true,
+        ),
       if (rotator != null && rotator.isConnected && rotator.isMoving)
         _PillData(
           SimpleStatusOrigin.rotator,

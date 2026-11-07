@@ -109,25 +109,55 @@ void main() {
         reason: 'fine is the small knob, as on a dual-speed focuser');
   });
 
+  /// One click out on [which], as a screen reader's increase sends it.
+  Future<void> clickOut(WidgetTester tester, String which) async {
+    final node = tester.getSemantics(_knob(which));
+    node.owner!.performAction(node.id, SemanticsAction.increase);
+    await tester.pump();
+  }
+
   testWidgets('a click scales to the travel: coarse about 1 %, fine a tenth of that', (tester) async {
-    await _pump(tester, _wire()); // 0-60 000
-    expect(find.text('Coarse (600)'), findsOneWidget);
-    expect(find.text('Fine (60)'), findsOneWidget);
-    await _pump(tester, _wire(max: 5000));
-    expect(find.text('Coarse (50)'), findsOneWidget);
-    expect(find.text('Fine (5)'), findsOneWidget);
-    await _pump(tester, _wire(max: 50));
-    expect(find.text('Coarse (1)'), findsOneWidget);
-    expect(find.text('Fine (1)'), findsOneWidget, reason: 'never 0');
+    var f = await _pump(tester, _wire()); // 0-60 000
+    await clickOut(tester, 'coarse');
+    await clickOut(tester, 'fine');
+    expect(f.moves, [12600, 12060]);
+    f = await _pump(tester, _wire(max: 5000, position: 2000));
+    await clickOut(tester, 'coarse');
+    await clickOut(tester, 'fine');
+    expect(f.moves, [2050, 2005]);
+    f = await _pump(tester, _wire(max: 50, position: 20));
+    await clickOut(tester, 'coarse');
+    await clickOut(tester, 'fine');
+    expect(f.moves, [21, 21], reason: 'never 0');
   });
 
   testWidgets('a relative focuser, or one with no travel, clicks 100 and 10', (tester) async {
-    await _pump(tester, _wire(absolute: false));
-    expect(find.text('Coarse (100)'), findsOneWidget);
-    expect(find.text('Fine (10)'), findsOneWidget);
-    await _pump(tester, _wire(max: 0));
-    expect(find.text('Coarse (100)'), findsOneWidget);
-    expect(find.text('Fine (10)'), findsOneWidget);
+    var f = await _pump(tester, _wire(absolute: false));
+    await clickOut(tester, 'coarse');
+    await clickOut(tester, 'fine');
+    expect(f.moves, [100, 10], reason: 'a relative focuser is sent the change');
+    f = await _pump(tester, _wire(max: 0));
+    await clickOut(tester, 'coarse');
+    await clickOut(tester, 'fine');
+    expect(f.moves, [12100, 12010]);
+  });
+
+  testWidgets('under each knob its name only, no click size (user, 2026-11-07)', (tester) async {
+    await _pump(tester, _wire());
+    expect(find.text('Coarse'), findsOneWidget);
+    expect(find.text('Fine'), findsOneWidget);
+    expect(find.textContaining('('), findsNothing);
+  });
+
+  testWidgets('In and Out carry arrows: up above the knobs, down under them', (tester) async {
+    await _pump(tester, _wire());
+    final up = tester.getRect(find.byIcon(Icons.arrow_drop_up));
+    final down = tester.getRect(find.byIcon(Icons.arrow_drop_down));
+    final inText = tester.getRect(find.text('In'));
+    final outText = tester.getRect(find.text('Out'));
+    expect(up.center.dy, moreOrLessEquals(inText.center.dy, epsilon: 4), reason: 'beside In');
+    expect(down.center.dy, moreOrLessEquals(outText.center.dy, epsilon: 4), reason: 'beside Out');
+    expect(up.bottom, lessThanOrEqualTo(tester.getRect(_knob('coarse')).top));
   });
 
   testWidgets('rolling down goes out and up goes in, as a drawtube; it moves on letting go', (tester) async {
@@ -148,7 +178,7 @@ void main() {
   testWidgets('the two knobs\' marks line up: both centred on one line, their captions on another', (tester) async {
     await _pump(tester, _wire());
     expect(tester.getCenter(_knob('fine')).dy, moreOrLessEquals(tester.getCenter(_knob('coarse')).dy, epsilon: 0.5));
-    expect(tester.getRect(find.text('Fine (60)')).top, moreOrLessEquals(tester.getRect(find.text('Coarse (600)')).top, epsilon: 0.5));
+    expect(tester.getRect(find.text('Fine')).top, moreOrLessEquals(tester.getRect(find.text('Coarse')).top, epsilon: 0.5));
   });
 
   testWidgets('the knobs sit beside the position, Autofocus under them', (tester) async {
@@ -175,6 +205,33 @@ void main() {
     await g.up();
     await tester.pump();
   });
+
+  for (final scrolling in [false, true]) {
+    testWidgets('a mouse wheel over a knob rolls it, on a page that scrolls too: $scrolling', (tester) async {
+      final f = await _pump(tester, _wire(), scrolling: scrolling);
+      final mouse = TestPointer(1, PointerDeviceKind.mouse);
+      await tester.sendEventToBinding(mouse.hover(tester.getCenter(_knob('coarse'))));
+      await tester.sendEventToBinding(mouse.scroll(const Offset(0, 50))); // one wheel notch
+      await tester.pump();
+      expect(find.text('Let go to move to 12 600'), findsOneWidget, reason: 'one notch, one click');
+      await tester.pump(const Duration(seconds: 1));
+      expect(f.moves, [12600]);
+    });
+
+    testWidgets('a two-finger trackpad scroll over a knob rolls it, on a page that scrolls too: $scrolling', (tester) async {
+      final f = await _pump(tester, _wire(), scrolling: scrolling);
+      final at = tester.getCenter(_knob('coarse'));
+      final g = await tester.startGesture(at, kind: PointerDeviceKind.trackpad);
+      for (var i = 1; i <= 10; i++) {
+        await g.panZoomUpdate(at, pan: Offset(0, i * kSimpleFocusClick * 0.35));
+        await tester.pump();
+      }
+      expect(find.textContaining('Let go to move to'), findsOneWidget);
+      await g.panZoomEnd();
+      await tester.pump(const Duration(seconds: 1));
+      expect(f.moves, hasLength(1));
+    });
+  }
 
   testWidgets('a scroll over a knob rolls it, and the focuser moves once the scrolling stops', (tester) async {
     final f = await _pump(tester, _wire());
@@ -212,7 +269,7 @@ void main() {
     expect(fill(), AraColors.accentConnected);
     _live.running();
     await tester.pump();
-    expect(fill(), AraColors.accentError);
+    expect(fill(), AraColors.emergencyStop, reason: 'white on it keeps 5:1; Fault Red gives 4.2 (#1670 re-audit P1)');
     expect(find.descendant(of: find.byKey(const Key('simple-focuser-autofocus')), matching: find.text('Cancel autofocus')),
         findsOneWidget);
     expect(find.descendant(of: find.byKey(const Key('simple-focuser-autofocus')), matching: find.byKey(const Key('simple-stop-square'))),
@@ -356,6 +413,16 @@ void main() {
     expect(simpleSteps(-1200), '−1 200');
     expect(simpleSteps(-5), '−5');
     expect(simpleSteps(12000), '12 000');
+  });
+
+  testWidgets('a busy Autofocus button reads as disabled (#1670 re-audit P3)', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(tester, _wire());
+    _live.state = const AutofocusLive(busy: true);
+    await tester.pump();
+    expect(tester.getSemantics(find.byKey(const Key('simple-focuser-autofocus'))),
+        isSemantics(isButton: true, hasEnabledState: true, isEnabled: false));
+    semantics.dispose();
   });
 
   testWidgets('a roll cut off by the system moves nothing', (tester) async {

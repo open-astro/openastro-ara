@@ -182,6 +182,47 @@ void main() {
     expect(r.calls, isEmpty);
   });
 
+  testWidgets('on a fractional angle, a click out and back clears the target (#1670 re-audit P2)', (tester) async {
+    await _pump(tester, _wire(sky: 92.4, mech: 92.4));
+    await _turn(tester, -1.5); // one click up: 93
+    expect(_syncLabel(tester), 'Sync to 93.0°');
+    await _turn(tester, 1.5); // and back
+    expect(_syncLabel(tester), 'Sync', reason: 'back where it is: no 92.0° target to sync to');
+  });
+
+  testWidgets('Rotate anyway spends the target, as a plain Start does (#1670 re-audit P2)', (tester) async {
+    await _pump(tester, _wire(), planRunning: true);
+    await tester.pump();
+    await _turn(tester, 17.5);
+    await tester.tap(_go);
+    await tester.pump();
+    await tester.tap(find.text('Rotate anyway'));
+    await tester.pump();
+    expect(_syncLabel(tester), 'Sync');
+  });
+
+  testWidgets('one mouse-wheel notch over the dial is one degree (#1670 re-audit P2)', (tester) async {
+    await _pump(tester, _wire());
+    final mouse = TestPointer(1, PointerDeviceKind.mouse);
+    await tester.sendEventToBinding(mouse.hover(tester.getCenter(_dial) + const Offset(60, 0)));
+    await tester.sendEventToBinding(mouse.scroll(const Offset(0, -50)));
+    await tester.pump();
+    expect(_syncLabel(tester), 'Sync to 93.0°');
+  });
+
+  testWidgets('a two-finger trackpad scroll over the dial sets the target', (tester) async {
+    await _pump(tester, _wire());
+    final at = tester.getCenter(_dial) + const Offset(60, 0);
+    final g = await tester.startGesture(at, kind: PointerDeviceKind.trackpad);
+    for (var i = 1; i <= 10; i++) {
+      await g.panZoomUpdate(at, pan: Offset(0, i * -2.0)); // 20 pt up: counter-clockwise, up
+      await tester.pump();
+    }
+    await g.panZoomEnd();
+    await tester.pump();
+    expect(_syncLabel(tester), 'Sync to 94.0°', reason: '7 pt a degree');
+  });
+
   testWidgets('the angle wraps through 0', (tester) async {
     final (_, r) = await _pump(tester, _wire(sky: 1, mech: 1));
     await _turn(tester, 2.5); // two clicks clockwise from 1: 0, then 359

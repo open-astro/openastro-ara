@@ -78,7 +78,6 @@
   "deviceCoarseFocus": "Foco grosso",
   "deviceFineFocus": "Foco fino",
   "deviceKnobHint": "Aumentar move para fora, diminuir move para dentro",
-  "deviceClickSize": "{knob} ({steps})",
   "deviceRotate": "Girar",
   "deviceRotateTo": "Girar para {angle}",
   "deviceSync": "Sincronizar",

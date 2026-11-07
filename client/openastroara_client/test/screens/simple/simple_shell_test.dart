@@ -228,6 +228,10 @@ class _Focuser extends FocuserNotifier with _Calls<FocuserStatus> {
   final EquipmentConnectionState state0;
   @override
   Future<FocuserStatus?> build() async => FocuserStatus.fromJson(_wire('EAF', state0));
+
+  /// What the focuser reports next ("moving", "idle").
+  void report(String runtime) =>
+      state = AsyncData(FocuserStatus.fromJson({..._wire('EAF', state0), 'runtime': {'state': runtime, 'position': 12000}}));
 }
 
 class _FilterWheel extends FilterWheelNotifier with _Calls<FilterWheelStatus> {
@@ -3367,6 +3371,27 @@ void main() {
     wheel.report({'state': 'awaiting_user', 'current_slot': 1, 'pending_slot': 2}, manual: true);
     await tester.pump();
     expect(find.descendant(of: pill, matching: find.textContaining('Swap in F2, then confirm.')), findsOneWidget);
+  });
+
+  testWidgets('the focuser moving shows in the status pill, blinking green, until it stops; a tap opens its window',
+      (tester) async {
+    final focuser = _Focuser(EquipmentConnectionState.connected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [focuserProvider.overrideWith(() => focuser)]);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Focuser')), findsNothing);
+    focuser.report('moving');
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Focuser')), findsOneWidget);
+    expect(find.descendant(of: pill, matching: find.textContaining('Moving…')), findsOneWidget);
+    expect(tester.widget<StatusBlink>(find.descendant(of: pill, matching: find.byType(StatusBlink))).on, isTrue);
+    await tester.tap(find.descendant(of: pill, matching: find.textContaining('Focuser')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const Key('simple-device-focuser')), findsOneWidget, reason: 'the pill opens its window');
+    focuser.report('idle');
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Focuser')), findsNothing, reason: 'stopped');
   });
 
   testWidgets('the rotator turning shows in the status pill, blinking green, until it stops; a tap opens its window',

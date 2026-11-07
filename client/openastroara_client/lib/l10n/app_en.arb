@@ -421,18 +421,6 @@
   "@deviceKnobHint": {
     "description": "Screen-reader hint on the focuser's knobs: increase (the bigger number) moves the focuser out, though rolling the knob up or the Up key moves it in"
   },
-  "deviceClickSize": "{knob} ({steps})",
-  "@deviceClickSize": {
-    "description": "Under a focuser knob: its name and, in brackets, how many steps one click moves, e.g. 'Coarse (600)'",
-    "placeholders": {
-      "knob": {
-        "type": "String"
-      },
-      "steps": {
-        "type": "String"
-      }
-    }
-  },
   "deviceState": "State",
   "@deviceState": {
     "description": "Guider window row: what the guider is doing"

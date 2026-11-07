@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-07T22:00:00+13:00",
+  "generatedAt": "2026-11-07T23:00:00+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -745,8 +745,8 @@
       "name": "Focus Knobs (Simple Mode)",
       "kind": "custom",
       "refersTo": "simple-focus-knobs",
-      "description": "The Focuser window's coarse and fine knobs: two upright knurled cylinders seen from the side (72 × 180 and 56 × 140 pt), In above and Out under them. Rolling up goes in, down goes out; a click is 1 % of the travel on Coarse, a tenth of that on Fine (100 / 10 for a relative focuser), each knob's name and click size under it (\"Coarse (600)\"), both knobs centred on one line so their marks line up. Autofocus under them is green to start and red to cancel. The focuser moves on letting go (#1662).",
-      "html": "<div class=\"ds-knobs\"><span>In</span><div class=\"ds-knob-row\"><div><i class=\"ds-knob\" style=\"height:120px;width:48px\"></i><small>Coarse (600)</small></div><div><i class=\"ds-knob\" style=\"height:94px;width:38px;margin:13px 0\"></i><small>Fine (60)</small></div></div><span>Out</span></div>",
+      "description": "The Focuser window's coarse and fine knobs: two upright knurled cylinders seen from the side (72 × 180 and 56 × 140 pt), ▲ In above and ▼ Out under them. Rolling up goes in, down goes out; a click is 1 % of the travel on Coarse, a tenth of that on Fine (100 / 10 for a relative focuser), each knob's name under it, both knobs centred on one line so their marks line up. Autofocus under them is green to start and red (Emergency Stop red, for 5:1 white words) to cancel. The focuser moves on letting go (#1662).",
+      "html": "<div class=\"ds-knobs\"><span>▲ In</span><div class=\"ds-knob-row\"><div><i class=\"ds-knob\" style=\"height:120px;width:48px\"></i><small>Coarse</small></div><div><i class=\"ds-knob\" style=\"height:94px;width:38px;margin:13px 0\"></i><small>Fine</small></div></div><span>▼ Out</span></div>",
       "css": ".ds-knobs{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;display:inline-flex;flex-direction:column;align-items:center;gap:4px;padding:16px;background:rgba(26,26,26,.9);border-radius:14px;color:#A0A0A0;font-size:12px} .ds-knob-row{display:flex;gap:8px;align-items:flex-start} .ds-knob-row div{display:flex;flex-direction:column;align-items:center;gap:4px} .ds-knob{display:block;border-radius:12px;border:1px solid #404040;background:repeating-linear-gradient(180deg,rgba(224,224,224,.35) 0 2px,transparent 2px 14px),linear-gradient(180deg,#1A1A1A,#383838 50%,#1A1A1A)}"
     },
     {

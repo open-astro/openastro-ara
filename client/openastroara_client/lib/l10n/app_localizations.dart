@@ -639,12 +639,6 @@ abstract class AppLocalizations {
   /// **'Increase moves out, decrease moves in'**
   String get deviceKnobHint;
 
-  /// Under a focuser knob: its name and, in brackets, how many steps one click moves, e.g. 'Coarse (600)'
-  ///
-  /// In en, this message translates to:
-  /// **'{knob} ({steps})'**
-  String deviceClickSize(String knob, String steps);
-
   /// Guider window row: what the guider is doing
   ///
   /// In en, this message translates to:

@@ -318,11 +318,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceKnobHint => 'Increase moves out, decrease moves in';
 
   @override
-  String deviceClickSize(String knob, String steps) {
-    return '$knob ($steps)';
-  }
-
-  @override
   String get deviceState => 'State';
 
   @override
@@ -2662,11 +2657,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get deviceKnobHint =>
       'Aumentar move para fora, diminuir move para dentro';
-
-  @override
-  String deviceClickSize(String knob, String steps) {
-    return '$knob ($steps)';
-  }
 
   @override
   String get deviceState => 'Estado';

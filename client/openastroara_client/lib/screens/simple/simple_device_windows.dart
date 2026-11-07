@@ -993,7 +993,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     }
   }
 
-  /// One knob with its click size under it ("Coarse (600)"): a slider to
+  /// One knob with its name under it ("Coarse"): a slider to
   /// screen readers, Up and Down a click from the keyboard. It sits centred
   /// in a slot [slot] tall (the coarse knob's height), so both knobs' marks
   /// and both captions line up.
@@ -1072,10 +1072,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
             ),
           ),
         ),
-        Text(
-          context.l10n.deviceClickSize(name, simpleSteps(step)),
-          style: AraText.caption,
-        ),
+        Text(name, style: AraText.caption),
       ],
     );
   }
@@ -1147,7 +1144,17 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
               mainAxisSize: MainAxisSize.min,
               spacing: AraSpace.s4,
               children: [
-                Text(l10n.deviceIn, style: AraText.caption),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.arrow_drop_up,
+                      size: 20,
+                      color: AraColors.textSecondary,
+                    ),
+                    Text(l10n.deviceIn, style: AraText.caption),
+                  ],
+                ),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -1175,7 +1182,17 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
                     ),
                   ],
                 ),
-                Text(l10n.deviceOut, style: AraText.caption),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.arrow_drop_down,
+                      size: 20,
+                      color: AraColors.textSecondary,
+                    ),
+                    Text(l10n.deviceOut, style: AraText.caption),
+                  ],
+                ),
               ],
             ),
           ],
@@ -1256,6 +1273,10 @@ class _DialState extends State<_Dial> {
   double _pending = 0;
   double? _last;
 
+  /// This drag is a trackpad's two-finger pan, with no usable position.
+  bool _panned = false;
+  double _scrolled = 0;
+
   /// A scroll counts as let go this long after its last tick.
   static const _scrollRest = Duration(milliseconds: 350);
   Timer? _scrollTimer;
@@ -1309,8 +1330,14 @@ class _DialState extends State<_Dial> {
     if (e is! PointerScrollEvent || !widget.enabled) return;
     // Claimed, so the sheet under the window doesn't scroll as well.
     GestureBinding.instance.pointerSignalResolver.register(e, (e) {
-      // A tenth of a degree a pixel: one 5° click is a short flick.
-      _turnBy((e as PointerScrollEvent).scrollDelta.dy * math.pi / 1800);
+      // One notch, one click, however many pixels the wheel reports; a
+      // smooth wheel's small deltas add up to 7 first.
+      _scrolled += (e as PointerScrollEvent).scrollDelta.dy;
+      if (_scrolled.abs() < 7) return;
+      final dir = _scrolled.sign;
+      _scrolled = 0;
+      _pending = 0;
+      _turnBy(dir * widget.detent);
       _scrollTimer?.cancel();
       _scrollTimer = Timer(_scrollRest, () {
         setState(() => _pending = 0);
@@ -1348,10 +1375,19 @@ class _DialState extends State<_Dial> {
                     r
                       ..dragStartBehavior = DragStartBehavior.down
                       ..onStart = (d) {
-                        _last = _at(d.localPosition);
+                        _panned = d.kind == PointerDeviceKind.trackpad;
+                        _last = _panned ? 0 : _at(d.localPosition);
                       }
                       ..onUpdate = (d) {
-                        _turn(d.localPosition);
+                        if (_panned) {
+                          // Two fingers: 7 pt of travel a degree, down
+                          // clockwise, as the wheel.
+                          if (_last != null) {
+                            _turnBy(d.delta.dy * math.pi / 1260);
+                          }
+                        } else {
+                          _turn(d.localPosition);
+                        }
                       }
                       ..onEnd = (_) {
                         _end();
@@ -1437,12 +1473,17 @@ class _FocusThumbwheelState extends State<_FocusThumbwheel> {
   double _pending = 0;
   bool _dragging = false;
 
+  /// How far this drag has strayed sideways; past a knob's width off its
+  /// side, the roll drops.
+  double _sideways = 0;
+
   /// Set by a pointer cancel, which reaches the drag as an ordinary end.
   bool _cancelled = false;
 
   /// A scroll counts as let go this long after its last tick.
   static const _scrollRest = Duration(milliseconds: 350);
   Timer? _scrollTimer;
+  double _scrolled = 0;
 
   @override
   void dispose() {
@@ -1473,7 +1514,15 @@ class _FocusThumbwheelState extends State<_FocusThumbwheel> {
     if (e is! PointerScrollEvent || !widget.enabled) return;
     // Claimed, so the sheet under the window doesn't scroll as well.
     GestureBinding.instance.pointerSignalResolver.register(e, (e) {
-      _roll((e as PointerScrollEvent).scrollDelta.dy);
+      // A wheel notch is tens of pixels: one notch, one click. A smooth
+      // wheel's small deltas add up to half a click first.
+      _scrolled += (e as PointerScrollEvent).scrollDelta.dy;
+      if (_scrolled.abs() >= kSimpleFocusClick / 2) {
+        final dir = _scrolled.sign;
+        _scrolled = 0;
+        _pending = 0;
+        _roll(dir * kSimpleFocusClick);
+      }
       _scrollTimer?.cancel();
       _scrollTimer = Timer(_scrollRest, () {
         _pending = 0;
@@ -1497,11 +1546,14 @@ class _FocusThumbwheelState extends State<_FocusThumbwheel> {
                 ..dragStartBehavior = DragStartBehavior.down
                 ..onStart = (_) {
                   _dragging = true;
+                  _sideways = 0;
                 }
                 ..onUpdate = (d) {
                   if (!_dragging) return; // dropped: dragged off the knob
-                  final w = widget.size.width;
-                  if (d.localPosition.dx < -w || d.localPosition.dx > 2 * w) {
+                  // Counted from the finger's own travel: a trackpad's
+                  // two-finger pan reports no usable position.
+                  _sideways += d.delta.dx;
+                  if (_sideways.abs() > widget.size.width * 1.5) {
                     _cancelled = true;
                     _end();
                     return;
@@ -1624,6 +1676,14 @@ class _EagerPan extends PanGestureRecognizer {
     super.addAllowedPointer(event);
     resolve(GestureDisposition.accepted);
   }
+
+  /// A two-finger trackpad scroll (macOS sends it as a pan, not a wheel
+  /// signal) rolls the control the same way, ahead of the page's scroll.
+  @override
+  void addAllowedPointerPanZoom(PointerPanZoomStartEvent event) {
+    super.addAllowedPointerPanZoom(event);
+    resolve(GestureDisposition.accepted);
+  }
 }
 
 /// The rotator dial's face: a knurled rim, a tick every 5°, and a long one
@@ -1685,7 +1745,7 @@ class _AngleScalePainter extends CustomPainter {
 
 /// Autofocus under the knobs, full width: green to start, red with Cancel
 /// autofocus while it runs (user, 2026-11-07). Dark words on the green and
-/// white on the red, each the pair that keeps its contrast.
+/// white on Emergency Stop's red (5:1; Fault Red gives 4.2:1).
 class _AutofocusButton extends ConsumerWidget {
   const _AutofocusButton();
 
@@ -1699,7 +1759,7 @@ class _AutofocusButton extends ConsumerWidget {
         : context.l10n.deviceAutofocus;
     final fg = running ? AraColors.selectionFg : AraColors.bgPrimary;
     return Material(
-      color: running ? AraColors.accentError : AraColors.accentConnected,
+      color: running ? AraColors.emergencyStop : AraColors.accentConnected,
       borderRadius: BorderRadius.circular(10),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -1707,6 +1767,7 @@ class _AutofocusButton extends ConsumerWidget {
         onTap: live.busy ? null : (running ? af.cancel : af.start),
         child: Semantics(
           button: true,
+          enabled: !live.busy,
           label: label,
           excludeSemantics: true,
           child: Container(
@@ -1936,11 +1997,20 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
     return _norm((first + n).toDouble());
   }
 
-  /// Moves the target [n] degrees; back at the rotator's angle there is
-  /// nothing to do, so the target clears.
+  /// The signed shortest turn from [from] to [to], in (-180, 180].
+  static double _delta(double from, double to) {
+    final d = _norm(to - from);
+    return d > 180 ? d - 360 : d;
+  }
+
+  /// Moves the target [n] degrees. Back to or across the rotator's angle
+  /// there is nothing to do, so the target clears (92.4: up to 93, then down
+  /// clears rather than leaving 92).
   void _nudge(double sky, int n) {
-    final t = _snap(_target ?? sky, n);
-    setState(() => _target = _same(t, sky) ? null : t);
+    final old = _target;
+    final t = _snap(old ?? sky, n);
+    final crossed = old != null && _delta(sky, old).sign != _delta(sky, t).sign;
+    setState(() => _target = crossed || _same(t, sky) ? null : t);
   }
 
   /// Rotate: a move while a plan runs asks first.
@@ -2177,7 +2247,10 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
             confirm: l10n.deviceRotateAnyway,
             onCancel: () => setState(() => _asking = null),
             onConfirm: () {
-              setState(() => _asking = null);
+              setState(() {
+                _asking = null;
+                _target = null; // spent, as a plain Start
+              });
               _go(target);
             },
           ),
