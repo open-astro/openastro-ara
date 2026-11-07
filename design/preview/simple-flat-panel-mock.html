@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flat Panel Window</title>
+<style>
+  /* Layout: one iPad-sized stage with the Simple Mode Flat panel window over the image and the status pill top right.
+     Single dark look on purpose: DESIGN.md tokens (lib/theme/ara_colors.dart), as the other design/preview mocks. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+    --ok: #4CAF50; --info: #42A5F5; --sel: #1976D2; --tile: #383838; --warn: #FFB300;
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys);
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+  body.night { filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(.75); }
+  .page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 80ch; }
+  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--warn); color: var(--warn); margin-left: 6px; vertical-align: 3px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  .group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+  .stage-wrap { overflow-x: auto; }
+  .ipad { width: 1024px; height: 640px; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 60% 45%, #3a3f4c 0, #12141a 55%, #08090c 100%); }
+  .strip { position: absolute; left: 16px; right: 16px; top: 16px; height: 56px; background: rgba(26,26,26,.9); border-radius: 10px;
+           display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 13px; color: var(--text2); }
+  .dot { display: inline-flex; align-items: center; gap: 6px; } .dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .dot.hot { outline: 1.5px solid var(--sel); outline-offset: 4px; border-radius: 6px; color: var(--text); }
+  .dot.off i { background: #666; }
+  .pill { position: absolute; right: 16px; top: 88px; max-width: 320px; background: rgba(26,26,26,.9); border-radius: 12px; padding: 6px 12px;
+          display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .pill i { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); flex: none; }
+  .pill i.ring { background: transparent; border: 2px solid var(--info); }
+
+  .win { position: absolute; left: 16px; top: 88px; width: 360px; background: rgba(26,26,26,.9); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+         border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+  .head { display: flex; align-items: center; gap: 8px; font-weight: 600; min-height: 32px; }
+  .head i { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
+  .head.off i { background: #666; }
+  .r { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+  .r .l { flex: 1; } .v { font-variant-numeric: tabular-nums; }
+  .caption { color: var(--text2); font-size: 12px; }
+  .green { color: var(--ok); } .blue { color: var(--info); }
+  .blink { animation: blink 1s steps(2, start) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
+  .segs { display: inline-flex; width: 216px; background: var(--tile); border-radius: 8px; overflow: hidden; }
+  .segs button { flex: 1; border: 0; background: transparent; color: var(--text); min-height: 44px; font: 14px var(--sys); cursor: pointer; }
+  .segs button[aria-pressed="true"] { background: var(--sel); color: #fff; cursor: default; }
+  .segs button:disabled { cursor: not-allowed; }
+  .segs.locked button[aria-pressed="false"] { color: #E0E0E061; }
+  .slider { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+  .slider input { flex: 1; accent-color: var(--sel); }
+  .slider .v { width: 64px; text-align: right; }
+  .ask { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 0; }
+  .ask span { flex: 1 1 160px; color: var(--warn); }
+  .ask button { border: 0; background: transparent; color: var(--info); font: 600 14px var(--sys); padding: 8px; cursor: pointer; }
+  .ver { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 10px; display: grid; grid-template-columns: auto 1fr; gap: 2px 24px; }
+  .ver b { grid-column: 1 / -1; margin-bottom: 4px; } .ver span:nth-child(even) { color: var(--text2); }
+
+  /* Layout B: the panel face beside the readings */
+  .split { display: flex; gap: 14px; align-items: center; }
+  .split .rows { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .split .r { flex-direction: column; align-items: stretch; gap: 4px; }
+  .split .segs { width: 100%; }
+  .face { width: 140px; height: 140px; flex: none; position: relative; border-radius: 50%; border: 6px solid #2a2a2a; overflow: hidden; background: #111; }
+  .face .glow { position: absolute; inset: 0; border-radius: 50%; transition: opacity .6s; background: radial-gradient(circle, #fffbe8 0, #e8e2c8 60%, #b8b29a 100%); }
+  .face .lid { position: absolute; top: 0; bottom: 0; width: 50%; background: repeating-linear-gradient(90deg, #303030 0 6px, #2a2a2a 6px 12px); transition: transform 2.5s ease-in-out; }
+  .face .lid.l { left: 0; } .face .lid.rr { right: 0; }
+  .face.open .lid.l { transform: translateX(-100%); } .face.open .lid.rr { transform: translateX(100%); }
+
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .notes div { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+  .notes h2 { font-size: 14px; margin: 0 0 4px; }
+  .notes p { margin: 0; color: var(--text2); font-size: 13px; }
+  @media (prefers-reduced-motion: reduce) { .blink { animation: none; } .face .lid, .face .glow { transition: none; } }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <h1>Flat panel window <span class="tag">B chosen</span></h1>
+  <p class="note">The Simple Mode window for a cover/calibrator (#1662). Cover Open / Closed, light On / Off, and a brightness slider sent when you let go. Everything works: the cover takes about 3 s to move and the light warms up for about 2 s, and the status pill top right shows both (#1668). Layout A is three plain rows, like the Camera window. Layout B adds a drawing of the panel face beside the cover and light rows, the way the Filter wheel window shows its wheel: the lids slide apart as the cover opens and the face lights up with the brightness.</p>
+
+  <div class="controls">
+    <div class="group"><span class="lbl">Layout</span>
+      <div class="seg" role="group" aria-label="Layout" id="layout">
+        <button aria-pressed="false" data-v="a">A · Rows only</button>
+        <button aria-pressed="true" data-v="b">B · Panel face beside (chosen)</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">Panel</span>
+      <div class="seg" role="group" aria-label="Panel" id="kind">
+        <button aria-pressed="true" data-v="both">Cover + light</button>
+        <button aria-pressed="false" data-v="cover">Cover only</button>
+        <button aria-pressed="false" data-v="light">Light only</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">State</span>
+      <div class="seg" role="group" aria-label="State" id="state">
+        <button aria-pressed="true" data-v="on">Connected</button>
+        <button aria-pressed="false" data-v="plan">Plan running</button>
+        <button aria-pressed="false" data-v="off">Not connected</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">Opened from</span>
+      <div class="seg" role="group" aria-label="Opened from" id="from">
+        <button aria-pressed="true" data-v="dot">Dot</button>
+        <button aria-pressed="false" data-v="settings">Settings</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">View</span>
+      <div class="seg" role="group" aria-label="View" id="view">
+        <button aria-pressed="true" data-v="day">Normal</button>
+        <button aria-pressed="false" data-v="night">Night (red)</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-wrap">
+    <div class="ipad">
+      <div class="strip">
+        <span class="dot"><i></i>Camera</span><span class="dot"><i></i>Mount</span>
+        <span class="dot"><i></i>Focuser</span><span class="dot"><i></i>Guider</span>
+        <span class="dot"><i></i>Filter wheel</span>
+        <span class="dot hot" id="stripDot"><i id="stripI"></i>Flat panel</span>
+      </div>
+      <div class="pill" id="pill" hidden></div>
+      <div class="win" id="win"></div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div><h2>Cover</h2><p>Open / Closed segments. While the cover moves the row reads "Moving…" in blinking green and both segments are locked: the cover is one motor. A panel without a cover has no Cover row.</p></div>
+    <div><h2>Light</h2><p>On / Off segments, turning on at the slider's level. While the panel warms up the row reads "Warming up…" in blue, and the pill says "Light warming up…" so you don't shoot flats too early. A dust cover with no light has no Light or Brightness row.</p></div>
+    <div><h2>Brightness</h2><p>0 to the panel's own maximum (255 here), with the level beside the slider in the panel's units, as plans use them. It is sent when you let go. Letting go above 0 with the light off turns it on at that level; 0 turns it off. Until the panel reports its maximum the slider is disabled and reads "—".</p></div>
+    <div><h2>While a plan runs</h2><p>Any change asks first, in the window: "A plan is running. Change the flat panel anyway?" with Cancel and Change anyway, as the Filter wheel and Rotator windows do. Nothing is sent until you confirm.</p></div>
+    <div><h2>Status pill</h2><p>"Flat panel · Cover moving…" in blinking green, or "Flat panel · Light warming up…" with a blue ring. Cover movement wins when both are true. It shows whoever moved it, and a tap opens this window (#1668).</p></div>
+    <div><h2>Stays in the full UI</h2><p>Auto-brightness target, auto-flats and the flat-panel safety policies. Connect / Disconnect stay on the Devices row in Settings.</p></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const MAX = 255;
+  const S = { layout: 'b', kind: 'both', conn: 'on', from: 'dot', open: false, coverMoving: false, light: false, level: 128, warming: false, drag: null, asking: null };
+  const win = document.getElementById('win'), pill = document.getElementById('pill');
+  const hasCover = () => S.kind !== 'light', hasLight = () => S.kind !== 'cover';
+
+  function send(change) {
+    if (S.conn === 'plan' && !S.asking) { S.asking = change; render(); return; }
+    S.asking = null;
+    if ('open' in change) {
+      S.coverMoving = true; render();
+      setTimeout(() => { S.open = change.open; S.coverMoving = false; render(); }, 3000);
+      setTimeout(() => { const f = win.querySelector('.face'); if (f) f.classList.toggle('open', change.open); }, 30);
+    }
+    if ('light' in change || 'level' in change) {
+      const on = change.light ?? change.level > 0;
+      if ('level' in change) S.level = change.level;
+      if (on) { S.light = true; S.warming = true; render(); setTimeout(() => { S.warming = false; render(); }, 2000); }
+      else { S.light = false; S.warming = false; render(); }
+    }
+  }
+
+  function segs(id, pairs, value, locked, onPick) {
+    const d = document.createElement('div'); d.className = 'segs' + (locked ? ' locked' : '');
+    for (const [v, word] of pairs) {
+      const b = document.createElement('button'); b.textContent = word; b.id = id + '-' + word.toLowerCase();
+      b.setAttribute('aria-pressed', String(v === value));
+      b.disabled = locked && v !== value;
+      if (v !== value && !locked) b.onclick = () => onPick(v);
+      d.append(b);
+    }
+    return d;
+  }
+  function row(label, value) {
+    const r = document.createElement('div'); r.className = 'r';
+    const l = document.createElement('span'); l.className = 'l'; l.textContent = label;
+    r.append(l, value); return r;
+  }
+  function state(text, cls) { const s = document.createElement('span'); s.className = 'v ' + (cls || ''); s.textContent = text; return s; }
+
+  function render() {
+    const off = S.conn === 'off';
+    document.getElementById('stripDot').classList.toggle('off', off);
+    win.innerHTML = '';
+    const head = document.createElement('div'); head.className = 'head' + (off ? ' off' : '');
+    head.innerHTML = '<i></i>Flat panel · Flip-Flat';
+    win.append(head);
+    if (off) {
+      const c = document.createElement('div'); c.className = 'caption'; c.textContent = 'Not connected'; win.append(c);
+    } else {
+      const coverRows = [], lightRows = [];
+      if (hasCover()) {
+        coverRows.push(row('Cover', S.coverMoving ? state('Moving…', 'green blink')
+          : segs('cover', [[true, 'Open'], [false, 'Closed']], S.open, !!S.asking, v => send({ open: v }))));
+      }
+      if (hasLight()) {
+        lightRows.push(row('Light', S.warming ? state('Warming up…', 'blue')
+          : segs('light', [[true, 'On'], [false, 'Off']], S.light, !!S.asking, v => send({ light: v }))));
+      }
+      let brightness = null;
+      if (hasLight()) {
+        const lvl = S.drag ?? S.level;
+        brightness = document.createElement('div');
+        brightness.innerHTML = '<div class="r" style="min-height:24px"><span class="l">Brightness</span></div>';
+        const sl = document.createElement('div'); sl.className = 'slider';
+        sl.innerHTML = `<input id="brightness" type="range" min="0" max="${MAX}" value="${lvl}" aria-label="Brightness" ${S.asking ? 'disabled' : ''}><span class="v">${lvl} / ${MAX}</span>`;
+        const inp = sl.querySelector('input');
+        inp.oninput = () => { S.drag = +inp.value; sl.querySelector('.v').textContent = `${S.drag} / ${MAX}`; drawFace(); };
+        inp.onchange = () => { const v = +inp.value; S.drag = null; send({ level: v }); };
+        sl.querySelector('input').setAttribute('aria-valuetext', `${lvl} of ${MAX}`);
+        brightness.append(sl);
+      }
+      if (S.layout === 'b') {
+        const split = document.createElement('div'); split.className = 'split';
+        const rows = document.createElement('div'); rows.className = 'rows'; rows.append(...coverRows, ...lightRows);
+        const face = document.createElement('div'); face.className = 'face' + (S.open || !hasCover() ? ' open' : '');
+        face.setAttribute('role', 'img');
+        face.innerHTML = '<div class="glow"></div>' + (hasCover() ? '<div class="lid l"></div><div class="lid rr"></div>' : '');
+        split.append(rows, face); win.append(split);
+      } else win.append(...coverRows, ...lightRows);
+      if (S.asking) {
+        const a = document.createElement('div'); a.className = 'ask';
+        a.innerHTML = '<span>A plan is running. Change the flat panel anyway?</span>';
+        const c = document.createElement('button'); c.textContent = 'Cancel'; c.onclick = () => { S.asking = null; render(); };
+        const ok = document.createElement('button'); ok.textContent = 'Change anyway'; ok.onclick = () => send(S.asking);
+        a.append(c, ok); win.append(a);
+      }
+      if (brightness) win.append(brightness);
+      drawFace();
+    }
+    if (S.from === 'settings') {
+      const v = document.createElement('div'); v.className = 'ver';
+      v.innerHTML = '<b>Versions</b><span>Driver</span><span>Alnitak Astrosystems 2.3.1</span><span>Firmware</span><span>3.11</span>';
+      win.append(v);
+    }
+    const p = off ? null : S.coverMoving ? ['blink', 'Cover moving…'] : S.warming ? ['ring', 'Light warming up…'] : null;
+    pill.hidden = !p;
+    if (p) pill.innerHTML = `<i class="${p[0]}"></i><span><b>Flat panel</b> · ${p[1]}</span>`;
+    const si = document.getElementById('stripI'); si.className = S.coverMoving && !off ? 'blink' : '';
+  }
+  function drawFace() {
+    const g = win.querySelector('.glow'); if (!g) return;
+    const lvl = S.drag ?? S.level;
+    g.style.opacity = S.light ? (S.warming ? 0.25 : 0.15 + 0.85 * lvl / MAX) : 0;
+  }
+
+  function bind(id, key, after) {
+    const el = document.getElementById(id);
+    el.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      S[key] = b.dataset.v; S.asking = null; after && after(); render();
+    });
+  }
+  bind('layout', 'layout'); bind('kind', 'kind'); bind('state', 'conn'); bind('from', 'from');
+  bind('view', 'view', () => document.body.classList.toggle('night', S.view === 'night'));
+  render();
+})();
+</script>
+</body>
+</html>

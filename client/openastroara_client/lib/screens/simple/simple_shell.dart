@@ -330,6 +330,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     'eq.focuser': SimpleFocuserWindow(),
     'eq.filterwheel': SimpleFilterWheelWindow(),
     'eq.rotator': SimpleRotatorWindow(),
+    'eq.flat': SimpleFlatPanelWindow(),
     'eq.guider': SimpleGuiderWindow(),
   };
 
@@ -436,6 +437,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       SimpleStatusOrigin.focuser => 'eq.focuser',
       SimpleStatusOrigin.filterWheel => 'eq.filterwheel',
       SimpleStatusOrigin.rotator => 'eq.rotator',
+      SimpleStatusOrigin.flatPanel => 'eq.flat',
       SimpleStatusOrigin.guiderCamera => 'eq.guider',
       _ => null,
     };
@@ -2433,6 +2435,13 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
           (c) => glyph(Icons.rotate_right, c),
           true,
         ),
+      if (ref.watch(flatPanelProvider.select((v) => v.value != null)))
+        (
+          'Flat panel',
+          l10n.shellFlatPanel,
+          (c) => EquipmentGlyph.flatPanel(size: 20, color: c),
+          true,
+        ),
       if (ref.watch(guiderStatusProvider.select((v) => v.value != null)))
         (
           'Guider',
@@ -2524,6 +2533,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                   inSettings: true,
                 ),
                 'Rotator' => const SimpleRotatorWindow(inSettings: true),
+                'Flat panel' => const SimpleFlatPanelWindow(inSettings: true),
                 'Guider' => const SimpleGuiderWindow(inSettings: true),
                 _ => _Gear(onOpen: (id) => setState(() => _section = id)),
               },
@@ -2600,6 +2610,7 @@ class _Gear extends ConsumerWidget {
           id: 'flat',
           type: l10n.shellFlatPanel,
           provider: flatPanelProvider,
+          onOpen: () => onOpen('Flat panel'),
         ),
         _GearRow(id: 'dome', type: l10n.shellDome, provider: domeProvider),
         _GearRow(

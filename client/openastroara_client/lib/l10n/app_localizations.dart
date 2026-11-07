@@ -477,6 +477,78 @@ abstract class AppLocalizations {
   /// **'Cancel swap'**
   String get deviceCancelSwap;
 
+  /// Flat panel window: the cover row's label
+  ///
+  /// In en, this message translates to:
+  /// **'Cover'**
+  String get deviceCover;
+
+  /// Flat panel window: the cover's open segment
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get deviceOpen;
+
+  /// Flat panel window: the cover's closed segment
+  ///
+  /// In en, this message translates to:
+  /// **'Closed'**
+  String get deviceClosed;
+
+  /// Flat panel window: the light row's label
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get deviceLight;
+
+  /// Flat panel window: the brightness slider's label
+  ///
+  /// In en, this message translates to:
+  /// **'Brightness'**
+  String get deviceBrightness;
+
+  /// Flat panel window: the light row while the panel's light warms up
+  ///
+  /// In en, this message translates to:
+  /// **'Warming up…'**
+  String get deviceWarmingUp;
+
+  /// Status pill detail while the flat panel's cover moves
+  ///
+  /// In en, this message translates to:
+  /// **'Cover moving…'**
+  String get deviceCoverMoving;
+
+  /// Status pill detail while the flat panel's light warms up
+  ///
+  /// In en, this message translates to:
+  /// **'Light warming up…'**
+  String get deviceLightWarmingUp;
+
+  /// Flat panel window: asked before a cover, light or brightness change while a plan runs
+  ///
+  /// In en, this message translates to:
+  /// **'A plan is running. Change the flat panel anyway?'**
+  String get devicePlanRunningChangeFlatPanel;
+
+  /// Error message when the flat panel refused a command
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t change the flat panel'**
+  String get deviceCouldntChangeFlatPanel;
+
+  /// Error message when the flat panel took a command but never showed it
+  ///
+  /// In en, this message translates to:
+  /// **'The flat panel didn\'t make that change'**
+  String get deviceFlatPanelUnconfirmed;
+
+  /// Detail under the flat panel's unconfirmed-change message
+  ///
+  /// In en, this message translates to:
+  /// **'Check the cover isn\'t jammed and the panel isn\'t busy.'**
+  String get deviceFlatPanelUnconfirmedDetail;
+
   /// Error message when a focuser or guider setting could not be saved
   ///
   /// In en, this message translates to:

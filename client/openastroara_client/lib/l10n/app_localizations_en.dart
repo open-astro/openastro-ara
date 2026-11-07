@@ -233,6 +233,45 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceCancelSwap => 'Cancel swap';
 
   @override
+  String get deviceCover => 'Cover';
+
+  @override
+  String get deviceOpen => 'Open';
+
+  @override
+  String get deviceClosed => 'Closed';
+
+  @override
+  String get deviceLight => 'Light';
+
+  @override
+  String get deviceBrightness => 'Brightness';
+
+  @override
+  String get deviceWarmingUp => 'Warming up…';
+
+  @override
+  String get deviceCoverMoving => 'Cover moving…';
+
+  @override
+  String get deviceLightWarmingUp => 'Light warming up…';
+
+  @override
+  String get devicePlanRunningChangeFlatPanel =>
+      'A plan is running. Change the flat panel anyway?';
+
+  @override
+  String get deviceCouldntChangeFlatPanel => 'Couldn\'t change the flat panel';
+
+  @override
+  String get deviceFlatPanelUnconfirmed =>
+      'The flat panel didn\'t make that change';
+
+  @override
+  String get deviceFlatPanelUnconfirmedDetail =>
+      'Check the cover isn\'t jammed and the panel isn\'t busy.';
+
+  @override
   String get deviceCouldntSaveThat => 'Couldn\'t save that';
 
   @override
