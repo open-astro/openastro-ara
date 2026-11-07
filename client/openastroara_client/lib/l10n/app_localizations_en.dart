@@ -2201,4 +2201,37 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get albumFilterMissing => 'Missing';
+
+  @override
+  String albumNewCards(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count new cards',
+      one: '1 new card',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String albumTiersUp(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count tiers up',
+      one: '1 tier up',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get albumCardNew => 'new';
+
+  @override
+  String get albumCardTierUp => 'up a tier';
+
+  @override
+  String albumSinceLastVisit(String changes) {
+    return '$changes since your last visit';
+  }
 }

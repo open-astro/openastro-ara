@@ -75,6 +75,13 @@ const ColorFilter _greyscaleDim = ColorFilter.matrix(<double>[
   0, 0, 0, 0.45, 0,
 ]);
 
+/// How long a new or tiered-up Card takes to turn to its colours, the grey hold included.
+const Duration albumRevealDuration = Duration(milliseconds: 1800);
+
+/// Grey for the first 35 % (about 630 ms): the rig answers in tens of milliseconds, so
+/// without the hold the reveal is spent while the page is still coming in.
+const Curve _revealCurve = Interval(0.35, 1, curve: Curves.easeInOut);
+
 /// The Card's corner, Simple Mode's 10 px, front and back alike so the flip
 /// keeps one shape.
 const double albumCardRadius = 10;
@@ -103,33 +110,64 @@ String albumTypeLabel(AppLocalizations l, String t) => switch (t) {
 
 /// The card front: the Art filling the picture (dimmed to grey while missing) or
 /// the Placeholder, the label and the name, bordered in the tier's colour
-/// with a soft glow on gold.
+/// with a soft glow on gold. With [reveal] it plays once from [revealFrom] (null:
+/// missing) to its tier: grey Art turns to colour, the border to the new tier's.
 class AlbumCardFront extends StatelessWidget {
-  const AlbumCardFront(this.card, {super.key});
+  const AlbumCardFront(this.card, {super.key, this.reveal = false, this.revealFrom, this.onRevealed});
   final AlbumCardData card;
+  final bool reveal;
+  final AlbumTier? revealFrom;
+  final VoidCallback? onRevealed;
 
   @override
   Widget build(BuildContext context) {
+    // Under Reduce Motion the Card is simply in its colours.
+    if (!reveal || reduceMotionOf(context)) return _at(context, 1);
+    return TweenAnimationBuilder<double>(
+      key: const Key('album-card-reveal'),
+      tween: Tween(begin: 0, end: 1),
+      duration: albumRevealDuration,
+      curve: _revealCurve,
+      onEnd: onRevealed,
+      builder: (context, t, _) => _at(context, t),
+    );
+  }
+
+  /// The front [t] of the way through its reveal; 1 is the plain card.
+  Widget _at(BuildContext context, double t) {
     final tier = card.tier;
     final missing = tier == null;
+    final fromMissing = reveal && revealFrom == null && t < 1;
     // A missing card is still tappable, so its text keeps 4.5:1; the grey border and
     // dimmed Art say "missing".
-    final textColor = missing ? AraColors.textSecondary : AraColors.textPrimary;
+    final textColor = missing
+        ? AraColors.textSecondary
+        : fromMissing
+            ? Color.lerp(AraColors.textSecondary, AraColors.textPrimary, t)!
+            : AraColors.textPrimary;
+    final borderColor = reveal ? Color.lerp(albumTierColor(revealFrom), albumTierColor(tier), t)! : albumTierColor(tier);
+    // The gold glow arrives last, once the border is gold.
+    final glow = reveal ? ((t - 0.5) * 2).clamp(0.0, 1.0) : 1.0;
     final placeholder = ColoredBox(
       key: const Key('album-placeholder'),
       color: AraColors.bgPanelAlt,
       child: Icon(albumSilhouette(card.dso.type),
-          size: 32, color: missing ? AraColors.albumPlaceholderMissing : AraColors.textSecondary),
+          size: 32,
+          color: missing
+              ? AraColors.albumPlaceholderMissing
+              : Color.lerp(AraColors.albumPlaceholderMissing, AraColors.textSecondary, fromMissing ? t : 1)),
     );
     final asset = card.art?.asset;
     return Container(
       decoration: BoxDecoration(
         color: AraColors.bgPanel,
         borderRadius: BorderRadius.circular(albumCardRadius),
-        border: Border.all(color: albumTierColor(tier), width: missing ? 1 : 2),
+        // 2 px from the reveal's first frame: a border that thickens shrinks the picture, and every
+        // new width decodes the Art again (black frames mid-fade).
+        border: Border.all(color: borderColor, width: missing ? 1 : 2),
         boxShadow: [
           if (tier == AlbumTier.gold)
-            BoxShadow(color: albumTierColor(tier).withValues(alpha: 0.35), blurRadius: 8),
+            BoxShadow(color: albumTierColor(tier).withValues(alpha: 0.35 * glow), blurRadius: 8),
         ],
       ),
       padding: const EdgeInsets.all(4),
@@ -143,15 +181,24 @@ class AlbumCardFront extends StatelessWidget {
                 : ColoredBox(
                     color: AraColors.albumArtBackdrop,
                     child: LayoutBuilder(builder: (context, box) {
-                      final image = Image.asset(asset,
-                          key: Key(missing ? 'album-art-dimmed' : 'album-art'),
+                      Image image({Key? key, Animation<double>? opacity}) => Image.asset(asset,
+                          key: key,
+                          opacity: opacity,
                           // The Art is cut to the slot's shape already; cover trims the last few
                           // pixels so no black bar shows.
                           fit: BoxFit.cover,
                           // Decode at the slot's width: a Book holds 110 cards.
                           cacheWidth: (box.maxWidth * MediaQuery.devicePixelRatioOf(context)).round(),
                           errorBuilder: (_, _, _) => placeholder);
-                      return missing ? ColorFiltered(colorFilter: _greyscaleDim, child: image) : image;
+                      final key = Key(missing ? 'album-art-dimmed' : 'album-art');
+                      if (missing) return ColorFiltered(colorFilter: _greyscaleDim, child: image(key: key));
+                      if (!fromMissing) return image(key: key);
+                      // Collected since the last open: the colour Art fades in over its grey self, by
+                      // the Image's own opacity (an Opacity widget adds a layer per fading card).
+                      return Stack(fit: StackFit.expand, children: [
+                        ColorFiltered(colorFilter: _greyscaleDim, child: image()),
+                        image(key: key, opacity: AlwaysStoppedAnimation(t)),
+                      ]);
                     }),
                   ),
           ),
@@ -347,8 +394,18 @@ class AlbumCardBack extends StatelessWidget {
 
 /// A tappable card front that flips in place to its back.
 class AlbumCard extends StatelessWidget {
-  const AlbumCard(this.card, {super.key, required this.onAction});
+  const AlbumCard(this.card,
+      {super.key, required this.onAction, this.reveal = false, this.revealFrom, this.onRevealed, this.news});
   final AlbumCardData card;
+
+  /// What changed since the last open ("new", "up a tier"), said after the tier: on screen
+  /// only the new shelf's title says it.
+  final String? news;
+
+  /// Plays the front's reveal from [revealFrom]; see [AlbumCardFront].
+  final bool reveal;
+  final AlbumTier? revealFrom;
+  final VoidCallback? onRevealed;
 
   /// The back's action; the flip closes before it runs.
   final VoidCallback onAction;
@@ -359,15 +416,19 @@ class AlbumCard extends StatelessWidget {
         // The tier is a border colour on screen; say it too. The front's own texts stay
         // out, or the label and name are read twice.
         label: context.l10n.albumCardSemantics(card.label, card.dso.name,
-            card.tier == null ? context.l10n.albumNotCollected : albumTierName(context, card.tier!)),
+            card.tier == null ? context.l10n.albumNotCollected : albumTierName(context, card.tier!)) +
+            (news == null ? '' : ', $news'),
         child: InkWell(
           borderRadius: BorderRadius.circular(albumCardRadius),
           onTap: () => _flip(context),
-          child: ExcludeSemantics(child: AlbumCardFront(card)),
+          child: ExcludeSemantics(
+              child: AlbumCardFront(card, reveal: reveal, revealFrom: revealFrom, onRevealed: onRevealed)),
         ),
       );
 
   void _flip(BuildContext context) {
+    // The flip draws the plain front, so a reveal still running ends here, not mid-colour.
+    onRevealed?.call();
     final box = context.findRenderObject()! as RenderBox;
     final from = box.localToGlobal(Offset.zero) & box.size;
     showGeneralDialog<void>(
