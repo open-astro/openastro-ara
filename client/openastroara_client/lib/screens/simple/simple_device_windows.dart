@@ -2823,6 +2823,8 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     // The notifier drops a write while another is on its way: lock them all.
     final locked = acting || _asked != null;
     _syncDim(locked);
+    // A drag the lock cut short sends nothing: show the rig's value again.
+    if (locked) _drag = null;
     for (final (:device, :ports) in devices) {
       children.add(
         Padding(

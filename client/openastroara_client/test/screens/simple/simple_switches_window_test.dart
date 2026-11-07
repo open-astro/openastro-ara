@@ -212,6 +212,25 @@ void main() {
     expect(c.read(simpleSwitchSettingProvider), isNull);
   });
 
+  testWidgets('a drag cut short by a write elsewhere goes back to what the rig has', (tester) async {
+    final (c, rig) = await _pump(tester, [_box()]);
+    // A finger is on the slider when another write starts (a second finger,
+    // or the Settings copy of the window).
+    tester.widget<Slider>(_slider('box-1')).onChanged!(80);
+    await tester.pump();
+    expect(find.text('Dew 1 · 80'), findsOneWidget);
+    rig.hold = Completer();
+    final other = c.read(switchListProvider.notifier).setValue(deviceId: 'box', portId: 0, value: 0);
+    await tester.pump();
+    tester.widget<Slider>(_slider('box-1')).onChangeEnd!(80);
+    await tester.pump(const Duration(milliseconds: 300));
+    rig.hold!.complete();
+    await other;
+    await tester.pumpAndSettle();
+    expect(rig.writes, ['box/0=0.0'], reason: 'locked: the release sends nothing');
+    expect(find.text('Dew 1 · 60'), findsOneWidget, reason: "the slider shows the rig's value, not the dropped drag");
+  });
+
   testWidgets('a slow answer dims the other ports after 300 ms; a fast one never does', (tester) async {
     final (_, rig) = await _pump(tester, [
       _box(ports: [_port(0, '12V Out 1', 1), _port(1, '12V Out 2', 0)]),
