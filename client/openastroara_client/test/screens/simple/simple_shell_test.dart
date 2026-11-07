@@ -2986,7 +2986,7 @@ void main() {
     final powerbox = find.byKey(const Key('simple-switch-device-box'));
     await tester.ensureVisible(find.descendant(of: powerbox, matching: find.text('Input voltage')));
     expect(find.descendant(of: powerbox, matching: find.text('Sensors')), findsOneWidget);
-    expect(find.descendant(of: powerbox, matching: find.text('12.4')), findsOneWidget);
+    expect(find.descendant(of: powerbox, matching: find.text('12.4 V')), findsOneWidget, reason: 'with its unit (#1683)');
     expect(find.descendant(of: powerbox, matching: find.text('Raining')), findsOneWidget);
     final hub = find.byKey(const Key('simple-switch-device-hub'));
     expect(find.descendant(of: hub, matching: find.text('Sensors')), findsNothing, reason: 'no readings, no table');

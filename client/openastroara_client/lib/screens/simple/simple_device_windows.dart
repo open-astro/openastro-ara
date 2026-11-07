@@ -50,6 +50,7 @@ import '../../widgets/equipment/switch_port_layout.dart'
         isAutoRegulating,
         isDewModePort,
         snapToSwitchStep,
+        switchPortUnit,
         switchSliderDivisions,
         usableSwitchStep;
 import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot;
@@ -410,11 +411,19 @@ Widget simpleSliderLevel(BuildContext context, String level, {Key? key}) {
     textDirection: TextDirection.ltr,
     textScaler: MediaQuery.textScalerOf(context),
   )..layout();
-  final width = widest.width;
+  // Rounded up: a fractional width wrapped "100 %" onto two lines.
+  final width = widest.width.ceilToDouble() + 1;
   widest.dispose();
   return SizedBox(
     width: width,
-    child: Text(level, key: key, textAlign: TextAlign.end, style: kSimpleText),
+    child: Text(
+      level,
+      key: key,
+      maxLines: 1,
+      softWrap: false,
+      textAlign: TextAlign.end,
+      style: kSimpleText,
+    ),
   );
 }
 
@@ -2752,10 +2761,15 @@ String _switchPercent(SwitchPort p, double v) {
 }
 
 /// A port the rig can't set, as Settings › Switches lists it: On / Off for an
-/// on/off reading, else its value.
-String simpleSwitchReading(AppLocalizations l10n, SwitchPort p) => p.isBoolean
-    ? (p.value >= 0.5 ? l10n.deviceOn : l10n.deviceOff)
-    : _simpleLevel(p.value);
+/// on/off reading, else its value and the unit its name gives (#1683).
+String simpleSwitchReading(AppLocalizations l10n, SwitchPort p) {
+  if (p.isBoolean) return p.value >= 0.5 ? l10n.deviceOn : l10n.deviceOff;
+  // The unit the full UI infers from the name; none when it recognises none.
+  final unit = switchPortUnit(p);
+  return unit.isEmpty
+      ? _simpleLevel(p.value)
+      : '${_simpleLevel(p.value)} $unit';
+}
 
 /// The port a Switches window write is on its way to, for the status pill
 /// (#1668); null when none.

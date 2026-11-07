@@ -167,6 +167,8 @@ void main() {
       _box(ports: [_port(0, 'PWM A', 0, max: 255), _port(1, 'PWM B', 255, max: 255)]),
     ]);
     expect(tester.getSize(_slider('box-0')).width, tester.getSize(_slider('box-1')).width);
+    final full = tester.widget<Text>(find.byKey(const Key('simple-switch-box-1-level')));
+    expect((full.data, full.maxLines, full.softWrap), ('100 %', 1, false), reason: '"100 %" never wraps');
   });
 
   testWidgets("a dew channel's mode port is Auto / Manual / Switch segments, not a percent slider", (tester) async {
@@ -275,14 +277,14 @@ void main() {
     final box = find.byKey(const Key('simple-switch-device-box'));
     expect(find.descendant(of: box, matching: find.text('Sensors')), findsOneWidget);
     expect(find.descendant(of: box, matching: find.text('Input voltage')), findsOneWidget);
-    expect(find.descendant(of: box, matching: find.text('12.4')), findsOneWidget);
+    expect(find.descendant(of: box, matching: find.text('12.4 V')), findsOneWidget, reason: 'its unit from its name (#1683)');
     for (final t in ['Driver', '2.1', 'Firmware', '1.4', 'Serial number', 'PB-77']) {
       expect(find.descendant(of: box, matching: find.text(t)), findsOneWidget, reason: t);
     }
     final meter = find.byKey(const Key('simple-switch-device-meter'));
     expect(find.descendant(of: meter, matching: find.text('Weather meter')), findsOneWidget,
         reason: 'a device with only readings is still listed in Settings');
-    expect(find.descendant(of: meter, matching: find.text('21.3')), findsOneWidget);
+    expect(find.descendant(of: meter, matching: find.text('21.3')), findsOneWidget, reason: 'no unit in the name: a bare number');
     expect(find.text('Nothing to switch'), findsNothing);
   });
 
@@ -478,6 +480,18 @@ void main() {
     expect(simpleSwitchReading(l10n, reading(0.004)), '0');
     expect(simpleSwitchReading(l10n, reading(12.4)), '12.4');
     expect(simpleSwitchReading(l10n, reading(1.23)), '1.23');
+  });
+
+  test('a reading carries the unit its name gives, as the full UI shows it (#1683)', () {
+    SwitchPort reading(String name, double v) => _port(0, name, v, max: 100, write: false);
+    final l10n = lookupAppLocalizations(const Locale('en'));
+    expect(simpleSwitchReading(l10n, reading('Input voltage', 12.4)), '12.4 V');
+    expect(simpleSwitchReading(l10n, reading('Total current', 1.5)), '1.5 A');
+    expect(simpleSwitchReading(l10n, reading('Total power', 18)), '18 W');
+    expect(simpleSwitchReading(l10n, reading('Humidity', 70)), '70 %');
+    expect(simpleSwitchReading(l10n, reading('Temperature', 8.4)), '8.4 °C');
+    expect(simpleSwitchReading(l10n, reading('Sky quality', 21.3)), '21.3', reason: 'no unit recognised');
+    expect(simpleSwitchReading(l10n, reading('Lamp', 3)), '3', reason: 'whole words only: not amps');
   });
 
   testWidgets('a refused write says why in a pill and the port keeps what the rig reports', (tester) async {
