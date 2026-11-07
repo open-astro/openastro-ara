@@ -2008,14 +2008,24 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
     return d > 180 ? d - 360 : d;
   }
 
-  /// Moves the target [n] degrees. Back to or across the rotator's angle
-  /// there is nothing to do, so the target clears (92.4: up to 93, then down
-  /// clears rather than leaving 92).
+  /// Moves the target [n] degrees, the first click from the angle shown
+  /// (92.4 reads 92°: down 91, up 93). Back to or across the rotator's angle
+  /// there is nothing to do, so the target clears; across the far side, 180°
+  /// away, it keeps counting.
   void _nudge(double sky, int n) {
+    final shown = sky.roundToDouble();
     final old = _target;
-    final t = _snap(old ?? sky, n);
-    final crossed = old != null && _delta(sky, old).sign != _delta(sky, t).sign;
-    setState(() => _target = crossed || _same(t, sky) ? null : t);
+    final t = _snap(old ?? shown, n);
+    final before = old == null ? 0.0 : _delta(sky, old);
+    final after = _delta(sky, t);
+    final crossed =
+        old != null &&
+        before.sign != after.sign &&
+        before.abs() < 90 &&
+        after.abs() < 90;
+    setState(
+      () => _target = crossed || _same(t, sky) || _same(t, shown) ? null : t,
+    );
   }
 
   /// Rotate: a move while a plan runs asks first.

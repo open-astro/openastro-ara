@@ -158,7 +158,8 @@ public interface IRotatorService {
     Task<OperationAcceptedDto> SetReverseAsync(RotatorReverseRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> SyncAsync(RotatorSyncRequestDto request, string? idempotencyKey, CancellationToken ct);
     /// <summary>Stop the rotator where it is (ASCOM <c>Halt</c>). Awaited, so the 202 means the
-    /// stop reached the driver. Throws InvalidOperationException (→ 409) when not connected.</summary>
+    /// stop reached the driver. Throws InvalidOperationException when not connected, as MoveAsync
+    /// does; the endpoint has no typed mapping for it, so it answers 500.</summary>
     Task<OperationAcceptedDto> HaltAsync(string? idempotencyKey, CancellationToken ct);
 }
 

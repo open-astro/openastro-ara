@@ -202,6 +202,23 @@ void main() {
     expect(_syncLabel(tester), 'Sync', reason: 'back where it is: no 92° target to sync to');
   });
 
+  testWidgets('turning past the far side keeps counting (#1670 audit 3 P2)', (tester) async {
+    await _pump(tester, _wire());
+    final node = tester.getSemantics(_dial);
+    for (var i = 0; i < 182; i++) {
+      node.owner!.performAction(node.id, SemanticsAction.increase);
+    }
+    await tester.pump();
+    expect(_syncLabel(tester), 'Sync to 274°', reason: '92 + 182, past the far side at 272');
+  });
+
+  testWidgets('on a fractional angle the first click steps off the angle shown (#1670 audit 3 P3)', (tester) async {
+    await _pump(tester, _wire(sky: 92.4, mech: 92.4));
+    expect(find.text('92°'), findsOneWidget);
+    await _turn(tester, 1.5); // one click clockwise: down
+    expect(_syncLabel(tester), 'Sync to 91°', reason: 'not 92, which reads like where it is');
+  });
+
   testWidgets('Rotate anyway spends the target, as a plain Start does (#1670 re-audit P2)', (tester) async {
     await _pump(tester, _wire(), planRunning: true);
     await tester.pump();
