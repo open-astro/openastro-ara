@@ -219,6 +219,8 @@ namespace OpenAstroAra.Test {
                 (mount ?? NewMount()).Object, store ?? NewStore(), ws, log,
                 fetcher ?? new FakeFrameFetcher(), guideFocus: guideFocus is null ? null : () => guideFocus) {
                 PausedRetryDelay = TimeSpan.FromMilliseconds(20),
+                TrackingConfirmTimeout = TimeSpan.FromMilliseconds(200),
+                TrackingConfirmPoll = TimeSpan.FromMilliseconds(10),
             };
             return svc;
         }
@@ -1316,6 +1318,110 @@ namespace OpenAstroAra.Test {
                 await Task.Delay(25, cts.Token).ConfigureAwait(false);
             }
             return ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+        }
+
+        /// <summary>A mount whose tracking is real state: the bridge refuses a slew while it is off, so the
+        /// call log records what tracking was at each slew. <paramref name="dropAtPointingRead"/> drops it
+        /// on that pointing read, as a §42.3 mount reconnect did on the CM4 on 2026-11-05.</summary>
+        private static (Mock<ITelescopeMediator> Mount, List<string> Calls) TrackingMount(
+                bool tracking, Func<bool, bool>? onSet = null, int dropAtPointingRead = 0) {
+            var mount = NewMount(tracking: tracking);
+            var calls = new List<string>();
+            var state = tracking;
+            var reads = 0;
+            var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            mount.Setup(m => m.GetInfo()).Returns(() => new TelescopeInfo {
+                Connected = true, SiderealTime = 20.0, TrackingEnabled = state,
+            });
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => {
+                if (++reads == dropAtPointingRead) {
+                    state = false;
+                }
+                return position;
+            });
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .Callback<Coordinates, CancellationToken>((target, _) => {
+                    lock (calls) { calls.Add($"slew tracking={state}"); }
+                    position = target;
+                })
+                .ReturnsAsync(true);
+            mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns((bool on) => {
+                lock (calls) { calls.Add($"tracking {on}"); }
+                if (onSet is not null) {
+                    return onSet(on);
+                }
+                state = on;
+                return true;
+            });
+            return (mount, calls);
+        }
+
+        private static async Task RunToAdjustingThenStopAsync(Mock<ITelescopeMediator> mount) {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            using var svc = NewService(guider, solver, mount);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task A_mount_that_is_not_tracking_tracks_through_the_seed_and_goes_back_to_off() {
+            // The bridge refuses SlewToCoordinatesAsync without tracking ("requires Tracking to be true").
+            var (mount, calls) = TrackingMount(tracking: false);
+
+            await RunToAdjustingThenStopAsync(mount).ConfigureAwait(false);
+
+            Assert.That(string.Join(", ", calls), Is.EqualTo("tracking True, slew tracking=True, tracking False, tracking False"),
+                "on before the seed slew, off for the adjust loop, the user's off put back");
+        }
+
+        [Test]
+        public async Task A_mount_already_tracking_is_not_touched_before_the_adjust_loop() {
+            var (mount, calls) = TrackingMount(tracking: true);
+
+            await RunToAdjustingThenStopAsync(mount).ConfigureAwait(false);
+
+            Assert.That(string.Join(", ", calls), Is.EqualTo("slew tracking=True, tracking False, tracking True"));
+        }
+
+        [Test]
+        public async Task Tracking_dropped_before_the_seed_slew_is_turned_back_on_and_left_on() {
+            var (mount, calls) = TrackingMount(tracking: true, dropAtPointingRead: 1);
+
+            await RunToAdjustingThenStopAsync(mount).ConfigureAwait(false);
+
+            Assert.That(string.Join(", ", calls), Is.EqualTo("tracking True, slew tracking=True, tracking False, tracking True"),
+                "the user had it on, so Stop leaves it on");
+        }
+
+        [TestCase("refused")]
+        [TestCase("thrown")]
+        [TestCase("never_reported")]
+        public async Task A_mount_that_will_not_start_tracking_fails_as_tracking_off(string how) {
+            var (mount, calls) = TrackingMount(tracking: false, onSet: _ => how switch {
+                "refused" => false,
+                "thrown" => throw new InvalidOperationException("mount offline"),
+                _ => true,
+            });
+
+            var failure = await SeedFailureAsync(mount).ConfigureAwait(false);
+
+            Assert.That(failure.GetProperty("reason").GetString(), Is.EqualTo("tracking_off"));
+            Assert.That(string.Join(", ", calls), Is.EqualTo("tracking True"), "no slew, and nothing to hand back");
+        }
+
+        [Test]
+        public async Task Tracking_that_drops_and_will_not_come_back_fails_before_the_slew() {
+            var (mount, calls) = TrackingMount(tracking: true, onSet: _ => false, dropAtPointingRead: 1);
+
+            Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("tracking_off"));
+            Assert.That(calls.Where(c => c.StartsWith("slew", StringComparison.Ordinal)), Is.Empty);
         }
 
         [Test]

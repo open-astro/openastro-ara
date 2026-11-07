@@ -78,6 +78,8 @@ namespace OpenAstroAra.Server.Services {
         internal TimeSpan CaptureCompleteTimeout { get; set; } = TimeSpan.FromSeconds(31);
         internal TimeSpan RunUnwindGrace { get; set; } = TimeSpan.FromSeconds(15);
         internal TimeSpan CaptureRequestPoll { get; set; } = TimeSpan.FromMilliseconds(200);
+        internal TimeSpan TrackingConfirmTimeout { get; set; } = TimeSpan.FromSeconds(10);
+        internal TimeSpan TrackingConfirmPoll { get; set; } = TimeSpan.FromMilliseconds(250);
 
         private bool _active;
         private string _state = "idle";
@@ -392,6 +394,60 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
+        private const string TrackingOffMessage =
+            "the mount is not tracking and would not start — turn tracking on from the mount controls, then start again";
+
+        /// <summary>An Alpaca mount refuses SlewToCoordinatesAsync while not tracking ("requires Tracking to
+        /// be true", the iOptron on the CM4, 2026-11-05), so a mount left with tracking off fails the seed
+        /// slew. Turned on here; false when it was off, for the exit path to put back, and null when it
+        /// was already on.</summary>
+        private async Task<bool?> EnsureTrackingOnAsync(CancellationToken ct) {
+            if (_mount.GetInfo().TrackingEnabled) {
+                return null;
+            }
+            if (!await TurnTrackingOnAsync(ct).ConfigureAwait(false)) {
+                throw new RoutineFailedException("tracking_off", TrackingOffMessage);
+            }
+            LogTrackingEnabled();
+            return false;
+        }
+
+        /// <summary>A §42.3 fault recovery (a mount reconnect) can drop tracking between the routine's
+        /// switch-on and its slew (CM4, 2026-11-05: six seconds later). Checked just before a slew, not
+        /// during one: the iOptron reports tracking off while it slews.</summary>
+        private async Task KeepTrackingOnForSlewAsync(CancellationToken ct) {
+            if (_mount.GetInfo().TrackingEnabled) {
+                return;
+            }
+            LogTrackingDropped();
+            if (!await TurnTrackingOnAsync(ct).ConfigureAwait(false)) {
+                throw new RoutineFailedException("tracking_off", TrackingOffMessage);
+            }
+        }
+
+        /// <summary>Set tracking and wait for the mount to report it (a driver can take a moment, and a
+        /// state that never flips means the mount refused). True once it reports tracking.</summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "A mount fault while enabling tracking becomes the routine's tracking_off failure.")]
+        private async Task<bool> TurnTrackingOnAsync(CancellationToken ct) {
+            try {
+                if (!_mount.SetTrackingEnabled(true)) {
+                    return false;
+                }
+            } catch (Exception ex) {
+                LogTrackingEnableFailed(ex);
+                return false;
+            }
+            var deadline = DateTimeOffset.UtcNow + TrackingConfirmTimeout;
+            while (!_mount.GetInfo().TrackingEnabled) {
+                if (DateTimeOffset.UtcNow >= deadline) {
+                    return false;
+                }
+                await Task.Delay(TrackingConfirmPoll, ct).ConfigureAwait(false);
+            }
+            return true;
+        }
+
         private const string SeedSlewRefusedMessage =
             "the mount refused the RA seed slew — slew it to about Dec 85° from the mount controls, then start again";
 
@@ -421,6 +477,7 @@ namespace OpenAstroAra.Server.Services {
                 // the run then failed with "the RA seed slew was rejected by the mount". The user started a
                 // routine that moves the mount, so unpark it here, before anything else.
                 await UnparkIfParkedAsync(ct).ConfigureAwait(false);
+                priorTracking = await EnsureTrackingOnAsync(ct).ConfigureAwait(false);
 
                 // ── §45.4 binning from the camera: ask the daemon for the guide camera's frame once per
                 // run. A daemon without the RPC (or a refused call) is not a failure — auto falls back
@@ -447,6 +504,7 @@ namespace OpenAstroAra.Server.Services {
                 var dirSign = haDeg >= 0 ? -1.0 : 1.0;
                 var targetRaDeg = (mountRaDeg + dirSign * settings.SeedRotationDeg + 360.0) % 360.0;
                 var target = new Coordinates(targetRaDeg, mountDecDeg, Epoch.JNOW, Coordinates.RAType.Degrees);
+                await KeepTrackingOnForSlewAsync(ct).ConfigureAwait(false);
                 bool slewed;
                 try {
                     // #1536 — the failure is this routine's to report; as a mount-op fault it would count toward abort-and-park.
@@ -490,7 +548,7 @@ namespace OpenAstroAra.Server.Services {
                 // ── live adjust: tracking OFF makes the camera direction stationary in alt/az, so
                 // every subsequent solve's alt/az delta from the seed pointing is purely the user's
                 // knob adjustment (§45.8) — and the loop needs no further slews.
-                priorTracking = info.TrackingEnabled;
+                priorTracking ??= true;
                 _mount.SetTrackingEnabled(false);
                 SetErrors(gen, altErr, azErr, "adjusting", frameId: null); // keeps the seed-b attempt's id
                 await PublishProgressAsync(gen, 0, altErr, azErr, solved: true).ConfigureAwait(false);
@@ -1232,6 +1290,15 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4525, Level = LogLevel.Information, Message = "§45.4 the guider did not report the guide camera's frame size — auto binning stays at 1×1: {Reason}")]
         private partial void LogFrameSizeUnavailable(string reason);
+
+        [LoggerMessage(EventId = 4531, Level = LogLevel.Information, Message = "§45 polar-align turned tracking on for the seed slew (restored on exit)")]
+        private partial void LogTrackingEnabled();
+
+        [LoggerMessage(EventId = 4532, Level = LogLevel.Warning, Message = "§45 polar-align could not turn tracking on")]
+        private partial void LogTrackingEnableFailed(Exception exception);
+
+        [LoggerMessage(EventId = 4533, Level = LogLevel.Warning, Message = "§45 polar-align tracking dropped before the seed slew — turning it back on")]
+        private partial void LogTrackingDropped();
 
         [LoggerMessage(EventId = 4526, Level = LogLevel.Warning, Message = "§45 polar-align seed slew refused by the mount: {Reason}")]
         private partial void LogSeedSlewRefused(string reason);
