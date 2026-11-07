@@ -193,7 +193,7 @@
     if (w.dew != null) out.push({ i: 'dew_point', k: 'Dew point', n: num(w.dew), u: '°C',
       over: mark && w.temp != null && w.temp - w.dew < POLICY.dewMarginC, why: `margin ${POLICY.dewMarginC} °C` });
     if (w.hum != null) out.push({ i: 'water_drop', k: 'Humidity', n: num(w.hum), u: '%', over: mark && w.hum > POLICY.humidityPct, why: `limit ${POLICY.humidityPct} %` });
-    if (w.rain != null) out.push({ i: 'rainy', k: 'Rain', n: w.rain > 0 ? num(w.rain) : 'None', u: w.rain > 0 ? 'mm/h' : '' });
+    if (w.rain != null) out.push({ i: 'rainy', k: 'Rain', n: num(w.rain), u: 'mm/h' });
     // Wind is checked against the worse of speed and gust, as the daemon does.
     if (w.wind != null) {
       const extra = [w.dir != null ? DIRS[Math.round(w.dir / 45) % 8] : null, w.gust != null ? `gusts ${num(w.gust * f)}` : null].filter(Boolean).join(' · ');

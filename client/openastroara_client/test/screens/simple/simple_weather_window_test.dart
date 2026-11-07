@@ -72,6 +72,7 @@ Future<void> _pump(
     minDewDeltaC: 2,
   ),
   ProfileApi? api,
+  bool noApi = false,
   Locale? locale,
   double width = 360,
   String? font,
@@ -84,7 +85,9 @@ Future<void> _pump(
       deviceDriverProvider.overrideWith(
         (ref, type) async => type == 'observingconditions' ? driver : null,
       ),
-      profileApiProvider.overrideWithValue(api),
+      profileApiProvider.overrideWithValue(
+        noApi ? null : api ?? _OkPolicies(policies),
+      ),
     ],
   );
   addTearDown(c.dispose);
@@ -109,6 +112,16 @@ Future<void> _pump(
     ),
   );
   await tester.pump();
+}
+
+/// A rig whose safety policies load.
+class _OkPolicies extends ProfileApi {
+  _OkPolicies(this.policies)
+    : super(const AraServer(hostname: 'test', port: 1));
+  final SafetyPolicies policies;
+
+  @override
+  Future<SafetyPolicies> getSafetyPolicies() async => policies;
 }
 
 /// A rig whose safety policies can't be read.
@@ -531,4 +544,42 @@ void main() {
       expect(find.text('7.2.4'), findsOneWidget);
     },
   );
+
+  for (final (moment, caption) in [
+    (DateTime.utc(2025, 11, 5, 14), 'Moon · Full moon'),
+    (DateTime.utc(2025, 10, 29, 17), 'Moon · First quarter'),
+  ]) {
+    testWidgets('the moon tile names the phase: $caption', (tester) async {
+      await withClock(Clock.fixed(moment), () async {
+        await _pump(tester, _wire());
+        expect(find.textContaining(caption), findsOneWidget);
+      });
+    });
+  }
+
+  testWidgets('an east wind reads E, not the NW fallback', (tester) async {
+    await _pump(
+      tester,
+      _wire(
+        readings: {
+          'wind_speed_ms': 4.2,
+          'wind_gust_ms': 7.5,
+          'wind_direction_deg': 90.0,
+        },
+      ),
+      locale: const Locale('pt', 'BR'),
+    );
+    expect(_said(tester, 'wind'), contains(', L,'));
+  });
+
+  testWidgets('without a profile API the limits line still shows', (
+    tester,
+  ) async {
+    await _pump(tester, _wire(), noApi: true);
+    await tester.pump();
+    expect(
+      find.text('Safety limits not loaded: nothing is marked.'),
+      findsOneWidget,
+    );
+  });
 }

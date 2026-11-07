@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/flat_panel_status.dart';
@@ -409,4 +410,40 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('the brightness level keeps tabular figures', (tester) async {
+    await _pump(tester, _wire(light: true, brightness: 1, max: 4095));
+    final level = tester.widget<Text>(find.text('1 %'));
+    expect(level.style?.fontFeatures, contains(FontFeature.tabularFigures()));
+  });
+
+  testWidgets('a slider level is measured in the text style it draws', (
+    tester,
+  ) async {
+    late BuildContext ctx;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DefaultTextStyle(
+          style: const TextStyle(letterSpacing: 6),
+          child: Builder(
+            builder: (c) {
+              ctx = c;
+              return Align(
+                alignment: Alignment.topLeft,
+                child: simpleSliderLevel(ctx, '100 %'),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    final drawn = tester
+        .renderObject<RenderParagraph>(find.text('100 %'))
+        .getMaxIntrinsicWidth(double.infinity);
+    expect(
+      tester.getSize(find.text('100 %')).width,
+      greaterThanOrEqualTo(drawn),
+      reason: 'the reserved width fits the text as drawn',
+    );
+  });
 }

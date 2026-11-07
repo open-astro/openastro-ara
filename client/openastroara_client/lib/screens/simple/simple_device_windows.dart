@@ -407,8 +407,10 @@ Widget simpleWindowRow(
 /// A slider's level after it ("60 %"), as wide as "100 %", so the slider
 /// keeps its width as the level changes.
 Widget simpleSliderLevel(BuildContext context, String level, {Key? key}) {
+  // The style the Text below draws in, so the measure matches it.
+  final style = DefaultTextStyle.of(context).style.merge(kSimpleText);
   final widest = TextPainter(
-    text: const TextSpan(text: '100 %', style: kSimpleText),
+    text: TextSpan(text: '100 %', style: style),
     textDirection: TextDirection.ltr,
     textScaler: MediaQuery.textScalerOf(context),
   )..layout();
@@ -3577,8 +3579,12 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
     // The safety limits the tiles are checked against: Simple Mode never
     // opens the policies page that loads them otherwise.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
       final api = ref.read(profileApiProvider);
-      if (api == null || !mounted) return;
+      if (api == null) {
+        setState(() => _limitsUnknown = true);
+        return;
+      }
       try {
         await ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api);
       } catch (_) {
