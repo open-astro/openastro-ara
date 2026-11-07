@@ -21,6 +21,10 @@ class EquipmentGlyph extends StatelessWidget {
   /// An observatory dome on its wall, with the shutter slit open.
   const EquipmentGlyph.dome({super.key, this.size = 28, required this.color}) : _paint = _dome;
 
+  /// Dew point: a leaf with its stem and midrib, a drop over its broken upper
+  /// edge (Material's dew point mark read as a second thermometer).
+  const EquipmentGlyph.dewPoint({super.key, this.size = 28, required this.color}) : _paint = _dewPoint;
+
   @override
   Widget build(BuildContext context) => SizedBox.square(
         dimension: size,
@@ -98,6 +102,43 @@ class EquipmentGlyph extends StatelessWidget {
       ..close();
     c.drawPath(Path.combine(PathOperation.difference, dome, slit), fill);
     c.drawRect(Rect.fromLTRB(2 * u, 16 * u, 22 * u, 20 * u), fill);
+  }
+
+  // Line art from the chosen mock (design/preview/dew-point-icon-mock.html H),
+  // on its 24-unit grid with its thinner 1.7-unit line.
+  static void _dewPoint(Canvas c, Size s, Paint stroke, Paint fill) {
+    final u = s.width / 24;
+    Offset p(double x, double y) => Offset(x * u, y * u);
+    final line = Paint()
+      ..color = stroke.color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.7 * u
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    // The leaf, its upper edge broken under the drop.
+    c.drawPath(
+        Path()
+          ..moveTo(13.5 * u, 9 * u)
+          ..cubicTo(12 * u, 7.5 * u, 9.5 * u, 6.6 * u, 6 * u, 8 * u)
+          ..cubicTo(3 * u, 13.5 * u, 7.5 * u, 20.5 * u, 20 * u, 19 * u)
+          ..cubicTo(19 * u, 16.5 * u, 18 * u, 14.5 * u, 16.5 * u, 12.5 * u),
+        line);
+    // The stem, running on as the midrib; it stops short of the tip, which
+    // otherwise reads as an arrowhead.
+    c.drawPath(
+        Path()
+          ..moveTo(3 * u, 3 * u)
+          ..cubicTo(5.5 * u, 7.5 * u, 9.5 * u, 12 * u, 15.5 * u, 15.8 * u),
+        line);
+    // The drop (no highlight: at this line width it closes up the drop).
+    c.drawPath(
+        Path()
+          ..moveTo(18 * u, 1.8 * u)
+          ..cubicTo(18 * u, 1.8 * u, 15 * u, 5.6 * u, 15 * u, 7.4 * u)
+          ..arcToPoint(p(21, 7.4), radius: Radius.circular(3 * u), clockwise: false)
+          ..cubicTo(21 * u, 5.6 * u, 18 * u, 1.8 * u, 18 * u, 1.8 * u)
+          ..close(),
+        line);
   }
 }
 

@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:clock/clock.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart' show HapticFeedback, LogicalKeyboardKey;
@@ -13,6 +15,7 @@ import '../../services/equipment_driver_api.dart';
 import '../../models/filter_wheel_status.dart';
 import '../../models/focuser_status.dart';
 import '../../models/switch_device.dart';
+import '../../models/weather_status.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../models/guider_status.dart';
 import '../../state/equipment/filter_wheel_state.dart';
@@ -20,6 +23,7 @@ import '../../state/equipment/flat_panel_state.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/equipment/rotator_state.dart';
 import '../../state/equipment/switch_state.dart';
+import '../../state/equipment/weather_state.dart';
 import '../../state/guider/guider_equipment_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
@@ -35,6 +39,7 @@ import '../../state/app_locale_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../util/tonight_sky_local.dart' show moonPhase;
 import '../../widgets/equipment/equipment_status_chip.dart'
     show switchChipLevel;
 import '../../widgets/equipment/switch_port_layout.dart'
@@ -45,8 +50,10 @@ import '../../widgets/equipment/switch_port_layout.dart'
         isAutoRegulating,
         isDewModePort,
         snapToSwitchStep,
+        switchPortUnit,
         switchSliderDivisions,
         usableSwitchStep;
+import '../../widgets/equipment/equipment_glyphs.dart' show EquipmentGlyph;
 import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot;
 import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment, SimpleSegments, simpleRailScale;
@@ -396,6 +403,32 @@ Widget simpleWindowRow(
           ),
         ),
 );
+
+/// A slider's level after it ("60 %"), as wide as "100 %", so the slider
+/// keeps its width as the level changes.
+Widget simpleSliderLevel(BuildContext context, String level, {Key? key}) {
+  // The style the Text below draws in, so the measure matches it.
+  final style = DefaultTextStyle.of(context).style.merge(kSimpleText);
+  final widest = TextPainter(
+    text: TextSpan(text: '100 %', style: style),
+    textDirection: TextDirection.ltr,
+    textScaler: MediaQuery.textScalerOf(context),
+  )..layout();
+  // Rounded up: a fractional width wrapped "100 %" onto two lines.
+  final width = widest.width.ceilToDouble() + 1;
+  widest.dispose();
+  return SizedBox(
+    width: width,
+    child: Text(
+      level,
+      key: key,
+      maxLines: 1,
+      softWrap: false,
+      textAlign: TextAlign.end,
+      style: kSimpleText,
+    ),
+  );
+}
 
 /// A window's ask before a move that would disturb a running plan: the
 /// question with Cancel and [confirm]. Too narrow for the question beside
@@ -2731,10 +2764,15 @@ String _switchPercent(SwitchPort p, double v) {
 }
 
 /// A port the rig can't set, as Settings › Switches lists it: On / Off for an
-/// on/off reading, else its value.
-String simpleSwitchReading(AppLocalizations l10n, SwitchPort p) => p.isBoolean
-    ? (p.value >= 0.5 ? l10n.deviceOn : l10n.deviceOff)
-    : _simpleLevel(p.value);
+/// on/off reading, else its value and the unit its name gives (#1683).
+String simpleSwitchReading(AppLocalizations l10n, SwitchPort p) {
+  if (p.isBoolean) return p.value >= 0.5 ? l10n.deviceOn : l10n.deviceOff;
+  // The unit the full UI infers from the name; none when it recognises none.
+  final unit = switchPortUnit(p);
+  return unit.isEmpty
+      ? _simpleLevel(p.value)
+      : '${_simpleLevel(p.value)} $unit';
+}
 
 /// The port a Switches window write is on its way to, for the status pill
 /// (#1668); null when none.
@@ -2950,7 +2988,6 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     final l10n = context.l10n;
     final id = '${d.deviceId}-${p.id}';
     final asked = _asked?.port == id ? _asked!.value : null;
-    var label = p.label;
     // Locked past [_dimAfter], the other ports read locked; the asked one
     // stays bright.
     final dimmed = locked && _dim && asked == null;
@@ -3005,44 +3042,64 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
         p.min,
         p.max,
       );
-      label = l10n.deviceSwitchLevel(p.label, _switchPercent(p, _round(p, v)));
+      // The level after the slider, as the Flat panel window's brightness:
+      // after the name it wrapped "Light Box · 60 %" onto two lines.
       control = SizedBox(
         width: kSimpleWindowControlWidth,
-        child: Opacity(
-          opacity: dimmed ? AraOpacity.locked : 1,
-          child: IgnorePointer(
-            ignoring: dimmed,
-            child: Semantics(
-              label: p.label,
-              child: Slider(
-                key: Key('simple-switch-$id'),
-                min: p.min,
-                max: p.max,
-                divisions: usableSwitchStep(p) == null
-                    ? null
-                    : switchSliderDivisions(p),
-                value: v,
-                semanticFormatterCallback: (x) =>
-                    _switchPercent(p, _round(p, x)),
-                // Locked: it takes nothing; once dimmed it fades as the
-                // segments do and takes no touch or screen-reader action, so a
-                // fast answer doesn't flash it.
-                onChanged: (x) {
-                  if (!locked) setState(() => _drag = (port: id, value: x));
-                },
-                onChangeEnd: (x) {
-                  if (locked) return;
-                  setState(() => _drag = null);
-                  _write(d, p, x);
-                },
+        child: Row(
+          children: [
+            Expanded(
+              child: Opacity(
+                opacity: dimmed ? AraOpacity.locked : 1,
+                child: IgnorePointer(
+                  ignoring: dimmed,
+                  child: Semantics(
+                    label: p.label,
+                    child: Slider(
+                      key: Key('simple-switch-$id'),
+                      min: p.min,
+                      max: p.max,
+                      divisions: usableSwitchStep(p) == null
+                          ? null
+                          : switchSliderDivisions(p),
+                      value: v,
+                      semanticFormatterCallback: (x) =>
+                          _switchPercent(p, _round(p, x)),
+                      // Locked: it takes nothing; once dimmed it fades as
+                      // the segments do and takes no touch or screen-reader
+                      // action, so a fast answer doesn't flash it.
+                      onChanged: (x) {
+                        if (!locked) {
+                          setState(() => _drag = (port: id, value: x));
+                        }
+                      },
+                      onChangeEnd: (x) {
+                        if (locked) return;
+                        setState(() => _drag = null);
+                        _write(d, p, x);
+                      },
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
+            // The slider already reads its level to a screen reader.
+            ExcludeSemantics(
+              child: Opacity(
+                opacity: dimmed ? AraOpacity.locked : 1,
+                child: simpleSliderLevel(
+                  context,
+                  _switchPercent(p, _round(p, v)),
+                  key: Key('simple-switch-$id-level'),
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }
     return simpleWindowRow(
-      label,
+      p.label,
       control,
       id: 'switch-$id',
       // The readout has no name of its own: the row's label says it.
@@ -3321,12 +3378,7 @@ class _SimpleFlatPanelWindowState extends ConsumerState<SimpleFlatPanelWindow> {
                       : (v) => send(brightness: v.round()),
                 ),
               ),
-              Text(
-                max == 0 ? '—' : _percent(level, max),
-                style: kSimpleText.copyWith(
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
+              simpleSliderLevel(context, max == 0 ? '—' : _percent(level, max)),
             ],
           ),
         ]);
@@ -3500,4 +3552,473 @@ class _FlatPanelFacePainter extends CustomPainter {
   @override
   bool shouldRepaint(_FlatPanelFacePainter old) =>
       old.open != open || old.hasCover != hasCover || old.glow != glow;
+}
+
+/// The weather station's window: its current readings as tiles, two across,
+/// the moon after them, and how old the readings are. Read-only, so no pill
+/// and no plan guard (#1662, mock `design/preview/simple-weather-mock.html`).
+class SimpleWeatherWindow extends ConsumerStatefulWidget {
+  const SimpleWeatherWindow({super.key, this.inSettings = false});
+
+  /// In Settings the window ends with the station's versions.
+  final bool inSettings;
+
+  @override
+  ConsumerState<SimpleWeatherWindow> createState() =>
+      _SimpleWeatherWindowState();
+}
+
+class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
+  /// The safety limits couldn't be read: the defaults mark nothing, so the
+  /// window says so rather than look calm.
+  bool _limitsUnknown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // The safety limits the tiles are checked against: Simple Mode never
+    // opens the policies page that loads them otherwise.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final api = ref.read(profileApiProvider);
+      if (api == null) {
+        setState(() => _limitsUnknown = true);
+        return;
+      }
+      try {
+        await ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api);
+      } catch (_) {
+        if (mounted) setState(() => _limitsUnknown = true);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final s = ref.watch(weatherProvider).value;
+    final children = <Widget>[
+      SimpleDeviceHeader(type: l10n.shellWeather, status: s),
+    ];
+    if (s?.connectionState == EquipmentConnectionState.error) {
+      // A failed read shows no numbers, so old ones can't pass for live.
+      children.add(
+        Text(
+          l10n.deviceSensorReadFailed,
+          style: kSimpleText.copyWith(color: AraColors.errorText),
+        ),
+      );
+    } else if (s == null || !s.isConnected) {
+      children.add(
+        Text(
+          s?.isConnecting ?? false
+              ? l10n.deviceConnecting
+              : l10n.deviceNotConnected,
+          style: AraText.caption,
+        ),
+      );
+    } else {
+      children.add(_tiles(context, s));
+      if (_limitsUnknown) {
+        children.add(
+          Text(
+            l10n.deviceSafetyLimitsNotLoaded,
+            style: AraText.caption.copyWith(
+              fontSize: 12,
+              color: AraColors.accentWarning,
+            ),
+          ),
+        );
+      }
+      final at = s.capturedAt;
+      if (at != null) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(top: AraSpace.s4),
+            child: _WeatherAge(at),
+          ),
+        );
+      }
+    }
+    if (widget.inSettings) {
+      children.addAll(
+        _versions(
+          context,
+          ref.watch(deviceDriverProvider('observingconditions')).value,
+        ),
+      );
+    }
+    return Column(
+      key: const Key('simple-device-weather'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s4,
+      children: children,
+    );
+  }
+
+  /// A reading as the tiles show it: whole numbers bare, otherwise one
+  /// decimal, a real minus sign.
+  static String _num(double v, {int decimals = 1}) =>
+      (v == v.roundToDouble() && decimals == 1
+              ? v.toStringAsFixed(0)
+              : v.toStringAsFixed(decimals))
+          .replaceFirst('-', '−');
+
+  static bool _ok(double? v) => v != null && v.isFinite;
+
+  /// A tile's icon from Material or Cupertino.
+  static Widget Function(Color) _icon(IconData icon) =>
+      (color) => Icon(icon, size: 22, color: color);
+
+  /// Material's dew point mark reads as a second thermometer: a leaf with a
+  /// drop instead (user, 2026-11-08).
+  static Widget _dew(Color color) =>
+      EquipmentGlyph.dewPoint(size: 22, color: color);
+
+  Widget _tiles(BuildContext context, WeatherStatus s) {
+    final l10n = context.l10n;
+    final p = ref.watch(safetyPoliciesProvider);
+    // Marked only when these limits act (the daemon's same checks, §35.1).
+    final mark = p.weatherTriggersEnabled;
+    final t = s.temperatureC, dew = s.dewPointC, hum = s.humidityPct;
+    final speed = s.windSpeedMs, gust = s.windGustMs;
+    final tiles = <_WeatherTile>[
+      if (_ok(s.cloudCoverPct))
+        _WeatherTile(
+          'cloud',
+          _icon(Icons.cloud_outlined),
+          _num(s.cloudCoverPct!),
+          '%',
+          l10n.deviceCloudCover,
+        ),
+      if (_ok(s.skyQualityMagArcsec2))
+        _WeatherTile(
+          'sqm',
+          _icon(Icons.auto_awesome_outlined),
+          _num(s.skyQualityMagArcsec2!, decimals: 2),
+          'mag/arcsec²',
+          l10n.deviceSkyQuality,
+          // Too long beside the number in a half tile: it goes under it.
+          unitBeside: false,
+        ),
+      if (_ok(t))
+        _WeatherTile(
+          'temperature',
+          _icon(Icons.thermostat),
+          _num(t!),
+          '°C',
+          l10n.deviceTemperature,
+        ),
+      if (_ok(dew))
+        _WeatherTile(
+          'dew',
+          _dew,
+          _num(dew!),
+          '°C',
+          l10n.deviceDewPoint,
+          past: mark && _ok(t) && t! - dew < p.minDewDeltaC
+              ? l10n.deviceMargin('${_num(p.minDewDeltaC)} °C')
+              : null,
+        ),
+      if (_ok(hum))
+        _WeatherTile(
+          'humidity',
+          _icon(Icons.water_drop_outlined),
+          _num(hum!),
+          '%',
+          l10n.deviceHumidity,
+          past: mark && hum > p.maxHumidityPct
+              ? l10n.deviceLimit('${p.maxHumidityPct} %')
+              : null,
+        ),
+      // A number even when dry: "Nenhuma" didn't fit a narrow half tile.
+      // Drizzle under 0.1 would read "0.0", a hair from dry's "0".
+      if (_ok(s.rainRate))
+        _WeatherTile(
+          'rain',
+          _icon(CupertinoIcons.cloud_rain),
+          s.rainRate! > 0 && s.rainRate! < 0.1 ? '< 0.1' : _num(s.rainRate!),
+          'mm/h',
+          l10n.deviceRain,
+        ),
+    ];
+    if (_ok(speed) || _ok(gust)) {
+      // Checked as the daemon does: the worse of speed and gust, and nothing
+      // when either reads NaN (its Math.Max gives NaN, which breaches nothing).
+      final nan =
+          (speed != null && !speed.isFinite) ||
+          (gust != null && !gust.isFinite);
+      bool over(double? ms) =>
+          mark && !nan && _ok(ms) && ms! * 3.6 > p.maxWindKmh;
+      final shown = _ok(speed) ? speed : gust;
+      final gustOver = _ok(speed) && over(gust);
+      final dir = s.windDirectionDeg;
+      const points = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
+      tiles.add(
+        _WeatherTile(
+          'wind',
+          _icon(Icons.air),
+          _num(shown! * 3.6),
+          'km/h',
+          l10n.deviceWind,
+          details: [
+            if (_ok(dir))
+              (
+                l10n.deviceCompass(points[(dir! / 45).round() % 8]),
+                null,
+                false,
+              ),
+            if (_ok(speed) && _ok(gust))
+              (
+                l10n.deviceGusts(_num(gust! * 3.6)),
+                l10n.deviceGusts('${_num(gust * 3.6)} km/h'),
+                gustOver,
+              ),
+          ],
+          // A gust past the limit marks the tile and its gust, not the lower
+          // sustained speed the number shows.
+          past: over(shown) || gustOver
+              ? l10n.deviceLimit('${p.maxWindKmh} km/h')
+              : null,
+          numberPast: over(shown),
+        ),
+      );
+    }
+    // Computed, not read: how much moon washes out the sky tonight.
+    final moon = moonPhase(clock.now().toUtc());
+    final phase = moon.phaseName.split(' ');
+    tiles.add(
+      _WeatherTile(
+        'moon',
+        _icon(Icons.nightlight_outlined),
+        '${(moon.illuminatedFraction * 100).round()}',
+        '%',
+        l10n.deviceMoon,
+        details: [
+          (
+            l10n.deviceMoonPhase(
+              phase[0] + phase[1][0].toUpperCase() + phase[1].substring(1),
+            ),
+            null,
+            false,
+          ),
+        ],
+      ),
+    );
+    final rows = <Widget>[
+      for (var i = 0; i < tiles.length; i += 2)
+        // An odd count's last tile spans the row, so no row has a hole.
+        i + 1 < tiles.length
+            ? Row(
+                spacing: AraSpace.s8,
+                children: [
+                  Expanded(child: tiles[i]),
+                  Expanded(child: tiles[i + 1]),
+                ],
+              )
+            : tiles[i],
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
+      children: rows,
+    );
+  }
+}
+
+/// How old the readings are, redrawn once a second on its own so the tiles
+/// don't rebuild with it; amber past a minute.
+class _WeatherAge extends StatefulWidget {
+  const _WeatherAge(this.capturedAt);
+
+  final DateTime capturedAt;
+
+  @override
+  State<_WeatherAge> createState() => _WeatherAgeState();
+}
+
+class _WeatherAgeState extends State<_WeatherAge> {
+  /// Older readings than this read amber: the daemon reads every 2 s and Ara
+  /// asks every 15 s, so a live station never gets near it.
+  static const Duration _stale = Duration(seconds: 60);
+
+  late final Timer _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick = Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _tick.cancel();
+    super.dispose();
+  }
+
+  /// "8 s", "4 min", "2 h".
+  static String _age(Duration d) {
+    final s = math.max(0, d.inSeconds);
+    if (s < 60) return '$s s';
+    if (s < 3600) return '${s ~/ 60} min';
+    return '${s ~/ 3600} h';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final age = clock.now().toUtc().difference(widget.capturedAt);
+    final stale = age > _stale;
+    return Text(
+      stale
+          ? l10n.deviceLastReadingAgo(_age(age))
+          : l10n.deviceUpdatedAgo(_age(age)),
+      key: const Key('simple-weather-age'),
+      style: AraText.caption.copyWith(
+        fontSize: 12,
+        color: stale ? AraColors.accentWarning : null,
+      ),
+    );
+  }
+}
+
+/// One reading: the number big with its unit, its name and details under it,
+/// and on a line of its own the limit it is past (so the caption can't cut
+/// off why the tile is amber).
+class _WeatherTile extends StatelessWidget {
+  const _WeatherTile(
+    this.id,
+    this.icon,
+    this.value,
+    this.unit,
+    this.label, {
+    this.unitBeside = true,
+    this.details = const [],
+    this.past,
+    bool? numberPast,
+  }) : numberPast = numberPast ?? past != null;
+
+  final String id;
+
+  /// In front of the value, as large as its number, in the colour given.
+  final Widget Function(Color color) icon;
+  final String value;
+  final String unit;
+  final String label;
+
+  /// The unit beside the number; else after the name (too long for a half
+  /// tile beside the number: mag/arcsec²).
+  final bool unitBeside;
+
+  /// After the name: what it shows, what a screen reader hears (null: the
+  /// same), and whether it is the part past the limit.
+  final List<(String, String?, bool)> details;
+
+  /// The limit it is past ("limit 85 %"), or null.
+  final String? past;
+
+  /// The number itself is past the limit (not only a detail, as a gust).
+  final bool numberPast;
+
+  @override
+  Widget build(BuildContext context) {
+    final warn = past != null;
+    final caption = AraText.caption.copyWith(fontSize: 12);
+    final amber = caption.copyWith(color: AraColors.accentWarning);
+    // A detail past the limit is all the caption shows after the name, so its
+    // one line under a warning can't cut it off (screen readers hear them all).
+    final shownDetails = details.any((d) => d.$3)
+        ? details.where((d) => d.$3)
+        : details;
+    final parts = [
+      TextSpan(text: label),
+      for (final (shown, _, over) in shownDetails)
+        TextSpan(text: shown, style: over ? amber : null),
+    ];
+    return Semantics(
+      key: Key('simple-weather-$id'),
+      container: true,
+      // The value next to the name, then its details, then why it's amber.
+      label: [
+        '$label $value${unit.isEmpty ? '' : ' $unit'}',
+        for (final (shown, spoken, _) in details) spoken ?? shown,
+        if (warn) '${context.l10n.devicePastLimit} ($past)',
+      ].join(', '),
+      excludeSemantics: true,
+      child: Container(
+        // One height for every tile: the number and two lines under it.
+        height: MediaQuery.textScalerOf(context).scale(80),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AraSpace.s12,
+          vertical: AraSpace.s8,
+        ),
+        decoration: BoxDecoration(
+          color: AraColors.tileFill,
+          borderRadius: BorderRadius.circular(10),
+          border: warn
+              ? Border.all(color: AraColors.accentWarning, width: 1.5)
+              : null,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              spacing: AraSpace.s4,
+              children: [
+                icon(warn ? AraColors.accentWarning : AraColors.textSecondary),
+                Flexible(
+                  child: Text.rich(
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    TextSpan(
+                      children: [
+                        TextSpan(text: value),
+                        if (unitBeside && unit.isNotEmpty)
+                          TextSpan(
+                            text: ' $unit',
+                            style: kSimpleText.copyWith(
+                              fontSize: 13,
+                              color: AraColors.textSecondary,
+                            ),
+                          ),
+                      ],
+                    ),
+                    style: kSimpleText.copyWith(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                      color: numberPast ? AraColors.accentWarning : null,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Text.rich(
+              TextSpan(
+                children: [
+                  for (final (i, part) in parts.indexed) ...[
+                    if (i > 0) const TextSpan(text: ' · '),
+                    part,
+                  ],
+                  // On its own line: after the name it broke at its slash.
+                  if (!unitBeside && unit.isNotEmpty) TextSpan(text: '\n$unit'),
+                ],
+              ),
+              maxLines: warn ? 1 : 2,
+              overflow: TextOverflow.ellipsis,
+              style: caption,
+            ),
+            if (warn)
+              Text(
+                past!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: amber,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }

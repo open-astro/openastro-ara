@@ -244,11 +244,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String deviceSwitchLevel(String port, String level) {
-    return '$port · $level';
-  }
-
-  @override
   String deviceCouldntSetPort(String port) {
     return 'Couldn\'t set $port';
   }
@@ -316,6 +311,92 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get deviceFlatPanelUnconfirmedDetail =>
       'Check the cover isn\'t jammed and the panel isn\'t busy.';
+
+  @override
+  String get deviceSensorReadFailed => 'Sensor read failed — check the device.';
+
+  @override
+  String get deviceCloudCover => 'Cloud cover';
+
+  @override
+  String get deviceSkyQuality => 'Sky quality';
+
+  @override
+  String get deviceDewPoint => 'Dew point';
+
+  @override
+  String get deviceHumidity => 'Humidity';
+
+  @override
+  String get deviceRain => 'Rain';
+
+  @override
+  String get deviceWind => 'Wind';
+
+  @override
+  String deviceGusts(String speed) {
+    return 'gusts $speed';
+  }
+
+  @override
+  String deviceCompass(String point) {
+    String _temp0 = intl.Intl.selectLogic(point, {
+      'n': 'N',
+      'ne': 'NE',
+      'e': 'E',
+      'se': 'SE',
+      's': 'S',
+      'sw': 'SW',
+      'w': 'W',
+      'other': 'NW',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String deviceLimit(String value) {
+    return 'limit $value';
+  }
+
+  @override
+  String deviceMargin(String value) {
+    return 'margin $value';
+  }
+
+  @override
+  String get devicePastLimit => 'past the safety limit';
+
+  @override
+  String deviceUpdatedAgo(String age) {
+    return 'Updated $age ago';
+  }
+
+  @override
+  String deviceLastReadingAgo(String age) {
+    return 'Last reading $age ago';
+  }
+
+  @override
+  String get deviceMoon => 'Moon';
+
+  @override
+  String deviceMoonPhase(String phase) {
+    String _temp0 = intl.Intl.selectLogic(phase, {
+      'newMoon': 'New moon',
+      'waxingCrescent': 'Waxing crescent',
+      'firstQuarter': 'First quarter',
+      'waxingGibbous': 'Waxing gibbous',
+      'fullMoon': 'Full moon',
+      'waningGibbous': 'Waning gibbous',
+      'lastQuarter': 'Last quarter',
+      'other': 'Waning crescent',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get deviceSafetyLimitsNotLoaded =>
+      'Safety limits not loaded: nothing is marked.';
 
   @override
   String get deviceCouldntSaveThat => 'Couldn\'t save that';

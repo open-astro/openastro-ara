@@ -244,11 +244,6 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String deviceSwitchLevel(String port, String level) {
-    return '$port · $level';
-  }
-
-  @override
   String deviceCouldntSetPort(String port) {
     return 'Couldn\'t set $port';
   }
@@ -316,6 +311,92 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get deviceFlatPanelUnconfirmedDetail =>
       'Check the cover isn\'t jammed and the panel isn\'t busy.';
+
+  @override
+  String get deviceSensorReadFailed => 'Sensor read failed — check the device.';
+
+  @override
+  String get deviceCloudCover => 'Cloud cover';
+
+  @override
+  String get deviceSkyQuality => 'Sky quality';
+
+  @override
+  String get deviceDewPoint => 'Dew point';
+
+  @override
+  String get deviceHumidity => 'Humidity';
+
+  @override
+  String get deviceRain => 'Rain';
+
+  @override
+  String get deviceWind => 'Wind';
+
+  @override
+  String deviceGusts(String speed) {
+    return 'gusts $speed';
+  }
+
+  @override
+  String deviceCompass(String point) {
+    String _temp0 = intl.Intl.selectLogic(point, {
+      'n': 'N',
+      'ne': 'NE',
+      'e': 'E',
+      'se': 'SE',
+      's': 'S',
+      'sw': 'SW',
+      'w': 'W',
+      'other': 'NW',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String deviceLimit(String value) {
+    return 'limit $value';
+  }
+
+  @override
+  String deviceMargin(String value) {
+    return 'margin $value';
+  }
+
+  @override
+  String get devicePastLimit => 'past the safety limit';
+
+  @override
+  String deviceUpdatedAgo(String age) {
+    return 'Updated $age ago';
+  }
+
+  @override
+  String deviceLastReadingAgo(String age) {
+    return 'Last reading $age ago';
+  }
+
+  @override
+  String get deviceMoon => 'Moon';
+
+  @override
+  String deviceMoonPhase(String phase) {
+    String _temp0 = intl.Intl.selectLogic(phase, {
+      'newMoon': 'New moon',
+      'waxingCrescent': 'Waxing crescent',
+      'firstQuarter': 'First quarter',
+      'waxingGibbous': 'Waxing gibbous',
+      'fullMoon': 'Full moon',
+      'waningGibbous': 'Waning gibbous',
+      'lastQuarter': 'Last quarter',
+      'other': 'Waning crescent',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get deviceSafetyLimitsNotLoaded =>
+      'Safety limits not loaded: nothing is marked.';
 
   @override
   String get deviceCouldntSaveThat => 'Couldn\'t save that';
@@ -2688,11 +2769,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String deviceSwitchLevel(String port, String level) {
-    return '$port · $level';
-  }
-
-  @override
   String deviceCouldntSetPort(String port) {
     return 'Não foi possível ajustar $port';
   }
@@ -2761,6 +2837,93 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get deviceFlatPanelUnconfirmedDetail =>
       'Verifique se a tampa não está travada e se o painel não está ocupado.';
+
+  @override
+  String get deviceSensorReadFailed =>
+      'Falha ao ler os sensores — verifique o dispositivo.';
+
+  @override
+  String get deviceCloudCover => 'Nebulosidade';
+
+  @override
+  String get deviceSkyQuality => 'Qualidade do céu';
+
+  @override
+  String get deviceDewPoint => 'Ponto de orvalho';
+
+  @override
+  String get deviceHumidity => 'Umidade';
+
+  @override
+  String get deviceRain => 'Chuva';
+
+  @override
+  String get deviceWind => 'Vento';
+
+  @override
+  String deviceGusts(String speed) {
+    return 'rajadas $speed';
+  }
+
+  @override
+  String deviceCompass(String point) {
+    String _temp0 = intl.Intl.selectLogic(point, {
+      'n': 'N',
+      'ne': 'NE',
+      'e': 'L',
+      'se': 'SE',
+      's': 'S',
+      'sw': 'SO',
+      'w': 'O',
+      'other': 'NO',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String deviceLimit(String value) {
+    return 'limite $value';
+  }
+
+  @override
+  String deviceMargin(String value) {
+    return 'margem $value';
+  }
+
+  @override
+  String get devicePastLimit => 'além do limite de segurança';
+
+  @override
+  String deviceUpdatedAgo(String age) {
+    return 'Atualizado há $age';
+  }
+
+  @override
+  String deviceLastReadingAgo(String age) {
+    return 'Última leitura há $age';
+  }
+
+  @override
+  String get deviceMoon => 'Lua';
+
+  @override
+  String deviceMoonPhase(String phase) {
+    String _temp0 = intl.Intl.selectLogic(phase, {
+      'newMoon': 'Lua nova',
+      'waxingCrescent': 'Crescente',
+      'firstQuarter': 'Quarto crescente',
+      'waxingGibbous': 'Crescente gibosa',
+      'fullMoon': 'Lua cheia',
+      'waningGibbous': 'Minguante gibosa',
+      'lastQuarter': 'Quarto minguante',
+      'other': 'Minguante',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get deviceSafetyLimitsNotLoaded =>
+      'Limites de segurança não carregados: nada é marcado.';
 
   @override
   String get deviceCouldntSaveThat => 'Não foi possível salvar';
