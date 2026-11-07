@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-07T05:26:42+13:00",
+  "generatedAt": "2026-11-07T15:40:00+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -689,9 +689,9 @@
       "name": "Segmented Switch",
       "kind": "custom",
       "refersTo": "nav-rail-selected",
-      "description": "Instrument-style switch that names its states.",
-      "html": "<div class=\"ds-seg\" role=\"group\"><button class=\"on\" aria-pressed=\"true\">Cooler on</button><button aria-pressed=\"false\">Off</button></div>",
-      "css": ".ds-seg{display:inline-flex;border:1px solid #404040;border-radius:20px;overflow:hidden} .ds-seg button{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:transparent;color:#E0E0E0;border:0;padding:6px 14px;font-size:13px;cursor:pointer} .ds-seg button+button{border-left:1px solid #404040} .ds-seg button.on{background:#1976D2;color:#FFFFFF} .ds-seg button:hover:not(.on){background:#2E2E2E} .ds-seg button:focus-visible{outline:2px solid #42A5F5;outline-offset:-2px}"
+      "description": "Instrument-style switch that names its states. A segment that takes no tap reads as disabled; a label too long for it ends in an ellipsis (#1666).",
+      "html": "<div class=\"ds-seg\" role=\"group\"><button class=\"on\" aria-pressed=\"true\">Cooler on</button><button aria-pressed=\"false\">Off</button><button aria-pressed=\"false\" disabled>Hydrogen-alpha 3 nm</button></div>",
+      "css": ".ds-seg{display:inline-flex;border:1px solid #404040;border-radius:20px;overflow:hidden} .ds-seg button{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:transparent;color:#E0E0E0;border:0;padding:6px 14px;font-size:13px;cursor:pointer} .ds-seg button+button{border-left:1px solid #404040} .ds-seg button.on{background:#1976D2;color:#FFFFFF} .ds-seg button:hover:not(.on){background:#2E2E2E} .ds-seg button:focus-visible{outline:2px solid #42A5F5;outline-offset:-2px} .ds-seg button{max-width:12em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .ds-seg button:disabled{color:#A0A0A0;cursor:default} .ds-seg button:disabled:hover{background:transparent}"
     },
     {
       "name": "Text Field",
