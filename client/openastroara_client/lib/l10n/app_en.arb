@@ -273,6 +273,48 @@
   "@deviceCouldntChangeFilter": {
     "description": "Error message when the filter wheel refused a change"
   },
+  "deviceSwitchPorts": "{device} · {count, plural, =1{1 port} other{{count} ports}}",
+  "@deviceSwitchPorts": {
+    "description": "Switches window: a device's section title, with how many ports it lists",
+    "placeholders": {
+      "device": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "deviceSwitchLevel": "{port} · {level}",
+  "@deviceSwitchLevel": {
+    "description": "Switches window: a slider port's name with the level it is set to (no unit: the rig reports none)",
+    "placeholders": {
+      "port": {
+        "type": "String"
+      },
+      "level": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceCouldntSetPort": "Couldn't set {port}",
+  "@deviceCouldntSetPort": {
+    "description": "Error message when a switch device refused a port change",
+    "placeholders": {
+      "port": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceSettingPort": "Setting {port}…",
+  "@deviceSettingPort": {
+    "description": "Simple Mode status pill: a switch port change on its way to the rig",
+    "placeholders": {
+      "port": {
+        "type": "String"
+      }
+    }
+  },
   "devicePlanRunningChangeFilter": "A plan is running. Change the filter anyway?",
   "@devicePlanRunningChangeFilter": {
     "description": "Filter wheel window: asked when a filter is tapped while a plan runs"
@@ -1144,6 +1186,10 @@
   "shellFilterWheel": "Filter wheel",
   "@shellFilterWheel": {
     "description": "Simple Mode Settings › Devices row: the filter wheel"
+  },
+  "shellSwitches": "Switches",
+  "@shellSwitches": {
+    "description": "Simple Mode: the switch devices (power boxes, dew outputs): their window's title, Settings section and status pill"
   },
   "shellRotator": "Rotator",
   "@shellRotator": {

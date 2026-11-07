@@ -31,6 +31,7 @@ import '../../widgets/status_indicator.dart'
     show StatusBlink, StatusDot, StatusLevel;
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
+import '../../state/equipment/switch_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
@@ -43,7 +44,11 @@ import 'simple_guide_panel.dart'
 import 'simple_plan_panel.dart' show simpleRunProvider;
 import 'simple_polar_panel.dart' show simplePolarActive, simplePolarPhase;
 import 'simple_device_windows.dart'
-    show SimpleGainSlider, simpleCelsius, simpleMountMotionProvider;
+    show
+        SimpleGainSlider,
+        simpleCelsius,
+        simpleMountMotionProvider,
+        simpleSwitchSettingProvider;
 import 'simple_shell.dart'
     show
         SimplePanel,
@@ -1073,6 +1078,9 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     // The filter wheel turning, or a manual wheel waiting for its hand swap.
     final wheel = ref.watch(filterWheelProvider).value;
     final swap = wheel != null && wheel.isAwaitingUser ? wheel.pending : null;
+    final settingPort = ref.watch(switchActingProvider)
+        ? ref.watch(simpleSwitchSettingProvider)
+        : null;
     // The guider's routine, or Guiding with its RMS, when nothing else is on.
     final guider = ref.watch(guiderStatusProvider).value;
     final guiding = simpleGuiding(guider);
@@ -1180,6 +1188,16 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
             swap.name.isEmpty ? l10n.deviceSlot(swap.position) : swap.name,
           ),
           AraColors.accentBusy,
+        ),
+      // A port change on its way is changing: a blue ring (DESIGN.md status
+      // rule), naming the port the Switches window asked for (#1668).
+      if (settingPort != null)
+        _PillData(
+          SimpleStatusOrigin.switches,
+          l10n.shellSwitches,
+          l10n.deviceSettingPort(settingPort),
+          AraColors.accentInfo,
+          ring: true,
         ),
       // A cooler turned on by hand (a plan's own cooling shows as its step).
       if (cooling && !planActive)

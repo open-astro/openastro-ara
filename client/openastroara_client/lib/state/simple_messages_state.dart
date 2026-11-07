@@ -39,6 +39,7 @@ enum SimpleStatusOrigin {
   camera,
   focuser,
   filterWheel,
+  switches,
   guiderCamera,
   focus,
   polar,

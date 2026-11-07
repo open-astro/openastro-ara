@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Switches Window</title>
+<style>
+  /* Layout: one iPad-sized stage with the Simple Mode Switches window under its dot, the status pill top right
+     and a message pill top left. Single dark look on purpose: DESIGN.md tokens (lib/theme/ara_colors.dart), as the other design/preview mocks. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0; --text3: #606060;
+    --ok: #4CAF50; --info: #42A5F5; --sel: #1976D2; --tile: rgba(56,56,56,.55); --warn: #FFB300; --err: #E53935; --errtext: #FF8A80;
+    --link: #64B5F6; --scrim: rgba(26,26,26,.9);
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  ::selection { background: var(--sel); color: #fff; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys); margin: 0;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+  body.night { filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(.75); }
+  .page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 80ch; }
+  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--warn); color: var(--warn); margin-left: 6px; vertical-align: 3px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  .group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+  .stage-wrap { overflow-x: auto; }
+  .ipad { width: 1024px; height: 720px; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 60% 45%, #3a3f4c 0, #12141a 55%, #08090c 100%); }
+  .strip { position: absolute; left: 16px; right: 16px; top: 16px; height: 56px; background: var(--scrim); border-radius: 10px;
+           display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 13px; color: var(--text2); }
+  .dot { display: inline-flex; align-items: center; gap: 6px; } .dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .dot.hot { outline: 1.5px solid var(--sel); outline-offset: 4px; border-radius: 6px; color: var(--text); }
+  .dot.ring i { background: transparent; border: 2px solid var(--info); }
+
+  /* Status dots: filled green, a blue ring while changing (the status rule) */
+  .sd { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--ok); }
+  .sd.ring { background: transparent; border: 2px solid var(--info); }
+  .sd.off { background: var(--text3); }
+
+  .pill { position: absolute; right: 16px; top: 88px; width: 300px; height: 48px; background: var(--scrim); border-radius: 10px; padding: 0 16px;
+          display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .msg { position: absolute; left: 16px; top: 88px; width: 420px; background: var(--scrim); border: 1px solid var(--err); border-radius: 10px;
+         padding: 12px 40px 12px 16px; color: var(--errtext); }
+  .msg button { position: absolute; right: 6px; top: 6px; width: 32px; height: 32px; border: 0; background: transparent; color: var(--text2); font-size: 18px; cursor: pointer; }
+
+  .win { position: absolute; top: 88px; background: var(--scrim); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+         border-radius: 10px; padding: 16px; display: flex; flex-direction: column; max-height: 616px; overflow-y: auto;
+         scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .head { display: flex; align-items: center; gap: 8px; font-weight: 600; min-height: 32px; }
+  .dev { display: flex; align-items: baseline; gap: 6px; font-weight: 600; margin-top: 14px; padding-bottom: 2px; border-bottom: 1px solid var(--border); min-height: 32px; align-items: center; }
+  .dev small { font: 400 13px var(--sys); color: var(--text2); }
+  .r { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+  .r .l { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+  .r .l span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .v { font-variant-numeric: tabular-nums; color: var(--text2); }
+  .ctl { width: 216px; flex: none; }
+  .ro { text-align: right; font-variant-numeric: tabular-nums; }
+  .narrow .r { flex-direction: column; align-items: stretch; gap: 4px; padding: 6px 0; }
+  .narrow .ctl { width: 100%; }
+  .narrow .ro { text-align: left; }
+  .caption { color: var(--text2); }
+
+  .segs { display: flex; background: var(--tile); border-radius: 8px; overflow: hidden; }
+  .segs button { flex: 1; border: 0; background: transparent; color: var(--text); min-height: 44px; font: 14px var(--sys); cursor: pointer; }
+  .segs button[aria-pressed="true"] { background: var(--sel); color: #fff; cursor: default; }
+  .segs button:disabled:not([aria-pressed="true"]) { color: var(--text3); cursor: not-allowed; }
+
+  /* B: the platform switch (Switch.adaptive, the iOS one on iPad), right-aligned in the control column */
+  .tog { display: flex; justify-content: flex-end; min-height: 44px; align-items: center; }
+  .narrow .tog { justify-content: flex-start; }
+  .tog button { position: relative; width: 51px; height: 31px; border-radius: 16px; border: 0; background: #4a4a4a; cursor: pointer; padding: 0; transition: background .2s; }
+  .tog button::after { content: ""; position: absolute; left: 2px; top: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; transition: transform .2s; }
+  .tog button[aria-checked="true"] { background: var(--sel); }
+  .tog button[aria-checked="true"]::after { transform: translateX(20px); }
+  .tog button:disabled { opacity: .4; cursor: not-allowed; }
+  @media (prefers-reduced-motion: reduce) { .tog button, .tog button::after { transition: none; } }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 44px; background: transparent; cursor: pointer; margin: 0; }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--sel) var(--p), #4a4a4a var(--p)); }
+  input[type=range]::-moz-range-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--sel) var(--p), #4a4a4a var(--p)); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; margin-top: -8px; border-radius: 50%; background: var(--link); border: 0; }
+  input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: var(--link); border: 0; }
+  input[type=range]:disabled { cursor: not-allowed; opacity: .4; }
+
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .notes div { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+  .notes h2 { font-size: 14px; margin: 0 0 4px; }
+  .notes p { margin: 0; color: var(--text2); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <h1>Switches window <span class="tag">proposed</span></h1>
+  <p class="note">The Simple Mode window for power boxes and dew outputs (#1651), opened from the Switches dot or its row in Settings › Devices. Each port is one 44 pt row: the name on the left (with its level for a slider), the control in the 216 pt column on the right. Everything here works. Tap On / Off, or drag a dew slider and let go: the rig takes about 1.5 s to answer. While it does, the port shows a blue ring, the other controls lock, and the status pill reads "Switches · Setting Dew 1…". Pick <b>Next write is refused</b> to see the error pill.</p>
+
+  <div class="controls">
+    <div class="group"><span class="lbl">Devices</span>
+      <div class="seg" role="group" aria-label="Devices" id="devs">
+        <button aria-pressed="true" data-v="one">One power box</button>
+        <button aria-pressed="false" data-v="two">Two devices</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">On / Off ports</span>
+      <div class="seg" role="group" aria-label="On / Off ports" id="style">
+        <button aria-pressed="true" data-v="seg">A · Segments (chosen)</button>
+        <button aria-pressed="false" data-v="tog">B · Toggles (dropped: hard to read in Night mode)</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">Rig answer</span>
+      <div class="seg" role="group" aria-label="Rig answer" id="answer">
+        <button aria-pressed="true" data-v="ok">Accepts</button>
+        <button aria-pressed="false" data-v="refuse">Next write is refused</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">Window</span>
+      <div class="seg" role="group" aria-label="Window width" id="width">
+        <button aria-pressed="true" data-v="360">360 pt</button>
+        <button aria-pressed="false" data-v="280">Narrow (280 pt)</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">View</span>
+      <div class="seg" role="group" aria-label="View" id="view">
+        <button aria-pressed="true" data-v="day">Normal</button>
+        <button aria-pressed="false" data-v="night">Night (red)</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-wrap">
+    <div class="ipad">
+      <div class="strip">
+        <span class="dot"><i></i>Camera</span><span class="dot"><i></i>Mount</span>
+        <span class="dot"><i></i>Focuser</span><span class="dot"><i></i>Guider</span>
+        <span class="dot hot" id="stripDot"><i></i>Switches</span>
+      </div>
+      <div class="msg" id="msg" role="alert" hidden></div>
+      <div class="pill" id="pill" role="status" hidden><i class="sd ring"></i><span id="pilltext"></span></div>
+      <div class="win" id="win" role="dialog" aria-label="Switches"></div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div><h2>Port rows</h2><p>On/off ports are On / Off segments. A port with a range is a slider, and its level sits after the name ("Dew 1 · 60"), with no unit because ASCOM ports don't report one. A read-only port shows its value on the right. The level is sent when you let go: whole numbers when the range spans 10 or more, else 0.01 steps (the Thermal Switch's heater, 0–5).</p></div>
+    <div><h2>While a write is on its way</h2><p>The port being set gets a blue ring before its name, and its slider stays where you let go. Every other control in the window is locked (read as disabled) until the rig answers, because the switch notifier drops a second write. The window then re-reads the ports.</p></div>
+    <div><h2>Refused</h2><p>The rig's reason shows as an error pill on the left (red outline, fades after 20 s or on ×). The port goes back to the value the rig reports.</p></div>
+    <div><h2>Several devices</h2><p>Each connected device gets a titled section with the number of ports it shows, in the switch list's order. The Thermal Switch's cooling fan is left out (the rig runs it with the cooler), so that device shows 1 port.</p></div>
+    <div><h2>Narrow</h2><p>Under 312 pt the label goes over its control, as in every device window. The window stops above the bottom row and scrolls when it's taller.</p></div>
+    <div><h2>Not in this window</h2><p>Connect / Disconnect (Settings › Devices has them), renaming or grouping ports, automatic dew control, live updates. The dew warning pill's Switches button opens this window.</p></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const devices = [
+    { name: 'Pegasus Powerbox', ports: [
+      { id: 0, name: '12V Out 1', min: 0, max: 1, value: 1, w: true },
+      { id: 1, name: '12V Out 2', min: 0, max: 1, value: 1, w: true },
+      { id: 2, name: '12V Out 3', min: 0, max: 1, value: 0, w: true },
+      { id: 3, name: '12V Out 4', min: 0, max: 1, value: 0, w: true },
+      { id: 4, name: 'Dew 1', min: 0, max: 100, value: 60, w: true },
+      { id: 5, name: 'Dew 2', min: 0, max: 100, value: 0, w: true },
+      { id: 6, name: 'Dew 3', min: 0, max: 100, value: 35, w: true },
+      { id: 7, name: 'USB hub', min: 0, max: 1, value: 1, w: true },
+      { id: 8, name: 'Input voltage', min: 0, max: 20, value: 12.4, w: false },
+      { id: 9, name: 'Total current', min: 0, max: 20, value: 2.31, w: false },
+      { id: 10, name: 'Power', min: 0, max: 300, value: 28.6, w: false },
+    ] },
+    { name: 'ToupTek Thermal Switch', ports: [
+      { id: 0, name: 'Fan', min: 0, max: 1, value: 1, w: true },
+      { id: 1, name: 'Heater', min: 0, max: 5, value: 2.5, w: true },
+    ] },
+  ];
+  const S = { devs: 'one', style: 'seg', refuse: false, width: 360, acting: null, msg: null };
+  let msgTimer;
+
+  const isBool = p => Math.abs(p.min) < 1e-6 && Math.abs(p.max - 1) < 1e-6;
+  const isFan = (d, p) => d.name.includes('Thermal Switch') && p.name === 'Fan';
+  const round = (p, v) => p.max - p.min >= 10 ? Math.round(v) : Math.round(v * 100) / 100;
+  const fmt = (p, v) => p.max - p.min >= 10 ? String(Math.round(v)) : String(Math.round(v * 100) / 100);
+  const show = () => devices.slice(0, S.devs === 'one' ? 1 : 2);
+
+  function seg(id, fn) {
+    $(id).addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      $(id).querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+      fn(b.dataset.v); render();
+    });
+  }
+  seg('#devs', v => S.devs = v);
+  seg('#style', v => S.style = v);
+  seg('#answer', v => S.refuse = v === 'refuse');
+  seg('#width', v => S.width = +v);
+  seg('#view', v => document.body.classList.toggle('night', v === 'night'));
+
+  function write(di, p, v) {
+    if (S.acting) return;
+    const asked = round(p, v);
+    S.acting = { di, id: p.id, asked };
+    render();
+    setTimeout(() => {
+      if (S.refuse) {
+        S.refuse = false;
+        $('#answer').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x.dataset.v === 'ok'));
+        showMsg(`${p.name} not set: the power box refused the change (port over its current limit).`);
+      } else {
+        p.value = asked;
+      }
+      S.acting = null;
+      render();
+    }, 1500);
+  }
+  function showMsg(text) {
+    S.msg = text; clearTimeout(msgTimer);
+    msgTimer = setTimeout(() => { S.msg = null; render(); }, 20000);
+  }
+
+  function row(di, d, p) {
+    const busy = S.acting && S.acting.di === di && S.acting.id === p.id;
+    const locked = !!S.acting;
+    const bool = isBool(p);
+    const slider = p.w && !bool;
+    const shownVal = busy && slider ? S.acting.asked : p.value;
+    const key = `${di}-${p.id}`;
+    let ctl;
+    if (p.w && bool && S.style === 'tog') {
+      const on = busy ? S.acting.asked === 1 : p.value === 1;
+      ctl = `<div class="tog"><button role="switch" data-k="${key}" aria-checked="${on}" aria-label="${p.name}" ${locked ? 'disabled' : ''}></button></div>`;
+    } else if (p.w && bool) {
+      const on = busy ? S.acting.asked === 1 : p.value === 1;
+      ctl = `<div class="segs" role="group" aria-label="${p.name}, on or off">
+        ${[['On', 1], ['Off', 0]].map(([w, n]) => `<button data-k="${key}" data-n="${n}" aria-pressed="${on === !!n}" ${locked ? 'disabled' : ''}>${w}</button>`).join('')}</div>`;
+    } else if (slider) {
+      const pct = (shownVal - p.min) / (p.max - p.min) * 100;
+      const step = p.max - p.min >= 10 ? 1 : 0.01;
+      ctl = `<input type="range" data-k="${key}" min="${p.min}" max="${p.max}" step="${step}" value="${shownVal}" style="--p:${pct}%"
+        aria-label="${p.name}, level" aria-valuetext="${fmt(p, shownVal)}" ${locked ? 'disabled' : ''}>`;
+    } else {
+      ctl = `<div class="ro" aria-label="${p.name}, reading, ${bool ? (p.value ? 'On' : 'Off') : p.value}">${bool ? (p.value ? 'On' : 'Off') : p.value}</div>`;
+    }
+    return `<div class="r"><div class="l">${busy ? '<i class="sd ring" title="Setting"></i>' : ''}<span>${p.name}${slider ? ` <span class="v" id="v-${key}">· ${fmt(p, shownVal)}</span>` : ''}</span></div>
+      <div class="ctl">${ctl}</div></div>`;
+  }
+
+  function render() {
+    const list = show();
+    const win = $('#win');
+    win.style.width = S.width + 'px';
+    win.style.left = (S.width === 360 ? 440 : 480) + 'px';
+    win.classList.toggle('narrow', S.width < 312 + 32);
+    let html = `<div class="head"><i class="sd ${S.acting ? 'ring' : ''}"></i>Switches</div>`;
+    list.forEach((d, di) => {
+      const ports = d.ports.filter(p => !isFan(d, p));
+      html += `<div class="dev">${d.name} <small>· ${ports.length} ${ports.length === 1 ? 'port' : 'ports'}</small></div>`;
+      html += ports.map(p => row(di, d, p)).join('');
+    });
+    win.innerHTML = html;
+    $('#stripDot').classList.toggle('ring', !!S.acting);
+    const pill = $('#pill');
+    pill.hidden = !S.acting;
+    if (S.acting) $('#pilltext').innerHTML = `<b>Switches</b> · Setting ${list[S.acting.di].ports.find(p => p.id === S.acting.id).name}…`;
+    const m = $('#msg');
+    m.hidden = !S.msg;
+    if (S.msg) m.innerHTML = `${S.msg}<button aria-label="Close">×</button>`;
+  }
+
+  const portOf = k => { const [di, id] = k.split('-').map(Number); return [di, show()[di].ports.find(p => p.id === id)]; };
+  $('#win').addEventListener('click', e => {
+    const t = e.target.closest('.tog button');
+    if (t && !t.disabled) { const [di, p] = portOf(t.dataset.k); write(di, p, t.getAttribute('aria-checked') === 'true' ? 0 : 1); return; }
+    const b = e.target.closest('.segs button'); if (!b || b.disabled || b.getAttribute('aria-pressed') === 'true') return;
+    const [di, p] = portOf(b.dataset.k); write(di, p, +b.dataset.n);
+  });
+  $('#win').addEventListener('input', e => {
+    const s = e.target; if (s.type !== 'range') return;
+    const [, p] = portOf(s.dataset.k);
+    s.style.setProperty('--p', ((s.value - p.min) / (p.max - p.min) * 100) + '%');
+    $(`#v-${s.dataset.k}`).textContent = `· ${fmt(p, +s.value)}`;
+  });
+  $('#win').addEventListener('change', e => {
+    const s = e.target; if (s.type !== 'range') return;
+    const [di, p] = portOf(s.dataset.k); write(di, p, +s.value);
+  });
+  $('#msg').addEventListener('click', e => { if (e.target.closest('button')) { S.msg = null; render(); } });
+  $('#pill').addEventListener('click', () => $('#win').scrollIntoView({ block: 'nearest' }));
+  render();
+})();
+</script>
+</body>
+</html>

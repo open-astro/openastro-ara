@@ -24,7 +24,9 @@ import 'package:openastroara/state/imaging/live_view_frame_state.dart';
 import 'package:openastroara/services/live_view_api.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/screens/simple/simple_search.dart';
-import 'package:openastroara/screens/simple/simple_device_windows.dart' show simpleMountMotionProvider;
+import 'package:openastroara/screens/simple/simple_device_windows.dart' show simpleMountMotionProvider, simpleSwitchSettingProvider;
+import 'package:openastroara/models/switch_device.dart';
+import 'package:openastroara/state/equipment/switch_state.dart';
 import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
@@ -245,6 +247,35 @@ class _FilterWheel extends FilterWheelNotifier with _Calls<FilterWheelStatus> {
   void report(Map<String, dynamic> runtime, {bool manual = false}) =>
       state = AsyncData(FilterWheelStatus.fromJson(_json(runtime, manual: manual)));
 }
+
+/// The rig's switch devices, recording Connect and Disconnect.
+class _Switches extends SwitchListNotifier {
+  _Switches(this.devices);
+  final List<SwitchDevice> devices;
+  final calls = <String>[];
+  @override
+  Future<List<SwitchDevice>> build() async => devices;
+  @override
+  Future<void> refresh([client]) async {}
+  @override
+  Future<bool> reconnectDevice(String deviceId) async {
+    calls.add('connect $deviceId');
+    return true;
+  }
+
+  @override
+  Future<bool> disconnect(String deviceId) async {
+    calls.add('disconnect $deviceId');
+    return true;
+  }
+}
+
+SwitchDevice _switch(String id, String name, SwitchConnectionState state) => SwitchDevice(
+    deviceId: id,
+    alpacaDeviceNumber: 0,
+    name: name,
+    connectionState: state,
+    ports: const [SwitchPort(id: 0, name: 'Dew 1', value: 0, min: 0, max: 100, canWrite: true)]);
 
 class _Mount extends MountNotifier with _Calls<MountStatus> {
   _Mount(this.state0);
@@ -2764,6 +2795,50 @@ void main() {
     expect(find.byKey(const Key('simple-menu-nav-Filter wheel')), findsNothing);
   });
 
+  testWidgets("the Switches dot opens the Switches window, not the full UI's page; Settings lists it under Devices (#1651)",
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      switchListProvider.overrideWith(
+          () => _Switches([_switch('box', 'Pegasus Powerbox', SwitchConnectionState.connected)])),
+    ]);
+    c.read(selectedSettingsPanelProvider.notifier).select('eq.switch');
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-device-switches')), findsOneWidget);
+    expect(find.byType(SettingsShell), findsNothing, reason: 'never the full UI\'s Settings page');
+    await _openSection(tester, 'Devices');
+    await tester.tap(find.textContaining('Pegasus Powerbox'));
+    await tester.pump();
+    expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-switches'))),
+        findsOneWidget, reason: 'its Devices row opens the same window');
+    await _openSection(tester, 'Switches');
+    expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-switches'))),
+        findsOneWidget);
+  });
+
+  testWidgets('Devices lists each switch device: Disconnect, Connect, Reconnect after a failure', (tester) async {
+    final switches = _Switches([
+      _switch('a', 'Box A', SwitchConnectionState.connected),
+      _switch('b', 'Box B', SwitchConnectionState.disconnected),
+      _switch('c', 'Box C', SwitchConnectionState.error),
+    ]);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [switchListProvider.overrideWith(() => switches)]);
+    await _openSection(tester, 'Devices');
+    await tester.tap(find.byKey(const Key('simple-gear-switch-a-disconnect')));
+    await tester.tap(find.byKey(const Key('simple-gear-switch-b-connect')));
+    await tester.tap(find.byKey(const Key('simple-gear-switch-c-reconnect')));
+    await tester.pump();
+    expect(switches.calls, ['disconnect a', 'connect b', 'connect c']);
+  });
+
+  testWidgets('Settings lists Switches only while the rig knows a switch device', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true,
+        gear: [switchListProvider.overrideWith(() => _Switches(const []))]);
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-menu-nav-Switches')), findsNothing);
+  });
+
   testWidgets('the guider\'s dot opens the Guider window; Settings lists it under Devices', (tester) async {
     final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
       guiderStatusProvider.overrideWith(() => _GuiderUp()),
@@ -3326,6 +3401,32 @@ void main() {
     wheel.report({'state': 'awaiting_user', 'current_slot': 1, 'pending_slot': 2}, manual: true);
     await tester.pump();
     expect(find.descendant(of: pill, matching: find.textContaining('Swap in F2, then confirm.')), findsOneWidget);
+  });
+
+  testWidgets('a switch port change shows in the status pill, naming the port, until the rig answers (#1668)',
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      switchListProvider.overrideWith(
+          () => _Switches([_switch('box', 'Pegasus Powerbox', SwitchConnectionState.connected)])),
+    ]);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Switches')), findsNothing);
+    c.read(switchActingProvider.notifier).set(true);
+    c.read(simpleSwitchSettingProvider.notifier).set('Dew 1');
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Switches')), findsOneWidget);
+    expect(find.descendant(of: pill, matching: find.textContaining('Setting Dew 1…')), findsOneWidget);
+    // A change on its way is changing: a blue ring (DESIGN.md status rule).
+    final dot = tester.widget<StatusDot>(find.descendant(of: pill, matching: find.byType(StatusDot)));
+    expect((dot.color, dot.ring), (AraColors.accentInfo, true));
+    await tester.tap(find.descendant(of: pill, matching: find.textContaining('Setting Dew 1…')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-device-switches')), findsOneWidget, reason: 'a tap opens the window');
+    c.read(switchActingProvider.notifier).set(false);
+    c.read(simpleSwitchSettingProvider.notifier).set(null);
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Switches')), findsNothing, reason: 'answered');
   });
 
   testWidgets('a scheduled plan waiting on the rig: the pill says when it starts', (tester) async {

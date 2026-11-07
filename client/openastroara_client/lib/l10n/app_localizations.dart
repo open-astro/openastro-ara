@@ -447,6 +447,30 @@ abstract class AppLocalizations {
   /// **'Couldn\'t change the filter'**
   String get deviceCouldntChangeFilter;
 
+  /// Switches window: a device's section title, with how many ports it lists
+  ///
+  /// In en, this message translates to:
+  /// **'{device} · {count, plural, =1{1 port} other{{count} ports}}'**
+  String deviceSwitchPorts(String device, int count);
+
+  /// Switches window: a slider port's name with the level it is set to (no unit: the rig reports none)
+  ///
+  /// In en, this message translates to:
+  /// **'{port} · {level}'**
+  String deviceSwitchLevel(String port, String level);
+
+  /// Error message when a switch device refused a port change
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t set {port}'**
+  String deviceCouldntSetPort(String port);
+
+  /// Simple Mode status pill: a switch port change on its way to the rig
+  ///
+  /// In en, this message translates to:
+  /// **'Setting {port}…'**
+  String deviceSettingPort(String port);
+
   /// Filter wheel window: asked when a filter is tapped while a plan runs
   ///
   /// In en, this message translates to:
@@ -1556,6 +1580,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Filter wheel'**
   String get shellFilterWheel;
+
+  /// Simple Mode: the switch devices (power boxes, dew outputs): their window's title, Settings section and status pill
+  ///
+  /// In en, this message translates to:
+  /// **'Switches'**
+  String get shellSwitches;
 
   /// Simple Mode Settings › Devices row: the rotator
   ///

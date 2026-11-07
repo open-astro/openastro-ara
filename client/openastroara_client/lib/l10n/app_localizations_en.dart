@@ -213,6 +213,32 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceCouldntChangeFilter => 'Couldn\'t change the filter';
 
   @override
+  String deviceSwitchPorts(String device, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ports',
+      one: '1 port',
+    );
+    return '$device · $_temp0';
+  }
+
+  @override
+  String deviceSwitchLevel(String port, String level) {
+    return '$port · $level';
+  }
+
+  @override
+  String deviceCouldntSetPort(String port) {
+    return 'Couldn\'t set $port';
+  }
+
+  @override
+  String deviceSettingPort(String port) {
+    return 'Setting $port…';
+  }
+
+  @override
   String get devicePlanRunningChangeFilter =>
       'A plan is running. Change the filter anyway?';
 
@@ -827,6 +853,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shellFilterWheel => 'Filter wheel';
+
+  @override
+  String get shellSwitches => 'Switches';
 
   @override
   String get shellRotator => 'Rotator';

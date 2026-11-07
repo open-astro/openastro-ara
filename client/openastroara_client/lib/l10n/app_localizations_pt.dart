@@ -213,6 +213,32 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceCouldntChangeFilter => 'Couldn\'t change the filter';
 
   @override
+  String deviceSwitchPorts(String device, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ports',
+      one: '1 port',
+    );
+    return '$device · $_temp0';
+  }
+
+  @override
+  String deviceSwitchLevel(String port, String level) {
+    return '$port · $level';
+  }
+
+  @override
+  String deviceCouldntSetPort(String port) {
+    return 'Couldn\'t set $port';
+  }
+
+  @override
+  String deviceSettingPort(String port) {
+    return 'Setting $port…';
+  }
+
+  @override
   String get devicePlanRunningChangeFilter =>
       'A plan is running. Change the filter anyway?';
 
@@ -827,6 +853,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get shellFilterWheel => 'Filter wheel';
+
+  @override
+  String get shellSwitches => 'Switches';
 
   @override
   String get shellRotator => 'Rotator';
@@ -2490,6 +2519,32 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get deviceCouldntChangeFilter => 'Não foi possível trocar o filtro';
 
   @override
+  String deviceSwitchPorts(String device, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count portas',
+      one: '1 porta',
+    );
+    return '$device · $_temp0';
+  }
+
+  @override
+  String deviceSwitchLevel(String port, String level) {
+    return '$port · $level';
+  }
+
+  @override
+  String deviceCouldntSetPort(String port) {
+    return 'Não foi possível ajustar $port';
+  }
+
+  @override
+  String deviceSettingPort(String port) {
+    return 'Ajustando $port…';
+  }
+
+  @override
   String get devicePlanRunningChangeFilter =>
       'Há um plano em andamento. Trocar o filtro mesmo assim?';
 
@@ -3106,6 +3161,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get shellFilterWheel => 'Roda de filtros';
+
+  @override
+  String get shellSwitches => 'Interruptores';
 
   @override
   String get shellRotator => 'Rotacionador';
