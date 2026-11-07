@@ -306,6 +306,15 @@ void main() {
     expect(tester.getSemantics(_dial).value, '93°', reason: 'the dial reads its target');
   });
 
+  testWidgets('screen readers hear the value a step lands on, from the rounded angle', (tester) async {
+    for (final (sky, up, down) in [(92.4, '93°', '91°'), (92.6, '94°', '92°')]) {
+      await _pump(tester, _wire(sky: sky, mech: sky));
+      final data = tester.getSemantics(_dial).getSemanticsData();
+      expect(data.increasedValue, up, reason: 'sky $sky');
+      expect(data.decreasedValue, down, reason: 'sky $sky');
+    }
+  });
+
   testWidgets('Sync tells the rotator it is at the target, without moving it', (tester) async {
     final (_, r) = await _pump(tester, _wire());
     expect(_syncLabel(tester), 'Sync');

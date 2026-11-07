@@ -1187,7 +1187,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           ),
           AraColors.accentBusy,
         ),
-      // Moving is working: blinking green, as the rotator's dot and window.
+      // Moving is working: blinking green, as the focuser's dot and window.
       if (focuser != null &&
           focuser.isConnected &&
           focuser.isMoving &&
