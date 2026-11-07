@@ -201,17 +201,13 @@ void main() {
     expect(find.text('Not connected'), findsOneWidget);
   });
 
-  testWidgets('while a write is on its way the port shows a ring and every other control is locked', (tester) async {
+  testWidgets('while a write is on its way the port shows what was asked and every other control is locked', (tester) async {
     final (c, rig) = await _pump(tester, [_box()]);
     rig.hold = Completer();
     await tester.tap(_segment('box-0', 'off'));
     await tester.pump();
-    final row = find.byKey(const Key('simple-window-row-switch-box-0'));
-    final ring = find.descendant(of: row, matching: find.byType(StatusDot));
-    expect(tester.widget<StatusDot>(ring).ring, isTrue);
     expect(tester.widget<SimpleSegment>(_segment('box-0', 'off')).selected, isTrue, reason: 'shows what was asked');
     expect(tester.widget<SimpleSegment>(_segment('box-0', 'on')).onTap, isNull);
-    // The slider keeps its look for the first 300 ms, but takes nothing.
     tester.widget<Slider>(_slider('box-1')).onChangeEnd!(10);
     await tester.pump();
     expect(rig.writes, ['box/0=0.0'], reason: 'locked: no second write');
@@ -223,7 +219,6 @@ void main() {
     ];
     rig.hold!.complete();
     await tester.pumpAndSettle();
-    expect(ring, findsNothing);
     expect(tester.widget<Slider>(_slider('box-1')).onChanged, isNotNull);
     expect(c.read(simpleSwitchSettingProvider), isNull);
   });
@@ -245,6 +240,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(rig.writes, ['box/0=0.0'], reason: 'locked: the release sends nothing');
     expect(find.text('Dew 1 · 60'), findsOneWidget, reason: "the slider shows the rig's value, not the dropped drag");
+  });
+
+  testWidgets("a write puts no ring by the port: the name doesn't move, the status pill says it", (tester) async {
+    final (_, rig) = await _pump(tester, [_box()]);
+    final row = find.byKey(const Key('simple-window-row-switch-box-0'));
+    final ring = find.descendant(of: row, matching: find.byType(StatusDot));
+    final at = tester.getTopLeft(find.text('12V Out 1'));
+    rig.hold = Completer();
+    await tester.tap(_segment('box-0', 'off'));
+    await tester.pump();
+    expect(ring, findsNothing);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(ring, findsNothing, reason: 'not on a slow answer either');
+    expect(tester.getTopLeft(find.text('12V Out 1')), at);
+    rig.hold!.complete();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('a slow answer dims the other ports after 300 ms; a fast one never does', (tester) async {

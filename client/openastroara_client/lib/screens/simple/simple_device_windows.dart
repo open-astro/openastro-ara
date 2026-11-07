@@ -37,7 +37,7 @@ import '../../theme/ara_metrics.dart';
 import '../../widgets/equipment/equipment_status_chip.dart' show switchChipLevel;
 import '../../widgets/equipment/switch_port_layout.dart'
     show snapToSwitchStep, switchSliderDivisions, usableSwitchStep;
-import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot, StatusLevel;
+import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot;
 import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment, simpleRailScale;
 
@@ -350,40 +350,29 @@ Widget simpleWindowStepper({
 /// One height for every row of a device window (the 44 pt of its controls),
 /// so a text-only row keeps the rhythm. [id] (English) names its Key. Too
 /// narrow for label and control side by side (a one-third Split View), the
-/// label goes over the control. [leading] sits before the label (a port's
-/// busy ring).
-Widget simpleWindowRow(
-  String label,
-  Widget value, {
-  required String id,
-  Widget? leading,
-}) => LayoutBuilder(
-  key: Key('simple-window-row-$id'),
-  builder: (context, box) {
-    final text = Text(label, style: kSimpleText);
-    final title = leading == null
-        ? text
-        : Row(
-            spacing: AraSpace.s8,
-            children: [leading, Flexible(child: text)],
-          );
-    return box.maxWidth < kSimpleWindowControlWidth + 96
-        ? Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: AraSpace.s4,
-            children: [title, value],
-          )
-        : ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 44),
-            child: Row(
+/// label goes over the control.
+Widget simpleWindowRow(String label, Widget value, {required String id}) =>
+    LayoutBuilder(
+      key: Key('simple-window-row-$id'),
+      builder: (context, box) => box.maxWidth < kSimpleWindowControlWidth + 96
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: AraSpace.s4,
               children: [
-                Expanded(child: title),
+                Text(label, style: kSimpleText),
                 value,
               ],
+            )
+          : ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Row(
+                children: [
+                  Expanded(child: Text(label, style: kSimpleText)),
+                  value,
+                ],
+              ),
             ),
-          );
-  },
-);
+    );
 
 /// A window's ask before a move that would disturb a running plan: the
 /// question with Cancel and [confirm]. Too narrow for the question beside
@@ -2921,7 +2910,6 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
       label,
       control,
       id: 'switch-$id',
-      leading: asked == null ? null : StatusDot.of(StatusLevel.changing),
     );
   }
 
