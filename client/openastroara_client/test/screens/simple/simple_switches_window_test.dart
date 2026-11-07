@@ -151,6 +151,18 @@ void main() {
     expect(find.byType(SimpleSegment), findsNothing);
   });
 
+  testWidgets("the ports that can't be set come last, under Sensors; a device without any has no heading", (tester) async {
+    await _pump(tester, [
+      _box(ports: [_port(2, 'Input voltage', 12.4, max: 20, write: false), _port(0, '12V Out 1', 1)]),
+      _box(id: 'hub', name: 'USB hub', ports: [_port(0, 'Port 1', 1)]),
+    ]);
+    expect(find.text('Sensors'), findsOneWidget, reason: 'one heading, for the box that has readings');
+    double y(String text) => tester.getTopLeft(find.text(text)).dy;
+    expect(y('12V Out 1'), lessThan(y('Sensors')));
+    expect(y('Sensors'), lessThan(y('Input voltage')));
+    expect(y('Input voltage'), lessThan(y('USB hub · 1 port')), reason: 'under its own device');
+  });
+
   testWidgets("the camera's cooling fan isn't listed; each device has its titled section", (tester) async {
     await _pump(tester, [
       _box(),

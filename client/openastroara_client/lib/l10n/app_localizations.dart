@@ -453,6 +453,12 @@ abstract class AppLocalizations {
   /// **'{device} · {count, plural, =1{1 port} other{{count} ports}}'**
   String deviceSwitchPorts(String device, int count);
 
+  /// Switches window: the heading over a device's ports that can't be set (voltage, temperature, a cover state)
+  ///
+  /// In en, this message translates to:
+  /// **'Sensors'**
+  String get deviceSensors;
+
   /// Switches window: a slider port's name with the level it is set to (no unit: the rig reports none)
   ///
   /// In en, this message translates to:

@@ -285,6 +285,10 @@
       }
     }
   },
+  "deviceSensors": "Sensors",
+  "@deviceSensors": {
+    "description": "Switches window: the heading over a device's ports that can't be set (voltage, temperature, a cover state)"
+  },
   "deviceSwitchLevel": "{port} · {level}",
   "@deviceSwitchLevel": {
     "description": "Switches window: a slider port's name with the level it is set to (no unit: the rig reports none)",

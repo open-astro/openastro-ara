@@ -2708,8 +2708,8 @@ final simpleSwitchSettingProvider =
     );
 
 /// The switch devices' window (#1651): each connected device's ports by
-/// name, as On / Off, a level slider or a reading. The camera's cooling fan
-/// is left out: the rig runs it with the cooler.
+/// name, as On / Off or a level slider, then its readings under Sensors.
+/// The camera's cooling fan is left out: the rig runs it with the cooler.
 class SimpleSwitchesWindow extends ConsumerStatefulWidget {
   const SimpleSwitchesWindow({super.key});
 
@@ -2791,8 +2791,28 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
           ),
         ),
       );
+      // A port the rig can't set is a reading: under Sensors, after the
+      // ones that can be.
+      final readings = [
+        for (final p in ports)
+          if (!p.canWrite) p,
+      ];
       for (final p in ports) {
-        children.add(_port(d, p, locked));
+        if (p.canWrite) children.add(_port(d, p, locked));
+      }
+      if (readings.isNotEmpty) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(top: AraSpace.s8),
+            child: Text(
+              l10n.deviceSensors,
+              style: AraText.caption.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+        );
+        for (final p in readings) {
+          children.add(_port(d, p, locked));
+        }
       }
     }
     return Column(

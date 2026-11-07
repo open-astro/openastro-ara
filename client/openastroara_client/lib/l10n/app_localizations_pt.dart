@@ -224,6 +224,9 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get deviceSensors => 'Sensors';
+
+  @override
   String deviceSwitchLevel(String port, String level) {
     return '$port · $level';
   }
@@ -2593,6 +2596,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
     );
     return '$device · $_temp0';
   }
+
+  @override
+  String get deviceSensors => 'Sensores';
 
   @override
   String deviceSwitchLevel(String port, String level) {

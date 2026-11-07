@@ -59,6 +59,10 @@
   .head { display: flex; align-items: center; gap: 8px; font-weight: 600; min-height: 32px; }
   .dev { display: flex; align-items: baseline; gap: 6px; font-weight: 600; margin-top: 14px; padding-bottom: 2px; border-bottom: 1px solid var(--border); min-height: 32px; align-items: center; }
   .dev small { font: 400 13px var(--sys); color: var(--text2); }
+  /* Sensors: the ports that can't be set, under their own small heading */
+  .sub { color: var(--text2); font-size: 13px; font-weight: 600; margin-top: 10px; min-height: 24px; display: flex; align-items: flex-end; }
+  /* Locked pairs dim (PR #1678 fix): a selected segment would otherwise stay bright */
+  .segs:has(button:disabled) { opacity: .38; }
   .r { display: flex; align-items: center; gap: 12px; min-height: 44px; }
   .r .l { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
   .r .l span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -108,12 +112,19 @@
       <div class="seg" role="group" aria-label="Devices" id="devs">
         <button aria-pressed="true" data-v="one">One power box</button>
         <button aria-pressed="false" data-v="two">Two devices</button>
+        <button aria-pressed="false" data-v="sim">The rig's simulator</button>
       </div>
     </div>
     <div class="group"><span class="lbl">On / Off ports</span>
       <div class="seg" role="group" aria-label="On / Off ports" id="style">
         <button aria-pressed="true" data-v="seg">A · Segments (chosen)</button>
         <button aria-pressed="false" data-v="tog">B · Toggles (dropped: hard to read in Night mode)</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">Read-only ports</span>
+      <div class="seg" role="group" aria-label="Read-only ports" id="sensors">
+        <button aria-pressed="true" data-v="sub">A · Sensors subsection (proposed)</button>
+        <button aria-pressed="false" data-v="mixed">B · Mixed in (built today)</button>
       </div>
     </div>
     <div class="group"><span class="lbl">Rig answer</span>
@@ -155,6 +166,7 @@
     <div><h2>Refused</h2><p>The rig's reason shows as an error pill on the left (red outline, fades after 20 s or on ×). The port goes back to the value the rig reports.</p></div>
     <div><h2>Several devices</h2><p>Each connected device gets a titled section with the number of ports it shows, in the switch list's order. The Thermal Switch's cooling fan is left out (the rig runs it with the cooler), so that device shows 1 port.</p></div>
     <div><h2>Narrow</h2><p>Under 312 pt the label goes over its control, as in every device window. The window stops above the bottom row and scrolls when it's taller.</p></div>
+    <div><h2>Sensors (proposed)</h2><p>A port the rig can't set is a reading, not a switch. Each device lists the ports you can set first, then its readings under a small <b>Sensors</b> heading (voltage, current, temperature, a cover or park state). A device with no readings has no heading. Try <b>The rig's simulator</b>: six of its ten ports are readings.</p></div>
     <div><h2>Not in this window</h2><p>Connect / Disconnect (Settings › Devices has them), renaming or grouping ports, automatic dew control, live updates. The dew warning pill's Switches button opens this window.</p></div>
   </div>
 </div>
@@ -180,15 +192,28 @@
       { id: 0, name: 'Fan', min: 0, max: 1, value: 1, w: true },
       { id: 1, name: 'Heater', min: 0, max: 5, value: 2.5, w: true },
     ] },
+    // What the rig's OmniSim switch reports today (GET /api/v1/equipment/switch, 2026-11-07)
+    { name: 'Alpaca Switch Simulator', ports: [
+      { id: 0, name: 'Power1', min: 0, max: 1, value: 1, w: true },
+      { id: 1, name: 'Power2', min: 0, max: 1, value: 0, w: true },
+      { id: 2, name: 'Light Box', min: 0, max: 100, value: 40, w: true },
+      { id: 3, name: 'Flat Panel', min: 0, max: 255, value: 0, w: true },
+      { id: 4, name: 'Cover State', min: 0, max: 1, value: 0, w: false },
+      { id: 5, name: 'Parked', min: 0, max: 1, value: 1, w: false },
+      { id: 6, name: 'Cloud Cover', min: 0, max: 8, value: 2, w: false },
+      { id: 7, name: 'Temperature', min: -20, max: 30, value: 8.5, w: false },
+      { id: 8, name: 'Humidity', min: 0, max: 100, value: 71, w: false },
+      { id: 9, name: 'Raining', min: 0, max: 1, value: 0, w: false },
+    ] },
   ];
-  const S = { devs: 'one', style: 'seg', refuse: false, width: 360, acting: null, msg: null };
+  const S = { devs: 'one', sensors: 'sub', style: 'seg', refuse: false, width: 360, acting: null, msg: null };
   let msgTimer;
 
   const isBool = p => Math.abs(p.min) < 1e-6 && Math.abs(p.max - 1) < 1e-6;
   const isFan = (d, p) => d.name.includes('Thermal Switch') && p.name === 'Fan';
   const round = (p, v) => p.max - p.min >= 10 ? Math.round(v) : Math.round(v * 100) / 100;
   const fmt = (p, v) => p.max - p.min >= 10 ? String(Math.round(v)) : String(Math.round(v * 100) / 100);
-  const show = () => devices.slice(0, S.devs === 'one' ? 1 : 2);
+  const show = () => S.devs === 'sim' ? [devices[2]] : devices.slice(0, S.devs === 'one' ? 1 : 2);
 
   function seg(id, fn) {
     $(id).addEventListener('click', e => {
@@ -199,6 +224,7 @@
   }
   seg('#devs', v => S.devs = v);
   seg('#style', v => S.style = v);
+  seg('#sensors', v => S.sensors = v);
   seg('#answer', v => S.refuse = v === 'refuse');
   seg('#width', v => S.width = +v);
   seg('#view', v => document.body.classList.toggle('night', v === 'night'));
@@ -262,7 +288,13 @@
     list.forEach((d, di) => {
       const ports = d.ports.filter(p => !isFan(d, p));
       html += `<div class="dev">${d.name} <small>· ${ports.length} ${ports.length === 1 ? 'port' : 'ports'}</small></div>`;
-      html += ports.map(p => row(di, d, p)).join('');
+      if (S.sensors === 'sub') {
+        const set = ports.filter(p => p.w), read = ports.filter(p => !p.w);
+        html += set.map(p => row(di, d, p)).join('');
+        if (read.length) html += `<div class="sub">Sensors</div>` + read.map(p => row(di, d, p)).join('');
+      } else {
+        html += ports.map(p => row(di, d, p)).join('');
+      }
     });
     win.innerHTML = html;
     $('#stripDot').classList.toggle('ring', !!S.acting);
