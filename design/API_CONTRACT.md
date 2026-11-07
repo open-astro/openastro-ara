@@ -1208,18 +1208,6 @@ its start and the client has nothing to do with it.
 **Related:** §36.10 of PORT_PLAYBOOK.md, PR #1423
 
 
-## 2026-11-05 — §45 polar alignment is the guider's Static PA routine (#1611)
-
-**Endpoint(s) or area:** `GET/POST /api/v1/equipment/polaralign/*` (unchanged shapes); `polar_align.*` WS events; `GET/PUT /profile/polar-align`
-
-**Decision:** Ara no longer measures polar alignment itself. `PolarAlignService` drives openastro-guider's Static PA tool: Start sets the guide exposure, `loop`s (no PA-session lease: it blocks `loop`, and the guider's tool already refuses `guide` while it runs), `find_star`s (five tries), then `staticpa_start {auto: true, hemisphere}`; when the guider answers that its mount cannot slew, it restarts in manual mode and Ara turns RA twice (`SeedRotationDeg` each, away from the meridian, `SettleSeconds` settle, star re-pick) and sends `staticpa_measure 2` and `3`. From then on Ara polls `staticpa_get_status` every `LoopCadenceMs`: `calced=false` is `seeding`; `live_adjustment.{alt,az}_error_arcmin` is `adjusting` and one `polar_align.progress` per poll; five polls without `current_star` is `paused` (one `polar_align.paused`), the next sighting resumes; `active=false` is `failed` (`guider_closed`). Stop and Done send `staticpa_stop`, `staticpa_close`, `stop_capture`, then write the `polar_alignments` row as before. Tracking is never touched by Ara (the guider's tool restores its own). `WaitingForCapture` is always false, `LastFrame` always null, `polar_align.frame_started` / `frame_complete` are no longer sent; `POST …/capture` is accepted as a no-op in the adjust phase (409 outside it) because the guider reads every frame. `PolarAlignSettingsDto.binning` and `loop_mode` stay on the wire and are ignored.
-
-**Reasoning:** the point of keeping PHD2 was its guiding AND its polar-alignment routines; the guider's `staticpa_*` API existed for this and was never called, while Ara's own two-point plate-solve fit reported 8″ at 3.5° off the pole (#1591). The guider's centroid-based fit is the one its users trust.
-
-**Spec ref:** openastro-guider `design/POLAR_ALIGNMENT_DESIGN.md` §4/§8 (corrected alongside), `design/API_REFERENCE.md` Static PA; `OpenAstroAra.Server/Services/PolarAlignService.cs`, `PHD2Guider.PolarAlign.cs` (`StaticPa*Async`).
-
-**Related:** #1611, #1591; tests `PolarAlignServiceTest`.
-
 ## 2026-11-07 — Switch ports carry the device's step size: `step` on `SwitchPortDto` (#1680)
 
 **Endpoint(s) or area:** `GET /api/v1/equipment/switch` (and every response that carries `SwitchDto.ports`): each port gains `step` (number, additive).

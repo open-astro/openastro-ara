@@ -31,7 +31,7 @@ safety policies, storage, and optional sky-data downloads. Notes:
 - The **sky catalogs** (stars + deep-sky objects) ship inside the rig server package, so the
   planetarium, search and Tonight's Sky work offline from the first start. The **plate-solver star
   database** is the one download: the review screen works out the field of view of your camera
-  (and of the guide camera, which polar alignment and guiding use) from the focal length, the reducer or
+  (and of the guide camera, which polar alignment solves) from the focal length, the reducer or
   Barlow factor you enter on the equipment step, and the sensor the camera reports, then lists the
   ASTAP database each needs — the smallest that covers the field (D05, 109 MB, for most refractors
   and lenses; G05/W08 for wide lenses and all-sky cameras; D50/D80 for narrow fields) — and downloads
@@ -223,7 +223,7 @@ framing/focus loop when you need to point or focus by eye.
   (dithers and settling are left out) it adds the guider's Dec corrections back onto the star's
   offset to get the drift the guider is fighting, and turns that into a polar alignment error. The
   guiding strip's header reads "PA residual · measuring 2:00 / 5:00", then e.g. **PA ≥ 48″ ·
-  Excellent**, with the same bands as the Polar Align card. It catches what the Polar Align routine
+  Excellent**, with the same bands as the Polar Align card. It catches what a plate-solve alignment
   can't see: refraction, flexure and the mount's own slop. It is a lower bound ("≥"): Dec drift at
   one hour angle shows only part of the error. The tooltip has the drift, the hour angle and
   tonight's Polar Align result to compare. "noisy" means the guiding was too rough for a firm

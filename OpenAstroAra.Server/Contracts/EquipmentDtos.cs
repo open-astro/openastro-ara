@@ -806,11 +806,9 @@ public sealed record GuiderAlpacaDiscoveryDto(IReadOnlyList<string> Servers);
 // ─── Polar Alignment (§10.6 row 12) ───────────────────────────────────────────
 
 public sealed record PolarAlignStateDto(
-    // §45 states (#1611: the guider's Static PA routine, driven by Ara): seeding (looping, star
-    // pick, the guider's RA rotation and fit), adjusting (the guider's live alt/az readout, error
-    // fields populated), paused (the guider has not seen the star for 5 polls — still polling),
-    // failed (fatal routine error; see the polar_align.error WS event). WaitingForCapture is
-    // always false and LastFrame always null now: there are no per-frame solves.
+    // §45 engine states: seeding (2-point axis measurement incl. the RA slew), adjusting (live
+    // knob-turning loop, error fields populated), paused (5 consecutive failed solves — still
+    // retrying), failed (fatal routine error; see the polar_align.error WS event).
     string State,    // "idle" | "seeding" | "adjusting" | "paused" | "stopped" | "failed"
     double? CurrentErrorArcmin,
     double? AzimuthAdjustmentArcmin,

@@ -126,12 +126,13 @@ public static class WsEventCatalog {
     // §63.17 — a profile push changed the guide-camera selection while a dark library exists: the stored
     // darks belong to the previous camera and should be rebuilt. Payload: {reason: "guide_camera_changed"}.
     public const string GuiderDarkLibraryInvalidated = "guider.dark_library.invalidated";
-    // §45 polar alignment (#1611: the guider's Static PA routine, driven by Ara) — the routine
-    // lifecycle (started/stopped) plus the live stream: progress per status poll with a readout
-    // ({iteration, altitude/azimuth/total_error_arcmin, zone, solved: true}), paused when the guider
-    // has not seen the star for 5 polls (the loop keeps polling and resumes on the next sighting),
-    // and error on a fatal routine failure ({reason, message}). frame_started / frame_complete are
-    // kept for older clients but no longer emitted: nothing is plate-solved per frame.
+    // §45 polar alignment — the routine lifecycle (started/stopped) plus the engine's live stream:
+    // progress per solved iteration ({iteration, altitude/azimuth/total_error_arcmin, zone, solved}),
+    // frame_started when a capture begins ({frame_id, exposure_seconds}), frame_complete per capture
+    // ({frame_id, solved, consecutive_solve_failures, exposure_seconds, capture_ms, solve_ms?, ra_deg?,
+    // dec_deg?}), paused when
+    // 5 consecutive solves fail (§45.11 — the loop keeps retrying and resumes on the next good
+    // solve), and error on a fatal routine failure ({reason, message}).
     public const string PolarAlignStarted = "polar_align.started";
     public const string PolarAlignStopped = "polar_align.stopped";
     public const string PolarAlignProgress = "polar_align.progress";
