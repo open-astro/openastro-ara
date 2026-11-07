@@ -3656,8 +3656,9 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
           'sqm',
           Icons.auto_awesome_outlined,
           _num(s.skyQualityMagArcsec2!, decimals: 2),
-          'mag/arcsec²',
-          l10n.deviceSkyQuality,
+          '',
+          // Too long beside the number in a half tile: it goes under it.
+          '${l10n.deviceSkyQuality} · mag/arcsec²',
         ),
       if (_ok(t))
         _WeatherTile(

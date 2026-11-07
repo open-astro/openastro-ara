@@ -102,7 +102,15 @@ void main() {
       await _pump(tester, _wire());
       expect(find.text('Weather · CloudWatcher'), findsOneWidget);
       expect(_said(tester, 'cloud'), startsWith('Cloud cover 12 %'));
-      expect(_said(tester, 'sqm'), startsWith('Sky quality 21.34 mag/arcsec²'));
+      expect(
+        _said(tester, 'sqm'),
+        startsWith('Sky quality · mag/arcsec² 21.34'),
+      );
+      expect(
+        find.textContaining('Sky quality · mag/arcsec²'),
+        findsOneWidget,
+        reason: 'the long unit goes under the number, so the number never ellipsises',
+      );
       expect(_said(tester, 'temperature'), startsWith('Temperature 8.4 °C'));
       expect(_said(tester, 'rain'), 'Rain None');
       expect(
