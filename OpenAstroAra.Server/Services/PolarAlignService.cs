@@ -397,21 +397,6 @@ namespace OpenAstroAra.Server.Services {
         private const string TrackingOffMessage =
             "the mount is not tracking and would not start — turn tracking on from the mount controls, then start again";
 
-        /// <summary>An Alpaca mount refuses SlewToCoordinatesAsync while not tracking ("requires Tracking to
-        /// be true", the iOptron on the CM4, 2026-11-05), so a mount left with tracking off fails the seed
-        /// slew. Turned on here; false when it was off, for the exit path to put back, and null when it
-        /// was already on.</summary>
-        private async Task<bool?> EnsureTrackingOnAsync(CancellationToken ct) {
-            if (_mount.GetInfo().TrackingEnabled) {
-                return null;
-            }
-            if (!await TurnTrackingOnAsync(ct).ConfigureAwait(false)) {
-                throw new RoutineFailedException("tracking_off", TrackingOffMessage);
-            }
-            LogTrackingEnabled();
-            return false;
-        }
-
         /// <summary>A §42.3 fault recovery (a mount reconnect) can drop tracking between the routine's
         /// switch-on and its slew (CM4, 2026-11-05: six seconds later). Checked just before a slew, not
         /// during one: the iOptron reports tracking off while it slews.</summary>
@@ -420,6 +405,10 @@ namespace OpenAstroAra.Server.Services {
                 return;
             }
             LogTrackingDropped();
+            await TurnTrackingOnOrFailAsync(ct).ConfigureAwait(false);
+        }
+
+        private async Task TurnTrackingOnOrFailAsync(CancellationToken ct) {
             if (!await TurnTrackingOnAsync(ct).ConfigureAwait(false)) {
                 throw new RoutineFailedException("tracking_off", TrackingOffMessage);
             }
@@ -477,7 +466,14 @@ namespace OpenAstroAra.Server.Services {
                 // the run then failed with "the RA seed slew was rejected by the mount". The user started a
                 // routine that moves the mount, so unpark it here, before anything else.
                 await UnparkIfParkedAsync(ct).ConfigureAwait(false);
-                priorTracking = await EnsureTrackingOnAsync(ct).ConfigureAwait(false);
+                // An Alpaca mount refuses SlewToCoordinatesAsync while not tracking ("requires Tracking to be
+                // true", the iOptron on the CM4, 2026-11-05). The prior state is recorded before the switch-on:
+                // a mount that reports late, or a Stop during the wait, still gets the user's off back.
+                if (!_mount.GetInfo().TrackingEnabled) {
+                    priorTracking = false;
+                    await TurnTrackingOnOrFailAsync(ct).ConfigureAwait(false);
+                    LogTrackingEnabled();
+                }
 
                 // ── §45.4 binning from the camera: ask the daemon for the guide camera's frame once per
                 // run. A daemon without the RPC (or a refused call) is not a failure — auto falls back

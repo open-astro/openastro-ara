@@ -1413,7 +1413,8 @@ namespace OpenAstroAra.Test {
             var failure = await SeedFailureAsync(mount).ConfigureAwait(false);
 
             Assert.That(failure.GetProperty("reason").GetString(), Is.EqualTo("tracking_off"));
-            Assert.That(string.Join(", ", calls), Is.EqualTo("tracking True"), "no slew, and nothing to hand back");
+            // Handed back even so: a mount that reports late must not stay tracking when the user had it off.
+            Assert.That(string.Join(", ", calls), Is.EqualTo("tracking True, tracking False"), "no slew, the user's off put back");
         }
 
         [Test]
