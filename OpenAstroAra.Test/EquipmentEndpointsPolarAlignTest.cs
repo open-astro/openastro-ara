@@ -39,7 +39,7 @@ namespace OpenAstroAra.Test {
         public async Task Start_returns_202_accepted_on_success() {
             var accepted = new OperationAcceptedDto(Guid.NewGuid(), "polar-align.start", DateTimeOffset.UtcNow, "idem-1");
             var svc = new Mock<IPolarAlignService>();
-            svc.Setup(s => s.StartAsync("idem-1", It.IsAny<CancellationToken>())).ReturnsAsync(accepted);
+            svc.Setup(s => s.StartAsync(null, "idem-1", It.IsAny<CancellationToken>())).ReturnsAsync(accepted);
 
             var result = await EquipmentEndpoints.PolarAlignStartAsync(svc.Object, "idem-1", CancellationToken.None);
 
@@ -51,7 +51,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Start_maps_not_connected_InvalidOperation_to_409_typed() {
             var svc = new Mock<IPolarAlignService>();
-            svc.Setup(s => s.StartAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            svc.Setup(s => s.StartAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException("guider is not connected"));
 
             var result = await EquipmentEndpoints.PolarAlignStartAsync(svc.Object, null, CancellationToken.None);
@@ -63,7 +63,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Start_maps_daemon_rejection_GuiderRpcException_to_422() {
             var svc = new Mock<IPolarAlignService>();
-            svc.Setup(s => s.StartAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            svc.Setup(s => s.StartAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new GuiderRpcException("set_pa_session", 1, "starting rejected while guiding"));
 
             var result = await EquipmentEndpoints.PolarAlignStartAsync(svc.Object, null, CancellationToken.None);

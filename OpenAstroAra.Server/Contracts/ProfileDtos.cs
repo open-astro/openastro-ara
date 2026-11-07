@@ -509,7 +509,9 @@ public sealed record Phd2SettingsDto(
 /// <c>Binning</c> 0 = auto (§45.4: the tier for the guide camera's frame size, see
 /// <see cref="OpenAstroAra.Server.Services.PolarAlignBinning"/>), 1–4 = the user's override.
 /// <c>TargetToleranceArcmin</c> gates the client's [Done] button (the server reports errors
-/// regardless); <c>SeedRotationDeg</c> is the 2-point measurement's RA slew;
+/// regardless); <c>SeedRotationDeg</c> is the 2-point measurement's RA slew; <c>CheckStepDeg</c> each
+/// of the check stage's two turns; <c>CoarseExposureSeconds</c> the main-camera exposure of the
+/// coarse stage; <c>UseHome</c> whether the coarse/check stages send the mount Home first;
 /// <c>LoopCadenceMs</c> is the live loop's target period (capture+solve time is inside it).
 /// <c>LoopMode</c> is <c>"loop"</c> (re-shoot continuously) or <c>"single"</c> (the adjust phase
 /// waits for <c>POST /equipment/polaralign/capture</c> before each frame). The live loop re-reads
@@ -519,10 +521,19 @@ public sealed record PolarAlignSettingsDto(
     double ExposureSeconds = 1.0,
     int Binning = 0,
     double TargetToleranceArcmin = 1.0,
-    double SeedRotationDeg = 30.0,
+    // 60°: §45.16 — a 30° turn amplifies solve noise ~1.9×, 60° passes it through 1:1. From Home the
+    // tube spins about the axis line, so a 60° turn cannot reach the pier.
+    double SeedRotationDeg = 60.0,
     int LoopCadenceMs = 1000,
     double SettleSeconds = 2.0,
-    string LoopMode = PolarAlignLoopModes.Loop);
+    string LoopMode = PolarAlignLoopModes.Loop,
+    // Check stage: each of the two RA turns between the three solves.
+    double CheckStepDeg = 30.0,
+    // Coarse stage: the main-camera exposure (the pole field is sparse; longer than a guide frame).
+    double CoarseExposureSeconds = 3.0,
+    // Coarse and check stages start by sending the mount Home (Find Home when it can, else the
+    // routine waits for the user). Off = use the current pointing as "home".
+    bool UseHome = true);
 
 /// <summary>
 /// #1364 — the guider's settings beyond Tune Guiding (profile section <c>guider_advanced</c>, endpoint

@@ -213,6 +213,15 @@ framing/focus loop when you need to point or focus by eye.
   dialog is reopened. **Start** waits while the guider is guiding (a run's or your own): stop guiding
   first, because the assistant needs the star to drift uncorrected. Run it on a calm night after polar alignment, and again after you change the
   guide camera, scope or mount.
+- **Polar Align in three steps.** *Rough*: the mount goes Home (or you put it there and tap
+  Continue) and the main camera solves the sky it sees along the mount's axis, so the card says how
+  far from the pole you are and on which side — above or below, east or west — while you make the
+  big moves. Tap **Next: fine** when you are within a few degrees. *Fine*: the guide camera measures
+  the axis around a 60° turn in RA and guides the knobs live, as before. *Check*: once inside the
+  tolerance, **Check it** sends the mount Home again and takes three solves 30° apart; the result is
+  measured on its own, not read off the loop, so it says how good the alignment really is and how far
+  it disagrees with the fine readout. **Done** skips the check. The Start card also offers *Skip the
+  rough step* (a permanent pier) and *Check only*.
 - **Starting guiding ends Polar Align.** Polar Align holds the guide camera while it runs. If guiding
   is started while it is still open (a run's Start Guiding after the Polar Align step was left
   without **Done**, a re-guide after a meridian flip, or Guide pressed by hand in the guider panel), Ara stops the

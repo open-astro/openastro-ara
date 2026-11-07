@@ -36,7 +36,8 @@ public interface IPolarAlignmentLog {
     Task InsertAsync(PolarAlignmentRecord record, CancellationToken ct);
 
     /// <summary>#1311 — the newest routine that ended at or after <paramref name="since"/> with a
-    /// measured error (complete, or stopped by the user once adjusting), or null.</summary>
+    /// measured error (complete, checked by the three-point stage, or stopped by the user once
+    /// adjusting), or null.</summary>
     Task<PolarAlignmentRecord?> GetLatestMeasuredAsync(DateTimeOffset since, CancellationToken ct);
 }
 
@@ -74,7 +75,7 @@ public sealed class SqlitePolarAlignmentLog : IPolarAlignmentLog {
             SELECT started_at, ended_at, final_error_arcmin, final_alt_error_arcmin, final_az_error_arcmin,
                    iterations, outcome
             FROM polar_alignments
-            WHERE final_error_arcmin IS NOT NULL AND outcome IN ('complete', 'aborted') AND ended_at >= $since
+            WHERE final_error_arcmin IS NOT NULL AND outcome IN ('complete', 'aborted', 'checked') AND ended_at >= $since
             ORDER BY ended_at DESC
             LIMIT 1;
             """;

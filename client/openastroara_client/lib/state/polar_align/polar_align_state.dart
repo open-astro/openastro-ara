@@ -16,6 +16,9 @@ abstract final class PolarAlignWsEvents {
   static const frameComplete = 'polar_align.frame_complete';
   static const paused = 'polar_align.paused';
   static const error = 'polar_align.error';
+  static const stage = 'polar_align.stage';
+  static const needsHome = 'polar_align.needs_home';
+  static const checked = 'polar_align.checked';
 }
 
 /// Live routine view folded from the `polar_align.*` WS stream — what the
@@ -48,6 +51,16 @@ class PolarAlignLive {
   /// The most recent finished frame (timings + solved pointing).
   final PolarAlignFrameInfo? lastFrame;
 
+  /// [PolarAlignStages]; null before the first run.
+  final String? stage;
+
+  /// The mount cannot find Home: the routine waits for Continue.
+  final bool waitingForHome;
+
+  /// Check stage: solves done so far (0–3).
+  final int checkSolvesDone;
+  final PolarAlignCheckResult? checkResult;
+
   const PolarAlignLive({
     this.phase = PolarAlignStates.idle,
     this.iteration = 0,
@@ -61,10 +74,17 @@ class PolarAlignLive {
     this.frameStartedAt,
     this.frameExposureSeconds,
     this.lastFrame,
+    this.stage,
+    this.waitingForHome = false,
+    this.checkSolvesDone = 0,
+    this.checkResult,
   });
 
   /// True between a frame's `frame_started` and its `frame_complete`.
   bool get frameInProgress => frameStartedAt != null;
+
+  /// True while the server runs any part of the routine.
+  bool get isActive => PolarAlignStates.isActive(phase);
 
   PolarAlignLive copyWith({
     String? phase,
@@ -80,6 +100,10 @@ class PolarAlignLive {
     double? frameExposureSeconds,
     PolarAlignFrameInfo? lastFrame,
     bool clearFrameInProgress = false,
+    String? stage,
+    bool? waitingForHome,
+    int? checkSolvesDone,
+    PolarAlignCheckResult? checkResult,
   }) =>
       PolarAlignLive(
         phase: phase ?? this.phase,
@@ -99,6 +123,10 @@ class PolarAlignLive {
             ? null
             : frameExposureSeconds ?? this.frameExposureSeconds,
         lastFrame: lastFrame ?? this.lastFrame,
+        stage: stage ?? this.stage,
+        waitingForHome: waitingForHome ?? this.waitingForHome,
+        checkSolvesDone: checkSolvesDone ?? this.checkSolvesDone,
+        checkResult: checkResult ?? this.checkResult,
       );
 }
 
@@ -113,15 +141,55 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
   switch (event.type) {
     case PolarAlignWsEvents.started:
       // A fresh routine: drop everything from the previous run.
-      return const PolarAlignLive(phase: PolarAlignStates.seeding);
+      return PolarAlignLive(
+        phase: event.payload['state'] is String
+            ? event.payload['state'] as String
+            : PolarAlignStates.seeding,
+        stage: event.payload['stage'] is String
+            ? event.payload['stage'] as String
+            : PolarAlignStages.fine,
+      );
     case PolarAlignWsEvents.stopped:
       return current.copyWith(
-          phase: PolarAlignStates.stopped, clearFrameInProgress: true);
+          phase: PolarAlignStates.stopped,
+          clearFrameInProgress: true,
+          waitingForHome: false);
     case PolarAlignWsEvents.paused:
       return current.copyWith(phase: PolarAlignStates.paused);
+    case PolarAlignWsEvents.stage:
+      return current.copyWith(
+        stage: event.payload['stage'] is String
+            ? event.payload['stage'] as String
+            : current.stage,
+        phase: event.payload['state'] is String
+            ? event.payload['state'] as String
+            : current.phase,
+        checkSolvesDone:
+            (event.payload['check_solves_done'] as num?)?.toInt() ?? 0,
+        waitingForHome: false,
+        clearFrameInProgress: true,
+      );
+    case PolarAlignWsEvents.needsHome:
+      return current.copyWith(
+          phase: PolarAlignStates.homing, waitingForHome: true);
+    case PolarAlignWsEvents.checked:
+      return current.copyWith(
+        phase: PolarAlignStates.checked,
+        checkSolvesDone: 3,
+        checkResult: PolarAlignCheckResult.fromJson(event.payload),
+        altErrorArcmin: _num(event.payload, 'altitude_error_arcmin'),
+        azErrorArcmin: _num(event.payload, 'azimuth_error_arcmin'),
+        totalErrorArcmin: _num(event.payload, 'total_error_arcmin'),
+        zone: polarAlignZone(_num(event.payload, 'total_error_arcmin')),
+        clearFrameInProgress: true,
+      );
     case PolarAlignWsEvents.progress:
       return current.copyWith(
         phase: PolarAlignStates.adjusting,
+        stage: event.payload['stage'] is String
+            ? event.payload['stage'] as String
+            : current.stage,
+        waitingForHome: false,
         iteration: (event.payload['iteration'] as num?)?.toInt() ?? current.iteration,
         altErrorArcmin: _num(event.payload, 'altitude_error_arcmin'),
         azErrorArcmin: _num(event.payload, 'azimuth_error_arcmin'),
@@ -208,6 +276,10 @@ PolarAlignLive liveFromStatus(PolarAlignStatus status) => PolarAlignLive(
       totalErrorArcmin: status.currentErrorArcmin,
       zone: polarAlignZone(status.currentErrorArcmin),
       lastFrame: status.lastFrame,
+      stage: status.stage,
+      waitingForHome: status.waitingForHome,
+      checkSolvesDone: status.checkSolvesDone,
+      checkResult: status.checkResult,
     );
 
 /// The zone for a total error, by the daemon's own rule (PolarAlignService

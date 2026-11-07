@@ -805,11 +805,43 @@ public sealed record GuiderAlpacaDiscoveryDto(IReadOnlyList<string> Servers);
 
 // ─── Polar Alignment (§10.6 row 12) ───────────────────────────────────────────
 
+/// <summary>The routine's stages (<see cref="PolarAlignStateDto.Stage"/>): <c>coarse</c> — the mount at
+/// Home, one main-camera solve per frame read as the axis (rough, shows which side of the pole);
+/// <c>fine</c> — the guide-camera two-point seed + live adjust loop; <c>check</c> — back Home, three
+/// guide-camera solves with two RA turns, an exact three-point axis fit, no adjusting.</summary>
+public static class PolarAlignStages {
+    public const string Coarse = "coarse";
+    public const string Fine = "fine";
+    public const string Check = "check";
+
+    public static bool IsValid(string? stage) => stage is Coarse or Fine or Check;
+}
+
+/// <summary><c>POST /polaralign/start</c> body (optional): the stage to begin at. Null/absent = coarse.</summary>
+public sealed record PolarAlignStartRequestDto(string? Stage = null);
+
+/// <summary>The check stage's three-point result: the axis error against the apparent pole, the
+/// cone half-angle the three pointings sat at (conditioning), how far the solved turns disagreed
+/// with the mount's reported RA turns, the fine stage's last error for comparison, and the verdict
+/// band (<c>excellent</c> ≤1′, <c>very_good</c> ≤3′, <c>good</c> ≤10′, <c>rough</c> ≤30′, else <c>far_off</c>).</summary>
+public sealed record PolarAlignCheckResultDto(
+    double AltitudeErrorArcmin,
+    double AzimuthErrorArcmin,
+    double TotalErrorArcmin,
+    double ConeHalfAngleDeg,
+    double TurnMismatchDeg,
+    double? FineErrorArcmin,
+    double? FineDeltaArcmin,
+    string Verdict,
+    DateTimeOffset MeasuredAt);
+
 public sealed record PolarAlignStateDto(
-    // §45 engine states: seeding (2-point axis measurement incl. the RA slew), adjusting (live
-    // knob-turning loop, error fields populated), paused (5 consecutive failed solves — still
-    // retrying), failed (fatal routine error; see the polar_align.error WS event).
-    string State,    // "idle" | "seeding" | "adjusting" | "paused" | "stopped" | "failed"
+    // §45 engine states: homing (Find Home running, or — WaitingForHome — waiting for the user to
+    // put the mount at Home and tap Continue), seeding (2-point axis measurement incl. the RA slew),
+    // adjusting (live loop, error fields populated; the coarse stage goes straight here), paused
+    // (5 consecutive failed solves — still retrying), checking (the three check solves), checked
+    // (terminal: CheckResult populated), failed (fatal routine error; see the polar_align.error WS event).
+    string State,    // "idle" | "homing" | "seeding" | "adjusting" | "paused" | "checking" | "checked" | "stopped" | "failed"
     double? CurrentErrorArcmin,
     double? AzimuthAdjustmentArcmin,
     double? AltitudeAdjustmentArcmin,
@@ -817,7 +849,14 @@ public sealed record PolarAlignStateDto(
     string? LastFrameId,
     // Single-frame mode: the adjust loop is parked until POST /polaralign/capture.
     bool WaitingForCapture = false,
-    PolarAlignLastFrameDto? LastFrame = null);
+    PolarAlignLastFrameDto? LastFrame = null,
+    // Which stage is running (PolarAlignStages); null when idle/stopped before any run.
+    string? Stage = null,
+    // The mount cannot find Home itself: the routine waits for POST /polaralign/next.
+    bool WaitingForHome = false,
+    // Check stage: solves done so far (0–3).
+    int CheckSolvesDone = 0,
+    PolarAlignCheckResultDto? CheckResult = null);
 
 /// <summary>§45 the most recent polar-align frame: its exposure, how long the capture (exposure +
 /// download) and the plate solve took, and the solved apparent-of-date pointing when it solved.</summary>

@@ -6,11 +6,91 @@ library;
 /// Server routine states (`PolarAlignStateDto.state`).
 abstract final class PolarAlignStates {
   static const idle = 'idle';
+
+  /// Find Home running, or (with `waiting_for_home`) waiting for the user to
+  /// put the mount at Home and tap Continue.
+  static const homing = 'homing';
   static const seeding = 'seeding';
   static const adjusting = 'adjusting';
   static const paused = 'paused';
+
+  /// The check stage's three solves are running.
+  static const checking = 'checking';
+
+  /// Terminal: the three-point check has its result (`check_result`).
+  static const checked = 'checked';
   static const stopped = 'stopped';
   static const failed = 'failed';
+
+  /// True while the server runs any part of the routine.
+  static bool isActive(String state) =>
+      state == homing ||
+      state == seeding ||
+      state == adjusting ||
+      state == paused ||
+      state == checking;
+}
+
+/// The routine's stages (`PolarAlignStateDto.stage`): coarse (Home, one
+/// main-camera solve per frame read as the axis), fine (the guide-camera seed
+/// + live loop), check (Home, three guide-camera solves, an exact fit).
+abstract final class PolarAlignStages {
+  static const coarse = 'coarse';
+  static const fine = 'fine';
+  static const check = 'check';
+
+  static const all = [coarse, fine, check];
+
+  /// 0-based position of [stage] in the routine, or null.
+  static int? indexOf(String? stage) {
+    final i = all.indexOf(stage ?? '');
+    return i < 0 ? null : i;
+  }
+}
+
+/// The check stage's result (`check_result` on the status and the
+/// `polar_align.checked` payload).
+class PolarAlignCheckResult {
+  final double altErrorArcmin;
+  final double azErrorArcmin;
+  final double totalErrorArcmin;
+
+  /// How far off the axis the three pointings sat (conditioning).
+  final double coneHalfAngleDeg;
+
+  /// How far the solved turns disagreed with what the mount said it turned.
+  final double turnMismatchDeg;
+
+  /// The fine stage's last readout, and |check − fine|; null when the run
+  /// began at the check.
+  final double? fineErrorArcmin;
+  final double? fineDeltaArcmin;
+
+  /// `excellent` | `very_good` | `good` | `rough` | `far_off`.
+  final String verdict;
+
+  const PolarAlignCheckResult({
+    required this.altErrorArcmin,
+    required this.azErrorArcmin,
+    required this.totalErrorArcmin,
+    this.coneHalfAngleDeg = 0,
+    this.turnMismatchDeg = 0,
+    this.fineErrorArcmin,
+    this.fineDeltaArcmin,
+    this.verdict = '',
+  });
+
+  factory PolarAlignCheckResult.fromJson(Map<String, dynamic> json) =>
+      PolarAlignCheckResult(
+        altErrorArcmin: (json['altitude_error_arcmin'] as num?)?.toDouble() ?? 0,
+        azErrorArcmin: (json['azimuth_error_arcmin'] as num?)?.toDouble() ?? 0,
+        totalErrorArcmin: (json['total_error_arcmin'] as num?)?.toDouble() ?? 0,
+        coneHalfAngleDeg: (json['cone_half_angle_deg'] as num?)?.toDouble() ?? 0,
+        turnMismatchDeg: (json['turn_mismatch_deg'] as num?)?.toDouble() ?? 0,
+        fineErrorArcmin: (json['fine_error_arcmin'] as num?)?.toDouble(),
+        fineDeltaArcmin: (json['fine_delta_arcmin'] as num?)?.toDouble(),
+        verdict: json['verdict'] is String ? json['verdict'] as String : '',
+      );
 }
 
 /// Live-adjust capture modes (`PolarAlignSettingsDto.loop_mode`).
@@ -72,6 +152,16 @@ class PolarAlignStatus {
   final bool waitingForCapture;
   final PolarAlignFrameInfo? lastFrame;
 
+  /// [PolarAlignStages]; null when idle before any run.
+  final String? stage;
+
+  /// The mount cannot find Home itself: the routine waits for Continue.
+  final bool waitingForHome;
+
+  /// Check stage: solves done so far (0–3).
+  final int checkSolvesDone;
+  final PolarAlignCheckResult? checkResult;
+
   const PolarAlignStatus({
     required this.state,
     this.currentErrorArcmin,
@@ -81,6 +171,10 @@ class PolarAlignStatus {
     this.lastFrameId,
     this.waitingForCapture = false,
     this.lastFrame,
+    this.stage,
+    this.waitingForHome = false,
+    this.checkSolvesDone = 0,
+    this.checkResult,
   });
 
   factory PolarAlignStatus.fromJson(Map<String, dynamic> json) =>
@@ -95,13 +189,16 @@ class PolarAlignStatus {
         lastFrame: json['last_frame'] is Map<String, dynamic>
             ? PolarAlignFrameInfo.fromJson(json['last_frame'] as Map<String, dynamic>)
             : null,
+        stage: json['stage'] is String ? json['stage'] as String : null,
+        waitingForHome: json['waiting_for_home'] == true,
+        checkSolvesDone: (json['check_solves_done'] as num?)?.toInt() ?? 0,
+        checkResult: json['check_result'] is Map<String, dynamic>
+            ? PolarAlignCheckResult.fromJson(json['check_result'] as Map<String, dynamic>)
+            : null,
       );
 
   /// True while the server is running any phase of the routine.
-  bool get isActive =>
-      state == PolarAlignStates.seeding ||
-      state == PolarAlignStates.adjusting ||
-      state == PolarAlignStates.paused;
+  bool get isActive => PolarAlignStates.isActive(state);
 }
 
 /// §45.12 profile section. Field defaults are the playbook defaults, matching
@@ -120,14 +217,26 @@ class PolarAlignSettings {
   /// [PolarAlignLoopModes.loop] or [PolarAlignLoopModes.single].
   final String loopMode;
 
+  /// Check stage: each of the two RA turns between the three solves.
+  final double checkStepDeg;
+
+  /// Coarse stage: the main-camera exposure.
+  final double coarseExposureSeconds;
+
+  /// Coarse and check stages send the mount Home first.
+  final bool useHome;
+
   const PolarAlignSettings({
     this.exposureSeconds = 1.0,
     this.binning = 0,
     this.targetToleranceArcmin = 1.0,
-    this.seedRotationDeg = 30.0,
+    this.seedRotationDeg = 60.0,
     this.loopCadenceMs = 1000,
     this.settleSeconds = 2.0,
     this.loopMode = PolarAlignLoopModes.loop,
+    this.checkStepDeg = 30.0,
+    this.coarseExposureSeconds = 3.0,
+    this.useHome = true,
   });
 
   factory PolarAlignSettings.fromJson(Map<String, dynamic> json) =>
@@ -136,12 +245,16 @@ class PolarAlignSettings {
         binning: (json['binning'] as num?)?.toInt() ?? 0,
         targetToleranceArcmin:
             (json['target_tolerance_arcmin'] as num?)?.toDouble() ?? 1.0,
-        seedRotationDeg: (json['seed_rotation_deg'] as num?)?.toDouble() ?? 30.0,
+        seedRotationDeg: (json['seed_rotation_deg'] as num?)?.toDouble() ?? 60.0,
         loopCadenceMs: (json['loop_cadence_ms'] as num?)?.toInt() ?? 1000,
         settleSeconds: (json['settle_seconds'] as num?)?.toDouble() ?? 2.0,
         loopMode: json['loop_mode'] == PolarAlignLoopModes.single
             ? PolarAlignLoopModes.single
             : PolarAlignLoopModes.loop,
+        checkStepDeg: (json['check_step_deg'] as num?)?.toDouble() ?? 30.0,
+        coarseExposureSeconds:
+            (json['coarse_exposure_seconds'] as num?)?.toDouble() ?? 3.0,
+        useHome: json['use_home'] != false,
       );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -152,6 +265,9 @@ class PolarAlignSettings {
         'loop_cadence_ms': loopCadenceMs,
         'settle_seconds': settleSeconds,
         'loop_mode': loopMode,
+        'check_step_deg': checkStepDeg,
+        'coarse_exposure_seconds': coarseExposureSeconds,
+        'use_home': useHome,
       };
 
   PolarAlignSettings copyWith({
@@ -162,6 +278,9 @@ class PolarAlignSettings {
     int? loopCadenceMs,
     double? settleSeconds,
     String? loopMode,
+    double? checkStepDeg,
+    double? coarseExposureSeconds,
+    bool? useHome,
   }) =>
       PolarAlignSettings(
         exposureSeconds: exposureSeconds ?? this.exposureSeconds,
@@ -172,5 +291,9 @@ class PolarAlignSettings {
         loopCadenceMs: loopCadenceMs ?? this.loopCadenceMs,
         settleSeconds: settleSeconds ?? this.settleSeconds,
         loopMode: loopMode ?? this.loopMode,
+        checkStepDeg: checkStepDeg ?? this.checkStepDeg,
+        coarseExposureSeconds:
+            coarseExposureSeconds ?? this.coarseExposureSeconds,
+        useHome: useHome ?? this.useHome,
       );
 }

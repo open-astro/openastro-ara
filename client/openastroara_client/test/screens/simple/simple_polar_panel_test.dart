@@ -23,7 +23,9 @@ class _Api implements PolarAlignClient {
   @override
   Future<PolarAlignSettings> getSettings() async => settings;
   @override
-  Future<void> start() async => calls.add('start');
+  Future<void> start({String? stage}) async => calls.add('start');
+  @override
+  Future<void> next() async => calls.add('next');
   @override
   Future<void> stop() async => calls.add('stop');
   @override
@@ -43,7 +45,7 @@ class _Api implements PolarAlignClient {
 
 class _FailingApi extends _Api {
   @override
-  Future<void> start() async => throw StateError('no camera');
+  Future<void> start({String? stage}) async => throw StateError('no camera');
 }
 
 class _SimplePrefs extends SimpleModePrefsService {

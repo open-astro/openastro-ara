@@ -380,6 +380,13 @@ public sealed record GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus Status, stri
 public interface IPolarAlignService {
     Task<PolarAlignStateDto> GetStatusAsync(CancellationToken ct);
     Task<OperationAcceptedDto> StartAsync(string? idempotencyKey, CancellationToken ct);
+    /// <summary>Begin at <paramref name="stage"/> (<see cref="PolarAlignStages"/>; null = coarse). Throws
+    /// <see cref="InvalidOperationException"/> (→ 409) for an unknown stage or a failed preflight.</summary>
+    Task<OperationAcceptedDto> StartAsync(string? stage, string? idempotencyKey, CancellationToken ct);
+    /// <summary>Advance: Continue when the routine waits for the mount at Home, Next from the coarse
+    /// stage to the fine stage, Next from the fine stage to the check. Throws
+    /// <see cref="InvalidOperationException"/> (→ 409) when nothing is waiting to advance.</summary>
+    Task<OperationAcceptedDto> NextAsync(string? idempotencyKey, CancellationToken ct);
     /// <summary>Abort: same unwind as complete, logged with outcome <c>aborted</c> (§45 step 10 —
     /// the mount stays put).</summary>
     Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct);

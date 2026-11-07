@@ -6534,6 +6534,15 @@ users with a jittery mount raise `seed_rotation_deg` (60° halves the amplificat
 wait for a third point. Revisit only if a rig shows the bullseye and the §63 residual disagreeing
 by more than 2′ with the seed at 60°.
 
+**Revisited 2026-11-07 (#1591).** The CM4 night of 2026-11-04 met the revisit condition (the bullseye
+said "Excellent" while the mount was degrees off). The answer is not a 3-point *seed* but a 3-point
+*check* after the adjust loop: the routine is now three stages — coarse (Home, main-camera solves
+read as the axis, rough but it shows which side of the pole), fine (this section's 2-point seed and
+live loop, with the seed turn's default raised to **60°**), and a check (Home, Dec 85°, three
+guide-camera solves 30° apart, `FitAxisThreePoint`, no adjusting). The check shares no input with
+the fine readout, and the gap between them (`fine_delta_arcmin`, logged on every run) is the
+evidence this section asked for. API_CONTRACT.md 2026-11-07 has the wire shape.
+
 ---
 
 ## 46. Notifications system

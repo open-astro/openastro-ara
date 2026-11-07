@@ -942,6 +942,84 @@
   "@polarPhaseReady": {
     "description": "Simple Mode Polar align panel: routine phase: idle"
   },
+  "polarPhaseHoming": "Going Home…",
+  "@polarPhaseHoming": {
+    "description": "Simple Mode Polar align panel: routine phase: the mount is finding its home position"
+  },
+  "polarPhaseNeedsHome": "Put the mount at Home",
+  "@polarPhaseNeedsHome": {
+    "description": "Simple Mode Polar align panel: routine phase: waiting for the user to put the mount at Home"
+  },
+  "polarPhaseRough": "Rough step",
+  "@polarPhaseRough": {
+    "description": "Simple Mode Polar align panel: routine phase: the coarse (main camera at Home) stage"
+  },
+  "polarPhaseChecking": "Checking {done} of 3",
+  "@polarPhaseChecking": {
+    "description": "Simple Mode Polar align panel: routine phase: the three-point check, solves done so far",
+    "placeholders": {
+      "done": {
+        "type": "int"
+      }
+    }
+  },
+  "polarPhaseChecked": "Checked",
+  "@polarPhaseChecked": {
+    "description": "Simple Mode Polar align panel: routine phase: the three-point check has its result"
+  },
+  "polarRoughWaiting": "The main camera at Home is read as the mount axis. Waiting for the first solve…",
+  "@polarRoughWaiting": {
+    "description": "Simple Mode Polar align panel: rough stage before the first solve"
+  },
+  "polarNeedsHomeHint": "This mount cannot find Home by itself. Counterweights down, tube pointing at the pole, then Continue.",
+  "@polarNeedsHomeHint": {
+    "description": "Simple Mode Polar align panel: what to do when the mount cannot find Home"
+  },
+  "polarCheckedLine": "Three-point check: {verdict}",
+  "@polarCheckedLine": {
+    "description": "Simple Mode Polar align panel: the check's verdict",
+    "placeholders": {
+      "verdict": {
+        "type": "String"
+      }
+    }
+  },
+  "polarCheckedVsFine": "Three-point check: {verdict}, {delta}′ from the fine readout",
+  "@polarCheckedVsFine": {
+    "description": "Simple Mode Polar align panel: the check's verdict and its disagreement with the fine stage",
+    "placeholders": {
+      "verdict": {
+        "type": "String"
+      },
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
+  "polarContinue": "Continue",
+  "@polarContinue": {
+    "description": "Simple Mode Polar align panel: button once the mount is at Home by hand"
+  },
+  "polarActionContinue": "continue polar alignment",
+  "@polarActionContinue": {
+    "description": "Completes \"Couldn't …\" for the Continue button"
+  },
+  "polarNextFine": "Next: fine",
+  "@polarNextFine": {
+    "description": "Simple Mode Polar align panel: button from the rough stage to the fine stage"
+  },
+  "polarActionNextFine": "move on to the fine step",
+  "@polarActionNextFine": {
+    "description": "Completes \"Couldn't …\" for the Next: fine button"
+  },
+  "polarCheck": "Check it",
+  "@polarCheck": {
+    "description": "Simple Mode Polar align panel: button from the fine stage to the three-point check"
+  },
+  "polarActionCheck": "start the check",
+  "@polarActionCheck": {
+    "description": "Completes \"Couldn't …\" for the Check it button"
+  },
   "polarAltitude": "Altitude",
   "@polarAltitude": {
     "description": "Simple Mode Polar align panel: altitude axis row label (bolt to turn)"

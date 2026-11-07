@@ -24,7 +24,9 @@ final _aligned = NotifierProvider<_Step, SetupStepState>(() => _Step(SetupStepSt
 class _PolarApi implements PolarAlignClient {
   final calls = <String>[];
   @override
-  Future<void> start() async => calls.add('start');
+  Future<void> start({String? stage}) async => calls.add('start');
+  @override
+  Future<void> next() async => calls.add('next');
   @override
   Future<void> stop() async => calls.add('stop');
   @override

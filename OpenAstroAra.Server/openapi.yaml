@@ -1978,6 +1978,26 @@ paths:
           in: header
           schema:
             type: string
+      requestBody:
+        description: Optional. The stage to begin at; absent = coarse (Home + main-camera solves).
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolarAlignStartRequestDto'
+        required: false
+      responses:
+        '200':
+          description: OK
+  /api/v1/equipment/polaralign/next:
+    post:
+      tags:
+        - Equipment
+      summary: Continue (the mount was put at Home by hand) or Next (coarse → fine, fine → check). 409 when nothing waits on the user.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
       responses:
         '200':
           description: OK
@@ -12751,6 +12771,14 @@ components:
             - number
             - string
           format: double
+    PolarAlignStartRequestDto:
+      type: object
+      properties:
+        stage:
+          type: string
+          nullable: true
+          enum: [coarse, fine, check]
+      additionalProperties: false
     PolarAlignSettingsDto:
       type: object
       properties:
@@ -12781,7 +12809,7 @@ components:
             - number
             - string
           format: double
-          default: 30
+          default: 60
         loop_cadence_ms:
           pattern: '^-?(?:0|[1-9]\d*)$'
           type:
@@ -12799,6 +12827,17 @@ components:
         loop_mode:
           type: string
           default: loop
+        check_step_deg:
+          type: number
+          format: double
+          default: 30
+        coarse_exposure_seconds:
+          type: number
+          format: double
+          default: 3
+        use_home:
+          type: boolean
+          default: true
     PreflightChecklistDto:
       required:
         - generated_utc

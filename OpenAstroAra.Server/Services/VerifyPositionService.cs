@@ -54,13 +54,7 @@ public sealed class VerifyPositionService : IVerifyPositionService, IDisposable 
     public const double MaxExposureSeconds = 30.0;
 
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private readonly IProfileService profileService;
-    private readonly IProfileStore? profileStore;
-    private readonly IPlateSolverFactory plateSolverFactory;
-    private readonly IImagingMediator imagingMediator;
-    private readonly ITelescopeMediator telescopeMediator;
-    private readonly IFilterWheelMediator filterWheelMediator;
-    private readonly ICameraService? camera;
+    private readonly MainCameraPointingSolver _solver;
 
     public VerifyPositionService(
             IProfileService profileService,
@@ -69,14 +63,13 @@ public sealed class VerifyPositionService : IVerifyPositionService, IDisposable 
             ITelescopeMediator telescopeMediator,
             IFilterWheelMediator filterWheelMediator,
             IProfileStore? profileStore = null,
-            ICameraService? camera = null) {
-        this.profileService = profileService;
-        this.plateSolverFactory = plateSolverFactory;
-        this.imagingMediator = imagingMediator;
-        this.telescopeMediator = telescopeMediator;
-        this.filterWheelMediator = filterWheelMediator;
-        this.profileStore = profileStore;
-        this.camera = camera;
+            ICameraService? camera = null)
+        : this(new MainCameraPointingSolver(profileService, plateSolverFactory, imagingMediator, telescopeMediator,
+            filterWheelMediator, profileStore, camera)) {
+    }
+
+    public VerifyPositionService(MainCameraPointingSolver solver) {
+        _solver = solver;
     }
 
     public async Task<VerifyPositionResultDto> VerifyAsync(double? exposureSeconds, CancellationToken ct) {
@@ -92,46 +85,10 @@ public sealed class VerifyPositionService : IVerifyPositionService, IDisposable 
         requested is double s && !double.IsNaN(s) ? Math.Clamp(s, MinExposureSeconds, MaxExposureSeconds) : DefaultExposureSeconds;
 
     private async Task<VerifyPositionResultDto> VerifyCoreAsync(double exposure, CancellationToken ct) {
-        LegacyProfileBridge.SyncPlateSolve(profileService, profileStore);
-        var profile = profileService.ActiveProfile
-            ?? throw new PlateSolverConfigurationException("Cannot verify the position: no active profile is loaded.");
-        var settings = profile.PlateSolveSettings;
-        var (focalLength, pixelSize) = PlateSolveService.ResolveSolveGeometry(
-            profileStore?.GetOpticsSettings(), profile.TelescopeSettings.FocalLength, profile.CameraSettings.PixelSize);
-        if (!(focalLength > 0) || !(pixelSize > 0)) {
-            throw new PlateSolverConfigurationException(
-                $"Cannot verify the position: telescope focal length ({focalLength}) and camera pixel size ({pixelSize}) must both be configured (> 0) — set them in Options → Imaging → Optics.");
-        }
-
-        // Fail fast while another exposure holds the camera: the capture path would otherwise wait
-        // on the gate for up to 20 minutes, long past any client's timeout (review of #1346).
-        if (camera is not null && !camera.IsFreeToCapture(this)) {
-            throw new CameraBusyException();
-        }
-
-        var info = telescopeMediator.GetInfo();
-        var mount = info?.Connected == true ? info.Coordinates : null;
-        var intended = info?.Connected == true ? info.TargetCoordinates : null;
-
-        var captureSolver = plateSolverFactory.GetCaptureSolver(
-            plateSolverFactory.GetPlateSolver(settings), plateSolverFactory.GetBlindSolver(settings), imagingMediator, filterWheelMediator);
-        // SNAPSHOT: never catalogued, like the centering exposures.
-        var sequence = new CaptureSequence(exposure, ImageTypes.SNAPSHOT, filterType: null,
-            binning: new BinningMode(settings.Binning, settings.Binning), exposureCount: 1) { Gain = settings.Gain };
-        var parameter = new CaptureSolverParameter {
-            Coordinates = mount,             // the hint: where the mount THINKS it is
-            FocalLength = focalLength,
-            PixelSize = pixelSize,
-            SearchRadius = settings.SearchRadius,
-            Regions = settings.Regions,
-            DownSampleFactor = settings.DownSampleFactor,
-            MaxObjects = settings.MaxObjects,
-            Timeout = PlateSolveService.TimeoutFrom(settings),
-            Binning = settings.Binning,
-            Attempts = 1,                    // one look; the user decides what to do next
-            ReattemptDelay = TimeSpan.Zero,
-        };
-        var result = await captureSolver.Solve(sequence, parameter, null, null, ct).ConfigureAwait(false);
+        var mount = _solver.MountPointing();
+        var intended = _solver.MountTarget();
+        // The main-camera capture-and-solve is shared with the polar-align coarse stage.
+        var result = await _solver.CaptureAndSolveRawAsync(exposure, mount, blindFailover: true, "Cannot verify the position", ct).ConfigureAwait(false);
         return Describe(result, mount, intended, exposure);
     }
 

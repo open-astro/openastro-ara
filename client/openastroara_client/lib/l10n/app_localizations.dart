@@ -1245,6 +1245,96 @@ abstract class AppLocalizations {
   /// **'Ready'**
   String get polarPhaseReady;
 
+  /// Simple Mode Polar align panel: routine phase: the mount is finding its home position
+  ///
+  /// In en, this message translates to:
+  /// **'Going Home…'**
+  String get polarPhaseHoming;
+
+  /// Simple Mode Polar align panel: routine phase: waiting for the user to put the mount at Home
+  ///
+  /// In en, this message translates to:
+  /// **'Put the mount at Home'**
+  String get polarPhaseNeedsHome;
+
+  /// Simple Mode Polar align panel: routine phase: the coarse (main camera at Home) stage
+  ///
+  /// In en, this message translates to:
+  /// **'Rough step'**
+  String get polarPhaseRough;
+
+  /// Simple Mode Polar align panel: routine phase: the three-point check, solves done so far
+  ///
+  /// In en, this message translates to:
+  /// **'Checking {done} of 3'**
+  String polarPhaseChecking(int done);
+
+  /// Simple Mode Polar align panel: routine phase: the three-point check has its result
+  ///
+  /// In en, this message translates to:
+  /// **'Checked'**
+  String get polarPhaseChecked;
+
+  /// Simple Mode Polar align panel: rough stage before the first solve
+  ///
+  /// In en, this message translates to:
+  /// **'The main camera at Home is read as the mount axis. Waiting for the first solve…'**
+  String get polarRoughWaiting;
+
+  /// Simple Mode Polar align panel: what to do when the mount cannot find Home
+  ///
+  /// In en, this message translates to:
+  /// **'This mount cannot find Home by itself. Counterweights down, tube pointing at the pole, then Continue.'**
+  String get polarNeedsHomeHint;
+
+  /// Simple Mode Polar align panel: the check's verdict
+  ///
+  /// In en, this message translates to:
+  /// **'Three-point check: {verdict}'**
+  String polarCheckedLine(String verdict);
+
+  /// Simple Mode Polar align panel: the check's verdict and its disagreement with the fine stage
+  ///
+  /// In en, this message translates to:
+  /// **'Three-point check: {verdict}, {delta}′ from the fine readout'**
+  String polarCheckedVsFine(String verdict, String delta);
+
+  /// Simple Mode Polar align panel: button once the mount is at Home by hand
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get polarContinue;
+
+  /// Completes "Couldn't …" for the Continue button
+  ///
+  /// In en, this message translates to:
+  /// **'continue polar alignment'**
+  String get polarActionContinue;
+
+  /// Simple Mode Polar align panel: button from the rough stage to the fine stage
+  ///
+  /// In en, this message translates to:
+  /// **'Next: fine'**
+  String get polarNextFine;
+
+  /// Completes "Couldn't …" for the Next: fine button
+  ///
+  /// In en, this message translates to:
+  /// **'move on to the fine step'**
+  String get polarActionNextFine;
+
+  /// Simple Mode Polar align panel: button from the fine stage to the three-point check
+  ///
+  /// In en, this message translates to:
+  /// **'Check it'**
+  String get polarCheck;
+
+  /// Completes "Couldn't …" for the Check it button
+  ///
+  /// In en, this message translates to:
+  /// **'start the check'**
+  String get polarActionCheck;
+
   /// Simple Mode Polar align panel: altitude axis row label (bolt to turn)
   ///
   /// In en, this message translates to:

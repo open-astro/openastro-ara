@@ -742,8 +742,14 @@ public static partial class EquipmentEndpoints {
         var polar = equipment.MapGroup("/polaralign");
         polar.MapGet("/status", async (IPolarAlignService svc, CancellationToken ct) =>
             Results.Ok(await svc.GetStatusAsync(ct)));
-        polar.MapPost("/start", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
-            await PolarAlignStartAsync(svc, key, ct));
+        // Optional body {stage: coarse|fine|check}; none = coarse (Home + main-camera solves).
+        polar.MapPost("/start", async ([FromHeader(Name = "Idempotency-Key")] string? key,
+                [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] PolarAlignStartRequestDto? body,
+                IPolarAlignService svc, CancellationToken ct) =>
+            await PolarAlignStartAsync(svc, body?.Stage, key, ct));
+        // Continue (mount put at Home by hand) / Next (coarse → fine, fine → check). 409 when nothing waits.
+        polar.MapPost("/next", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
+            await PolarAlignNextAsync(svc, key, ct));
         polar.MapPost("/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.StopAsync(key, ct)));
         // §45 step 9 — "Done": same unwind as stop, but the §45.13 session row records `complete`
@@ -1010,13 +1016,24 @@ public static partial class EquipmentEndpoints {
     // InvalidOperationException → 409 (typed, same as the guide ops), and a daemon-rejected lease (e.g.
     // "starting rejected while guiding") throws GuiderRpcException → 422 — rather than a raw 500. Stop is
     // best-effort about the lease (it never throws not-connected), so it needs no such mapping.
-    public static async Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, string? idempotencyKey, CancellationToken ct) {
+    public static Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, string? idempotencyKey, CancellationToken ct) =>
+        PolarAlignStartAsync(svc, stage: null, idempotencyKey, ct);
+
+    public static async Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, string? stage, string? idempotencyKey, CancellationToken ct) {
         try {
-            return Results.Accepted(value: await svc.StartAsync(idempotencyKey, ct));
+            return Results.Accepted(value: await svc.StartAsync(stage, idempotencyKey, ct));
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         } catch (System.InvalidOperationException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
+        }
+    }
+
+    public static async Task<IResult> PolarAlignNextAsync(IPolarAlignService svc, string? idempotencyKey, CancellationToken ct) {
+        try {
+            return Results.Accepted(value: await svc.NextAsync(idempotencyKey, ct));
+        } catch (System.InvalidOperationException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
         }
     }
 

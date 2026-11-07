@@ -1107,6 +1107,18 @@ const Map<String, Help> helpRegistry = {
     relatedSettings: [],
     keywords: ['bahtinov', 'mask', 'focus', 'spikes', 'manual focuser', 'critical focus zone'],
   ),
+  'setup.polar_align.stages': Help(
+    key: 'setup.polar_align.stages',
+    title: 'Polar alignment in three steps',
+    body:
+        '* **Rough** — the mount goes Home (Find Home, or you put it there and tap *Continue*), tracking stops, and the *main camera* solves the sky along the mount\'s axis. The readout says how far from the pole the axis sits and on which side: above or below, east or west. It is rough (a camera not quite square to the axis shows as a small false offset), so use it for the big moves and tap **Next: fine** within a few degrees.\n'
+        '* **Fine** — the *guide camera* takes two solved frames around a 60° turn in RA (the mount first slews from Home to Dec 85°, where the turn draws a circle the fit can use), then tracking stops and every solve shows your knob adjustments live. Lower/Raise and Move east/west name the knob to turn.\n'
+        '* **Check** — once inside the tolerance, **Check it** sends the mount Home again and takes three solves 30° apart. Three points fix the axis exactly, with nothing taken from the live loop, so the verdict says how good the alignment really is. *Disagreement* is the gap between the check and the fine readout: more than 2′ means trust the check and adjust again.\n'
+        '* **Done** without the check ends the routine where it is; *Skip the rough step* and *Check only* on the Start card jump straight to a later step.\n'
+        '* From Home the tube turns about the axis line, so the 60° turn cannot reach the pier; the mount\'s own limits still apply.',
+    relatedSettings: ['eq.guider.guide_focal_length', 'eq.guider.guide_pixel_size'],
+    keywords: ['polar', 'alignment', 'home', 'three point', 'check', 'coarse', 'fine', 'pole', 'east', 'west'],
+  ),
   'setup.focusing.guide': Help(
     key: 'setup.focusing.guide',
     title: 'Focusing the guide camera',
