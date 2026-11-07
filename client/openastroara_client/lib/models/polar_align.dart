@@ -14,6 +14,14 @@ abstract final class PolarAlignStates {
 }
 
 /// Live-adjust capture modes (`PolarAlignSettingsDto.loop_mode`).
+abstract final class PolarAlignLoopModes {
+  /// Re-shoot continuously.
+  static const loop = 'loop';
+
+  /// Wait for `POST /api/v1/equipment/polaralign/capture` before each frame.
+  static const single = 'single';
+}
+
 /// One polar-align frame: its exposure, how long the capture (exposure +
 /// download) and the plate solve took, and the solved pointing (apparent
 /// of date, degrees) when it solved. Parsed from the status snapshot's
@@ -109,7 +117,7 @@ class PolarAlignSettings {
   final int loopCadenceMs;
   final double settleSeconds;
 
-  /// Wire field kept for older daemons; the routine ignores it (#1611).
+  /// [PolarAlignLoopModes.loop] or [PolarAlignLoopModes.single].
   final String loopMode;
 
   const PolarAlignSettings({
@@ -119,7 +127,7 @@ class PolarAlignSettings {
     this.seedRotationDeg = 30.0,
     this.loopCadenceMs = 1000,
     this.settleSeconds = 2.0,
-    this.loopMode = 'loop',
+    this.loopMode = PolarAlignLoopModes.loop,
   });
 
   factory PolarAlignSettings.fromJson(Map<String, dynamic> json) =>
@@ -131,7 +139,9 @@ class PolarAlignSettings {
         seedRotationDeg: (json['seed_rotation_deg'] as num?)?.toDouble() ?? 30.0,
         loopCadenceMs: (json['loop_cadence_ms'] as num?)?.toInt() ?? 1000,
         settleSeconds: (json['settle_seconds'] as num?)?.toDouble() ?? 2.0,
-        loopMode: json['loop_mode'] == 'single' ? 'single' : 'loop',
+        loopMode: json['loop_mode'] == PolarAlignLoopModes.single
+            ? PolarAlignLoopModes.single
+            : PolarAlignLoopModes.loop,
       );
 
   Map<String, dynamic> toJson() => <String, dynamic>{

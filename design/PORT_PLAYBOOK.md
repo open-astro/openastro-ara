@@ -6231,18 +6231,6 @@ Deferred — see the `P1`–`P5` issue backlog:
 
 ## 45. Polar alignment — iPolar-style continuous loop
 
-> **As built (2026-11-05, #1611, PR #1612) — supersedes the plate-solve engine below.** Polar
-> alignment is openastro-guider's own Static PA routine, driven by Ara over `staticpa_*`
-> (`design/API_CONTRACT.md` 2026-11-05; guider `design/POLAR_ALIGNMENT_DESIGN.md`). Ara sets the
-> guide exposure, loops, picks a star, starts the tool (auto mode; manual mode with Ara's RA turns
-> when the guider's mount cannot slew) and relays the guider's `live_adjustment` on the §45.9
-> wire. Nothing is plate-solved, `binning` and `loop_mode` are ignored, tracking is never touched,
-> `polar_align.frame_started`/`frame_complete` are no longer emitted, and `paused` means the
-> guider has not seen the star for five polls. §45.4, §45.6–45.8, §45.11 and §45.16 below
-> describe the deleted engine and are kept as history; the user-facing §45.3, §45.9 (shapes),
-> §45.10, §45.12 (remaining knobs) and §45.13 still apply.
-
-
 ### 45.1 Why not three-point polar alignment (TPPA)
 
 NINA's TPPA plugin slews to 3 widely-separated points, plate-solves each, and computes alignment from the geometric inconsistencies. It works, but:
@@ -6300,8 +6288,6 @@ This gives ARA users iPolar-quality alignment WITHOUT requiring a dedicated PA c
 
 ### 45.4 Binning per camera
 
-> Superseded 2026-11-05 (#1611): `binning` is ignored; the guider reads every frame at its own binning.
-
 **As built (#1133, 2026-10-19):** the PA frames come from the **guide camera through the guider
 daemon** (§45.14's dedicated-camera path, which is what shipped — the main camera is never opened),
 so the capability the server has is the daemon's `get_camera_frame_size`, not Alpaca `MaxBinX`.
@@ -6358,14 +6344,12 @@ The 500 ms aspiration is achievable on Pi 5 with most cameras; older Pi 4 + heav
 
 ### 45.8 Math — error vector from plate solve
 
-> Superseded 2026-11-05 (#1611): the two-frame seed and the reverse projection were deleted; the guider's `staticpa_geometry` centre-of-rotation fit is the math now.
-
 Given:
 - `P_pole` = celestial pole position (NCP: RA=0, Dec=+90 for J2000; SCP: RA=0, Dec=−90)
 - `P_solved` = where the mount's optical axis currently points (RA/Dec from plate solve)
 - `P_mount_axis` = direction the RA axis is pointing (≠ P_solved if mount isn't perfectly polar-aligned)
 
-(Superseded 2026-11-05, #1611: the guider's Static PA finds the axis from the star track.) To find `P_mount_axis`, server captures two frames with the mount rotated in RA by Δ (e.g., 30°). The two solved positions form a great-circle arc; the center of that arc is `P_mount_axis`. Difference between `P_mount_axis` and `P_pole` is the alignment error, decomposed into altitude + azimuth components per the user's site latitude.
+To find `P_mount_axis`, server captures two frames with the mount rotated in RA by Δ (e.g., 30°). The two solved positions form a great-circle arc; the center of that arc is `P_mount_axis`. Difference between `P_mount_axis` and `P_pole` is the alignment error, decomposed into altitude + azimuth components per the user's site latitude.
 
 Once `P_mount_axis` is known (after the initial 2-frame seed), subsequent single frames update the estimate via plate-solve + reverse-projection (no need to re-rotate the mount continuously).
 
@@ -6448,11 +6432,9 @@ Failure events:
 
 ### 45.11 Failure modes
 
-> Superseded 2026-11-05 (#1611): the loop pauses when five consecutive `staticpa_get_status` polls carry no `live_adjustment` (star not seen), and fails with `fit_failed` / `measure_failed` / `slew_failed` / `guider_closed` / `no_star` / `guider_refused`.
-
 | Failure | Handling |
 |---|---|
-| Star not seen by the guider (clouds, no stars) | Loop pauses after 5 polls without a readout; the client reads "The guider cannot see the star — check sky and focus"; resumes on the next sighting (#1611; was "No solve" with a retry counter) |
+| Plate solve fails (clouds, no stars) | Loop pauses; WILMA shows "No solve — check sky and try again" with retry counter. After 5 consecutive failures, suggest user check focus / point closer to pole |
 | Mount can't rotate in RA for initial 30° seed | Cap to whatever rotation is possible; user shown warning that estimate may be less precise |
 | Camera reports cooler instability mid-PA | Notify, recapture dark, continue |
 | User's site latitude too far from pole (extreme polar latitudes) | Workflow allows; bullseye math still works; just narrower workable window |
@@ -6506,8 +6488,6 @@ When support is added for an iPolar / PoleMaster / dedicated PA camera attached 
 - Pre-canned "well-known star" alignments (Polaris reticle patterns) — manual workflows, replaced by automated continuous loop
 
 ### 45.16 Solve-error budget and the 2-point call (2026-10-19, #1133)
-
-> Superseded 2026-11-05 (#1611): `FitAxisTwoPoint` is gone and tracking stays on; the guider's three-point (manual) / rotation-tracked (auto) Static PA fit replaced it after the 2-point fit read 8″ at 3.5° off the pole (#1591).
 
 Written down after the on-sky nights of 2026-10-04 (41″ final on the HAE29C / ASI120MM Mini guide
 scope, +1.9° residual confirmed by the rotate-by-hand readout) and 2026-10-16/18 (CM4 rig; the
@@ -9674,7 +9654,7 @@ Domain reservations (so AI doesn't invent overlapping namespaces):
 | `equipment.{type}` | Per-equipment-type | `equipment.camera.connected` |
 | `mount`, `focuser`, `filterwheel`, etc. | Per-equipment-type detail events | `mount.slewing`, `focuser.moving` |
 | `guider` | PHD2 wrapper | `guider.guiding`, `guider.dither_settled` |
-| `polar_align` | §45 PA loop | `polar_align.progress` |
+| `polar_align` | §45 PA loop | `polar_align.frame_complete` |
 | `meridian_flip` | §58 flip orchestration | `meridian_flip.starting` |
 | `calibration` | §39 calibration + dark library | `calibration.flats_generated` |
 | `mosaic` | §47 mosaic | `mosaic.panel_complete` |
@@ -9777,8 +9757,7 @@ Catalog is implementation source-of-truth in code; table here is the human-reada
 | `guider.restart` | `GuiderRestartPayload` | §63 | W | v1 |
 | **Polar alignment** | | | | |
 | `polar_align.started` | `PolarAlignStartedPayload` | §45 | I | v1 |
-| `polar_align.progress` | `PolarAlignProgressPayload` | §45 | D | v1 |
-| `polar_align.frame_complete` | `PolarAlignFramePayload` | §45 | D | retired 2026-11-05 (#1611) |
+| `polar_align.frame_complete` | `PolarAlignFramePayload` | §45 | D | v1 |
 | `polar_align.paused` | `PolarAlignPausedPayload` | §45 | I | v1 |
 | `polar_align.stopped` | `PolarAlignStoppedPayload` | §45 | I | v1 |
 | `polar_align.solved` | `PolarAlignSolvedPayload` | §45 | I | v1 |
