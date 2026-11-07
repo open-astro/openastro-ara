@@ -194,6 +194,14 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         }
     }
 
+    public DiscoveredDeviceDto? GetDevice(string deviceId) {
+        ArgumentException.ThrowIfNullOrEmpty(deviceId);
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            return _connections.TryGetValue(deviceId, out var conn) ? conn.Device : null;
+        }
+    }
+
     private static string EndpointKey(DiscoveredDeviceDto d) => DiscoveredDeviceEndpoint.KeyOf(d);
 
     // Caller holds _gate.

@@ -9,6 +9,7 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/models/switch_device.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegment;
+import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/services/switch_api.dart';
 import 'package:openastroara/state/equipment/switch_state.dart';
@@ -85,7 +86,8 @@ SwitchDevice _box({String id = 'box', String name = 'Pegasus Powerbox', List<Swi
           ],
     );
 
-Future<(ProviderContainer, _Rig)> _pump(WidgetTester tester, List<SwitchDevice> devices) async {
+Future<(ProviderContainer, _Rig)> _pump(WidgetTester tester, List<SwitchDevice> devices,
+    {bool inSettings = false, Map<String, DeviceDriver> drivers = const {}}) async {
   final rig = _Rig(devices);
   final c = ProviderContainer(overrides: [
     savedServerServiceProvider.overrideWithValue(_Servers()),
@@ -93,13 +95,14 @@ Future<(ProviderContainer, _Rig)> _pump(WidgetTester tester, List<SwitchDevice> 
     // A server would otherwise dial a real event stream.
     wsEventStreamProvider.overrideWith((ref) => null),
     simpleModeActiveProvider.overrideWithValue(true), // errors go to a pill
+    deviceDriverProvider.overrideWith((ref, key) async => drivers[key]),
   ]);
   addTearDown(c.dispose);
   await c.read(switchListProvider.future);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: c,
-    child: const MaterialApp(
-      home: Scaffold(body: Align(alignment: Alignment.topLeft, child: SimpleSwitchesWindow())),
+    child: MaterialApp(
+      home: Scaffold(body: Align(alignment: Alignment.topLeft, child: SimpleSwitchesWindow(inSettings: inSettings))),
     ),
   ));
   await tester.pumpAndSettle();
@@ -156,6 +159,36 @@ void main() {
     tester.widget<Slider>(_slider('box-1')).onChangeEnd!(8.47);
     await tester.pumpAndSettle();
     expect(rig.writes, ['box/0=40.0', 'box/1=8.5']);
+  });
+
+  testWidgets("in Settings each device ends with its readings under Sensors and its versions, like any device", (tester) async {
+    await _pump(
+      tester,
+      [
+        _box(),
+        _box(id: 'meter', name: 'Weather meter', ports: [_port(0, 'Sky quality', 21.3, max: 25, write: false)]),
+      ],
+      inSettings: true,
+      drivers: const {'switch/box': DeviceDriver(driverVersion: '2.1', firmware: '1.4', serialNumber: 'PB-77')},
+    );
+    final box = find.byKey(const Key('simple-switch-device-box'));
+    expect(find.descendant(of: box, matching: find.text('Sensors')), findsOneWidget);
+    expect(find.descendant(of: box, matching: find.text('Input voltage')), findsOneWidget);
+    expect(find.descendant(of: box, matching: find.text('12.4')), findsOneWidget);
+    for (final t in ['Driver', '2.1', 'Firmware', '1.4', 'Serial number', 'PB-77']) {
+      expect(find.descendant(of: box, matching: find.text(t)), findsOneWidget, reason: t);
+    }
+    final meter = find.byKey(const Key('simple-switch-device-meter'));
+    expect(find.descendant(of: meter, matching: find.text('Weather meter')), findsOneWidget,
+        reason: 'a device with only readings is still listed in Settings');
+    expect(find.descendant(of: meter, matching: find.text('21.3')), findsOneWidget);
+    expect(find.text('Nothing to switch'), findsNothing);
+  });
+
+  testWidgets('from the dot the window shows neither readings nor versions', (tester) async {
+    await _pump(tester, [_box()], drivers: const {'switch/box': DeviceDriver(driverVersion: '2.1')});
+    expect(find.text('Sensors'), findsNothing);
+    expect(find.text('Driver'), findsNothing);
   });
 
   testWidgets("a port that can't be set isn't listed: the window shows what you can switch", (tester) async {

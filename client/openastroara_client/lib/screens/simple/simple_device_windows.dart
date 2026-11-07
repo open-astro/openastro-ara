@@ -2709,11 +2709,14 @@ final simpleSwitchSettingProvider =
     );
 
 /// The switch devices' window (#1651): each connected device's ports by
-/// name, as On / Off or a level slider. Readings (ports the rig can't set)
-/// are in Settings › Rig; the camera's cooling fan, which the rig runs with
-/// the cooler, is left out.
+/// name, as On / Off or a level slider. In Settings ([inSettings]) each device
+/// also lists its readings (ports the rig can't set) under Sensors, and its
+/// versions, like any device. The camera's cooling fan, which the rig runs
+/// with the cooler, is left out.
 class SimpleSwitchesWindow extends ConsumerStatefulWidget {
-  const SimpleSwitchesWindow({super.key});
+  const SimpleSwitchesWindow({super.key, this.inSettings = false});
+
+  final bool inSettings;
 
   @override
   ConsumerState<SimpleSwitchesWindow> createState() =>
@@ -2779,7 +2782,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
         if (d.isConnected) d,
     ];
     // Only what can be switched: a port the rig can't set is a reading,
-    // shown in Settings › Rig (user, 2026-11-07).
+    // listed under Sensors in Settings only (user, 2026-11-07).
     final devices = [
       for (final d in connected)
         (
@@ -2790,8 +2793,12 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
               if (p.canWrite && p.max > p.min && !isThermalSwitchFanPort(d, p))
                 p,
           ],
+          readings: [
+            for (final p in d.ports)
+              if (!p.canWrite && !isThermalSwitchFanPort(d, p)) p,
+          ],
         ),
-    ].where((e) => e.ports.isNotEmpty).toList();
+    ].where((e) => widget.inSettings || e.ports.isNotEmpty).toList();
     final children = <Widget>[
       Row(
         spacing: AraSpace.s8,
@@ -2819,25 +2826,51 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     _syncDim(locked);
     // A drag the lock cut short sends nothing: show the rig's value again.
     if (locked) _drag = null;
-    for (final (:device, :ports) in devices) {
+    for (final (:device, :ports, :readings) in devices) {
+      final name = device.name.isEmpty ? l10n.shellSwitches : device.name;
       children.add(
-        Padding(
-          padding: const EdgeInsets.only(top: AraSpace.s12),
-          child: Text(
-            l10n.deviceSwitchPorts(
-              device.name.isEmpty ? l10n.shellSwitches : device.name,
-              ports.length,
+        Column(
+          key: Key('simple-switch-device-${device.deviceId}'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: AraSpace.s4,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: AraSpace.s12),
+              child: Text(
+                ports.isEmpty
+                    ? name
+                    : l10n.deviceSwitchPorts(name, ports.length),
+                style: kSimpleText.copyWith(
+                  color: AraColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
-            style: kSimpleText.copyWith(
-              color: AraColors.textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+            for (final p in ports) _port(device, p, locked),
+            if (widget.inSettings && readings.isNotEmpty) ...[
+              const Divider(height: AraSpace.s16),
+              SimpleVersions(
+                title: l10n.deviceSensors,
+                rows: [
+                  for (final p in readings)
+                    (p.label, simpleSwitchReading(l10n, p)),
+                ],
+              ),
+            ],
+            if (widget.inSettings)
+              ..._versions(
+                context,
+                ref
+                    .watch(
+                      deviceDriverProvider(
+                        'switch/${Uri.encodeComponent(device.deviceId)}',
+                      ),
+                    )
+                    .value,
+              ),
+          ],
         ),
       );
-      for (final p in ports) {
-        children.add(_port(device, p, locked));
-      }
     }
     return Column(
       key: const Key('simple-device-switches'),

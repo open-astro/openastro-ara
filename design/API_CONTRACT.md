@@ -1231,3 +1231,15 @@ its start and the client has nothing to do with it.
 **Spec ref:** `OpenAstroAra.Server/Contracts/EquipmentDtos.cs` (`SwitchPortDto`), `SwitchService.ProjectPorts`; client `SwitchPort.step`, `snapToSwitchStep` / `switchSliderDivisions`.
 
 **Related:** #1680, #1651 (PR #1678); tests `SwitchMediatorTest.ProjectPorts_carries_each_ports_step_to_the_rest_dto`, `switch_port_layout_test`, `simple_switches_window_test`.
+
+## 2026-11-07 — A switch device's versions: `GET /api/v1/equipment/driver/switch/{id}` (#1651)
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/driver/switch/{id}` (new); `ISwitchService.GetDevice`.
+
+**Decision:** answers a `DeviceDriverDto` (driver version, SDK version, firmware, serial number; each null when its Alpaca server doesn't report it) for one KNOWN switch, looked up by its id from the discovery record the switch service holds, from the same Alpaca management calls as `/driver/{type}`; 404 for an unknown id. `/driver/{type}` stays one device per type, so `/driver/switch` (the first remembered switch) is not what a client should ask for a given switch.
+
+**Reasoning:** every other device window lists its versions in Simple Mode's Settings; switches are many at once (one per power box), which the per-type route, built on the single equipment selection, can't address.
+
+**Spec ref:** `OpenAstroAra.Server/Endpoints/EquipmentEndpoints.cs` (`GetSwitchDriverAsync`, shared `DriverOfAsync`); client `deviceDriverProvider('switch/<id>')`.
+
+**Related:** #1651 (PR #1678); test `DeviceDriverInfoTest.The_switch_route_answers_that_switchs_driver_by_its_id`.

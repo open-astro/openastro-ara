@@ -211,6 +211,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_switch_route_answers_that_switchs_driver_by_its_id() {
+            // Switches are many at once (one per power box), so they are asked by id, not by the one selection.
+            var switches = new Mock<ISwitchService>();
+            switches.Setup(s => s.GetDevice("box")).Returns(
+                new DiscoveredDeviceDto("box", "Pegasus Powerbox", DeviceType.Switch, "rig.local", "10.0.30.223", 6800, 0, false));
+            var alpaca = new Mock<IAlpacaManagementClient>();
+            alpaca.Setup(a => a.GetConfiguredDevicesAsync("10.0.30.223", 6800, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(AlpacaManagementClient.ParseConfiguredDevices(
+                    "{\"Value\":[{\"DeviceType\":\"Switch\",\"DeviceNumber\":0,\"DeviceName\":\"Pegasus Powerbox\",\"UniqueID\":\"box\",\"Firmware\":\"1.4\"}]}"));
+            alpaca.Setup(a => a.GetDriverVersionAsync("10.0.30.223", 6800, "switch", 0, It.IsAny<CancellationToken>()))
+                .ReturnsAsync("2.1");
+
+            var result = await EquipmentEndpoints.GetSwitchDriverAsync("box", switches.Object, alpaca.Object, CancellationToken.None);
+            Assert.That((result as Ok<DeviceDriverDto>)?.Value, Is.EqualTo(new DeviceDriverDto("2.1", null, "1.4")));
+
+            var unknown = await EquipmentEndpoints.GetSwitchDriverAsync("gone", switches.Object, alpaca.Object, CancellationToken.None);
+            Assert.That((unknown as IStatusCodeHttpResult)?.StatusCode, Is.EqualTo(StatusCodes.Status404NotFound));
+        }
+
+        [Test]
         public async Task No_selected_device_is_404_and_an_unknown_type_400() {
             var selections = new Mock<IEquipmentSelectionStore>();
             selections.Setup(s => s.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new List<DiscoveredDeviceDto>());

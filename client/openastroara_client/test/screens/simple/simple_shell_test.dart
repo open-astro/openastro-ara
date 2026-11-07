@@ -2876,7 +2876,7 @@ void main() {
     expect(switches.calls, ['disconnect a', 'connect b', 'connect c']);
   });
 
-  testWidgets("Settings › Rig shows the switch devices' readings under Sensors, one table per device", (tester) async {
+  testWidgets("Settings › Switches lists each device's readings under Sensors; Rig no longer does", (tester) async {
     SwitchDevice box(String id, String name, List<SwitchPort> ports) => SwitchDevice(
         deviceId: id, alpacaDeviceNumber: 0, name: name, connectionState: SwitchConnectionState.connected, ports: ports);
     await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
@@ -2890,14 +2890,15 @@ void main() {
           ])),
     ]);
     await _openSection(tester, 'Rig');
-    final sensors = find.byKey(const Key('simple-sensors-box'));
-    await tester.ensureVisible(sensors);
-    expect(find.descendant(of: sensors, matching: find.text('Sensors · Pegasus Powerbox')), findsOneWidget);
-    expect(find.descendant(of: sensors, matching: find.text('Input voltage')), findsOneWidget);
-    expect(find.descendant(of: sensors, matching: find.text('12.4')), findsOneWidget);
-    expect(find.descendant(of: sensors, matching: find.text('Off')), findsOneWidget, reason: 'an on/off reading');
-    expect(find.descendant(of: sensors, matching: find.text('Dew 1')), findsNothing, reason: 'a switch, not a reading');
-    expect(find.byKey(const Key('simple-sensors-hub')), findsNothing, reason: 'no readings, no table');
+    expect(find.text('Input voltage'), findsNothing, reason: 'readings moved to Switches (user, 2026-11-07)');
+    await _openSection(tester, 'Switches');
+    final powerbox = find.byKey(const Key('simple-switch-device-box'));
+    await tester.ensureVisible(find.descendant(of: powerbox, matching: find.text('Input voltage')));
+    expect(find.descendant(of: powerbox, matching: find.text('Sensors')), findsOneWidget);
+    expect(find.descendant(of: powerbox, matching: find.text('12.4')), findsOneWidget);
+    expect(find.descendant(of: powerbox, matching: find.text('Raining')), findsOneWidget);
+    final hub = find.byKey(const Key('simple-switch-device-hub'));
+    expect(find.descendant(of: hub, matching: find.text('Sensors')), findsNothing, reason: 'no readings, no table');
   });
 
   testWidgets('Settings lists Switches only while the rig knows a switch device', (tester) async {
