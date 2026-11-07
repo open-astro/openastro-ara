@@ -46,6 +46,7 @@ namespace OpenAstroAra.Test {
         private string _profileDir = null!;
         private string _bridgeDir = null!;
         private string _guiderDir = null!;
+        private string _ninaDir = null!;
         private string _aptHistory = null!;
         private readonly ConcurrentQueue<IReadOnlyList<string>> _journalCalls = new();
         private Func<IReadOnlyList<string>, IEnumerable<string>> _journal = args => [$"journal for {string.Join(' ', args)}"];
@@ -56,8 +57,9 @@ namespace OpenAstroAra.Test {
             _profileDir = Path.Combine(_root, "var-lib-openastroara");
             _bridgeDir = Path.Combine(_root, "AlpacaBridge");
             _guiderDir = Path.Combine(_root, "PHD2");
+            _ninaDir = Path.Combine(_root, "local-share", "NINA", "Logs");
             _aptHistory = Path.Combine(_root, "history.log");
-            foreach (var d in new[] { _profileDir, _bridgeDir, _guiderDir, Path.Combine(_profileDir, "logs"), Path.Combine(_profileDir, "NINA", "Logs") }) {
+            foreach (var d in new[] { _profileDir, _bridgeDir, _guiderDir, Path.Combine(_profileDir, "logs"), _ninaDir }) {
                 Directory.CreateDirectory(d);
             }
             _journalCalls.Clear();
@@ -85,7 +87,8 @@ namespace OpenAstroAra.Test {
                 KernelRing: (_, output, _) => {
                     output("[2026-10-28T23:41:02] usb 2-1: USB disconnect, device number 4");
                     return 0;
-                })) {
+                },
+                NinaLogDir: _ninaDir)) {
                 FileCap = fileCap,
                 TotalCap = totalCap,
             };
@@ -115,7 +118,7 @@ namespace OpenAstroAra.Test {
 
         private void SeedLastNight(DateTime old) {
             Write(Path.Combine(_profileDir, "logs", "openastroara-20261028.log"), "ara daemon line\n");
-            Write(Path.Combine(_profileDir, "NINA", "Logs", "20261028-220306.log"), "nina layer line\n");
+            Write(Path.Combine(_ninaDir, "20261028-220306.log"), "nina layer line\n");
             Write(Path.Combine(_bridgeDir, "alpacabridge-2026-10-28.log"), "bridge line\n");
             Write(Path.Combine(_bridgeDir, "alpacabridge-2026-10-20.log"), "a week-old bridge log\n", old);
             Write(Path.Combine(_guiderDir, "PHD2_DebugLog_2026-10-28_220000.txt"), "guider debug line\n");
@@ -307,6 +310,54 @@ namespace OpenAstroAra.Test {
             }
             Assert.That(state!.Status, Is.EqualTo("failed"));
             Assert.That(state.Error, Is.Not.Empty);
+        }
+
+        [Test]
+        public async Task The_manifest_is_scrubbed_for_the_sharing_mode() {
+            using var svc = new BugReportService(_profileDir, NullLogger<BugReportService>.Instance,
+                BugReportSources.None with { GuiderLogDir = "/home/joey/PHD2" });
+
+            var prep = await svc.PrepareAsync(null, CancellationToken.None, BugReportSharingMode.Redacted, DateTimeOffset.UtcNow.AddHours(-1));
+
+            using var zip = await OpenAsync(svc, prep.PreparationId);
+            Assert.That(Read(zip, "manifest.json"), Does.Not.Contain("joey"), "the redacted mode scrubs usernames in paths");
+        }
+
+        [Test]
+        public async Task A_preparation_still_queued_is_never_pruned() {
+            // The first preparation holds the gate in its journal read while more than MaxRetainedBundles queue behind it.
+            using var hold = new ManualResetEventSlim();
+            _journal = args => {
+                hold.Wait();
+                return ["line"];
+            };
+            using var svc = Service();
+            var ids = Enumerable.Range(0, 12).Select(_ => svc.StartPrepare(BugReportSharingMode.Full, DateTimeOffset.UtcNow.AddHours(-1)).PreparationId).ToList();
+            try {
+                Assert.That(ids.Select(id => svc.GetPreparation(id)?.Status), Is.All.EqualTo("preparing"));
+            } finally {
+                hold.Set();
+                var deadline = DateTime.UtcNow.AddSeconds(60);
+                while (ids.Any(id => svc.GetPreparation(id)?.Status == "preparing") && DateTime.UtcNow < deadline) {
+                    await Task.Delay(20);
+                }
+            }
+        }
+
+        [Test]
+        public async Task A_finished_bundle_is_ready_after_a_restart() {
+            BugReportPreparationDto prep;
+            using (var before = Service()) {
+                prep = await before.PrepareAsync(null, CancellationToken.None, BugReportSharingMode.Full, DateTimeOffset.UtcNow.AddHours(-1));
+            }
+
+            using var after = Service();
+            var state = after.GetPreparation(prep.PreparationId);
+
+            Assert.That(state, Is.Not.Null);
+            Assert.That(state!.Status, Is.EqualTo("ready"));
+            Assert.That(state.EstimatedSizeBytes, Is.EqualTo(prep.EstimatedSizeBytes));
+            Assert.That(state.DownloadUrl, Is.EqualTo(prep.DownloadUrl));
         }
 
         [Test]

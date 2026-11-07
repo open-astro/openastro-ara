@@ -39,13 +39,16 @@ public delegate int? BugReportJournalReader(IReadOnlyList<string> args, Action<s
 /// <param name="JournalUnits">The units whose journal is exported, one file each.</param>
 /// <param name="KernelRing">The kernel ring buffer (<c>dmesg</c>): USB drops and power events since boot, which a
 /// journald that keeps no kernel messages (the CM4's) would otherwise lose. Its args are ignored.</param>
+/// <param name="NinaLogDir">The NINA-layer Core logger's folder (<c>LocalApplicationData/NINA/Logs</c>), written by
+/// builds before #1591.</param>
 public sealed record BugReportSources(
     string? AlpacaBridgeLogDir,
     string? GuiderLogDir,
     IReadOnlyList<string> SystemFiles,
     BugReportJournalReader? Journal,
     IReadOnlyList<string> JournalUnits,
-    BugReportJournalReader? KernelRing = null) {
+    BugReportJournalReader? KernelRing = null,
+    string? NinaLogDir = null) {
 
     /// <summary>No sources beyond Ara's own (desktop hosts, tests).</summary>
     public static readonly BugReportSources None = new(null, null, [], null, []);
@@ -60,7 +63,9 @@ public sealed record BugReportSources(
         // power-watch logs the Pi's under-voltage and throttling changes where a rig installs it (the CM4
         // does): the first thing to read after a brown-out night. Absent elsewhere: "-- No entries --".
         JournalUnits: ["openastroara-server", "alpacabridge", "openastro-guider", "power-watch"],
-        KernelRing: (_, output, ct) => RunTool("dmesg", ["--time-format", "iso"], output, ct));
+        KernelRing: (_, output, ct) => RunTool("dmesg", ["--time-format", "iso"], output, ct),
+        // Where the Core logger writes ($HOME/.local/share/NINA/Logs), not under the profile dir.
+        NinaLogDir: Path.Combine(OpenAstroAra.Core.Utility.CoreUtil.APPLICATIONTEMPPATH, "Logs"));
 
     public static BugReportSources ForHost() => RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? Linux : None;
 
@@ -139,7 +144,7 @@ public sealed partial class BugReportService {
         if (since is not DateTimeOffset from) {
             return;
         }
-        AddFolder(archive, "ara-nina", Path.Combine(_profileDir, "NINA", "Logs"), "*.log", "ara-nina-logs", from, null, mode, manifest, budget, progress, ct);
+        AddFolder(archive, "ara-nina", _sources.NinaLogDir, "*.log", "ara-nina-logs", from, null, mode, manifest, budget, progress, ct);
         AddFolder(archive, "alpacabridge", _sources.AlpacaBridgeLogDir, "alpacabridge-*.log", "alpacabridge", from, null, mode, manifest, budget, progress, ct);
         AddFolder(archive, "guider", _sources.GuiderLogDir, "PHD2_*Log_*.txt", "guider", from, null, mode, manifest, budget, progress, ct);
         foreach (var file in _sources.SystemFiles) {

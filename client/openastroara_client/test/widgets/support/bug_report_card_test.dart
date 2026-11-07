@@ -88,7 +88,9 @@ Directory _freshDir() {
   return d;
 }
 
-Widget _host(_FakeBugReportClient api, {ClientErrorLog? log, Directory? dir}) => ProviderScope(
+Widget _host(_FakeBugReportClient api,
+        {ClientErrorLog? log, Directory? dir, Duration packingTimeout = const Duration(minutes: 15)}) =>
+    ProviderScope(
       overrides: [
         bugReportApiProvider.overrideWith((ref) {
           ref.onDispose(api.close);
@@ -103,6 +105,7 @@ Widget _host(_FakeBugReportClient api, {ClientErrorLog? log, Directory? dir}) =>
           body: BugReportCard(
             savePathPicker: (_, name) async => '${(dir ?? _freshDir()).path}/$name',
             pollInterval: const Duration(milliseconds: 10),
+            packingTimeout: packingTimeout,
           ),
         ),
       ),
@@ -352,6 +355,23 @@ void main() {
 
     expect(find.text('Before you share this bug report'), findsNothing);
     expect(find.textContaining('the drive is full'), findsOneWidget);
+    expect(api.downloadCalls, 0);
+  });
+
+  testWidgets('a bundle still packing past the timeout says so and never offers a download', (tester) async {
+    final api = _FakeBugReportClient()
+      ..script = List.filled(
+          20, const BugReportPreparation(preparationId: 'rig-3', status: 'preparing', estimatedSizeBytes: 0),
+          growable: true);
+    await tester.pumpWidget(_host(api, packingTimeout: Duration.zero));
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Prepare & download'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('Before you share this bug report'), findsNothing);
+    expect(find.textContaining('the rig is still packing the logs'), findsOneWidget);
     expect(api.downloadCalls, 0);
   });
 }

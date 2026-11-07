@@ -165,15 +165,16 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
             LogPrepared(id, _bugReportsDir);
         } catch (Exception ex) {
             LogPrepareFailed(ex, id);
-            _preparations[id] = _preparations[id] with { Status = "failed", Error = ex.Message };
+            _preparations[id] = _preparations[id] with { Status = "failed", Error = ex.Message, CompletedUtc = DateTimeOffset.UtcNow };
         } finally {
             _gate.Release();
         }
     }
 
-    // The in-memory records only need to outlive the app's poll; keep the newest few.
+    // The finished records only need to outlive the app's poll; keep the newest few. A record still preparing
+    // stays: its background run writes to it.
     private void PrunePreparations() {
-        foreach (var stale in _preparations.Values.OrderByDescending(p => p.CompletedUtc ?? DateTimeOffset.MaxValue).Skip(MaxRetainedBundles)) {
+        foreach (var stale in _preparations.Values.Where(p => p.CompletedUtc is not null).OrderByDescending(p => p.CompletedUtc).Skip(MaxRetainedBundles)) {
             _preparations.TryRemove(stale.PreparationId, out _);
         }
     }
@@ -206,7 +207,7 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
                     // mode other than Full.
                     TryAddProfileEntry(archive, profilePath, mode);
                 }
-                WriteTextEntry(archive, ManifestFileName, ManifestJson(since, manifest));
+                WriteTextEntry(archive, ManifestFileName, BugReportRedactor.RedactText(ManifestJson(since, manifest), mode));
             }
 
             ct.ThrowIfCancellationRequested();
