@@ -1115,7 +1115,7 @@ void main() {
     expect(find.byKey(const Key('simple-polar-exposure')), findsNothing, reason: 'picking a mode opens nothing');
     await tester.tap(chip);
     await tester.pump();
-    expect(find.descendant(of: chip, matching: find.text('1 s')), findsOneWidget);
+    expect(find.descendant(of: chip, matching: find.text('1 s\nLoop')), findsOneWidget);
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
     final panel = _panelOf(tester, find.byKey(const Key('simple-polar-exposure')));
     expect(panel.right, rail.left - kSimpleInset);
@@ -1128,13 +1128,13 @@ void main() {
     expect(find.byKey(const Key('simple-polar-exposure')), findsOneWidget);
   });
 
-  testWidgets('the P.A. chip shows the exposure under the icon, never cut', (tester) async {
+  testWidgets('the P.A. chip stacks exposure over Loop/Single under the icon, never cut', (tester) async {
     tester.platformDispatcher.textScaleFactorTestValue = 0.5;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     final container = await _pump(tester, const Size(1024, 768));
     await container.read(simplePolarSettingsProvider.future);
     await container.read(simplePolarSettingsProvider.notifier)
-        .save(const PolarAlignSettings(exposureSeconds: 45));
+        .save(const PolarAlignSettings(exposureSeconds: 45, loopMode: PolarAlignLoopModes.single));
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.text('Polar align'));
@@ -1142,7 +1142,7 @@ void main() {
     final chip = find.byKey(const Key('simple-settings'));
     expect(find.descendant(of: chip, matching: find.byIcon(Icons.tune)), findsOneWidget);
     final p = tester.renderObject<RenderParagraph>(
-        find.descendant(of: find.descendant(of: chip, matching: find.text('45 s')), matching: find.byType(RichText)));
+        find.descendant(of: find.descendant(of: chip, matching: find.text('45 s\nSingle')), matching: find.byType(RichText)));
     expect(p.didExceedMaxLines, isFalse, reason: 'cut');
   });
 

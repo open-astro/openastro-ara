@@ -576,6 +576,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get focusNoFocuser => 'No focuser connected';
 
   @override
+  String get polarLoop => 'Loop';
+
+  @override
+  String get polarSingle => 'Single';
+
+  @override
   String get polarStart => 'Start polar alignment';
 
   @override
@@ -589,6 +595,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get polarActionSave => 'save the polar-align settings';
+
+  @override
+  String get polarActionCapture => 'take a frame';
 
   @override
   String get polarActionComplete => 'complete polar alignment';
@@ -620,10 +629,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get polarStarLost => 'The guider cannot see the star. Check the sky.';
+  String polarNoSolve(int count) {
+    return 'No solve ($count in a row). Check the sky.';
+  }
 
   @override
   String get polarExposure => 'Exposure';
+
+  @override
+  String get polarTakeFrame => 'Take frame';
 
   @override
   String get polarDone => 'Done';

@@ -576,6 +576,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get focusNoFocuser => 'No focuser connected';
 
   @override
+  String get polarLoop => 'Loop';
+
+  @override
+  String get polarSingle => 'Single';
+
+  @override
   String get polarStart => 'Start polar alignment';
 
   @override
@@ -589,6 +595,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get polarActionSave => 'save the polar-align settings';
+
+  @override
+  String get polarActionCapture => 'take a frame';
 
   @override
   String get polarActionComplete => 'complete polar alignment';
@@ -620,10 +629,15 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get polarStarLost => 'The guider cannot see the star. Check the sky.';
+  String polarNoSolve(int count) {
+    return 'No solve ($count in a row). Check the sky.';
+  }
 
   @override
   String get polarExposure => 'Exposure';
+
+  @override
+  String get polarTakeFrame => 'Take frame';
 
   @override
   String get polarDone => 'Done';
@@ -3013,6 +3027,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get focusNoFocuser => 'Nenhum focalizador conectado';
 
   @override
+  String get polarLoop => 'Contínuo';
+
+  @override
+  String get polarSingle => 'Único';
+
+  @override
   String get polarStart => 'Iniciar alinhamento polar';
 
   @override
@@ -3026,6 +3046,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarActionSave => 'salvar os ajustes do alinhamento polar';
+
+  @override
+  String get polarActionCapture => 'fazer um quadro';
 
   @override
   String get polarActionComplete => 'concluir o alinhamento polar';
@@ -3057,10 +3080,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String get polarStarLost => 'O guia não vê a estrela. Verifique o céu.';
+  String polarNoSolve(int count) {
+    return 'Sem plate solve ($count seguidos). Verifique o céu.';
+  }
 
   @override
   String get polarExposure => 'Exposição';
+
+  @override
+  String get polarTakeFrame => 'Fazer quadro';
 
   @override
   String get polarDone => 'Concluir';
