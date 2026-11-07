@@ -2826,7 +2826,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     _syncDim(locked);
     // A drag the lock cut short sends nothing: show the rig's value again.
     if (locked) _drag = null;
-    for (final (:device, :ports, :readings) in devices) {
+    for (final (i, (:device, :ports, :readings)) in devices.indexed) {
       final name = device.name.isEmpty ? l10n.shellSwitches : device.name;
       children.add(
         Column(
@@ -2835,7 +2835,12 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
           spacing: AraSpace.s4,
           children: [
             Padding(
-              padding: const EdgeInsets.only(top: AraSpace.s12),
+              // A device after another one's tables gets more room above its
+              // title than the tables have between them, so it reads as the
+              // next device, not one more table.
+              padding: EdgeInsets.only(
+                top: i > 0 && widget.inSettings ? AraSpace.s24 : AraSpace.s12,
+              ),
               child: Text(
                 ports.isEmpty
                     ? name
