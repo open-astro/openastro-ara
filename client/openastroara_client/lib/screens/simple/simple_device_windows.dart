@@ -441,26 +441,31 @@ class _OnOff extends StatelessWidget {
   final bool enabled;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      color: AraColors.tileFill,
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final (v, key, word) in [
-          (true, ids.$1, labels?.$1 ?? context.l10n.deviceOn),
-          (false, ids.$2, labels?.$2 ?? context.l10n.deviceOff),
-        ])
-          SimpleSegment(
-            key: Key('$id-$key'),
-            label: word,
-            selected: on == v,
-            radius: 8,
-            onTap: on == v || !enabled ? null : () => onChanged(v),
-          ),
-      ],
+  Widget build(BuildContext context) => Opacity(
+    // Locked looks locked: the selected segment would otherwise stay as
+    // bright as a live one (Material's disabled opacity).
+    opacity: enabled ? 1 : 0.38,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: AraColors.tileFill,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final (v, key, word) in [
+            (true, ids.$1, labels?.$1 ?? context.l10n.deviceOn),
+            (false, ids.$2, labels?.$2 ?? context.l10n.deviceOff),
+          ])
+            SimpleSegment(
+              key: Key('$id-$key'),
+              label: word,
+              selected: on == v,
+              radius: 8,
+              onTap: on == v || !enabled ? null : () => onChanged(v),
+            ),
+        ],
+      ),
     ),
   );
 }

@@ -197,6 +197,24 @@ void main() {
     expect(c.read(simpleSwitchSettingProvider), isNull);
   });
 
+  testWidgets('locked On / Off segments look dimmed, not only untappable', (tester) async {
+    final (_, rig) = await _pump(tester, [
+      _box(ports: [_port(0, '12V Out 1', 1), _port(1, '12V Out 2', 0)]),
+    ]);
+    double opacity(String port) {
+      final o = find.ancestor(of: _segment(port, 'on'), matching: find.byType(Opacity));
+      return o.evaluate().isEmpty ? 1 : tester.widget<Opacity>(o.first).opacity;
+    }
+    expect(opacity('box-1'), 1);
+    rig.hold = Completer();
+    await tester.tap(_segment('box-0', 'off'));
+    await tester.pump();
+    expect(opacity('box-1'), lessThan(1), reason: 'the other port waits, and shows it');
+    rig.hold!.complete();
+    await tester.pumpAndSettle();
+    expect(opacity('box-1'), 1);
+  });
+
   testWidgets('a refused write says why in a pill and the port keeps what the rig reports', (tester) async {
     final (c, rig) = await _pump(tester, [_box()]);
     rig.refuse = StateError('port over its current limit');
