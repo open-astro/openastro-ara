@@ -198,6 +198,11 @@ public static partial class EquipmentEndpoints {
             .Produces<DeviceDriverDto>(StatusCodes.Status200OK)
             .WithName("GetGuideCameraDriver")
             .WithSummary("The guide camera's name, driver, SDK and firmware versions.");
+        // Switches are many at once (one per power box): each is asked by its id.
+        equipment.MapGet("/driver/switch/{id}", GetSwitchDriverAsync)
+            .Produces<DeviceDriverDto>(StatusCodes.Status200OK)
+            .WithName("GetSwitchDriver")
+            .WithSummary("A switch device's driver, SDK and firmware versions, by its id.");
         equipment.MapGet("/driver/{type}", GetDeviceDriverAsync)
             .Produces<DeviceDriverDto>(StatusCodes.Status200OK)
             .WithName("GetDeviceDriver")
@@ -1057,6 +1062,22 @@ public static partial class EquipmentEndpoints {
         if (device is null) {
             return Results.Problem($"No {type} is set up.", statusCode: StatusCodes.Status404NotFound);
         }
+        return await DriverOfAsync(device, alpaca, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>GET /driver/switch/{id}: the versions of one known switch, from the Alpaca server it
+    /// was connected from; 404 for an unknown id.</summary>
+    public static async Task<IResult> GetSwitchDriverAsync(
+            string id, ISwitchService switches, IAlpacaManagementClient alpaca, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(switches);
+        ArgumentNullException.ThrowIfNull(alpaca);
+        var device = switches.GetDevice(id);
+        return device is null
+            ? Results.Problem($"No switch '{id}' is known.", statusCode: StatusCodes.Status404NotFound)
+            : await DriverOfAsync(device, alpaca, ct).ConfigureAwait(false);
+    }
+
+    private static async Task<IResult> DriverOfAsync(DiscoveredDeviceDto device, IAlpacaManagementClient alpaca, CancellationToken ct) {
         var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
         var wire = device.Type.Canonical().ToString().ToLowerInvariant();
         try {

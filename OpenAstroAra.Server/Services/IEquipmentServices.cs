@@ -193,6 +193,10 @@ public interface ISwitchService {
     // connected/known switch.
     Task<IReadOnlyList<SwitchDto>> GetAllAsync(CancellationToken ct);
     Task<SwitchDto?> GetAsync(string deviceId, CancellationToken ct);
+
+    /// <summary>The discovery record a KNOWN switch was connected from (its Alpaca host, port and
+    /// device number), for <c>GET /driver/switch/{id}</c>; null for an unknown id.</summary>
+    DiscoveredDeviceDto? GetDevice(string deviceId);
     Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> DisconnectAsync(string deviceId, string? idempotencyKey, CancellationToken ct);
     Task SetValueAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct);

@@ -9,6 +9,7 @@ SwitchPort _port(
   double min = 0,
   double max = 1,
   bool canWrite = true,
+  double step = 0,
 }) =>
     SwitchPort(
       id: id,
@@ -17,6 +18,7 @@ SwitchPort _port(
       min: min,
       max: max,
       canWrite: canWrite,
+      step: step,
     );
 
 void main() {
@@ -240,10 +242,40 @@ void main() {
       expect(quantiseSwitchWrite(offset, 2.2), 2.5);
     });
 
+    test("snaps to the device's step when it reports one (#1680)", () {
+      expect(quantiseSwitchWrite(_port(0, 'Light Box', max: 100, step: 10), 37), 40);
+      // Exact: 0.1 * 85 is 8.500000000000002 in floating point.
+      expect(quantiseSwitchWrite(_port(0, 'Temperature', max: 15, step: 0.1), 8.47), 8.5);
+      expect(quantiseSwitchWrite(_port(0, 'Odd', min: 0.5, max: 3.5, step: 0.5), 1.8), 2);
+    });
+
+    test('a max off the step grid is never sent: the top stops on the last step', () {
+      final p = _port(0, 'Coarse', max: 100, step: 40);
+      expect(quantiseSwitchWrite(p, 99), 80);
+      expect(quantiseSwitchWrite(p, 100), 80);
+    });
+
+    test('a step finer than 1000 stops over the range is treated as unknown', () {
+      expect(quantiseSwitchWrite(_port(0, 'Big', max: 65535, step: 0.01), 41234.87), 41235);
+    });
+
     test('never escapes the port bounds', () {
       final p = _port(0, 'DEW6', max: 100);
       expect(quantiseSwitchWrite(p, 100.4), 100);
       expect(quantiseSwitchWrite(p, -0.4), 0);
+    });
+  });
+
+  group('switchSliderDivisions', () {
+    test("one stop per device step when the step is known (#1680)", () {
+      expect(switchSliderDivisions(_port(0, 'Light Box', max: 100, step: 10)), 10);
+      expect(switchSliderDivisions(_port(0, 'Temperature', max: 15, step: 0.1)), 150);
+    });
+
+    test('without a step: one stop per whole unit on a whole range, else continuous', () {
+      expect(switchSliderDivisions(_port(0, 'DEW6', max: 100)), 100);
+      expect(switchSliderDivisions(_port(0, 'Fine', max: 1.5)), isNull);
+      expect(switchSliderDivisions(_port(0, 'Big', max: 65535)), isNull, reason: 'capped at 1000');
     });
   });
 

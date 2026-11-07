@@ -27,6 +27,20 @@ void main() {
       expect(d.ports[2].canWrite, isFalse);
     });
 
+    test("reads each port's step; an older daemon without one leaves it unknown (0)", () {
+      final d = SwitchDevice.fromJson(const <String, dynamic>{
+        'device_id': 'box',
+        'alpaca_device_number': 0,
+        'state': 'connected',
+        'ports': <Map<String, dynamic>>[
+          {'id': 0, 'name': 'Light Box', 'value': 40, 'min': 0, 'max': 100, 'can_write': true, 'step': 10},
+          {'id': 1, 'name': 'PWM', 'value': 55, 'min': 0, 'max': 100, 'can_write': true},
+        ],
+      });
+      expect(d.ports[0].step, 10);
+      expect(d.ports[1].step, 0);
+    });
+
     test('unknown state token + missing ports degrade safely', () {
       final d = SwitchDevice.fromJson(const <String, dynamic>{
         'device_id': 'x',

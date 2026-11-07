@@ -15,7 +15,7 @@ Simple Mode covers the top 90 % most used features, for 90 % of the people, 90 %
 ## Direction (chosen: B)
 
 - **Shape:** the gear opens a sheet over the dimmed image. Sections on the left (Devices, with each device listed under it, Site, Storage, End of night, Alerts, Rig), the section or device window on the right. A tap outside or Close returns to the image.
-- **One window per device, one piece of code:** each device has its own window (Camera, Mount, Focuser, Filter wheel, Guider). The same widget is the right pane of Settings and opens on its own, under its dot, when the device's dot in the top bar is tapped (the image stays visible). Each window's header holds the device's status dot and name. A device's window has no Connect / Disconnect (user, 2026-11-03): Ara connects the profile's gear and reconnects what drops. Settings › Devices keeps Connect / Disconnect per device (user: "leave it in the Settings"), and a device that failed or is stuck shows red there with the reason and **Reconnect** (disconnect plus connect).
+- **One window per device, one piece of code:** each device has its own window (Camera, Mount, Focuser, Filter wheel, Switches, Guider). The same widget is the right pane of Settings and opens on its own, under its dot, when the device's dot in the top bar is tapped (the image stays visible). Each window's header holds the device's status dot and name. A device's window has no Connect / Disconnect (user, 2026-11-03): Ara connects the profile's gear and reconnects what drops. Settings › Devices keeps Connect / Disconnect per device (user: "leave it in the Settings"), and a device that failed or is stuck shows red there with the reason and **Reconnect** (disconnect plus connect).
 - **No page titles:** the selected section in the list names the page; the page doesn't repeat it (user, 2026-11-03).
 - **Look:** the sheet uses the 90 % `overlay-scrim` every Simple Mode panel uses, plus a 5 px blur of the image behind (user, 2026-11-03). Its dimmest text (#A0A0A0) is 5.8:1 over a white flat under the veil, AA.
 - **Values are shared** with the Advanced UI: Simple Mode only hides settings, so switching modes resets nothing.
@@ -29,6 +29,8 @@ Simple Mode covers the top 90 % most used features, for 90 % of the people, 90 %
 | Focuser | Position, temperature, coarse and fine knobs (a click scales to the travel; #1662), Autofocus, refocus when it cools by N °C | Frame-count and filter-change triggers, backlash |
 | Filter wheel | Filter in place, tap a filter to move; a manual wheel asks for the swap and its confirmation (#1662) | Renaming filters, focus offsets, slot labels for sequences |
 | Rotator | Sky angle (and mechanical angle when it differs), a sky-angle dial in 1° clicks with Start / Stop in its middle, Sync to the dial's target (#1662) | Reverse |
+| Switches | Each connected switch device's ports by name: On / Off or a level slider, then its readings (Sensors) and its versions; the camera's cooling fan left out (#1651) | Renaming or grouping ports, automatic dew control, adding switch devices |
+| Flat panel | Cover Open / Closed, light On / Off, brightness (0 to the panel's maximum, sent on release), a drawing of the panel face beside them; only the parts the panel has (#1662) | Auto-brightness target, auto-flats, flat-panel safety policies |
 | Guider | RMS, dither every N frames | Graph (bottom row), settle, tuning, calibration |
 | Site | Location (this device's GPS or typed), time zone | Clock check, horizon, Bortle/SQM |
 | Storage | Which drive, free space | Copy to another disk, file names |
@@ -36,7 +38,7 @@ Simple Mode covers the top 90 % most used features, for 90 % of the people, 90 %
 | Alerts | Safety alarm sound, silent delay | Where alerts go (in-app only today, §46) |
 | Rig | System figures, Change profile / Change rig, permanent pier, Simple Mode switch, version, logs & bug report | Profile editing, wizard, sky data |
 
-Devices lists only the devices the profile has, each with its state. Every Alpaca device the profile has gets a window of its own (#1662, 2026-11-07, reversing the 2026-11-03 decision that the flat panel, dome, weather and safety monitor have none); the flat panel, dome, weather and safety monitor windows join this brief as each is built. ASIAir's settings stay the reference for how much control to give (user, 2026-11-03: "we need to give SOME control to the user").
+Devices lists only the devices the profile has, each with its state. Every Alpaca device the profile has gets a window of its own (#1662, 2026-11-07, reversing the 2026-11-03 decision that the flat panel, dome, weather and safety monitor have none); the dome, weather and safety monitor windows join this brief as each is built. ASIAir's settings stay the reference for how much control to give (user, 2026-11-03: "we need to give SOME control to the user").
 
 ## States
 

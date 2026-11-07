@@ -12,11 +12,14 @@ import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../services/equipment_driver_api.dart';
 import '../../models/filter_wheel_status.dart';
 import '../../models/focuser_status.dart';
+import '../../models/switch_device.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../models/guider_status.dart';
 import '../../state/equipment/filter_wheel_state.dart';
+import '../../state/equipment/flat_panel_state.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/equipment/rotator_state.dart';
+import '../../state/equipment/switch_state.dart';
 import '../../state/guider/guider_equipment_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
@@ -32,9 +35,21 @@ import '../../state/app_locale_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../widgets/equipment/equipment_status_chip.dart'
+    show switchChipLevel;
+import '../../widgets/equipment/switch_port_layout.dart'
+    show
+        SwitchPortKind,
+        classifySwitchPort,
+        findModePort,
+        isAutoRegulating,
+        isDewModePort,
+        snapToSwitchStep,
+        switchSliderDivisions,
+        usableSwitchStep;
 import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot;
 import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
-import 'simple_shell.dart' show SimpleSegment, simpleRailScale;
+import 'simple_shell.dart' show SimpleSegment, SimpleSegments, simpleRailScale;
 
 /// One window per device in Simple Mode (design/briefs/simple-mode-settings.md):
 /// the same widget opens from the device's dot in the top bar and as its page
@@ -345,29 +360,42 @@ Widget simpleWindowStepper({
 /// One height for every row of a device window (the 44 pt of its controls),
 /// so a text-only row keeps the rhythm. [id] (English) names its Key. Too
 /// narrow for label and control side by side (a one-third Split View), the
-/// label goes over the control.
-Widget simpleWindowRow(String label, Widget value, {required String id}) =>
-    LayoutBuilder(
-      key: Key('simple-window-row-$id'),
-      builder: (context, box) => box.maxWidth < kSimpleWindowControlWidth + 96
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              spacing: AraSpace.s4,
-              children: [
-                Text(label, style: kSimpleText),
-                value,
-              ],
-            )
-          : ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 44),
-              child: Row(
-                children: [
-                  Expanded(child: Text(label, style: kSimpleText)),
-                  value,
-                ],
-              ),
+/// label goes over the control. [labelInControl]: the control says the name
+/// to a screen reader, so the label isn't read a second time.
+Widget simpleWindowRow(
+  String label,
+  Widget value, {
+  required String id,
+  bool labelInControl = false,
+}) => LayoutBuilder(
+  key: Key('simple-window-row-$id'),
+  builder: (context, box) => box.maxWidth < kSimpleWindowControlWidth + 96
+      ? Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: AraSpace.s4,
+          children: [
+            ExcludeSemantics(
+              excluding: labelInControl,
+              child: Text(label, style: kSimpleText),
             ),
-    );
+            value,
+          ],
+        )
+      : ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Row(
+            children: [
+              Expanded(
+                child: ExcludeSemantics(
+                  excluding: labelInControl,
+                  child: Text(label, style: kSimpleText),
+                ),
+              ),
+              value,
+            ],
+          ),
+        ),
+);
 
 /// A window's ask before a move that would disturb a running plan: the
 /// question with Cancel and [confirm]. Too narrow for the question beside
@@ -415,6 +443,7 @@ class _OnOff extends StatelessWidget {
     this.labels,
     this.ids = ('on', 'off'),
     this.enabled = true,
+    this.fill = false,
   });
 
   final String id;
@@ -426,6 +455,9 @@ class _OnOff extends StatelessWidget {
   /// False: both segments show the state but take no tap.
   final bool enabled;
 
+  /// True: the two segments share the width they're given.
+  final bool fill;
+
   @override
   Widget build(BuildContext context) => DecoratedBox(
     decoration: BoxDecoration(
@@ -433,18 +465,21 @@ class _OnOff extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
     ),
     child: Row(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
       children: [
         for (final (v, key, word) in [
           (true, ids.$1, labels?.$1 ?? context.l10n.deviceOn),
           (false, ids.$2, labels?.$2 ?? context.l10n.deviceOff),
         ])
-          SimpleSegment(
-            key: Key('$id-$key'),
-            label: word,
-            selected: on == v,
-            radius: 8,
-            onTap: on == v || !enabled ? null : () => onChanged(v),
+          Flexible(
+            fit: fill ? FlexFit.tight : FlexFit.loose,
+            child: SimpleSegment(
+              key: Key('$id-$key'),
+              label: word,
+              selected: on == v,
+              radius: 8,
+              onTap: on == v || !enabled ? null : () => onChanged(v),
+            ),
           ),
       ],
     ),
@@ -2672,4 +2707,797 @@ class _SimpleFilterWheelWindowState
       return false;
     }
   }
+}
+
+/// A switch port's level or reading as Simple Mode shows it: no ".0", at
+/// most 2 places.
+String _simpleLevel(double v) {
+  final r = (v * 100).roundToDouble() / 100;
+  return r == r.roundToDouble()
+      ? r.toStringAsFixed(0)
+      : r.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '');
+}
+
+/// A slider port's level as a percent of its range ("50 %"); anything off
+/// the bottom reads at least 1 % and anything short of the top at most 99 %,
+/// so only the ends read 0 % and 100 %. The rig is still sent its own value.
+String _switchPercent(SwitchPort p, double v) {
+  final pct = v <= p.min
+      ? 0
+      : v >= p.max
+      ? 100
+      : ((v - p.min) * 100 / (p.max - p.min)).round().clamp(1, 99);
+  return '$pct %';
+}
+
+/// A port the rig can't set, as Settings › Switches lists it: On / Off for an
+/// on/off reading, else its value.
+String simpleSwitchReading(AppLocalizations l10n, SwitchPort p) => p.isBoolean
+    ? (p.value >= 0.5 ? l10n.deviceOn : l10n.deviceOff)
+    : _simpleLevel(p.value);
+
+/// The port a Switches window write is on its way to, for the status pill
+/// (#1668); null when none.
+class SimpleSwitchSettingNotifier extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void set(String? port) => state = port;
+}
+
+final simpleSwitchSettingProvider =
+    NotifierProvider<SimpleSwitchSettingNotifier, String?>(
+      SimpleSwitchSettingNotifier.new,
+    );
+
+/// The switch devices' window (#1651): each connected device's ports by
+/// name, as On / Off or a level slider. In Settings ([inSettings]) each device
+/// also lists its readings (ports the rig can't set) under Sensors, and its
+/// versions, like any device. The camera's cooling fan, which the rig runs
+/// with the cooler, is left out.
+class SimpleSwitchesWindow extends ConsumerStatefulWidget {
+  const SimpleSwitchesWindow({super.key, this.inSettings = false});
+
+  final bool inSettings;
+
+  @override
+  ConsumerState<SimpleSwitchesWindow> createState() =>
+      _SimpleSwitchesWindowState();
+}
+
+class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
+  /// The port written ("device-port") and the value asked, until the rig
+  /// answers: the control shows it meanwhile.
+  ({String port, double value})? _asked;
+
+  /// A slider being dragged, and where.
+  ({String port, double value})? _drag;
+
+  /// Locked for longer than [_dimAfter]: the other ports dim. A rig that
+  /// answers sooner never dims them, so a write doesn't flash the window.
+  bool _dim = false;
+  Timer? _dimTimer;
+  static const _dimAfter = Duration(milliseconds: 300);
+
+  /// Called whenever the lock may have changed (a write asked or answered,
+  /// the notifier busy or free), never from build.
+  void _relock() {
+    if (!mounted) return;
+    final locked = ref.read(switchActingProvider) || _asked != null;
+    setState(() {
+      if (!locked) {
+        _dimTimer?.cancel();
+        _dimTimer = null;
+        _dim = false;
+        return;
+      }
+      // A drag the lock cut short sends nothing: show the rig's value again.
+      _drag = null;
+      if (_dimTimer == null && !_dim) {
+        _dimTimer = Timer(_dimAfter, () {
+          _dimTimer = null;
+          if (mounted) setState(() => _dim = true);
+        });
+      }
+    });
+  }
+
+  /// A dew output whose mode port reads Auto: the controller sets it.
+  static bool _autoRegulated(SwitchDevice d, SwitchPort p) =>
+      isAutoRegulating(findModePort(p, d.ports));
+
+  @override
+  void dispose() {
+    _dimTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // The list has no live updates: read it fresh as the window opens.
+    Future.microtask(() => ref.read(switchListProvider.notifier).refresh());
+  }
+
+  /// On the device's step (#1680); without one, whole numbers over a range of
+  /// 10 or more, else to 0.01.
+  static double _round(SwitchPort p, double v) =>
+      snapToSwitchStep(p, v) ??
+      (p.max - p.min >= 10
+          ? (p.min + (v - p.min).roundToDouble()).clamp(p.min, p.max)
+          : (v * 100).roundToDouble() / 100);
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final async = ref.watch(switchListProvider);
+    final acting = ref.watch(switchActingProvider);
+    final connected = [
+      for (final d in async.value ?? const <SwitchDevice>[])
+        if (d.isConnected) d,
+    ];
+    // Only what can be switched: a port the rig can't set is a reading,
+    // listed under Sensors in Settings only (user, 2026-11-07).
+    final devices = [
+      for (final d in connected)
+        (
+          device: d,
+          ports: [
+            for (final p in d.ports)
+              // A range of one value has nothing to set. A dew output its
+              // controller regulates shows, as a readout, even when the
+              // driver reports it read-only meanwhile.
+              if (!isThermalSwitchFanPort(d, p) &&
+                  (p.canWrite && p.max > p.min || _autoRegulated(d, p)))
+                p,
+          ],
+          readings: [
+            for (final p in d.ports)
+              if (!p.canWrite &&
+                  !isThermalSwitchFanPort(d, p) &&
+                  !_autoRegulated(d, p))
+                p,
+          ],
+        ),
+    ].where((e) => widget.inSettings || e.ports.isNotEmpty).toList();
+    final children = <Widget>[
+      Row(
+        spacing: AraSpace.s8,
+        children: [
+          StatusDot.of(switchChipLevel(async, acting: acting)),
+          Expanded(
+            child: Text(
+              l10n.shellSwitches,
+              style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    ];
+    if (devices.isEmpty) {
+      children.add(
+        Text(
+          connected.isEmpty
+              ? l10n.deviceNotConnected
+              : l10n.deviceNothingToSwitch,
+          style: AraText.caption,
+        ),
+      );
+    }
+    ref.listen(switchActingProvider, (_, _) => _relock());
+    // The notifier drops a write while another is on its way: lock them all.
+    final locked = acting || _asked != null;
+    for (final (i, (:device, :ports, :readings)) in devices.indexed) {
+      final name = device.name.isEmpty ? l10n.shellSwitches : device.name;
+      children.add(
+        Column(
+          key: Key('simple-switch-device-${device.deviceId}'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: AraSpace.s4,
+          children: [
+            Padding(
+              // A device after another one's tables gets more room above its
+              // title than the tables have between them, so it reads as the
+              // next device, not one more table.
+              padding: EdgeInsets.only(
+                top: i > 0 && widget.inSettings ? AraSpace.s24 : AraSpace.s12,
+              ),
+              child: Text(
+                ports.isEmpty
+                    ? name
+                    : l10n.deviceSwitchPorts(name, ports.length),
+                style: kSimpleText.copyWith(
+                  color: AraColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            for (final p in ports) _port(device, p, locked),
+            if (widget.inSettings && readings.isNotEmpty) ...[
+              const Divider(height: AraSpace.s16),
+              SimpleVersions(
+                title: l10n.deviceSensors,
+                rows: [
+                  for (final p in readings)
+                    (p.label, simpleSwitchReading(l10n, p)),
+                ],
+              ),
+            ],
+            if (widget.inSettings)
+              ..._versions(
+                context,
+                ref
+                    .watch(
+                      deviceDriverProvider(
+                        'switch/${Uri.encodeComponent(device.deviceId)}',
+                      ),
+                    )
+                    .value,
+              ),
+          ],
+        ),
+      );
+    }
+    return Column(
+      key: const Key('simple-device-switches'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s4,
+      children: children,
+    );
+  }
+
+  Widget _port(SwitchDevice d, SwitchPort p, bool locked) {
+    final l10n = context.l10n;
+    final id = '${d.deviceId}-${p.id}';
+    final asked = _asked?.port == id ? _asked!.value : null;
+    var label = p.label;
+    // Locked past [_dimAfter], the other ports read locked; the asked one
+    // stays bright.
+    final dimmed = locked && _dim && asked == null;
+    final Widget control;
+    if (_autoRegulated(d, p)) {
+      // The full UI's readout: fighting the regulation helps nobody.
+      control = Text(
+        l10n.deviceSetAutomatically,
+        style: kSimpleText.copyWith(color: AraColors.textSecondary),
+      );
+    } else if (classifySwitchPort(p) == SwitchPortKind.mode) {
+      // A few named states (a dew channel's Auto / Manual / Switch, a fan's
+      // speeds) are segments, as the full UI's mode picker, not a level.
+      final lo = p.min.round();
+      final names = isDewModePort(p)
+          ? [l10n.deviceAuto, l10n.deviceModeManual, l10n.deviceModeSwitch]
+          : [for (var v = lo; v <= p.max.round(); v++) '$v'];
+      final on = (asked ?? p.value).round();
+      control = Semantics(
+        label: p.label,
+        container: true,
+        child: Opacity(
+          opacity: dimmed ? AraOpacity.locked : 1,
+          child: SimpleSegments<int>(
+            options: [
+              for (final (i, name) in names.indexed)
+                (lo + i, name, '${lo + i}'),
+            ],
+            selected: on,
+            onPick: locked ? null : (v) => _write(d, p, v.toDouble()),
+            keyPrefix: 'simple-switch-$id',
+            expand: false,
+          ),
+        ),
+      );
+    } else if (p.isBoolean) {
+      control = Semantics(
+        label: p.label,
+        container: true,
+        child: Opacity(
+          opacity: dimmed ? AraOpacity.locked : 1,
+          child: _OnOff(
+            id: 'simple-switch-$id',
+            on: (asked ?? p.value) >= 0.5,
+            enabled: !locked,
+            onChanged: (on) => _write(d, p, on ? 1 : 0),
+          ),
+        ),
+      );
+    } else {
+      final v = (_drag?.port == id ? _drag!.value : asked ?? p.value).clamp(
+        p.min,
+        p.max,
+      );
+      label = l10n.deviceSwitchLevel(p.label, _switchPercent(p, _round(p, v)));
+      control = SizedBox(
+        width: kSimpleWindowControlWidth,
+        child: Opacity(
+          opacity: dimmed ? AraOpacity.locked : 1,
+          child: IgnorePointer(
+            ignoring: dimmed,
+            child: Semantics(
+              label: p.label,
+              child: Slider(
+                key: Key('simple-switch-$id'),
+                min: p.min,
+                max: p.max,
+                divisions: usableSwitchStep(p) == null
+                    ? null
+                    : switchSliderDivisions(p),
+                value: v,
+                semanticFormatterCallback: (x) =>
+                    _switchPercent(p, _round(p, x)),
+                // Locked: it takes nothing; once dimmed it fades as the
+                // segments do and takes no touch or screen-reader action, so a
+                // fast answer doesn't flash it.
+                onChanged: (x) {
+                  if (!locked) setState(() => _drag = (port: id, value: x));
+                },
+                onChangeEnd: (x) {
+                  if (locked) return;
+                  setState(() => _drag = null);
+                  _write(d, p, x);
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return simpleWindowRow(
+      label,
+      control,
+      id: 'switch-$id',
+      // The readout has no name of its own: the row's label says it.
+      labelInControl: !_autoRegulated(d, p),
+    );
+  }
+
+  Future<void> _write(SwitchDevice d, SwitchPort p, double value) async {
+    final v = _round(p, value);
+    final l10n = context.l10n;
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.switches);
+    final setting = ref.read(simpleSwitchSettingProvider.notifier);
+    setState(() => _asked = (port: '${d.deviceId}-${p.id}', value: v));
+    _relock();
+    // Two devices with a port of this name: the pill says which device.
+    final shared = (ref.read(switchListProvider).value ?? const []).any(
+      (o) =>
+          o.deviceId != d.deviceId &&
+          o.isConnected &&
+          o.ports.any((q) => q.label == p.label),
+    );
+    setting.set(
+      shared
+          ? l10n.deviceSwitchPortOnDevice(
+              p.label,
+              d.name.isEmpty ? l10n.shellSwitches : d.name,
+            )
+          : p.label,
+    );
+    try {
+      // Re-reads the list once the rig takes it.
+      final performed = await ref
+          .read(switchListProvider.notifier)
+          .setValue(deviceId: d.deviceId, portId: p.id, value: v);
+      if (!performed && mounted) _sayBusy(ref, l10n);
+    } catch (e) {
+      notify(
+        l10n.deviceCouldntSetPort(p.label),
+        detail: describeEquipmentError(e),
+        error: true,
+      );
+    } finally {
+      setting.set(null);
+      if (mounted) {
+        setState(() => _asked = null);
+        _relock();
+      }
+    }
+  }
+}
+
+/// The flat panel's window: the cover (Open / Closed), the light (On / Off)
+/// and its brightness, with a drawing of the panel face beside them. Only
+/// the parts the panel has show. Auto-brightness, auto-flats and the
+/// safety policies stay in the full UI.
+class SimpleFlatPanelWindow extends ConsumerStatefulWidget {
+  const SimpleFlatPanelWindow({super.key, this.inSettings = false});
+
+  /// In Settings the window ends with the panel's versions.
+  final bool inSettings;
+
+  @override
+  ConsumerState<SimpleFlatPanelWindow> createState() =>
+      _SimpleFlatPanelWindowState();
+}
+
+class _SimpleFlatPanelWindowState extends ConsumerState<SimpleFlatPanelWindow> {
+  /// The light asked for, while its command is on its way, so the segment
+  /// moves under the finger (the light has no moving state to poll).
+  bool? _pendingLight;
+
+  /// The brightness under the finger, then sent, until the command lands.
+  int? _level;
+
+  /// A command is on its way: a second ask says busy and leaves
+  /// [_pendingLight] and [_level] to the first.
+  bool _applying = false;
+
+  /// A change asked for while a plan runs: the window asks first.
+  ({bool? openCover, bool? lightOn, int? brightness})? _asking;
+
+  /// The panel face's size beside the rows, at most.
+  static const double _face = 140;
+
+  /// The narrowest the rows go beside the face (both segments' words whole).
+  static const double _rowsMin = 176;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final s = ref.watch(flatPanelProvider).value;
+    final children = <Widget>[
+      SimpleDeviceHeader(type: l10n.shellFlatPanel, status: s),
+    ];
+    if (s == null || !s.isConnected) {
+      children.add(
+        Text(
+          s?.isConnecting ?? false
+              ? l10n.deviceConnecting
+              : l10n.deviceNotConnected,
+          style: AraText.caption,
+        ),
+      );
+    } else {
+      // Watched, so it's known by the time a control is used.
+      final planRunning =
+          ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
+      final asking = _asking != null;
+      void send({bool? openCover, bool? lightOn, int? brightness}) =>
+          planRunning
+          ? setState(
+              () => _asking = (
+                openCover: openCover,
+                lightOn: lightOn,
+                brightness: brightness,
+              ),
+            )
+          : _apply(
+              openCover: openCover,
+              lightOn: lightOn,
+              brightness: brightness,
+            );
+      final lightOn = _pendingLight ?? s.lightOn;
+      final max = s.maxBrightness;
+      final level = (_level ?? s.brightness).clamp(0, max);
+      // Each row's label over its segments, a state beside the label (blinking
+      // green Moving…, blue Warming up…) while the segments stay, locked, so
+      // the window keeps its size.
+      Widget row(String label, Widget? state, Widget control) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: AraSpace.s4,
+        children: [
+          Row(
+            spacing: AraSpace.s8,
+            children: [
+              Text(label, style: kSimpleText),
+              if (state != null) Flexible(child: state),
+            ],
+          ),
+          control,
+        ],
+      );
+      final rows = <Widget>[
+        if (s.hasCover)
+          row(
+            l10n.deviceCover,
+            // Moving is working: blinking green (DESIGN.md status rule). The
+            // cover is one motor, so neither segment takes a tap meanwhile.
+            s.isMoving
+                ? StatusBlink(
+                    on: true,
+                    child: Text(
+                      l10n.deviceMoving,
+                      overflow: TextOverflow.ellipsis,
+                      style: kSimpleText.copyWith(
+                        color: AraColors.accentConnected,
+                      ),
+                    ),
+                  )
+                : null,
+            _OnOff(
+              id: 'simple-flat-cover',
+              ids: ('open', 'closed'),
+              labels: (l10n.deviceOpen, l10n.deviceClosed),
+              on: s.coverOpen,
+              enabled: !asking && !s.isMoving,
+              fill: true,
+              onChanged: (open) => send(openCover: open),
+            ),
+          ),
+        if (s.hasCalibrator)
+          row(
+            l10n.deviceLight,
+            // Warming up is a change between two states: blue (status rule).
+            s.lightWarming
+                ? Text(
+                    l10n.deviceWarmingUp,
+                    overflow: TextOverflow.ellipsis,
+                    style: kSimpleText.copyWith(color: AraColors.accentInfo),
+                  )
+                : null,
+            _OnOff(
+              id: 'simple-flat-light',
+              on: lightOn,
+              enabled: !asking && !_applying && !s.lightWarming,
+              fill: true,
+              onChanged: (on) => send(lightOn: on),
+            ),
+          ),
+      ];
+      children.add(
+        LayoutBuilder(
+          builder: (context, box) {
+            // As big as the rows leave room for, up to 140 pt; under 96 pt
+            // (a narrow window, large text) it gives way.
+            final face = math.min(
+              _face,
+              box.maxWidth -
+                  AraSpace.s12 -
+                  MediaQuery.textScalerOf(context).scale(_rowsMin),
+            );
+            final column = Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: AraSpace.s8,
+              children: rows,
+            );
+            return face < 96
+                ? column
+                : Row(
+                    spacing: AraSpace.s12,
+                    children: [
+                      Expanded(child: column),
+                      // Says nothing the rows don't, so screen readers skip it.
+                      ExcludeSemantics(
+                        child: _FlatPanelFace(
+                          key: const Key('simple-flat-face'),
+                          size: face,
+                          hasCover: s.hasCover,
+                          cover: s.isMoving ? 0.5 : (s.coverOpen ? 1 : 0),
+                          glow: !s.hasCalibrator || !lightOn
+                              ? 0
+                              : s.lightWarming
+                              ? 0.25
+                              : max == 0
+                              ? 1
+                              : 0.15 + 0.85 * level / max,
+                        ),
+                      ),
+                    ],
+                  );
+          },
+        ),
+      );
+      if (_asking != null) {
+        final ask = _asking!;
+        children.add(
+          simpleWindowConfirm(
+            question: l10n.devicePlanRunningChangeFlatPanel,
+            confirm: l10n.deviceChangeAnyway,
+            onCancel: () => setState(() {
+              _asking = null;
+              _level = null;
+            }),
+            onConfirm: () {
+              setState(() => _asking = null);
+              _apply(
+                openCover: ask.openCover,
+                lightOn: ask.lightOn,
+                brightness: ask.brightness,
+              );
+            },
+          ),
+        );
+      }
+      if (s.hasCalibrator) {
+        children.addAll([
+          Text(l10n.deviceBrightness, style: kSimpleText),
+          Row(
+            children: [
+              Expanded(
+                child: Slider(
+                  key: const Key('simple-flat-brightness'),
+                  value: level.toDouble(),
+                  // Slider needs max > min: held at 1 and disabled until the
+                  // panel reports its range.
+                  max: (max > 0 ? max : 1).toDouble(),
+                  semanticFormatterCallback: (v) =>
+                      max == 0 ? '—' : _percent(v.round(), max),
+                  onChanged: max == 0 || asking || _applying
+                      ? null
+                      : (v) => setState(() => _level = v.round()),
+                  // Sent on release only: each change is a blocking round
+                  // trip to the panel.
+                  onChangeEnd: max == 0 || asking || _applying
+                      ? null
+                      : (v) => send(brightness: v.round()),
+                ),
+              ),
+              Text(
+                max == 0 ? '—' : _percent(level, max),
+                style: kSimpleText.copyWith(
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ],
+          ),
+        ]);
+      }
+    }
+    if (widget.inSettings) {
+      children.addAll(
+        _versions(context, ref.watch(deviceDriverProvider('flatdevice')).value),
+      );
+    }
+    return Column(
+      key: const Key('simple-device-flat'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s4,
+      children: children,
+    );
+  }
+
+  /// A level as a percent of the panel's maximum ("50 %"); anything above
+  /// 0 reads at least 1 %, so a lit panel never reads 0 %. The panel is still
+  /// sent its own units.
+  static String _percent(int level, int max) {
+    assert(max > 0);
+    return '${level == 0 ? 0 : math.max(1, (level * 100 / max).round())} %';
+  }
+
+  Future<void> _apply({bool? openCover, bool? lightOn, int? brightness}) async {
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.flatPanel);
+    final l10n = context.l10n;
+    if (_applying) return _sayBusy(ref, l10n);
+    _applying = true;
+    // A level alone sets the light too: above 0 on, 0 off (as the daemon does).
+    final light = lightOn ?? (brightness == null ? null : brightness > 0);
+    setState(() {
+      _pendingLight = light;
+      if (brightness != null) _level = brightness;
+    });
+    try {
+      final notifier = ref.read(flatPanelProvider.notifier);
+      final performed = await notifier.apply(
+        openCover: openCover,
+        lightOn: lightOn,
+        brightness: brightness,
+      );
+      if (!performed) {
+        _sayBusy(ref, l10n);
+      } else if (!notifier.lastApplyConfirmed) {
+        notify(
+          l10n.deviceFlatPanelUnconfirmed,
+          detail: l10n.deviceFlatPanelUnconfirmedDetail,
+          error: true,
+        );
+      }
+    } catch (e) {
+      notify(
+        l10n.deviceCouldntChangeFlatPanel,
+        detail: describeEquipmentError(e),
+        error: true,
+      );
+    } finally {
+      // The panel's own reading takes over again, landed or not.
+      _applying = false;
+      if (mounted) {
+        setState(() {
+          _pendingLight = null;
+          _level = null;
+        });
+      }
+    }
+  }
+}
+
+/// The panel face as it sits on the scope: two lids that slide apart as the
+/// cover opens ([cover] 0 closed to 1 open), over a face that lights up with
+/// the brightness ([glow] 0 dark to 1 full).
+class _FlatPanelFace extends StatelessWidget {
+  const _FlatPanelFace({
+    super.key,
+    required this.size,
+    required this.hasCover,
+    required this.cover,
+    required this.glow,
+  });
+
+  final double size;
+  final bool hasCover;
+  final double cover;
+  final double glow;
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    tween: Tween(end: cover),
+    duration: MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 600),
+    curve: Curves.easeInOut,
+    builder: (context, open, _) => CustomPaint(
+      size: Size.square(size),
+      painter: _FlatPanelFacePainter(
+        open: hasCover ? open : 1,
+        hasCover: hasCover,
+        glow: glow,
+      ),
+    ),
+  );
+}
+
+class _FlatPanelFacePainter extends CustomPainter {
+  _FlatPanelFacePainter({
+    required this.open,
+    required this.hasCover,
+    required this.glow,
+  });
+
+  final double open;
+  final bool hasCover;
+  final double glow;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = size.shortestSide / 2;
+    final face = Rect.fromCircle(center: c, radius: r - 5);
+    canvas.drawCircle(c, r - 5, Paint()..color = const Color(0xFF111111));
+    if (glow > 0) {
+      canvas.drawCircle(
+        c,
+        r - 5,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [
+              const Color(0xFFFFFBE8).withValues(alpha: glow),
+              const Color(0xFFB8B29A).withValues(alpha: glow),
+            ],
+          ).createShader(face),
+      );
+    }
+    if (hasCover && open < 1) {
+      canvas.save();
+      canvas.clipPath(Path()..addOval(face));
+      final lid = Paint()..color = const Color(0xFF303030);
+      final seam = Paint()
+        ..color = const Color(0xFF242424)
+        ..strokeWidth = 1;
+      final shift = face.width / 2 * open;
+      for (final (left, dir) in [(face.left, -1.0), (face.center.dx, 1.0)]) {
+        final half = Rect.fromLTWH(
+          left + dir * shift,
+          face.top,
+          face.width / 2,
+          face.height,
+        );
+        canvas.drawRect(half, lid);
+        // Ribs across each lid, so the two halves read as hinged panels.
+        for (var x = half.left + 6; x < half.right; x += 6) {
+          canvas.drawLine(Offset(x, half.top), Offset(x, half.bottom), seam);
+        }
+      }
+      canvas.restore();
+    }
+    canvas.drawCircle(
+      c,
+      r - 3,
+      Paint()
+        ..color = AraColors.border
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_FlatPanelFacePainter old) =>
+      old.open != open || old.hasCover != hasCover || old.glow != glow;
 }

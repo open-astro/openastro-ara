@@ -104,6 +104,16 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void ProjectPorts_carries_each_ports_step_to_the_rest_dto() {
+            var ports = SwitchService.ProjectPorts(SampleSnapshots());
+
+            // #1680: a client slider snaps to the device's step instead of guessing one.
+            Assert.That(ports[0].Step, Is.EqualTo(1));
+            Assert.That(ports[1].Step, Is.EqualTo(0.1));
+            Assert.That(ports[2].Step, Is.EqualTo(5));
+        }
+
+        [Test]
         public void Wrapper_Value_reads_live_cache_and_is_NaN_when_not_connected() {
             using var svc = new SwitchService();
             var (writable, _) = SwitchService.BuildSwitchCollections(svc, SampleSnapshots());

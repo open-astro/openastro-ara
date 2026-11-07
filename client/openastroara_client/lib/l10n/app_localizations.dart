@@ -447,6 +447,66 @@ abstract class AppLocalizations {
   /// **'Couldn\'t change the filter'**
   String get deviceCouldntChangeFilter;
 
+  /// Switches window: a device's section title, with how many ports it lists
+  ///
+  /// In en, this message translates to:
+  /// **'{device} · {count, plural, =1{1 port} other{{count} ports}}'**
+  String deviceSwitchPorts(String device, int count);
+
+  /// Settings › Switches: the title over a switch device's readings (ports that can't be set: voltage, temperature, a cover state)
+  ///
+  /// In en, this message translates to:
+  /// **'Sensors'**
+  String get deviceSensors;
+
+  /// Switches window: the connected switch devices have no port that can be set (only readings, which Simple Mode leaves out)
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to switch'**
+  String get deviceNothingToSwitch;
+
+  /// Switches window: a dew channel's mode segment, the duty set by hand
+  ///
+  /// In en, this message translates to:
+  /// **'Manual'**
+  String get deviceModeManual;
+
+  /// Switches window: a dew channel's mode segment, plain on/off
+  ///
+  /// In en, this message translates to:
+  /// **'Switch'**
+  String get deviceModeSwitch;
+
+  /// Switches window: a dew output its controller regulates (mode Auto)
+  ///
+  /// In en, this message translates to:
+  /// **'Set automatically'**
+  String get deviceSetAutomatically;
+
+  /// Switches status pill: a port named with its device, when two devices have a port of that name
+  ///
+  /// In en, this message translates to:
+  /// **'{port} ({device})'**
+  String deviceSwitchPortOnDevice(String port, String device);
+
+  /// Switches window: a slider port's name with the level it is set to, as a percent of the port's range (e.g. 60 %)
+  ///
+  /// In en, this message translates to:
+  /// **'{port} · {level}'**
+  String deviceSwitchLevel(String port, String level);
+
+  /// Error message when a switch device refused a port change
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t set {port}'**
+  String deviceCouldntSetPort(String port);
+
+  /// Simple Mode status pill: a switch port change on its way to the rig
+  ///
+  /// In en, this message translates to:
+  /// **'Setting {port}…'**
+  String deviceSettingPort(String port);
+
   /// Filter wheel window: asked when a filter is tapped while a plan runs
   ///
   /// In en, this message translates to:
@@ -476,6 +536,78 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel swap'**
   String get deviceCancelSwap;
+
+  /// Flat panel window: the cover row's label
+  ///
+  /// In en, this message translates to:
+  /// **'Cover'**
+  String get deviceCover;
+
+  /// Flat panel window: the cover's open segment
+  ///
+  /// In en, this message translates to:
+  /// **'Open'**
+  String get deviceOpen;
+
+  /// Flat panel window: the cover's closed segment
+  ///
+  /// In en, this message translates to:
+  /// **'Closed'**
+  String get deviceClosed;
+
+  /// Flat panel window: the light row's label
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get deviceLight;
+
+  /// Flat panel window: the brightness slider's label
+  ///
+  /// In en, this message translates to:
+  /// **'Brightness'**
+  String get deviceBrightness;
+
+  /// Flat panel window: the light row while the panel's light warms up
+  ///
+  /// In en, this message translates to:
+  /// **'Warming up…'**
+  String get deviceWarmingUp;
+
+  /// Status pill detail while the flat panel's cover moves
+  ///
+  /// In en, this message translates to:
+  /// **'Cover moving…'**
+  String get deviceCoverMoving;
+
+  /// Status pill detail while the flat panel's light warms up
+  ///
+  /// In en, this message translates to:
+  /// **'Light warming up…'**
+  String get deviceLightWarmingUp;
+
+  /// Flat panel window: asked before a cover, light or brightness change while a plan runs
+  ///
+  /// In en, this message translates to:
+  /// **'A plan is running. Change the flat panel anyway?'**
+  String get devicePlanRunningChangeFlatPanel;
+
+  /// Error message when the flat panel refused a command
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t change the flat panel'**
+  String get deviceCouldntChangeFlatPanel;
+
+  /// Error message when the flat panel took a command but never showed it
+  ///
+  /// In en, this message translates to:
+  /// **'The flat panel didn\'t make that change'**
+  String get deviceFlatPanelUnconfirmed;
+
+  /// Detail under the flat panel's unconfirmed-change message
+  ///
+  /// In en, this message translates to:
+  /// **'Check the cover isn\'t jammed and the panel isn\'t busy.'**
+  String get deviceFlatPanelUnconfirmedDetail;
 
   /// Error message when a focuser or guider setting could not be saved
   ///
@@ -1670,6 +1802,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Filter wheel'**
   String get shellFilterWheel;
+
+  /// Simple Mode: the switch devices (power boxes, dew outputs): their window's title, Settings section and status pill
+  ///
+  /// In en, this message translates to:
+  /// **'Switches'**
+  String get shellSwitches;
 
   /// Simple Mode Settings › Devices row: the rotator
   ///

@@ -70,6 +70,7 @@ import '../../widgets/ara_mark.dart';
 import '../../widgets/emergency_stop_button.dart';
 import '../../widgets/equipment/equipment_glyphs.dart';
 import '../../state/equipment/safety_monitor_state.dart';
+import '../../models/switch_device.dart';
 import '../../state/equipment/switch_state.dart';
 import '../../state/faults/faults_state.dart';
 import '../../widgets/status_indicator.dart' show StatusDot, StatusLevel;
@@ -330,6 +331,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     'eq.focuser': SimpleFocuserWindow(),
     'eq.filterwheel': SimpleFilterWheelWindow(),
     'eq.rotator': SimpleRotatorWindow(),
+    'eq.switch': SimpleSwitchesWindow(),
+    'eq.flat': SimpleFlatPanelWindow(),
     'eq.guider': SimpleGuiderWindow(),
   };
 
@@ -436,6 +439,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       SimpleStatusOrigin.focuser => 'eq.focuser',
       SimpleStatusOrigin.filterWheel => 'eq.filterwheel',
       SimpleStatusOrigin.rotator => 'eq.rotator',
+      SimpleStatusOrigin.switches => 'eq.switch',
+      SimpleStatusOrigin.flatPanel => 'eq.flat',
       SimpleStatusOrigin.guiderCamera => 'eq.guider',
       _ => null,
     };
@@ -2291,7 +2296,7 @@ class SimpleSegments<T> extends StatelessWidget {
                   ? null
                   : () => onPick!(value),
             );
-            return expand ? Expanded(child: segment) : segment;
+            return expand ? Expanded(child: segment) : Flexible(child: segment);
           }(),
       ],
     ),
@@ -2433,6 +2438,17 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
           (c) => glyph(Icons.rotate_right, c),
           true,
         ),
+      if (ref.watch(
+        switchListProvider.select((v) => v.value?.isNotEmpty ?? false),
+      ))
+        ('Switches', l10n.shellSwitches, (c) => glyph(Icons.toggle_on, c), true),
+      if (ref.watch(flatPanelProvider.select((v) => v.value != null)))
+        (
+          'Flat panel',
+          l10n.shellFlatPanel,
+          (c) => EquipmentGlyph.flatPanel(size: 20, color: c),
+          true,
+        ),
       if (ref.watch(guiderStatusProvider.select((v) => v.value != null)))
         (
           'Guider',
@@ -2524,6 +2540,8 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                   inSettings: true,
                 ),
                 'Rotator' => const SimpleRotatorWindow(inSettings: true),
+                'Switches' => const SimpleSwitchesWindow(inSettings: true),
+                'Flat panel' => const SimpleFlatPanelWindow(inSettings: true),
                 'Guider' => const SimpleGuiderWindow(inSettings: true),
                 _ => _Gear(onOpen: (id) => setState(() => _section = id)),
               },
@@ -2539,8 +2557,6 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
 /// place Simple Mode connects or disconnects one (a device's own window has
 /// neither). Ara connects the profile's gear on its own; Connect asks the rig
 /// for the device it remembers, never a chooser.
-// shortcut: the switches have their own state type; they join this list
-// with a window of their own.
 class _Gear extends ConsumerWidget {
   const _Gear({required this.onOpen});
 
@@ -2600,7 +2616,9 @@ class _Gear extends ConsumerWidget {
           id: 'flat',
           type: l10n.shellFlatPanel,
           provider: flatPanelProvider,
+          onOpen: () => onOpen('Flat panel'),
         ),
+        _SwitchGearRows(onOpen: () => onOpen('Switches')),
         _GearRow(id: 'dome', type: l10n.shellDome, provider: domeProvider),
         _GearRow(
           id: 'weather',
@@ -2661,6 +2679,73 @@ class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
       title: status.name.isEmpty
           ? type
           : l10n.shellGearTitle(type, status.name),
+      dot: dot,
+      word: word,
+      verb: verb,
+      label: label,
+      action: action,
+      onOpen: onOpen,
+    );
+  }
+}
+
+/// One row per switch device: their own state type, all opening the one
+/// Switches window.
+class _SwitchGearRows extends ConsumerWidget {
+  const _SwitchGearRows({required this.onOpen});
+
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final devices = ref.watch(switchListProvider).value ?? const [];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
+      children: [for (final d in devices) _row(context, ref, d)],
+    );
+  }
+
+  Widget _row(BuildContext context, WidgetRef ref, SwitchDevice d) {
+    final notifier = ref.read(switchListProvider.notifier);
+    final l10n = context.l10n;
+    Future<void> connect() => notifier.reconnectDevice(d.deviceId);
+    // The dot follows the top bar chip's rule, for one device.
+    final (dot, word, verb, label, action) = switch (d.connectionState) {
+      SwitchConnectionState.connected => (
+        StatusLevel.connected,
+        l10n.shellConnected,
+        'disconnect',
+        l10n.shellDisconnect,
+        () => notifier.disconnect(d.deviceId),
+      ),
+      SwitchConnectionState.connecting => (
+        StatusLevel.changing,
+        l10n.shellConnecting,
+        null,
+        null,
+        null,
+      ),
+      SwitchConnectionState.error => (
+        StatusLevel.error,
+        l10n.shellFailed,
+        'reconnect',
+        l10n.shellReconnect,
+        connect,
+      ),
+      _ => (
+        StatusLevel.disconnected,
+        l10n.shellNotConnected,
+        'connect',
+        l10n.shellConnect,
+        connect,
+      ),
+    };
+    return _gearTile(
+      id: 'switch-${d.deviceId}',
+      title: d.name.isEmpty
+          ? l10n.shellSwitches
+          : l10n.shellGearTitle(l10n.shellSwitches, d.name),
       dot: dot,
       word: word,
       verb: verb,

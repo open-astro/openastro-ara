@@ -213,6 +213,52 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceCouldntChangeFilter => 'Couldn\'t change the filter';
 
   @override
+  String deviceSwitchPorts(String device, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ports',
+      one: '1 port',
+    );
+    return '$device · $_temp0';
+  }
+
+  @override
+  String get deviceSensors => 'Sensors';
+
+  @override
+  String get deviceNothingToSwitch => 'Nothing to switch';
+
+  @override
+  String get deviceModeManual => 'Manual';
+
+  @override
+  String get deviceModeSwitch => 'Switch';
+
+  @override
+  String get deviceSetAutomatically => 'Set automatically';
+
+  @override
+  String deviceSwitchPortOnDevice(String port, String device) {
+    return '$port ($device)';
+  }
+
+  @override
+  String deviceSwitchLevel(String port, String level) {
+    return '$port · $level';
+  }
+
+  @override
+  String deviceCouldntSetPort(String port) {
+    return 'Couldn\'t set $port';
+  }
+
+  @override
+  String deviceSettingPort(String port) {
+    return 'Setting $port…';
+  }
+
+  @override
   String get devicePlanRunningChangeFilter =>
       'A plan is running. Change the filter anyway?';
 
@@ -231,6 +277,45 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get deviceCancelSwap => 'Cancel swap';
+
+  @override
+  String get deviceCover => 'Cover';
+
+  @override
+  String get deviceOpen => 'Open';
+
+  @override
+  String get deviceClosed => 'Closed';
+
+  @override
+  String get deviceLight => 'Light';
+
+  @override
+  String get deviceBrightness => 'Brightness';
+
+  @override
+  String get deviceWarmingUp => 'Warming up…';
+
+  @override
+  String get deviceCoverMoving => 'Cover moving…';
+
+  @override
+  String get deviceLightWarmingUp => 'Light warming up…';
+
+  @override
+  String get devicePlanRunningChangeFlatPanel =>
+      'A plan is running. Change the flat panel anyway?';
+
+  @override
+  String get deviceCouldntChangeFlatPanel => 'Couldn\'t change the flat panel';
+
+  @override
+  String get deviceFlatPanelUnconfirmed =>
+      'The flat panel didn\'t make that change';
+
+  @override
+  String get deviceFlatPanelUnconfirmedDetail =>
+      'Check the cover isn\'t jammed and the panel isn\'t busy.';
 
   @override
   String get deviceCouldntSaveThat => 'Couldn\'t save that';
@@ -888,6 +973,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get shellFilterWheel => 'Filter wheel';
+
+  @override
+  String get shellSwitches => 'Switches';
 
   @override
   String get shellRotator => 'Rotator';
@@ -2555,6 +2643,52 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get deviceCouldntChangeFilter => 'Não foi possível trocar o filtro';
 
   @override
+  String deviceSwitchPorts(String device, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count portas',
+      one: '1 porta',
+    );
+    return '$device · $_temp0';
+  }
+
+  @override
+  String get deviceSensors => 'Sensores';
+
+  @override
+  String get deviceNothingToSwitch => 'Nada para ligar ou desligar';
+
+  @override
+  String get deviceModeManual => 'Manual';
+
+  @override
+  String get deviceModeSwitch => 'Liga/desliga';
+
+  @override
+  String get deviceSetAutomatically => 'Ajustado automaticamente';
+
+  @override
+  String deviceSwitchPortOnDevice(String port, String device) {
+    return '$port ($device)';
+  }
+
+  @override
+  String deviceSwitchLevel(String port, String level) {
+    return '$port · $level';
+  }
+
+  @override
+  String deviceCouldntSetPort(String port) {
+    return 'Não foi possível ajustar $port';
+  }
+
+  @override
+  String deviceSettingPort(String port) {
+    return 'Ajustando $port…';
+  }
+
+  @override
   String get devicePlanRunningChangeFilter =>
       'Há um plano em andamento. Trocar o filtro mesmo assim?';
 
@@ -2573,6 +2707,46 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get deviceCancelSwap => 'Cancelar troca';
+
+  @override
+  String get deviceCover => 'Tampa';
+
+  @override
+  String get deviceOpen => 'Aberta';
+
+  @override
+  String get deviceClosed => 'Fechada';
+
+  @override
+  String get deviceLight => 'Luz';
+
+  @override
+  String get deviceBrightness => 'Brilho';
+
+  @override
+  String get deviceWarmingUp => 'Aquecendo…';
+
+  @override
+  String get deviceCoverMoving => 'Tampa em movimento…';
+
+  @override
+  String get deviceLightWarmingUp => 'Luz aquecendo…';
+
+  @override
+  String get devicePlanRunningChangeFlatPanel =>
+      'Há um plano em andamento. Alterar o painel de flat mesmo assim?';
+
+  @override
+  String get deviceCouldntChangeFlatPanel =>
+      'Não foi possível alterar o painel de flat';
+
+  @override
+  String get deviceFlatPanelUnconfirmed =>
+      'O painel de flat não fez essa alteração';
+
+  @override
+  String get deviceFlatPanelUnconfirmedDetail =>
+      'Verifique se a tampa não está travada e se o painel não está ocupado.';
 
   @override
   String get deviceCouldntSaveThat => 'Não foi possível salvar';
@@ -3238,6 +3412,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get shellFilterWheel => 'Roda de filtros';
+
+  @override
+  String get shellSwitches => 'Interruptores';
 
   @override
   String get shellRotator => 'Rotacionador';

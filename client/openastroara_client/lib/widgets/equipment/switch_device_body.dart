@@ -513,17 +513,6 @@ class _LevelCard extends StatefulWidget {
   State<_LevelCard> createState() => _LevelCardState();
 }
 
-/// Slider steps for a port with a whole-numbered range, or null to stay
-/// continuous. Capped so a wide range (a 0..65535 device) doesn't build tens of
-/// thousands of divisions.
-int? _divisions(SwitchPort port) {
-  const maxDivisions = 1000;
-  final span = port.max - port.min;
-  if (span != span.roundToDouble()) return null;
-  final steps = span.round();
-  return steps >= 1 && steps <= maxDivisions ? steps : null;
-}
-
 class _LevelCardState extends State<_LevelCard> {
   double? _dragValue;
 
@@ -633,13 +622,13 @@ class _LevelCardState extends State<_LevelCard> {
                       child: Slider(
                         min: port.min,
                         max: port.max,
-                        // Snap to whole steps when the port's range is whole —
-                        // a dew channel is 0..100% in integer duty, and a bare
-                        // continuous slider would write 63.42 and render
-                        // "63.42 %". Left continuous for a genuinely
-                        // fractional range, and capped so a huge range doesn't
-                        // build a division per unit.
-                        divisions: _divisions(port),
+                        // Snap to the device's step, or to whole steps when the
+                        // port's range is whole — a dew channel is 0..100% in
+                        // integer duty, and a bare continuous slider would
+                        // write 63.42 and render "63.42 %". Left continuous for
+                        // a genuinely fractional range, and capped so a huge
+                        // range doesn't build a division per unit.
+                        divisions: switchSliderDivisions(port),
                         value: value.toDouble(),
                         onChanged: (v) => setState(() {
                           _dragging = true;

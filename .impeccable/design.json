@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-07T23:00:00+13:00",
+  "generatedAt": "2026-11-08T01:30:00+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -616,6 +616,11 @@
         "name": "immersive-fade",
         "value": "220ms ease-out",
         "purpose": "Simple Mode panels fading out for the immersive view; instant with reduced motion."
+      },
+      {
+        "name": "locked-dim-delay",
+        "value": "300ms, then instant",
+        "purpose": "Switches window: the other ports dim only when the rig takes longer than this to answer a write, so a fast answer doesn't flash the window (#1651)."
       }
     ],
     "breakpoints": [
@@ -641,6 +646,13 @@
         "name": "panel-simple",
         "value": "5px",
         "purpose": "Simple Mode's panels blur the image behind their 90 % scrim; one shared BackdropGroup for all panels (AraBlur.panel in code)."
+      }
+    ],
+    "opacity": [
+      {
+        "name": "locked",
+        "value": "0.38",
+        "purpose": "Switches window: ports locked behind a change still on its way, past the 300 ms delay (AraOpacity.locked in code; Material's disabled opacity)."
       }
     ]
   },
@@ -689,7 +701,7 @@
       "name": "Segmented Switch",
       "kind": "custom",
       "refersTo": "nav-rail-selected",
-      "description": "Instrument-style switch that names its states. A segment that takes no tap reads as disabled, except the selected one, read as selected; a label too long for it ends in an ellipsis (#1666).",
+      "description": "Instrument-style switch that names its states. A segment that takes no tap reads as disabled, except the selected one, read as selected; a label too long for it ends in an ellipsis (#1666). In the Switches window, ports locked behind a change still on its way dim to 0.38 after 300 ms (#1651); elsewhere a locked segment keeps its look, with words saying why.",
       "html": "<div class=\"ds-seg\" role=\"group\"><button class=\"on\" aria-pressed=\"true\">Cooler on</button><button aria-pressed=\"false\">Off</button><button aria-pressed=\"false\" disabled>Hydrogen-alpha 3 nm</button></div>",
       "css": ".ds-seg{display:inline-flex;border:1px solid #404040;border-radius:20px;overflow:hidden} .ds-seg button{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:transparent;color:#E0E0E0;border:0;padding:6px 14px;font-size:13px;cursor:pointer} .ds-seg button+button{border-left:1px solid #404040} .ds-seg button.on{background:#1976D2;color:#FFFFFF} .ds-seg button:hover:not(.on){background:#2E2E2E} .ds-seg button:focus-visible{outline:2px solid #42A5F5;outline-offset:-2px} .ds-seg button{max-width:12em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .ds-seg button:disabled{color:#A0A0A0;cursor:default} .ds-seg button:disabled:hover{background:transparent}"
     },
@@ -756,6 +768,14 @@
       "description": "The Rotator window's dial: the whole face, a 0–360° scale (tick every 5°, number every 30°, clockwise from 0 at the top), turns under a fixed blue mark; the number under it is where the rotator is or the target, a degree a click. Letting go moves nothing. The middle is Start, a play triangle (green with a target, grey without), which moves the rotator to the target and turns into Stop, the red stop square, while it turns. A full-width Sync under the dial carries the target (\"Sync to 75°\") (#1662).",
       "html": "<div class=\"ds-dial\"><i class=\"ds-dial-mark\"></i><div class=\"ds-dial-face\"><b>90</b></div><div class=\"ds-dial-hub\"><i></i></div></div>",
       "css": ".ds-dial{position:relative;width:180px;height:180px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif} .ds-dial-face{position:absolute;inset:14px;border-radius:50%;background:repeating-conic-gradient(from -1deg,#A0A0A0 0 2deg,transparent 2deg 5deg),#383838;display:flex;justify-content:center} .ds-dial-face b{margin-top:22px;color:#E0E0E0;font-size:11px;font-weight:600} .ds-dial-mark{position:absolute;left:50%;top:-4px;transform:translateX(-50%);border:9px solid transparent;border-top:14px solid #42A5F5;border-bottom:0} .ds-dial-hub{position:absolute;inset:58px;border-radius:50%;background:#1A1A1A;border:1px solid #404040;display:grid;place-items:center} .ds-dial-hub i{width:0;height:0;border-top:14px solid transparent;border-bottom:14px solid transparent;border-left:22px solid #4CAF50;margin-left:6px}"
+    },
+    {
+      "name": "Flat Panel Face (Simple Mode)",
+      "kind": "custom",
+      "refersTo": "simple-flat-panel-face",
+      "description": "The Flat panel window's drawing of the panel face (140 pt in the 360 pt window, shrinking to leave the rows 176 pt, left out under 96 pt) beside its Cover Open / Closed and Light On / Off rows (label over two segments): two ribbed lids slide apart as the cover opens (half open while it moves), and the face glows warm white with the brightness (dim while the light warms up). It takes no tap and screen readers skip it. Moving… / Warming up… sit beside the row's label while its segments lock, so the window keeps its size. Brightness is a slider under the rows, 0 to the panel's maximum, sent on release (#1662).",
+      "html": "<div class=\"ds-flat\"><i class=\"ds-flat-glow\"></i><i class=\"ds-flat-lid ds-flat-l\"></i><i class=\"ds-flat-lid ds-flat-r\"></i></div>",
+      "css": ".ds-flat{position:relative;width:140px;height:140px;border-radius:50%;border:5px solid #404040;overflow:hidden;background:#111;box-sizing:border-box} .ds-flat-glow{position:absolute;inset:0;border-radius:50%;opacity:.6;background:radial-gradient(circle,#FFFBE8 0,#B8B29A 100%)} .ds-flat-lid{position:absolute;top:0;bottom:0;width:50%;background:repeating-linear-gradient(90deg,#303030 0 5px,#242424 5px 6px)} .ds-flat-l{left:0;transform:translateX(-60%)} .ds-flat-r{right:0;transform:translateX(60%)}"
     },
     {
       "name": "Message Pill: Question (Simple Mode)",
