@@ -3925,9 +3925,14 @@ class _WeatherTile extends StatelessWidget {
     final warn = past != null;
     final caption = AraText.caption.copyWith(fontSize: 12);
     final amber = caption.copyWith(color: AraColors.accentWarning);
+    // A detail past the limit is all the caption shows after the name, so its
+    // one line under a warning can't cut it off (screen readers hear them all).
+    final shownDetails = details.any((d) => d.$3)
+        ? details.where((d) => d.$3)
+        : details;
     final parts = [
       TextSpan(text: label),
-      for (final (shown, _, over) in details)
+      for (final (shown, _, over) in shownDetails)
         TextSpan(text: shown, style: over ? amber : null),
     ];
     return Semantics(

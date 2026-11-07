@@ -388,6 +388,49 @@ void main() {
     },
   );
 
+  testWidgets(
+    'narrow and in Portuguese, a gust past the limit is not cut off',
+    skip: !hasFonts,
+    (tester) async {
+      final roboto = FontLoader('Roboto');
+      for (final f in ['Roboto-Regular.ttf', 'Roboto-Medium.ttf']) {
+        roboto.addFont(
+          Future.value(
+            ByteData.view(File('$fonts/$f').readAsBytesSync().buffer),
+          ),
+        );
+      }
+      await roboto.load();
+      // 22 km/h sustained (under 30), 54 km/h gusts (over): the gust is
+      // the amber part of the caption.
+      await _pump(
+        tester,
+        _wire(
+          readings: {
+            'wind_speed_ms': 6.0,
+            'wind_gust_ms': 15.0,
+            'wind_direction_deg': 315.0,
+          },
+        ),
+        locale: const Locale('pt', 'BR'),
+        width: 280,
+        font: 'Roboto',
+      );
+      final caption = tester.renderObject<RenderParagraph>(
+        find.descendant(
+          of: _tile('wind'),
+          matching: find.textContaining('rajadas 54', findRichText: true),
+        ),
+      );
+      expect(caption.didExceedMaxLines, isFalse);
+      expect(
+        _said(tester, 'wind'),
+        contains('NO'),
+        reason: 'the compass point is still read out',
+      );
+    },
+  );
+
   for (final scale in [1.3, 2.0]) {
     testWidgets('at ${scale}x text nothing overflows', skip: !hasFonts, (
       tester,
