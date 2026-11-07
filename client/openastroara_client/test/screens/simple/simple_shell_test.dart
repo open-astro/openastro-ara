@@ -32,7 +32,7 @@ import 'package:openastroara/models/bahtinov_focus.dart';
 import 'package:openastroara/state/focus/guide_focus_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/models/guider_status.dart';
-import 'package:openastroara/widgets/status_indicator.dart' show StatusDot, StatusLevel;
+import 'package:openastroara/widgets/status_indicator.dart' show StatusBlink, StatusDot, StatusLevel;
 import 'package:openastroara/widgets/equipment/equipment_status_chip.dart' show TopEquipmentChips;
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import 'package:openastroara/state/app_locale_state.dart';
@@ -3316,6 +3316,10 @@ void main() {
     await tester.pump();
     expect(find.descendant(of: pill, matching: find.textContaining('Filter wheel')), findsOneWidget);
     expect(find.descendant(of: pill, matching: find.textContaining('Moving…')), findsOneWidget);
+    // Re-audit 2: moving is working, blinking green, as the wheel's dot and window show it (DESIGN.md status rule).
+    final dot = tester.widget<StatusDot>(find.descendant(of: pill, matching: find.byType(StatusDot)));
+    expect((dot.color, dot.ring), (AraColors.accentConnected, false));
+    expect(tester.widget<StatusBlink>(find.descendant(of: pill, matching: find.byType(StatusBlink))).on, isTrue);
     wheel.report({'state': 'idle', 'current_slot': 1});
     await tester.pump();
     expect(find.descendant(of: pill, matching: find.textContaining('Filter wheel')), findsNothing, reason: 'landed');

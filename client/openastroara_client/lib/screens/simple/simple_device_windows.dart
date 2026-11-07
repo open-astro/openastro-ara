@@ -1683,8 +1683,8 @@ class _SimpleFilterWheelWindowState
                   // a block, so the slot numbers line up.
                   final scaler = MediaQuery.textScalerOf(context);
                   final widest = w.slots
-                      .map(
-                        (slot) => (TextPainter(
+                      .map((slot) {
+                        final painter = TextPainter(
                           text: TextSpan(
                             text: _labelled(slot),
                             style: kSimpleText,
@@ -1692,8 +1692,11 @@ class _SimpleFilterWheelWindowState
                           textScaler: scaler,
                           maxLines: 1,
                           textDirection: Directionality.of(context),
-                        )..layout()).width,
-                      )
+                        )..layout();
+                        final width = painter.width;
+                        painter.dispose();
+                        return width;
+                      })
                       .reduce(math.max);
                   final inset = math.max(14.0, (box.maxWidth - widest) / 2);
                   return DecoratedBox(

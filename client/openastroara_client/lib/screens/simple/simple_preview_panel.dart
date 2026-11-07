@@ -1162,13 +1162,15 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           AraColors.accentInfo,
           ring: true,
         ),
+      // Moving is working: blinking green, as the wheel's dot and window
+      // show it (DESIGN.md status rule).
       if (wheel != null && wheel.isConnected && wheel.isMoving)
         _PillData(
           SimpleStatusOrigin.filterWheel,
           l10n.shellFilterWheel,
           l10n.deviceMoving,
-          AraColors.accentInfo,
-          ring: true,
+          AraColors.accentConnected,
+          working: true,
         )
       else if (swap != null)
         _PillData(
