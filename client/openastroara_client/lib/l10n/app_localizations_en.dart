@@ -251,9 +251,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceMoving => 'Moving…';
 
   @override
-  String get deviceStep => 'Step';
-
-  @override
   String get deviceAutofocus => 'Autofocus';
 
   @override
@@ -276,6 +273,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deviceFineFocus => 'Fine focus';
+
+  @override
+  String get deviceRotate => 'Rotate';
+
+  @override
+  String deviceRotateTo(String angle) {
+    return 'Rotate to $angle';
+  }
+
+  @override
+  String get deviceSync => 'Sync';
+
+  @override
+  String deviceSyncTo(String angle) {
+    return 'Sync to $angle';
+  }
+
+  @override
+  String get deviceCouldntSyncRotator => 'Couldn\'t sync the rotator';
 
   @override
   String get deviceSkyAngle => 'Sky angle';

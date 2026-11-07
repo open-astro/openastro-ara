@@ -327,10 +327,6 @@
   "@deviceMoving": {
     "description": "Focuser window caption while the focuser moves"
   },
-  "deviceStep": "Step",
-  "@deviceStep": {
-    "description": "Rotator window row: how far one dial click turns (1°, 5° or 15°)"
-  },
   "deviceAutofocus": "Autofocus",
   "@deviceAutofocus": {
     "description": "Full-width button under the focuser knobs: runs autofocus"
@@ -362,6 +358,36 @@
   "deviceFineFocus": "Fine focus",
   "@deviceFineFocus": {
     "description": "Screen-reader label of the focuser's fine knob"
+  },
+  "deviceRotate": "Rotate",
+  "@deviceRotate": {
+    "description": "Rotator window button with no target set on the dial (disabled)"
+  },
+  "deviceRotateTo": "Rotate to {angle}",
+  "@deviceRotateTo": {
+    "description": "Rotator window button: move the rotator to the angle set on the dial, e.g. 'Rotate to 75.0°'",
+    "placeholders": {
+      "angle": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceSync": "Sync",
+  "@deviceSync": {
+    "description": "Rotator window button with no target set on the dial (disabled)"
+  },
+  "deviceSyncTo": "Sync to {angle}",
+  "@deviceSyncTo": {
+    "description": "Rotator window button: tell the rotator it is at the angle set on the dial, without moving it, e.g. 'Sync to 75.0°'",
+    "placeholders": {
+      "angle": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceCouldntSyncRotator": "Couldn't sync the rotator",
+  "@deviceCouldntSyncRotator": {
+    "description": "Error pill when the rotator refused or failed a sync"
   },
   "deviceSkyAngle": "Sky angle",
   "@deviceSkyAngle": {
@@ -434,7 +460,7 @@
   },
   "deviceLetGoToMoveTo": "Let go to move to {position}",
   "@deviceLetGoToMoveTo": {
-    "description": "Device window caption while a knob or dial turns; position is a step count like 12 000 or an angle like 105.0°",
+    "description": "Focuser window caption while a knob rolls; position is a step count like 12 000",
     "placeholders": {
       "position": {
         "type": "String"

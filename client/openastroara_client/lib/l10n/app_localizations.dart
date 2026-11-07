@@ -513,12 +513,6 @@ abstract class AppLocalizations {
   /// **'Moving…'**
   String get deviceMoving;
 
-  /// Rotator window row: how far one dial click turns (1°, 5° or 15°)
-  ///
-  /// In en, this message translates to:
-  /// **'Step'**
-  String get deviceStep;
-
   /// Full-width button under the focuser knobs: runs autofocus
   ///
   /// In en, this message translates to:
@@ -566,6 +560,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Fine focus'**
   String get deviceFineFocus;
+
+  /// Rotator window button with no target set on the dial (disabled)
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate'**
+  String get deviceRotate;
+
+  /// Rotator window button: move the rotator to the angle set on the dial, e.g. 'Rotate to 75.0°'
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate to {angle}'**
+  String deviceRotateTo(String angle);
+
+  /// Rotator window button with no target set on the dial (disabled)
+  ///
+  /// In en, this message translates to:
+  /// **'Sync'**
+  String get deviceSync;
+
+  /// Rotator window button: tell the rotator it is at the angle set on the dial, without moving it, e.g. 'Sync to 75.0°'
+  ///
+  /// In en, this message translates to:
+  /// **'Sync to {angle}'**
+  String deviceSyncTo(String angle);
+
+  /// Error pill when the rotator refused or failed a sync
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t sync the rotator'**
+  String get deviceCouldntSyncRotator;
 
   /// Rotator window: the camera's angle on the sky (position angle), and the dial's screen-reader label
   ///
@@ -651,7 +675,7 @@ abstract class AppLocalizations {
   /// **'{percent} % power'**
   String devicePowerPercent(int percent);
 
-  /// Device window caption while a knob or dial turns; position is a step count like 12 000 or an angle like 105.0°
+  /// Focuser window caption while a knob rolls; position is a step count like 12 000
   ///
   /// In en, this message translates to:
   /// **'Let go to move to {position}'**

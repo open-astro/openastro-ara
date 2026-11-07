@@ -10,7 +10,6 @@ import 'package:openastroara/models/rotator_status.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimpleStopSquare;
-import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegment;
 import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/state/equipment/rotator_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
@@ -36,6 +35,16 @@ class _Rotator extends RotatorNotifier {
   Future<bool> move(double targetAngleDeg, {bool useSkyAngle = false}) async {
     calls.add('move ${targetAngleDeg.toStringAsFixed(1)}${useSkyAngle ? ' sky' : ''}');
     if (refuse) throw StateError('Rotator is moving');
+    return true;
+  }
+
+  /// The rotator refuses the next sync.
+  bool refuseSync = false;
+
+  @override
+  Future<bool> sync(double skyAngleDeg) async {
+    calls.add('sync ${skyAngleDeg.toStringAsFixed(1)}');
+    if (refuseSync) throw StateError('Rotator is moving');
     return true;
   }
 
@@ -96,19 +105,24 @@ Future<(ProviderContainer, _Rotator)> _pump(WidgetTester tester, Map<String, dyn
 
 final _dial = find.byKey(const Key('simple-rotator-dial'));
 final _stop = find.byKey(const Key('simple-rotator-stop'));
+final _go = find.byKey(const Key('simple-rotator-go'));
+final _sync = find.byKey(const Key('simple-rotator-sync'));
 
-/// Turns the dial by [degrees] clockwise (negative: counter-clockwise) from
-/// near its rim, a degree at a time like a finger.
-Future<void> _turn(WidgetTester tester, double degrees, {bool cancel = false}) async {
+Offset _rim(WidgetTester tester, double deg) {
   final centre = tester.getCenter(_dial);
   final r = tester.getSize(_dial).width * 0.42;
-  Offset at(double deg) {
-    final a = (deg - 90) * math.pi / 180;
-    return centre + Offset(r * math.cos(a), r * math.sin(a));
-  }
-  final g = await tester.startGesture(at(0));
-  for (var i = 1; i <= degrees.abs().round(); i++) {
-    await g.moveTo(at(degrees.sign * i));
+  final a = (deg - 90) * math.pi / 180;
+  return centre + Offset(r * math.cos(a), r * math.sin(a));
+}
+
+/// Turns the dial by [degrees] clockwise (negative: counter-clockwise) from
+/// near its rim, half a degree at a time like a finger. Give a half degree
+/// past the clicks wanted (17.5 for 17), so rounding never drops one.
+Future<void> _turn(WidgetTester tester, double degrees, {bool cancel = false}) async {
+  final g = await tester.startGesture(_rim(tester, 0));
+  final steps = (degrees.abs() / 0.5).round();
+  for (var i = 1; i <= steps; i++) {
+    await g.moveTo(_rim(tester, degrees.sign * i * 0.5));
     await tester.pump();
   }
   if (cancel) {
@@ -119,15 +133,21 @@ Future<void> _turn(WidgetTester tester, double degrees, {bool cancel = false}) a
   await tester.pump();
 }
 
+String _syncLabel(WidgetTester tester) =>
+    tester.widget<Text>(find.descendant(of: _sync, matching: find.byType(Text))).data!;
+
+String _goLabel(WidgetTester tester) =>
+    tester.widget<Text>(find.descendant(of: _go, matching: find.byType(Text))).data!;
+
 void main() {
-  testWidgets('the sky angle big on the left, the mechanical angle under it, the dial on the right', (tester) async {
+  testWidgets('the sky angle big on the left, the mechanical angle under it, the dial on the right; no step picker',
+      (tester) async {
     await _pump(tester, _wire());
     expect(find.text('Rotator · Falcon'), findsOneWidget);
     expect(find.text('92.0°'), findsOneWidget);
     expect(find.text('88.0°'), findsOneWidget);
     expect(tester.getRect(_dial).left, greaterThan(tester.getRect(find.text('92.0°')).right));
-    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-rotator-step-5'))).selected, isTrue,
-        reason: '5° to start');
+    expect(find.byKey(const Key('simple-rotator-steps')), findsNothing, reason: 'one step: 1°');
   });
 
   testWidgets('with the mechanical angle the same as the sky angle, only the sky angle shows', (tester) async {
@@ -135,43 +155,42 @@ void main() {
     expect(find.text('Mechanical angle'), findsNothing);
   });
 
-  testWidgets('turning shows the target, on the step\'s marks; the rotator moves there on letting go', (tester) async {
+  testWidgets('turning sets a target a degree a click; letting go moves nothing; Rotate moves there', (tester) async {
     final (_, r) = await _pump(tester, _wire());
-    final centre = tester.getCenter(_dial);
-    final radius = tester.getSize(_dial).width * 0.42;
-    Offset at(double deg) {
-      final a = (deg - 90) * math.pi / 180;
-      return centre + Offset(radius * math.cos(a), radius * math.sin(a));
-    }
-    final g = await tester.startGesture(at(0));
-    for (var d = 1; d <= 17; d++) {
-      await g.moveTo(at(d.toDouble()));
-      await tester.pump();
-    }
-    // Clockwise brings lower numbers under the mark: three 5° clicks from 92 are 90, 85, 80.
-    expect(find.text('Let go to move to 80.0°'), findsOneWidget);
+    expect(_goLabel(tester), 'Rotate');
+    await _turn(tester, 17.5);
+    // Clockwise brings lower numbers under the mark: 17 clicks from 92 is 75.
+    expect(r.calls, isEmpty, reason: 'letting go no longer moves it');
+    expect(_goLabel(tester), 'Rotate to 75.0°');
     expect(find.text('92.0°'), findsOneWidget, reason: 'the reading stays where the rotator is');
-    expect(r.calls, isEmpty, reason: 'nothing moves until letting go');
-    await g.up();
+    await tester.tap(_go);
     await tester.pump();
-    expect(r.calls, ['move 80.0 sky']);
+    expect(r.calls, ['move 75.0 sky']);
+    expect(_goLabel(tester), 'Rotate', reason: 'the target is spent');
   });
 
-  testWidgets('counter-clockwise goes up, and the step size sets each click', (tester) async {
+  testWidgets('turning on adds to the target; turning back to where it is clears it', (tester) async {
     final (_, r) = await _pump(tester, _wire());
-    await tester.tap(find.byKey(const Key('simple-rotator-step-15')));
+    await _turn(tester, -2.5); // two clicks counter-clockwise: up
+    expect(_goLabel(tester), 'Rotate to 94.0°');
+    await _turn(tester, -1.5);
+    expect(_goLabel(tester), 'Rotate to 95.0°', reason: 'from the target, not the rotator');
+    await _turn(tester, 3.5);
+    expect(_goLabel(tester), 'Rotate', reason: 'back at 92: nothing to do');
+    await tester.tap(_go);
     await tester.pump();
-    await _turn(tester, -32); // two 15° clicks
-    expect(r.calls, ['move 120.0 sky'], reason: 'the next marks up from 92: 105, then 120');
+    expect(r.calls, isEmpty);
   });
 
   testWidgets('the angle wraps through 0', (tester) async {
-    final (_, r) = await _pump(tester, _wire(sky: 2, mech: 2));
-    await _turn(tester, 11); // two 5° clicks clockwise from 2: 0, then 355
-    expect(r.calls, ['move 355.0 sky']);
+    final (_, r) = await _pump(tester, _wire(sky: 1, mech: 1));
+    await _turn(tester, 2.5); // two clicks clockwise from 1: 0, then 359
+    await tester.tap(_go);
+    await tester.pump();
+    expect(r.calls, ['move 359.0 sky']);
   });
 
-  testWidgets('a keyboard turns it: the arrows move a step from where the rotator is', (tester) async {
+  testWidgets('a keyboard sets the target: the arrows move it a degree; nothing moves until Rotate', (tester) async {
     final (_, r) = await _pump(tester, _wire());
     for (var i = 0; i < 10 && FocusManager.instance.primaryFocus?.debugLabel != 'simple-rotator-dial'; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
@@ -179,45 +198,91 @@ void main() {
     }
     expect(FocusManager.instance.primaryFocus?.debugLabel, 'simple-rotator-dial');
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
-    expect(r.calls, ['move 95.0 sky'], reason: 'up or right: the next mark up');
+    expect(_goLabel(tester), 'Rotate to 94.0°');
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.pump();
-    expect(r.calls.last, 'move 90.0 sky', reason: 'down or left: the next mark down, from the reported angle');
+    expect(_goLabel(tester), 'Rotate to 93.0°');
+    expect(r.calls, isEmpty);
+    await tester.tap(_go);
+    await tester.pump();
+    expect(r.calls, ['move 93.0 sky']);
   });
 
-  testWidgets('a scroll over the dial turns it, and it moves once the scrolling stops', (tester) async {
+  testWidgets('a scroll over the dial sets the target, and nothing moves on its own', (tester) async {
     final (_, r) = await _pump(tester, _wire());
     final mouse = TestPointer(1, PointerDeviceKind.mouse);
     await tester.sendEventToBinding(mouse.hover(tester.getCenter(_dial) + const Offset(60, 0)));
-    await tester.sendEventToBinding(mouse.scroll(const Offset(0, -60)));
-    await tester.pump(const Duration(milliseconds: 50));
-    expect(r.calls, isEmpty, reason: 'not while the scroll goes on');
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(r.calls.single, startsWith('move '));
+    await tester.sendEventToBinding(mouse.scroll(const Offset(0, -25)));
+    await tester.pump(const Duration(seconds: 1));
+    expect(r.calls, isEmpty);
+    expect(_goLabel(tester), isNot('Rotate'));
   });
 
-  testWidgets('screen readers get the dial as a slider: increase moves a step up', (tester) async {
+  testWidgets('screen readers get the dial as a slider: increase moves the target a degree up', (tester) async {
     final (_, r) = await _pump(tester, _wire());
     final node = tester.getSemantics(_dial);
     expect(node.label, contains('Sky angle'));
     expect(node.value, '92.0°');
     node.owner!.performAction(node.id, SemanticsAction.increase);
     await tester.pump();
-    expect(r.calls, ['move 95.0 sky']);
+    expect(r.calls, isEmpty);
+    expect(_goLabel(tester), 'Rotate to 93.0°');
+    expect(tester.getSemantics(_dial).value, '93.0°', reason: 'the dial reads its target');
+  });
+
+  testWidgets('Sync tells the rotator it is at the target, without moving it', (tester) async {
+    final (_, r) = await _pump(tester, _wire());
+    expect(_syncLabel(tester), 'Sync');
+    await _turn(tester, 17.5);
+    expect(_syncLabel(tester), 'Sync to 75.0°');
+    await tester.tap(_sync);
+    await tester.pump();
+    expect(r.calls, ['sync 75.0']);
+    expect(_syncLabel(tester), 'Sync', reason: 'the target is spent');
+  });
+
+  testWidgets('Sync sits beside Rotate, under the dial', (tester) async {
+    await _pump(tester, _wire(), width: 328);
+    final sync = tester.getRect(_sync);
+    final go = tester.getRect(_go);
+    expect(sync.top, greaterThan(tester.getRect(_dial).bottom));
+    expect(go.left, greaterThan(sync.right), reason: 'Sync, then Rotate');
+    expect(go.top, sync.top);
+  });
+
+  testWidgets('a refused sync says why in a pill', (tester) async {
+    final (c, r) = await _pump(tester, _wire());
+    r.refuseSync = true;
+    await _turn(tester, 17.5);
+    await tester.tap(_sync);
+    await tester.pump();
+    final pill = c.read(simpleMessagesProvider).single;
+    expect((pill.kind, pill.title), (SimpleMessageKind.error, "Couldn't sync the rotator"));
+  });
+
+  testWidgets('with no target Rotate and Sync are disabled', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(tester, _wire());
+    expect(tester.getSemantics(_go), isSemantics(isButton: true, hasEnabledState: true, isEnabled: false));
+    expect(tester.getSemantics(_sync), isSemantics(isButton: true, hasEnabledState: true, isEnabled: false));
+    semantics.dispose();
   });
 
   testWidgets('while it moves the window says where to; the middle is a red stop that halts it', (tester) async {
     final (_, r) = await _pump(tester, _wire());
-    await _turn(tester, 17);
+    await _turn(tester, 17.5);
+    await tester.tap(_go);
+    await tester.pump();
     r.set(_wire(runtime: 'moving'));
     await tester.pump();
-    expect(find.text('Moving to 80.0°…'), findsOneWidget);
+    expect(find.text('Moving to 75.0°…'), findsOneWidget);
     final square = tester.widget<SimpleStopSquare>(find.descendant(of: _stop, matching: find.byType(SimpleStopSquare)));
     expect(square.color, AraColors.accentError);
     await tester.tap(_stop);
     await tester.pump();
-    expect(r.calls, ['move 80.0 sky', 'halt']);
+    expect(r.calls, ['move 75.0 sky', 'halt']);
   });
 
   testWidgets('at rest the stop is grey and takes no tap', (tester) async {
@@ -235,35 +300,44 @@ void main() {
   testWidgets('a move started elsewhere reads Moving…, and the dial turns nothing until it stops', (tester) async {
     final (_, r) = await _pump(tester, _wire(runtime: 'moving'));
     expect(find.text('Moving…'), findsOneWidget);
-    await _turn(tester, 17);
+    await _turn(tester, 17.5);
+    expect(_goLabel(tester), 'Rotate');
+    await tester.tap(_go);
+    await tester.pump();
     expect(r.calls, isEmpty);
   });
 
-  testWidgets('with the sky angle unknown the dial moves nothing', (tester) async {
+  testWidgets('with the sky angle unknown the dial sets nothing', (tester) async {
     final (_, r) = await _pump(tester, _wire(sky: null));
-    await _turn(tester, 17);
+    await _turn(tester, 17.5);
+    expect(_goLabel(tester), 'Rotate');
     expect(r.calls, isEmpty);
   });
 
-  testWidgets('while a plan runs, a move asks first, in the window', (tester) async {
+  testWidgets('while a plan runs, Rotate asks first, in the window', (tester) async {
     final (_, r) = await _pump(tester, _wire(), planRunning: true);
     await tester.pump(); // the run state arrives
-    await _turn(tester, 17);
+    await _turn(tester, 17.5);
+    await tester.tap(_go);
+    await tester.pump();
     expect(r.calls, isEmpty);
     expect(find.textContaining('A plan is running'), findsOneWidget);
     await tester.tap(find.text('Cancel'));
     await tester.pump();
     expect(r.calls, isEmpty);
-    await _turn(tester, 17);
+    await tester.tap(_go);
+    await tester.pump();
     await tester.tap(find.text('Rotate anyway'));
     await tester.pump();
-    expect(r.calls, ['move 80.0 sky']);
+    expect(r.calls, ['move 75.0 sky']);
   });
 
   testWidgets('a refused move says why in a pill', (tester) async {
     final (c, r) = await _pump(tester, _wire());
     r.refuse = true;
-    await _turn(tester, 17);
+    await _turn(tester, 17.5);
+    await tester.tap(_go);
+    await tester.pump();
     final pill = c.read(simpleMessagesProvider).single;
     expect((pill.kind, pill.title), (SimpleMessageKind.error, "Couldn't move the rotator"));
   });
@@ -277,26 +351,19 @@ void main() {
     expect(page.pixels, greaterThan(0));
   });
 
-  testWidgets('dragging off the dial drops the target: nothing moves (#1670 audit P1)', (tester) async {
-    final (_, r) = await _pump(tester, _wire());
-    final centre = tester.getCenter(_dial);
-    final radius = tester.getSize(_dial).width * 0.42;
-    Offset at(double deg) {
-      final a = (deg - 90) * math.pi / 180;
-      return centre + Offset(radius * math.cos(a), radius * math.sin(a));
-    }
-    final g = await tester.startGesture(at(0));
-    for (var d = 1; d <= 17; d++) {
-      await g.moveTo(at(d.toDouble()));
+  testWidgets('dragging off the dial drops the target (#1670 audit P1)', (tester) async {
+    await _pump(tester, _wire());
+    final g = await tester.startGesture(_rim(tester, 0));
+    for (var i = 1; i <= 35; i++) {
+      await g.moveTo(_rim(tester, i * 0.5));
       await tester.pump();
     }
-    expect(find.text('Let go to move to 80.0°'), findsOneWidget);
-    await g.moveTo(centre + Offset(tester.getSize(_dial).width, 0));
+    expect(_goLabel(tester), 'Rotate to 75.0°');
+    await g.moveTo(tester.getCenter(_dial) + Offset(tester.getSize(_dial).width, 0));
     await tester.pump();
-    expect(find.textContaining('Let go to move'), findsNothing);
     await g.up();
     await tester.pump();
-    expect(r.calls, isEmpty);
+    expect(_goLabel(tester), 'Rotate');
   });
 
   testWidgets('while it moves the dial reads as disabled, with nothing to adjust (#1670 audit P2)', (tester) async {
@@ -308,11 +375,10 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('a turn cut off by the system moves nothing', (tester) async {
-    final (_, r) = await _pump(tester, _wire());
-    await _turn(tester, 17, cancel: true);
-    expect(r.calls, isEmpty);
-    expect(find.textContaining('Let go to move'), findsNothing);
+  testWidgets('a turn cut off by the system drops the target', (tester) async {
+    await _pump(tester, _wire());
+    await _turn(tester, 17.5, cancel: true);
+    expect(_goLabel(tester), 'Rotate');
   });
 
   testWidgets('in Settings it ends with the rotator\'s versions; from the dot, none', (tester) async {

@@ -251,9 +251,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceMoving => 'Moving…';
 
   @override
-  String get deviceStep => 'Step';
-
-  @override
   String get deviceAutofocus => 'Autofocus';
 
   @override
@@ -276,6 +273,25 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get deviceFineFocus => 'Fine focus';
+
+  @override
+  String get deviceRotate => 'Rotate';
+
+  @override
+  String deviceRotateTo(String angle) {
+    return 'Rotate to $angle';
+  }
+
+  @override
+  String get deviceSync => 'Sync';
+
+  @override
+  String deviceSyncTo(String angle) {
+    return 'Sync to $angle';
+  }
+
+  @override
+  String get deviceCouldntSyncRotator => 'Couldn\'t sync the rotator';
 
   @override
   String get deviceSkyAngle => 'Sky angle';
@@ -2572,9 +2588,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get deviceMoving => 'Movendo…';
 
   @override
-  String get deviceStep => 'Passo';
-
-  @override
   String get deviceAutofocus => 'Foco automático';
 
   @override
@@ -2597,6 +2610,26 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get deviceFineFocus => 'Foco fino';
+
+  @override
+  String get deviceRotate => 'Girar';
+
+  @override
+  String deviceRotateTo(String angle) {
+    return 'Girar para $angle';
+  }
+
+  @override
+  String get deviceSync => 'Sincronizar';
+
+  @override
+  String deviceSyncTo(String angle) {
+    return 'Sincronizar em $angle';
+  }
+
+  @override
+  String get deviceCouldntSyncRotator =>
+      'Não foi possível sincronizar o rotacionador';
 
   @override
   String get deviceSkyAngle => 'Ângulo no céu';

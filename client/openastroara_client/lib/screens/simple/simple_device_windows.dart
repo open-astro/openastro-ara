@@ -12,7 +12,6 @@ import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../services/equipment_driver_api.dart';
 import '../../models/filter_wheel_status.dart';
 import '../../models/focuser_status.dart';
-import '../../models/rotator_status.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../models/guider_status.dart';
 import '../../state/equipment/filter_wheel_state.dart';
@@ -1891,10 +1890,11 @@ String simpleDegrees(double a) => '${a.toStringAsFixed(1)}°';
 
 /// The rotator's window: the sky angle big on the left (the mechanical angle
 /// under it when they differ) and a dial on the right whose face is the sky
-/// angle. The number under its mark is where the rotator is or, while
-/// turning, where it will go; each click is a step of the size picked under
-/// it, and the rotator goes there on letting go. The middle stops it while it
-/// turns. Reverse, sync and the step size stay in the full UI.
+/// angle. The number under its mark is where the rotator is or, once turned,
+/// where it will go: each click is a degree, and the target waits for Rotate
+/// (move there) or Sync (tell the rotator it is there, without moving). The
+/// middle stops it while it turns (user, 2026-11-07). Reverse stays in the
+/// full UI.
 class SimpleRotatorWindow extends ConsumerStatefulWidget {
   const SimpleRotatorWindow({super.key, this.inSettings = false});
 
@@ -1907,15 +1907,13 @@ class SimpleRotatorWindow extends ConsumerStatefulWidget {
 }
 
 class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
-  double _step = 5;
-
-  /// While the dial turns: where it will send the rotator.
+  /// Where the dial was turned to, waiting for Rotate or Sync.
   double? _target;
 
   /// The last angle sent, for "Moving to …"; cleared once it stops.
   double? _sent;
 
-  /// A move let go while a plan runs: the window asks first.
+  /// A Rotate while a plan runs: the window asks first.
   double? _asking;
 
   final _dialFocus = FocusNode(debugLabel: 'simple-rotator-dial');
@@ -1929,19 +1927,50 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
 
   static double _norm(double a) => (a % 360 + 360) % 360;
 
-  /// [n] marks of the step from [from]: the first is the next mark that way
-  /// (92 at 5°: up 95, down 90), each one after a whole step.
-  double _snap(double from, int n) {
-    final at = from / _step;
-    final first = n > 0 ? (at + 1e-6).floor() : (at - 1e-6).ceil();
-    return _norm((first + n) * _step);
+  static bool _same(double a, double b) => (_norm(a - b) + 0.05) % 360 < 0.1;
+
+  /// [n] whole degrees from [from]: the first is the next whole degree that
+  /// way (92.4: up 93, down 92).
+  static double _snap(double from, int n) {
+    final first = n > 0 ? (from + 1e-6).floor() : (from - 1e-6).ceil();
+    return _norm((first + n).toDouble());
   }
 
-  /// Moves while a plan runs ask first; a move to where it is does nothing.
-  void _request(RotatorStatus s, double target, bool planRunning) {
-    if (s.skyAngleDeg == null || s.isMoving) return;
-    if ((_norm(target - s.skyAngleDeg!) + 0.05) % 360 < 0.1) return;
-    planRunning ? setState(() => _asking = target) : _go(target);
+  /// Moves the target [n] degrees; back at the rotator's angle there is
+  /// nothing to do, so the target clears.
+  void _nudge(double sky, int n) {
+    final t = _snap(_target ?? sky, n);
+    setState(() => _target = _same(t, sky) ? null : t);
+  }
+
+  /// Rotate: a move while a plan runs asks first.
+  void _rotate(bool planRunning) {
+    final t = _target;
+    if (t == null) return;
+    if (planRunning) {
+      setState(() => _asking = t);
+    } else {
+      setState(() => _target = null);
+      _go(t);
+    }
+  }
+
+  Future<void> _sync() async {
+    final t = _target;
+    if (t == null) return;
+    setState(() => _target = null);
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.rotator);
+    final l10n = context.l10n;
+    try {
+      final performed = await ref.read(rotatorProvider.notifier).sync(t);
+      if (!performed) _sayBusy(ref, l10n);
+    } catch (e) {
+      notify(
+        l10n.deviceCouldntSyncRotator,
+        detail: describeEquipmentError(e),
+        error: true,
+      );
+    }
   }
 
   Future<void> _go(double target) async {
@@ -2038,13 +2067,9 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
                       ),
                       // Moving is working: blinking green (DESIGN.md status rule).
                       StatusBlink(
-                        on: _target == null && s.isMoving,
+                        on: s.isMoving,
                         child: Text(
-                          _target != null
-                              ? l10n.deviceLetGoToMoveTo(
-                                  simpleDegrees(_target!),
-                                )
-                              : s.isMoving
+                          s.isMoving
                               ? (_sent != null
                                     ? l10n.deviceMovingTo(simpleDegrees(_sent!))
                                     : l10n.deviceMoving)
@@ -2070,7 +2095,7 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
                 FocusableActionDetector(
                   focusNode: _dialFocus,
                   onShowFocusHighlight: (v) => setState(() => _dialFocused = v),
-                  // Up or right a step up, as the screen reader's increase.
+                  // Up or right a degree up, as the screen reader's increase.
                   shortcuts: const {
                     SingleActivator(LogicalKeyboardKey.arrowUp): _DialStep(1),
                     SingleActivator(LogicalKeyboardKey.arrowRight): _DialStep(
@@ -2085,32 +2110,28 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
                   },
                   actions: {
                     _DialStep: CallbackAction<_DialStep>(
-                      onInvoke: (i) => sky == null
-                          ? null
-                          : _request(s, _snap(sky, i.dir), planRunning),
+                      onInvoke: (i) => enabled ? _nudge(sky, i.dir) : null,
                     ),
                   },
                   child: Semantics(
                     slider: true,
                     label: l10n.deviceSkyAngle,
-                    value: sky == null ? null : simpleDegrees(sky),
+                    // The dial reads what is under its mark: the target once
+                    // turned, else where the rotator is.
+                    value: sky == null ? null : simpleDegrees(shown),
                     increasedValue: sky == null
                         ? null
-                        : simpleDegrees(_snap(sky, 1)),
+                        : simpleDegrees(_snap(shown, 1)),
                     decreasedValue: sky == null
                         ? null
-                        : simpleDegrees(_snap(sky, -1)),
+                        : simpleDegrees(_snap(shown, -1)),
                     enabled: enabled,
-                    onIncrease: enabled
-                        ? () => _request(s, _snap(sky, 1), planRunning)
-                        : null,
-                    onDecrease: enabled
-                        ? () => _request(s, _snap(sky, -1), planRunning)
-                        : null,
+                    onIncrease: enabled ? () => _nudge(sky, 1) : null,
+                    onDecrease: enabled ? () => _nudge(sky, -1) : null,
                     child: _Dial(
                       key: const Key('simple-rotator-dial'),
                       size: dial,
-                      detent: _step * math.pi / 180,
+                      detent: math.pi / 180,
                       // The reading sits under the mark at the top.
                       angle: -shown * math.pi / 180,
                       painter: _AngleScalePainter(
@@ -2121,14 +2142,11 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
                       // Clockwise brings lower numbers under the mark.
                       onDetent: (d) {
                         HapticFeedback.selectionClick();
-                        setState(() => _target = _snap(_target ?? sky!, -d));
+                        _nudge(sky!, -d);
                       },
-                      onRelease: () {
-                        final t = _target;
-                        setState(() => _target = null);
-                        if (t != null) _request(s, t, planRunning);
-                      },
-                      // The system took the finger: nothing moves.
+                      // The target waits for Rotate or Sync.
+                      onRelease: () {},
+                      // The system took the finger: the target drops.
                       onCancel: () => setState(() => _target = null),
                       centre: _RotatorStop(onStop: s.isMoving ? _halt : null),
                     ),
@@ -2153,33 +2171,33 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
           ),
         );
       }
+      final ready = enabled && _target != null;
+      final target = _target == null ? null : simpleDegrees(_target!);
       children.addAll([
         const SizedBox(height: AraSpace.s12),
-        simpleWindowRow(
-          l10n.deviceStep,
-          id: 'Step',
-          Container(
-            key: const Key('simple-rotator-steps'),
-            width: kSimpleWindowControlWidth,
-            decoration: BoxDecoration(
-              color: AraColors.tileFill,
-              borderRadius: BorderRadius.circular(8),
+        Row(
+          spacing: AraSpace.s8,
+          children: [
+            Expanded(
+              child: _RotatorButton(
+                key: const Key('simple-rotator-sync'),
+                label: target == null
+                    ? l10n.deviceSync
+                    : l10n.deviceSyncTo(target),
+                onTap: ready ? _sync : null,
+              ),
             ),
-            child: Row(
-              children: [
-                for (final n in const [1, 5, 15])
-                  Expanded(
-                    child: SimpleSegment(
-                      key: Key('simple-rotator-step-$n'),
-                      label: '$n°',
-                      selected: _step == n,
-                      radius: 8,
-                      onTap: () => setState(() => _step = n.toDouble()),
-                    ),
-                  ),
-              ],
+            Expanded(
+              child: _RotatorButton(
+                key: const Key('simple-rotator-go'),
+                label: target == null
+                    ? l10n.deviceRotate
+                    : l10n.deviceRotateTo(target),
+                primary: true,
+                onTap: ready ? () => _rotate(planRunning) : null,
+              ),
             ),
-          ),
+          ],
         ),
       ]);
     }
@@ -2195,6 +2213,54 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
       children: children,
     );
   }
+}
+
+/// Sync or Rotate under the rotator's dial, carrying the target ("Rotate to
+/// 75.0°"): Rotate green with dark words, as Autofocus starts, Sync on the
+/// tile fill; dimmed and taking no tap with no target.
+class _RotatorButton extends StatelessWidget {
+  const _RotatorButton({
+    super.key,
+    required this.label,
+    required this.onTap,
+    this.primary = false,
+  });
+
+  final String label;
+  final VoidCallback? onTap;
+  final bool primary;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    enabled: onTap != null,
+    label: label,
+    excludeSemantics: true,
+    child: Opacity(
+      opacity: onTap == null ? 0.4 : 1,
+      child: Material(
+        color: primary ? AraColors.accentConnected : AraColors.tileFill,
+        borderRadius: BorderRadius.circular(10),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 48),
+            padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: kSimpleText.copyWith(
+                fontWeight: FontWeight.w600,
+                color: primary ? AraColors.bgPrimary : AraColors.textPrimary,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 /// The rotator dial's middle: the shutter's stop square. Grey and taking no

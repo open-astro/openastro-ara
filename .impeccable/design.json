@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-07T20:30:00+13:00",
+  "generatedAt": "2026-11-07T21:30:00+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -753,7 +753,7 @@
       "name": "Sky-angle Dial (Simple Mode)",
       "kind": "custom",
       "refersTo": "simple-sky-angle-dial",
-      "description": "The Rotator window's dial: the whole face, a 0–360° scale (tick every 5°, number every 30°, clockwise from 0 at the top), turns under a fixed blue mark; the number under it is where the rotator is or will go, each click on the next mark of the 1° / 5° / 15° step. The middle is the shutter's stop square: grey at rest, red while the rotator turns, and a tap stops it (#1662).",
+      "description": "The Rotator window's dial: the whole face, a 0–360° scale (tick every 5°, number every 30°, clockwise from 0 at the top), turns under a fixed blue mark; the number under it is where the rotator is or the target, a degree a click. Letting go moves nothing: Sync and Rotate buttons under the dial carry the target (\"Rotate to 75.0°\"), Rotate green with dark words, both dimmed with no target. The middle is the shutter's stop square: grey at rest, red while the rotator turns, and a tap stops it (#1662).",
       "html": "<div class=\"ds-dial\"><i class=\"ds-dial-mark\"></i><div class=\"ds-dial-face\"><b>90</b></div><div class=\"ds-dial-hub\"><i></i></div></div>",
       "css": ".ds-dial{position:relative;width:180px;height:180px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif} .ds-dial-face{position:absolute;inset:14px;border-radius:50%;background:repeating-conic-gradient(from -1deg,#A0A0A0 0 2deg,transparent 2deg 5deg),#383838;display:flex;justify-content:center} .ds-dial-face b{margin-top:22px;color:#E0E0E0;font-size:11px;font-weight:600} .ds-dial-mark{position:absolute;left:50%;top:-4px;transform:translateX(-50%);border:9px solid transparent;border-top:14px solid #42A5F5;border-bottom:0} .ds-dial-hub{position:absolute;inset:58px;border-radius:50%;background:#1A1A1A;border:1px solid #404040;display:grid;place-items:center} .ds-dial-hub i{width:22px;height:22px;border-radius:4px;background:#F44336}"
     },
