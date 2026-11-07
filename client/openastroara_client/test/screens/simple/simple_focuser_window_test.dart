@@ -51,7 +51,8 @@ class _Live extends AutofocusLiveNotifier {
 late _Live _live;
 late ProviderContainer _c;
 
-Future<_Focuser> _pump(WidgetTester tester, Map<String, dynamic> wire, {double width = 360, String? font}) async {
+Future<_Focuser> _pump(WidgetTester tester, Map<String, dynamic> wire,
+    {double width = 360, String? font, bool scrolling = false}) async {
   final focuser = _Focuser(wire);
   _live = _Live();
   final c = _c = ProviderContainer(overrides: [
@@ -64,7 +65,12 @@ Future<_Focuser> _pump(WidgetTester tester, Map<String, dynamic> wire, {double w
     container: c,
     child: MaterialApp(
         theme: ThemeData(fontFamily: font),
-        home: Scaffold(body: Center(child: SizedBox(width: width, child: const SimpleFocuserWindow())))),
+        home: Scaffold(
+            body: scrolling
+                // As in Settings: the window on a page that scrolls.
+                ? SingleChildScrollView(
+                    child: Column(children: [SizedBox(width: width, child: const SimpleFocuserWindow()), const SizedBox(height: 2000)]))
+                : Center(child: SizedBox(width: width, child: const SimpleFocuserWindow())))),
   ));
   await tester.pump();
   return focuser;
@@ -299,6 +305,57 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await tester.pump();
     expect(f.moves.last, 11400, reason: 'up: in a click, from the reported position');
+  });
+
+  testWidgets('a locked knob leaves the finger to the page: a swipe on it scrolls (#1670 audit P1)', (tester) async {
+    final f = await _pump(tester, _wire(), scrolling: true);
+    _live.running();
+    await tester.pump();
+    final page = tester.state<ScrollableState>(find.byType(Scrollable)).position;
+    await tester.drag(_knob('coarse'), const Offset(0, -200));
+    await tester.pump();
+    expect(page.pixels, greaterThan(0), reason: 'the page scrolled');
+    expect(f.moves, isEmpty);
+  });
+
+  testWidgets('dragging off a knob drops the target: nothing moves (#1670 audit P1)', (tester) async {
+    final f = await _pump(tester, _wire());
+    final g = await tester.startGesture(tester.getCenter(_knob('coarse')));
+    for (var i = 0; i < 10; i++) {
+      await g.moveBy(Offset(0, kSimpleFocusClick * 0.35));
+      await tester.pump();
+    }
+    expect(find.text('Let go to move to 13 800'), findsOneWidget);
+    await g.moveBy(Offset(tester.getSize(_knob('coarse')).width * 2, 0)); // past a knob's width off its side
+    await tester.pump();
+    expect(find.textContaining('Let go to move'), findsNothing, reason: 'the target dropped as the finger left');
+    await g.moveBy(const Offset(0, 60));
+    await tester.pump();
+    await g.up();
+    await tester.pump();
+    expect(f.moves, isEmpty);
+  });
+
+  testWidgets('a locked knob reads as disabled to screen readers, with nothing to adjust (#1670 audit P2)', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(tester, _wire());
+    _live.running();
+    await tester.pump();
+    final node = tester.getSemantics(_knob('coarse'));
+    expect(node, isSemantics(isSlider: true, hasEnabledState: true, isEnabled: false));
+    expect(node.getSemanticsData().hasAction(SemanticsAction.increase), isFalse);
+    semantics.dispose();
+  });
+
+  testWidgets('screen readers hear which way increase goes: out (#1670 audit P2)', (tester) async {
+    await _pump(tester, _wire());
+    expect(tester.getSemantics(_knob('fine')).hint, 'Increase moves out, decrease moves in');
+  });
+
+  test('a negative position keeps its minus sign (#1670 audit)', () {
+    expect(simpleSteps(-1200), '−1 200');
+    expect(simpleSteps(-5), '−5');
+    expect(simpleSteps(12000), '12 000');
   });
 
   testWidgets('a roll cut off by the system moves nothing', (tester) async {

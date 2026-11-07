@@ -391,6 +391,10 @@
   "@deviceRotateAnyway": {
     "description": "Rotator window: confirms a move while a plan runs"
   },
+  "deviceKnobHint": "Increase moves out, decrease moves in",
+  "@deviceKnobHint": {
+    "description": "Screen-reader hint on the focuser's knobs: increase (the bigger number) moves the focuser out, though rolling the knob up or the Up key moves it in"
+  },
   "deviceClickSize": "{knob} ({steps})",
   "@deviceClickSize": {
     "description": "Under a focuser knob: its name and, in brackets, how many steps one click moves, e.g. 'Coarse (600)'",

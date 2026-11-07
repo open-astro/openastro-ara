@@ -609,6 +609,12 @@ abstract class AppLocalizations {
   /// **'Rotate anyway'**
   String get deviceRotateAnyway;
 
+  /// Screen-reader hint on the focuser's knobs: increase (the bigger number) moves the focuser out, though rolling the knob up or the Up key moves it in
+  ///
+  /// In en, this message translates to:
+  /// **'Increase moves out, decrease moves in'**
+  String get deviceKnobHint;
+
   /// Under a focuser knob: its name and, in brackets, how many steps one click moves, e.g. 'Coarse (600)'
   ///
   /// In en, this message translates to:

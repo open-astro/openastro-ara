@@ -853,11 +853,9 @@ class _SimpleGainSliderState extends ConsumerState<SimpleGainSlider> {
 }
 
 /// "12 000": a focuser position, grouped in thousands.
-String simpleSteps(int n) => n
-    .abs()
-    .toString()
-    .replaceAllMapped(RegExp(r'\B(?=(\d{3})+$)'), (_) => ' ')
-    .padLeft(n < 0 ? 1 : 0, '−');
+String simpleSteps(int n) =>
+    (n < 0 ? '−' : '') +
+    n.abs().toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+$)'), (_) => ' ');
 
 /// The focuser's window: where it is and its temperature on the left, and a
 /// coarse and a fine knob on the right, upright like a focuser's knobs seen
@@ -1011,6 +1009,10 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     double slot,
   ) {
     final pos = s.position ?? 0;
+    // Locked while autofocus runs or the position is unknown (see _locked).
+    final enabled =
+        s.position != null &&
+        !ref.watch(autofocusLiveProvider.select((l) => l.run.isRunning));
     return Column(
       mainAxisSize: MainAxisSize.min,
       spacing: AraSpace.s4,
@@ -1034,21 +1036,25 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
               },
               child: Semantics(
                 slider: true,
+                enabled: enabled,
                 label: label,
+                // Increase is the bigger number, out; the knob rolled up and
+                // the Up key go in, so the reader says which way it goes.
+                hint: context.l10n.deviceKnobHint,
                 value: simpleSteps(pos),
                 increasedValue: simpleSteps(_clamp(pos + step, s)),
                 decreasedValue: simpleSteps(_clamp(pos - step, s)),
-                onIncrease: () => _go(s, _clamp(pos + step, s)),
-                onDecrease: () => _go(s, _clamp(pos - step, s)),
+                onIncrease: enabled
+                    ? () => _go(s, _clamp(pos + step, s))
+                    : null,
+                onDecrease: enabled
+                    ? () => _go(s, _clamp(pos - step, s))
+                    : null,
                 child: _FocusThumbwheel(
                   key: Key('simple-focuser-$id'),
                   size: size,
                   focused: _highlighted == focus,
-                  enabled:
-                      s.position != null &&
-                      !ref.watch(
-                        autofocusLiveProvider.select((l) => l.run.isRunning),
-                      ),
+                  enabled: enabled,
                   onClicks: (n) {
                     HapticFeedback.selectionClick();
                     setState(
@@ -1198,8 +1204,10 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
 /// reporting each [detent] turned (clockwise +1, counter-clockwise −1), then
 /// the release. A scroll over it turns it the same way and counts as let go
 /// once the scrolling stops. [angle] turns the face to the reading the mark
-/// shows; [centre] sits in the middle and takes its own taps. It claims the
-/// finger at once (no drag slop), so the dial follows from the first touch.
+/// shows; [centre] sits in the middle and takes its own taps. Turned on, it
+/// claims the finger at once (no drag slop), so the dial follows from the
+/// first touch; turned off, it takes no finger, so a swipe on it scrolls the
+/// page. A finger that strays well off the face drops the turn, as a cancel.
 /// iOS has no rotary control of its own.
 class _Dial extends StatefulWidget {
   const _Dial({
@@ -1272,6 +1280,13 @@ class _DialState extends State<_Dial> {
   }
 
   void _turn(Offset p) {
+    if (_last == null) return; // dropped: dragged off the face
+    // Well off the face (a quarter of it past the rim): drop the turn.
+    if ((p - Offset(_size / 2, _size / 2)).distance > _size * 0.75) {
+      _cancelled = true;
+      _end();
+      return;
+    }
     final a = _at(p);
     var d = a - (_last ?? a);
     if (d > math.pi) d -= 2 * math.pi;
@@ -1327,34 +1342,38 @@ class _DialState extends State<_Dial> {
           onPointerSignal: _scroll,
           child: RawGestureDetector(
             gestures: {
-              _EagerPan: GestureRecognizerFactoryWithHandlers<_EagerPan>(
-                _EagerPan.new,
-                (r) {
-                  r
-                    ..dragStartBehavior = DragStartBehavior.down
-                    ..onStart = (d) {
-                      _last = _at(d.localPosition);
-                    }
-                    ..onUpdate = (d) {
-                      _turn(d.localPosition);
-                    }
-                    ..onEnd = (_) {
-                      _end();
-                    }
-                    ..onCancel = () {
-                      _cancelled = true;
-                      _end();
-                    };
-                },
-              ),
+              if (widget.enabled)
+                _EagerPan: GestureRecognizerFactoryWithHandlers<_EagerPan>(
+                  _EagerPan.new,
+                  (r) {
+                    r
+                      ..dragStartBehavior = DragStartBehavior.down
+                      ..onStart = (d) {
+                        _last = _at(d.localPosition);
+                      }
+                      ..onUpdate = (d) {
+                        _turn(d.localPosition);
+                      }
+                      ..onEnd = (_) {
+                        _end();
+                      }
+                      ..onCancel = () {
+                        _cancelled = true;
+                        _end();
+                      };
+                  },
+                ),
             },
             child: Opacity(
               opacity: widget.enabled ? 1 : 0.4,
               child: Transform.rotate(
                 angle: widget.angle + _pending,
-                child: CustomPaint(
-                  size: Size.square(_size),
-                  painter: widget.painter,
+                // Painted once and turned, not repainted every frame.
+                child: RepaintBoundary(
+                  child: CustomPaint(
+                    size: Size.square(_size),
+                    painter: widget.painter,
+                  ),
                 ),
               ),
             ),
@@ -1380,9 +1399,11 @@ class _DialState extends State<_Dial> {
 /// A focus knob seen from the side: an upright knurled cylinder whose ridges
 /// roll with the finger, reporting each click ([kSimpleFocusClick] of
 /// travel: down +1, out; up −1, in), then the release. A scroll over it
-/// rolls it the same way and counts as let go once the scrolling stops. It
-/// claims the finger at once (no drag slop), so it follows from the first
-/// touch.
+/// rolls it the same way and counts as let go once the scrolling stops.
+/// Turned on, it claims the finger at once (no drag slop), so it follows from
+/// the first touch; turned off, it takes no finger, so a swipe on it scrolls
+/// the page. A finger that strays a knob's width off either side drops the
+/// roll, as a cancel.
 class _FocusThumbwheel extends StatefulWidget {
   const _FocusThumbwheel({
     super.key,
@@ -1469,26 +1490,34 @@ class _FocusThumbwheelState extends State<_FocusThumbwheel> {
     onPointerSignal: _scroll,
     child: RawGestureDetector(
       gestures: {
-        _EagerPan: GestureRecognizerFactoryWithHandlers<_EagerPan>(
-          _EagerPan.new,
-          (r) {
-            r
-              ..dragStartBehavior = DragStartBehavior.down
-              ..onStart = (_) {
-                _dragging = true;
-              }
-              ..onUpdate = (d) {
-                _roll(d.delta.dy);
-              }
-              ..onEnd = (_) {
-                _end();
-              }
-              ..onCancel = () {
-                _cancelled = true;
-                _end();
-              };
-          },
-        ),
+        if (widget.enabled)
+          _EagerPan: GestureRecognizerFactoryWithHandlers<_EagerPan>(
+            _EagerPan.new,
+            (r) {
+              r
+                ..dragStartBehavior = DragStartBehavior.down
+                ..onStart = (_) {
+                  _dragging = true;
+                }
+                ..onUpdate = (d) {
+                  if (!_dragging) return; // dropped: dragged off the knob
+                  final w = widget.size.width;
+                  if (d.localPosition.dx < -w || d.localPosition.dx > 2 * w) {
+                    _cancelled = true;
+                    _end();
+                    return;
+                  }
+                  _roll(d.delta.dy);
+                }
+                ..onEnd = (_) {
+                  _end();
+                }
+                ..onCancel = () {
+                  _cancelled = true;
+                  _end();
+                };
+            },
+          ),
       },
       child: Opacity(
         opacity: widget.enabled ? 1 : 0.4,
@@ -1599,9 +1628,12 @@ class _EagerPan extends PanGestureRecognizer {
 }
 
 /// The rotator dial's face: a knurled rim, a tick every 5°, and a long one
-/// with its number every 30°, running clockwise from 0 at the top.
+/// with its number every 30°, running clockwise from 0 at the top. The
+/// numbers follow the user's text size, as the dial itself does.
 class _AngleScalePainter extends CustomPainter {
-  const _AngleScalePainter();
+  const _AngleScalePainter(this.textScaler);
+
+  final TextScaler textScaler;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1638,6 +1670,7 @@ class _AngleScalePainter extends CustomPainter {
           ),
         ),
         textDirection: TextDirection.ltr,
+        textScaler: textScaler,
       )..layout();
       label.paint(
         canvas,
@@ -1648,7 +1681,7 @@ class _AngleScalePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_AngleScalePainter old) => false;
+  bool shouldRepaint(_AngleScalePainter old) => old.textScaler != textScaler;
 }
 
 /// Autofocus under the knobs, full width: green to start, red with Cancel
@@ -2067,19 +2100,22 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
                     decreasedValue: sky == null
                         ? null
                         : simpleDegrees(_snap(sky, -1)),
-                    onIncrease: sky == null
-                        ? null
-                        : () => _request(s, _snap(sky, 1), planRunning),
-                    onDecrease: sky == null
-                        ? null
-                        : () => _request(s, _snap(sky, -1), planRunning),
+                    enabled: enabled,
+                    onIncrease: enabled
+                        ? () => _request(s, _snap(sky, 1), planRunning)
+                        : null,
+                    onDecrease: enabled
+                        ? () => _request(s, _snap(sky, -1), planRunning)
+                        : null,
                     child: _Dial(
                       key: const Key('simple-rotator-dial'),
                       size: dial,
                       detent: _step * math.pi / 180,
                       // The reading sits under the mark at the top.
                       angle: -shown * math.pi / 180,
-                      painter: const _AngleScalePainter(),
+                      painter: _AngleScalePainter(
+                        MediaQuery.textScalerOf(context),
+                      ),
                       focused: _dialFocused,
                       enabled: enabled,
                       // Clockwise brings lower numbers under the mark.

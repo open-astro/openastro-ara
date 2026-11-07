@@ -78,6 +78,7 @@
   "deviceFine": "Fino",
   "deviceCoarseFocus": "Foco grosso",
   "deviceFineFocus": "Foco fino",
+  "deviceKnobHint": "Aumentar move para fora, diminuir move para dentro",
   "deviceClickSize": "{knob} ({steps})",
   "deviceSkyAngle": "Ângulo no céu",
   "deviceMechanicalAngle": "Ângulo mecânico",

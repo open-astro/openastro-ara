@@ -61,7 +61,7 @@ class _Running extends SequenceRunStateNotifier {
 }
 
 Future<(ProviderContainer, _Rotator)> _pump(WidgetTester tester, Map<String, dynamic> wire,
-    {bool inSettings = false, DeviceDriver? driver, bool planRunning = false, double? width}) async {
+    {bool inSettings = false, DeviceDriver? driver, bool planRunning = false, double? width, bool scrolling = false}) async {
   await tester.pumpWidget(const SizedBox());
   await tester.pump();
   final rotator = _Rotator(wire);
@@ -78,7 +78,14 @@ Future<(ProviderContainer, _Rotator)> _pump(WidgetTester tester, Map<String, dyn
       home: Scaffold(
         body: Align(
           alignment: Alignment.topLeft,
-          child: SizedBox(width: width, child: SimpleRotatorWindow(inSettings: inSettings)),
+          child: scrolling
+              // As in Settings: the window on a page that scrolls.
+              ? SingleChildScrollView(
+                  child: Column(children: [
+                  SizedBox(width: 360, child: SimpleRotatorWindow(inSettings: inSettings)),
+                  const SizedBox(height: 2000),
+                ]))
+              : SizedBox(width: width, child: SimpleRotatorWindow(inSettings: inSettings)),
         ),
       ),
     ),
@@ -259,6 +266,46 @@ void main() {
     await _turn(tester, 17);
     final pill = c.read(simpleMessagesProvider).single;
     expect((pill.kind, pill.title), (SimpleMessageKind.error, "Couldn't move the rotator"));
+  });
+
+  testWidgets('while it moves the dial leaves the finger to the page: a swipe on it scrolls (#1670 audit P1)', (tester) async {
+    await _pump(tester, _wire(runtime: 'moving'), scrolling: true);
+    final page = tester.state<ScrollableState>(find.byType(Scrollable)).position;
+    // From the face near its rim, not the stop square in the middle.
+    await tester.dragFrom(tester.getCenter(_dial) + Offset(tester.getSize(_dial).width * 0.4, 0), const Offset(0, -200));
+    await tester.pump();
+    expect(page.pixels, greaterThan(0));
+  });
+
+  testWidgets('dragging off the dial drops the target: nothing moves (#1670 audit P1)', (tester) async {
+    final (_, r) = await _pump(tester, _wire());
+    final centre = tester.getCenter(_dial);
+    final radius = tester.getSize(_dial).width * 0.42;
+    Offset at(double deg) {
+      final a = (deg - 90) * math.pi / 180;
+      return centre + Offset(radius * math.cos(a), radius * math.sin(a));
+    }
+    final g = await tester.startGesture(at(0));
+    for (var d = 1; d <= 17; d++) {
+      await g.moveTo(at(d.toDouble()));
+      await tester.pump();
+    }
+    expect(find.text('Let go to move to 80.0°'), findsOneWidget);
+    await g.moveTo(centre + Offset(tester.getSize(_dial).width, 0));
+    await tester.pump();
+    expect(find.textContaining('Let go to move'), findsNothing);
+    await g.up();
+    await tester.pump();
+    expect(r.calls, isEmpty);
+  });
+
+  testWidgets('while it moves the dial reads as disabled, with nothing to adjust (#1670 audit P2)', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(tester, _wire(runtime: 'moving'));
+    final node = tester.getSemantics(_dial);
+    expect(node, isSemantics(isSlider: true, hasEnabledState: true, isEnabled: false));
+    expect(node.getSemanticsData().hasAction(SemanticsAction.increase), isFalse);
+    semantics.dispose();
   });
 
   testWidgets('a turn cut off by the system moves nothing', (tester) async {
