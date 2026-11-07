@@ -141,9 +141,9 @@ void main() {
     expect(_selected(tester, 'light-off'), isTrue);
     expect(_key('face'), findsOneWidget);
     expect(
-      find.text('128 / 255'),
+      find.text('50 %'),
       findsOneWidget,
-      reason: 'the level in the panel\'s own units',
+      reason: 'the level as a percent of the panel\'s maximum (128 of 255)',
     );
     await tester.tap(_key('cover-open'));
     await tester.pump();
@@ -232,6 +232,13 @@ void main() {
       expect(_key('brightness'), findsOneWidget);
     },
   );
+
+  testWidgets('a level just above 0 reads 1 %, never 0 % with the light on', (
+    tester,
+  ) async {
+    await _pump(tester, _wire(light: true, brightness: 1, max: 4095));
+    expect(find.text('1 %'), findsOneWidget);
+  });
 
   testWidgets(
     'before the panel reports its maximum the slider is disabled and reads —',

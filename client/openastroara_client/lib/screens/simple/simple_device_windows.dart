@@ -2893,7 +2893,7 @@ class _SimpleFlatPanelWindowState extends ConsumerState<SimpleFlatPanelWindow> {
                   // Slider needs max > min: held at 1 and disabled until the
                   // panel reports its range.
                   max: (max > 0 ? max : 1).toDouble(),
-                  semanticFormatterCallback: (v) => '${v.round()} / $max',
+                  semanticFormatterCallback: (v) => _percent(v.round(), max),
                   onChanged: max == 0 || asking
                       ? null
                       : (v) => setState(() => _level = v.round()),
@@ -2905,7 +2905,7 @@ class _SimpleFlatPanelWindowState extends ConsumerState<SimpleFlatPanelWindow> {
                 ),
               ),
               Text(
-                max == 0 ? '—' : '$level / $max',
+                max == 0 ? '—' : _percent(level, max),
                 style: kSimpleText.copyWith(
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
@@ -2927,6 +2927,12 @@ class _SimpleFlatPanelWindowState extends ConsumerState<SimpleFlatPanelWindow> {
       children: children,
     );
   }
+
+  /// A level as a percent of the panel's maximum ("50 %"); anything above
+  /// 0 reads at least 1 %, so a lit panel never reads 0 %. The panel is still
+  /// sent its own units.
+  static String _percent(int level, int max) =>
+      '${level == 0 ? 0 : math.max(1, (level * 100 / max).round())} %';
 
   Future<void> _apply({bool? openCover, bool? lightOn, int? brightness}) async {
     final notify = userNotifier(context, origin: SimpleStatusOrigin.flatPanel);

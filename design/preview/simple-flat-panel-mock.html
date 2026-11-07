@@ -143,7 +143,7 @@
   <div class="notes">
     <div><h2>Cover</h2><p>Open / Closed segments. While the cover moves the row reads "Moving…" in blinking green and both segments are locked: the cover is one motor. A panel without a cover has no Cover row.</p></div>
     <div><h2>Light</h2><p>On / Off segments, turning on at the slider's level. While the panel warms up the row reads "Warming up…" in blue, and the pill says "Light warming up…" so you don't shoot flats too early. A dust cover with no light has no Light or Brightness row.</p></div>
-    <div><h2>Brightness</h2><p>0 to the panel's own maximum (255 here), with the level beside the slider in the panel's units, as plans use them. It is sent when you let go. Letting go above 0 with the light off turns it on at that level; 0 turns it off. Until the panel reports its maximum the slider is disabled and reads "—".</p></div>
+    <div><h2>Brightness</h2><p>0 to the panel's own maximum (255 here), with the level beside the slider as a percent of that maximum (Ara still sends the panel's own units). It is sent when you let go. Letting go above 0 with the light off turns it on at that level; 0 turns it off. Until the panel reports its maximum the slider is disabled and reads "—".</p></div>
     <div><h2>While a plan runs</h2><p>Any change asks first, in the window: "A plan is running. Change the flat panel anyway?" with Cancel and Change anyway, as the Filter wheel and Rotator windows do. Nothing is sent until you confirm.</p></div>
     <div><h2>Status pill</h2><p>"Flat panel · Cover moving…" in blinking green, or "Flat panel · Light warming up…" with a blue ring. Cover movement wins when both are true. It shows whoever moved it, and a tap opens this window (#1668).</p></div>
     <div><h2>Stays in the full UI</h2><p>Auto-brightness target, auto-flats and the flat-panel safety policies. Connect / Disconnect stay on the Devices row in Settings.</p></div>
@@ -155,6 +155,7 @@
   const MAX = 255;
   const S = { layout: 'b', kind: 'both', conn: 'on', from: 'dot', open: false, coverMoving: false, light: false, level: 128, warming: false, drag: null, asking: null };
   const win = document.getElementById('win'), pill = document.getElementById('pill');
+  const pct = v => (v === 0 ? 0 : Math.max(1, Math.round(v * 100 / MAX))) + ' %';
   const hasCover = () => S.kind !== 'light', hasLight = () => S.kind !== 'cover';
 
   function send(change) {
@@ -216,11 +217,11 @@
         brightness = document.createElement('div');
         brightness.innerHTML = '<div class="r" style="min-height:24px"><span class="l">Brightness</span></div>';
         const sl = document.createElement('div'); sl.className = 'slider';
-        sl.innerHTML = `<input id="brightness" type="range" min="0" max="${MAX}" value="${lvl}" aria-label="Brightness" ${S.asking ? 'disabled' : ''}><span class="v">${lvl} / ${MAX}</span>`;
+        sl.innerHTML = `<input id="brightness" type="range" min="0" max="${MAX}" value="${lvl}" aria-label="Brightness" ${S.asking ? 'disabled' : ''}><span class="v">${pct(lvl)}</span>`;
         const inp = sl.querySelector('input');
-        inp.oninput = () => { S.drag = +inp.value; sl.querySelector('.v').textContent = `${S.drag} / ${MAX}`; drawFace(); };
+        inp.oninput = () => { S.drag = +inp.value; sl.querySelector('.v').textContent = pct(S.drag); drawFace(); };
         inp.onchange = () => { const v = +inp.value; S.drag = null; send({ level: v }); };
-        sl.querySelector('input').setAttribute('aria-valuetext', `${lvl} of ${MAX}`);
+        sl.querySelector('input').setAttribute('aria-valuetext', pct(lvl));
         brightness.append(sl);
       }
       if (S.layout === 'b') {
