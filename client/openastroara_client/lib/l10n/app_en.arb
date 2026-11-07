@@ -369,21 +369,107 @@
   "@deviceMoving": {
     "description": "Focuser window caption while the focuser moves"
   },
-  "deviceFocusPosition": "Focus position",
-  "@deviceFocusPosition": {
-    "description": "Screen-reader label of the focuser's dial"
-  },
-  "deviceStep": "Step",
-  "@deviceStep": {
-    "description": "Focuser window row: how far one dial click moves"
-  },
   "deviceAutofocus": "Autofocus",
   "@deviceAutofocus": {
-    "description": "Button in the middle of the focuser dial: runs autofocus"
+    "description": "Full-width button under the focuser knobs: runs autofocus"
   },
   "deviceCancelAutofocus": "Cancel autofocus",
   "@deviceCancelAutofocus": {
-    "description": "Screen-reader label of the focuser dial's middle button while autofocus runs"
+    "description": "The focuser's Autofocus button while autofocus runs: stops it"
+  },
+  "deviceIn": "In",
+  "@deviceIn": {
+    "description": "Focuser window, above the knobs: rolling a knob up moves the focuser in"
+  },
+  "deviceOut": "Out",
+  "@deviceOut": {
+    "description": "Focuser window, under the knobs: rolling a knob down moves the focuser out"
+  },
+  "deviceCoarse": "Coarse",
+  "@deviceCoarse": {
+    "description": "The focuser window's big knob, which moves in large clicks"
+  },
+  "deviceFine": "Fine",
+  "@deviceFine": {
+    "description": "The focuser window's small knob, which moves in small clicks"
+  },
+  "deviceCoarseFocus": "Coarse focus",
+  "@deviceCoarseFocus": {
+    "description": "Screen-reader label of the focuser's coarse knob"
+  },
+  "deviceFineFocus": "Fine focus",
+  "@deviceFineFocus": {
+    "description": "Screen-reader label of the focuser's fine knob"
+  },
+  "deviceRotate": "Rotate",
+  "@deviceRotate": {
+    "description": "Rotator window button with no target set on the dial (disabled)"
+  },
+  "deviceRotateTo": "Rotate to {angle}",
+  "@deviceRotateTo": {
+    "description": "Rotator window button: move the rotator to the angle set on the dial, e.g. 'Rotate to 75°'",
+    "placeholders": {
+      "angle": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceSync": "Sync",
+  "@deviceSync": {
+    "description": "Rotator window button with no target set on the dial (disabled)"
+  },
+  "deviceSyncTo": "Sync to {angle}",
+  "@deviceSyncTo": {
+    "description": "Rotator window button: tell the rotator it is at the angle set on the dial, without moving it, e.g. 'Sync to 75°'",
+    "placeholders": {
+      "angle": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceCouldntSyncRotator": "Couldn't sync the rotator",
+  "@deviceCouldntSyncRotator": {
+    "description": "Error pill when the rotator refused or failed a sync"
+  },
+  "devicePlanRunningSync": "A plan is running. Sync anyway?",
+  "@devicePlanRunningSync": {
+    "description": "Rotator window: asked before a sync while a plan runs"
+  },
+  "deviceSyncAnyway": "Sync anyway",
+  "@deviceSyncAnyway": {
+    "description": "Rotator window: confirms a sync while a plan runs"
+  },
+  "deviceSkyAngle": "Sky angle",
+  "@deviceSkyAngle": {
+    "description": "Rotator window: the camera's angle on the sky (position angle), and the dial's screen-reader label"
+  },
+  "deviceMechanicalAngle": "Mechanical angle",
+  "@deviceMechanicalAngle": {
+    "description": "Rotator window: the rotator's own angle, shown when it differs from the sky angle"
+  },
+  "deviceCouldntMoveRotator": "Couldn't move the rotator",
+  "@deviceCouldntMoveRotator": {
+    "description": "Error pill when the rotator refused or failed a move"
+  },
+  "deviceCouldntStopRotator": "Couldn't stop the rotator",
+  "@deviceCouldntStopRotator": {
+    "description": "Error pill when a stop never reached the rotator"
+  },
+  "deviceStopRotator": "Stop the rotator",
+  "@deviceStopRotator": {
+    "description": "Screen-reader label of the red stop square in the middle of the rotator dial"
+  },
+  "devicePlanRunningRotate": "A plan is running. Rotate anyway?",
+  "@devicePlanRunningRotate": {
+    "description": "Rotator window: asked before a move while a plan runs"
+  },
+  "deviceRotateAnyway": "Rotate anyway",
+  "@deviceRotateAnyway": {
+    "description": "Rotator window: confirms a move while a plan runs"
+  },
+  "deviceKnobHint": "Increase moves out, decrease moves in",
+  "@deviceKnobHint": {
+    "description": "Screen-reader hint on the focuser's knobs: increase (the bigger number) moves the focuser out, though rolling the knob up or the Up key moves it in"
   },
   "deviceState": "State",
   "@deviceState": {
@@ -412,7 +498,7 @@
   },
   "deviceLetGoToMoveTo": "Let go to move to {position}",
   "@deviceLetGoToMoveTo": {
-    "description": "Focuser window caption while the dial turns; position is a step count like 12 000",
+    "description": "Focuser window caption while a knob rolls; position is a step count like 12 000",
     "placeholders": {
       "position": {
         "type": "String"
@@ -1966,7 +2052,7 @@
   "@estopConfirmTitle": {
     "description": "Emergency Stop confirm dialog (keyboard/screen reader, full UI): title"
   },
-  "estopConfirmBody": "This aborts the running sequence and the in-flight exposure, stops guiding, parks the mount, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.",
+  "estopConfirmBody": "This aborts the running sequence and the in-flight exposure, stops guiding, halts the rotator, parks the mount, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.",
   "@estopConfirmBody": {
     "description": "Emergency Stop confirm dialog: what the stop does"
   },
@@ -2064,6 +2150,10 @@
   },
   "estopFailPark": "MOUNT PARK FAILED — verify it manually",
   "@estopFailPark": {
+    "description": "Emergency Stop failed step"
+  },
+  "estopFailRotator": "ROTATOR HALT FAILED — it may still be turning",
+  "@estopFailRotator": {
     "description": "Emergency Stop failed step"
   },
   "estopFailFlatPanel": "FLAT PANEL LIGHT-OFF FAILED",

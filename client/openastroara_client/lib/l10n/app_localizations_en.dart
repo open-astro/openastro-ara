@@ -277,16 +277,77 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceMoving => 'Moving…';
 
   @override
-  String get deviceFocusPosition => 'Focus position';
-
-  @override
-  String get deviceStep => 'Step';
-
-  @override
   String get deviceAutofocus => 'Autofocus';
 
   @override
   String get deviceCancelAutofocus => 'Cancel autofocus';
+
+  @override
+  String get deviceIn => 'In';
+
+  @override
+  String get deviceOut => 'Out';
+
+  @override
+  String get deviceCoarse => 'Coarse';
+
+  @override
+  String get deviceFine => 'Fine';
+
+  @override
+  String get deviceCoarseFocus => 'Coarse focus';
+
+  @override
+  String get deviceFineFocus => 'Fine focus';
+
+  @override
+  String get deviceRotate => 'Rotate';
+
+  @override
+  String deviceRotateTo(String angle) {
+    return 'Rotate to $angle';
+  }
+
+  @override
+  String get deviceSync => 'Sync';
+
+  @override
+  String deviceSyncTo(String angle) {
+    return 'Sync to $angle';
+  }
+
+  @override
+  String get deviceCouldntSyncRotator => 'Couldn\'t sync the rotator';
+
+  @override
+  String get devicePlanRunningSync => 'A plan is running. Sync anyway?';
+
+  @override
+  String get deviceSyncAnyway => 'Sync anyway';
+
+  @override
+  String get deviceSkyAngle => 'Sky angle';
+
+  @override
+  String get deviceMechanicalAngle => 'Mechanical angle';
+
+  @override
+  String get deviceCouldntMoveRotator => 'Couldn\'t move the rotator';
+
+  @override
+  String get deviceCouldntStopRotator => 'Couldn\'t stop the rotator';
+
+  @override
+  String get deviceStopRotator => 'Stop the rotator';
+
+  @override
+  String get devicePlanRunningRotate => 'A plan is running. Rotate anyway?';
+
+  @override
+  String get deviceRotateAnyway => 'Rotate anyway';
+
+  @override
+  String get deviceKnobHint => 'Increase moves out, decrease moves in';
 
   @override
   String get deviceState => 'State';
@@ -1390,7 +1451,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get estopConfirmBody =>
-      'This aborts the running sequence and the in-flight exposure, stops guiding, parks the mount, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.';
+      'This aborts the running sequence and the in-flight exposure, stops guiding, halts the rotator, parks the mount, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.';
 
   @override
   String get estopCancel => 'Cancel';
@@ -1464,6 +1525,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get estopFailPark => 'MOUNT PARK FAILED — verify it manually';
+
+  @override
+  String get estopFailRotator =>
+      'ROTATOR HALT FAILED — it may still be turning';
 
   @override
   String get estopFailFlatPanel => 'FLAT PANEL LIGHT-OFF FAILED';

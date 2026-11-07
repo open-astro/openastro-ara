@@ -1019,7 +1019,8 @@ public partial class Program {
                 sp.GetService<IFlatDeviceService>(),
                 sp.GetService<INotificationService>(),
                 sp.GetService<IWsBroadcaster>(),
-                sp.GetService<ILogger<EmergencyStopService>>()));
+                sp.GetService<ILogger<EmergencyStopService>>(),
+                sp.GetService<IRotatorService>()));
 
         // §29 — background disk-space monitor: warns (diagnostic + OnDiskSpaceLow notification) when the image
         // save volume runs low so an unattended session doesn't silently die on a full disk. Warn-only.

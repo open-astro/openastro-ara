@@ -31,6 +31,8 @@ import '../../widgets/status_indicator.dart'
     show StatusBlink, StatusDot, StatusLevel;
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
+import '../../state/equipment/focuser_state.dart';
+import '../../state/equipment/rotator_state.dart';
 import '../../state/equipment/switch_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
@@ -1078,6 +1080,10 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     // The filter wheel turning, or a manual wheel waiting for its hand swap.
     final wheel = ref.watch(filterWheelProvider).value;
     final swap = wheel != null && wheel.isAwaitingUser ? wheel.pending : null;
+    // The rotator turning, whoever turned it (#1668).
+    final rotator = ref.watch(rotatorProvider).value;
+    // The focuser moving, whoever moved it; autofocus has its own pill.
+    final focuser = ref.watch(focuserProvider).value;
     final settingPort = ref.watch(switchActingProvider)
         ? ref.watch(simpleSwitchSettingProvider)
         : null;
@@ -1188,6 +1194,26 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
             swap.name.isEmpty ? l10n.deviceSlot(swap.position) : swap.name,
           ),
           AraColors.accentBusy,
+        ),
+      // Moving is working: blinking green, as the focuser's dot and window.
+      if (focuser != null &&
+          focuser.isConnected &&
+          focuser.isMoving &&
+          !af.isRunning)
+        _PillData(
+          SimpleStatusOrigin.focuser,
+          l10n.deviceFocuser,
+          l10n.deviceMoving,
+          AraColors.accentConnected,
+          working: true,
+        ),
+      if (rotator != null && rotator.isConnected && rotator.isMoving)
+        _PillData(
+          SimpleStatusOrigin.rotator,
+          l10n.shellRotator,
+          l10n.deviceMoving,
+          AraColors.accentConnected,
+          working: true,
         ),
       // A port change on its way is changing: a blue ring (DESIGN.md status
       // rule), naming the port the Switches window asked for (#1668).
