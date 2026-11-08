@@ -521,6 +521,13 @@
       "angle": {"type": "String", "example": "245°"}
     }
   },
+  "deviceReasonSentence": "{reason}.",
+  "@deviceReasonSentence": {
+    "description": "Safety monitor window: a weather reason as a sentence in the Why list (the same words are a status pill's detail without the full stop)",
+    "placeholders": {
+      "reason": {"type": "String", "example": "Wind 41 km/h, over the 36 km/h limit"}
+    }
+  },
   "deviceWhy": "Why",
   "@deviceWhy": {
     "description": "Safety monitor window: heading over the reasons the rig is unsafe"

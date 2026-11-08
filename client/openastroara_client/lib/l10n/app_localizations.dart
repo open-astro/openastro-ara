@@ -741,6 +741,12 @@ abstract class AppLocalizations {
   /// **'Turning to {angle}…'**
   String deviceTurningTo(String angle);
 
+  /// Safety monitor window: a weather reason as a sentence in the Why list (the same words are a status pill's detail without the full stop)
+  ///
+  /// In en, this message translates to:
+  /// **'{reason}.'**
+  String deviceReasonSentence(String reason);
+
   /// Safety monitor window: heading over the reasons the rig is unsafe
   ///
   /// In en, this message translates to:

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:clock/clock.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -65,12 +66,16 @@ class DomeShutterMove {
   final DateTime startedAt;
   final Duration expected;
 
-  /// How far along, 0 to 1, held just short of the end until the dome says
-  /// it got there.
+  /// How far along, 0 to 1: at the expected pace to 80 %, then slowing
+  /// toward the end without reaching it, so a dome slower than last time
+  /// never freezes at a cap and the landing has no big jump. The curve meets
+  /// the steady slide at the same pace, with no kink.
   double progressAt(DateTime now) {
     final ms = expected.inMilliseconds;
     if (ms <= 0) return 0.95;
-    return (now.difference(startedAt).inMilliseconds / ms).clamp(0.0, 0.95);
+    final p = math.max(0.0, now.difference(startedAt).inMilliseconds / ms);
+    const knee = 0.8, room = 0.19;
+    return p <= knee ? p : knee + room * (1 - math.exp(-(p - knee) / room));
   }
 }
 

@@ -4616,10 +4616,19 @@ class _DomeFrontState extends State<_DomeFront>
       null when m != null => 0.5,
       null => widget.open ? 1.0 : 0.0,
     };
+    // While it slides each frame sets the shells; when the dome reports it
+    // landed they ease the rest of the way rather than jump there (user,
+    // 2026-11-08: the end was always glitchy).
+    final still = m == null && !MediaQuery.disableAnimationsOf(context);
     // Says nothing the reading and the segments don't.
     return ExcludeSemantics(
-      child: CustomPaint(
-        painter: _AllSkyDomePainter(open: open, moving: m != null),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(end: open),
+        duration: still ? const Duration(milliseconds: 500) : Duration.zero,
+        curve: Curves.easeOutCubic,
+        builder: (context, shown, _) => CustomPaint(
+          painter: _AllSkyDomePainter(open: shown, moving: m != null),
+        ),
       ),
     );
   }
@@ -5221,7 +5230,10 @@ class _SimpleSafetyMonitorWindowState
           children.add(row(Icons.sensors, l10n.deviceMonitorNoReason(name)));
         }
         for (final b in breaches) {
-          children.add(row(Icons.air, b, warn: true));
+          // The pill uses the same words without the stop.
+          children.add(
+            row(Icons.air, l10n.deviceReasonSentence(b), warn: true),
+          );
         }
         // What the rig's policy does, once it has loaded: a default could
         // promise the wrong thing.

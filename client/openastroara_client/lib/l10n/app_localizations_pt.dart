@@ -391,6 +391,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String deviceReasonSentence(String reason) {
+    return '$reason.';
+  }
+
+  @override
   String get deviceWhy => 'Why';
 
   @override
@@ -3046,6 +3051,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String deviceTurningTo(String angle) {
     return 'Girando para $angle…';
+  }
+
+  @override
+  String deviceReasonSentence(String reason) {
+    return '$reason.';
   }
 
   @override

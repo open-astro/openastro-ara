@@ -107,6 +107,7 @@
   "deviceShutterFault": "Falha na janela: abra ou feche de novo.",
   "deviceFindingHome": "Buscando a posição inicial…",
   "deviceTurningTo": "Girando para {angle}…",
+  "deviceReasonSentence": "{reason}.",
   "deviceWhy": "Por quê",
   "deviceWhatAraDoes": "O que o Ara faz",
   "deviceMonitorNoReason": "{name} indica inseguro. Ele não diz o motivo: verifique o dispositivo.",

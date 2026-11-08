@@ -391,6 +391,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String deviceReasonSentence(String reason) {
+    return '$reason.';
+  }
+
+  @override
   String get deviceWhy => 'Why';
 
   @override

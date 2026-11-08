@@ -681,6 +681,30 @@ void main() {
     expect(gap, greaterThanOrEqualTo(12));
   });
 
+  testWidgets(
+    'when the shutter lands the shells ease into place, not jump there',
+    (tester) async {
+      final (_, dome) = await _pump(tester, _wire());
+      await tester.tap(_key('shutter-open'));
+      await tester.pump(const Duration(seconds: 1)); // the tap's ripple ends
+      dome.set(_wire(runtime: 'shutter_moving'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 5)); // a few % along of 60 s
+      dome.set(_wire(open: true));
+      await tester.pump();
+      final settled = tester.binding.transientCallbackCount;
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        tester.binding.transientCallbackCount,
+        greaterThan(0),
+        reason: 'the shells still moving to fully open',
+      );
+      await tester.pump(const Duration(seconds: 1));
+      expect(tester.binding.transientCallbackCount, lessThanOrEqualTo(settled));
+      await tester.pump(const Duration(seconds: 4));
+    },
+  );
+
   testWidgets('a narrow window drops the drawing, keeping the dial', (
     tester,
   ) async {
