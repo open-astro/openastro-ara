@@ -402,8 +402,9 @@ PlanetariumSelection simplePickDso(WidgetRef ref, PlanningDso d) {
 
 /// A catalog object (a Sky Album card) as the selection: the ranker's row
 /// when it lists the object under any designation, so altitude and rise come
-/// with it; else the catalog position only, with no altitude and the transit
-/// altitude from [latitudeDeg]. Pure — unit-tested.
+/// with it; else the catalog position, with the altitude computed when
+/// [longitudeDeg] and [utc] are given and the transit altitude from
+/// [latitudeDeg]. Pure — unit-tested.
 PlanetariumSelection simpleSelectionOfDso(
   PlanningDso d,
   List<TonightSkyObject> ranked, {

@@ -4461,6 +4461,7 @@ Persistent **[Emergency Stop]** button in WILMA's main app shell (top-right of s
 
 Server shutdown sequence:
 1. Camera: abort current exposure
+1a. Guide-camera focus loop, Bahtinov readout, autofocus, polar alignment: stop if running (failed rungs `stop_guide_focus`, `stop_bahtinov`, `cancel_autofocus`, `stop_polar_align`)
 2. Guider (PHD2): stop guiding
 3. Mount: abort any slew or manual move, then switch tracking off, so it stops where it is. Never a park, a home or a slew: if the slew or park code is at fault, parking would repeat the fault. A parked mount gets neither call. Reported as `mount_stopped`; a fault in either call is the failed rung `stop_mount`, and tracking off is still attempted when the abort faults
 4. Filter wheel / focuser / rotator: leave in place (no auto-move; user can intervene). A rotator that is turning is halted where it is (ASCOM `Halt`, no target; reported as the failed rung `halt_rotator` when the halt faults), run right after the sequence abort, since aborting a run only stops the sequencer waiting on its move (#1671)

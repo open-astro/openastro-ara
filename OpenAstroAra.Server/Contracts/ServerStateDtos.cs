@@ -163,7 +163,8 @@ public sealed record EmergencyStopResultDto(
     bool MountStopped,
     bool FlatPanelLightOff,
     // Rungs that were ATTEMPTED and faulted (tokens: abort_runs,
-    // halt_rotator, abort_exposure, stop_guiding, stop_mount, flat_panel_light_off, cooler_off). A device
+    // halt_rotator, abort_exposure, stop_guide_focus, stop_bahtinov, cancel_autofocus,
+    // stop_polar_align, stop_guiding, stop_mount, flat_panel_light_off, cooler_off). A device
     // that isn't connected at all reads false above but is NOT listed here —
     // a rig without a flat panel is not a failure.
     System.Collections.Generic.IReadOnlyList<string> FailedRungs,
