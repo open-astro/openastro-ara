@@ -294,6 +294,88 @@ namespace OpenAstroAra.Test {
             Assert.That(rig.Log, Is.Empty);
         }
 
+        private async Task<HttpStatusCode> CreateAsync(string query = "") {
+            using var body = new StringContent("{\"name\":\"Next\"}", System.Text.Encoding.UTF8, "application/json");
+            return (await http.PostAsync(new Uri("/api/v1/profiles" + query, UriKind.Relative), body)).StatusCode;
+        }
+
+        private async Task<HttpStatusCode> DeleteAsync(Guid id) =>
+            (await http.DeleteAsync(new Uri($"/api/v1/profiles/{id}", UriKind.Relative))).StatusCode;
+
+        [Test]
+        public async Task Creating_an_active_profile_drops_the_devices_of_the_one_it_replaces() {
+            await SimRigConnectedAsync();
+
+            Assert.That(await CreateAsync(), Is.EqualTo(HttpStatusCode.Created));
+
+            Assert.That(rig.Log, Does.Contain("disconnect:safety"));
+            Assert.That(rig.Log, Does.Contain("disconnect:mount"));
+            Assert.That(rig.Log.IndexOf("disconnect:safety"), Is.LessThan(rig.Log.IndexOf("disconnect:mount")), "the Safety Monitor goes first");
+        }
+
+        [Test]
+        public async Task Creating_a_profile_without_activating_it_touches_no_device() {
+            await SimRigConnectedAsync();
+
+            Assert.That(await CreateAsync("?activate=false"), Is.EqualTo(HttpStatusCode.Created));
+
+            Assert.That(rig.Log, Is.Empty);
+        }
+
+        [Test]
+        public async Task A_run_refuses_creating_an_active_profile_and_leaves_the_rig_alone() {
+            await SimRigConnectedAsync();
+            runs.Enter(Guid.NewGuid());
+
+            Assert.That(await CreateAsync(), Is.EqualTo(HttpStatusCode.Conflict));
+
+            Assert.That(repo.ActiveId, Is.EqualTo(sim));
+            Assert.That(rig.Log, Is.Empty);
+        }
+
+        [Test]
+        public async Task Deleting_the_active_profile_moves_the_devices_to_the_profile_that_takes_over() {
+            await SimRigConnectedAsync();
+            await RememberForAsync(real, RealMount);
+
+            Assert.That(await DeleteAsync(sim), Is.EqualTo(HttpStatusCode.OK));
+
+            Assert.That(repo.ActiveId, Is.EqualTo(real));
+            Assert.That(rig.Log.Where(l => !l.StartsWith("forget:", StringComparison.Ordinal)), Is.EqualTo(SafetyThenMountThenConnect));
+        }
+
+        [Test]
+        public async Task Deleting_another_profile_touches_no_device() {
+            await SimRigConnectedAsync();
+
+            Assert.That(await DeleteAsync(real), Is.EqualTo(HttpStatusCode.OK));
+
+            Assert.That(rig.Log, Is.Empty);
+        }
+
+        [Test]
+        public async Task A_run_refuses_deleting_the_active_profile_and_leaves_the_rig_alone() {
+            await SimRigConnectedAsync();
+            runs.Enter(Guid.NewGuid());
+
+            Assert.That(await DeleteAsync(sim), Is.EqualTo(HttpStatusCode.Conflict));
+
+            Assert.That(repo.ActiveId, Is.EqualTo(sim));
+            Assert.That(rig.Log, Is.Empty);
+        }
+
+        [Test]
+        public async Task Deleting_the_last_profile_releases_its_devices() {
+            await SimRigConnectedAsync();
+            await DeleteAsync(real);
+
+            Assert.That(await DeleteAsync(sim), Is.EqualTo(HttpStatusCode.OK));
+
+            Assert.That(repo.ActiveId, Is.Null);
+            Assert.That(rig.Log, Does.Contain("disconnect:safety"));
+            Assert.That(rig.Log, Does.Contain("disconnect:mount"));
+        }
+
         [Test]
         public async Task Selecting_the_active_profile_touches_no_device() {
             await SimRigConnectedAsync();

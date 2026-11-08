@@ -41,7 +41,8 @@ public static partial class ProfilesEndpoints {
             .WithName("ListProfiles")
             .WithSummary("List the known profiles and which one is active.");
 
-        profiles.MapPost("/", (CreateProfileRequestDto body, bool? activate, IProfileRepository repo, IGuiderService guider,
+        profiles.MapPost("/", async (CreateProfileRequestDto body, bool? activate, IProfileRepository repo, IGuiderService guider,
+                ActiveRunSessionRegistry runs, ProfileDeviceSwitch devices,
                 Microsoft.Extensions.Logging.ILoggerFactory loggerFactory) => {
                 // Creating a profile activates it by default (the wizard's Save lands you in the new
                 // profile); pass ?activate=false to add one without switching (e.g. duplicate-current).
@@ -49,13 +50,22 @@ public static partial class ProfilesEndpoints {
                 // source name BEFORE the create, which may switch the active profile.
                 var source = body.Settings is null ? ActiveProfileName(repo) : null;
                 var activated = activate ?? true;
+                // #1710 — activating is a profile switch, whichever request does it.
+                if (activated && runs.HasAny) {
+                    return Results.Problem("a sequence run is active — stop it before switching profiles",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
                 var meta = repo.Create(body.Name, body.Settings, makeActive: activated);
                 // Fire-and-forget: the 201 must not wait on a guider RPC.
                 _ = GuiderFollowsCreatedProfileAsync(guider, loggerFactory.CreateLogger("ProfilesEndpoints"), source, meta.Name, activated);
+                if (activated) {
+                    await devices.ApplyAsync(CancellationToken.None).ConfigureAwait(false);
+                }
                 return Results.Created($"/api/v1/profiles/{meta.Id}", meta);
             })
             .Accepts<CreateProfileRequestDto>("application/json")
             .Produces<ProfileMetaDto>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("CreateProfile")
             .WithSummary("Create a profile (clones the active profile's settings when none are supplied).");
 
@@ -124,7 +134,7 @@ public static partial class ProfilesEndpoints {
         profiles.MapDelete("/{id:guid}", async (Guid id,
                 [FromQuery(Name = "guider_profile")] string? guiderProfile,
                 [FromQuery(Name = "dark_library")] string? darkLibrary,
-                IProfileRepository repo, IGuiderService guider) => {
+                IProfileRepository repo, IGuiderService guider, ActiveRunSessionRegistry runs, ProfileDeviceSwitch devices) => {
                 // §63.4 — the guider twin goes only on an explicit ask (default keep): an older client
                 // that sends no parameter never deletes guider data without the user being asked.
                 bool deleteTwin;
@@ -143,6 +153,12 @@ public static partial class ProfilesEndpoints {
                 // record is gone once Delete succeeds. Read-only, so the repository's atomic
                 // decide-under-lock (below) still owns TOCTOU.
                 var name = repo.GetProfile(id)?.Meta.Name;
+                // #1710 — deleting the active profile hands the rig to another one: a profile switch.
+                var wasActive = repo.ActiveId == id;
+                if (wasActive && runs.HasAny) {
+                    return Results.Problem("a sequence run is active — stop it before switching profiles",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
                 // The repository decides atomically under its lock, so a concurrent select can't
                 // slip between an existence pre-check and the delete (TOCTOU).
                 var result = repo.Delete(id);
@@ -151,6 +167,9 @@ public static partial class ProfilesEndpoints {
                 }
                 if (result != ProfileDeleteResult.Deleted) {
                     return Results.Problem(statusCode: StatusCodes.Status500InternalServerError);
+                }
+                if (wasActive) {
+                    await devices.ApplyAsync(CancellationToken.None).ConfigureAwait(false);
                 }
                 if (!deleteTwin) {
                     return Results.Ok(new ProfileDeleteResultDto("kept", null));
@@ -170,6 +189,7 @@ public static partial class ProfilesEndpoints {
             .Produces<ProfileDeleteResultDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("DeleteProfile")
             .WithSummary("Delete a profile. Deleting the active profile activates the newest " +
                 "remaining one; deleting the last profile returns to the zero-profile state. " +
