@@ -285,10 +285,10 @@ public sealed record SafetyPoliciesDto(
     // warm cooler → disconnect camera; see UnattendedShutdownService). Default ON: the spec
     // allows disabling but flags it as not recommended.
     bool UnattendedShutdownEnabled = true,
-    // §58.12 — the unattended wait before the shutdown executes. 10 min is the spec's
-    // Goldilocks default (long enough to grab a phone and acknowledge, short enough not to
-    // burn a field battery all night); 5 for battery rigs, 30 for wall-powered observatories.
-    int UnattendedShutdownWaitMinutes = 10,
+    // §58.12 — the unattended wait before the shutdown executes. New profiles get 30 min, long
+    // enough for a user who stepped outside to come back (10 was too short, #1712); a stored
+    // profile keeps its own value; 5 suits battery rigs.
+    int UnattendedShutdownWaitMinutes = 30,
     // §35.1 — granular weather-threshold triggers over the connected ObservingConditions
     // device. Default OFF: a rig that upgrades must not surprise-park because its weather
     // station reads breezy. When enabled, a breached threshold makes conditions UNSAFE and

@@ -125,11 +125,17 @@ namespace OpenAstroAra.Sequencer.Utility {
         User = 0,
 
         /// <summary>
+        /// A step the plan asked for on purpose (<c>WaitForUser</c>: swap a filter, remove a cap). The run
+        /// lands in the awaiting-user state, but no unattended-shutdown clock starts.
+        /// </summary>
+        Prompt = 1,
+
+        /// <summary>
         /// §58.12 — the engine paused itself after an urgent failure (e.g. a §58.9
         /// meridian-flip abort with the mount in safe rest) and needs a human
         /// decision before imaging may continue.
         /// </summary>
-        AwaitingUser = 1
+        AwaitingUser = 2
     }
 
     /// <summary>

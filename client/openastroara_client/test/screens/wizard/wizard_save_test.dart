@@ -627,10 +627,10 @@ void main() {
       final out = applyDraftToSafety(const SafetyPolicies(), d);
       expect(out.unattendedShutdownEnabled, isFalse);
       expect(out.unattendedShutdownWaitMinutes, 25);
-      // Untouched draft keeps the base (the section defaults: on / 10 min).
+      // Untouched draft keeps the base (the section defaults: on / 30 min).
       final kept = applyDraftToSafety(const SafetyPolicies(), ProfileDraft());
       expect(kept.unattendedShutdownEnabled, isTrue);
-      expect(kept.unattendedShutdownWaitMinutes, 10);
+      expect(kept.unattendedShutdownWaitMinutes, 30);
     });
 
     test('applyDraftToSafety maps the §35.1 weather thresholds', () {

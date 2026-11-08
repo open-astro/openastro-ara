@@ -27,10 +27,11 @@ namespace OpenAstroAra.Server.Services;
 /// <summary>
 /// §58.12 — the unattended-failure graceful-shutdown countdown.
 ///
-/// When a run enters <see cref="SequenceRunState.PausedAwaitingUser"/> (an
-/// urgent failure suspended it — e.g. a §58.9 meridian-flip abort with the
-/// mount in safe rest), this service starts a countdown (profile
-/// <c>safety.unattended_shutdown_wait_minutes</c>, default 10). Any sign of the
+/// When a run enters <see cref="SequenceRunState.PausedAwaitingUser"/> because an
+/// urgent failure suspended it (e.g. a §58.9 meridian-flip abort with the
+/// mount in safe rest; a <c>WaitForUser</c> prompt the plan asked for does not
+/// count), this service starts a countdown (profile
+/// <c>safety.unattended_shutdown_wait_minutes</c>, default 30). Any sign of the
 /// user coming back cancels it; if the full window elapses unattended, the rig
 /// is put to bed gracefully so a sleeping user's equipment doesn't sit powered
 /// and cold all night.
@@ -82,7 +83,13 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
     private readonly INotificationService? _notifications;
     private readonly ILogger<UnattendedShutdownService> _logger;
 
+    private readonly TimeProvider _time;
     private readonly object _lock = new();
+    // True from the first failure until the user shows up (or a countdown finds the run no longer waiting).
+    // Further failures in that period join the first one's clock, or its finished ladder, instead of
+    // starting their own: a rig that keeps failing must still be put to bed once.
+    private bool _periodOpen;
+    private DateTimeOffset _shutdownAt;
     // Non-null while a countdown is pending. One at a time: a second
     // awaiting-user entry while a countdown is already running joins it (the
     // first failure started the clock; the user is equally absent for both).
@@ -117,6 +124,9 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
     /// the sensor finishes settling to true ambient passively.</summary>
     internal const double WarmTargetC = 10.0;
 
+    /// <summary>The wait when the profile cannot be read; the same as a new profile's default.</summary>
+    internal const int DefaultWaitMinutes = 30;
+
     public UnattendedShutdownService(
             IProfileStore? profiles = null,
             Func<ISequencerService?>? sequencerResolver = null,
@@ -128,7 +138,8 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
             IRotatorService? rotator = null,
             IFlatDeviceService? flatDevice = null,
             INotificationService? notifications = null,
-            ILogger<UnattendedShutdownService>? logger = null) {
+            ILogger<UnattendedShutdownService>? logger = null,
+            TimeProvider? time = null) {
         _profiles = profiles;
         _sequencerResolver = sequencerResolver;
         _guider = guider;
@@ -140,6 +151,12 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
         _flatDevice = flatDevice;
         _notifications = notifications;
         _logger = logger ?? NullLogger<UnattendedShutdownService>.Instance;
+        _time = time ?? TimeProvider.System;
+    }
+
+    /// <summary>When the pending countdown ends, or null when none is pending.</summary>
+    internal DateTimeOffset? ShutdownAt {
+        get { lock (_lock) { return _pending is null ? null : _shutdownAt; } }
     }
 
     /// <summary>Whether a countdown is currently pending (armed, not yet fired).</summary>
@@ -169,26 +186,49 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
             LogCountdownDisabled(sequenceId);
             return;
         }
-        var wait = WaitFromMinutes(Math.Max(1, safety?.UnattendedShutdownWaitMinutes ?? 10));
+        var wait = WaitFromMinutes(Math.Max(1, safety?.UnattendedShutdownWaitMinutes ?? DefaultWaitMinutes));
 
+        DateTimeOffset at;
         lock (_lock) {
-            // First failure already started the clock, or its ladder is still
-            // putting the rig to bed — either way the user is equally absent
-            // and the (idempotent) ladder covers the shared equipment once.
-            // DELIBERATE: a run that re-enters awaiting-user WHILE the ladder
-            // executes (a resume racing the ladder, the flip re-failing fast
-            // against half-disconnected equipment) is dropped without a fresh
-            // countdown — the rig is already being put to bed by the running
-            // ladder, and that failure's own Critical notification still
-            // reaches the user; re-arming here would re-run a mostly-no-op
-            // ladder (and post a fresh summary) every wait-window forever.
-            if (_pending is not null || _executing) return;
+            // The first failure already started the clock (or its ladder already put the rig to bed), and the
+            // user is equally absent for every later one. Only user activity starts a new period.
+            if (_periodOpen) return;
+            _periodOpen = true;
             var cts = new CancellationTokenSource();
             _pending = cts;
             _sequenceId = sequenceId;
+            at = _shutdownAt = _time.GetUtcNow() + wait;
             _worker = Task.Run(() => CountdownAsync(sequenceId, runId, wait, cts), CancellationToken.None);
         }
         LogCountdownStarted(sequenceId, runId, wait);
+        _ = AnnounceCountdownAsync(sequenceId, at);
+    }
+
+    private void ClosePeriod() {
+        lock (_lock) { _periodOpen = false; }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort notice: failing to post it must not affect the countdown.")]
+    private async Task AnnounceCountdownAsync(Guid sequenceId, DateTimeOffset at) {
+        try {
+            if (_notifications is null) return;
+            await _notifications.CreateAsync(new NotificationDto(
+                Id: Guid.NewGuid(),
+                PostedUtc: DateTimeOffset.UtcNow,
+                Severity: NotificationSeverity.Warning,
+                Category: NotificationCategory.Safety,
+                Title: "Unattended shutdown scheduled",
+                Message: $"The sequence needs you. If nobody responds, the equipment will be shut down at {at.ToLocalTime().ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture)}.",
+                Read: false,
+                Dismissed: false,
+                DismissedUtc: null,
+                Payload: null,
+                RelatedEntityType: "sequence",
+                RelatedEntityId: sequenceId.ToString()), CancellationToken.None).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogStepFailed("countdown-notification", ex);
+        }
     }
 
     /// <summary>
@@ -203,6 +243,7 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
         lock (_lock) {
             toCancel = _pending;
             _pending = null;
+            _periodOpen = false;
             cancelledSequenceId = _sequenceId;
             toAbandon = _executing ? _ladderCts : null;
         }
@@ -270,6 +311,7 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
                     : null;
                 if (state is null || state.RunId != runId || state.State != SequenceRunState.PausedAwaitingUser) {
                     LogCountdownStale(sequenceId, state?.State);
+                    ClosePeriod(); // nobody is owed: the next failure is a new one
                     return;
                 }
             } catch (Exception ex) {
@@ -278,6 +320,7 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
                 // escalation already made the failure loud); a wrong shutdown
                 // tears down a rig that resumed imaging.
                 LogStateRecheckFailed(sequenceId, ex);
+                ClosePeriod();
                 return;
             }
 

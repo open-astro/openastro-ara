@@ -128,17 +128,17 @@ void main() {
       expect(container.read(safetyPoliciesProvider).unattendedEscalation, isFalse);
     });
 
-    test('§58.12 unattended shutdown defaults on/10min; wait rejects < 1', () {
+    test('§58.12 unattended shutdown defaults on/30min; wait rejects < 1', () {
       final n = container.read(safetyPoliciesProvider.notifier);
       final s0 = container.read(safetyPoliciesProvider);
       expect(s0.unattendedShutdownEnabled, isTrue);
-      expect(s0.unattendedShutdownWaitMinutes, 10);
+      expect(s0.unattendedShutdownWaitMinutes, 30);
 
       n.setUnattendedShutdownEnabled(false);
-      n.setUnattendedShutdownWaitMinutes(30);
+      n.setUnattendedShutdownWaitMinutes(45);
       var s1 = container.read(safetyPoliciesProvider);
       expect(s1.unattendedShutdownEnabled, isFalse);
-      expect(s1.unattendedShutdownWaitMinutes, 30);
+      expect(s1.unattendedShutdownWaitMinutes, 45);
 
       // The daemon clamps the wait to >= 1 minute — the client mirrors it so
       // a typo can't stage a value the server would silently rewrite.
@@ -146,7 +146,7 @@ void main() {
       n.setUnattendedShutdownWaitMinutes(-5);
       expect(
         container.read(safetyPoliciesProvider).unattendedShutdownWaitMinutes,
-        30,
+        45,
       );
     });
 

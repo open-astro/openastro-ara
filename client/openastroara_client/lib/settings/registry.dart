@@ -495,7 +495,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.policies.unattended_shutdown_wait_minutes',
     label: 'Unattended shutdown wait (min)',
-    description: 'Minutes of unattended silence after a paused-awaiting-you failure before the graceful shutdown executes. 10 is a good default — long enough to grab a phone and acknowledge, short enough not to drain a field battery; 5 suits battery rigs, 30 wall-powered observatories.',
+    description: 'Minutes of unattended silence after a paused-awaiting-you failure before the graceful shutdown executes. 30 is the default — long enough to step outside and come back; 5 suits battery rigs.',
     keywords: [
       'unattended',
       'shutdown',
@@ -508,7 +508,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 1, max: 120),
-    defaultValue: 10,
+    defaultValue: 30,
     profilePath: 'safety.unattended_shutdown_wait_minutes',
     relatedSettings: ['safety.policies.unattended_shutdown_enabled'],
   ),

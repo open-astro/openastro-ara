@@ -47,6 +47,8 @@ namespace OpenAstroAra.Test {
         private Mock<IFlatDeviceService> flatDevice = null!;
         private Mock<INotificationService> notifications = null!;
         private List<NotificationDto> published = null!;
+        // The "shutdown scheduled" notice posted when a countdown starts; `published` holds the ladder summaries.
+        private List<NotificationDto> announced = null!;
         private List<(bool on, double? target)> coolerCalls = null!;
 
         private static readonly Guid SeqId = Guid.NewGuid();
@@ -120,10 +122,12 @@ namespace OpenAstroAra.Test {
                 .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "flatpanel.disconnect", DateTimeOffset.UtcNow, null));
 
             published = new List<NotificationDto>();
+            announced = new List<NotificationDto>();
             notifications = new Mock<INotificationService>();
             notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
                 .Callback<NotificationDto, CancellationToken>((n, _) => {
-                    lock (published) published.Add(n);
+                    var scheduled = n.Title == "Unattended shutdown scheduled";
+                    lock (published) (scheduled ? announced : published).Add(n);
                 })
                 .Returns(Task.CompletedTask);
         }
@@ -250,6 +254,105 @@ namespace OpenAstroAra.Test {
             sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
             sut.NotifyRunPausedAwaitingUser(SeqId, Guid.NewGuid()); // second failure — same absent user
             Assert.That(sut.IsCountingDown, Is.True);
+            sut.NotifyUserActivity("test-teardown");
+        }
+
+        private sealed class FakeClock : TimeProvider {
+            public DateTimeOffset Now { get; set; } = new(2026, 11, 9, 0, 10, 0, TimeSpan.Zero);
+            public override DateTimeOffset GetUtcNow() => Now;
+        }
+
+        // A countdown that cannot fire during the test, on a clock the test moves.
+        private UnattendedShutdownService CreateSUTOnClock(FakeClock clock) {
+            var sut = new UnattendedShutdownService(profiles.Object, () => sequencer.Object, guider.Object, telescope.Object,
+                camera.Object, filterWheel.Object, focuser.Object, rotator.Object, flatDevice.Object, notifications.Object, time: clock);
+            return sut;
+        }
+
+        [Test]
+        public void A_second_failure_keeps_the_original_deadline() {
+            // #1712: the logs showed the countdown starting again at 00:10, 00:11, 00:14 and 00:17.
+            var clock = new FakeClock();
+            using var sut = CreateSUTOnClock(clock);
+            sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
+            var first = sut.ShutdownAt;
+
+            clock.Now += TimeSpan.FromMinutes(3);
+            sut.NotifyRunPausedAwaitingUser(SeqId, Guid.NewGuid());
+
+            Assert.That(first, Is.EqualTo(clock.Now - TimeSpan.FromMinutes(3) + TimeSpan.FromMinutes(10)));
+            Assert.That(sut.ShutdownAt, Is.EqualTo(first));
+            sut.NotifyUserActivity("test-teardown");
+        }
+
+        [Test]
+        public async Task A_failure_after_the_ladder_ran_does_not_start_another_countdown() {
+            // The rig is already in bed; each further failure of the same absent user must not re-run the
+            // ladder and post another summary every wait window.
+            using var sut = CreateSUT();
+            sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
+            await WaitUntilAsync(() => { lock (published) return published.Count > 0; },
+                "the ladder summary is posted");
+            await WaitUntilAsync(() => !sut.IsCountingDown, "the ladder finished");
+
+            sut.NotifyRunPausedAwaitingUser(SeqId, Guid.NewGuid());
+
+            Assert.That(sut.IsCountingDown, Is.False);
+        }
+
+        [Test]
+        public void User_activity_ends_the_failure_period_so_the_next_failure_starts_a_fresh_countdown() {
+            var clock = new FakeClock();
+            using var sut = CreateSUTOnClock(clock);
+            sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
+            sut.NotifyUserActivity("sequencer.resume");
+            clock.Now += TimeSpan.FromMinutes(20);
+
+            sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
+
+            Assert.That(sut.ShutdownAt, Is.EqualTo(clock.Now + TimeSpan.FromMinutes(10)));
+            sut.NotifyUserActivity("test-teardown");
+        }
+
+        [Test]
+        public async Task A_countdown_that_found_the_run_resumed_does_not_block_the_next_failure() {
+            sequencer.Setup(s => s.GetRunStateAsync(SeqId, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(RunState(SequenceRunState.Running));
+            using var sut = CreateSUT();
+            sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
+            await WaitUntilAsync(() => !sut.IsCountingDown, "the window elapses");
+            await Task.Delay(100); // the stale re-check runs after the slot disarms
+
+            sut.WaitFromMinutes = _ => TimeSpan.FromMinutes(10);
+            sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
+
+            Assert.That(sut.IsCountingDown, Is.True);
+            sut.NotifyUserActivity("test-teardown");
+        }
+
+        [Test]
+        public void With_no_wait_configured_the_countdown_gives_the_user_30_minutes() {
+            profiles.Setup(p => p.GetSafetyPolicies()).Throws(new InvalidOperationException("profile unreadable"));
+            var clock = new FakeClock();
+            using var sut = CreateSUTOnClock(clock);
+
+            sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
+
+            Assert.That(sut.ShutdownAt, Is.EqualTo(clock.Now + TimeSpan.FromMinutes(30)));
+            sut.NotifyUserActivity("test-teardown");
+        }
+
+        [Test]
+        public async Task Starting_the_countdown_tells_the_user_when_the_rig_shuts_down() {
+            var clock = new FakeClock();
+            using var sut = CreateSUTOnClock(clock);
+
+            sut.NotifyRunPausedAwaitingUser(SeqId, RunId);
+
+            await WaitUntilAsync(() => { lock (published) return announced.Count > 0; }, "the countdown notice is posted");
+            var at = sut.ShutdownAt!.Value.ToLocalTime().ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+            Assert.That(announced[0].Message, Does.Contain(at));
+            Assert.That(announced[0].Severity, Is.EqualTo(NotificationSeverity.Warning));
             sut.NotifyUserActivity("test-teardown");
         }
 
