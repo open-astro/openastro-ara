@@ -72,8 +72,13 @@ const _adjusting = PolarAlignLive(
 );
 
 Future<_Api?> _pump(WidgetTester tester, PolarAlignLive live,
-    {bool server = true, String loopMode = PolarAlignLoopModes.loop, Widget child = const SimplePolarPanel()}) async {
-  final api = server ? (_Api()..settings = PolarAlignSettings(loopMode: loopMode)) : null;
+    {bool server = true, String loopMode = PolarAlignLoopModes.loop, double? tolerance, Widget child = const SimplePolarPanel()}) async {
+  final api = server
+      ? (_Api()
+        ..settings = tolerance == null
+            ? PolarAlignSettings(loopMode: loopMode)
+            : PolarAlignSettings(loopMode: loopMode, targetToleranceArcmin: tolerance))
+      : null;
   await tester.pumpWidget(ProviderScope(
     overrides: [
       polarAlignApiProvider.overrideWithValue(api),
@@ -161,6 +166,72 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-polar-capture')));
     await tester.pump();
     expect(api!.calls, ['capture']);
+  });
+
+  testWidgets('waiting for Home: Continue tells the daemon the mount is at Home', (tester) async {
+    final api = await _pump(
+      tester,
+      const PolarAlignLive(phase: PolarAlignStates.homing, stage: PolarAlignStages.coarse, waitingForHome: true),
+    );
+    expect(find.byKey(const Key('simple-polar-next-fine')), findsNothing, reason: 'nothing to hand over yet');
+    await tester.tap(find.byKey(const Key('simple-polar-continue')));
+    await tester.pump();
+    expect(api!.calls, ['next']);
+  });
+
+  testWidgets('rough stage: Next: fine hands the routine to the guide camera', (tester) async {
+    final api = await _pump(
+      tester,
+      const PolarAlignLive(
+          phase: PolarAlignStates.adjusting, stage: PolarAlignStages.coarse,
+          altErrorArcmin: 40, azErrorArcmin: 12, totalErrorArcmin: 41.8, zone: 'red'),
+    );
+    expect(find.byKey(const Key('simple-polar-check')), findsNothing, reason: 'the fine buttons wait for the fine stage');
+    expect(find.byKey(const Key('simple-polar-continue')), findsNothing);
+    await tester.tap(find.byKey(const Key('simple-polar-next-fine')));
+    await tester.pump();
+    expect(api!.calls, ['next']);
+  });
+
+  testWidgets('fine stage: a hair above the tolerance, Check and Done stay off', (tester) async {
+    final api = await _pump(
+      tester,
+      const PolarAlignLive(
+          phase: PolarAlignStates.adjusting, stage: PolarAlignStages.fine,
+          altErrorArcmin: 0.7, azErrorArcmin: 0.75, totalErrorArcmin: 1.01, zone: 'yellow'),
+      tolerance: 1.0,
+    );
+    expect(tester.widget<FilledButton>(find.byKey(const Key('simple-polar-check'))).onPressed, isNull);
+    expect(tester.widget<FilledButton>(find.byKey(const Key('simple-polar-done'))).onPressed, isNull);
+    expect(api!.calls, isEmpty);
+  });
+
+  testWidgets('fine stage: at the tolerance exactly, Check asks the daemon for the check', (tester) async {
+    final api = await _pump(
+      tester,
+      const PolarAlignLive(
+          phase: PolarAlignStates.adjusting, stage: PolarAlignStages.fine,
+          altErrorArcmin: 0.6, azErrorArcmin: 0.8, totalErrorArcmin: 1.0, zone: 'green'),
+      tolerance: 1.0,
+    );
+    expect(tester.widget<FilledButton>(find.byKey(const Key('simple-polar-check'))).onPressed, isNotNull,
+        reason: 'enabled at the tolerance exactly (<=), not only below it');
+    await tester.tap(find.byKey(const Key('simple-polar-check')));
+    await tester.pump();
+    expect(api!.calls, ['next']);
+  });
+
+  testWidgets('checked: Done completes the routine and leaves the verdict alone', (tester) async {
+    final api = await _pump(
+      tester,
+      const PolarAlignLive(
+          phase: PolarAlignStates.checked, stage: PolarAlignStages.check,
+          altErrorArcmin: 0.3, azErrorArcmin: 0.2, totalErrorArcmin: 0.36, zone: 'green'),
+    );
+    expect(find.byKey(const Key('simple-polar-check')), findsNothing);
+    await tester.tap(find.byKey(const Key('simple-polar-done')));
+    await tester.pump();
+    expect(api!.calls, ['complete']);
   });
 
   testWidgets('inside the tolerance Done completes it', (tester) async {
