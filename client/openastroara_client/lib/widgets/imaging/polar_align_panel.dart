@@ -529,7 +529,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
 
   /// The three stages as chips — the one running lit, the ones done ticked.
   Widget _stageStrip(PolarAlignLive live) {
-    final current = PolarAlignStages.indexOf(live.stage) ?? 0;
+    // A null stage is an older daemon's one-stage routine — the fine routine,
+    // as the fold and the Simple panel read it.
+    final current = PolarAlignStages.indexOf(live.stage) ?? 1;
     final checkedDone = live.phase == PolarAlignStates.checked;
     const labels = ['1 · Rough', '2 · Fine', '3 · Check'];
     return Row(

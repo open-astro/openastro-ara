@@ -72,6 +72,18 @@ public sealed class MainCameraPointingSolver : IPolarAlignMainCameraSolver {
     }
 
     public async Task<string?> UnavailableReasonAsync(CancellationToken ct) {
+        // The same optics check the capture makes, so a focal length left at 0 refuses before the
+        // mount moves instead of after Home and the Dec-85° slew (the 2026-11-07 first attempt).
+        LegacyProfileBridge.SyncPlateSolve(_profileService, _profileStore);
+        var profile = _profileService.ActiveProfile;
+        if (profile is null) {
+            return "Cannot polar-align: no active profile is loaded.";
+        }
+        var (focalLength, pixelSize) = PlateSolveService.ResolveSolveGeometry(
+            _profileStore?.GetOpticsSettings(), profile.TelescopeSettings.FocalLength, profile.CameraSettings.PixelSize);
+        if (!(focalLength > 0) || !(pixelSize > 0)) {
+            return $"Cannot polar-align: telescope focal length ({focalLength}) and camera pixel size ({pixelSize}) must both be configured (> 0) — set them in Options → Imaging → Optics.";
+        }
         if (_camera is null) {
             return null;
         }

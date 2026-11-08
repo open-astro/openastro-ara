@@ -1803,7 +1803,7 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(guider, new ScriptedSolver());
 
             await AssertThrowsAsync<InvalidOperationException>(() => svc.StartAsync(PolarAlignStages.Coarse, null, CancellationToken.None)).ConfigureAwait(false);
-            await AssertThrowsAsync<InvalidOperationException>(() => svc.StartAsync("sideways", null, CancellationToken.None)).ConfigureAwait(false);
+            await AssertThrowsAsync<ArgumentException>(() => svc.StartAsync("sideways", null, CancellationToken.None)).ConfigureAwait(false);
             Assert.That(paCalls, Is.Empty, "a refused start takes no lease");
         }
 
@@ -2007,6 +2007,71 @@ namespace OpenAstroAra.Test {
             // Coarse: the seed turn (RA 0 → 30). Fine: back to the start (RA 0), then its own turn (RA 30).
             var ras = slews.Select(c => c.RADegrees).ToArray();
             Assert.That(ras, Is.EqualTo(new[] { 30.0, 0.0, 30.0 }).Within(1e-6));
+        }
+
+        [Test]
+        public async Task After_a_hand_placed_Home_the_off_axis_move_is_relative_to_the_mounts_stale_reading() {
+            // No Find Home: the user puts the mount at Home by hand, so after the coarse turn the mount still
+            // REPORTS Dec 85° while it physically sits on the pole. The fine stage must still move off the axis.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var slews = new ConcurrentQueue<Coordinates>();
+            var mount = NewHomeMount(canFindHome: false, slews);
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, new HintFollowingSolver(), mount, ws, mainCamera: new FakeMainCamera());
+
+            await svc.StartAsync(PolarAlignStages.Coarse, null, CancellationToken.None).ConfigureAwait(false);
+            await WaitForEventAsync(ws, WsEventCatalog.PolarAlignNeedsHome).ConfigureAwait(false);
+            await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false); // Continue: at Home by hand
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).Stage, Is.EqualTo(PolarAlignStages.Coarse));
+
+            await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false); // Next: fine — asks for Home again
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20))) {
+                while (ws.Count(WsEventCatalog.PolarAlignNeedsHome) < 2) {
+                    await Task.Delay(50, cts.Token).ConfigureAwait(false);
+                }
+            }
+            await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false); // Continue: at Home by hand again
+            PolarAlignStateDto fine;
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20))) {
+                fine = await svc.GetStatusAsync(cts.Token).ConfigureAwait(false);
+                while (!(fine.Stage == PolarAlignStages.Fine && fine.State is "adjusting" or "failed")) {
+                    await Task.Delay(50, cts.Token).ConfigureAwait(false);
+                    fine = await svc.GetStatusAsync(cts.Token).ConfigureAwait(false);
+                }
+            }
+            Assert.That(fine.State, Is.EqualTo("adjusting"));
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            // Coarse: Dec 90 → 85, turn. Fine: the reading is still (RA of the turn, Dec 85) — the move off
+            // the axis is 5° relative to it (Dec 80 at that RA), not skipped; then the fine turn.
+            var targets = slews.ToArray();
+            Assert.That(targets.Length, Is.EqualTo(4));
+            Assert.That(targets[2].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg - 5.0).Within(1e-6), "relative to the stale reading");
+            Assert.That(targets[2].RADegrees, Is.EqualTo(targets[1].RADegrees).Within(1e-6), "same RA as the reading");
+        }
+
+        [Test]
+        public async Task The_check_refuses_a_verdict_when_the_three_solves_do_not_describe_a_turn() {
+            // The mount reports its 30° turns but the sky never moved (a slipping clutch): three solves of one
+            // field, apart by noise. No fit from that may call the alignment excellent.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(
+                new PolarAlignSolveOutcome(true, 10.0, 85.0),
+                new PolarAlignSolveOutcome(true, 10.0001, 85.0001),
+                new PolarAlignSolveOutcome(true, 9.9999, 85.0002));
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, solver, NewHomeMount(canFindHome: true), ws);
+
+            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("axis_fit_failed"));
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).CheckResult, Is.Null, "no verdict");
         }
 
         [Test]

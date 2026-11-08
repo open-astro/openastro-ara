@@ -657,18 +657,16 @@ public static class ProfileEndpoints {
             return Results.Problem(detail: "loop_mode must be \"loop\" or \"single\"",
                 statusCode: StatusCodes.Status400BadRequest);
         }
-        if (!(double.IsFinite(body.SeedRotationDeg) && body.SeedRotationDeg >= 5 && body.SeedRotationDeg <= 120)) {
-            return Results.Problem(detail: "seed_rotation_deg must be between 5 and 120",
-                statusCode: StatusCodes.Status400BadRequest);
-        }
-        if (!(double.IsFinite(body.CheckStepDeg) && body.CheckStepDeg >= 5 && body.CheckStepDeg <= 60)) {
-            return Results.Problem(detail: "check_step_deg must be between 5 and 60 (two turns are made)",
-                statusCode: StatusCodes.Status400BadRequest);
-        }
-        if (!(double.IsFinite(body.CoarseExposureSeconds) && body.CoarseExposureSeconds > 0 && body.CoarseExposureSeconds <= 60)) {
-            return Results.Problem(detail: "coarse_exposure_seconds must be greater than 0 and at most 60",
-                statusCode: StatusCodes.Status400BadRequest);
-        }
+        // The turn and rough-exposure knobs have no control in the app yet (#1736), and an older build
+        // stored any value: a stored value outside the range must not make the panel's own edits (the
+        // whole DTO comes back on every PUT) fail over a field the user cannot reach. Clamp, don't refuse.
+        body = body with {
+            SeedRotationDeg = double.IsFinite(body.SeedRotationDeg) ? Math.Clamp(body.SeedRotationDeg, 5.0, 120.0) : 60.0,
+            CheckStepDeg = double.IsFinite(body.CheckStepDeg) ? Math.Clamp(body.CheckStepDeg, 5.0, 60.0) : 30.0,
+            CoarseExposureSeconds = double.IsFinite(body.CoarseExposureSeconds) && body.CoarseExposureSeconds > 0
+                ? Math.Min(body.CoarseExposureSeconds, 60.0)
+                : 3.0,
+        };
         store.PutPolarAlignSettings(body);
         return Results.Ok(body);
     }

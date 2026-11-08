@@ -1021,9 +1021,6 @@ public static partial class EquipmentEndpoints {
     // InvalidOperationException → 409 (typed, same as the guide ops), and a daemon-rejected lease (e.g.
     // "starting rejected while guiding") throws GuiderRpcException → 422 — rather than a raw 500. Stop is
     // best-effort about the lease (it never throws not-connected), so it needs no such mapping.
-    public static Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, string? idempotencyKey, CancellationToken ct) =>
-        PolarAlignStartAsync(svc, stage: null, idempotencyKey, ct);
-
     public static async Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, string? stage, string? idempotencyKey, CancellationToken ct) {
         // A typo in the stage is the caller's mistake (400), not a busy routine (409).
         if (stage is not null && !PolarAlignStages.IsValid(stage)) {

@@ -41,7 +41,7 @@ namespace OpenAstroAra.Test {
             var svc = new Mock<IPolarAlignService>();
             svc.Setup(s => s.StartAsync(null, "idem-1", It.IsAny<CancellationToken>())).ReturnsAsync(accepted);
 
-            var result = await EquipmentEndpoints.PolarAlignStartAsync(svc.Object, "idem-1", CancellationToken.None);
+            var result = await EquipmentEndpoints.PolarAlignStartAsync(svc.Object, null, "idem-1", CancellationToken.None);
 
             var typed = result as Accepted<OperationAcceptedDto>;
             Assert.That(typed, Is.Not.Null);
@@ -54,7 +54,7 @@ namespace OpenAstroAra.Test {
             svc.Setup(s => s.StartAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException("guider is not connected"));
 
-            var result = await EquipmentEndpoints.PolarAlignStartAsync(svc.Object, null, CancellationToken.None);
+            var result = await EquipmentEndpoints.PolarAlignStartAsync(svc.Object, null, null, CancellationToken.None);
 
             Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
             Assert.That(ProblemTypeOf(result), Is.EqualTo(EquipmentEndpoints.GuiderNotConnectedProblemType));
@@ -66,7 +66,7 @@ namespace OpenAstroAra.Test {
             svc.Setup(s => s.StartAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new GuiderRpcException("set_pa_session", 1, "starting rejected while guiding"));
 
-            var result = await EquipmentEndpoints.PolarAlignStartAsync(svc.Object, null, CancellationToken.None);
+            var result = await EquipmentEndpoints.PolarAlignStartAsync(svc.Object, null, null, CancellationToken.None);
 
             Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status422UnprocessableEntity));
         }

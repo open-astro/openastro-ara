@@ -310,7 +310,7 @@ namespace OpenAstroAra.Server.Services {
         public async Task<OperationAcceptedDto> StartAsync(string? stage, string? idempotencyKey, CancellationToken ct) {
             stage ??= PolarAlignStages.Coarse;
             if (!PolarAlignStages.IsValid(stage)) {
-                throw new InvalidOperationException($"unknown polar-align stage '{stage}' — use coarse, fine or check");
+                throw new ArgumentException($"unknown polar-align stage '{stage}' — use coarse, fine or check");
             }
             await _opLock.WaitAsync(ct).ConfigureAwait(false);
             try {
@@ -920,7 +920,7 @@ namespace OpenAstroAra.Server.Services {
                     $"the {frameId} seed frame could not be captured after {SeedSolveAttempts} attempts: {captureFault}");
             }
             throw new RoutineFailedException("seed_solve_failed",
-                $"the {frameId} seed frame failed to solve after {SeedSolveAttempts} attempts — check focus, sky conditions, and the guide optics configuration");
+                $"the {frameId} seed frame failed to solve after {SeedSolveAttempts} attempts — check focus, sky conditions, and the optics configuration of the camera in use");
         }
 
         /// <summary>One loop body: ask the guider for a saved solver frame, await its
