@@ -372,20 +372,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public static IReadOnlyList<Phd2Method> BuildGuiderTuningMessages(IGuiderSettings guider, GuiderAdvancedSettings? advanced = null) =>
             BuildGuiderEngineConfigMessages(guider, advanced).Where(m => !RequiresDisconnectedEquipment(m)).ToList();
 
-        /// <summary>
-        /// §63.17 — on-demand re-push of the §63.5 engine config + equipment selections (the connect path
-        /// pushes automatically; this serves POST /guider/profile/push so a settings edit takes effect without
-        /// a full reconnect). Runs the same best-effort push — including its disconnect window when a
-        /// selection/setup message is queued — then re-ensures the daemon's equipment is connected. Returns
-        /// the RPC method names attempted, for the <c>guider.profile_pushed</c> event's fields-changed payload.
-        /// Requires a connected guider (throws <see cref="InvalidOperationException"/>).
-        /// </summary>
-        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-            Justification = "Catch-and-rethrow-typed boundary: a post-push equipment reconnect failure (transport drop, daemon contract break) is converted to GuiderRpcException so the service layer maps it to an actionable 422 instead of a raw 500. OperationCanceledException is rethrown untouched.")]
         /// <summary>Select or create the active ARA profile's twin, sending no equipment selection. Same
         /// select-or-create-or-migrate as the connect path; best-effort like there — a profile RPC fault must
         /// not fail the caller. The profile list is refreshed first so the ensure decides against current
         /// daemon state.</summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Best-effort §63.4 boundary: a failed profile refresh must not fail the caller; logged, and the ensure decides on the list it has.")]
         public async Task SelectActiveAraProfileTwinAsync(CancellationToken ct) {
             try {
                 await GetProfiles();
@@ -397,6 +389,16 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             await EnsureAraGuiderProfileAsync(ct);
         }
 
+        /// <summary>
+        /// §63.17 — on-demand re-push of the §63.5 engine config + equipment selections (the connect path
+        /// pushes automatically; this serves POST /guider/profile/push so a settings edit takes effect without
+        /// a full reconnect). Runs the same best-effort push — including its disconnect window when a
+        /// selection/setup message is queued — then re-ensures the daemon's equipment is connected. Returns
+        /// the RPC method names attempted, for the <c>guider.profile_pushed</c> event's fields-changed payload.
+        /// Requires a connected guider (throws <see cref="InvalidOperationException"/>).
+        /// </summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Catch-and-rethrow-typed boundary: a post-push equipment reconnect failure (transport drop, daemon contract break) is converted to GuiderRpcException so the service layer maps it to an actionable 422 instead of a raw 500. OperationCanceledException is rethrown untouched.")]
         public async Task<IReadOnlyList<string>> RepushGuiderEngineConfigAsync(CancellationToken ct) {
             if (!Connected) {
                 throw new InvalidOperationException("guider is not connected");

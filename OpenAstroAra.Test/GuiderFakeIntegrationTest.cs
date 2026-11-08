@@ -934,8 +934,8 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Profile_push_refuses_a_bare_alpaca_selection_and_sends_none_of_it_to_the_guider() {
             // #1306 — the field case: bare "Alpaca Camera"/"Alpaca Mount" with no stored host/port. The
-            // push must throw the typed refusal (→ 422) and send NOTHING, rather than leave the guider on
-            // localhost:0 with its equipment disconnected. Proven red by deleting the guard in PushAsync.
+            // push must throw the typed refusal (→ 422) and send none of the selection, rather than leave the
+            // guider on localhost:0. The twin still follows (#1665).
             await using var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
             fake.OnRpc("get_connected", JsonValue.Create(true));
