@@ -85,7 +85,7 @@ class ServerApi {
   }
 
   /// §35.3 — trigger the daemon's emergency stop (abort runs → abort
-  /// exposure → stop guiding → park → flat panel light off). Synchronous on
+  /// exposure → stop guiding → stop mount → flat panel light off). Synchronous on
   /// the server: the response reports honestly what each rung did. The
   /// receive timeout is generous — the ladder waits on real device calls.
   Future<EmergencyStopResult> emergencyStop() async {
@@ -139,7 +139,7 @@ class EmergencyStopResult {
   final bool flatPanelLightOff;
 
   /// Rungs that were ATTEMPTED and faulted (wire tokens: abort_runs,
-  /// halt_rotator, abort_exposure, stop_guiding, park, flat_panel_light_off, cooler_off). A device
+  /// halt_rotator, abort_exposure, stop_guiding, stop_mount, flat_panel_light_off, cooler_off). A device
   /// that isn't connected reads false above but is NOT listed here.
   final List<String> failedRungs;
 
