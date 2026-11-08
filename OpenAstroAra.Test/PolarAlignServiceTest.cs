@@ -488,6 +488,32 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task After_a_refused_guider_push_the_routine_fails_with_the_reason_before_its_first_capture() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            var profiles = new HeadlessProfileService();
+            using var guider = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>());
+            await guider.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(guider, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null);
+            var settings = profiles.ActiveProfile.GuiderSettings;
+            settings.GuiderCamera = "Alpaca Camera";
+            settings.GuiderAlpacaHost = "";
+            settings.GuiderAlpacaPort = 0;
+            await Assert.ThatAsync(() => guider.PushGuiderProfileAsync(null, CancellationToken.None),
+                Throws.TypeOf<GuiderSelectionInvalidException>()).ConfigureAwait(false);
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, new ScriptedSolver { Fallback = Unsolved }, ws: ws);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("guider_out_of_step"));
+            Assert.That(fake.ReceivedMethods, Has.No.Member("capture_single_frame"));
+        }
+
+        [Test]
         public async Task Seed_solve_failure_fails_the_routine_and_releases_the_lease() {
             var paCalls = new ConcurrentQueue<bool>();
             await using var fake = StartFake(paCalls);

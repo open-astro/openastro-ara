@@ -153,6 +153,15 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        // Frames are saved in the background, so a capture can return before its insert (#1705).
+        private static async Task WaitForFrameInsertAsync(Mock<IFrameRepository> frames) {
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+            while (!frames.Invocations.Any(i => i.Method.Name == nameof(IFrameRepository.InsertAsync))) {
+                Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "the frame was never registered");
+                await Task.Delay(20);
+            }
+        }
+
         [Test]
         public async Task One_failed_exposure_is_retried_and_the_frame_lands() {
             var starts = 0;
@@ -172,6 +181,7 @@ namespace OpenAstroAra.Test {
                 await svc.CaptureImage(new CaptureSequence { ExposureTime = 0.01, ImageType = "LIGHT" }, CancellationToken.None, null, "M42");
 
                 Assert.That(starts, Is.EqualTo(2), "the glitch cost one retry");
+                await WaitForFrameInsertAsync(frames);
                 frames.Verify(f => f.InsertAsync(It.IsAny<FrameDto>(), It.IsAny<CancellationToken>()), Times.Once);
                 Assert.That(svc.DeviceFailureCount, Is.Zero, "a downloaded frame clears the failure count");
             } finally {
@@ -201,6 +211,7 @@ namespace OpenAstroAra.Test {
                 await svc.CaptureImage(new CaptureSequence { ExposureTime = 0.01, ImageType = "LIGHT" }, CancellationToken.None, null, "M42");
 
                 Assert.That(starts, Is.EqualTo(4), "the second capture's one glitch was retried, not treated as lost");
+                await WaitForFrameInsertAsync(frames);
                 frames.Verify(f => f.InsertAsync(It.IsAny<FrameDto>(), It.IsAny<CancellationToken>()), Times.Once);
             } finally {
                 Directory.Delete(dir, recursive: true);

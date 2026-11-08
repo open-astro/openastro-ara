@@ -229,7 +229,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 CalibrationDirection: calibration?.Direction,
                 CalibrationStep: calibration?.Step,
                 CalibrationDistancePx: calibration is { } cal ? Math.Round(cal.Distance, 1) : null,
-                Profiles: _guider.ProfilesSnapshot.Select(p => new GuiderProfileDto(p.Id, p.Name)).ToList());
+                Profiles: _guider.ProfilesSnapshot.Select(p => new GuiderProfileDto(p.Id, p.Name)).ToList(),
+                OutOfStepReason: _outOfStepReason);
             return Task.FromResult<GuiderDto?>(new GuiderDto("PHD2_Single", "PHD2", _state, runtime));
         }
     }
@@ -348,6 +349,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         // gives up the guide camera, and a stale lease or an open polar alignment is cleared, so the
         // guider does not refuse with "polar-alignment session in progress" (review of #1365).
         _ = RunAndReportAsync(accepted, async () => {
+            ThrowIfOutOfStep("Start guiding");
             await ReleaseGuideCameraQuietlyAsync().ConfigureAwait(false);
             await ClearPaSessionQuietlyAsync(guider, CancellationToken.None).ConfigureAwait(false);
             return await guider.StartGuiding(forceCalibration: false, _noProgress, CancellationToken.None).ConfigureAwait(false);
@@ -495,6 +497,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 ReconcileTask = ReconcileGuideCameraAsync(guider, ct);
                 Interlocked.Increment(ref _reconcileStarts);
                 await ReconcileTask.ConfigureAwait(false);
+                await RecheckSelectionAsync(ct).ConfigureAwait(false);
             }
         } catch (OperationCanceledException) {
             // Superseded by a newer connect/disconnect — that operation already owns the state;
@@ -875,6 +878,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             _guider.Disconnect();
             _guider.Dispose();
             _guider = null;
+            _outOfStepReason = null;
             ResetPaResidual();
             ResetStarLostWatchLocked();
         }

@@ -18,6 +18,7 @@ using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -83,19 +84,30 @@ public sealed partial class GuiderService {
         // the daemon on localhost:0 with its equipment disconnected (the 422 reaches the client's Apply
         // button). The §63.4 profile-switch follow is exempt (review r2): a profile saved before this rule
         // must still get its guider twin and tuning, with the guider's own Alpaca server left as it is.
-        if (refuseUnservedSelection) {
-            if (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PHD2Guider.DescribeUnservedAlpacaSelection(settings) is { } reason) {
-                throw new GuiderSelectionInvalidException(reason);
-            }
-            // #1308 — re-resolve the pinned guide camera against the server's configureddevices: a
-            // renumbered or vanished camera, or one that is the main imaging camera, is refused.
-            if (await DescribeCameraPinProblemAsync(settings, ct).ConfigureAwait(false) is { } pin) {
-                throw new GuiderSelectionInvalidException(pin);
-            }
+        if (refuseUnservedSelection && await DescribeSelectionProblemAsync(settings, ct).ConfigureAwait(false) is { } reason) {
+            // #1665 — the refused selection is not sent, but the twin still follows, so calibration and
+            // darks never land in the previous profile's twin.
+            MarkOutOfStep(reason);
+            await guider.SelectActiveAraProfileTwinAsync(ct).ConfigureAwait(false);
+            throw new GuiderSelectionInvalidException(reason);
         }
         var camera = settings.GuiderCamera;
         var cameraId = settings.GuiderCameraId;
-        var methods = await guider.RepushGuiderEngineConfigAsync(ct).ConfigureAwait(false);
+        IReadOnlyList<string> methods;
+        try {
+            methods = await guider.RepushGuiderEngineConfigAsync(ct).ConfigureAwait(false);
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            MarkOutOfStep(ex.Message);
+            throw;
+        }
+        if (refuseUnservedSelection) {
+            lock (_gate) {
+                _outOfStepReason = null;
+            }
+        } else {
+            // A select's push skipped the checks, so passing proves nothing: the selection is judged here.
+            await RecheckSelectionAsync(ct).ConfigureAwait(false);
+        }
         var payload = new JsonObject {
             ["methods"] = new JsonArray(methods.Select(m => (JsonNode)JsonValue.Create(m)).ToArray()),
             ["ara_profile_id"] = _activeProfileIdResolver?.Invoke()?.ToString(),
@@ -104,6 +116,68 @@ public sealed partial class GuiderService {
         await EmitDarkLibraryInvalidationIfCameraChangedAsync(guider, camera, cameraId, ct).ConfigureAwait(false);
         return Accepted("guider.profile.push", idempotencyKey);
     }
+
+    // #1665 — why the guider does not hold the active profile's guider settings, with the fix. Null when it
+    // does, or when that is not known yet (no push or connect has decided). Guarded by _gate.
+    private string? _outOfStepReason;
+
+    internal string? OutOfStepReason {
+        get {
+            lock (_gate) {
+                return _outOfStepReason;
+            }
+        }
+    }
+
+    private void MarkOutOfStep(string reason) {
+        var message = $"The Guider does not have this profile's guider settings: {reason.TrimEnd('.')}. "
+            + "Fix it in Guider settings and press Apply, or reconnect the Guider.";
+        lock (_gate) {
+            _outOfStepReason = message;
+        }
+        LogOutOfStep(message);
+    }
+
+    /// <summary>#1665 — refuse an operation that would capture with another profile's Guide Camera.</summary>
+    internal void ThrowIfOutOfStep(string operation) {
+        if (OutOfStepReason is { } reason) {
+            LogRefusedOutOfStep(operation, reason);
+            throw new GuiderOutOfStepException(reason);
+        }
+    }
+
+    // #1665 — the connect-time push and a select's push send the selection unchecked, so it is judged here.
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Check boundary after a push that already landed: it must never turn a good connect or push into a failure; the state is left as it was and the fault is logged.")]
+    private async Task RecheckSelectionAsync(CancellationToken ct) {
+        try {
+            var reason = await DescribeSelectionProblemAsync(_profileService.ActiveProfile.GuiderSettings, ct).ConfigureAwait(false);
+            if (reason is not null) {
+                MarkOutOfStep(reason);
+                return;
+            }
+            lock (_gate) {
+                _outOfStepReason = null;
+            }
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            LogSelectionRecheckFailed(ex);
+        }
+    }
+
+    private async Task<string?> DescribeSelectionProblemAsync(IGuiderSettings settings, CancellationToken ct) =>
+        OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PHD2Guider.DescribeUnservedAlpacaSelection(settings)
+        // #1308 — re-resolve the pinned guide camera against the server's configureddevices: a
+        // renumbered or vanished camera, or one that is the main imaging camera, is refused.
+        ?? await DescribeCameraPinProblemAsync(settings, ct).ConfigureAwait(false);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Guider is out of step with the active profile (#1665): {Reason}")]
+    private partial void LogOutOfStep(string reason);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "{Operation} refused, guider out of step with the active profile (#1665): {Reason}")]
+    private partial void LogRefusedOutOfStep(string operation, string reason);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Guider selection check failed; out-of-step state left as it was (#1665)")]
+    private partial void LogSelectionRecheckFailed(Exception exception);
 
     private async Task<string?> DescribeCameraPinProblemAsync(IGuiderSettings settings, CancellationToken ct) {
         if (GuiderCameraPinCheck.CameraEndpoint(settings) is not { } ep) {
@@ -158,6 +232,14 @@ public sealed partial class GuiderService {
         await EmitCalibrationEventAsync(WsEventCatalog.GuiderDarkLibraryInvalidated,
             new JsonObject { ["reason"] = "guide_camera_changed" }).ConfigureAwait(false);
     }
+}
+
+/// <summary>#1665 — the guider does not hold the active profile's guider settings, so an operation that
+/// would capture with its Guide Camera is refused. The message says why and how to fix it.</summary>
+public class GuiderOutOfStepException : InvalidOperationException {
+    public GuiderOutOfStepException() { }
+    public GuiderOutOfStepException(string message) : base(message) { }
+    public GuiderOutOfStepException(string message, Exception innerException) : base(message, innerException) { }
 }
 
 /// <summary>#1306 — the stored guider equipment selection cannot be pushed as it stands (a bare Alpaca

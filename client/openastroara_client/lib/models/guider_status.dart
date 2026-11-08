@@ -135,6 +135,9 @@ class GuiderStatus {
   final String? calibrationDirection;
   final int? calibrationStep;
   final double? calibrationDistancePx;
+  /// Why the guider does not hold the active profile's guider settings, and
+  /// how to fix it; null when it does or that is not known yet (#1665).
+  final String? outOfStepReason;
   /// The guider's profiles, id → name (`runtime.profiles`), for the Settings
   /// profile picker. Empty until a guider has connected.
   final Map<int, String> profiles;
@@ -155,6 +158,7 @@ class GuiderStatus {
     this.calibrationDirection,
     this.calibrationStep,
     this.calibrationDistancePx,
+    this.outOfStepReason,
     this.profiles = const {},
   });
 
@@ -205,6 +209,7 @@ class GuiderStatus {
       calibrationDirection: _str(runtimeMap['calibration_direction']),
       calibrationStep: (runtimeMap['calibration_step'] as num?)?.toInt(),
       calibrationDistancePx: _asDouble(runtimeMap['calibration_distance_px']),
+      outOfStepReason: _str(runtimeMap['out_of_step_reason']),
       profiles: _profiles(runtimeMap['profiles']),
     );
   }
@@ -257,10 +262,11 @@ class GuiderStatus {
       other.rmsDecArcsec == rmsDecArcsec &&
       other.currentProfile == currentProfile &&
       other.paResidual == paResidual &&
+      other.outOfStepReason == outOfStepReason &&
       mapEquals(other.profiles, profiles);
 
   @override
   int get hashCode => Object.hash(deviceId, name, connectionState, runtimeState,
       rmsTotal, rmsRa, rmsDec, rmsTotalArcsec, rmsRaArcsec, rmsDecArcsec,
-      currentProfile, paResidual, Object.hashAll(profiles.entries.map((e) => Object.hash(e.key, e.value))));
+      currentProfile, paResidual, outOfStepReason, Object.hashAll(profiles.entries.map((e) => Object.hash(e.key, e.value))));
 }

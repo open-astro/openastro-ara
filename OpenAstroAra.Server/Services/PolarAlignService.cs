@@ -461,6 +461,11 @@ namespace OpenAstroAra.Server.Services {
                 Directory.CreateDirectory(workDir);
                 var north = site.LatitudeDeg > 0;
 
+                // #1665 — never capture with another profile's Guide Camera.
+                if (_guider.OutOfStepReason is { } outOfStep) {
+                    throw new RoutineFailedException("guider_out_of_step", outOfStep);
+                }
+
                 // ── unpark: the routine rotates the mount, and the mediator refuses every slew while it is
                 // parked. 2026-10-17 the mount had been parked a minute before; the first frame solved and
                 // the run then failed with "the RA seed slew was rejected by the mount". The user started a

@@ -240,7 +240,7 @@ class SimpleGuidePanel extends ConsumerWidget {
               ],
             ),
             if (connected && !active && pending == null)
-              Text(l10n.guideTapShutter, style: AraText.caption),
+              Text(g.outOfStepReason ?? l10n.guideTapShutter, style: AraText.caption),
             if (!connected)
               Text(l10n.guideConnectFirst, style: AraText.caption),
             simpleWindowRow(

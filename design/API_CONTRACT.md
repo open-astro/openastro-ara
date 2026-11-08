@@ -1243,3 +1243,15 @@ its start and the client has nothing to do with it.
 **Spec ref:** `OpenAstroAra.Server/openapi.yaml#/components/schemas/EmergencyStopResultDto`
 
 **Related:** PORT_PLAYBOOK.md §35.3 step 3, #1671
+
+## 2026-11-08 — Out-of-step Guider: `out_of_step_reason` and the guider-out-of-step 409 (#1665)
+
+**Endpoint(s) or area:** `GuiderStateDto.out_of_step_reason`; `POST /equipment/guider/darklibrary/build` and the defect-map build; `POST /equipment/guider/focus/start`; `polar_align.error`
+
+**Decision:** `out_of_step_reason` is an optional field on the guider runtime: null when the Guider holds the active profile's settings, or when that is not known yet. While it is set, the dark library and defect map builds answer **409 `https://openastro.net/errors/guider-out-of-step`**, the focus loop answers 409, polar alignment fails with reason `guider_out_of_step`, and Start guiding ends with a failed `guider.operation_complete`. Each carries the same text. The 422 of `POST /equipment/guider/profile/push` is unchanged.
+
+**Reasoning:** The field is additive and needs no version change. A client can show the reason before the user presses Start. A separate problem type keeps this apart from `guider-not-connected`.
+
+**Spec ref:** PORT_PLAYBOOK.md §63.4
+
+**Related:** #1661, #1664
