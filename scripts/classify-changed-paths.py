@@ -121,6 +121,14 @@ SCRIPT_RULES = {
     "scripts/generate-3rd-party-licenses.py": frozenset({"dotnet"}),
     # Standalone tooling, unit-tested by the Sanity job, read by nothing else.
     "scripts/check-flutter-release.py": NONE,
+    # PR-body and decision-record gates: run by pr-body.yml, decision-records.yml,
+    # claude-review.yml and the Sanity job, read by no .NET or client job.
+    "scripts/adr_grammar.py": NONE,
+    "scripts/check-adr-authorization.py": NONE,
+    "scripts/check-adr-scope.py": NONE,
+    "scripts/check-adr-shape.py": NONE,
+    "scripts/check-falsified-by.py": NONE,
+    "scripts/check-pr-template.py": NONE,
     "scripts/check-settings-registry.mjs": NONE,
     "scripts/check-help-registry.mjs": NONE,
     "scripts/fit-star-count-model.py": NONE,
@@ -138,6 +146,8 @@ GITHUB_RULES = {
     ".github/workflows/check-flutter.yml": NONE,
     ".github/workflows/claude-review.yml": NONE,
     ".github/workflows/codeql.yml": NONE,
+    ".github/workflows/decision-records.yml": NONE,
+    ".github/workflows/pr-body.yml": NONE,
     ".github/workflows/label-trusted-authors.yml": NONE,
     ".github/workflows/merge-queue.yml": NONE,
     ".github/dependabot.yml": NONE,
