@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -213,7 +214,9 @@ void main() {
     });
     await tester.tap(find.text('Andromeda Galaxy'));
     await tester.pumpAndSettle();
-    expect(find.text('Galáxia · V 5.0 · 2,5 milhões de anos-luz'), findsOneWidget);
+    expect(find.text('Galáxia · V 5,0 · 2,5 milhões de anos-luz'), findsOneWidget, reason: 'one decimal separator');
+    expect(find.text('2,0 h'), findsOneWidget, reason: 'the total hours, in the locale');
+    expect(find.text('0,5'), findsNWidgets(4), reason: 'each Night\'s hours, in the locale');
     expect(find.text('Está se aproximando de nós.'), findsOneWidget);
   });
 
@@ -230,6 +233,44 @@ void main() {
     await tester.tap(find.text('Andromeda Galaxy'));
     await tester.pumpAndSettle();
     expect(styleOf(find.text('Close.')).fontSize, 14);
+  });
+
+  testWidgets('the back\'s action draws at 44 px or more on desktop', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    try {
+      await _pump(tester, frames: _m31Frames);
+      await tester.tap(find.text('Andromeda Galaxy'));
+      await tester.pumpAndSettle();
+      expect(tester.getSize(find.byType(FilledButton)).height, greaterThanOrEqualTo(44));
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('both faces write the Tier, not only colour it', (tester) async {
+    await _pump(tester, frames: _m31Frames);
+    Finder inFront(String t) => find.descendant(of: find.byType(AlbumCardFront), matching: find.text(t));
+    expect(inFront('Silver'), findsOneWidget, reason: 'the collected card\'s front');
+    expect(inFront('Bronze'), findsNothing);
+    await tester.tap(find.text('Andromeda Galaxy'));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: find.byType(AlbumCardBack), matching: find.text('Silver')), findsOneWidget);
+  });
+
+  testWidgets('the flip keeps one image provider for the front art', (tester) async {
+    await _pump(tester, frames: _m31Frames, manifest: const {'M31': AlbumArt(asset: 'assets/album/art/test.webp')});
+    Set<int?> widths() => {
+          for (final img in tester.widgetList<Image>(find.byType(Image))) (img.image as ResizeImage).width,
+        };
+    final grid = widths();
+    await tester.tap(find.text('Andromeda Galaxy'));
+    final seen = <int?>{};
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      seen.addAll(widths());
+    }
+    expect(seen.difference(grid), hasLength(1), reason: 'decode widths seen during the flip: $seen');
+    await tester.pumpAndSettle();
   });
 
   testWidgets('a missing card\'s Placeholder icon reads at 3:1 on its panel', (tester) async {

@@ -142,11 +142,14 @@ NightSetupStep? nightSetupNext({
   return null;
 }
 
-/// The main camera is taking frames (simpleMainCameraBusy, read once).
-bool _mainCameraBusy(Ref ref) =>
-    ref.read(captureProgressProvider).isCapturing ||
-    ref.read(liveViewControllerProvider) ||
-    (ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false);
+/// The main camera is taking frames, as the Guide shutter reads it
+/// (simpleMainCameraBusy with a paused Queue idle, read once).
+bool _mainCameraBusy(Ref ref) {
+  final queue = ref.read(sequenceRunStateProvider).value?.state;
+  return ref.read(captureProgressProvider).isCapturing ||
+      ref.read(liveViewControllerProvider) ||
+      ((queue?.isActive ?? false) && !queue!.isAnyPaused);
+}
 
 /// The guide step has nothing to do: guiding already, or no guider to guide
 /// with (an unguided rig images without it).

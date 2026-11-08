@@ -7,6 +7,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../l10n/l10n.dart';
@@ -113,8 +114,12 @@ String albumTypeLabel(AppLocalizations l, String t) => switch (t) {
 /// with a soft glow on gold. With [reveal] it plays once from [revealFrom] (null:
 /// missing) to its tier: grey Art turns to colour, the border to the new tier's.
 class AlbumCardFront extends StatelessWidget {
-  const AlbumCardFront(this.card, {super.key, this.reveal = false, this.revealFrom, this.onRevealed});
+  const AlbumCardFront(this.card, {super.key, this.reveal = false, this.revealFrom, this.onRevealed, this.decodeWidth});
   final AlbumCardData card;
+
+  /// Logical width to decode the Art at; null: the slot's. The flip pins its end size, or every
+  /// frame of the scale-up would be a new image provider.
+  final double? decodeWidth;
   final bool reveal;
   final AlbumTier? revealFrom;
   final VoidCallback? onRevealed;
@@ -188,7 +193,7 @@ class AlbumCardFront extends StatelessWidget {
                           // pixels so no black bar shows.
                           fit: BoxFit.cover,
                           // Decode at the slot's width: a Book holds 110 cards.
-                          cacheWidth: (box.maxWidth * MediaQuery.devicePixelRatioOf(context)).round(),
+                          cacheWidth: ((decodeWidth ?? box.maxWidth) * MediaQuery.devicePixelRatioOf(context)).round(),
                           errorBuilder: (_, _, _) => placeholder);
                       final key = Key(missing ? 'album-art-dimmed' : 'album-art');
                       if (missing) return ColorFiltered(colorFilter: _greyscaleDim, child: image(key: key));
@@ -204,10 +209,22 @@ class AlbumCardFront extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
-        Text(card.label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AraText.body.copyWith(color: textColor, fontWeight: FontWeight.w600)),
+        Row(children: [
+          Flexible(
+            child: Text(card.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AraText.body.copyWith(color: textColor, fontWeight: FontWeight.w600)),
+          ),
+          // The border says the tier by colour; the word says it for everyone else.
+          if (tier != null) ...[
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(albumTierName(context, tier),
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: AraText.caption.copyWith(color: albumTierColor(tier))),
+            ),
+          ],
+        ]),
         Text(card.dso.name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -238,12 +255,14 @@ class AlbumCardBack extends StatelessWidget {
     final banner = tier == null ? AraColors.bgPanelAlt : albumTierColor(tier);
     // Tier colours are light: dark text on them, light text on the missing grey.
     final onBanner = tier == null ? AraColors.textPrimary : AraColors.onTier;
-    final lang = Localizations.localeOf(context).languageCode;
+    final locale = Localizations.localeOf(context);
+    final lang = locale.languageCode;
+    final oneDecimal = NumberFormat('0.0', locale.toString());
     final bio = [
       albumTypeLabel(l, d.type),
       ?d.constellation,
-      if (d.magnitude case final m?) 'V ${m.toStringAsFixed(1)}',
-      if (d.sizeMajArcmin case final a?) '${a < 10 ? a.toStringAsFixed(1) : a.round()}′',
+      if (d.magnitude case final m?) 'V ${oneDecimal.format(m)}',
+      if (d.sizeMajArcmin case final a?) '${a < 10 ? oneDecimal.format(a) : a.round()}′',
       ?art?.distanceIn(lang),
     ].join(' · ');
     final cell = _backText.copyWith(color: AraColors.textPrimary);
@@ -259,7 +278,7 @@ class AlbumCardBack extends StatelessWidget {
                   textAlign: i == 0 ? TextAlign.start : TextAlign.end),
             ),
         ]);
-    String hours(double h) => h.toStringAsFixed(1);
+    String hours(double h) => oneDecimal.format(h);
     String sub(double sec) => '${sec.round()} s';
 
     final top = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -283,7 +302,11 @@ class AlbumCardBack extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: AraText.title.copyWith(color: onBanner, fontWeight: FontWeight.w700)),
-                Text(l.albumSetNumber(card.number, card.bookSize), style: _backText.copyWith(color: onBanner)),
+                Wrap(spacing: 8, children: [
+                  Text(l.albumSetNumber(card.number, card.bookSize), style: _backText.copyWith(color: onBanner)),
+                  if (tier != null)
+                    Text(albumTierName(context, tier), style: _backText.copyWith(color: onBanner, fontWeight: FontWeight.w700)),
+                ]),
               ]),
             ),
           ]),
@@ -332,6 +355,8 @@ class AlbumCardBack extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         FilledButton(
           onPressed: onAction,
+          // Desktop's compact density would take the theme's minimum height under 44.
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 44), visualDensity: VisualDensity.standard),
           child: Text(s == null ? l.albumImageThis : l.albumAddTime, textAlign: TextAlign.center),
         ),
         if (art != null && art.creditLine != null) ...[
@@ -479,7 +504,7 @@ class AlbumCard extends StatelessWidget {
                         }),
                       ),
                     )
-                  : AlbumCardFront(card),
+                  : AlbumCardFront(card, decodeWidth: size.width),
             ),
           ),
         ]);
