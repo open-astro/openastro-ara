@@ -30,8 +30,11 @@ namespace OpenAstroAra.Server.Services;
 /// a busy camera throws <see cref="CameraBusyException"/>, unset optics
 /// <see cref="PlateSolverConfigurationException"/>.</summary>
 public interface IPolarAlignMainCameraSolver {
+    /// <param name="blindFailover">Walk the staged search (wider radii, then the blind solver) when the near
+    /// solve misses: right for a seed frame (the mount may be degrees off), wrong for the live loop, whose
+    /// contract is fail fast and shoot again (#1136) — a blind cascade there freezes the readout for minutes.</param>
     Task<PolarAlignSolveOutcome> CaptureAndSolveAsync(
-        double exposureSeconds, (double RaDeg, double DecDeg)? hintJnow, CancellationToken ct);
+        double exposureSeconds, (double RaDeg, double DecDeg)? hintJnow, bool blindFailover, CancellationToken ct);
 
     /// <summary>Why the main camera cannot shoot right now (not connected), or null when it can — or
     /// when the daemon has no camera service to ask. The coarse stage's Start checks this before it
@@ -147,20 +150,21 @@ public sealed class MainCameraPointingSolver : IPolarAlignMainCameraSolver {
             Timeout = PlateSolveService.TimeoutFrom(settings),
             Binning = settings.Binning,
             BlindFailoverEnabled = blindFailover,
+            StagedSearchEnabled = blindFailover, // no widening either when the caller wants one fast look
             Attempts = 1,                    // one look; the caller decides what to do next
             ReattemptDelay = TimeSpan.Zero,
         };
         return await captureSolver.Solve(sequence, parameter, null, null, ct).ConfigureAwait(false);
     }
 
-    /// <summary>Coarse-stage frame: the mount at Home may be degrees off, so the near solve may miss
-    /// and the blind fallback is ON (a 1-in-several-seconds loop, not the 1 s guide loop).</summary>
+    /// <summary>Coarse-stage frame. A seed frame keeps the blind fallback (the mount at Home may be degrees
+    /// off); a live frame takes one near look and lets the loop shoot again.</summary>
     public async Task<PolarAlignSolveOutcome> CaptureAndSolveAsync(
-            double exposureSeconds, (double RaDeg, double DecDeg)? hintJnow, CancellationToken ct) {
+            double exposureSeconds, (double RaDeg, double DecDeg)? hintJnow, bool blindFailover, CancellationToken ct) {
         Coordinates? hint = hintJnow is { } h
             ? new Coordinates(h.RaDeg, h.DecDeg, Epoch.JNOW, Coordinates.RAType.Degrees)
             : MountPointing();
-        var result = await CaptureAndSolveRawAsync(exposureSeconds, hint, blindFailover: true, "Cannot polar-align", ct).ConfigureAwait(false);
+        var result = await CaptureAndSolveRawAsync(exposureSeconds, hint, blindFailover, "Cannot polar-align", ct).ConfigureAwait(false);
         if (result?.Success != true || result.Coordinates is null) {
             return new PolarAlignSolveOutcome(false, 0, 0);
         }

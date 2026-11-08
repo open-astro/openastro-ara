@@ -56,15 +56,18 @@ namespace OpenAstroAra.Server.Services {
         // ── coarse ───────────────────────────────────────────────────────────────────────────
 
         private async Task RunCoarseStageAsync(
-                PHD2Guider guiderClient, IPolarAlignMainCameraSolver mainCamera, SiteSettingsDto site, PolarAlignSettingsDto settings,
+                IPolarAlignMainCameraSolver mainCamera, SiteSettingsDto site, PolarAlignSettingsDto settings,
                 Func<Task> renew, int gen, CancellationToken ct) {
             var manualHome = await GoHomeAsync(settings, renew, returnTo: null, gen, ct).ConfigureAwait(false);
             await SetStageAsync(gen, PolarAlignStages.Coarse, "seeding").ConfigureAwait(false);
             // The axis is MEASURED (seed turn + two-point fit), never read off the camera's pointing at
             // Home: on 2026-11-07 the camera-as-axis reading sat 75′ from the fine stage's seed (#1727).
+            // Seed frames may need the blind fallback (the mount can be degrees off); the live loop takes
+            // one fast look per frame and shoots again, like the guide-camera loop (#1136).
             await RunSeededAdjustAsync(
-                (frameId, hint, s, timing, token) => CaptureMainCameraAsync(mainCamera, frameId, hint, s, gen, timing, token),
-                renew, site, settings, manualHome, gen, ct).ConfigureAwait(false);
+                (frameId, hint, s, timing, token) => CaptureMainCameraAsync(mainCamera, frameId, hint, s, blindFailover: true, gen, timing, token),
+                renew, site, settings, manualHome, gen, ct,
+                liveCapture: (frameId, hint, s, timing, token) => CaptureMainCameraAsync(mainCamera, frameId, hint, s, blindFailover: false, gen, timing, token)).ConfigureAwait(false);
             LogStageAdvanced(PolarAlignStages.Coarse, PolarAlignStages.Fine);
         }
 
@@ -75,13 +78,13 @@ namespace OpenAstroAra.Server.Services {
             Justification = "A camera or solver fault on one frame is one failed solve, not a routine abort (§45.11); configuration exceptions are excluded and fail the routine.")]
         private async Task<PolarAlignSolveOutcome> CaptureMainCameraAsync(
                 IPolarAlignMainCameraSolver mainCamera, string frameId, (double RaDeg, double DecDeg)? hint,
-                PolarAlignSettingsDto settings, int gen, FrameTiming timing, CancellationToken ct) {
+                PolarAlignSettingsDto settings, bool blindFailover, int gen, FrameTiming timing, CancellationToken ct) {
             var exposure = settings.CoarseExposureSeconds; // always > 0: PolarAlignSettingsClamp on every read
             timing.ExposureSeconds = exposure;
             var start = Stopwatch.GetTimestamp();
             await PublishFrameStartedAsync(gen, frameId, exposure).ConfigureAwait(false);
             try {
-                var s = await mainCamera.CaptureAndSolveAsync(exposure, hint, ct).ConfigureAwait(false);
+                var s = await mainCamera.CaptureAndSolveAsync(exposure, hint, blindFailover, ct).ConfigureAwait(false);
                 // A result, solved or not, means the frame reached the solver: whatever failed before was
                 // the capture layer's and is over — an unsolved pole field is a sky/focus answer, like the
                 // guider path's. (A stale "camera busy" here would relabel it capture_rejected.)
@@ -157,9 +160,11 @@ namespace OpenAstroAra.Server.Services {
         /// else — the Dec-85° slew, the turn away from the meridian, the two-point fit, the §45.8
         /// reverse-projection — is the same, so the two stages differ only in the camera and its
         /// cadence, never in what the readout means.</summary>
+        /// <param name="liveCapture">The live loop's capture when it differs from the seeds' (the coarse
+        /// stage: no blind fallback per frame); null = the same as <paramref name="capture"/>.</param>
         private async Task RunSeededAdjustAsync(
                 LiveCapture capture, Func<Task> renewLeaseIfDue, SiteSettingsDto site, PolarAlignSettingsDto settings,
-                bool afterManualHome, int gen, CancellationToken ct) {
+                bool afterManualHome, int gen, CancellationToken ct, LiveCapture? liveCapture = null) {
             var north = site.LatitudeDeg > 0;
             await EnsureTrackingOnAsync(gen, ct).ConfigureAwait(false);
 
@@ -202,7 +207,7 @@ namespace OpenAstroAra.Server.Services {
             SetErrors(gen, seedAltErr, seedAzErr, "adjusting", frameId: null); // keeps the seed-b attempt's id
             await PublishProgressAsync(gen, 0, seedAltErr, seedAzErr, solved: true).ConfigureAwait(false);
             await SolveLoopAsync(
-                capture,
+                liveCapture ?? capture,
                 toError: (s, at) => {
                     // §45.8 reverse-projection: the pointing's alt/az delta since the seed IS the knob
                     // adjustment (rigid mount, tracking stopped). Azimuth-knob turns are rotations about
@@ -238,7 +243,7 @@ namespace OpenAstroAra.Server.Services {
             await LeaveTheAxisAsync(settings, manualHome, gen, ct).ConfigureAwait(false);
             await SetStageAsync(gen, PolarAlignStages.Check, "checking").ConfigureAwait(false);
 
-            var step = settings.CheckStepDeg > 0 ? settings.CheckStepDeg : 30.0;
+            var step = settings.CheckStepDeg; // always in range: PolarAlignSettingsClamp on every read
             var (ra0, dec0) = CurrentMountPointingJnow()
                 ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
             var dirSign = AwayFromMeridianSign(ra0);

@@ -432,8 +432,16 @@ namespace OpenAstroAra.Server.Services {
         /// <c>complete</c> with the achieved error. Accepted (without a log row) when no routine is
         /// active, mirroring Stop's idempotency.
         /// </summary>
-        public Task<OperationAcceptedDto> CompleteAsync(string? idempotencyKey, CancellationToken ct) =>
-            EndRoutineAsync("polar-align.complete", outcome: "complete", idempotencyKey, ct);
+        public Task<OperationAcceptedDto> CompleteAsync(string? idempotencyKey, CancellationToken ct) {
+            lock (_gate) {
+                // The rough readout is not an alignment to record as "complete" (a stage-unaware client's
+                // Done would otherwise write the §45.13 row the guiding and "last night" readouts trust).
+                if (_active && _stage == PolarAlignStages.Coarse) {
+                    throw new InvalidOperationException("Done is not available in the rough step — tap Next: fine to refine it, or Stop");
+                }
+            }
+            return EndRoutineAsync("polar-align.complete", outcome: "complete", idempotencyKey, ct);
+        }
 
         private async Task<OperationAcceptedDto> EndRoutineAsync(
                 string operationType, string outcome, string? idempotencyKey, CancellationToken ct) {
@@ -626,7 +634,7 @@ namespace OpenAstroAra.Server.Services {
                 var laterStage = false;
                 if (stage == PolarAlignStages.Coarse) {
                     // StartAsync refused a coarse start without the main camera's solver.
-                    await RunCoarseStageAsync(guiderClient,
+                    await RunCoarseStageAsync(
                         mainCamera ?? throw new InvalidOperationException("the coarse stage started without a main-camera solver"),
                         site, settings, renew, gen, ct).ConfigureAwait(false);
                     stage = PolarAlignStages.Fine;

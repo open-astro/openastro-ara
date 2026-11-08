@@ -83,6 +83,13 @@ void main() {
           SetupStepState.done);
     });
 
+    test('a finished check outside the green zone needs work', () {
+      const checked = PolarAlignLive(
+          phase: PolarAlignStates.checked, stage: PolarAlignStages.check, zone: 'yellow');
+      expect(polarAlignStepState(checked), SetupStepState.problem);
+      expect(polarAlignStepState(checked.copyWith(zone: 'green')), SetupStepState.done);
+    });
+
     test('red/yellow zones are not done', () {
       expect(
           polarAlignStepState(const PolarAlignLive(

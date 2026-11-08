@@ -1773,9 +1773,11 @@ namespace OpenAstroAra.Test {
             public int Calls;
             public ConcurrentQueue<double> Exposures { get; } = new();
             public Task<string?> UnavailableReasonAsync(CancellationToken ct) => Task.FromResult(Unavailable);
-            public Task<PolarAlignSolveOutcome> CaptureAndSolveAsync(double exposureSeconds, (double RaDeg, double DecDeg)? hintJnow, CancellationToken ct) {
+            public ConcurrentQueue<bool> BlindFailovers { get; } = new();
+            public Task<PolarAlignSolveOutcome> CaptureAndSolveAsync(double exposureSeconds, (double RaDeg, double DecDeg)? hintJnow, bool blindFailover, CancellationToken ct) {
                 Interlocked.Increment(ref Calls);
                 Exposures.Enqueue(exposureSeconds);
+                BlindFailovers.Enqueue(blindFailover);
                 if (Answer is { } fixedAnswer) {
                     return Task.FromResult(fixedAnswer);
                 }
@@ -1848,6 +1850,9 @@ namespace OpenAstroAra.Test {
             mount.Verify(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Once);
             Assert.That(mainCamera.Calls, Is.GreaterThanOrEqualTo(3), "two seed frames and at least one live frame");
             Assert.That(mainCamera.Exposures.TryPeek(out var exposure) && exposure == 3.0, Is.True, "the coarse exposure, not the guide exposure");
+            var blind = mainCamera.BlindFailovers.ToArray();
+            Assert.That(blind.Take(2), Is.All.True, "the seed frames may need the blind fallback");
+            Assert.That(blind.Skip(2), Is.All.False, "the live loop takes one fast look per frame");
             // The axis is measured from the seed turn, so the camera's offset cancels: only the ~1′
             // refraction term is left — never the 75′ the pointing-as-axis reading gave.
             Assert.That(coarse.CurrentErrorArcmin, Is.LessThan(3.0));
@@ -2110,6 +2115,25 @@ namespace OpenAstroAra.Test {
 
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("axis_fit_failed"));
             Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).CheckResult, Is.Null, "no verdict");
+        }
+
+        [Test]
+        public async Task Done_is_refused_during_the_coarse_stage() {
+            // A stage-unaware client's Done on the rough readout would write a "complete" row the guiding
+            // and "last night" readouts trust; the rough step offers Next and Stop only.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var log = new RecordingLog();
+            using var svc = NewService(guider, new HintFollowingSolver(), NewHomeMount(canFindHome: true), store: NewHomeStore(), log: log, mainCamera: new FakeMainCamera());
+
+            await svc.StartAsync(PolarAlignStages.Coarse, null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).Stage, Is.EqualTo(PolarAlignStages.Coarse));
+
+            await AssertThrowsAsync<InvalidOperationException>(() => svc.CompleteAsync(null, CancellationToken.None)).ConfigureAwait(false);
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("adjusting"), "still running");
+            Assert.That(log.Rows, Is.Empty, "no complete row from the rough step");
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
         }
 
         [Test]

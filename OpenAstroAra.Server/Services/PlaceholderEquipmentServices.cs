@@ -248,6 +248,7 @@ public sealed class PlaceholderGuiderService : IGuiderService {
 }
 
 public sealed class PlaceholderPolarAlignService : IPolarAlignService {
+    public bool IsActive => false; // the placeholder never runs a routine
     // Unlike the device services, polar align status returns a state
     // record (not nullable) — "idle" when no alignment is in progress.
     public Task<PolarAlignStateDto> GetStatusAsync(CancellationToken ct) =>

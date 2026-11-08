@@ -145,9 +145,11 @@ public sealed partial class EmergencyStopService {
             _autofocus is null ? null : () => Task.FromResult(_autofocus.IsRunning),
             _autofocus is null ? null : _ => { _autofocus.TryCancel(); return Task.CompletedTask; }).ConfigureAwait(false);
         if (autofocusOutcome is RungOutcome.Failed) { failedRungs.Add("cancel_autofocus"); }
-        // Only a routine that runs: a stray Stop would clear a finished alignment's result.
+        // Only a routine that runs (homing, seeding, adjusting, paused or checking — the service's own
+        // IsActive, not a list of states a new stage can outgrow): a stray Stop would clear a finished
+        // alignment's result.
         var polarOutcome = await RungAsync("stop polar alignment",
-            _polarAlign is null ? null : async () => (await _polarAlign.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State is "seeding" or "adjusting" or "paused",
+            _polarAlign is null ? null : () => Task.FromResult(_polarAlign.IsActive),
             _polarAlign is null ? null : async ct => await _polarAlign.StopAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);
         if (polarOutcome is RungOutcome.Failed) { failedRungs.Add("stop_polar_align"); }
         var guidingOutcome = await RungAsync("stop guiding",

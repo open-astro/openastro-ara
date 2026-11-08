@@ -226,8 +226,9 @@ public static class ProfileEndpoints {
             .WithName("PutAutofocusSettings")
             .WithSummary("Replace the active profile's autofocus settings.");
 
+        // One view of the knobs: what the daemon will use, not what an older build stored.
         profile.MapGet("/polar-align", (IProfileStore store) =>
-                Results.Ok(store.GetPolarAlignSettings()))
+                Results.Ok(PolarAlignSettingsClamp.Apply(store.GetPolarAlignSettings())))
             .Produces<PolarAlignSettingsDto>(StatusCodes.Status200OK)
             .WithName("GetPolarAlignSettings")
             .WithSummary("Get the active profile's §45 polar-alignment settings.");
