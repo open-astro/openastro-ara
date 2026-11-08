@@ -106,6 +106,10 @@ jobs:
       - name: Python tooling tests
         run: python3 -m unittest discover -s scripts/tests -v
 
+      # Decision records (docs/adr/README.md): every record keeps the shape the review bot reads.
+      - name: Decision record shape
+        run: python3 scripts/check-adr-shape.py
+
       # #1232 — the bundled IERS DUT1 snapshot goes stale about a year after its bulletin. Nothing
       # else signals that before a release except one Warning at daemon boot, so this surfaces the
       # table's end date on every run and warns (never fails: a stale table extrapolates within a
