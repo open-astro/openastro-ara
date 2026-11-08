@@ -37,7 +37,7 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ### Changed
 
-- The architecture decisions now live in `docs/adr/`: nine new records cover the daemon and client split, Alpaca-only equipment, client-side planning, the trusted-LAN single-client model, the Wayland-only Linux client, ASTAP, GPS on the client and Simple Mode. `design/PORT_PLAYBOOK.md`, `design/README.md`, the Simple Mode brief and the Sky Album spec point at the records instead of repeating them.
+- The architecture decisions now live in `docs/adr/`: nine accepted records cover the daemon and client split, Alpaca-only equipment, client-side planning, the trusted-LAN single-client model, the Wayland-only Linux client, ASTAP, GPS on the client and Simple Mode, and three proposed records (0011 to 0013) from an architecture review describe code that does not exist yet. `design/PORT_PLAYBOOK.md`, `design/README.md`, the Simple Mode brief and the Sky Album spec point at the records instead of repeating them.
 
 ### Fixed
 
