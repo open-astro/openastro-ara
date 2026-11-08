@@ -502,7 +502,10 @@ public sealed record GuiderStateDto(
     double? CalibrationDistancePx = null,
     /// <summary>The guider's profiles (its <c>get_profiles</c>), for the Settings profile picker. Empty until
     /// the guider has listed its profiles; null only while there is no guider at all.</summary>
-    System.Collections.Generic.IReadOnlyList<GuiderProfileDto>? Profiles = null);
+    System.Collections.Generic.IReadOnlyList<GuiderProfileDto>? Profiles = null,
+    /// <summary>#1665 — why the guider does not hold the active profile's guider settings, and how to fix
+    /// it. Null when it does, or when that is not known yet.</summary>
+    string? OutOfStepReason = null);
 
 /// <summary>One guider profile: the daemon's id and its name.</summary>
 public sealed record GuiderProfileDto(int Id, string Name);

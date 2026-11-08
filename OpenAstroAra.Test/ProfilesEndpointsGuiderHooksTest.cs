@@ -108,6 +108,7 @@ namespace OpenAstroAra.Test {
         }
 
         private static readonly string[] OnlyRigA = { "Rig A" };
+        private static readonly string[] CloneThenPush = { "clone", "push" };
 
         private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 
@@ -128,6 +129,49 @@ namespace OpenAstroAra.Test {
 
             guider.Verify(g => g.TryCloneAraGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never,
                 "a profile built from a settings body (the wizard) has no source twin to copy");
+        }
+
+        [Test]
+        public async Task Duplicating_into_an_active_profile_clones_the_twin_and_then_pushes_with_the_checks() {
+            var calls = new List<string>();
+            guider.Setup(g => g.TryCloneAraGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .Callback(() => calls.Add("clone")).ReturnsAsync(true);
+            guider.Setup(g => g.PushGuiderProfileAsync(null, It.IsAny<CancellationToken>(), true))
+                .Callback(() => calls.Add("push")).ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "t", DateTimeOffset.UtcNow, null));
+
+            var resp = await http.PostAsJsonAsync("/api/v1/profiles", new { name = "Rig A copy" }, Json);
+
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+            Assert.That(calls, Is.EqualTo(CloneThenPush));
+        }
+
+        [Test]
+        public async Task Creating_an_active_profile_from_settings_pushes_with_the_checks_and_clones_nothing() {
+            var settings = repo.GetProfile(repo.List().ActiveId!.Value)!.Settings;
+
+            var resp = await http.PostAsJsonAsync("/api/v1/profiles", new CreateProfileRequestDto("Fresh", settings), Json);
+
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+            guider.Verify(g => g.PushGuiderProfileAsync(null, It.IsAny<CancellationToken>(), true), Times.Once);
+            guider.Verify(g => g.TryCloneAraGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Creating_without_activating_never_moves_the_guider() {
+            var resp = await http.PostAsJsonAsync("/api/v1/profiles?activate=false", new { name = "Rig A copy" }, Json);
+
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+            guider.Verify(g => g.PushGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Selecting_a_profile_still_follows_without_the_checks() {
+            var other = repo.Create("Rig B", settings: null, makeActive: false);
+
+            var resp = await http.PostAsync(new Uri($"/api/v1/profiles/{other.Id}/select", UriKind.Relative), null);
+
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            guider.Verify(g => g.PushGuiderProfileAsync(null, It.IsAny<CancellationToken>(), false), Times.Once);
         }
 
         [Test]

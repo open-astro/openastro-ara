@@ -382,15 +382,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// </summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Catch-and-rethrow-typed boundary: a post-push equipment reconnect failure (transport drop, daemon contract break) is converted to GuiderRpcException so the service layer maps it to an actionable 422 instead of a raw 500. OperationCanceledException is rethrown untouched.")]
-        public async Task<IReadOnlyList<string>> RepushGuiderEngineConfigAsync(CancellationToken ct) {
-            if (!Connected) {
-                throw new InvalidOperationException("guider is not connected");
-            }
-            // §63.4 — land the push in the ARA profile's TWIN, not whatever profile the daemon happens
-            // to be sitting on (a web-UI switch or a fresh daemon selects some other profile, and a push
-            // there silently configures the wrong rig). Same select-or-create-or-migrate as the connect
-            // path; best-effort like there — a profile RPC fault must not fail the push itself. The
-            // profile list is refreshed first so the ensure decides against current daemon state.
+        /// <summary>Select or create the active ARA profile's twin, sending no equipment selection. Same
+        /// select-or-create-or-migrate as the connect path; best-effort like there — a profile RPC fault must
+        /// not fail the caller. The profile list is refreshed first so the ensure decides against current
+        /// daemon state.</summary>
+        public async Task SelectActiveAraProfileTwinAsync(CancellationToken ct) {
             try {
                 await GetProfiles();
             } catch (OperationCanceledException) {
@@ -399,6 +395,16 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 Logger.Warning($"PHD2 §63.4 - profile refresh before push failed (ensure decides on a stale list): {ex.Message}");
             }
             await EnsureAraGuiderProfileAsync(ct);
+        }
+
+        public async Task<IReadOnlyList<string>> RepushGuiderEngineConfigAsync(CancellationToken ct) {
+            if (!Connected) {
+                throw new InvalidOperationException("guider is not connected");
+            }
+            // §63.4 — land the push in the ARA profile's TWIN, not whatever profile the daemon happens
+            // to be sitting on (a web-UI switch or a fresh daemon selects some other profile, and a push
+            // there silently configures the wrong rig).
+            await SelectActiveAraProfileTwinAsync(ct);
             var pushed = BuildGuiderEngineConfigMessages(profileService.ActiveProfile.GuiderSettings, AdvancedSettingsQuietly())
                 .Select(m => m.Method).Append(CameraGainSetter).Distinct().ToList();
             await PushGuiderEngineConfigAsync(ct);

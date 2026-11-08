@@ -10322,6 +10322,8 @@ ARA profile "Field rig AM5"     ↔ PHD2 profile "ara-field-am5"
 
 PHD2 preserves per-profile calibration + dark library data, so switching ARA profiles never loses guider state for either rig.
 
+**The Guider follows the active profile (#1665).** Creating a profile that becomes active runs the same follow as selecting one, after the clone when the create is a duplicate. Creating without activating leaves the Guider alone. Unlike a select, the create runs the selection checks (#1306, #1308). A push refused by those checks still selects or creates the active profile's twin and sends no equipment selection. A refused or failed push, or a connect whose selection fails the same checks, leaves the Guider **out of step** with the reason recorded; a push or connect that passes clears it, and a disconnect makes it unknown. While out of step, Start guiding, a run's Start Guiding, polar alignment, the dark library and defect map builds, and the guide-camera focus loop refuse up front with the reason and send no capture RPC. `runtime.out_of_step_reason` carries the same text.
+
 ### 63.5 Profile parameters ARA pushes to PHD2
 
 Captured by §37.3 Screen 10 wizard, pushed via `set_profile_setup` (which accepts any subset of fields):

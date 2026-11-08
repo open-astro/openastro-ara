@@ -41,19 +41,17 @@ public static partial class ProfilesEndpoints {
             .WithName("ListProfiles")
             .WithSummary("List the known profiles and which one is active.");
 
-        profiles.MapPost("/", (CreateProfileRequestDto body, bool? activate, IProfileRepository repo, IGuiderService guider) => {
+        profiles.MapPost("/", (CreateProfileRequestDto body, bool? activate, IProfileRepository repo, IGuiderService guider,
+                Microsoft.Extensions.Logging.ILoggerFactory loggerFactory) => {
                 // Creating a profile activates it by default (the wizard's Save lands you in the new
                 // profile); pass ?activate=false to add one without switching (e.g. duplicate-current).
                 // With no settings in the body this is "duplicate the active profile" — snapshot the
                 // source name BEFORE the create, which may switch the active profile.
                 var source = body.Settings is null ? ActiveProfileName(repo) : null;
-                var meta = repo.Create(body.Name, body.Settings, makeActive: activate ?? true);
-                if (source is not null) {
-                    // #1156 lifecycle hook — the duplicate's guider twin is cloned from the source's
-                    // twin so calibration survives. Fire-and-forget, never throws (best-effort by
-                    // contract); the 201 must not wait on a guider RPC.
-                    _ = guider.TryCloneAraGuiderProfileAsync(source, meta.Name, CancellationToken.None);
-                }
+                var activated = activate ?? true;
+                var meta = repo.Create(body.Name, body.Settings, makeActive: activated);
+                // Fire-and-forget: the 201 must not wait on a guider RPC.
+                _ = GuiderFollowsCreatedProfileAsync(guider, loggerFactory.CreateLogger("ProfilesEndpoints"), source, meta.Name, activated);
                 return Results.Created($"/api/v1/profiles/{meta.Id}", meta);
             })
             .Accepts<CreateProfileRequestDto>("application/json")
@@ -191,7 +189,7 @@ public static partial class ProfilesEndpoints {
                 // disconnected guider (InvalidOperationException) just means there is nothing
                 // to flip — the next guider connect maps the twin anyway — and the select
                 // response must not wait on daemon RPCs.
-                _ = PushGuiderAfterProfileSwitchAsync(guider, loggerFactory.CreateLogger("ProfilesEndpoints"));
+                _ = PushGuiderAfterProfileSwitchAsync(guider, loggerFactory.CreateLogger("ProfilesEndpoints"), refuseUnservedSelection: false);
                 return Results.Ok(repo.List());
             })
             .Produces<ProfileListDto>(StatusCodes.Status200OK)
@@ -216,17 +214,30 @@ public static partial class ProfilesEndpoints {
         return list.ActiveId is Guid active ? list.Profiles.FirstOrDefault(p => p.Id == active)?.Name : null;
     }
 
+    /// <summary>#1156 clone hook for a duplicate (the twin exists before the follow selects it; the clone
+    /// never throws, best-effort by contract), then, for a profile that became active, the §63.4 follow.
+    /// #1665 — unlike a select, the create runs the selection checks: a new profile has no older stored
+    /// selection to spare, and an unchecked push could hand the main imaging camera to the guider.</summary>
+    private static async Task GuiderFollowsCreatedProfileAsync(IGuiderService guider, ILogger logger, string? source, string name, bool activated) {
+        if (source is not null) {
+            await guider.TryCloneAraGuiderProfileAsync(source, name, CancellationToken.None).ConfigureAwait(false);
+        }
+        if (activated) {
+            await PushGuiderAfterProfileSwitchAsync(guider, logger, refuseUnservedSelection: true).ConfigureAwait(false);
+        }
+    }
+
     /// <summary>The §63.4 profile-switch follow: push the (new) active profile to a connected guider,
     /// best-effort. Every failure is LOGGED (review r1 — a silent unobserved-task swallow hid "the twin
     /// didn't follow" from operators): disconnected guider at Debug (expected — the next connect maps
     /// the twin), everything else at Warning.</summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Fire-and-forget boundary: any escape would be an unobserved task exception with no log — the catch-all exists precisely to record unexpected faults.")]
-    private static async Task PushGuiderAfterProfileSwitchAsync(IGuiderService guider, ILogger logger) {
+    private static async Task PushGuiderAfterProfileSwitchAsync(IGuiderService guider, ILogger logger, bool refuseUnservedSelection) {
         try {
-            // refuseUnservedSelection: false — a pre-#1306 profile with a bare Alpaca selection still gets
-            // its twin and tuning on a switch; only the explicit Apply refuses it.
-            await guider.PushGuiderProfileAsync(idempotencyKey: null, CancellationToken.None, refuseUnservedSelection: false)
+            // A select passes false — a pre-#1306 profile with a bare Alpaca selection still gets its twin
+            // and tuning on a switch.
+            await guider.PushGuiderProfileAsync(idempotencyKey: null, CancellationToken.None, refuseUnservedSelection)
                 .ConfigureAwait(false);
         } catch (InvalidOperationException) {
             // Guider not connected — nothing to flip; the §63.4 connect-path ensure maps the twin
