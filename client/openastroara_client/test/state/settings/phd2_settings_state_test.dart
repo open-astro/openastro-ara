@@ -83,6 +83,16 @@ void main() {
       expect(container.read(phd2SettingsProvider).guiderSetupType, 'oag');
     });
 
+    test('#1715 leaving the OAG train drops the guide focal length it derived from the main scope', () {
+      final n = container.read(phd2SettingsProvider.notifier);
+      n.setGuiderSetupType('oag');
+      n.setGuideFocalLength(375);
+      n.setGuiderSetupType('oag');
+      expect(container.read(phd2SettingsProvider).guideFocalLength, 375);
+      n.setGuiderSetupType('guide_scope');
+      expect(container.read(phd2SettingsProvider).guideFocalLength, 0);
+    });
+
     test('§63.19 leaving the OAG train drops the guider rotator', () {
       final n = container.read(phd2SettingsProvider.notifier);
       n.setGuiderSetupType('oag');

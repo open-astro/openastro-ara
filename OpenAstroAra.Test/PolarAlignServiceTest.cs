@@ -71,6 +71,12 @@ namespace OpenAstroAra.Test {
                 }
             }
             public ConcurrentQueue<int> Binnings { get; } = new();
+            public double? Measured { get; set; }
+            public int Measures;
+            public Task<double?> MeasureFocalLengthAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) {
+                Interlocked.Increment(ref Measures);
+                return Task.FromResult(Measured);
+            }
             public Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) {
                 Binnings.Enqueue(binning);
                 return Task.FromResult(_script.TryDequeue(out var o) ? o : Fallback);
@@ -536,6 +542,41 @@ namespace OpenAstroAra.Test {
                 await Task.Delay(25, cts.Token).ConfigureAwait(false);
             }
             Assert.That(paCalls.ToArray().Last(), Is.False, "a failed routine releases the lease itself");
+        }
+
+        [Test]
+        public async Task A_seed_that_fails_to_solve_but_solves_with_no_scale_hint_reports_the_measured_focal_length() {
+            // #1715: a guide focal length copied from the main scope made every seed frame unsolvable and the
+            // error did not say why. One extra solve with no scale hint measures the real one.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver { Fallback = Unsolved, Measured = 128.4 };
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, solver, ws: ws);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("seed_solve_failed"));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("128 mm").And.Contain("Settings"));
+            Assert.That(Volatile.Read(ref solver.Measures), Is.EqualTo(1), "one measuring solve, not one per attempt");
+        }
+
+        [Test]
+        public async Task A_seed_that_does_not_solve_with_no_scale_hint_either_keeps_the_plain_message() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver { Fallback = Unsolved, Measured = null };
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, solver, ws: ws);
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("message").GetString(), Does.Not.Contain(" mm"));
+            Assert.That(Volatile.Read(ref solver.Measures), Is.EqualTo(1));
         }
 
         [Test]

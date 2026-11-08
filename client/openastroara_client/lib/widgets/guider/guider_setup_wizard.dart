@@ -749,6 +749,8 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
             },
             onChanged: (v) {
               final norm = Phd2SettingsNotifier.normalizeGuiderSetupType(v);
+              final leavingOag =
+                  draft.guiderSetupType == 'oag' && norm != 'oag';
               // §63.19 — only an OAG turns with the imaging rotator, so a
               // guide scope drops any rotator pick (the daemon clears it too).
               _edit((d) => d.copyWith(
@@ -764,6 +766,9 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
                 _edit((d) => d.copyWith(
                     guideFocalLength: derivedOagGuideFocalLength(
                         optics.focalLengthMm, optics.reducerFactor)));
+              } else if (leavingOag) {
+                // The OAG's derived value is the main scope's, not this guide scope's (#1715).
+                _edit((d) => d.copyWith(guideFocalLength: 0));
               }
             },
           ),
