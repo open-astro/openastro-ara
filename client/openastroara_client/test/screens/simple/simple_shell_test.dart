@@ -334,6 +334,17 @@ class _FlakyPoliciesApi extends ProfileApi {
   }
 }
 
+/// The rig the app talks to; [use] switches to another server.
+class _Rig extends Notifier<ProfileApi?> {
+  _Rig(this.first);
+  final ProfileApi first;
+  @override
+  ProfileApi? build() => first;
+  void use(ProfileApi api) => state = api;
+}
+
+final _rigProvider = NotifierProvider<_Rig, ProfileApi?>(() => throw UnimplementedError('override it'));
+
 class _Dome extends DomeNotifier with _Calls<DomeStatus> {
   _Dome(this.state0);
   final EquipmentConnectionState state0;
@@ -3834,7 +3845,7 @@ void main() {
         findsNothing, reason: 'the defaults are not the rig\'s: nothing beats a wrong promise');
   });
 
-  testWidgets('a failed policies load is retried, and a new rig loads its own', (tester) async {
+  testWidgets('a failed policies load is retried', (tester) async {
     final api = _FlakyPoliciesApi();
     final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
       safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
@@ -3851,6 +3862,25 @@ void main() {
     await tester.pump();
     expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41')),
         findsOneWidget, reason: 'one unreachable moment does not silence the pill for the session');
+  });
+
+  testWidgets('a new rig whose policies have not loaded shows no weather from the old rig\'s limits',
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
+      weatherProvider.overrideWith(() => _Windy()),
+      _rigProvider.overrideWith(() => _Rig(_PoliciesApi(const SafetyPolicies(weatherTriggersEnabled: true)))),
+      profileApiProvider.overrideWith((ref) => ref.watch(_rigProvider)),
+    ]);
+    await tester.pump();
+    await tester.pump();
+    final wind = find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41'));
+    expect(wind, findsOneWidget, reason: 'precondition: rig A\'s limits loaded, weather triggers on');
+    c.read(_rigProvider.notifier).use(_PoliciesApi(null));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(wind, findsNothing, reason: 'rig B\'s load failed: its weather is not read against rig A\'s limits');
   });
 
   testWidgets('a dome Park asked in its window shows in the status pill at once', (tester) async {
