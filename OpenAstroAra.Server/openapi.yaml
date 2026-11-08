@@ -9627,6 +9627,9 @@ components:
         home_on_first_connect:
           type: boolean
           default: true
+        use_filter_wheel_offsets:
+          type: boolean
+          default: false
     FlatPanelRequestDto:
       type: object
       properties:

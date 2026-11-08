@@ -343,6 +343,10 @@ public partial class Program {
         // IFilterWheelMediator (§8.1), so SwitchFilter drives the live device (mediator wiring is
         // below; this replaces the HeadlessFilterWheelMediator stub). On connect the wheel's filter
         // list imports into the active profile so SwitchFilter resolves filters by name/position.
+        builder.Services.AddSingleton(sp => new FilterFocusOffset(
+            () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>(),
+            sp.GetRequiredService<IProfileStore>(),
+            sp.GetRequiredService<ILogger<FilterFocusOffset>>()));
         builder.Services.AddSingleton<FilterWheelService>();
         // #1298 — the router fronts the Alpaca wheel and the driverless manual wheel (registered
         // below, once the profile dir is known); it is THE IFilterWheelService and mediator.
@@ -580,7 +584,8 @@ public partial class Program {
             sp.GetService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
             sp.GetService<EquipmentEventPublisher>(),
             sp.GetService<INotificationService>(),
-            profileDir));
+            profileDir,
+            sp.GetService<FilterFocusOffset>()));
 
         // §29.9.2 — wire the rolling CLEF (Compact-JSON) file sink now that the
         // profile dir is known. The §29.9 log endpoints (LogService) tail +

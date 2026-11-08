@@ -50,7 +50,7 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public sealed partial class FilterWheelService : IFilterWheelMediator {
 
-    private const int FilterChangeSettleMaxPolls = 600; // ~60s at the poll interval — wheels take seconds
+    internal int FilterChangeSettleMaxPolls { get; set; } = 600; // ~60s at the poll interval — wheels take seconds
     private static readonly TimeSpan FilterChangePollInterval = TimeSpan.FromMilliseconds(100);
     // Wall-clock ceiling for the blocking ASCOM Position write (the rotation itself is tracked by
     // the settle-wait): a hung HTTP call must not pin the sequence thread.
@@ -111,6 +111,7 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
         lock (_gate) {
             client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
             slots = _slots;
+            _focusBaseline ??= _runtime.CurrentSlot;
         }
         var target = inputFilter.Position;
         if (client is not null) {
@@ -144,10 +145,28 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
             throw new SequenceEntityFailedException(
                 $"filter change to '{inputFilter.Name}' (position {target}) was not confirmed by the wheel");
         }
+        await ApplyFocusOffsetAsync(target, token).ConfigureAwait(false); // before the run's next exposure
         var profileSnapshot = SnapshotProfileFilters();
         lock (_gate) {
             return ResolveFilter(profileSnapshot, _slots, target) ?? inputFilter;
         }
+    }
+
+    // #1667 — the wheel has landed: compensate the focuser for the filter it was on (exactly once, both paths end here).
+    private async Task ApplyFocusOffsetAsync(int target, CancellationToken ct) {
+        if (_focusOffset is null) {
+            return;
+        }
+        int? from;
+        IReadOnlyList<FilterSlotDto>? slots;
+        lock (_gate) {
+            from = _focusBaseline;
+            _focusBaseline = target;
+            slots = _slots;
+        }
+        var profile = SnapshotProfileFilters();
+        await _focusOffset.MoveAsync(from is int f ? ResolveFilter(profile, slots, f) : null, ResolveFilter(profile, slots, target), ct)
+            .ConfigureAwait(false);
     }
 
     /// <summary>#1079 — the first slot read lands on the seed refresh or the next 2 s tick; wait up

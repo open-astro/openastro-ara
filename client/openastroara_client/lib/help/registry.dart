@@ -1055,6 +1055,14 @@ const Map<String, Help> helpRegistry = {
         'Turn this off if you want the wheel left exactly where the driver reports it, for example a mono rig that lives on Hα. Turning it back on takes effect the next time Ara starts on the rig: a wheel that already connected this session is not parked by the change.',
   ),
 
+  'eq.filterwheel.use_focus_offsets': Help(
+    key: 'eq.filterwheel.use_focus_offsets',
+    title: 'Move the focuser by each filter\'s offset',
+    body:
+        'After a filter change, Ara moves the focuser by the difference between the two filters\' focus offsets, once the wheel has landed (or, on a manual wheel, when you confirm the swap).\n\n'
+        'Off, the focuser stays where it is. A filter change still succeeds when no focuser is connected or the move fails; Ara logs a warning.',
+  ),
+
   'eq.switch.readings': Help(
     key: 'eq.switch.readings',
     title: 'Switch readings',

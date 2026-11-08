@@ -79,6 +79,7 @@ public sealed partial class ManualFilterWheelService : IFilterWheelService, IFil
     private readonly OpenAstroAra.Profile.Interfaces.IProfileService? _profileService;
     private readonly EquipmentEventPublisher? _events;
     private readonly INotificationService? _notifications;
+    private readonly FilterFocusOffset? _focusOffset; // #1667
     private readonly string? _stateFile;
     private readonly object _gate = new();
     // The NINA profile's observable filter collection is guarded by the lock the Alpaca wheel uses
@@ -99,7 +100,9 @@ public sealed partial class ManualFilterWheelService : IFilterWheelService, IFil
         OpenAstroAra.Profile.Interfaces.IProfileService? profileService = null,
         EquipmentEventPublisher? events = null,
         INotificationService? notifications = null,
-        string? profileDir = null) {
+        string? profileDir = null,
+        FilterFocusOffset? focusOffset = null) {
+        _focusOffset = focusOffset;
         _logger = logger ?? NullLogger<ManualFilterWheelService>.Instance;
         _profileStore = profileStore;
         _profileService = profileService;
@@ -208,23 +211,32 @@ public sealed partial class ManualFilterWheelService : IFilterWheelService, IFil
     /// <summary>The user reports <paramref name="position"/> installed. Completes a pending change to
     /// that slot (a sequencer change waiting on it resumes); any other slot just records what is
     /// in the train and leaves a pending prompt standing.</summary>
-    public Task ReportInstalledAsync(int position, CancellationToken ct) {
+    public async Task ReportInstalledAsync(int position, CancellationToken ct) {
         var slots = RefreshSlots();
         ValidatePosition(slots, position);
+        int? previous;
         int? pending;
         lock (_gate) {
+            previous = _current;
             _current = position;
             if (_pending == position) {
                 _pending = null;
             }
             pending = _pending;
+        }
+        // #1667 — before the signal: a sequence waiting on this swap must not expose until the focuser has moved.
+        if (_focusOffset is not null && previous is int was && was != position) {
+            var profile = SnapshotProfileFilters();
+            await _focusOffset.MoveAsync(FilterWheelService.ResolveFilter(profile, slots, was), FilterWheelService.ResolveFilter(profile, slots, position), CancellationToken.None)
+                .ConfigureAwait(false);
+        }
+        lock (_gate) {
             SignalLocked();
         }
         WritePersistedSlot(position);
         var installedName = NameAt(slots, position);
         LogInstalled(installedName, position);
         _events?.ManualFilterSwap(pending, pending is int p ? NameAt(slots, p) : null, position, installedName);
-        return Task.CompletedTask;
     }
 
     /// <summary>Drop a standing hand-swap prompt without a swap. A sequencer change waiting on it
