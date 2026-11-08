@@ -3189,6 +3189,30 @@ abstract class AppLocalizations {
   /// **'CAMERA COOLER STILL ON (switching it off failed)'**
   String get estopFailCooler;
 
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'GUIDE-CAMERA FOCUS LOOP MAY STILL BE RUNNING (stop failed)'**
+  String get estopFailGuideFocus;
+
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'BAHTINOV READOUT MAY STILL BE RUNNING (stop failed)'**
+  String get estopFailBahtinov;
+
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'AUTOFOCUS MAY STILL BE RUNNING (cancel failed)'**
+  String get estopFailAutofocus;
+
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'POLAR ALIGNMENT MAY STILL BE RUNNING (stop failed)'**
+  String get estopFailPolarAlign;
+
   /// Emergency Stop failed step the app has no wording for; step is the daemon's token
   ///
   /// In en, this message translates to:

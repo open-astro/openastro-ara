@@ -1831,6 +1831,22 @@ class AppLocalizationsPt extends AppLocalizations {
       'CAMERA COOLER STILL ON (switching it off failed)';
 
   @override
+  String get estopFailGuideFocus =>
+      'GUIDE-CAMERA FOCUS LOOP MAY STILL BE RUNNING (stop failed)';
+
+  @override
+  String get estopFailBahtinov =>
+      'BAHTINOV READOUT MAY STILL BE RUNNING (stop failed)';
+
+  @override
+  String get estopFailAutofocus =>
+      'AUTOFOCUS MAY STILL BE RUNNING (cancel failed)';
+
+  @override
+  String get estopFailPolarAlign =>
+      'POLAR ALIGNMENT MAY STILL BE RUNNING (stop failed)';
+
+  @override
   String estopFailOther(String step) {
     return '$step FAILED';
   }
@@ -4539,6 +4555,22 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get estopFailCooler =>
       'REFRIGERAÇÃO DA CÂMERA AINDA LIGADA (falha ao desligar)';
+
+  @override
+  String get estopFailGuideFocus =>
+      'O LOOP DE FOCO DA CÂMERA GUIA PODE AINDA ESTAR RODANDO (falha ao parar)';
+
+  @override
+  String get estopFailBahtinov =>
+      'A LEITURA BAHTINOV PODE AINDA ESTAR RODANDO (falha ao parar)';
+
+  @override
+  String get estopFailAutofocus =>
+      'O AUTOFOCO PODE AINDA ESTAR RODANDO (falha ao cancelar)';
+
+  @override
+  String get estopFailPolarAlign =>
+      'O ALINHAMENTO POLAR PODE AINDA ESTAR RODANDO (falha ao parar)';
 
   @override
   String estopFailOther(String step) {

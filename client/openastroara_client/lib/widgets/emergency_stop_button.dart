@@ -222,6 +222,10 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
       switch (rung) {
         'abort_runs' => l.estopFailAbortRuns,
         'abort_exposure' => l.estopFailAbortExposure,
+        'stop_guide_focus' => l.estopFailGuideFocus,
+        'stop_bahtinov' => l.estopFailBahtinov,
+        'cancel_autofocus' => l.estopFailAutofocus,
+        'stop_polar_align' => l.estopFailPolarAlign,
         'stop_guiding' => l.estopFailStopGuiding,
         'stop_mount' => l.estopFailStopMount,
         'halt_rotator' => l.estopFailRotator,

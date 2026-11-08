@@ -2545,6 +2545,22 @@
   "@estopFailCooler": {
     "description": "Emergency Stop failed step"
   },
+  "estopFailGuideFocus": "GUIDE-CAMERA FOCUS LOOP MAY STILL BE RUNNING (stop failed)",
+  "@estopFailGuideFocus": {
+    "description": "Emergency Stop failed step"
+  },
+  "estopFailBahtinov": "BAHTINOV READOUT MAY STILL BE RUNNING (stop failed)",
+  "@estopFailBahtinov": {
+    "description": "Emergency Stop failed step"
+  },
+  "estopFailAutofocus": "AUTOFOCUS MAY STILL BE RUNNING (cancel failed)",
+  "@estopFailAutofocus": {
+    "description": "Emergency Stop failed step"
+  },
+  "estopFailPolarAlign": "POLAR ALIGNMENT MAY STILL BE RUNNING (stop failed)",
+  "@estopFailPolarAlign": {
+    "description": "Emergency Stop failed step"
+  },
   "estopFailOther": "{step} FAILED",
   "@estopFailOther": {
     "description": "Emergency Stop failed step the app has no wording for; step is the daemon's token",

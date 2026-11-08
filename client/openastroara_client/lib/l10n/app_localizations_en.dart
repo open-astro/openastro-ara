@@ -1831,6 +1831,22 @@ class AppLocalizationsEn extends AppLocalizations {
       'CAMERA COOLER STILL ON (switching it off failed)';
 
   @override
+  String get estopFailGuideFocus =>
+      'GUIDE-CAMERA FOCUS LOOP MAY STILL BE RUNNING (stop failed)';
+
+  @override
+  String get estopFailBahtinov =>
+      'BAHTINOV READOUT MAY STILL BE RUNNING (stop failed)';
+
+  @override
+  String get estopFailAutofocus =>
+      'AUTOFOCUS MAY STILL BE RUNNING (cancel failed)';
+
+  @override
+  String get estopFailPolarAlign =>
+      'POLAR ALIGNMENT MAY STILL BE RUNNING (stop failed)';
+
+  @override
   String estopFailOther(String step) {
     return '$step FAILED';
   }
