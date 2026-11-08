@@ -125,6 +125,50 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Execute_StopsARunningBahtinovReadout() {
+            var bahtinov = new Mock<IBahtinovFocusService>();
+            bahtinov.SetupGet(b => b.IsActive).Returns(true);
+            bahtinov.Setup(b => b.StopAsync()).Returns(Task.CompletedTask);
+
+            var result = await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                bahtinov: bahtinov.Object).ExecuteAsync();
+
+            bahtinov.Verify(b => b.StopAsync(), Times.Once);
+            Assert.That(result.FailedRungs, Is.Empty);
+        }
+
+        [Test]
+        public async Task Execute_CancelsARunningAutofocus() {
+            var tracker = new AutofocusRunTracker();
+            using var run = new CancellationTokenSource();
+            tracker.Begin("classic", 100, 5, null, null, run);
+
+            var result = await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                autofocus: tracker).ExecuteAsync();
+
+            Assert.That(run.IsCancellationRequested, Is.True);
+            Assert.That(result.FailedRungs, Is.Empty);
+        }
+
+        [Test]
+        public async Task Execute_StopsPolarAlignment() {
+            var polar = new Mock<IPolarAlignService>();
+            polar.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Accepted);
+
+            var result = await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                polarAlign: polar.Object).ExecuteAsync();
+
+            polar.Verify(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(result.FailedRungs, Is.Empty);
+        }
+
+        [Test]
         public async Task Execute_AnIdleGuideCameraFocusLoop_IsNotPoked() {
             var focus = new Mock<IGuideFocusService>();
             focus.SetupGet(f => f.IsActive).Returns(false);

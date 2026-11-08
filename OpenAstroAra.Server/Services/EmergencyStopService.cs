@@ -38,6 +38,9 @@ public sealed partial class EmergencyStopService {
     private readonly IFlatDeviceService? _flatDevice;
     private readonly IRotatorService? _rotator;
     private readonly IGuideFocusService? _guideFocus;
+    private readonly IBahtinovFocusService? _bahtinov;
+    private readonly AutofocusRunTracker? _autofocus;
+    private readonly IPolarAlignService? _polarAlign;
     private readonly INotificationService? _notifications;
     private readonly IWsBroadcaster? _ws;
     private readonly ILogger<EmergencyStopService> _logger;
@@ -65,7 +68,10 @@ public sealed partial class EmergencyStopService {
             IWsBroadcaster? ws = null,
             ILogger<EmergencyStopService>? logger = null,
             IRotatorService? rotator = null,
-            IGuideFocusService? guideFocus = null) {
+            IGuideFocusService? guideFocus = null,
+            IBahtinovFocusService? bahtinov = null,
+            AutofocusRunTracker? autofocus = null,
+            IPolarAlignService? polarAlign = null) {
         _camera = camera;
         _sequencerResolver = sequencerResolver;
         _guider = guider;
@@ -73,6 +79,9 @@ public sealed partial class EmergencyStopService {
         _flatDevice = flatDevice;
         _rotator = rotator;
         _guideFocus = guideFocus;
+        _bahtinov = bahtinov;
+        _autofocus = autofocus;
+        _polarAlign = polarAlign;
         _notifications = notifications;
         _ws = ws;
         _logger = logger ?? NullLogger<EmergencyStopService>.Instance;
@@ -127,6 +136,19 @@ public sealed partial class EmergencyStopService {
             _guideFocus is null ? null : () => Task.FromResult(_guideFocus.IsActive),
             _guideFocus is null ? null : _ => _guideFocus.StopAsync()).ConfigureAwait(false);
         if (guideFocusOutcome is RungOutcome.Failed) { failedRungs.Add("stop_guide_focus"); }
+        var bahtinovOutcome = await RungAsync("stop bahtinov readout",
+            _bahtinov is null ? null : () => Task.FromResult(_bahtinov.IsActive),
+            _bahtinov is null ? null : _ => _bahtinov.StopAsync()).ConfigureAwait(false);
+        if (bahtinovOutcome is RungOutcome.Failed) { failedRungs.Add("stop_bahtinov"); }
+        var autofocusOutcome = await RungAsync("cancel autofocus",
+            _autofocus is null ? null : () => Task.FromResult(_autofocus.IsRunning),
+            _autofocus is null ? null : _ => { _autofocus.TryCancel(); return Task.CompletedTask; }).ConfigureAwait(false);
+        if (autofocusOutcome is RungOutcome.Failed) { failedRungs.Add("cancel_autofocus"); }
+        // Stop is accepted when no routine runs, so there is nothing to probe first.
+        var polarOutcome = await RungAsync("stop polar alignment",
+            _polarAlign is null ? null : () => Task.FromResult(true),
+            _polarAlign is null ? null : async ct => await _polarAlign.StopAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);
+        if (polarOutcome is RungOutcome.Failed) { failedRungs.Add("stop_polar_align"); }
         var guidingOutcome = await RungAsync("stop guiding",
             _guider is null ? null : async () => (await _guider.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _guider is null ? null : async ct => await _guider.StopGuidingAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);

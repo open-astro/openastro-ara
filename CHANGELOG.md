@@ -41,7 +41,7 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ### Fixed
 
-- A guide-camera focus loop left running can always be stopped: Simple Mode's Focus opens on Guide when it finds one running, Preview's Guide row stays selectable, and Emergency Stop now ends the loop too.
+- A guide-camera focus loop left running can always be stopped: Simple Mode's Focus opens on Guide when it finds one running, Preview's Guide row stays selectable, and Emergency Stop now ends the loop too. Emergency Stop also stops the Bahtinov readout, a running autofocus and polar alignment.
 - Simple Mode: every floating panel and message pill now has a 1 px Hairline contour, so a panel no longer disappears when the frame or dark area behind it matches its colour. The line is drawn on top of the panel and moves nothing; a warning or error pill keeps its own colour.
 - Simple Mode: the autofocus V-curve in the Focus panel is now tall enough to read. The chart was 80 pt tall and its axes left the plot only 18 pt, so the curve was flat and the HFR labels collided; it is now 160 pt, as in the full UI.
 - A start of guiding that fails now says why: the Guider's reason (for example its Guide Camera not connected) shows in a pill and the start ends at once instead of waiting out the 30 s guide-star timeout (#1664). A settle timeout after guiding has begun does not fail the start.
