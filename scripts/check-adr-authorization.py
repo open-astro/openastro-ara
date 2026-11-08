@@ -85,7 +85,7 @@ def decide(changed, head_sha, statements, permission_of, records_at=lambda _sha:
     for login, body in statements:
         if not login or login.endswith("[bot]"):
             continue
-        for sha in AUTHORIZE_RE.findall(body or ""):
+        for sha in AUTHORIZE_RE.findall((body or "").replace("\r\n", "\n")):
             if permission_of(login) not in AUTHORIZING_PERMISSIONS:
                 continue
             if head.startswith(sha.lower()):

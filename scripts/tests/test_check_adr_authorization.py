@@ -71,6 +71,10 @@ class DecideTest(unittest.TestCase):
         body = "Looks good.\n  ADR authorized 0123456789ABCDEF  \nThanks"
         self.assertEqual(decide(REC, [("writer", body)])[0], "success")
 
+    def test_crlf_line_endings_from_the_web_ui_still_authorize(self):
+        body = "ADR authorized 0123456789ABCDEF\r\nThanks\r\n"
+        self.assertEqual(decide(REC, [("writer", body)])[0], "success")
+
     def test_rename_away_from_the_directory_still_needs_authorization(self):
         """run() lists a renamed file under both names, so moving a record out of the directory is still a change."""
         posted = []
