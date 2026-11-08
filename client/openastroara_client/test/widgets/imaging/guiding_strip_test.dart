@@ -71,7 +71,10 @@ class _FakeGuiderApi implements GuiderClient {
   Future<void> disconnect() async {}
   final calls = <String>[];
   @override
-  Future<void> startGuiding() async => calls.add('startGuiding');
+  Future<String?> startGuiding() async {
+    calls.add('startGuiding');
+    return null;
+  }
   @override
   Future<void> stopGuiding() async => calls.add('stopGuiding');
 }

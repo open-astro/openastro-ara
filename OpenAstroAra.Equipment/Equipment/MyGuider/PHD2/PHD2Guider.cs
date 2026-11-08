@@ -207,6 +207,18 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         public const string SettleTimedOutError = "settle timed out — no SettleDone from the guider";
 
+        private volatile string? _lastStartError;
+        // #1664 — set while a start runs; a SettleDone error after the guide RPC calls it with the reason.
+        private volatile Action<string>? _startGivenUp;
+        private volatile bool _startArmed;
+
+        /// <summary>
+        /// #1664 — why the last start failed: the guider's refusal of the guide RPC, or the error its
+        /// SettleDone carried while the start waited for a star, calibration or settling. Null after a
+        /// start that worked or failed without a reason. Read after <see cref="StartGuiding"/> returns false.
+        /// </summary>
+        public string? LastStartError => _lastStartError;
+
         private PhdEventGuidingDithered? _guidingDithered;
 
         public PhdEventGuidingDithered GuidingDithered {
@@ -835,6 +847,30 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         }
 
         private async Task<bool> StartGuidingPrivate(bool forceCalibration, bool waitForSettle, IProgress<ApplicationStatus> progress, CancellationToken ct) {
+            _lastStartError = null;
+            using var givenUp = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            _startGivenUp = reason => {
+                _lastStartError = reason;
+                try { givenUp.Cancel(); } catch (ObjectDisposedException) { }
+            };
+            bool ok;
+            try {
+                // The guider gave up (e.g. "Stopped capturing", its camera not connected): stop at once
+                // instead of waiting out the 30 s guide-star timeout.
+                ok = await StartGuidingCore(forceCalibration, waitForSettle, progress, givenUp.Token) && _lastStartError is null;
+            } catch (OperationCanceledException) when (!ct.IsCancellationRequested && _lastStartError is not null) {
+                ok = false;
+            } finally {
+                _startArmed = false;
+                _startGivenUp = null;
+            }
+            if (!ok && _lastStartError is not null) {
+                Logger.Warning($"Phd2 - Start guiding failed: {_lastStartError}");
+            }
+            return ok;
+        }
+
+        private async Task<bool> StartGuidingCore(bool forceCalibration, bool waitForSettle, IProgress<ApplicationStatus> progress, CancellationToken ct) {
             if (!Connected)
                 return false;
 
@@ -979,11 +1015,14 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
             Logger.Info($"Phd2 - Requesting to start guiding. Recalibrate: {forceCalibration}");
 
+            // Armed after the wait above, so an earlier dither's failed settle is not taken for this start's.
+            _startArmed = true;
             var guideMsgResponse = await SendMessage(guideMsg);
             if (guideMsgResponse.error == null) {
                 await TryRefreshShiftLockParams();
                 return true;
             }
+            _lastStartError = string.IsNullOrWhiteSpace(guideMsgResponse.error.message) ? null : guideMsgResponse.error.message;
             return false;
         }
 
@@ -1347,6 +1386,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         // Record the outcome BEFORE clearing Settling: Dither() reads it as soon
                         // as WaitForSettling sees the flag drop.
                         _lastSettleError = string.IsNullOrEmpty(settleDone?.Error) ? null : settleDone!.Error;
+                        if (_lastSettleError is not null && _startArmed) {
+                            _startGivenUp?.Invoke(_lastSettleError);
+                        }
                         Settling = false;
                         // A successful SettleDone carries Error "" from the guider, not null: the night of
                         // 2026-10-16 logged 46 empty "PHD2 error:" lines, each escalated to a warning.

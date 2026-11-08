@@ -351,7 +351,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             await ReleaseGuideCameraQuietlyAsync().ConfigureAwait(false);
             await ClearPaSessionQuietlyAsync(guider, CancellationToken.None).ConfigureAwait(false);
             return await guider.StartGuiding(forceCalibration: false, _noProgress, CancellationToken.None).ConfigureAwait(false);
-        }, ditherGuider: null);
+        }, ditherGuider: null, startGuider: guider);
         return Task.FromResult(accepted);
     }
 
@@ -396,7 +396,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Fire-and-forget boundary: the op's fault becomes the terminal event's error instead of an unobserved task exception.")]
-    private async Task RunAndReportAsync(OperationAcceptedDto accepted, Func<Task<bool>> op, PHD2Guider? ditherGuider) {
+    private async Task RunAndReportAsync(OperationAcceptedDto accepted, Func<Task<bool>> op, PHD2Guider? ditherGuider, PHD2Guider? startGuider = null) {
         bool ok;
         string? error = null;
         try {
@@ -412,7 +412,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         } else if (!ok) {
             // A false return is the guider saying no (not guiding, already stopped, RPC refused); a
             // refusal that names its reason (calibrating, paused) keeps it, as the sequencer's path does.
-            error ??= ditherGuider?.LastSettleError ?? "refused";
+            // #1664 — a failed start carries the guider's own reason (e.g. "Stopped capturing").
+            error ??= ditherGuider?.LastSettleError ?? startGuider?.LastStartError ?? "refused";
         }
         await PublishOperationCompleteAsync(accepted, ok, error).ConfigureAwait(false);
         if (ditherGuider is not null) {

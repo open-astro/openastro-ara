@@ -2462,6 +2462,46 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_rest_start_the_guider_gives_up_on_ends_at_once_with_the_guiders_reason() {
+            // #1664 — the guider stopped capturing (its Guide Camera was not connected) and said so in a
+            // SettleDone; the start waited out the 30 s star timeout and reported a bare "refused".
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+
+            var accepted = await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => fake.ReceivedMethods.Contains("guide")).ConfigureAwait(false), Is.True);
+            await fake.BroadcastAsync(PhdEvents.SettleDone(status: 1, error: "Stopped capturing")).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.operation_complete").Count == 1).ConfigureAwait(false), Is.True,
+                "the start ends well inside the 30 s guide-star timeout");
+            var op = ws.Of("guider.operation_complete")[0];
+            Assert.That(op.GetProperty("operation").GetString(), Is.EqualTo("guider.start"));
+            Assert.That(op.GetProperty("operation_id").GetString(), Is.EqualTo(accepted.OperationId.ToString()));
+            Assert.That(op.GetProperty("ok").GetBoolean(), Is.False);
+            Assert.That(op.GetProperty("error").GetString(), Does.Contain("Stopped capturing"));
+        }
+
+        [TestCase("cannot guide while calibrating", "cannot guide while calibrating")]
+        [TestCase("", "refused")]
+        public async Task A_rest_start_the_guider_refuses_carries_its_reason_or_refused(string message, string expected) {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            fake.OnRawRpc("guide", id =>
+                "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":1,\"message\":" + JsonValue.Create(message).ToJsonString() + "},\"id\":" + id + "}");
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+
+            await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.operation_complete").Count == 1).ConfigureAwait(false), Is.True);
+            var op = ws.Of("guider.operation_complete")[0];
+            Assert.That(op.GetProperty("ok").GetBoolean(), Is.False);
+            Assert.That(op.GetProperty("error").GetString(), Is.EqualTo(expected));
+        }
+
+        [Test]
         public async Task A_sequencer_dither_aborted_mid_settle_is_reported_cancelled_not_ok() {
             // #1351 r1 note: WaitForSettling swallows the cancellation and Dither() returns true
             // with no settle verdict — the terminal event must not call that a settled dither.

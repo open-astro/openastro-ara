@@ -6,6 +6,7 @@ import '../../models/server.dart';
 import '../../services/guider_api.dart';
 import '../profile_management_state.dart';
 import '../saved_server_state.dart';
+import '../ws/ws_providers.dart';
 
 /// Builds a [GuiderClient] for a server. Overridable in tests so a pure fake
 /// can be injected (the default constructs a real Dio-backed [GuiderApi]).
@@ -126,8 +127,46 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
   bool _guideActionInFlight = false;
 
   /// Start guiding by hand — the way back after guiding was stopped, with or
-  /// without a run. Throws when the daemon refuses, for the caller to show.
-  Future<void> startGuiding() => _guideAction((api) => api.startGuiding());
+  /// without a run. Throws when the daemon refuses, for the caller to show;
+  /// throws [GuideStartFailed] when the guider gives up on the start (#1664).
+  Future<void> startGuiding() => _guideAction((api) async {
+        // Listening before the ask: a guider that refuses at once can answer
+        // before the 202 does.
+        final done = <Object?, Map<String, dynamic>>{};
+        final sub = ref.listen(wsEventsProvider, (_, next) {
+          final e = next.asData?.value;
+          if (e != null && e.type == 'guider.operation_complete') {
+            done[e.payload['operation_id']] = e.payload;
+          }
+        });
+        try {
+          final id = await api.startGuiding();
+          if (id == null) return;
+          // A start that works can run long (calibration): stop waiting once the
+          // guider is past picking a star, or after 10 s, as before (no false failure).
+          for (var i = 0; i < 40 && ref.mounted; i++) {
+            final p = done[id];
+            if (p != null) {
+              final error = p['error'];
+              if (p['ok'] == false) {
+                // The daemon says "refused" when the guider named no reason.
+                throw GuideStartFailed(error is String && error.isNotEmpty && error != 'refused' ? error : null);
+              }
+              return;
+            }
+            final runtime = state.value?.runtimeState;
+            if (runtime == GuiderRuntimeState.calibrating ||
+                runtime == GuiderRuntimeState.guiding ||
+                runtime == GuiderRuntimeState.settling) {
+              return;
+            }
+            await Future<void>.delayed(settleInterval);
+            await refresh(api);
+          }
+        } finally {
+          sub.close();
+        }
+      });
 
   /// Stop guiding by hand. Throws when the daemon refuses.
   Future<void> stopGuiding() => _guideAction((api) => api.stopGuiding());

@@ -4023,6 +4023,18 @@ abstract class AppLocalizations {
   /// **'The guider didn\'t stop: it is still {state}. Try Stop again.'**
   String guideStopRefused(String state);
 
+  /// Simple Mode pill: the guider accepted a Start and then gave up; {reason} is the guider's own words, e.g. Stopped capturing (#1664).
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding didn\'t start: {reason}.'**
+  String guideStartFailed(String reason);
+
+  /// Simple Mode pill: the guider gave up on a Start without saying why (#1664).
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding didn\'t start. See the Guider log for why.'**
+  String get guideStartFailedNoReason;
+
   /// Guide exposure picker value when the profile leaves it to the guider
   ///
   /// In en, this message translates to:
