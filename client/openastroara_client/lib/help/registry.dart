@@ -2412,7 +2412,7 @@ const Map<String, Help> helpRegistry = {
     title: 'Before you sleep',
     body:
         'A one-shot self-test of the rig as it stands, read fresh from Ara each time: the mount and '
-        'camera connected (other selected devices and unresolved faults are warnings), free space against your '
+        'camera connected (other selected devices and tonight's unresolved faults are warnings), free space against your '
         'storage thresholds, the plate solver binary and star database present (a presence check, not a test '
         'solve), the cooler within a degree of its setpoint, the mount tracking and unparked, and the running '
         'sequence. Below that: when the active target crosses the flip point tonight and how high it will be, '
