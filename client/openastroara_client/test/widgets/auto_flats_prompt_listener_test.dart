@@ -181,6 +181,7 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(pills().map((m) => (m.kind, m.title)), [(SimpleMessageKind.warning, 'No flats this run')]);
+      expect(pills().single.detail, contains('Turn off Simple Mode'), reason: 'the setting is only in the full app');
       expect(pills().single.detail, contains('Settings → Session → Calibration'));
     });
 

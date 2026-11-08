@@ -706,7 +706,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get simpleNoFlatsThisRunDetail =>
-      'Your profile asks before each run, and Simple Mode doesn\'t ask. To take flats, set Capture calibration after a sequence under Settings → Session → Calibration.';
+      'Your profile asks before each run, and Simple Mode doesn\'t ask. Turn off Simple Mode in Settings → Rig, then set Capture calibration after a sequence under Settings → Session → Calibration.';
 
   @override
   String get previewCamera => 'Camera';

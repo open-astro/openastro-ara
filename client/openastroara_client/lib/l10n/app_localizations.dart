@@ -1224,7 +1224,7 @@ abstract class AppLocalizations {
   /// Why the run takes no flats and where to change it; the setting names match the English-only Settings panel
   ///
   /// In en, this message translates to:
-  /// **'Your profile asks before each run, and Simple Mode doesn\'t ask. To take flats, set Capture calibration after a sequence under Settings → Session → Calibration.'**
+  /// **'Your profile asks before each run, and Simple Mode doesn\'t ask. Turn off Simple Mode in Settings → Rig, then set Capture calibration after a sequence under Settings → Session → Calibration.'**
   String get simpleNoFlatsThisRunDetail;
 
   /// Simple Mode: label above the list of connected cameras in Preview's settings.
