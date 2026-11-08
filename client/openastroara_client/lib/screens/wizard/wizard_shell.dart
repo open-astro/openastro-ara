@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../models/profile_draft.dart';
 import '../../models/server.dart';
 import '../../services/pending_profile_draft_service.dart';
@@ -15,6 +16,7 @@ import '../../state/saved_server_state.dart';
 import '../../state/sky_atlas/data_manager_state.dart';
 import '../../state/wizard_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/friendly_error.dart';
 import 'wizard_equipment_apply.dart';
 import 'wizard_save.dart';
 import 'wizard_screens.dart';
@@ -141,6 +143,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     // `!context.mounted` return would strand the non-dismissible spinner forever).
     final nav = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
+    final l = context.l10n;
 
     final server = ref.read(activeServerProvider);
     if (server == null) {
@@ -229,7 +232,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     // on save failure — the wizard stays open for a retry. Never throws.
     var equipmentNotes = const <String>[];
     if (error == null) {
-      equipmentNotes = await applyWizardEquipment(server, draft.equipment);
+      equipmentNotes = await applyWizardEquipment(server, draft.equipment, l);
     }
 
     // §76.2 S4 — guider provisioning + darks kickoff, both best-effort (a
@@ -244,14 +247,24 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     var darksStarted = false;
     final finishNotes = <String>[...equipmentNotes];
     if (error == null && finalSave) {
+      var pushed = true;
       try {
         await ref.read(guiderEquipmentProvider.notifier).pushProfile();
       } catch (e) {
+        pushed = false;
         debugPrint('[wizard] guider profile push failed: $e');
-        finishNotes.add('The guider profile push didn\'t complete — push it '
-            'from Settings → OpenAstro Guider (the top-bar Guider button) when the guider is reachable.');
+        // A server refusal carries its own reason; the "when the guider is
+        // reachable" advice only fits a guider that gave no answer.
+        finishNotes.add(e is DioException && e.response != null
+            ? 'Guider: ${friendlyError(l, e, action: 'push the guider profile')}'
+            : 'The guider profile push didn\'t complete — push it '
+                'from Settings → OpenAstro Guider (the top-bar Guider button) when the guider is reachable.');
       }
-      if (draft.guider.buildDarksOnFinish) {
+      if (draft.guider.buildDarksOnFinish && !pushed) {
+        // The guider is still on the previous profile's twin: darks would be
+        // shot with the previous rig's Guide Camera.
+        finishNotes.add(l.wizardDarksSkippedPushFailed);
+      } else if (draft.guider.buildDarksOnFinish) {
         final calApi = ref.read(guiderCalibrationApiProvider);
         if (calApi == null) {
           finishNotes.add('Dark-library build skipped (no server connection) '

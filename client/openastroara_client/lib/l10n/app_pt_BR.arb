@@ -762,5 +762,7 @@
   "albumCardNew": "nova",
   "albumCardTierUp": "subiu de nível",
   "albumTiersUp": "{count, plural, =1{1 nível acima} other{{count} níveis acima}}",
-  "albumSinceLastVisit": "{changes} desde a última visita"
+  "albumSinceLastVisit": "{changes} desde a última visita",
+  "wizardGuideCameraIsMainCamera": "A câmera principal não pode ser também a câmera de guiagem. A guiagem precisa de uma câmera de guiagem separada, porque dois programas no mesmo sensor quebram a guiagem. Escolha outra câmera ou selecione Nenhuma.",
+  "wizardDarksSkippedPushFailed": "Biblioteca de darks não iniciada: o guiador não aceitou o novo perfil. Crie-a no painel do Guiador depois que o envio do perfil funcionar."
 }

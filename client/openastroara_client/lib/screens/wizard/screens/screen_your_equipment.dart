@@ -211,6 +211,8 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
       if (devices.length == 1) {
         _slotSet(_draft.equipment, type, devices.single.uniqueId);
         _draft.deviceNames[devices.single.uniqueId] = devices.single.name;
+        _draft.deviceEndpoints[devices.single.uniqueId] =
+            devices.single.alpacaEndpoints;
       }
       // Deliberately broad: this screen's contract is never-crash — any
       // throwable (incl. an Error from a malformed response) leaves the slot
@@ -255,6 +257,8 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
       _slotSet(_draft.equipment, type, picked.device?.uniqueId);
       if (picked.device != null) {
         _draft.deviceNames[picked.device!.uniqueId] = picked.device!.name;
+        _draft.deviceEndpoints[picked.device!.uniqueId] =
+            picked.device!.alpacaEndpoints;
       }
     });
     // Re-verify the changed slot (fact types only — slot-only types carry no
