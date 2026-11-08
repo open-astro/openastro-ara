@@ -1428,7 +1428,7 @@ class _Fade extends StatelessWidget {
   }
 }
 
-/// One floating panel: overlay scrim, 10 px corners, no border.
+/// One floating panel: overlay scrim, 10 px corners, a Hairline contour.
 /// Every Simple Mode panel's look: the 90 % scrim over a blur of the image
 /// behind ([AraBlur.panel]), first the Settings sheet's and the device
 /// windows', now every panel's, for legibility (user, 2026-11-04).
@@ -1444,6 +1444,11 @@ class SimplePanel extends StatelessWidget {
       key: const Key('simple-frosted-surface'),
       padding: padding,
       decoration: const BoxDecoration(color: AraColors.overlayScrim),
+      // On top, not a border, so the contour takes no room from the content.
+      foregroundDecoration: BoxDecoration(
+        border: Border.all(color: AraColors.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: child,
     ),
   );

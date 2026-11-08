@@ -1702,6 +1702,16 @@ void main() {
     expect(find.text('Edit M31'), findsNothing);
   });
 
+  testWidgets('a panel has the Hairline contour, drawn on top so nothing moves', (tester) async {
+    // The night's screenshot: over a frame or side area of its own colour a panel's edge disappeared.
+    await tester.pumpWidget(const MaterialApp(home: Center(child: SimplePanel(child: SizedBox(width: 120, height: 80)))));
+    expect(tester.getSize(find.byType(SimplePanel)), const Size(120, 80));
+    final surface = tester.widget<Container>(find.byKey(const Key('simple-frosted-surface')));
+    final line = surface.foregroundDecoration! as BoxDecoration;
+    expect((line.border! as Border).top, const BorderSide(color: AraColors.border));
+    expect(line.borderRadius, BorderRadius.circular(10));
+  });
+
   group('#1572 a rail or image tap while editing a queued target', () {
     Future<ProviderContainer> edit(WidgetTester tester) async {
       final container = await _pump(tester, const Size(1024, 768), plan: _queuedM31);
@@ -3490,7 +3500,7 @@ void main() {
     Focus.of(tester.element(fold)).requestFocus();
     await tester.pump();
     expect(find.ancestor(of: fold, matching: find.byWidgetPredicate((w) =>
-        w is DecoratedBox && (w.decoration as BoxDecoration).border != null)), findsOneWidget,
+        w is DecoratedBox && (w.decoration as BoxDecoration).border?.top.color == AraColors.accentInfo)), findsOneWidget,
         reason: 'a visible focus ring');
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
