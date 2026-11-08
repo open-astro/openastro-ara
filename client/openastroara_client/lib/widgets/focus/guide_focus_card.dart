@@ -387,21 +387,23 @@ class GuideFocusHint {
 String? guideFocusBlocker(AppLocalizations l, GuiderStatus? guider, {required bool active}) {
   if (active) return null;
   if (guider?.connectionState != GuiderConnectionState.connected) return l.guideFocusConnectGuider;
-  const busy = {
-    GuiderRuntimeState.guiding,
-    GuiderRuntimeState.settling,
-    GuiderRuntimeState.calibrating,
-    GuiderRuntimeState.dithering,
-    // #1364 — a looping guider refuses the single frames this loop takes.
-    GuiderRuntimeState.looping,
-    GuiderRuntimeState.starSelected,
-    GuiderRuntimeState.starLost,
-    GuiderRuntimeState.paused,
-    // The Guiding Assistant owns the guide camera for its whole run.
-    GuiderRuntimeState.assistant,
-  };
-  return busy.contains(guider!.runtimeState) ? l.guideFocusStopGuider : null;
+  return guideFocusBusy(guider!) ? l.guideFocusStopGuider : null;
 }
+
+/// Whether the guider holds its camera, so the guide-camera frames can't start.
+bool guideFocusBusy(GuiderStatus guider) => const {
+  GuiderRuntimeState.guiding,
+  GuiderRuntimeState.settling,
+  GuiderRuntimeState.calibrating,
+  GuiderRuntimeState.dithering,
+  // #1364 — a looping guider refuses the single frames this loop takes.
+  GuiderRuntimeState.looping,
+  GuiderRuntimeState.starSelected,
+  GuiderRuntimeState.starLost,
+  GuiderRuntimeState.paused,
+  // The Guiding Assistant owns the guide camera for its whole run.
+  GuiderRuntimeState.assistant,
+}.contains(guider.runtimeState);
 
 /// Pure — unit-tested. First an absolute verdict: at or under the profile's
 /// expected in-focus HFR (× [kGuideFocusTargetTolerance]) is "In focus", whatever

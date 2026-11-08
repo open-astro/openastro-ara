@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Preview Camera Field</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: one iPad-sized stage with Preview's settings popover beside the right rail.
+     Single dark look on purpose: DESIGN.md tokens (lib/theme/ara_colors.dart), as the other design/preview mocks. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --hair: #404040; --text: #E0E0E0; --text2: #A0A0A0; --dis: #606060;
+    --ok: #4CAF50; --info: #42A5F5; --link: #64B5F6; --sel: #1565C0; --tile: rgba(56,56,56,.55); --err: #E53935;
+    --scrim: rgba(26,26,26,.9);
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys);
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+  .page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; }
+  p.note { color: var(--text2); margin: 0; max-width: 80ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
+  .group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--hair); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--hair); }
+  .seg button[aria-pressed="true"] { background: #1976D2; color: #fff; }
+  button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+  .stage-wrap { overflow-x: auto; }
+  .ipad { width: 1024px; height: 640px; position: relative; overflow: hidden; border-radius: 18px; border: 1px solid #333; background: #202020; }
+  .frame { position: absolute; left: 112px; right: 112px; top: 0; bottom: 0; background: radial-gradient(ellipse at 45% 50%, #2b2e38 0, #111319 60%, #090a0d 100%); }
+  .caption { position: absolute; left: 128px; bottom: 16px; padding: 6px 12px; font-size: 13px; color: var(--text2); }
+  .s { position: absolute; border-radius: 50%; background: #fff; }
+  .sf { background: var(--scrim); border-radius: 10px; box-shadow: inset 0 0 0 1px var(--hair); }
+
+  .strip { position: absolute; left: 16px; right: 16px; top: 16px; height: 56px; display: flex; align-items: center; gap: 16px; padding: 0 14px; font-size: 12px; color: var(--text2); }
+  .strip i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); margin-right: 6px; }
+  .strip i.off { background: var(--dis); }
+  .rail { position: absolute; right: 16px; top: 200px; width: 80px; padding: 10px 4px; display: flex; flex-direction: column; align-items: center; gap: 10px; font-size: 12px; }
+  .shutter { width: 56px; height: 56px; border-radius: 50%; border: 3px solid #fff; padding: 4px; } .shutter u { display: block; width: 100%; height: 100%; border-radius: 50%; background: #fff; }
+  .chip { width: 68px; height: 72px; border-radius: 10px; background: #1b3a5e; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; text-align: center; line-height: 1.25; }
+
+  .pop { position: absolute; right: 108px; top: 96px; width: 320px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field > label, .field > .t { font-size: 13px; color: var(--text2); }
+  .fseg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--tile); border-radius: 8px; overflow: hidden; }
+  .fseg button { min-height: 44px; border: 0; background: transparent; color: var(--text2); font: 14px var(--sys); cursor: pointer; }
+  .fseg button[aria-pressed="true"] { background: var(--sel); color: #fff; border-radius: 8px; }
+  .fseg button:disabled { color: var(--dis); cursor: not-allowed; }
+  .sub { font-size: 12px; color: var(--text2); min-height: 17px; }
+  .list { display: flex; flex-direction: column; gap: 4px; }
+  .list button { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 4px 12px; text-align: left; border: 0; border-radius: 8px; background: var(--tile); color: var(--text); font: 14px var(--sys); cursor: pointer; }
+  .list button b { font-weight: 500; display: block; } .list button small { color: var(--text2); font-size: 12px; }
+  .list button[aria-pressed="true"] { background: rgba(21,101,192,.4); box-shadow: inset 0 0 0 1px var(--link); }
+  .list button:disabled { color: var(--dis); cursor: not-allowed; } .list button:disabled small { color: var(--dis); }
+  .list em { font-style: normal; margin-left: auto; color: var(--link); }
+  .select { min-height: 44px; background: var(--tile); border-radius: 8px; display: flex; align-items: center; padding: 0 12px; justify-content: space-between; }
+  .range { height: 4px; background: #555; border-radius: 2px; position: relative; margin: 10px 2px; } .range u { position: absolute; top: -7px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+</style>
+
+<div class="page">
+  <h1>Preview: choosing the camera</h1>
+  <p class="note">A new Camera field at the top of Preview's settings. Try both layouts and each rig state, and tap the cameras in the popover. Guide Camera frames come through the guider, so the fields below change with the camera. Example readings only.</p>
+  <div class="controls">
+    <div class="group"><span class="lbl">Layout</span><div class="seg" id="layout">
+      <button data-v="seg" aria-pressed="true">A. Segments</button><button data-v="list" aria-pressed="false">B. List with models</button></div></div>
+    <div class="group"><span class="lbl">Rig</span><div class="seg" id="rig">
+      <button data-v="both" aria-pressed="true">Both connected</button><button data-v="noguide" aria-pressed="false">Guider off</button><button data-v="guiding" aria-pressed="false">Guiding</button></div></div>
+  </div>
+  <div class="stage-wrap"><div id="stage"></div></div>
+</div>
+
+<script>
+  const CAMS = {
+    main: { role: 'Main', model: 'ZWO ASI533MC Pro', size: '3008 × 3008', exp: '5 s', gain: '100', pct: .55, filter: true, stars: 1.6 },
+    guide: { role: 'Guide', model: 'ZWO ASI120MM Mini', size: '1280 × 960', exp: '2 s', gain: '30', pct: .3, filter: false, stars: 1 },
+  };
+  const st = { layout: 'seg', rig: 'both', cam: 'main' };
+  const seedStars = Array.from({ length: 70 }, (_, i) => [(i * 137.5) % 100, (i * 61.8) % 100, ((i * 7) % 3) + 1]);
+
+  function guideState() {
+    if (st.rig === 'noguide') return { show: false };
+    if (st.rig === 'guiding') return { show: true, locked: true, why: 'In use while guiding' };
+    return { show: true, locked: false };
+  }
+
+  function picker() {
+    const g = guideState();
+    if (st.layout === 'seg') {
+      if (!g.show) return `<div class="field"><div class="t">Camera</div><div class="select"><span>Main</span><span class="sub">${CAMS.main.model}</span></div></div>`;
+      return `<div class="field"><div class="t">Camera</div><div class="fseg">
+        <button data-cam="main" aria-pressed="${st.cam === 'main'}">Main</button>
+        <button data-cam="guide" aria-pressed="${st.cam === 'guide'}" ${g.locked ? 'disabled' : ''}>Guide</button></div>
+        <div class="sub">${g.locked ? g.why : CAMS[st.cam].model}</div></div>`;
+    }
+    const row = (k, dis, why) => `<button data-cam="${k}" aria-pressed="${st.cam === k}" ${dis ? 'disabled' : ''}><span><b>${CAMS[k].role}</b><small>${why || CAMS[k].model}</small></span>${st.cam === k ? '<em>✓</em>' : ''}</button>`;
+    return `<div class="field"><div class="t">Camera</div><div class="list">${row('main')}${g.show ? row('guide', g.locked, g.locked ? g.why : '') : ''}</div></div>`;
+  }
+
+  function render() {
+    if (st.cam === 'guide' && (!guideState().show || guideState().locked)) st.cam = 'main';
+    const c = CAMS[st.cam];
+    const stars = seedStars.map(([x, y, r]) => `<div class="s" style="left:${x}%;top:${y}%;width:${r * c.stars}px;height:${r * c.stars}px;opacity:.8"></div>`).join('');
+    const filter = c.filter ? `<div class="field"><div class="t">Filter</div><div class="select"><span>L-Pro</span><span class="sub">▾</span></div></div>` : '';
+    document.getElementById('stage').innerHTML = `<div class="ipad">
+      <div class="frame">${stars}</div>
+      <div class="caption sf">${c.role} · ${c.model} · ${c.size}</div>
+      <div class="strip sf"><span><i></i>Camera</span><span><i></i>Mount</span><span><i class="${st.rig === 'noguide' ? 'off' : ''}"></i>Guider</span><span><i></i>Focuser</span></div>
+      <div class="rail sf"><div>Preview</div><div class="shutter"><u></u></div><div class="chip"><span>${c.role}</span><span>${c.exp} · ${c.gain}</span></div></div>
+      <div class="pop sf">
+        ${picker()}
+        <div class="field"><div class="t">Exposure</div><div class="select"><span>${c.exp}</span><span class="sub">▾</span></div></div>
+        <div class="field"><div class="t">Gain · ${c.gain}</div><div class="range"><u style="left:${c.pct * 100}%"></u></div></div>
+        ${filter}
+        <div class="field"><div class="t">Shot</div><div class="fseg"><button aria-pressed="true">Loop</button><button aria-pressed="false">Single</button></div></div>
+      </div>
+    </div>`;
+  }
+
+  document.getElementById('stage').addEventListener('click', e => {
+    const b = e.target.closest('button[data-cam]');
+    if (b && !b.disabled) { st.cam = b.dataset.cam; render(); }
+  });
+  for (const id of ['layout', 'rig']) {
+    const root = document.getElementById(id);
+    root.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      root.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      st[id] = b.dataset.v; render();
+    });
+  }
+  render();
+</script>

@@ -926,6 +926,18 @@ void main() {
     expect(find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.byIcon(Icons.tune)), findsOneWidget);
   });
 
+  testWidgets("Preview with Guide picked fills the screen with the guide camera's frames", (tester) async {
+    final container = await _pump(tester, const Size(1024, 768), gear: [
+      guideFocusProvider.overrideWith(_GuideFrame.new),
+      guiderStatusProvider.overrideWith(() => _GuiderAt('stopped')),
+    ]);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-focus-frame')), findsNothing, reason: 'the main camera to start');
+    container.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-focus-frame')), findsOneWidget);
+  });
+
   testWidgets("Focus: Measured stars On fills the screen with the run's frame, circles and all", (tester) async {
     final container = await _pump(tester, const Size(1024, 768), gear: [
       autofocusLiveProvider.overrideWith(() => _LiveFrame()),
@@ -1332,7 +1344,8 @@ void main() {
 
   testWidgets('the settings chip opens Exposure from a list, the Gain slider under it, Filter and Loop/Single',
       (tester) async {
-    final container = await _pump(tester, const Size(1024, 768));
+    final container = await _pump(tester, const Size(1024, 768),
+        gear: [filterWheelProvider.overrideWith(() => _FilterWheel(EquipmentConnectionState.connected))]);
     expect(find.text(_summary(container)), findsOneWidget, reason: 'the chip reads the settings');
     await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();

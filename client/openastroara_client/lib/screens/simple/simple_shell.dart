@@ -748,7 +748,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         simplePolarActive(ref.watch(polarAlignLiveProvider));
     // Focus can show its run's frame, measured stars circled, when asked.
     // Manual shows the Bahtinov readout's crop, spikes and all, there.
-    final focusFrame = shown != SimpleModeScreen.focus
+    // Preview on the guide camera shows the frames the guider gives it.
+    final focusFrame = shown == SimpleModeScreen.preview
+        ? (simplePreviewGuide(ref)
+              ? ref.watch(guideFocusProvider.select((l) => l.frame))
+              : null)
+        : shown != SimpleModeScreen.focus
         ? null
         : ref.watch(simpleFocusScopeProvider) == SimpleFocusScope.guide
         ? ref.watch(guideFocusProvider.select((l) => l.frame))
@@ -1880,7 +1885,7 @@ class _RightRail extends ConsumerWidget {
             const PolarAlignSettings(),
         ref.context.l10n,
       ),
-      _ => simpleSettingsSummary(ref),
+      _ => simpleSettingsSummary(context, ref),
     };
     return named == null
         ? label

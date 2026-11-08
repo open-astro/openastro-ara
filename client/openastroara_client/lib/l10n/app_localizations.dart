@@ -1203,6 +1203,12 @@ abstract class AppLocalizations {
   /// **'Stars'**
   String get previewStars;
 
+  /// Simple Mode: label above the list of connected cameras in Preview's settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get previewCamera;
+
   /// Simple Mode: exposure length, as an Info tile label and the Preview settings picker label
   ///
   /// In en, this message translates to:

@@ -928,6 +928,10 @@
   "@previewStars": {
     "description": "Simple Mode Info tile label: number of stars detected in the last frame"
   },
+  "previewCamera": "Camera",
+  "@previewCamera": {
+    "description": "Simple Mode: label above the list of connected cameras in Preview's settings."
+  },
   "previewExposure": "Exposure",
   "@previewExposure": {
     "description": "Simple Mode: exposure length, as an Info tile label and the Preview settings picker label"

@@ -8,9 +8,12 @@ import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
+import '../../models/equipment_device_status.dart';
 import '../../models/guider_status.dart';
+import '../../services/equipment_driver_api.dart' show deviceDriverProvider;
 import '../../services/storage_space_api.dart';
 import '../../state/guider/guider_state.dart';
+import '../../state/settings/phd2_settings_state.dart';
 import '../../state/imaging/capture_progress_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/imaging/last_frame_state.dart';
@@ -27,6 +30,8 @@ import '../../state/focus/guide_focus_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
+import '../../widgets/focus/guide_focus_card.dart'
+    show guideFocusBlocker, guideFocusBusy;
 import '../../widgets/status_indicator.dart'
     show StatusBlink, StatusDot, StatusLevel;
 import '../../state/equipment/camera_state.dart';
@@ -51,11 +56,17 @@ import 'simple_guide_panel.dart'
         simpleGuiderColour,
         simpleGuiderPendingProvider,
         simpleGuiding;
+import 'simple_focus_panel.dart'
+    show
+        SimpleGuideLiveShutter,
+        kSimpleGuideExposures,
+        simpleGuideExposureProvider;
 import 'simple_plan_panel.dart' show simpleRunProvider;
 import 'simple_polar_panel.dart' show simplePolarActive, simplePolarPhase;
 import 'simple_device_windows.dart'
     show
         SimpleGainSlider,
+        SimpleGuideGainSlider,
         simpleCelsius,
         simpleClockTime,
         simpleDomeAskLabel,
@@ -74,10 +85,33 @@ import 'simple_shell.dart'
 // kSimpleText moved to the theme so the Sky Album shares it; re-exported for Simple Mode's panels.
 export '../../theme/ara_metrics.dart' show kSimpleText;
 
-
 /// Single takes a saved frame (the daemon registers every Take One); Loop
 /// runs live view, whose frames are not saved.
 enum PreviewShot { loop, single }
+
+/// Which camera Preview shows: the main camera's frames, or the guide camera's
+/// through the guider.
+enum PreviewCamera { main, guide }
+
+final previewCameraProvider = NotifierProvider<_PreviewCamera, PreviewCamera>(
+  _PreviewCamera.new,
+);
+
+class _PreviewCamera extends Notifier<PreviewCamera> {
+  @override
+  PreviewCamera build() => PreviewCamera.main;
+  void set(PreviewCamera v) => state = v;
+}
+
+/// Whether Preview is on the guide camera: picked, and the guider connected
+/// and not holding it (guiding takes it back, and Preview is on Main again).
+bool simplePreviewGuide(WidgetRef ref) {
+  if (ref.watch(previewCameraProvider) != PreviewCamera.guide) return false;
+  final guider = ref.watch(guiderStatusProvider).value;
+  if (guider == null || !guider.isConnected) return false;
+  return ref.watch(guideFocusProvider.select((g) => g.status.active)) ||
+      !guideFocusBusy(guider);
+}
 
 final previewShotProvider = NotifierProvider<_PreviewShot, PreviewShot>(
   _PreviewShot.new,
@@ -89,8 +123,14 @@ class _PreviewShot extends Notifier<PreviewShot> {
   void set(PreviewShot v) => state = v;
 }
 
-/// "5 s · 100": the settings chip's caption on the rail.
-String simpleSettingsSummary(WidgetRef ref) {
+/// "5 s · 100": the settings chip's caption on the rail; on the guide camera
+/// "Guide" over its own exposure and gain.
+String simpleSettingsSummary(BuildContext context, WidgetRef ref) {
+  if (simplePreviewGuide(ref)) {
+    final seconds = ref.watch(simpleGuideExposureProvider).round();
+    final gain = ref.watch(phd2SettingsProvider).guideCameraGain;
+    return '${context.l10n.focusScopeGuide}\n$seconds s · $gain';
+  }
   final p = ref.watch(exposureControllerProvider);
   return '${formatExposure(p.exposure)} · ${p.gain}';
 }
@@ -249,25 +289,25 @@ class SimpleFactTiles extends StatelessWidget {
     if (MediaQuery.textScalerOf(context).scale(1) > 1.3) {
       return _frost(
         Container(
-        key: const Key('simple-facts-list'),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: _box,
-        child: Table(
-          defaultColumnWidth: const IntrinsicColumnWidth(),
-          children: [
-            for (final (label, value) in facts)
-              TableRow(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 18),
-                    child: Text(label, style: AraText.caption),
-                  ),
-                  Text(value, style: _value, textAlign: TextAlign.right),
-                ],
-              ),
-          ],
+          key: const Key('simple-facts-list'),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: _box,
+          child: Table(
+            defaultColumnWidth: const IntrinsicColumnWidth(),
+            children: [
+              for (final (label, value) in facts)
+                TableRow(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 18),
+                      child: Text(label, style: AraText.caption),
+                    ),
+                    Text(value, style: _value, textAlign: TextAlign.right),
+                  ],
+                ),
+            ],
+          ),
         ),
-      ),
       );
     }
     return _tiles();
@@ -281,27 +321,27 @@ class SimpleFactTiles extends StatelessWidget {
 
   Widget _tile(String label, String value) {
     final tile = _frost(
-        Container(
-      width: expand ? null : kSimpleRailWidth,
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: _box,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        spacing: 1,
-        children: [
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(label, style: AraText.caption, maxLines: 1),
-          ),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(value, style: _value, maxLines: 1),
-          ),
-        ],
+      Container(
+        width: expand ? null : kSimpleRailWidth,
+        height: 56,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: _box,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          spacing: 1,
+          children: [
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(label, style: AraText.caption, maxLines: 1),
+            ),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(value, style: _value, maxLines: 1),
+            ),
+          ],
+        ),
       ),
-    ),
-      );
+    );
     return expand ? Expanded(child: tile) : tile;
   }
 }
@@ -342,6 +382,13 @@ class SimpleSettingsPopover extends ConsumerWidget {
     final shot = ref.watch(previewShotProvider);
     final looping = ref.watch(liveViewControllerProvider);
     final caps = ref.watch(cameraStatusProvider).asData?.value?.capabilities;
+    final guide = simplePreviewGuide(ref);
+    final guideLive = ref.watch(
+      guideFocusProvider.select((g) => g.status.active),
+    );
+    final wheel =
+        ref.watch(filterWheelProvider).asData?.value?.connectionState ==
+        EquipmentConnectionState.connected;
     return SimplePanel(
       padding: const EdgeInsets.all(AraSpace.s12),
       child: Column(
@@ -349,57 +396,191 @@ class SimpleSettingsPopover extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         spacing: AraSpace.s8,
         children: [
+          // Locked while frames run: switching would strand them with no stop.
+          ..._previewCameraRows(context, ref, locked: looping || guideLive),
           // No title: the chip that opened it says what it is (user,
           // 2026-11-04).
-          SimplePresetTile<Duration>(
-            key: const Key('simple-exposure'),
-            label: context.l10n.previewExposure,
-            value: params.exposure,
-            options: exposurePresets(
-              minSec: caps?.minExposureSec ?? 0,
-              maxSec: caps?.maxExposureSec ?? 0,
+          if (guide) ...[
+            SimplePresetTile<double>(
+              key: const Key('simple-exposure'),
+              label: context.l10n.previewExposure,
+              value: ref.watch(simpleGuideExposureProvider),
+              options: kSimpleGuideExposures,
+              format: (s) => '${s.round()} s',
+              onSelected: ref.read(simpleGuideExposureProvider.notifier).set,
             ),
-            format: formatExposure,
-            onSelected: ctrl.setExposure,
-          ),
-          // The camera's gain: the same slider and value as the Camera window.
-          SimpleGainSlider(
-            id: 'simple-gain',
-            value: params.gain,
-            onSet: ctrl.setGain,
-          ),
-          FilterDropdown(
-            value: params.filterSlot,
-            onChanged: ctrl.setFilterSlot,
-          ),
-          // Switching while a loop runs would strand it with no stop.
-          Container(
-            decoration: BoxDecoration(
-              color: AraColors.tileFill,
-              borderRadius: BorderRadius.circular(8),
+            const SimpleGuideGainSlider(),
+          ] else ...[
+            SimplePresetTile<Duration>(
+              key: const Key('simple-exposure'),
+              label: context.l10n.previewExposure,
+              value: params.exposure,
+              options: exposurePresets(
+                minSec: caps?.minExposureSec ?? 0,
+                maxSec: caps?.maxExposureSec ?? 0,
+              ),
+              format: formatExposure,
+              onSelected: ctrl.setExposure,
             ),
-            child: Row(
-              children: [
-                for (final (v, label) in [
-                  (PreviewShot.loop, context.l10n.previewLoop),
-                  (PreviewShot.single, context.l10n.previewSingle),
-                ])
-                  Expanded(
-                    child: SimpleSegment(
-                      label: label,
-                      selected: shot == v,
-                      radius: 8,
-                      onTap: looping
-                          ? null
-                          : () => ref.read(previewShotProvider.notifier).set(v),
+            // The camera's gain: the same slider and value as the Camera window.
+            SimpleGainSlider(
+              id: 'simple-gain',
+              value: params.gain,
+              onSet: ctrl.setGain,
+            ),
+            if (wheel)
+              FilterDropdown(
+                value: params.filterSlot,
+                onChanged: ctrl.setFilterSlot,
+              ),
+            // Switching while a loop runs would strand it with no stop.
+            Container(
+              decoration: BoxDecoration(
+                color: AraColors.tileFill,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  for (final (v, label) in [
+                    (PreviewShot.loop, context.l10n.previewLoop),
+                    (PreviewShot.single, context.l10n.previewSingle),
+                  ])
+                    Expanded(
+                      child: SimpleSegment(
+                        label: label,
+                        selected: shot == v,
+                        radius: 8,
+                        onTap: looping
+                            ? null
+                            : () =>
+                                  ref.read(previewShotProvider.notifier).set(v),
+                      ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );
+  }
+
+  /// "Camera", then one row per connected camera: its role over its model.
+  /// The guide camera is greyed out, saying why, while the guider holds it.
+  List<Widget> _previewCameraRows(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool locked,
+  }) {
+    final l10n = context.l10n;
+    final camera = ref.watch(cameraStatusProvider).asData?.value;
+    final guider = ref.watch(guiderStatusProvider).value;
+    final guide = simplePreviewGuide(ref);
+    final guideActive = ref.watch(
+      guideFocusProvider.select((g) => g.status.active),
+    );
+    final blocked = guideFocusBlocker(l10n, guider, active: guideActive);
+    Widget row(
+      PreviewCamera value,
+      String id,
+      String role,
+      String detail,
+      bool enabled,
+    ) {
+      final selected = (value == PreviewCamera.guide) == guide;
+      final on = enabled && !locked;
+      return Semantics(
+        button: true,
+        selected: selected,
+        enabled: on,
+        child: Material(
+          color: selected ? AraColors.selectionTint : AraColors.tileFill,
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            key: Key('simple-preview-camera-$id'),
+            borderRadius: BorderRadius.circular(8),
+            onTap: on
+                ? () => ref.read(previewCameraProvider.notifier).set(value)
+                : null,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AraSpace.s12,
+                  vertical: 4,
+                ),
+                child: Row(
+                  spacing: AraSpace.s8,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            role,
+                            style: kSimpleText.copyWith(
+                              color: !on && !selected
+                                  ? AraColors.textDisabled
+                                  : selected
+                                  ? AraColors.linkText
+                                  : null,
+                            ),
+                          ),
+                          if (detail.isNotEmpty)
+                            Text(
+                              detail,
+                              style: kSimpleText.copyWith(
+                                fontSize: 12,
+                                color: AraColors.textSecondary,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (selected)
+                      const Icon(
+                        Icons.check,
+                        size: 18,
+                        color: AraColors.linkText,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final rows = <Widget>[
+      if (camera?.connectionState == EquipmentConnectionState.connected)
+        row(
+          PreviewCamera.main,
+          'main',
+          l10n.focusScopeMain,
+          camera!.name,
+          true,
+        ),
+      if (guider?.isConnected ?? false)
+        row(
+          PreviewCamera.guide,
+          'guide',
+          l10n.focusScopeGuide,
+          blocked ??
+              ref.watch(deviceDriverProvider('guidecamera')).value?.name ??
+              '',
+          blocked == null,
+        ),
+    ];
+    if (rows.isEmpty) return const [];
+    return [
+      Text(
+        l10n.previewCamera,
+        style: kSimpleText.copyWith(color: AraColors.textSecondary),
+      ),
+      ...rows,
+    ];
   }
 }
 
@@ -414,6 +595,7 @@ class SimpleShutter extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (simplePreviewGuide(ref)) return const SimpleGuideLiveShutter();
     final shot = ref.watch(previewShotProvider);
     final looping = ref.watch(liveViewControllerProvider);
     final capturing = ref.watch(captureProgressProvider).isCapturing;
@@ -769,7 +951,9 @@ class SimpleShutterButton extends StatelessWidget {
       hint: why,
       child: InkResponse(
         key: const Key('simple-shutter'),
-        onTap: onPressed ?? (why == null ? null : () => simpleSayWhy(context, why)),
+        onTap:
+            onPressed ??
+            (why == null ? null : () => simpleSayWhy(context, why)),
         radius: 36,
         child: Container(
           width: 60,
@@ -1015,7 +1199,6 @@ class _StatusPillState extends State<_StatusPill> {
   }
 }
 
-
 class SimpleStatusPill extends ConsumerStatefulWidget {
   const SimpleStatusPill({super.key, this.onOpen});
 
@@ -1157,14 +1340,23 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final planActive = run?.state?.isActive ?? false;
     final polar = ref.watch(polarAlignLiveProvider);
     final af = ref.watch(autofocusLiveProvider).run;
-    final bahtinov = ref.watch(bahtinovFocusProvider.select((b) => b.status.active));
-    final guideFocus = ref.watch(guideFocusProvider.select((g) => g.status.active));
+    final bahtinov = ref.watch(
+      bahtinovFocusProvider.select((b) => b.status.active),
+    );
+    final guideFocus = ref.watch(
+      guideFocusProvider.select((g) => g.status.active),
+    );
     // One pill per thing happening, stacked in this order (user, 2026-11-04:
     // a frame hid the guider). Each says it once when it changes, not each
     // second of a countdown, a calibration step or an RMS update.
     final pills = <_PillData>[
       if (stopping)
-        _PillData(SimpleStatusOrigin.preview, l10n.previewStopping, null, AraColors.textSecondary)
+        _PillData(
+          SimpleStatusOrigin.preview,
+          l10n.previewStopping,
+          null,
+          AraColors.textSecondary,
+        )
       else if (p.phase != CapturePhase.idle)
         switch (p.phase) {
           CapturePhase.exposing => _PillData(
@@ -1213,7 +1405,9 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
       // A running plan says what it's doing (cooling, slewing, centring,
       // focusing), with how far the step has got along the pill's foot.
       // #1596: a finished run that imaged nothing keeps its reason on the pill.
-      if ((planActive || run?.reasonText != null) && step != null && step.isNotEmpty)
+      if ((planActive || run?.reasonText != null) &&
+          step != null &&
+          step.isNotEmpty)
         _PillData(
           SimpleStatusOrigin.plan,
           paused ? l10n.previewPlanPaused : l10n.previewPlan,
@@ -1460,11 +1654,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
       spacing: AraSpace.s8,
       children: [
         for (final d in shown)
-          _StatusPill(
-            key: ValueKey(d.origin),
-            data: d,
-            onOpen: widget.onOpen,
-          ),
+          _StatusPill(key: ValueKey(d.origin), data: d, onOpen: widget.onOpen),
         if (more > 0)
           Semantics(
             button: widget.onOpen != null,
@@ -1475,7 +1665,10 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
               child: SimplePanel(
                 padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12),
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+                  constraints: const BoxConstraints(
+                    minHeight: 44,
+                    minWidth: 44,
+                  ),
                   child: Center(
                     widthFactor: 1,
                     heightFactor: 1,

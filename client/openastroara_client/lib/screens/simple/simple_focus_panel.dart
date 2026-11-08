@@ -125,45 +125,7 @@ class SimpleFocusShutter extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cameraBusy = simpleMainCameraBusy(ref);
     if (ref.watch(simpleFocusScopeProvider) == SimpleFocusScope.guide) {
-      // The guide camera: starts and stops its live focus, once it can.
-      final guide = ref.watch(guideFocusProvider);
-      final active = guide.status.active;
-      final notifier = ref.read(guideFocusProvider.notifier);
-      final blocked =
-          guideFocusBlocker(
-            context.l10n,
-            ref.watch(guiderStatusProvider).asData?.value,
-            active: active,
-          ) !=
-          null;
-      final gated =
-          ref.watch(
-            phd2SettingsProvider.select((p) => p.guiderSetupType == 'oag'),
-          ) &&
-          !ref.watch(autofocusLiveProvider.select((s) => s.focusedThisSession));
-      return SimpleShutterButton(
-        start: true,
-        running: active,
-        label: active
-            ? context.l10n.focusStopGuide
-            : context.l10n.focusStartGuide,
-        whyOff: guide.busy
-            ? null
-            : gated
-            ? context.l10n.guideFocusWaitingMain
-            : guideFocusBlocker(
-                context.l10n,
-                ref.watch(guiderStatusProvider).asData?.value,
-                active: active,
-              ),
-        onPressed: guide.busy || (!active && (blocked || gated))
-            ? null
-            : active
-            ? notifier.stop
-            : () => notifier.start(
-                exposureSec: ref.read(simpleGuideExposureProvider),
-              ),
-      );
+      return const SimpleGuideLiveShutter();
     }
     if (simpleFocusMethod(ref) != MainFocusMethod.autofocus) {
       // Manual: starts and stops the Bahtinov readout.
@@ -208,6 +170,54 @@ class SimpleFocusShutter extends ConsumerWidget {
           : !connected
           ? context.l10n.focusNeedsFocuser
           : context.l10n.shellMainCameraBusy,
+    );
+  }
+}
+
+/// The guide camera's shutter, in Focus and Preview: starts and stops its live
+/// frames through the guider, once it can.
+class SimpleGuideLiveShutter extends ConsumerWidget {
+  const SimpleGuideLiveShutter({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final guide = ref.watch(guideFocusProvider);
+    final active = guide.status.active;
+    final notifier = ref.read(guideFocusProvider.notifier);
+    final blocked =
+        guideFocusBlocker(
+          context.l10n,
+          ref.watch(guiderStatusProvider).asData?.value,
+          active: active,
+        ) !=
+        null;
+    final gated =
+        ref.watch(
+          phd2SettingsProvider.select((p) => p.guiderSetupType == 'oag'),
+        ) &&
+        !ref.watch(autofocusLiveProvider.select((s) => s.focusedThisSession));
+    return SimpleShutterButton(
+      start: true,
+      running: active,
+      label: active
+          ? context.l10n.focusStopGuide
+          : context.l10n.focusStartGuide,
+      whyOff: guide.busy
+          ? null
+          : gated
+          ? context.l10n.guideFocusWaitingMain
+          : guideFocusBlocker(
+              context.l10n,
+              ref.watch(guiderStatusProvider).asData?.value,
+              active: active,
+            ),
+      onPressed: guide.busy || (!active && (blocked || gated))
+          ? null
+          : active
+          ? notifier.stop
+          : () => notifier.start(
+              exposureSec: ref.read(simpleGuideExposureProvider),
+            ),
     );
   }
 }

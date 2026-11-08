@@ -695,6 +695,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get previewStars => 'Stars';
 
   @override
+  String get previewCamera => 'Camera';
+
+  @override
   String get previewExposure => 'Exposure';
 
   @override

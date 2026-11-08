@@ -695,6 +695,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get previewStars => 'Stars';
 
   @override
+  String get previewCamera => 'Camera';
+
+  @override
   String get previewExposure => 'Exposure';
 
   @override
@@ -3374,6 +3377,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get previewStars => 'Estrelas';
+
+  @override
+  String get previewCamera => 'Câmera';
 
   @override
   String get previewExposure => 'Exposição';
