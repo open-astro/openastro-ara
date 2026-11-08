@@ -98,6 +98,7 @@ public sealed partial class GuiderService {
         // Reject up front if no guider is connected (throws InvalidOperationException → 409) — same as the other
         // guide ops; do NOT accept a 202 we can't honor.
         var guider = RequireConnectedGuider();
+        ThrowIfOutOfStep("The dark library build");
         const string op = "guider.dark_library.build";
         lock (_gate) {
             switch (ResolveBuildAdmission(_calibrationBuildInProgress, _calibrationBuildKey, _calibrationBuildOp, idempotencyKey, op)) {
@@ -387,6 +388,7 @@ public sealed partial class GuiderService {
             request.ExposureMs, request.FrameCount, request.Notes, request.LoadAfter);
         // Reject if no guider is connected (→ 409) before accepting a 202 we can't honor.
         var guider = RequireConnectedGuider();
+        ThrowIfOutOfStep("The defect map build");
         const string op = "guider.defect_map.build";
         lock (_gate) {
             switch (ResolveBuildAdmission(_calibrationBuildInProgress, _calibrationBuildKey, _calibrationBuildOp, idempotencyKey, op)) {

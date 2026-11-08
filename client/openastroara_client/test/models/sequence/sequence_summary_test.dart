@@ -40,6 +40,12 @@ void main() {
   });
 
   group('SequenceRunStateInfo estimated seconds (#1068)', () {
+    test('a progress frame keeps the frames filed so far, and takes a new count when it brings one', () {
+      const info = SequenceRunStateInfo(framesCaptured: 8);
+      expect(info.applyWsProgress({'instructions_completed': 2}).framesCaptured, 8);
+      expect(info.applyWsProgress({'frames_captured': 9}).framesCaptured, 9);
+    });
+
     test('parses the daemon estimate from run state and keeps it on WS frames',
         () {
       final info = SequenceRunStateInfo.fromJson({

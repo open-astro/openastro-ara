@@ -70,8 +70,14 @@ class _FakeGuiderApi implements GuiderClient {
   @override
   Future<void> disconnect() async {}
   final calls = <String>[];
+  /// Thrown by [startGuiding] when set.
+  Object? startError;
   @override
-  Future<void> startGuiding() async => calls.add('startGuiding');
+  Future<String?> startGuiding() async {
+    calls.add('startGuiding');
+    if (startError != null) throw startError!;
+    return null;
+  }
   @override
   Future<void> stopGuiding() async => calls.add('stopGuiding');
 }
@@ -221,6 +227,26 @@ void main() {
       await _teardownPanel(tester, container);
     });
   }
+
+  testWidgets('a start the guider gave up on shows its reason in a snackbar '
+      '(#1664)', (tester) async {
+    final guider = _FakeGuiderApi()
+      ..startError = const GuideStartFailed('Stopped capturing');
+    final container = await _pump(tester,
+        guider: guider,
+        status: const GuiderStatus(
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.stopped,
+        ));
+
+    await tester.tap(find.byKey(const Key('guide-toggle-button')));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text("Guiding didn't start: Stopped capturing."), findsOneWidget);
+    await _teardownPanel(tester, container);
+  });
 
   testWidgets('a disconnected guider shows no Guide button', (tester) async {
     final container = await _pump(tester,

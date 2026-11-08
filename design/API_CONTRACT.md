@@ -1243,3 +1243,26 @@ its start and the client has nothing to do with it.
 **Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1polaralign~1next`; `PolarAlignService.Stages.cs`, `PolarAlignGeometry.FitAxisThreePoint`, `MainCameraPointingSolver`.
 
 **Related:** #1591, #1686 (the plate-solve routine this builds on), §45.16 (the 2-point call, now revisited for the check); tests `PolarAlignServiceTest` (`Coarse_stage_*`, `Check_stage_*`, `Next_*`), `PolarAlignGeometryTest` (`Three_point_fit_*`), client `polar_align_state_test` (stages), `polar_align_panel_test`.
+## 2026-11-08 — Emergency Stop reports `mount_stopped`, not `park_requested` (#1672)
+
+**Endpoint(s) or area:** `POST /api/v1/server/emergency-stop`, WebSocket `safety.action_taken` with `action: emergency_stop`
+
+**Decision:** Emergency Stop no longer parks the mount. It sends AbortSlew and then Tracking off. `EmergencyStopResultDto.park_requested` becomes `mount_stopped`, the `safety.action_taken` payload changes the same way, and the failed-rung token `park` becomes `stop_mount`.
+
+**Reasoning:** A park is a slew, and it runs the code that may be at fault. This is a breaking change inside `/api/v1/`, permitted within v0.x, and needs no shim: an older client reads the missing field as false and only drops its "mount told to park" line. An older client shows an unknown failed rung through its generic `{step} FAILED` text. The §35.4 unsafe-weather reaction still parks and keeps `park_requested`.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/components/schemas/EmergencyStopResultDto`
+
+**Related:** PORT_PLAYBOOK.md §35.3 step 3, #1671
+
+## 2026-11-08 — Out-of-step Guider: `out_of_step_reason` and the guider-out-of-step 409 (#1665)
+
+**Endpoint(s) or area:** `GuiderStateDto.out_of_step_reason`; `POST /equipment/guider/darklibrary/build` and the defect-map build; `POST /equipment/guider/focus/start`; `polar_align.error`
+
+**Decision:** `out_of_step_reason` is an optional field on the guider runtime: null when the Guider holds the active profile's settings, or when that is not known yet. While it is set, the dark library and defect map builds answer **409 `https://openastro.net/errors/guider-out-of-step`**, the focus loop answers 409, polar alignment fails with reason `guider_out_of_step`, and Start guiding ends with a failed `guider.operation_complete`. Each carries the same text. The 422 of `POST /equipment/guider/profile/push` is unchanged.
+
+**Reasoning:** The field is additive and needs no version change. A client can show the reason before the user presses Start. A separate problem type keeps this apart from `guider-not-connected`.
+
+**Spec ref:** PORT_PLAYBOOK.md §63.4
+
+**Related:** #1661, #1664

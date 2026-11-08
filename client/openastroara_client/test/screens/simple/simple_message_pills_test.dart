@@ -114,6 +114,26 @@ void main() {
     expect(c.read(simpleMessagesProvider), isEmpty);
   });
 
+  testWidgets('a result pill has the Hairline contour (a warning or error keeps its colour)', (tester) async {
+    final c = await _pump(tester);
+    c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.result, 'Saved');
+    await tester.pump();
+    final box = tester.widget<Container>(find.byKey(const Key('simple-message-0'))).decoration! as BoxDecoration;
+    expect((box.border! as Border).top.color, AraColors.border);
+    await tester.pump(kSimpleResultLife * 3);
+  });
+
+  testWidgets('the "+N more" pill has the Hairline contour', (tester) async {
+    final c = await _pump(tester, maxHeight: 2 * kSimpleMessageHeight + 8 + 8 + 44);
+    final n = c.read(simpleMessagesProvider.notifier);
+    for (final t in ['one', 'two', 'three', 'four']) {
+      n.show(SimpleMessageKind.error, t);
+    }
+    await tester.pump();
+    final pill = tester.widget<Material>(find.ancestor(of: find.byKey(const Key('simple-messages-more')), matching: find.byType(Material)).first);
+    expect((pill.shape! as RoundedRectangleBorder).side.color, AraColors.border);
+  });
+
   testWidgets('a question stays until answered, and the answer runs', (tester) async {
     final c = await _pump(tester);
     var slewed = false;

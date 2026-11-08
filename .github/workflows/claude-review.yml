@@ -91,6 +91,8 @@ jobs:
           for parent in .github docs; do
             if [ -L "$parent" ]; then rm -f "$parent"; fi
           done
+          # Decision records are read as rules: the base branch's copy, never the PR's.
+          rm -rf docs/adr
           find . -path ./.git -prune -o \
             \( -name AGENTS.md -o -name CLAUDE.md -o -name .mcp.json -o -name .claude \) \
             -print0 | xargs -0 rm -rf
@@ -100,10 +102,68 @@ jobs:
           git fetch --depth=1 origin "$BASE_SHA" || true
           if git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
             git ls-tree -r --name-only "$BASE_SHA" \
-              | grep -E '(^|/)(AGENTS\.md|CLAUDE\.md|\.claude/.*)$' \
+              | grep -E '(^|/)(AGENTS\.md|CLAUDE\.md|\.claude/.*)$|^docs/adr/.*$' \
               | xargs -r git checkout "$BASE_SHA" -- || true
           fi
           git status --short
+
+      # Which decision-record rules the diff falls under: the default branch's
+      # scripts run over the base branch's records (restored above), so a PR
+      # cannot change what it is checked against. Only lines of the form
+      # `NNNN-slug.md: rules 1, 2` reach the prompt. While the default branch
+      # has no scripts/check-adr-scope.py (the PR that adds it), the step
+      # prints `none` and the review runs without a rule checklist. A base
+      # with records whose scope cannot be computed fails the job here: a
+      # review that cannot see the rules does not run.
+      - name: List the decision-record rules in scope
+        id: adr_scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          fail() { printf '::error::Decision-record scope: %s, so the review does not run.\n' "$1"; exit 1; }
+          tools="${RUNNER_TEMP}/adr-tools"
+          records_tree="${RUNNER_TEMP}/adr-base"
+          rm -rf "${tools}" "${records_tree}" && mkdir -p "${tools}" "${records_tree}"
+          git fetch --depth=1 origin "refs/heads/${DEFAULT_BRANCH}" || fail "the default branch could not be fetched"
+          if [ -n "$(git ls-tree -r --name-only FETCH_HEAD scripts/check-adr-scope.py)" ]; then
+            git archive FETCH_HEAD scripts | tar -x -C "${tools}" || fail "the default branch's scripts could not be extracted"
+          fi
+          if [ ! -f "${tools}/scripts/check-adr-scope.py" ]; then
+            records="none (the default branch has no scripts/check-adr-scope.py yet)"
+            skeleton="none in scope"
+          else
+            git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null || git fetch --depth=1 origin "${BASE_SHA}" || fail "the base commit ${BASE_SHA} could not be fetched"
+            if [ -z "$(git ls-tree -d "${BASE_SHA}" docs/adr)" ]; then
+              records="none (the base branch has no decision records)"
+            else
+              git archive "${BASE_SHA}" docs/adr | tar -x -C "${records_tree}" || fail "the base branch's records could not be extracted"
+              changed="$(gh pr diff "${PR_NUMBER}" --repo "${REPO}" --name-only)" || fail "the PR's changed files could not be listed"
+              listed="$(printf '%s\n' "${changed}" \
+                | python3 -I "${tools}/scripts/check-adr-scope.py" --list --root "${records_tree}")" \
+                || fail "check-adr-scope.py --list exited non-zero"
+              if printf '%s\n' "${listed}" | grep -vE '^([0-9]{4}-[a-z0-9-]+\.md: rules [0-9, ]+)?$' >/dev/null; then
+                fail "check-adr-scope.py --list printed a line that is not a rule list"
+              fi
+              records="${listed:-none}"
+            fi
+            printf '%s\n' "${records}" > "${RUNNER_TEMP}/adr-scope.txt"
+            # One line per rule to fill in, so the review never expands "rules 1, 3, 4" itself.
+            skeleton="$(python3 -I "${tools}/scripts/check-adr-scope.py" --skeleton "${RUNNER_TEMP}/adr-scope.txt")" \
+              || fail "check-adr-scope.py --skeleton exited non-zero"
+            skeleton="${skeleton:-none in scope}"
+          fi
+          {
+            echo "records<<ADR_SCOPE_EOF"
+            echo "${records}"
+            echo "ADR_SCOPE_EOF"
+            echo "skeleton<<ADR_SCOPE_EOF"
+            echo "${skeleton}"
+            echo "ADR_SCOPE_EOF"
+          } >> "${GITHUB_OUTPUT}"
 
       - id: agent
         uses: anthropics/claude-code-action@4845bacbb38b3c4b15d948f035349786f678e068  # v1.0.267
@@ -144,6 +204,20 @@ jobs:
             - Blocking device I/O or a lock wait added to a path the daemon
               runs per-frame or per-poll during a sequence.
             - A PR description that does not describe the diff.
+            - A changed line that breaks a decision-record rule the diff falls
+              under. The records and rule numbers in scope are listed under
+              DECISION RECORDS IN SCOPE below; read each listed rule in
+              docs/adr/ (the base branch's copy) and cite the record file and
+              rule number. When a rule says "Checked by: review (<what to
+              look for>)", look for exactly that evidence. A PR that changes a
+              record is checked against the base copy; the change to the rule
+              itself needs a reason in the PR description, not a defect.
+            - A new decision record (a file the PR adds under docs/adr/) that
+              fails one of the three tests in docs/adr/README.md ("What earns
+              a record": hard to reverse, surprising without context, a real
+              trade-off with named alternatives), or whose Consequences
+              section carves out code that deviates from its own rules
+              instead of pointing at an issue.
             Each defect names the file, the line, and the input or scenario
             that shows it, so the builder can reproduce it before fixing.
 
@@ -162,8 +236,30 @@ jobs:
             changed, and any doc or skill text describing the changed
             behaviour. Be concise. Use short bullet points.
 
-            Write the review as two sections, "Defects" and "Notes" (either
-            may say "none"), then the sign-off as the LAST line:
+            DECISION RECORDS IN SCOPE:
+            ${{ steps.adr_scope.outputs.records }}
+
+            Account for every rule listed above, one line each, in a
+            "Decision records" section. Copy every line of this checklist,
+            in order, and fill in VERDICT and reason on each:
+            ${{ steps.adr_scope.outputs.skeleton }}
+            VERDICT is pass, defect or n/a. The reason names the file and
+            line you checked. Use n/a only when the rule's own wording does
+            not reach the changed lines, and name that wording. Every defect
+            line is also listed under Defects. When nothing is listed, write
+            "none in scope". The check after your run fails the review when a
+            listed rule has no line, has two verdicts, or is a defect under
+            the approving sign-off. After you write /tmp/review.md and before
+            you post it, when a command is named here, run this exact command
+            and fix every line it prints in the file, then run it again until
+            it prints nothing:
+              python3 -I ${{ runner.temp }}/adr-tools/scripts/check-adr-scope.py --checklist ${{ runner.temp }}/adr-scope.txt /tmp/review.md
+            (When the scope above starts with "none (the default branch has
+            no", there is no checker yet: skip that command.)
+
+            Write the review as three sections, "Defects", "Notes" (either
+            may say "none") and "Decision records" (the checklist above),
+            then the sign-off as the LAST line:
               "⚠️ Issues found" if Defects is non-empty, otherwise
               "✅ Approved". A note is never a reason to withhold approval.
             Do not quote either sign-off string anywhere else in the review.
@@ -189,7 +285,7 @@ jobs:
             Do not submit the review text as a chat message.
           claude_args: |
             --model opus
-            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob,Write,Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git fetch:*),Bash(git merge-base:*),Bash(sed -n:*),Bash(grep:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(cat:*),Bash(ls:*),Bash(echo:*),Bash(awk:*)"
+            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob,Write,Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git fetch:*),Bash(git merge-base:*),Bash(sed -n:*),Bash(grep:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(cat:*),Bash(ls:*),Bash(echo:*),Bash(awk:*),Bash(python3 -I ${{ runner.temp }}/adr-tools/scripts/check-adr-scope.py --checklist:*)"
             --disallowedTools "Task,Agent,Workflow,ScheduleWakeup,CronCreate,CronDelete,Monitor"
 
 
@@ -231,15 +327,33 @@ jobs:
           # comment left over from a previous commit's review, must not
           # satisfy the gate.
           started="$(gh run view "$GITHUB_RUN_ID" --repo "${{ github.repository }}" --json createdAt --jq .createdAt)"
-          if gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
+          bodies="$(gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
               --paginate \
               | jq -r --arg since "$started" \
-              '.[] | select(.user.login | test("^(claude|github-actions)(\\[bot\\])?$")) | select(.updated_at >= $since) | .body' \
-              | grep -qE "Approved|Issues found"; then
-            echo "Review comment found."
-          else
+              '.[] | select(.user.login | test("^(claude|github-actions)(\\[bot\\])?$")) | select(.updated_at >= $since) | select(.body | test("Approved|Issues found")) | .body | @base64')"
+          if [ -z "$bodies" ]; then
             echo "::error::The review agent finished without posting its comment — failing rather than green-lighting a review that does not exist."
             exit 1
+          fi
+          echo "Review comment found."
+          # The posted review must account for every decision-record rule in
+          # scope: the default branch's checker (extracted by the scope step,
+          # never the PR's) runs over the posted body. One bot comment that
+          # passes is enough, so a progress comment cannot fail the gate.
+          checker="${RUNNER_TEMP}/adr-tools/scripts/check-adr-scope.py"
+          if [ -f "$checker" ] && [ -f "${RUNNER_TEMP}/adr-scope.txt" ]; then
+            accounted=""
+            while IFS= read -r body; do
+              printf '%s' "$body" | base64 -d > "${RUNNER_TEMP}/posted-review.md"
+              if python3 -I "$checker" --checklist "${RUNNER_TEMP}/adr-scope.txt" "${RUNNER_TEMP}/posted-review.md"; then
+                accounted=1
+                break
+              fi
+            done <<< "$bodies"
+            if [ -z "$accounted" ]; then
+              echo "::error::The posted review does not account for every decision-record rule in scope."
+              exit 1
+            fi
           fi
 
   # ─── Fork PRs: label-gated pull_request_target path (#930/#931) ───
@@ -289,6 +403,8 @@ jobs:
           for parent in .github docs; do
             if [ -L "$parent" ]; then rm -f "$parent"; fi
           done
+          # Decision records are read as rules: the base branch's copy, never the PR's.
+          rm -rf docs/adr
           find . -path ./.git -prune -o \
             \( -name AGENTS.md -o -name CLAUDE.md -o -name .mcp.json -o -name .claude \) \
             -print0 | xargs -0 rm -rf
@@ -298,10 +414,68 @@ jobs:
           git fetch --depth=1 origin "$BASE_SHA" || true
           if git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
             git ls-tree -r --name-only "$BASE_SHA" \
-              | grep -E '(^|/)(AGENTS\.md|CLAUDE\.md|\.claude/.*)$' \
+              | grep -E '(^|/)(AGENTS\.md|CLAUDE\.md|\.claude/.*)$|^docs/adr/.*$' \
               | xargs -r git checkout "$BASE_SHA" -- || true
           fi
           git status --short
+
+      # Which decision-record rules the diff falls under: the default branch's
+      # scripts run over the base branch's records (restored above), so a PR
+      # cannot change what it is checked against. Only lines of the form
+      # `NNNN-slug.md: rules 1, 2` reach the prompt. While the default branch
+      # has no scripts/check-adr-scope.py (the PR that adds it), the step
+      # prints `none` and the review runs without a rule checklist. A base
+      # with records whose scope cannot be computed fails the job here: a
+      # review that cannot see the rules does not run.
+      - name: List the decision-record rules in scope
+        id: adr_scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          fail() { printf '::error::Decision-record scope: %s, so the review does not run.\n' "$1"; exit 1; }
+          tools="${RUNNER_TEMP}/adr-tools"
+          records_tree="${RUNNER_TEMP}/adr-base"
+          rm -rf "${tools}" "${records_tree}" && mkdir -p "${tools}" "${records_tree}"
+          git fetch --depth=1 origin "refs/heads/${DEFAULT_BRANCH}" || fail "the default branch could not be fetched"
+          if [ -n "$(git ls-tree -r --name-only FETCH_HEAD scripts/check-adr-scope.py)" ]; then
+            git archive FETCH_HEAD scripts | tar -x -C "${tools}" || fail "the default branch's scripts could not be extracted"
+          fi
+          if [ ! -f "${tools}/scripts/check-adr-scope.py" ]; then
+            records="none (the default branch has no scripts/check-adr-scope.py yet)"
+            skeleton="none in scope"
+          else
+            git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null || git fetch --depth=1 origin "${BASE_SHA}" || fail "the base commit ${BASE_SHA} could not be fetched"
+            if [ -z "$(git ls-tree -d "${BASE_SHA}" docs/adr)" ]; then
+              records="none (the base branch has no decision records)"
+            else
+              git archive "${BASE_SHA}" docs/adr | tar -x -C "${records_tree}" || fail "the base branch's records could not be extracted"
+              changed="$(gh pr diff "${PR_NUMBER}" --repo "${REPO}" --name-only)" || fail "the PR's changed files could not be listed"
+              listed="$(printf '%s\n' "${changed}" \
+                | python3 -I "${tools}/scripts/check-adr-scope.py" --list --root "${records_tree}")" \
+                || fail "check-adr-scope.py --list exited non-zero"
+              if printf '%s\n' "${listed}" | grep -vE '^([0-9]{4}-[a-z0-9-]+\.md: rules [0-9, ]+)?$' >/dev/null; then
+                fail "check-adr-scope.py --list printed a line that is not a rule list"
+              fi
+              records="${listed:-none}"
+            fi
+            printf '%s\n' "${records}" > "${RUNNER_TEMP}/adr-scope.txt"
+            # One line per rule to fill in, so the review never expands "rules 1, 3, 4" itself.
+            skeleton="$(python3 -I "${tools}/scripts/check-adr-scope.py" --skeleton "${RUNNER_TEMP}/adr-scope.txt")" \
+              || fail "check-adr-scope.py --skeleton exited non-zero"
+            skeleton="${skeleton:-none in scope}"
+          fi
+          {
+            echo "records<<ADR_SCOPE_EOF"
+            echo "${records}"
+            echo "ADR_SCOPE_EOF"
+            echo "skeleton<<ADR_SCOPE_EOF"
+            echo "${skeleton}"
+            echo "ADR_SCOPE_EOF"
+          } >> "${GITHUB_OUTPUT}"
 
       - uses: anthropics/claude-code-action@4845bacbb38b3c4b15d948f035349786f678e068  # v1.0.267
         env:
@@ -376,6 +550,20 @@ jobs:
             - Blocking device I/O or a lock wait added to a path the daemon
               runs per-frame or per-poll during a sequence.
             - A PR description that does not describe the diff.
+            - A changed line that breaks a decision-record rule the diff falls
+              under. The records and rule numbers in scope are listed under
+              DECISION RECORDS IN SCOPE below; read each listed rule in
+              docs/adr/ (the base branch's copy) and cite the record file and
+              rule number. When a rule says "Checked by: review (<what to
+              look for>)", look for exactly that evidence. A PR that changes a
+              record is checked against the base copy; the change to the rule
+              itself needs a reason in the PR description, not a defect.
+            - A new decision record (a file the PR adds under docs/adr/) that
+              fails one of the three tests in docs/adr/README.md ("What earns
+              a record": hard to reverse, surprising without context, a real
+              trade-off with named alternatives), or whose Consequences
+              section carves out code that deviates from its own rules
+              instead of pointing at an issue.
             Each defect names the file, the line, and the input or scenario
             that shows it, so the builder can reproduce it before fixing.
 
@@ -394,8 +582,30 @@ jobs:
             changed, and any doc or skill text describing the changed
             behaviour. Be concise. Use short bullet points.
 
-            Write the review as two sections, "Defects" and "Notes" (either
-            may say "none"), then the sign-off as the LAST line:
+            DECISION RECORDS IN SCOPE:
+            ${{ steps.adr_scope.outputs.records }}
+
+            Account for every rule listed above, one line each, in a
+            "Decision records" section. Copy every line of this checklist,
+            in order, and fill in VERDICT and reason on each:
+            ${{ steps.adr_scope.outputs.skeleton }}
+            VERDICT is pass, defect or n/a. The reason names the file and
+            line you checked. Use n/a only when the rule's own wording does
+            not reach the changed lines, and name that wording. Every defect
+            line is also listed under Defects. When nothing is listed, write
+            "none in scope". The check after your run fails the review when a
+            listed rule has no line, has two verdicts, or is a defect under
+            the approving sign-off. After you write /tmp/review.md and before
+            you post it, when a command is named here, run this exact command
+            and fix every line it prints in the file, then run it again until
+            it prints nothing:
+              python3 -I ${{ runner.temp }}/adr-tools/scripts/check-adr-scope.py --checklist ${{ runner.temp }}/adr-scope.txt /tmp/review.md
+            (When the scope above starts with "none (the default branch has
+            no", there is no checker yet: skip that command.)
+
+            Write the review as three sections, "Defects", "Notes" (either
+            may say "none") and "Decision records" (the checklist above),
+            then the sign-off as the LAST line:
               "⚠️ Issues found" if Defects is non-empty, otherwise
               "✅ Approved". A note is never a reason to withhold approval.
             Do not quote either sign-off string anywhere else in the review.
@@ -421,7 +631,7 @@ jobs:
             Do not submit the review text as a chat message.
           claude_args: |
             --model opus
-            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob,Write,Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git fetch:*),Bash(git merge-base:*),Bash(sed -n:*),Bash(grep:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(cat:*),Bash(ls:*),Bash(echo:*),Bash(awk:*)"
+            --allowedTools "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob,Write,Bash(git log:*),Bash(git diff:*),Bash(git show:*),Bash(git fetch:*),Bash(git merge-base:*),Bash(sed -n:*),Bash(grep:*),Bash(head:*),Bash(tail:*),Bash(wc:*),Bash(cat:*),Bash(ls:*),Bash(echo:*),Bash(awk:*),Bash(python3 -I ${{ runner.temp }}/adr-tools/scripts/check-adr-scope.py --checklist:*)"
             --disallowedTools "Task,Agent,Workflow,ScheduleWakeup,CronCreate,CronDelete,Monitor"
 
       # Per #862/#863 (and round-tripped back from AlpacaBridge's port, which
@@ -450,13 +660,31 @@ jobs:
           # comment left over from a previous commit's review, must not
           # satisfy the gate.
           started="$(gh run view "$GITHUB_RUN_ID" --repo "${{ github.repository }}" --json createdAt --jq .createdAt)"
-          if gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
+          bodies="$(gh api "repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments" \
               --paginate \
               | jq -r --arg since "$started" \
-              '.[] | select(.user.login | test("^(claude|github-actions)(\\[bot\\])?$")) | select(.updated_at >= $since) | .body' \
-              | grep -qE "Approved|Issues found"; then
-            echo "Review comment found."
-          else
+              '.[] | select(.user.login | test("^(claude|github-actions)(\\[bot\\])?$")) | select(.updated_at >= $since) | select(.body | test("Approved|Issues found")) | .body | @base64')"
+          if [ -z "$bodies" ]; then
             echo "::error::The review agent finished without posting its comment — failing rather than green-lighting a review that does not exist."
             exit 1
+          fi
+          echo "Review comment found."
+          # The posted review must account for every decision-record rule in
+          # scope: the default branch's checker (extracted by the scope step,
+          # never the PR's) runs over the posted body. One bot comment that
+          # passes is enough, so a progress comment cannot fail the gate.
+          checker="${RUNNER_TEMP}/adr-tools/scripts/check-adr-scope.py"
+          if [ -f "$checker" ] && [ -f "${RUNNER_TEMP}/adr-scope.txt" ]; then
+            accounted=""
+            while IFS= read -r body; do
+              printf '%s' "$body" | base64 -d > "${RUNNER_TEMP}/posted-review.md"
+              if python3 -I "$checker" --checklist "${RUNNER_TEMP}/adr-scope.txt" "${RUNNER_TEMP}/posted-review.md"; then
+                accounted=1
+                break
+              fi
+            done <<< "$bodies"
+            if [ -z "$accounted" ]; then
+              echo "::error::The posted review does not account for every decision-record rule in scope."
+              exit 1
+            fi
           fi

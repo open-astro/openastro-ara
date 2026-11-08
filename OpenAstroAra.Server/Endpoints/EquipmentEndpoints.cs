@@ -970,6 +970,7 @@ public static partial class EquipmentEndpoints {
     // the guider first". Status code stays 409 for both (no wire-shape break for older clients).
     internal const string BuildInProgressProblemType = "https://openastro.net/errors/calibration-build-in-progress";
     internal const string GuiderNotConnectedProblemType = "https://openastro.net/errors/guider-not-connected";
+    internal const string GuiderOutOfStepProblemType = "https://openastro.net/errors/guider-out-of-step";
 
     // Extracted (not an inline lambda) so the validation/connection error mapping is unit-testable with a mocked
     // service. §63.6: a bad request (out-of-range frame count / exposure bound, or min > max) throws
@@ -985,6 +986,8 @@ public static partial class EquipmentEndpoints {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
         } catch (CalibrationBuildInProgressException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: BuildInProgressProblemType);
+        } catch (GuiderOutOfStepException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderOutOfStepProblemType);
         } catch (System.InvalidOperationException ex) {
             // Guider not connected — can't accept a build it can't run.
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
@@ -1000,6 +1003,8 @@ public static partial class EquipmentEndpoints {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
         } catch (CalibrationBuildInProgressException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: BuildInProgressProblemType);
+        } catch (GuiderOutOfStepException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderOutOfStepProblemType);
         } catch (System.InvalidOperationException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         }

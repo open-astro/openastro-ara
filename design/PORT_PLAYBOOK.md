@@ -203,7 +203,7 @@ Three of the four tracking files this section created (`PORT_DECISIONS.md`, `POR
 | SDK pin | `global.json` pinning SDK 10.0.x with `rollForward: latestFeature` |
 | Hosting | Kestrel listening on configurable port (default **5555**), no reverse proxy. Overridable via `OPENASTROARA_PORT` env var or `appsettings.json`. mDNS advertises the actual bound port (§32.4). |
 | Persistence | SQLite via `Microsoft.Data.Sqlite` 10.0.x for session/profile; FITS files on disk |
-| Equipment | **Alpaca only.** `ASCOM.Alpaca.Components` 2.1.0+. No ASCOM COM, no native vendor SDKs. |
+| Equipment | Decided in ADR 0003. `ASCOM.Alpaca.Components` 2.1.0+. |
 | Guiding | PHD2 JSON-RPC client (existing NINA code, repointed to openastro-phd2) |
 | Plate solving | ASTAP external process (cross-platform binary) |
 | Image format | FITS via existing NINA codecs; preview JPEGs generated server-side via **OpenCvSharp4** (replaces `System.Drawing.Common` which doesn't work on Linux ARM64 — see §26) |
@@ -236,11 +236,11 @@ Three of the four tracking files this section created (`PORT_DECISIONS.md`, `POR
 
 | Concern | Value |
 |---|---|
-| Transport | HTTP/1.1 over TCP (no TLS today — local LAN only; opt-in TLS planned with remote-access mode) |
+| Transport | HTTP/1.1 over TCP (decided in ADR 0005) |
 | Encoding | JSON for ops; JPEG bytes for image previews; FITS bytes for full-frame downloads |
 | Operations | REST endpoints under `/api/v1/...` |
 | Live updates | WebSocket at `/api/v1/stream` — server pushes sequence progress, frame complete, log lines, equipment state changes |
-| Authentication | **None in the initial release.** Trusted-LAN posture matching ASCOM Alpaca + ZWO ASIAir; see §67 for the full security model. All endpoints open. A planned remote-access mode (§67.4, ROADMAP) introduces opt-in TLS + token auth for over-internet deployments. |
+| Authentication | Decided in ADR 0005. |
 | Discovery | mDNS service type `_openastroara._tcp.local`; TXT records expose version, hostname, port |
 | Contract | OpenAPI 3.1 spec at `OpenAstroAra.Server/openapi.yaml` — source of truth; Dart client and server-side validation both derive from it |
 
@@ -518,6 +518,8 @@ Commit: `port(net10): bump all projects to net10.0; add global.json`.
 ---
 
 ## 6. Phase 2 — Equipment to Alpaca-only
+
+Decided in ADR 0003; this section is how the port did it.
 
 ### 6.1 Csproj
 
@@ -1424,7 +1426,7 @@ When AI can't run the UI locally (e.g., CI environment, headless), AI states thi
 | `e2e_connect_and_idle.dart` | mDNS discovery → connect → server-state hydration → §60.4 snapshot matches WILMA's reconstructed state |
 | `e2e_run_mock_sequence.dart` | Connect → wizard with simulator profile → start 2-frame sequence → preview JPEGs appear → sequence completes cleanly |
 | `e2e_disconnect_reconnect_resume.dart` | Mid-sequence WS disconnect → wait 30 s → reconnect → resume protocol per §60.9 → caught-up state matches expected |
-| `e2e_emergency_stop.dart` | Start sequence → trigger emergency stop per §35.3 → mount parks, camera aborts, alarm fires per §35.5 |
+| `e2e_emergency_stop.dart` | Start sequence → trigger emergency stop per §35.3 → mount stops, camera aborts, alarm fires per §35.5 |
 | `e2e_changelog_modal.dart` | Update server version mid-session simulation → reconnect → changelog modal appears per §33.7 |
 
 **Test environment** (CI job):
@@ -1656,7 +1658,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
 **SUPERSEDED IN PART (2026-08-02, §77):** this section originally declared planetary/lunar lucky-imaging "out of scope, permanently" because ASCOM Alpaca has no video API (the `IVideo` interface is deprecated and unsupported by Alpaca) and §52 commits ARA's *Alpaca* path to still imaging. The Alpaca-side reasoning stands unchanged — high-frame-rate capture will never go through Alpaca, and the still-imaging pipeline stays DSO + comets (30 s – 900 s exposures, where the image-grab API is the right primitive; NINA has the same protocol limitation). What changed: §77 adds planetary/SER capture as a first-class mode **outside** the Alpaca path — the daemon P/Invokes the vendor SDK `.so` directly (the one documented §52 exception), so SER output, ROI capture, and 100–500 fps workflows are now IN scope via §77's engine, mode-gated behind the §77.2 Alpaca disconnected-window. Statements elsewhere in this doc that cite §18.J for "planetary permanently out of scope" are corrected to "out of scope *for the Alpaca imaging path*; handled by §77."
 
 ### 18.I — Plate solving
-- **ASTAP**: only solver. Cross-platform; users download per OS from astap.nl. Server config exposes ASTAP binary path + **one or more star-database paths**; per-OS binary defaults attempted on first run:
+- **ASTAP** (decided in ADR 0007). Cross-platform; users download per OS from astap.nl. Server config exposes ASTAP binary path + **one or more star-database paths**; per-OS binary defaults attempted on first run:
   - Linux: `/opt/openastroara/astap_cli` — the solver bundled with the daemon: OpenAstro's multi-core fork of `astap_cli` (git submodule `third_party/astap`, branch `ara` of open-astro/astap: Han Kleijn's `main` plus an OpenAstro patch, built by `scripts/build-astap-cli.sh` on every publish). Han's v2026.11.01 threads the spiral database search; the patch also spreads the FITS load, binning and star detection over every core: on a 4-core Pi a hinted solve of a 26 MP frame takes 0.63 s against Han's 1.6 s, a blind solve 2.7 s against 3.7 s; its output is identical to Han's build at any thread count. `ASTAP_THREADS` / `-threads n` cap the cores. Profiles that still name a stock binary (`/usr/bin/astap_cli` from Debian's `astap-cli`, the GUI package's `/usr/bin/astap`, the astap.nl `.deb`'s `/opt/astap/astap_cli`) are migrated to the bundled one by `SolverPathMigration`; any other path is the user's and stays
   - macOS: `/Applications/ASTAP.app/Contents/MacOS/astap`
   - Windows: `%PROGRAMFILES%\astap\astap.exe`
@@ -1666,7 +1668,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
   - **Narrow field / tiny galaxies** (under 0.5°: long focal length, small sensor, few bright stars in frame) → `D80` (8000 stars/deg²) — enough faint Gaia stars to get a match where shallow catalogs fail. `H17` / `H18` are the legacy deep databases ASTAP has retired: still accepted when installed, never recommended. Under 0.15° nothing solves (the wizard says so).
   - **Selection:** the server picks the appropriate installed database from the active rig's computed FOV / pixel scale (focal length + sensor + binning) and names it to ASTAP per-solve with `-D <abbrev>` alongside `-d <database_dir>` (only when more than one is installed; see Status). A lone database is used for every solve; a warning when the FOV falls outside its useful range is not built yet. Exact database names/magnitude limits track astap.nl and may evolve — config stores paths, not hard-coded catalog identifiers.
   - **Status (2026-09-22, #1094):** `ASTAPSolver` now passes `-d <database_dir>` from the profile's plate-solve index path (`ASTAPDatabaseLocation`, bridged from `PlateSolveSettingsDto.IndexDownloadPath`, default `/var/lib/astap`); a configured directory that is missing or empty logs one warning per daemon run and falls back to ASTAP's own lookup. Since #1121, when more than one database sits in that directory the daemon names one with `-D <abbrev>` (`AstapStarDatabase.Select`, five bands: under 0.5° D80 first, 0.5–1° D50 first, 1–6° D05 first, above 6° G05 first and above 20° W08 first — the 6° and 20° cut-offs are ASTAP's own auto-selection thresholds, the 0.5° and 1° ones are this project's ladder — each falling back down the installed list), a stock solver path (`/usr/bin/astap`, `/usr/bin/astap_cli`, `/opt/astap/astap_cli`) migrates to the bundled `/opt/openastroara/astap_cli` once that binary is on disk (#1136), and Settings → Plate solving shows the directory's status (`GET /api/v1/platesolve/database`). The server-side download flow shipped in #1136 (PR #1417): D80/D50/D05/G05/W08 are Data Manager packages (D05/D50 since #1423) (release assets on open-astro/sky-data), installed under the index path one subdirectory each, with the Recommended flag from the profile's field of view; docs/DEPLOY.md step 3 points at Settings → Sky data. A blank index path means the default directory on every side (`SolverPathMigration.EffectiveIndexPath`). §36.10's rig-specific recommendation shipped with the setup wizard's reducer field and database section: `AstapStarDatabase.RecommendedFor` is the ladder (W08 > 20°, G05 > 6°, D05 ≥ 1°, D50 ≥ 0.5°, D80 below, nothing under the 0.15° floor), `POST /data-manager/solver-recommendation` answers per camera (imaging + guide, OAG through the main optics), and the fifth screen downloads the picks after Save. Still open: the "Solve a test image" setup step.
-- **Where ASTAP + databases live: on the Pi (server side), not the client.** The solver runs on the Pi, so its binary and star databases are a **server-managed, Pi-side asset** — the same storage domain as FITS frames / profiles / calibration (§29, on the **mandatory USB drive**), and explicitly *not* the WILMA/client-side sky-data domain (§36 Aladin HiPS surveys / DE440, which download to the client). Consequences:
+- **Where ASTAP + databases live** (decided in ADR 0007): a **server-managed, Pi-side asset** — the same storage domain as FITS frames / profiles / calibration (§29, on the **mandatory USB drive**), and explicitly *not* the WILMA/client-side sky-data domain (§36 Aladin HiPS surveys / DE440, which download to the client). Consequences:
   - **Downloads execute server-side.** The wizard (running in WILMA) does not fetch databases to the client and copy them over — it calls a **server endpoint** that downloads the selected database(s) from astap.nl directly onto the Pi's USB storage, where ASTAP reads them. Client only triggers and shows progress (mirrors the §36.2 background-download UX, but the bytes land on the Pi).
   - **"Browse" = the Pi's filesystem.** Any path picker for binary/database location browses the **server's** filesystem via the server API, not WILMA's local disk.
   - **Default install location** is under the server's USB data root (per §29), e.g. `<usb-root>/astap/databases/`, so databases survive on the same drive policy as the rest of the Pi-side data and don't consume the SD card.
@@ -2197,7 +2199,7 @@ The OpenCvSharp4 *technique* we borrow. The compat layer we don't.
 
 ## 27. Connection policy — single-client at a time
 
-ARA serves **one connected client at a time** to eliminate command-conflict edge cases entirely. New connection attempts go through a hand-off dance mediated by the currently-connected client.
+Decided in ADR 0005. New connection attempts go through a hand-off dance mediated by the currently-connected client.
 
 ### 27.1 Flow
 
@@ -2470,7 +2472,7 @@ Future: UPS GPIO signal pin can trigger a proactive checkpoint + park sequence a
 **Pause vs Abort vs Stop:**
 - **Pause** — described above; everything stays connected and ready; resume restores the running state
 - **Abort** — sequence ends; mount stays where it is; cooler stays on; user controls what happens next
-- **Emergency Stop** (§35.3) — sequence ends; mount parks per §35 safety policy; the cooler is switched straight off as the stop's last rung, whatever `cooler_warmup_on_session_end` says (§28.13 does not apply to it); equipment disconnects per safety policy
+- **Emergency Stop** (§35.3) — sequence ends; the mount stops where it is (§35.3 step 3); the cooler is switched straight off as the stop's last rung, whatever `cooler_warmup_on_session_end` says (§28.13 does not apply to it); equipment disconnects per safety policy
 
 ### 28.13 Cooler warmup at session end
 
@@ -3549,10 +3551,7 @@ GET /api/v1/server/time-sync  → server reports sync state
               ↓
          5. Manual entry modal: UTC date/time + lat/long/altitude
 
-The daemon never opens a serial port looking for a receiver (#1305, 2026-10-11): a blind
-probe of /dev/ttyUSB*/ttyACM* collided with the mount's port and latched AlpacaBridge's
-link fault, and the SBC's USB ports are for equipment. The dongle goes on the computer
-the user is already holding next to the mount. A user who wants the Pi's clock
+Where the receiver goes is decided in ADR 0008. A user who wants the Pi's clock
 disciplined with no client attached runs gpsd/chrony themselves (§31.4.1).
 ```
 
@@ -3602,7 +3601,7 @@ Response: {
 ### 31.4 Implementation notes
 
 - Server sets the system clock via a CAP_SYS_TIME-granted helper. docs/DEPLOY.md adds `sudo setcap cap_sys_time+ep /opt/openastroara/OpenAstroAra.Server` post-install.
-- USB GPS: the WILMA client reads the dongle (NMEA `$GPRMC` / `$GPGGA`) and relays the fix as `gps-client`. The server does NOT scan serial ports (#1305).
+- USB GPS: the WILMA client reads the dongle (NMEA `$GPRMC` / `$GPGGA`) and relays the fix as `gps-client` (ADR 0008).
 - WILMA mobile GPS: `geolocator` Flutter plugin, permission-prompts on first use. Cached for the session. **Status (2026-10-19):** the server accepts and ranks `gps-mobile` (medium), but no client sends it yet: the mobile client pushes its device clock as `client` and the dongle path (`gps-client`, high, #1095) is the only GPS source wired through. Whether the phone's own fix should be pushed as `gps-mobile` is undecided (#1152).
 - All astronomy computations use **UTC internally**; client displays in user's local TZ.
 - Time-sync state is cached per-session; doesn't re-prompt unless the Pi reboots or > 12 hours pass.
@@ -4462,8 +4461,9 @@ Persistent **[Emergency Stop]** button in WILMA's main app shell (top-right of s
 
 Server shutdown sequence:
 1. Camera: abort current exposure
+1a. Guide-camera focus loop, Bahtinov readout, autofocus, polar alignment: stop if running (failed rungs `stop_guide_focus`, `stop_bahtinov`, `cancel_autofocus`, `stop_polar_align`)
 2. Guider (PHD2): stop guiding
-3. Mount: park (or home if no park position configured)
+3. Mount: abort any slew or manual move, then switch tracking off, so it stops where it is. Never a park, a home or a slew: if the slew or park code is at fault, parking would repeat the fault. A parked mount gets neither call. Reported as `mount_stopped`; a fault in either call is the failed rung `stop_mount`, and tracking off is still attempted when the abort faults
 4. Filter wheel / focuser / rotator: leave in place (no auto-move; user can intervene). A rotator that is turning is halted where it is (ASCOM `Halt`, no target; reported as the failed rung `halt_rotator` when the halt faults), run right after the sequence abort, since aborting a run only stops the sequencer waiting on its move (#1671)
 5. Flat panel: turn off (if connected, and configured to do so)
 6. Camera cooler: switch off (if the camera is connected and its cooler is on; reported as `cooler_off`, a refusal as the failed rung `cooler_off`)
@@ -5772,7 +5772,7 @@ Execute fault's configured action per profile
    Continue   = log, keep going (use for benign / informational faults)
    Notify     = queued WebSocket event, sequence continues
    Pause      = sequence pauses at next safe point, equipment stays connected, user resumes manually
-   Abort+park = full §35.3 emergency stop sequence (camera abort, guider stop, mount park, etc.)
+   Abort+park = abort the sequence and park (camera abort, guider stop, mount park, etc.)
 ```
 
 Per-fault action is configurable in profile safety policies (§35 extension), with the defaults below.
@@ -7825,17 +7825,7 @@ This is the section that's worth showing in marketing screenshots: a side-by-sid
 
 ### 52.1 Alpaca-only is a permanent architectural commitment
 
-ARA speaks ASCOM Alpaca exclusively. **INDI and INDIGO are not, and will not become, native protocols.** This is not "deferred — see the `P1`–`P5` issue backlog" — it's a permanent design choice. Reasons:
-
-| Standard | Conformance validation | Driver quality bar |
-|---|---|---|
-| **ASCOM Alpaca** | [ConformU](https://github.com/ASCOMInitiative/ConformU) — formal test suite operated by the ASCOM Initiative; required for certified drivers | Consistently high; non-conformance is detectable + reportable |
-| INDI | None (community-curated) | Variable; quirks must be discovered + worked around per-driver |
-| INDIGO | Limited (some validation but no equivalent ConformU-style certification) | Better than INDI but still inconsistent |
-
-Supporting INDI/INDIGO natively means accumulating brand-quirk workarounds forever — exactly the maintenance burden ARA exists to avoid. NINA learned this the hard way; we don't repeat it.
-
-**One documented exception (2026-08-02):** §77 planetary capture P/Invokes the vendor camera SDK's video subset directly (Alpaca has no video API), and only while the camera is detached from the Alpaca surface via the §77.2 disconnected-window. Device *control* remains Alpaca-only; this exception never extends to mounts, INDI/INDIGO, or any second feature without its own decision-log entry.
+Decided in ADR 0003, with its one bounded addition for §77 planetary capture.
 
 ### 52.2 Bridge path for INDI / INDIGO users
 
@@ -7894,14 +7884,7 @@ Reporting workflow when a driver fails: ARA shows a "Report this issue" button t
 
 ### 52.6 What about NINA's mount-specific code?
 
-NINA contains a fair amount of brand-specific mount handling — special-case branches for EQMod, iOptron CEM park modes, SiTech axis limits, OnStep extensions, etc. **During the Phase 8 port, ARA strips this brand-specific code.** Generic Alpaca handling replaces it.
-
-If a brand-specific behavior turns out to genuinely require special handling, the path is:
-1. Report the discrepancy to the driver author
-2. Wait for the driver to be updated to handle the case via standard Alpaca calls
-3. NOT add special-case code to ARA
-
-This is firm. The maintenance burden of one mount-quirk-database is genuinely worse than the inconvenience of waiting for a driver update.
+Decided in ADR 0003 (rule 2). During the Phase 8 port, ARA stripped NINA's brand-specific mount code. A driver discrepancy goes to the driver's author.
 
 ### 52.7 What future releases may add (without changing the core philosophy)
 
@@ -8055,6 +8038,19 @@ WILMA opens https://github.com/open-astro/openastro-ara/issues/new?template=bug_
 ```
 
 User attaches the zip manually in GitHub — ARA cannot upload directly via API (would require auth + would feel sneaky for a public issue tracker).
+
+**What Ara ships (2026-10-29): the whole-rig bundle.** Support → *Send me a bug report* → **Covers** picks the range: *Last night (whole rig)* (24 h, the default), *Last 3 days*, *Last 7 days*, or *Ara logs only* (the daemon's newest 3 logs, as the bundle was before, now with `manifest.json` and the 128 MB per-file cap). With a range the daemon packs, from every file written in it:
+
+| ZIP folder | Source on the rig |
+|---|---|
+| `logs/` | Ara's daemon logs (`/var/lib/openastroara/logs`) |
+| `ara-nina-logs/` | Ara's NINA-layer logs (`/var/lib/openastroara/.local/share/NINA/Logs`, where the Core logger wrote before #1591) |
+| `alpacabridge/` | AlpacaBridge's daily logs (`/var/log/AlpacaBridge`) |
+| `guider/` | openastro-guider's PHD2 debug and guide logs (`/var/lib/openastro-guider/PHD2`) |
+| `system/` | package history (`/var/log/apt/history.log`, `/var/log/dpkg.log`) and the kernel ring buffer (`dmesg`, since boot) |
+| `journal/` | `journalctl --since` for Ara, AlpacaBridge, the guider, `power-watch` (the under-voltage / throttle monitor, where a rig runs it) and the kernel, plus `--list-boots` |
+
+plus `profile.json`, `system-info.json` and a `manifest.json` that lists every file included, cut or skipped and why. Each log file keeps its newest 128 MB (a PHD2 debug log reaches 245 MB a night) and the files stop at 1 GB of text (~100 MB zipped); the journal and `dmesg` exports are taken whole, bounded by journald's own size limit and the ring buffer; every text file passes the §54.3 sharing-mode scrub. The bundle packs in the background (`POST /api/v1/bugreport/prepare` with `since_utc` → `preparing`; the app polls `GET /api/v1/bugreport/{id}` and lists each source's files and size in the disclosure). The service unit carries `SupplementaryGroups=systemd-journal` so `journalctl` can read the journal; `apt/term.log` (root:adm) is left out rather than widening that further. On the CM4, a night packs in ~14 s: 115 MB of logs → a 6 MB ZIP.
 
 ### 54.3 Review modal
 
@@ -8327,7 +8323,7 @@ Centered on one principle: **whenever the mount is moving autonomously, the user
 | Control | What it does | When visible | After triggering |
 |---|---|---|---|
 | **Stop Mount** (§57) | Issues Alpaca `AbortSlew()` — mount halts in place; nothing else touched | Contextual — only during autonomous slews | Sequence pauses; mount stays where halted; cooler/guider/etc. keep running. Modal prompts [Verify Position] / [Resume] / [Skip Target] / [End Session] |
-| **Emergency Stop** (§35.3) | Full session abort — camera abort, guider stop, mount park, sequence aborted | Persistent — always visible in WILMA shell | Session over |
+| **Emergency Stop** (§35.3) | Full session abort — camera abort, guider stop, mount stopped where it is, sequence aborted | Persistent — always visible in WILMA shell | Session over |
 
 Different buttons, different colors, different positions, different consequences. Stop Mount = "this slew is going somewhere I don't like." Emergency Stop = "kill everything now." Users learn the distinction quickly because each only appears when contextually relevant.
 
@@ -10336,6 +10332,8 @@ ARA profile "Field rig AM5"     ↔ PHD2 profile "ara-field-am5"
 
 PHD2 preserves per-profile calibration + dark library data, so switching ARA profiles never loses guider state for either rig.
 
+**The Guider follows the active profile (#1665).** Creating a profile that becomes active runs the same follow as selecting one, after the clone when the create is a duplicate. Creating without activating leaves the Guider alone. Unlike a select, the create runs the selection checks (#1306, #1308). A push refused by those checks still selects or creates the active profile's twin and sends no equipment selection. A refused or failed push, or a connect whose selection fails the same checks, leaves the Guider **out of step** with the reason recorded. A push or connect whose selection passes the checks clears it. A select's follow is not refused, but its selection is judged the same way after the push, so it cannot clear a bad selection. A disconnect makes the state unknown. While out of step, Start guiding, a run's Start Guiding, polar alignment, the dark library and defect map builds, and the guide-camera focus loop refuse up front with the reason and send no capture RPC. `runtime.out_of_step_reason` carries the same text.
+
 ### 63.5 Profile parameters ARA pushes to PHD2
 
 Captured by §37.3 Screen 10 wizard, pushed via `set_profile_setup` (which accepts any subset of fields):
@@ -10459,7 +10457,7 @@ If `openastro-phd2` is not installed (user opted out of Recommends, or removed i
 |---|---|---|
 | `GET` | `/api/v1/guider/status` | PHD2 lifecycle state + version + last-seen app state + connected equipment |
 | `POST` | `/api/v1/equipment/guider/restart` | Force `systemctl restart openastro-guider`; idempotent per §60.5. Only when the profile's guider host is this machine (§63.3 host gate, #1192) — for a remote host it is a logged no-op that still returns 202 |
-| `POST` | `/api/v1/guider/profile/push` | Push current ARA-profile params to PHD2; runs the disconnect-update-reconnect sequence. 409 disconnected guider; 422 when the post-push reconnect fails, or (#1306) when a bare `Alpaca …` selection has no Alpaca host/port to serve it (nothing is sent; the message names the slot) |
+| `POST` | `/api/v1/guider/profile/push` | Push current ARA-profile params to PHD2; runs the disconnect-update-reconnect sequence. 409 disconnected guider; 422 when the post-push reconnect fails, or (#1306) when a bare `Alpaca …` selection has no Alpaca host/port to serve it (no equipment selection is sent, but the active profile's twin still follows, #1665; the message names the slot) |
 | `POST` | `/api/v1/guider/dark-library/build` | Initiate dark library build (with prompt-cover modal flow on client) |
 | `GET` | `/api/v1/guider/dark-library/state` | Returns `get_calibration_files_status` result (paths, exists, loaded, frame count) |
 | `DELETE` | `/api/v1/guider/dark-library` | `delete_calibration_files({delete_dark_library: true})` for current profile |
@@ -11241,7 +11239,7 @@ In the initial release, these are **aspirational** — no automated gating in CI
 
 ## 67. Security model
 
-ARA's security model matches **ASCOM Alpaca and ZWO ASIAir**: trusted-LAN deployment, **no authentication on the API**, no transport encryption in the initial release. This is a deliberate choice that reflects how astrophotography software is actually used.
+Decided in ADR 0005. This section is the detail that goes with it.
 
 ### 67.1 Threat model
 
@@ -11250,9 +11248,7 @@ ARA users image from:
 - Remote observatories they own (private LAN, possibly behind a VPN)
 - Dark sky party fields (shared LAN with other astrophotographers)
 
-In every case the people on the network are imaging peers, not adversaries. Star parties have happened for decades with ASIAir, KStars/EKOS, NINA-with-Alpaca-over-LAN, SharpCap remote, and SkyPortal — **none of which authenticate the API**. No one is hacking imaging rigs in the wild. The imaging community is small, trusts each other, and the on-network blast radius (mess with someone's exposure) is too low to motivate attacks.
-
-ARA inherits this posture:
+What each threat meets today:
 
 | Threat | Current protection | Notes |
 |---|---|---|
@@ -11284,7 +11280,7 @@ docs/DEPLOY.md (per §34.6) documents:
 
 ### 67.4 Remote-access mode (not planned)
 
-**Decided 2026-11-06 (#1163): not planned.** ARA stays LAN-only with no API auth, and a VPN is the supported way to reach a rig from outside its network. The reasoning is in `.out-of-scope/remote-access-mode.md`. Encrypted backups (§28.14, #1175) are not built for the same reason.
+Not planned: decided in ADR 0005. Encrypted backups (§28.14, #1175) are not built for the same reason.
 
 The design that was deferred here, kept for the record: an opt-in mode with TLS termination (Let's Encrypt or self-signed), token authentication, rate limiting with an optional IP allowlist, bound on a separate interface so LAN access stayed unauthenticated. Other mentions of a "future" or "planned" remote-access mode elsewhere in this playbook describe that shelved design, not a commitment.
 

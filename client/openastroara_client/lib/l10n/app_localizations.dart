@@ -591,6 +591,228 @@ abstract class AppLocalizations {
   /// **'Couldn\'t change the flat panel'**
   String get deviceCouldntChangeFlatPanel;
 
+  /// Simple Mode Settings › Devices row and window title: the safety monitor
+  ///
+  /// In en, this message translates to:
+  /// **'Safety monitor'**
+  String get shellSafetyMonitor;
+
+  /// Dome window: the shutter's row
+  ///
+  /// In en, this message translates to:
+  /// **'Shutter'**
+  String get deviceShutter;
+
+  /// Dome window and status pill: the dome's shutter is opening or closing
+  ///
+  /// In en, this message translates to:
+  /// **'Shutter moving…'**
+  String get deviceShutterMoving;
+
+  /// Dome window: the caption under the dome's azimuth
+  ///
+  /// In en, this message translates to:
+  /// **'Azimuth'**
+  String get deviceAzimuth;
+
+  /// Dome window: the dome sits at its home position
+  ///
+  /// In en, this message translates to:
+  /// **'At home'**
+  String get deviceAtHome;
+
+  /// Dome window: button that sends the dome to find its home position
+  ///
+  /// In en, this message translates to:
+  /// **'Home'**
+  String get deviceHome;
+
+  /// Dome window: button that stops the dome
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get deviceStop;
+
+  /// Dome window: screen reader label of the stop square in the dome's middle
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the dome'**
+  String get deviceStopDome;
+
+  /// Dome window: asked before a shutter change, Park or Home while a plan runs
+  ///
+  /// In en, this message translates to:
+  /// **'A plan is running. Change the dome anyway?'**
+  String get devicePlanRunningChangeDome;
+
+  /// Error message when the dome refused a shutter change, Park or Home
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t move the dome'**
+  String get deviceCouldntMoveDome;
+
+  /// Error message when the dome refused Stop
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t stop the dome'**
+  String get deviceCouldntStopDome;
+
+  /// Dome window: the daemon couldn't read the dome
+  ///
+  /// In en, this message translates to:
+  /// **'Dome read failed — check the device.'**
+  String get deviceDomeReadFailed;
+
+  /// Safety monitor window: the monitor reads safe
+  ///
+  /// In en, this message translates to:
+  /// **'Safe'**
+  String get deviceSafe;
+
+  /// Safety monitor window: the monitor reads unsafe
+  ///
+  /// In en, this message translates to:
+  /// **'Unsafe'**
+  String get deviceUnsafe;
+
+  /// Safety monitor window: when the reading last changed (local 24 h time) and how long ago
+  ///
+  /// In en, this message translates to:
+  /// **'since {time} · {duration}'**
+  String deviceSafetySince(String time, String duration);
+
+  /// Status pill detail while the safety monitor reads unsafe (local 24 h time)
+  ///
+  /// In en, this message translates to:
+  /// **'Unsafe since {time}'**
+  String deviceUnsafeSince(String time);
+
+  /// Safety monitor window while unsafe: the safety policy resumes the plan this long after the monitor reads safe again
+  ///
+  /// In en, this message translates to:
+  /// **'Resumes {minutes} min after Safe'**
+  String deviceResumesAfterSafe(int minutes);
+
+  /// Safety monitor window while unsafe: the safety policy does not resume the plan by itself
+  ///
+  /// In en, this message translates to:
+  /// **'Stays paused until you resume'**
+  String get deviceStaysPaused;
+
+  /// Dome window and status pill: the shutter is opening
+  ///
+  /// In en, this message translates to:
+  /// **'Opening…'**
+  String get deviceOpening;
+
+  /// Dome window and status pill: the shutter is closing
+  ///
+  /// In en, this message translates to:
+  /// **'Closing…'**
+  String get deviceClosing;
+
+  /// Dome window: screen reader label of the dial's middle with no target yet
+  ///
+  /// In en, this message translates to:
+  /// **'Turn'**
+  String get deviceTurn;
+
+  /// Dome window: screen reader label of the dial's middle, turning the dome to the target
+  ///
+  /// In en, this message translates to:
+  /// **'Turn to {angle}'**
+  String deviceTurnTo(String angle);
+
+  /// Dome window: the daemon reads the dome's shutter as faulted (ASCOM ShutterState.Error)
+  ///
+  /// In en, this message translates to:
+  /// **'Shutter fault: open or close again.'**
+  String get deviceShutterFault;
+
+  /// Dome window and status pill: the dome is finding its home position
+  ///
+  /// In en, this message translates to:
+  /// **'Finding home…'**
+  String get deviceFindingHome;
+
+  /// Dome window and status pill: the dome is turning to the dial's target
+  ///
+  /// In en, this message translates to:
+  /// **'Turning to {angle}…'**
+  String deviceTurningTo(String angle);
+
+  /// Safety monitor window: a weather reason as a sentence in the Why list (the same words are a status pill's detail without the full stop)
+  ///
+  /// In en, this message translates to:
+  /// **'{reason}.'**
+  String deviceReasonSentence(String reason);
+
+  /// Safety monitor window: heading over the reasons the rig is unsafe
+  ///
+  /// In en, this message translates to:
+  /// **'Why'**
+  String get deviceWhy;
+
+  /// Safety monitor window: heading over what the safety policy does while unsafe
+  ///
+  /// In en, this message translates to:
+  /// **'What Ara does'**
+  String get deviceWhatAraDoes;
+
+  /// Safety monitor window: an ASCOM safety monitor reports only safe or unsafe, never a reason
+  ///
+  /// In en, this message translates to:
+  /// **'{name} says unsafe. It doesn\'t say why: check the device.'**
+  String deviceMonitorNoReason(String name);
+
+  /// Safety monitor window and status pill: the wind (worse of speed and gust) past the safety limit; no full stop, it is a pill detail too
+  ///
+  /// In en, this message translates to:
+  /// **'Wind {value} km/h, over the {limit} km/h limit'**
+  String deviceWindOverLimit(String value, int limit);
+
+  /// Safety monitor window: the humidity past the safety limit
+  ///
+  /// In en, this message translates to:
+  /// **'Humidity {value} %, over the {limit} % limit'**
+  String deviceHumidityOverLimit(String value, int limit);
+
+  /// Safety monitor window: the air too close to the dew point
+  ///
+  /// In en, this message translates to:
+  /// **'Dew point {value} °C below the air, under the {limit} °C margin'**
+  String deviceDewUnderMargin(String value, String limit);
+
+  /// Safety monitor window: under Unsafe when the weather, not the monitor, makes the rig unsafe
+  ///
+  /// In en, this message translates to:
+  /// **'{name} reads Safe'**
+  String deviceMonitorReadsSafe(String name);
+
+  /// Safety monitor window: the On unsafe policy Pause + park + close dome
+  ///
+  /// In en, this message translates to:
+  /// **'On unsafe, Ara pauses the plan, parks and closes the dome.'**
+  String get deviceOnUnsafePause;
+
+  /// Safety monitor window: the On unsafe policy Park only
+  ///
+  /// In en, this message translates to:
+  /// **'On unsafe, Ara parks; the plan carries on.'**
+  String get deviceOnUnsafePark;
+
+  /// Safety monitor window: the On unsafe policy Abort sequence + park
+  ///
+  /// In en, this message translates to:
+  /// **'On unsafe, Ara stops the plan and parks.'**
+  String get deviceOnUnsafeAbort;
+
+  /// Safety monitor window: the On unsafe policy Ignore
+  ///
+  /// In en, this message translates to:
+  /// **'On unsafe, Ara does nothing; imaging carries on.'**
+  String get deviceOnUnsafeIgnore;
+
   /// Error message when the flat panel took a command but never showed it
   ///
   /// In en, this message translates to:
@@ -980,6 +1202,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Stars'**
   String get previewStars;
+
+  /// Why the Main row in Preview's Camera field is locked while the guide camera loops
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the guide camera\'s frames first.'**
+  String get previewStopGuideFrames;
+
+  /// Empty screen in Preview with the guide camera picked and no guide frame yet
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the shutter for the guide camera\'s frames'**
+  String get previewGuideEmpty;
+
+  /// Simple Mode pill when a run starts on a profile set to ask about flats
+  ///
+  /// In en, this message translates to:
+  /// **'No flats this run'**
+  String get simpleNoFlatsThisRun;
+
+  /// Why the run takes no flats and where to change it; the setting names match the English-only Settings panel
+  ///
+  /// In en, this message translates to:
+  /// **'Your profile asks before each run, and Simple Mode doesn\'t ask. Turn off Simple Mode in Settings → Rig, then set Capture calibration after a sequence under Settings → Session → Calibration.'**
+  String get simpleNoFlatsThisRunDetail;
+
+  /// Simple Mode: label above the list of connected cameras in Preview's settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get previewCamera;
 
   /// Simple Mode: exposure length, as an Info tile label and the Preview settings picker label
   ///
@@ -2982,8 +3234,8 @@ abstract class AppLocalizations {
   /// Emergency Stop result list item
   ///
   /// In en, this message translates to:
-  /// **'mount told to park'**
-  String get estopParkRequested;
+  /// **'mount stopped'**
+  String get estopMountStopped;
 
   /// Emergency Stop result list item
   ///
@@ -3030,8 +3282,8 @@ abstract class AppLocalizations {
   /// Emergency Stop failed step
   ///
   /// In en, this message translates to:
-  /// **'MOUNT PARK FAILED — verify it manually'**
-  String get estopFailPark;
+  /// **'MOUNT STOP FAILED — verify it manually'**
+  String get estopFailStopMount;
 
   /// Emergency Stop failed step
   ///
@@ -3050,6 +3302,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'CAMERA COOLER STILL ON (switching it off failed)'**
   String get estopFailCooler;
+
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'GUIDE-CAMERA FOCUS LOOP MAY STILL BE RUNNING (stop failed)'**
+  String get estopFailGuideFocus;
+
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'BAHTINOV READOUT MAY STILL BE RUNNING (stop failed)'**
+  String get estopFailBahtinov;
+
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'AUTOFOCUS MAY STILL BE RUNNING (cancel failed)'**
+  String get estopFailAutofocus;
+
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'POLAR ALIGNMENT MAY STILL BE RUNNING (stop failed)'**
+  String get estopFailPolarAlign;
 
   /// Emergency Stop failed step the app has no wording for; step is the daemon's token
   ///
@@ -4112,6 +4388,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The guider didn\'t stop: it is still {state}. Try Stop again.'**
   String guideStopRefused(String state);
+
+  /// Simple Mode pill: the guider accepted a Start and then gave up; {reason} is the guider's own words, e.g. Stopped capturing (#1664).
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding didn\'t start: {reason}.'**
+  String guideStartFailed(String reason);
+
+  /// Simple Mode pill: the guider gave up on a Start without saying why (#1664).
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding didn\'t start. See the Guider log for why.'**
+  String get guideStartFailedNoReason;
+
+  /// No description provided for @guideAggressiveness.
+  ///
+  /// In en, this message translates to:
+  /// **'Aggressiveness'**
+  String get guideAggressiveness;
+
+  /// Right ascension, the short axis name beside its slider
+  ///
+  /// In en, this message translates to:
+  /// **'RA'**
+  String get guideAxisRa;
+
+  /// Declination, the short axis name beside its slider
+  ///
+  /// In en, this message translates to:
+  /// **'Dec'**
+  String get guideAxisDec;
+
+  /// No description provided for @guideRaAggressiveness.
+  ///
+  /// In en, this message translates to:
+  /// **'RA aggressiveness'**
+  String get guideRaAggressiveness;
+
+  /// No description provided for @guideDecAggressiveness.
+  ///
+  /// In en, this message translates to:
+  /// **'Dec aggressiveness'**
+  String get guideDecAggressiveness;
+
+  /// No description provided for @guideDecMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Dec guide mode'**
+  String get guideDecMode;
+
+  /// No description provided for @guideDecAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get guideDecAuto;
+
+  /// No description provided for @guideDecNorth.
+  ///
+  /// In en, this message translates to:
+  /// **'North'**
+  String get guideDecNorth;
+
+  /// No description provided for @guideDecSouth.
+  ///
+  /// In en, this message translates to:
+  /// **'South'**
+  String get guideDecSouth;
 
   /// Guide exposure picker value when the profile leaves it to the guider
   ///

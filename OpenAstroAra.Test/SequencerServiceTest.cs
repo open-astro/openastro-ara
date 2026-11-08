@@ -257,6 +257,7 @@ namespace OpenAstroAra.Test {
             var described = progress.Where(e => e.Payload.TryGetProperty("current_instruction_description", out var d)
                                                 && d.ValueKind == JsonValueKind.String && d.GetString()!.Length > 0).ToList();
             Assert.That(described, Is.Not.Empty, "the running wait is described on the wire, not only on GET /state");
+            Assert.That(progress.All(e => e.Payload.TryGetProperty("frames_captured", out _)), Is.True, "the frames filed ride every frame");
             Assert.That(progress.All(e => e.Payload.TryGetProperty("current_target_name", out _)), Is.True, "the target rides every frame (null before a target)");
         }
 

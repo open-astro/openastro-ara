@@ -162,6 +162,7 @@ Future<ImagingRunResult?> createImagingRun(
   // the Full UI has always built.
   String? stopAtDawn,
   bool parkAtEnd = false,
+  bool pauseForFilterSwap = true,
 }) async {
   // Pin the autoDispose API for the whole create. With no widget watching
   // it (the coordinate-entry dialog, a Tonight's Sky row whose panel just
@@ -192,6 +193,7 @@ Future<ImagingRunResult?> createImagingRun(
       gainOverride: gain,
       stopAtDawn: stopAtDawn,
       parkAtEnd: parkAtEnd,
+      pauseForFilterSwap: pauseForFilterSwap,
     );
   } finally {
     keepApi.close();
@@ -218,6 +220,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   int? gainOverride,
   String? stopAtDawn,
   bool parkAtEnd = false,
+  bool pauseForFilterSwap = true,
 }) async {
   final api = container.read(sequenceApiProvider);
 
@@ -242,7 +245,8 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   // choreography as the connected append-to-open-sequence path.
   if (api == null) {
     // No daemon to ask what the rig has — settings are the best we know.
-    final rig = rigCapabilitiesFromSettings(container.read(phd2SettingsProvider));
+    final rig = rigCapabilitiesFromSettings(container.read(phd2SettingsProvider))
+        .copyWith(pauseForFilterSwap: pauseForFilterSwap);
     final choice = filterPlan != null
         ? TargetPlanChoice(filterPlan: filterPlan, guide: rig.guider)
         : await _choosePlan(
@@ -377,7 +381,8 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   await hydratePlanningSettings(container);
   // The rig cooks the run: guiding only with a guider, filter switches only
   // with a wheel, autofocus only with a focuser (see RigCapabilities).
-  final rig = await readRigCapabilities(container);
+  final rig = (await readRigCapabilities(container))
+      .copyWith(pauseForFilterSwap: pauseForFilterSwap);
 
   // §Run smart targets — offer the SHO / LRGB / single-filter plan chooser
   // when the filter set gives a real choice. Null = the user cancelled.

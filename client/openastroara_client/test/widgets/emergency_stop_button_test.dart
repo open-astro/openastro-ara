@@ -27,7 +27,7 @@ class _FakeServerApi implements ServerApi {
     runsAborted: 1,
     exposureAborted: true,
     guidingStopped: true,
-    parkRequested: true,
+    mountStopped: true,
     flatPanelLightOff: true,
   );
 
@@ -169,16 +169,16 @@ void main() {
       runsAborted: 1,
       exposureAborted: true,
       guidingStopped: true,
-      parkRequested: false,
+      mountStopped: false,
       flatPanelLightOff: true,
-      failedRungs: ['park'],
+      failedRungs: ['stop_mount'],
     );
     await activateWithoutPointer(tester);
     await activateWithoutPointer(tester);
     await tester.pumpAndSettle();
     final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
     final title = container.read(simpleMessagesProvider).first.title;
-    expect(title, startsWith('CHECK THE RIG: MOUNT PARK FAILED'));
+    expect(title, startsWith('CHECK THE RIG: MOUNT STOP FAILED'));
     expect(title, contains('1 sequence run(s) aborted'), reason: 'what worked still follows');
   });
 
@@ -189,7 +189,7 @@ void main() {
       runsAborted: 0,
       exposureAborted: true,
       guidingStopped: true,
-      parkRequested: true,
+      mountStopped: true,
       flatPanelLightOff: false,
       failedRungs: ['halt_rotator'],
     );
@@ -200,6 +200,31 @@ void main() {
     expect(container.read(simpleMessagesProvider).first.title, startsWith('CHECK THE RIG: ROTATOR HALT FAILED'));
   });
 
+  for (final (rung, phrase) in const [
+    ('stop_guide_focus', 'GUIDE-CAMERA FOCUS LOOP MAY STILL BE RUNNING'),
+    ('stop_bahtinov', 'BAHTINOV READOUT MAY STILL BE RUNNING'),
+    ('cancel_autofocus', 'AUTOFOCUS MAY STILL BE RUNNING'),
+    ('stop_polar_align', 'POLAR ALIGNMENT MAY STILL BE RUNNING'),
+  ]) {
+    testWidgets('a failed $rung is called out in words, not its wire token', (tester) async {
+      await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true);
+      fake.result = EmergencyStopResult(
+        alreadyInProgress: false,
+        runsAborted: 0,
+        exposureAborted: true,
+        guidingStopped: true,
+        mountStopped: true,
+        flatPanelLightOff: false,
+        failedRungs: [rung],
+      );
+      await activateWithoutPointer(tester);
+      await activateWithoutPointer(tester);
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
+      expect(container.read(simpleMessagesProvider).first.title, startsWith('CHECK THE RIG: $phrase'));
+    });
+  }
+
   testWidgets('Simple Mode: a stop that went through stays in its pill until closed (user, 2026-11-04: 6 s was too fast)',
       (tester) async {
     await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true, pills: true);
@@ -208,7 +233,7 @@ void main() {
       runsAborted: 1,
       exposureAborted: true,
       guidingStopped: true,
-      parkRequested: true,
+      mountStopped: true,
       flatPanelLightOff: true,
       failedRungs: [],
     );
@@ -234,9 +259,9 @@ void main() {
       runsAborted: 1,
       exposureAborted: true,
       guidingStopped: true,
-      parkRequested: false,
+      mountStopped: false,
       flatPanelLightOff: true,
-      failedRungs: ['park'],
+      failedRungs: ['stop_mount'],
     );
     await activateWithoutPointer(tester);
     await activateWithoutPointer(tester);
@@ -276,9 +301,9 @@ void main() {
       runsAborted: 1,
       exposureAborted: true,
       guidingStopped: true,
-      parkRequested: true,
+      mountStopped: true,
       flatPanelLightOff: true,
-      failedRungs: ['park'],
+      failedRungs: ['stop_mount'],
     );
     await activateWithoutPointer(tester);
     await activateWithoutPointer(tester);
@@ -429,7 +454,7 @@ void main() {
       expect(fake.calls, 1);
       expect(find.textContaining('Emergency stop executed'), findsOneWidget);
       expect(find.textContaining('1 sequence run(s) aborted'), findsOneWidget);
-      expect(find.textContaining('mount told to park'), findsOneWidget);
+      expect(find.textContaining('mount stopped'), findsOneWidget);
     });
 
     testWidgets(
@@ -441,9 +466,9 @@ void main() {
           runsAborted: 0,
           exposureAborted: false,
           guidingStopped: false,
-          parkRequested: false,
+          mountStopped: false,
           flatPanelLightOff: false,
-          failedRungs: ['stop_guiding', 'park'],
+          failedRungs: ['stop_guiding', 'stop_mount'],
         );
 
         await activateWithoutPointer(tester);
@@ -456,12 +481,12 @@ void main() {
           findsOneWidget,
           reason: 'failed rungs must be loud — the user must go look',
         );
-        expect(find.textContaining('MOUNT PARK FAILED'), findsOneWidget);
+        expect(find.textContaining('MOUNT STOP FAILED'), findsOneWidget);
         expect(
           find.textContaining('GUIDING MAY STILL BE ACTIVE'),
           findsOneWidget,
           reason:
-              'a hung guider is as dangerous as an unparked mount — '
+              'a hung guider is as dangerous as a mount still moving — '
               'no rung fails silently',
         );
       },
@@ -473,7 +498,7 @@ void main() {
       await pumpButton(tester);
       fake.result = EmergencyStopResult.fromJson(const {
         'runs_aborted': 1,
-        'park_requested': true,
+        'mount_stopped': true,
         'cooler_off': true,
         'failed_rungs': <String>[],
       });

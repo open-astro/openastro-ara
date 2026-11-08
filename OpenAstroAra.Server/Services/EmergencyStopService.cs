@@ -22,7 +22,8 @@ namespace OpenAstroAra.Server.Services;
 /// abort active sequence runs FIRST (so a still-running instruction can't
 /// start a fresh exposure or slew behind the stop), then halt the rotator
 /// where it is (aborting a run only stops the sequencer waiting on its move,
-/// #1671), abort the in-flight exposure, stop guiding, park the mount, switch
+/// #1671), abort the in-flight exposure, stop the guide-camera focus loop, the Bahtinov readout,
+/// a running autofocus and polar alignment, stop guiding, stop the mount where it is, switch
 /// the flat panel's light off, and switch the camera's cooler off. Every rung is best-effort — a
 /// dead device must never block the remaining rungs — and the result reports honestly what each rung did.
 /// The <c>safety.emergency_stop</c> WS event fires up-front so WILMA can
@@ -37,12 +38,16 @@ public sealed partial class EmergencyStopService {
     private readonly ITelescopeService? _telescope;
     private readonly IFlatDeviceService? _flatDevice;
     private readonly IRotatorService? _rotator;
+    private readonly IGuideFocusService? _guideFocus;
+    private readonly IBahtinovFocusService? _bahtinov;
+    private readonly AutofocusRunTracker? _autofocus;
+    private readonly IPolarAlignService? _polarAlign;
     private readonly INotificationService? _notifications;
     private readonly IWsBroadcaster? _ws;
     private readonly ILogger<EmergencyStopService> _logger;
 
     // Single-flight: a panicked double-press must not queue a second full
-    // pass (each rung is idempotent, but a second park/abort volley just adds
+    // pass (each rung is idempotent, but a second abort volley just adds
     // noise while the first is mid-flight). 0 = idle, 1 = a stop is running.
     private int _running;
 
@@ -63,13 +68,21 @@ public sealed partial class EmergencyStopService {
             INotificationService? notifications = null,
             IWsBroadcaster? ws = null,
             ILogger<EmergencyStopService>? logger = null,
-            IRotatorService? rotator = null) {
+            IRotatorService? rotator = null,
+            IGuideFocusService? guideFocus = null,
+            IBahtinovFocusService? bahtinov = null,
+            AutofocusRunTracker? autofocus = null,
+            IPolarAlignService? polarAlign = null) {
         _camera = camera;
         _sequencerResolver = sequencerResolver;
         _guider = guider;
         _telescope = telescope;
         _flatDevice = flatDevice;
         _rotator = rotator;
+        _guideFocus = guideFocus;
+        _bahtinov = bahtinov;
+        _autofocus = autofocus;
+        _polarAlign = polarAlign;
         _notifications = notifications;
         _ws = ws;
         _logger = logger ?? NullLogger<EmergencyStopService>.Instance;
@@ -87,7 +100,7 @@ public sealed partial class EmergencyStopService {
                 RunsAborted: 0,
                 ExposureAborted: false,
                 GuidingStopped: false,
-                ParkRequested: false,
+                MountStopped: false,
                 FlatPanelLightOff: false,
                 FailedRungs: Array.Empty<string>());
         }
@@ -119,14 +132,36 @@ public sealed partial class EmergencyStopService {
             _camera is null ? null : async () => (await _camera.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _camera is null ? null : ct => _camera.AbortExposureAsync(ct)).ConfigureAwait(false);
         if (exposureOutcome is RungOutcome.Failed) { failedRungs.Add("abort_exposure"); }
+        // The guide-camera focus loop borrows frames through the guider, so stopping guiding doesn't end it.
+        var guideFocusOutcome = await RungAsync("stop guide focus",
+            _guideFocus is null ? null : () => Task.FromResult(_guideFocus.IsActive),
+            _guideFocus is null ? null : _ => _guideFocus.StopAsync()).ConfigureAwait(false);
+        if (guideFocusOutcome is RungOutcome.Failed) { failedRungs.Add("stop_guide_focus"); }
+        var bahtinovOutcome = await RungAsync("stop bahtinov readout",
+            _bahtinov is null ? null : () => Task.FromResult(_bahtinov.IsActive),
+            _bahtinov is null ? null : _ => _bahtinov.StopAsync()).ConfigureAwait(false);
+        if (bahtinovOutcome is RungOutcome.Failed) { failedRungs.Add("stop_bahtinov"); }
+        var autofocusOutcome = await RungAsync("cancel autofocus",
+            _autofocus is null ? null : () => Task.FromResult(_autofocus.IsRunning),
+            _autofocus is null ? null : _ => { _autofocus.TryCancel(); return Task.CompletedTask; }).ConfigureAwait(false);
+        if (autofocusOutcome is RungOutcome.Failed) { failedRungs.Add("cancel_autofocus"); }
+        // Only a routine that runs: a stray Stop would clear a finished alignment's result.
+        var polarOutcome = await RungAsync("stop polar alignment",
+            _polarAlign is null ? null : async () => (await _polarAlign.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State is "seeding" or "adjusting" or "paused",
+            _polarAlign is null ? null : async ct => await _polarAlign.StopAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);
+        if (polarOutcome is RungOutcome.Failed) { failedRungs.Add("stop_polar_align"); }
         var guidingOutcome = await RungAsync("stop guiding",
             _guider is null ? null : async () => (await _guider.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _guider is null ? null : async ct => await _guider.StopGuidingAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);
         if (guidingOutcome is RungOutcome.Failed) { failedRungs.Add("stop_guiding"); }
-        var parkOutcome = await RungAsync("park mount",
-            _telescope is null ? null : async () => (await _telescope.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
-            _telescope is null ? null : async ct => await _telescope.ParkAsync(new ParkRequestDto("emergency_stop"), null, ct).ConfigureAwait(false)).ConfigureAwait(false);
-        if (parkOutcome is RungOutcome.Failed) { failedRungs.Add("park"); }
+        // §35.3 step 3: stop where it is. Never a park, home or slew: if the slew or park code is what
+        // went wrong, parking would repeat it. Two rungs so a hung abort still gets the tracking write.
+        Func<Task<bool>>? mountCanMove = _telescope is null ? null : async () => (await _telescope.GetAsync(CancellationToken.None).ConfigureAwait(false)) is { State: EquipmentConnectionState.Connected } mount && mount.Runtime?.Parked != true;
+        var abortSlewOutcome = await RungAsync("abort mount slew", mountCanMove,
+            _telescope is null ? null : ct => _telescope.AbortSlewAsync(ct)).ConfigureAwait(false);
+        var trackingOffOutcome = await RungAsync("mount tracking off", mountCanMove,
+            _telescope is null ? null : ct => _telescope.SetTrackingAsync(false, ct)).ConfigureAwait(false);
+        if (abortSlewOutcome is RungOutcome.Failed || trackingOffOutcome is RungOutcome.Failed) { failedRungs.Add("stop_mount"); }
         var flatOutcome = await RungAsync("flat panel light off",
             _flatDevice is null ? null : async () => (await _flatDevice.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _flatDevice is null ? null : async ct => await _flatDevice.ApplyFlatPanelAsync(new FlatPanelRequestDto(LightOn: false), null, ct).ConfigureAwait(false)).ConfigureAwait(false);
@@ -140,10 +175,10 @@ public sealed partial class EmergencyStopService {
 
         var exposureAborted = exposureOutcome is RungOutcome.Done;
         var guidingStopped = guidingOutcome is RungOutcome.Done;
-        var parkRequested = parkOutcome is RungOutcome.Done;
+        var mountStopped = abortSlewOutcome is RungOutcome.Done && trackingOffOutcome is RungOutcome.Done;
         var flatLightOff = flatOutcome is RungOutcome.Done;
 
-        LogCompleted(runsAborted, exposureAborted, guidingStopped, parkRequested, flatLightOff);
+        LogCompleted(runsAborted, exposureAborted, guidingStopped, mountStopped, flatLightOff);
 
         var failedRungsJson = new JsonArray();
         foreach (var rung in failedRungs) { failedRungsJson.Add(rung); }
@@ -152,7 +187,7 @@ public sealed partial class EmergencyStopService {
             ["runs_aborted"] = runsAborted,
             ["exposure_aborted"] = exposureAborted,
             ["guiding_stopped"] = guidingStopped,
-            ["park_requested"] = parkRequested,
+            ["mount_stopped"] = mountStopped,
             ["flat_panel_light_off"] = flatLightOff,
             ["cooler_off"] = coolerOff,
             ["failed_rungs"] = failedRungsJson,
@@ -163,7 +198,7 @@ public sealed partial class EmergencyStopService {
             (runsAborted > 0 ? $"{runsAborted} running sequence(s) aborted, " : "No sequence was running, ")
             + (exposureAborted ? "the in-flight exposure was aborted, " : string.Empty)
             + (guidingStopped ? "guiding was stopped, " : string.Empty)
-            + (parkRequested ? "the mount was told to park" : "no connected mount was parked")
+            + (mountStopped ? "the mount was stopped" : "the mount was not stopped")
             + (flatLightOff ? ", and the flat panel light was switched off" : string.Empty)
             + (coolerOff ? "; the camera's cooler was switched off" : string.Empty) + "."
             + (failedRungs.Count > 0
@@ -175,7 +210,7 @@ public sealed partial class EmergencyStopService {
             RunsAborted: runsAborted,
             ExposureAborted: exposureAborted,
             GuidingStopped: guidingStopped,
-            ParkRequested: parkRequested,
+            MountStopped: mountStopped,
             FlatPanelLightOff: flatLightOff,
             FailedRungs: failedRungs,
             CoolerOff: coolerOff);
@@ -300,8 +335,8 @@ public sealed partial class EmergencyStopService {
     private partial void LogAlreadyRunning();
 
     [LoggerMessage(EventId = 3533, Level = LogLevel.Information,
-        Message = "§35.3 emergency stop completed: runsAborted={RunsAborted} exposureAborted={ExposureAborted} guidingStopped={GuidingStopped} parkRequested={ParkRequested} flatLightOff={FlatLightOff}")]
-    private partial void LogCompleted(int runsAborted, bool exposureAborted, bool guidingStopped, bool parkRequested, bool flatLightOff);
+        Message = "§35.3 emergency stop completed: runsAborted={RunsAborted} exposureAborted={ExposureAborted} guidingStopped={GuidingStopped} mountStopped={MountStopped} flatLightOff={FlatLightOff}")]
+    private partial void LogCompleted(int runsAborted, bool exposureAborted, bool guidingStopped, bool mountStopped, bool flatLightOff);
 
     [LoggerMessage(EventId = 3534, Level = LogLevel.Warning, Message = "§35.3 emergency stop rung '{Rung}' failed")]
     private partial void LogRungFailed(string rung, Exception exception);

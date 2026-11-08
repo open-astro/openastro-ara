@@ -85,7 +85,7 @@ class ServerApi {
   }
 
   /// §35.3 — trigger the daemon's emergency stop (abort runs → abort
-  /// exposure → stop guiding → park → flat panel light off). Synchronous on
+  /// exposure → stop guiding → stop mount → flat panel light off). Synchronous on
   /// the server: the response reports honestly what each rung did. The
   /// receive timeout is generous — the ladder waits on real device calls.
   Future<EmergencyStopResult> emergencyStop() async {
@@ -135,11 +135,12 @@ class EmergencyStopResult {
   final int runsAborted;
   final bool exposureAborted;
   final bool guidingStopped;
-  final bool parkRequested;
+  final bool mountStopped;
   final bool flatPanelLightOff;
 
   /// Rungs that were ATTEMPTED and faulted (wire tokens: abort_runs,
-  /// halt_rotator, abort_exposure, stop_guiding, park, flat_panel_light_off, cooler_off). A device
+  /// halt_rotator, abort_exposure, stop_guide_focus, stop_bahtinov,
+  /// cancel_autofocus, stop_polar_align, stop_guiding, stop_mount, flat_panel_light_off, cooler_off). A device
   /// that isn't connected reads false above but is NOT listed here.
   final List<String> failedRungs;
 
@@ -151,7 +152,7 @@ class EmergencyStopResult {
     required this.runsAborted,
     required this.exposureAborted,
     required this.guidingStopped,
-    required this.parkRequested,
+    required this.mountStopped,
     required this.flatPanelLightOff,
     this.failedRungs = const [],
     this.coolerOff = false,
@@ -163,7 +164,7 @@ class EmergencyStopResult {
         runsAborted: json['runs_aborted'] is int ? json['runs_aborted'] as int : 0,
         exposureAborted: json['exposure_aborted'] == true,
         guidingStopped: json['guiding_stopped'] == true,
-        parkRequested: json['park_requested'] == true,
+        mountStopped: json['mount_stopped'] == true,
         flatPanelLightOff: json['flat_panel_light_off'] == true,
         failedRungs: json['failed_rungs'] is List
             ? (json['failed_rungs'] as List).whereType<String>().toList(growable: false)

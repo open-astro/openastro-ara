@@ -8,6 +8,9 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/services/ws_event_stream.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/services/simple_mode_prefs_service.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/auto_flats_prompt_listener.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
@@ -47,6 +50,15 @@ class _RecordingClient implements SequenceClient {
       throw UnimplementedError('${invocation.memberName}');
 }
 
+class _Prefs extends SimpleModePrefsService {
+  _Prefs(this.value);
+  bool value;
+  @override
+  Future<bool> load() async => value;
+  @override
+  Future<void> save(bool enabled) async => value = enabled;
+}
+
 class _FakeSocket {
   final StreamController<dynamic> incoming = StreamController<dynamic>();
   final List<String> sent = <String>[];
@@ -75,8 +87,9 @@ void main() {
   const server = AraServer(hostname: 'host-a', port: 5555);
 
   Future<(_FakeConnector, _RecordingClient)> pumpListener(
-    WidgetTester tester,
-  ) async {
+    WidgetTester tester, {
+    bool simple = false,
+  }) async {
     final conn = _FakeConnector();
     final client = _RecordingClient();
     final stream = WsEventStream(server, connect: conn.connect);
@@ -93,6 +106,8 @@ void main() {
             return stream;
           }),
           sequenceApiProvider.overrideWith((ref) => client),
+          simpleModePrefsProvider.overrideWithValue(_Prefs(simple)),
+          simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(simple)),
         ],
         child: const MaterialApp(
           home: Scaffold(
@@ -125,6 +140,11 @@ void main() {
       await tester.pump();
 
       expect(find.text('Capture calibration frames tonight?'), findsOneWidget);
+      expect(
+        ProviderScope.containerOf(tester.element(find.byType(AutoFlatsPromptListener))).read(simpleMessagesProvider),
+        isEmpty,
+        reason: 'the full UI asks; it has no pill to show',
+      );
 
       await tester.tap(find.text('Remember my choice (stop asking)'));
       await tester.pump();
@@ -135,6 +155,34 @@ void main() {
       expect(client.lastId, 'seq-1');
       expect(client.lastChoice, 'panel_at_end');
       expect(client.lastRemember, isTrue);
+    });
+
+    testWidgets('Simple Mode shows no calibration popup; an unanswered run ends without flats', (tester) async {
+      final (conn, client) = await pumpListener(tester, simple: true);
+      await tester.pump();
+
+      emitPrompt(conn);
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Capture calibration frames tonight?'), findsNothing);
+      expect(client.calls, 0);
+    });
+
+    testWidgets('Simple Mode says in one pill that this run takes no flats', (tester) async {
+      List<SimpleMessage> pills() => ProviderScope.containerOf(tester.element(find.byType(AutoFlatsPromptListener)))
+          .read(simpleMessagesProvider);
+      final (conn, _) = await pumpListener(tester, simple: true);
+      await tester.pump();
+      emitPrompt(conn);
+      await tester.pump();
+      await tester.pump();
+      emitPrompt(conn, seq: 2);
+      await tester.pump();
+      await tester.pump();
+      expect(pills().map((m) => (m.kind, m.title)), [(SimpleMessageKind.warning, 'No flats this run')]);
+      expect(pills().single.detail, contains('Turn off Simple Mode'), reason: 'the setting is only in the full app');
+      expect(pills().single.detail, contains('Settings → Session → Calibration'));
     });
 
     testWidgets('"Not tonight" posts later without remember', (tester) async {

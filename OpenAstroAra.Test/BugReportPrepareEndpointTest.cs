@@ -89,7 +89,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_known_mode_reaches_the_service_and_is_echoed() {
-            svc.Setup(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Redacted))
+            svc.Setup(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Redacted, It.IsAny<DateTimeOffset?>()))
                 .ReturnsAsync(Prepared(BugReportSharingMode.Redacted));
 
             using var resp = await http.PostAsJsonAsync("/api/v1/bugreport/prepare", new { mode = "redacted" });
@@ -97,7 +97,7 @@ namespace OpenAstroAra.Test {
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
             Assert.That(doc.RootElement.GetProperty("sharing_mode").GetString(), Is.EqualTo("redacted"));
-            svc.Verify(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Redacted), Times.Once);
+            svc.Verify(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Redacted, It.IsAny<DateTimeOffset?>()), Times.Once);
         }
 
         [Test]
@@ -107,32 +107,72 @@ namespace OpenAstroAra.Test {
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
             using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
             Assert.That(doc.RootElement.GetProperty("detail").GetString(), Does.Contain("bogus").And.Contain("redacted"));
-            svc.Verify(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<BugReportSharingMode>()), Times.Never);
+            svc.Verify(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<BugReportSharingMode>(), It.IsAny<DateTimeOffset?>()), Times.Never);
         }
 
         [Test]
         public async Task A_post_with_no_body_and_no_content_type_is_full() {
             // A pre-#1185 Dio client posts nothing at all: Kestrel reports no body, the parameter binds null.
-            svc.Setup(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full))
+            svc.Setup(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full, It.IsAny<DateTimeOffset?>()))
                 .ReturnsAsync(Prepared(BugReportSharingMode.Full));
 
             using var request = new HttpRequestMessage(HttpMethod.Post, new Uri("/api/v1/bugreport/prepare", UriKind.Relative));
             using var resp = await http.SendAsync(request);
 
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Accepted), await resp.Content.ReadAsStringAsync());
-            svc.Verify(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full), Times.Once);
+            svc.Verify(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full, It.IsAny<DateTimeOffset?>()), Times.Once);
         }
 
         [Test]
         public async Task An_empty_body_from_an_older_client_is_full() {
-            svc.Setup(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full))
+            svc.Setup(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full, It.IsAny<DateTimeOffset?>()))
                 .ReturnsAsync(Prepared(BugReportSharingMode.Full));
 
             using var content = new StringContent("", Encoding.UTF8, "application/json");
             using var resp = await http.PostAsync(new Uri("/api/v1/bugreport/prepare", UriKind.Relative), content);
 
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Accepted), await resp.Content.ReadAsStringAsync());
-            svc.Verify(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full), Times.Once);
+            svc.Verify(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), BugReportSharingMode.Full, It.IsAny<DateTimeOffset?>()), Times.Once);
+        }
+
+        [Test]
+        public async Task A_range_starts_a_background_whole_rig_bundle() {
+            var since = DateTimeOffset.UtcNow.AddHours(-24);
+            var started = new BugReportPreparationDto(Guid.NewGuid(), "preparing", 0, null, null, "full", SinceUtc: since);
+            svc.Setup(s => s.StartPrepare(BugReportSharingMode.Full, It.Is<DateTimeOffset?>(d => d!.Value.ToUnixTimeSeconds() == since.ToUnixTimeSeconds())))
+                .Returns(started);
+
+            using var resp = await http.PostAsJsonAsync("/api/v1/bugreport/prepare", new { mode = "full", since_utc = since });
+
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Accepted), await resp.Content.ReadAsStringAsync());
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            Assert.That(doc.RootElement.GetProperty("status").GetString(), Is.EqualTo("preparing"));
+            svc.Verify(s => s.PrepareAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<BugReportSharingMode>(), It.IsAny<DateTimeOffset?>()), Times.Never,
+                "a range is never packed inside the request");
+        }
+
+        [Test]
+        public async Task A_range_in_the_future_is_a_400() {
+            using var resp = await http.PostAsJsonAsync("/api/v1/bugreport/prepare", new { mode = "full", since_utc = DateTimeOffset.UtcNow.AddHours(2) });
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        }
+
+        [Test]
+        public async Task A_preparation_reports_its_state_and_an_unknown_one_is_404() {
+            var id = Guid.NewGuid();
+            var ready = new BugReportPreparationDto(id, "ready", 4321, null, DateTimeOffset.UtcNow, "full",
+                Sources: [new BugReportSourceSummaryDto("alpacabridge", 2, 999, false, null)]);
+            svc.Setup(s => s.GetPreparation(id)).Returns(ready);
+            svc.Setup(s => s.GetPreparation(It.Is<Guid>(g => g != id))).Returns((BugReportPreparationDto?)null);
+
+            using var resp = await http.GetAsync(new Uri($"/api/v1/bugreport/{id}", UriKind.Relative));
+            Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+            Assert.That(doc.RootElement.GetProperty("status").GetString(), Is.EqualTo("ready"));
+            Assert.That(doc.RootElement.GetProperty("sources")[0].GetProperty("source").GetString(), Is.EqualTo("alpacabridge"));
+
+            using var missing = await http.GetAsync(new Uri($"/api/v1/bugreport/{Guid.NewGuid()}", UriKind.Relative));
+            Assert.That(missing.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
         }
     }
 }

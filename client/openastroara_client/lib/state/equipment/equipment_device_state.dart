@@ -31,6 +31,11 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
   /// the poll stops (a connected device drops to the liveness poll instead).
   static const int maxSettlePolls = 40;
 
+  /// This device's settle-poll budget; [maxSettlePolls] unless a device's
+  /// moves outlast it (a dome's shutter or a long turn).
+  @protected
+  int get settlePollCap => maxSettlePolls;
+
   /// Cadence of the background liveness poll that keeps a CONNECTED device's
   /// reading current (its state — e.g. a SafetyMonitor's is_safe, weather sensors —
   /// changes autonomously on the device, not just at connect). Slow by design; the
@@ -365,7 +370,7 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
       if (_refreshing || _acting) return;
       // Bound the poll so a device stuck in `connecting` can't keep firing reads
       // for the whole session (e.g. the network dropped after the connect 202).
-      if (_settleTicks >= maxSettlePolls) {
+      if (_settleTicks >= settlePollCap) {
         _cancelSettle();
         // A connected device still busy (an exposure past the cap) drops to the
         // liveness poll, so its reading can't freeze on "exposing".

@@ -30,6 +30,10 @@ _Avoid_: guider camera, guiding camera
 The guiding program that reads the Guide Camera and corrects the mount: PHD2 or openastro-guider, reached through the daemon. The device chip, the status pill ("Guider · Calibrating") and the guider window name the program. Simple Mode's **Guider** mode holds its settings (exposure, gain, dither) and starts and stops it, so it carries the same name (2026-11-06).
 _Avoid_: guide (for the program), guider camera
 
+**Polar Align Routine**:
+The steps that measure the polar alignment error while the person turns the mount's bolts.
+_Avoid_: Polar Align session, Polar Align run
+
 ### Connection
 
 **Control Slot**:

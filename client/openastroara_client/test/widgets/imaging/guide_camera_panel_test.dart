@@ -8,6 +8,7 @@ import 'package:openastroara/models/guider_calibration_view.dart';
 import 'package:openastroara/models/guider_live.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/server.dart';
+import 'package:openastroara/models/ws_event.dart';
 import 'package:openastroara/models/guider_advanced_settings.dart';
 import 'package:openastroara/services/guider_advanced_api.dart';
 import 'package:openastroara/services/guider_api.dart';
@@ -16,6 +17,7 @@ import 'package:openastroara/state/guider/guider_live_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/widgets/imaging/guide_calibration_panel.dart';
 import 'package:openastroara/models/guiding_assistant.dart';
@@ -107,7 +109,10 @@ class _FakeGuider implements GuiderClient {
   @override
   Future<GuiderStatus?> getStatus() async => null;
   @override
-  Future<void> startGuiding() async => starts++;
+  Future<String?> startGuiding() async {
+    starts++;
+    return null;
+  }
   @override
   void close() {}
   @override
@@ -149,6 +154,8 @@ Future<void> _pumpPanel(
         guiderApiFactoryProvider.overrideWithValue(
           (_) => guider ?? _FakeGuider(),
         ),
+        // A start listens for its outcome event (#1664): no socket in a test.
+        wsEventsProvider.overrideWith((ref) => const Stream<WsEvent>.empty()),
         guidingAssistantApiFactoryProvider.overrideWithValue(
           (_) => _FakeAssistant(),
         ),

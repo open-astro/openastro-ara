@@ -305,6 +305,142 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceCouldntChangeFlatPanel => 'Couldn\'t change the flat panel';
 
   @override
+  String get shellSafetyMonitor => 'Safety monitor';
+
+  @override
+  String get deviceShutter => 'Shutter';
+
+  @override
+  String get deviceShutterMoving => 'Shutter moving…';
+
+  @override
+  String get deviceAzimuth => 'Azimuth';
+
+  @override
+  String get deviceAtHome => 'At home';
+
+  @override
+  String get deviceHome => 'Home';
+
+  @override
+  String get deviceStop => 'Stop';
+
+  @override
+  String get deviceStopDome => 'Stop the dome';
+
+  @override
+  String get devicePlanRunningChangeDome =>
+      'A plan is running. Change the dome anyway?';
+
+  @override
+  String get deviceCouldntMoveDome => 'Couldn\'t move the dome';
+
+  @override
+  String get deviceCouldntStopDome => 'Couldn\'t stop the dome';
+
+  @override
+  String get deviceDomeReadFailed => 'Dome read failed — check the device.';
+
+  @override
+  String get deviceSafe => 'Safe';
+
+  @override
+  String get deviceUnsafe => 'Unsafe';
+
+  @override
+  String deviceSafetySince(String time, String duration) {
+    return 'since $time · $duration';
+  }
+
+  @override
+  String deviceUnsafeSince(String time) {
+    return 'Unsafe since $time';
+  }
+
+  @override
+  String deviceResumesAfterSafe(int minutes) {
+    return 'Resumes $minutes min after Safe';
+  }
+
+  @override
+  String get deviceStaysPaused => 'Stays paused until you resume';
+
+  @override
+  String get deviceOpening => 'Opening…';
+
+  @override
+  String get deviceClosing => 'Closing…';
+
+  @override
+  String get deviceTurn => 'Turn';
+
+  @override
+  String deviceTurnTo(String angle) {
+    return 'Turn to $angle';
+  }
+
+  @override
+  String get deviceShutterFault => 'Shutter fault: open or close again.';
+
+  @override
+  String get deviceFindingHome => 'Finding home…';
+
+  @override
+  String deviceTurningTo(String angle) {
+    return 'Turning to $angle…';
+  }
+
+  @override
+  String deviceReasonSentence(String reason) {
+    return '$reason.';
+  }
+
+  @override
+  String get deviceWhy => 'Why';
+
+  @override
+  String get deviceWhatAraDoes => 'What Ara does';
+
+  @override
+  String deviceMonitorNoReason(String name) {
+    return '$name says unsafe. It doesn\'t say why: check the device.';
+  }
+
+  @override
+  String deviceWindOverLimit(String value, int limit) {
+    return 'Wind $value km/h, over the $limit km/h limit';
+  }
+
+  @override
+  String deviceHumidityOverLimit(String value, int limit) {
+    return 'Humidity $value %, over the $limit % limit';
+  }
+
+  @override
+  String deviceDewUnderMargin(String value, String limit) {
+    return 'Dew point $value °C below the air, under the $limit °C margin';
+  }
+
+  @override
+  String deviceMonitorReadsSafe(String name) {
+    return '$name reads Safe';
+  }
+
+  @override
+  String get deviceOnUnsafePause =>
+      'On unsafe, Ara pauses the plan, parks and closes the dome.';
+
+  @override
+  String get deviceOnUnsafePark => 'On unsafe, Ara parks; the plan carries on.';
+
+  @override
+  String get deviceOnUnsafeAbort => 'On unsafe, Ara stops the plan and parks.';
+
+  @override
+  String get deviceOnUnsafeIgnore =>
+      'On unsafe, Ara does nothing; imaging carries on.';
+
+  @override
   String get deviceFlatPanelUnconfirmed =>
       'The flat panel didn\'t make that change';
 
@@ -557,6 +693,23 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get previewStars => 'Stars';
+
+  @override
+  String get previewStopGuideFrames => 'Stop the guide camera\'s frames first.';
+
+  @override
+  String get previewGuideEmpty =>
+      'Tap the shutter for the guide camera\'s frames';
+
+  @override
+  String get simpleNoFlatsThisRun => 'No flats this run';
+
+  @override
+  String get simpleNoFlatsThisRunDetail =>
+      'Your profile asks before each run, and Simple Mode doesn\'t ask. Turn off Simple Mode in Settings → Rig, then set Capture calibration after a sequence under Settings → Session → Calibration.';
+
+  @override
+  String get previewCamera => 'Camera';
 
   @override
   String get previewExposure => 'Exposure';
@@ -1701,7 +1854,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get estopGuidingStopped => 'guiding stopped';
 
   @override
-  String get estopParkRequested => 'mount told to park';
+  String get estopMountStopped => 'mount stopped';
 
   @override
   String get estopFlatPanelOff => 'flat panel light off';
@@ -1731,7 +1884,7 @@ class AppLocalizationsPt extends AppLocalizations {
       'GUIDING MAY STILL BE ACTIVE (stop failed)';
 
   @override
-  String get estopFailPark => 'MOUNT PARK FAILED — verify it manually';
+  String get estopFailStopMount => 'MOUNT STOP FAILED — verify it manually';
 
   @override
   String get estopFailRotator =>
@@ -1743,6 +1896,22 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get estopFailCooler =>
       'CAMERA COOLER STILL ON (switching it off failed)';
+
+  @override
+  String get estopFailGuideFocus =>
+      'GUIDE-CAMERA FOCUS LOOP MAY STILL BE RUNNING (stop failed)';
+
+  @override
+  String get estopFailBahtinov =>
+      'BAHTINOV READOUT MAY STILL BE RUNNING (stop failed)';
+
+  @override
+  String get estopFailAutofocus =>
+      'AUTOFOCUS MAY STILL BE RUNNING (cancel failed)';
+
+  @override
+  String get estopFailPolarAlign =>
+      'POLAR ALIGNMENT MAY STILL BE RUNNING (stop failed)';
 
   @override
   String estopFailOther(String step) {
@@ -2375,6 +2544,42 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String guideStartFailed(String reason) {
+    return 'Guiding didn\'t start: $reason.';
+  }
+
+  @override
+  String get guideStartFailedNoReason =>
+      'Guiding didn\'t start. See the Guider log for why.';
+
+  @override
+  String get guideAggressiveness => 'Aggressiveness';
+
+  @override
+  String get guideAxisRa => 'RA';
+
+  @override
+  String get guideAxisDec => 'Dec';
+
+  @override
+  String get guideRaAggressiveness => 'RA aggressiveness';
+
+  @override
+  String get guideDecAggressiveness => 'Dec aggressiveness';
+
+  @override
+  String get guideDecMode => 'Dec guide mode';
+
+  @override
+  String get guideDecAuto => 'Auto';
+
+  @override
+  String get guideDecNorth => 'North';
+
+  @override
+  String get guideDecSouth => 'South';
+
+  @override
   String get guideExposureOwn => 'The guider\'s own';
 
   @override
@@ -2884,6 +3089,145 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Não foi possível alterar o painel de flat';
 
   @override
+  String get shellSafetyMonitor => 'Monitor de segurança';
+
+  @override
+  String get deviceShutter => 'Janela';
+
+  @override
+  String get deviceShutterMoving => 'Janela em movimento…';
+
+  @override
+  String get deviceAzimuth => 'Azimute';
+
+  @override
+  String get deviceAtHome => 'Na posição inicial';
+
+  @override
+  String get deviceHome => 'Início';
+
+  @override
+  String get deviceStop => 'Parar';
+
+  @override
+  String get deviceStopDome => 'Parar a cúpula';
+
+  @override
+  String get devicePlanRunningChangeDome =>
+      'Há um plano em andamento. Alterar a cúpula mesmo assim?';
+
+  @override
+  String get deviceCouldntMoveDome => 'Não foi possível mover a cúpula';
+
+  @override
+  String get deviceCouldntStopDome => 'Não foi possível parar a cúpula';
+
+  @override
+  String get deviceDomeReadFailed =>
+      'Falha ao ler a cúpula — verifique o dispositivo.';
+
+  @override
+  String get deviceSafe => 'Seguro';
+
+  @override
+  String get deviceUnsafe => 'Inseguro';
+
+  @override
+  String deviceSafetySince(String time, String duration) {
+    return 'desde $time · $duration';
+  }
+
+  @override
+  String deviceUnsafeSince(String time) {
+    return 'Inseguro desde $time';
+  }
+
+  @override
+  String deviceResumesAfterSafe(int minutes) {
+    return 'Retoma $minutes min após Seguro';
+  }
+
+  @override
+  String get deviceStaysPaused => 'Fica pausado até você retomar';
+
+  @override
+  String get deviceOpening => 'Abrindo…';
+
+  @override
+  String get deviceClosing => 'Fechando…';
+
+  @override
+  String get deviceTurn => 'Girar';
+
+  @override
+  String deviceTurnTo(String angle) {
+    return 'Girar para $angle';
+  }
+
+  @override
+  String get deviceShutterFault => 'Falha na janela: abra ou feche de novo.';
+
+  @override
+  String get deviceFindingHome => 'Buscando a posição inicial…';
+
+  @override
+  String deviceTurningTo(String angle) {
+    return 'Girando para $angle…';
+  }
+
+  @override
+  String deviceReasonSentence(String reason) {
+    return '$reason.';
+  }
+
+  @override
+  String get deviceWhy => 'Por quê';
+
+  @override
+  String get deviceWhatAraDoes => 'O que o Ara faz';
+
+  @override
+  String deviceMonitorNoReason(String name) {
+    return '$name indica inseguro. Ele não diz o motivo: verifique o dispositivo.';
+  }
+
+  @override
+  String deviceWindOverLimit(String value, int limit) {
+    return 'Vento $value km/h, acima do limite de $limit km/h';
+  }
+
+  @override
+  String deviceHumidityOverLimit(String value, int limit) {
+    return 'Umidade $value %, acima do limite de $limit %';
+  }
+
+  @override
+  String deviceDewUnderMargin(String value, String limit) {
+    return 'Ponto de orvalho $value °C abaixo do ar, menos que a margem de $limit °C';
+  }
+
+  @override
+  String deviceMonitorReadsSafe(String name) {
+    return '$name indica Seguro';
+  }
+
+  @override
+  String get deviceOnUnsafePause =>
+      'Se inseguro, o Ara pausa o plano, estaciona e fecha a cúpula.';
+
+  @override
+  String get deviceOnUnsafePark =>
+      'Se inseguro, o Ara estaciona; o plano continua.';
+
+  @override
+  String get deviceOnUnsafeAbort =>
+      'Se inseguro, o Ara interrompe o plano e estaciona.';
+
+  @override
+  String get deviceOnUnsafeIgnore =>
+      'Se inseguro, o Ara não faz nada; a captura continua.';
+
+  @override
   String get deviceFlatPanelUnconfirmed =>
       'O painel de flat não fez essa alteração';
 
@@ -3143,6 +3487,24 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get previewStars => 'Estrelas';
+
+  @override
+  String get previewStopGuideFrames =>
+      'Pare os quadros da câmera guia primeiro.';
+
+  @override
+  String get previewGuideEmpty =>
+      'Toque no obturador para ver os quadros da câmera guia';
+
+  @override
+  String get simpleNoFlatsThisRun => 'Sem flats nesta sessão';
+
+  @override
+  String get simpleNoFlatsThisRunDetail =>
+      'Seu perfil pergunta antes de cada sessão, e o Modo Simples não pergunta. Desligue o Modo Simples em Ajustes → Setup e ajuste Capture calibration after a sequence em Ajustes → Session → Calibration.';
+
+  @override
+  String get previewCamera => 'Câmera';
 
   @override
   String get previewExposure => 'Exposição';
@@ -4294,7 +4656,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get estopGuidingStopped => 'guiagem parada';
 
   @override
-  String get estopParkRequested => 'montagem instruída a estacionar';
+  String get estopMountStopped => 'montagem parada';
 
   @override
   String get estopFlatPanelOff => 'luz do painel de flat desligada';
@@ -4324,8 +4686,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'A GUIAGEM PODE AINDA ESTAR ATIVA (falha ao parar)';
 
   @override
-  String get estopFailPark =>
-      'FALHA AO ESTACIONAR A MONTAGEM — verifique manualmente';
+  String get estopFailStopMount =>
+      'FALHA AO PARAR A MONTAGEM — verifique manualmente';
 
   @override
   String get estopFailRotator =>
@@ -4337,6 +4699,22 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get estopFailCooler =>
       'REFRIGERAÇÃO DA CÂMERA AINDA LIGADA (falha ao desligar)';
+
+  @override
+  String get estopFailGuideFocus =>
+      'O LOOP DE FOCO DA CÂMERA GUIA PODE AINDA ESTAR RODANDO (falha ao parar)';
+
+  @override
+  String get estopFailBahtinov =>
+      'A LEITURA BAHTINOV PODE AINDA ESTAR RODANDO (falha ao parar)';
+
+  @override
+  String get estopFailAutofocus =>
+      'O AUTOFOCO PODE AINDA ESTAR RODANDO (falha ao cancelar)';
+
+  @override
+  String get estopFailPolarAlign =>
+      'O ALINHAMENTO POLAR PODE AINDA ESTAR RODANDO (falha ao parar)';
 
   @override
   String estopFailOther(String step) {
@@ -4970,6 +5348,42 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String guideStopRefused(String state) {
     return 'O guia não parou: continua $state. Tente Parar de novo.';
   }
+
+  @override
+  String guideStartFailed(String reason) {
+    return 'A guiagem não começou: $reason.';
+  }
+
+  @override
+  String get guideStartFailedNoReason =>
+      'A guiagem não começou. Veja o log do guia para saber por quê.';
+
+  @override
+  String get guideAggressiveness => 'Agressividade';
+
+  @override
+  String get guideAxisRa => 'AR';
+
+  @override
+  String get guideAxisDec => 'Dec';
+
+  @override
+  String get guideRaAggressiveness => 'Agressividade em AR';
+
+  @override
+  String get guideDecAggressiveness => 'Agressividade em Dec';
+
+  @override
+  String get guideDecMode => 'Modo de guiagem em Dec';
+
+  @override
+  String get guideDecAuto => 'Auto';
+
+  @override
+  String get guideDecNorth => 'Norte';
+
+  @override
+  String get guideDecSouth => 'Sul';
 
   @override
   String get guideExposureOwn => 'O do guia';

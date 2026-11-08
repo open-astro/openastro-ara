@@ -106,6 +106,10 @@ jobs:
       - name: Python tooling tests
         run: python3 -m unittest discover -s scripts/tests -v
 
+      # Decision records (docs/adr/README.md): every record keeps the shape the review bot reads.
+      - name: Decision record shape
+        run: python3 scripts/check-adr-shape.py
+
       # #1232 — the bundled IERS DUT1 snapshot goes stale about a year after its bulletin. Nothing
       # else signals that before a release except one Warning at daemon boot, so this surfaces the
       # table's end date on every run and warns (never fails: a stale table extrapolates within a
@@ -1296,7 +1300,16 @@ jobs:
             ios) args=(ios --no-codesign) ;;
             *) args=("$TARGET") ;;
           esac
-          flutter build "${args[@]}" --release --dart-define=ARA_BUILD_DATE="$(date -u +%Y-%m-%d)"
+          # Gradle fetches its distribution and Kotlin from GitHub, which answers 504 at times (#1706).
+          attempts=1
+          if [ "$TARGET" = android ]; then attempts=3; fi
+          for attempt in $(seq 1 "$attempts"); do
+            if flutter build "${args[@]}" --release --dart-define=ARA_BUILD_DATE="$(date -u +%Y-%m-%d)"; then
+              exit 0
+            fi
+            echo "flutter build failed (attempt $attempt of $attempts)"
+          done
+          exit 1
 
       - name: Launcher icons match icon_sources/
         # #1129 — the per-platform icons are generated, then committed. Re-run
@@ -1344,14 +1357,12 @@ jobs:
           persist-credentials: false
 
       - name: Install zizmor
-        # Prebuilt x86_64 release binary — no Rust toolchain / pip build needed.
+        # Prebuilt wheel from PyPI — no Rust toolchain. GitHub's release download answered
+        # 504 through six attempts on 2026-11-08 (#1706).
         run: |
           set -euo pipefail
           ver=1.25.2
-          curl -fsSL "https://github.com/zizmorcore/zizmor/releases/download/v${ver}/zizmor-x86_64-unknown-linux-gnu.tar.gz" \
-            -o /tmp/zizmor.tgz
-          tar -xzf /tmp/zizmor.tgz -C /tmp
-          sudo install /tmp/zizmor /usr/local/bin/zizmor
+          pipx install "zizmor==${ver}"
           zizmor --version
 
       - name: Audit workflows

@@ -18,6 +18,7 @@ import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegmen
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
+import 'package:openastroara/widgets/focus/v_curve_chart.dart';
 
 FocuserStatus _focuser({int? position = 1000, bool absolute = true, int max = 1100, String runtime = 'idle'}) =>
     FocuserStatus(
@@ -165,6 +166,19 @@ void main() {
     expect(find.text('HFR 2.40'), findsOneWidget);
     expect(find.textContaining('Sweeping'), findsOneWidget);
     expect(find.text('Cancel'), findsNothing);
+  });
+
+  testWidgets('the V-curve is tall enough to read (at 80 pt its axes left the plot 18 pt)', (tester) async {
+    final run = AutofocusRun(
+      state: AutofocusRunStates.running,
+      phase: 'sweep',
+      totalSteps: 7,
+      completedSteps: 2,
+      stepSize: 80,
+      probes: [_probe(0, 3.1), _probe(1, 2.4)],
+    );
+    await _pump(tester, focuser: _focuser(), run: run);
+    expect(tester.getSize(find.byType(VCurveChart)).height, greaterThanOrEqualTo(160));
   });
 
   // A finished Smart Focus whose fit was weak (R² 0.55), like the rig's.

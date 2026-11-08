@@ -78,8 +78,12 @@ public interface ISolverRecommender {
 /// <summary>Bug-report bundle preparation (§54).</summary>
 public interface IBugReportService {
     /// <param name="mode">§54.3 sharing mode applied while the bundle is built (default: everything).</param>
-    Task<BugReportPreparationDto> PrepareAsync(string? idempotencyKey, CancellationToken ct, BugReportSharingMode mode = BugReportSharingMode.Full);
+    Task<BugReportPreparationDto> PrepareAsync(string? idempotencyKey, CancellationToken ct, BugReportSharingMode mode = BugReportSharingMode.Full,
+        DateTimeOffset? since = null);
     Task<(Stream Stream, string FileName)?> OpenDownloadAsync(Guid preparationId, CancellationToken ct);
+    /// <summary>Packs a bundle in the background; poll <see cref="GetPreparation"/>.</summary>
+    BugReportPreparationDto StartPrepare(BugReportSharingMode mode, DateTimeOffset? since);
+    BugReportPreparationDto? GetPreparation(Guid preparationId);
 }
 
 /// <summary>§36 — outcome of a sky-data package delete. Split (not a bool) so callers can tell

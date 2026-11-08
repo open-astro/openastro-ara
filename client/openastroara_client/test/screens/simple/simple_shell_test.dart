@@ -88,12 +88,19 @@ import 'package:openastroara/models/flat_panel_status.dart';
 import 'package:openastroara/state/equipment/flat_panel_state.dart';
 import 'package:openastroara/models/weather_status.dart';
 import 'package:openastroara/state/equipment/weather_state.dart';
+import 'package:openastroara/models/dome_status.dart';
+import 'package:openastroara/state/equipment/dome_state.dart';
+import 'package:openastroara/models/safety_monitor_status.dart';
+import 'package:openastroara/state/equipment/safety_monitor_state.dart';
+import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
-import 'package:openastroara/theme/ara_metrics.dart' show AraBlur;
+import 'package:openastroara/theme/ara_metrics.dart' show AraBlur, AraSpace;
+import 'package:openastroara/widgets/imaging/frame_viewer.dart' show FrameViewer;
+import 'package:openastroara/models/guide_focus.dart';
 import 'package:openastroara/screens/simple/simple_safety_alarm.dart';
 import 'package:openastroara/state/night_mode_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
@@ -301,6 +308,75 @@ SwitchDevice _switch(String id, String name, SwitchConnectionState state) => Swi
     connectionState: state,
     ports: const [SwitchPort(id: 0, name: 'Dew 1', value: 0, min: 0, max: 100, canWrite: true)]);
 
+class _Windy extends WeatherNotifier with _Calls<WeatherStatus> {
+  @override
+  Future<WeatherStatus?> build() async => WeatherStatus.fromJson({
+        ..._wire('CloudWatcher', EquipmentConnectionState.connected),
+        'captured_at': DateTime.now().toUtc().toIso8601String(),
+        'wind_speed_ms': 11.4,
+      });
+}
+
+/// A rig whose safety policies load as [policies], or fail to.
+class _PoliciesApi extends ProfileApi {
+  _PoliciesApi(this.policies) : super(const AraServer(hostname: 'test', port: 1));
+  final SafetyPolicies? policies;
+  @override
+  Future<SafetyPolicies> getSafetyPolicies() async => policies ?? (throw StateError('unreachable'));
+}
+
+/// Fails its first safety-policies read, then answers with the weather on.
+class _FlakyPoliciesApi extends ProfileApi {
+  _FlakyPoliciesApi() : super(const AraServer(hostname: 'test', port: 1));
+  int calls = 0;
+  @override
+  Future<SafetyPolicies> getSafetyPolicies() async {
+    if (++calls == 1) throw StateError('unreachable');
+    return const SafetyPolicies(weatherTriggersEnabled: true);
+  }
+}
+
+/// The rig the app talks to; [use] switches to another server.
+class _Rig extends Notifier<ProfileApi?> {
+  _Rig(this.first);
+  final ProfileApi first;
+  @override
+  ProfileApi? build() => first;
+  void use(ProfileApi api) => state = api;
+}
+
+final _rigProvider = NotifierProvider<_Rig, ProfileApi?>(() => throw UnimplementedError('override it'));
+
+class _Dome extends DomeNotifier with _Calls<DomeStatus> {
+  _Dome(this.state0);
+  final EquipmentConnectionState state0;
+  Map<String, dynamic> _json(String runtime) => {
+        ..._wire('ScopeDome', state0),
+        'capabilities': {'can_set_shutter': true, 'can_set_azimuth': true, 'can_park': true},
+        'runtime': {'state': runtime, 'azimuth_deg': 212.0},
+      };
+  @override
+  Future<DomeStatus?> build() async => DomeStatus.fromJson(_json('idle'));
+
+  /// What the dome reports next ("slewing", "shutter_moving", "idle").
+  void report(String runtime) => state = AsyncData(DomeStatus.fromJson(_json(runtime)));
+
+  @override
+  Future<bool> park() async => true;
+}
+
+class _Safety extends SafetyMonitorNotifier with _Calls<SafetyMonitorStatus> {
+  _Safety(this.state0);
+  final EquipmentConnectionState state0;
+  Map<String, dynamic> _json(bool safe, DateTime? at) =>
+      {..._wire('Solo', state0), 'safe': safe, 'last_transition_at': at?.toUtc().toIso8601String()};
+  @override
+  Future<SafetyMonitorStatus?> build() async => SafetyMonitorStatus.fromJson(_json(true, null));
+
+  /// What the monitor reads next, and when it last changed.
+  void report(bool safe, [DateTime? at]) => state = AsyncData(SafetyMonitorStatus.fromJson(_json(safe, at)));
+}
+
 class _Weather extends WeatherNotifier with _Calls<WeatherStatus> {
   _Weather(this.state0);
   final EquipmentConnectionState state0;
@@ -312,16 +388,17 @@ class _Weather extends WeatherNotifier with _Calls<WeatherStatus> {
 class _FlatPanel extends FlatPanelNotifier with _Calls<FlatPanelStatus> {
   _FlatPanel(this.state0);
   final EquipmentConnectionState state0;
-  Map<String, dynamic> _json(String runtime, {bool warming = false}) => {
+  Map<String, dynamic> _json(String runtime, {bool warming = false, bool cover = true}) => {
         ..._wire('Flip-Flat', state0),
-        'runtime': {'state': runtime, 'max_brightness': 255, 'light_warming': warming},
+        'runtime': {'state': runtime, 'max_brightness': 255, 'light_warming': warming, 'has_cover': cover},
       };
   @override
   Future<FlatPanelStatus?> build() async => FlatPanelStatus.fromJson(_json('cover_closed'));
 
-  /// What the panel reports next ("cover_moving", "cover_closed", "light_on").
-  void report(String runtime, {bool warming = false}) =>
-      state = AsyncData(FlatPanelStatus.fromJson(_json(runtime, warming: warming)));
+  /// What the panel reports next ("cover_moving", "cover_closed", "light_on");
+  /// [cover] false for a light-only panel.
+  void report(String runtime, {bool warming = false, bool cover = true}) =>
+      state = AsyncData(FlatPanelStatus.fromJson(_json(runtime, warming: warming, cover: cover)));
 }
 
 class _Mount extends MountNotifier with _Calls<MountStatus> {
@@ -355,6 +432,12 @@ class _Clock implements TimeSyncClient {
   Future<void> pushClientTime(DateTime utcNow) async => pushed.add(utcNow);
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+class _GuideStarting extends GuideFocusNotifier {
+  @override
+  GuideFocusLive build() =>
+      const GuideFocusLive(status: GuideFocusStatus(active: true, state: 'running', exposureSec: 2, seq: 0));
 }
 
 class _GuiderUp extends GuiderStatusNotifier {
@@ -436,6 +519,9 @@ class _GuideOpticsApi extends ProfileApi {
   _GuideOpticsApi(this.unsetReads) : super(const AraServer(hostname: 'test', port: 1));
   int unsetReads;
   int reads = 0;
+  // The status pill loads the safety policies; no network here.
+  @override
+  Future<SafetyPolicies> getSafetyPolicies() async => throw StateError('unreachable');
   @override
   Future<Phd2Settings> getPhd2Settings() async => ++reads > unsetReads
       ? const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75)
@@ -584,6 +670,9 @@ class _OpticsApi extends ProfileApi {
   _OpticsApi(this.optics) : super(const AraServer(hostname: 'test', port: 1));
   OpticsSettings optics;
   final puts = <OpticsSettings>[];
+  // The status pill loads the safety policies; no network here.
+  @override
+  Future<SafetyPolicies> getSafetyPolicies() async => throw StateError('unreachable');
   @override
   Future<OpticsSettings> getOptics() async => optics;
   @override
@@ -845,6 +934,18 @@ void main() {
     expect(find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.byIcon(Icons.tune)), findsOneWidget);
   });
 
+  testWidgets("Preview with Guide picked fills the screen with the guide camera's frames", (tester) async {
+    final container = await _pump(tester, const Size(1024, 768), gear: [
+      guideFocusProvider.overrideWith(_GuideFrame.new),
+      guiderStatusProvider.overrideWith(() => _GuiderAt('stopped')),
+    ]);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-focus-frame')), findsNothing, reason: 'the main camera to start');
+    container.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-focus-frame')), findsOneWidget);
+  });
+
   testWidgets("Focus: Measured stars On fills the screen with the run's frame, circles and all", (tester) async {
     final container = await _pump(tester, const Size(1024, 768), gear: [
       autofocusLiveProvider.overrideWith(() => _LiveFrame()),
@@ -1054,6 +1155,42 @@ void main() {
         reason: 'under the status pill');
   });
 
+  testWidgets("with the histogram showing, a mode panel stops above the bottom row, like Plan's sheet (user, 2026-11-09)",
+      (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final c = await _pump(tester, const Size(1024, 768), histogram: _histogram,
+        gear: [guiderStatusProvider.overrideWith(_GuiderUp.new)]);
+    await _frame(tester, c);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-guide')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final panel = tester.getRect(find.byKey(const Key('simple-guide-panel')));
+    final row = tester.getRect(find.byKey(const Key('simple-histogram')));
+    expect(panel.bottom, lessThanOrEqualTo(row.top - AraSpace.s8));
+  });
+
+  testWidgets("the Guider panel sits centred between the status pill and the bottom row, like Plan's sheet (user, 2026-11-09)",
+      (tester) async {
+    const pillBottom = kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight;
+    const roomBottom = 768 - kSimpleInset - kSimpleBarHeight; // a connected guider shows the bottom row
+    await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(_GuiderUp.new)]);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-guide')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final panel = tester.getRect(find.byKey(const Key('simple-guide-panel')));
+    expect(panel.center.dy, closeTo((pillBottom + roomBottom) / 2, 1));
+  });
+
   testWidgets('Guide is a mode: its shutter starts guiding, its chip shows the RMS and opens the Guide panel',
       (tester) async {
     // User, 2026-11-04: guiding moves from the guider's window to a mode on the rail.
@@ -1251,7 +1388,8 @@ void main() {
 
   testWidgets('the settings chip opens Exposure from a list, the Gain slider under it, Filter and Loop/Single',
       (tester) async {
-    final container = await _pump(tester, const Size(1024, 768));
+    final container = await _pump(tester, const Size(1024, 768),
+        gear: [filterWheelProvider.overrideWith(() => _FilterWheel(EquipmentConnectionState.connected))]);
     expect(find.text(_summary(container)), findsOneWidget, reason: 'the chip reads the settings');
     await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
@@ -1621,6 +1759,16 @@ void main() {
     expect(find.text('Edit M31'), findsNothing);
   });
 
+  testWidgets('a panel has the Hairline contour, drawn on top so nothing moves', (tester) async {
+    // The night's screenshot: over a frame or side area of its own colour a panel's edge disappeared.
+    await tester.pumpWidget(const MaterialApp(home: Center(child: SimplePanel(child: SizedBox(width: 120, height: 80)))));
+    expect(tester.getSize(find.byType(SimplePanel)), const Size(120, 80));
+    final surface = tester.widget<Container>(find.byKey(const Key('simple-frosted-surface')));
+    final line = surface.foregroundDecoration! as BoxDecoration;
+    expect((line.border! as Border).top, const BorderSide(color: AraColors.border));
+    expect(line.borderRadius, BorderRadius.circular(10));
+  });
+
   group('#1572 a rail or image tap while editing a queued target', () {
     Future<ProviderContainer> edit(WidgetTester tester) async {
       final container = await _pump(tester, const Size(1024, 768), plan: _queuedM31);
@@ -1833,6 +1981,33 @@ void main() {
     final clipped = tester.getRect(find.text('Clipped'));
     expect(clipped.top, greaterThan(hfr.top), reason: 'one fact per line');
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets("Preview on Guide with no guide frame says so, and does not show the main camera's last frame or histogram",
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), histogram: _histogram,
+        gear: [guiderStatusProvider.overrideWith(() => _GuiderAt('stopped'))]);
+    await _frame(tester, c);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-histogram')), findsOneWidget, reason: 'precondition: Main shows it');
+    c.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
+    await tester.pump();
+    await tester.pump();
+    expect(find.byType(FrameViewer), findsNothing);
+    expect(find.byKey(const Key('simple-histogram')), findsNothing);
+    expect(find.text("Tap the shutter for the guide camera's frames"), findsOneWidget);
+  });
+
+  testWidgets("Preview on Guide says Starting, not to tap the shutter, while the loop waits for its first frame", (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), gear: [
+      guideFocusProvider.overrideWith(_GuideStarting.new),
+      guiderStatusProvider.overrideWith(() => _GuiderAt('stopped')),
+    ]);
+    c.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Starting…'), findsOneWidget);
+    expect(find.text("Tap the shutter for the guide camera's frames"), findsNothing);
   });
 
   testWidgets('Info shows the last frame facts as tiles in the bottom-left corner', (tester) async {
@@ -2086,6 +2261,7 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-search-sky-0')));
     await tester.pump();
     expect(c.read(planetariumSearchProvider), 'M 31');
+    expect(c.read(planetariumSelectionProvider), isNotNull, reason: "the hit is Plan's target at once");
     expect(find.byKey(const Key('simple-planetarium')), findsOneWidget, reason: 'the sky, pointed at it');
   });
 
@@ -2860,6 +3036,51 @@ void main() {
         findsOneWidget);
   });
 
+  // One panel in the top-left corner at a time (#1674): the switches' window under
+  // the Ara sheet hid its labels and most of an On segment (user, 2026-11-08).
+  testWidgets('a device window, the Ara sheet and Search shut each other out, side by side or not (#1674)',
+      (tester) async {
+    final rotator = _Rotator(EquipmentConnectionState.connected);
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      rotatorProvider.overrideWith(() => rotator),
+    ]);
+    final window = find.byKey(const Key('simple-device-rotator'));
+    final sheet = find.byKey(const Key('simple-ara-sheet'));
+    final search = find.byKey(const Key('simple-search'));
+    Future<void> dot() async {
+      c.read(selectedSettingsPanelProvider.notifier).select('eq.rotator');
+      c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+      await tester.pumpAndSettle();
+    }
+    Future<void> tap(String key) async {
+      await tester.tap(find.byKey(Key(key)));
+      await tester.pumpAndSettle();
+    }
+
+    await tap('simple-ara-mark');
+    await dot();
+    expect(window, findsOneWidget, reason: 'a dot closes the Ara sheet');
+    expect(sheet, findsNothing, reason: 'a dot closes the Ara sheet');
+    await tap('simple-ara-mark');
+    expect(window, findsNothing, reason: 'the Ara mark closes the window');
+    expect(sheet, findsOneWidget, reason: 'the Ara mark closes the window');
+    await tap('simple-search-button');
+    await dot();
+    expect(window, findsOneWidget, reason: 'a dot closes Search');
+    expect(search, findsNothing, reason: 'a dot closes Search');
+    await tap('simple-search-button');
+    expect(window, findsNothing, reason: 'Search closes the window');
+    expect(search, findsOneWidget, reason: 'Search closes the window');
+    await tap('simple-ara-mark');
+    rotator.report('moving');
+    await tester.pump();
+    await tester.tap(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Rotator')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(window, findsOneWidget, reason: 'the pill opens the window as the dot does');
+    expect(sheet, findsNothing, reason: 'the pill opens the window as the dot does');
+  });
+
   testWidgets('the flat panel\'s dot opens its window and closes it again; Settings lists it under Devices',
       (tester) async {
     final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
@@ -2908,6 +3129,52 @@ void main() {
     await _openSection(tester, 'Weather');
     expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(const Key('simple-device-weather'))),
         findsOneWidget);
+  });
+
+  for (final (name, panel, key, row, override) in [
+    ('dome', 'eq.dome', 'simple-device-dome', 'ScopeDome',
+        domeProvider.overrideWith(() => _Dome(EquipmentConnectionState.connected))),
+    ('safety monitor', 'eq.safety', 'simple-device-safety', 'Solo',
+        safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected))),
+  ]) {
+    testWidgets('the $name\'s dot opens its window and closes it again; Settings lists it under Devices',
+        (tester) async {
+      final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [override]);
+      Future<void> dot() async {
+        c.read(selectedSettingsPanelProvider.notifier).select(panel);
+        c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+        await tester.pumpAndSettle();
+      }
+      await dot();
+      expect(find.byKey(Key(key)), findsOneWidget);
+      expect(find.byType(SettingsShell), findsNothing, reason: 'never the full UI\'s Settings page');
+      await dot();
+      expect(find.byKey(Key(key)), findsNothing);
+      await _openSection(tester, 'Devices');
+      await tester.tap(find.textContaining(row));
+      await tester.pump();
+      expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(Key(key))),
+          findsOneWidget, reason: 'its Devices row opens the same window');
+    });
+  }
+
+  testWidgets('Settings lists the dome and the safety monitor only while the rig knows them', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true);
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-menu-nav-Dome')), findsNothing);
+    expect(find.byKey(const Key('simple-menu-nav-Safety monitor')), findsNothing);
+  });
+
+  testWidgets('no device dot opens the full UI\'s Settings page', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true);
+    for (final panel in ['eq.camera', 'eq.mount', 'eq.focuser', 'eq.filterwheel', 'eq.rotator', 'eq.switch',
+        'eq.flat', 'eq.weather', 'eq.safety', 'eq.dome', 'eq.guider']) {
+      c.read(selectedSettingsPanelProvider.notifier).select(panel);
+      c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsShell), findsNothing, reason: panel);
+    }
   });
 
   testWidgets('Settings lists the weather station only while the rig knows one', (tester) async {
@@ -3318,7 +3585,7 @@ void main() {
     Focus.of(tester.element(fold)).requestFocus();
     await tester.pump();
     expect(find.ancestor(of: fold, matching: find.byWidgetPredicate((w) =>
-        w is DecoratedBox && (w.decoration as BoxDecoration).border != null)), findsOneWidget,
+        w is DecoratedBox && (w.decoration as BoxDecoration).border?.top.color == AraColors.accentInfo)), findsOneWidget,
         reason: 'a visible focus ring');
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
@@ -3660,6 +3927,198 @@ void main() {
     flat.report('light_on');
     await tester.pump();
     expect(find.descendant(of: pill, matching: find.textContaining('Flat panel')), findsNothing, reason: 'ready');
+  });
+
+  testWidgets('the dome turning and its shutter opening show in the status pill; a tap opens its window',
+      (tester) async {
+    final dome = _Dome(EquipmentConnectionState.connected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [domeProvider.overrideWith(() => dome)]);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Dome')), findsNothing);
+    dome.report('slewing');
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Moving…')), findsOneWidget);
+    final dot = tester.widget<StatusDot>(find.descendant(of: pill, matching: find.byType(StatusDot)));
+    expect((dot.color, dot.ring), (AraColors.accentConnected, false));
+    expect(tester.widget<StatusBlink>(find.descendant(of: pill, matching: find.byType(StatusBlink))).on, isTrue);
+    await tester.tap(find.descendant(of: pill, matching: find.textContaining('Dome')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const Key('simple-device-dome')), findsOneWidget, reason: 'the pill opens its window');
+    dome.report('shutter_moving');
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Opening…')), findsOneWidget,
+        reason: 'closed before it moved, so it is opening');
+    final ring = tester.widget<StatusDot>(find.descendant(of: pill, matching: find.byType(StatusDot)));
+    expect((ring.color, ring.ring), (AraColors.accentInfo, true), reason: 'a change between two states');
+    dome.report('idle');
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Dome')), findsNothing, reason: 'stopped');
+  });
+
+  testWidgets('weather past its limit shows in the Safety pill even while the monitor reads Safe', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
+      weatherProvider.overrideWith(() => _Windy()),
+      profileApiProvider.overrideWithValue(_PoliciesApi(const SafetyPolicies(weatherTriggersEnabled: true))),
+    ]);
+    await tester.pump();
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Wind 41 km/h, over the 36 km/h limit')),
+        findsOneWidget, reason: 'the daemon holds the plan for the wind; the pill says why');
+    expect(find.descendant(of: pill, matching: find.textContaining('limit.')), findsNothing,
+        reason: 'a pill detail carries no full stop');
+  });
+
+  testWidgets('no weather in the Safety pill until the safety policies have loaded', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
+      weatherProvider.overrideWith(() => _Windy()),
+      profileApiProvider.overrideWithValue(_PoliciesApi(null)),
+    ]);
+    c.read(safetyPoliciesProvider.notifier).state = const SafetyPolicies(weatherTriggersEnabled: true);
+    await tester.pump();
+    await tester.pump();
+    expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41')),
+        findsNothing, reason: 'the defaults are not the rig\'s: nothing beats a wrong promise');
+  });
+
+  testWidgets('a failed policies load is retried', (tester) async {
+    final api = _FlakyPoliciesApi();
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
+      weatherProvider.overrideWith(() => _Windy()),
+      profileApiProvider.overrideWithValue(api),
+    ]);
+    await tester.pump();
+    await tester.pump();
+    expect(api.calls, greaterThan(0));
+    // Anything that rebuilds the pill retries after the failed first load.
+    c.read(safetyPoliciesProvider.notifier).state = const SafetyPolicies(weatherTriggersEnabled: true);
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41')),
+        findsOneWidget, reason: 'one unreachable moment does not silence the pill for the session');
+  });
+
+  testWidgets('a new rig whose policies have not loaded shows no weather from the old rig\'s limits',
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
+      weatherProvider.overrideWith(() => _Windy()),
+      _rigProvider.overrideWith(() => _Rig(_PoliciesApi(const SafetyPolicies(weatherTriggersEnabled: true)))),
+      profileApiProvider.overrideWith((ref) => ref.watch(_rigProvider)),
+    ]);
+    await tester.pump();
+    await tester.pump();
+    final wind = find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41'));
+    expect(wind, findsOneWidget, reason: 'precondition: rig A\'s limits loaded, weather triggers on');
+    c.read(_rigProvider.notifier).use(_PoliciesApi(null));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(wind, findsNothing, reason: 'rig B\'s load failed: its weather is not read against rig A\'s limits');
+  });
+
+  testWidgets('a dome Park asked in its window shows in the status pill at once', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true,
+        gear: [domeProvider.overrideWith(() => _Dome(EquipmentConnectionState.connected))]);
+    c.read(selectedSettingsPanelProvider.notifier).select('eq.dome');
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-dome-park')));
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Parking…')), findsOneWidget,
+        reason: 'from the tap, before the dome reports moving');
+    await tester.pump(const Duration(seconds: 4));
+    expect(find.descendant(of: pill, matching: find.textContaining('Dome')), findsNothing,
+        reason: 'nothing moved: the ask goes');
+  });
+
+  testWidgets('the safety monitor\'s Unsafe stays in the status pill, steady amber, with since when',
+      (tester) async {
+    final safety = _Safety(EquipmentConnectionState.connected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [safetyMonitorProvider.overrideWith(() => safety)]);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Safety monitor')), findsNothing);
+    safety.report(false, DateTime(2026, 11, 8, 2, 14));
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Unsafe since 02:14')), findsOneWidget);
+    final dot = tester.widget<StatusDot>(find.descendant(of: pill, matching: find.byType(StatusDot)));
+    expect((dot.color, dot.ring), (AraColors.accentWarning, false));
+    expect(find.descendant(of: pill, matching: find.byType(StatusBlink)).evaluate()
+        .every((e) => !(e.widget as StatusBlink).on), isTrue, reason: 'steady');
+    await tester.tap(find.descendant(of: pill, matching: find.textContaining('Safety monitor')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const Key('simple-device-safety')), findsOneWidget, reason: 'the pill opens its window');
+    safety.report(true, DateTime(2026, 11, 8, 3, 0));
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Safety monitor')), findsNothing, reason: 'safe');
+  });
+
+  testWidgets('a device that isn\'t connected shows no pill, whatever its runtime state says (#1668)', (tester) async {
+    final rotator = _Rotator(EquipmentConnectionState.disconnected);
+    final flat = _FlatPanel(EquipmentConnectionState.disconnected);
+    final dome = _Dome(EquipmentConnectionState.disconnected);
+    final safety = _Safety(EquipmentConnectionState.disconnected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      rotatorProvider.overrideWith(() => rotator),
+      flatPanelProvider.overrideWith(() => flat),
+      domeProvider.overrideWith(() => dome),
+      safetyMonitorProvider.overrideWith(() => safety),
+    ]);
+    await tester.pump();
+    rotator.report('moving');
+    flat.report('cover_moving', warming: true);
+    dome.report('slewing');
+    safety.report(false, DateTime(2026, 11, 8, 2, 14));
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    for (final name in ['Rotator', 'Flat panel', 'Dome', 'Safety monitor']) {
+      expect(find.descendant(of: pill, matching: find.textContaining(name)), findsNothing, reason: name);
+    }
+  });
+
+  testWidgets('a light-only flat panel never shows a cover pill (#1668)', (tester) async {
+    final flat = _FlatPanel(EquipmentConnectionState.connected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [flatPanelProvider.overrideWith(() => flat)]);
+    await tester.pump();
+    flat.report('cover_moving', cover: false);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Cover moving…')), findsNothing);
+    flat.report('light_on', warming: true, cover: false);
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Light warming up…')), findsOneWidget);
+  });
+
+  testWidgets('with four or more pills up, the safety monitor\'s Unsafe is among the three shown (#1668)', (tester) async {
+    final rotator = _Rotator(EquipmentConnectionState.connected);
+    final flat = _FlatPanel(EquipmentConnectionState.connected);
+    final dome = _Dome(EquipmentConnectionState.connected);
+    final safety = _Safety(EquipmentConnectionState.connected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      rotatorProvider.overrideWith(() => rotator),
+      flatPanelProvider.overrideWith(() => flat),
+      domeProvider.overrideWith(() => dome),
+      safetyMonitorProvider.overrideWith(() => safety),
+    ]);
+    await tester.pump();
+    rotator.report('moving');
+    flat.report('cover_moving');
+    dome.report('slewing');
+    safety.report(false, DateTime(2026, 11, 8, 2, 14));
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Unsafe since 02:14')), findsOneWidget);
+    expect(find.descendant(of: pill, matching: find.text('+1')), findsOneWidget,
+        reason: 'four up: three shown, one folded, and it isn\'t the Unsafe');
   });
 
   testWidgets('a scheduled plan waiting on the rig: the pill says when it starts', (tester) async {

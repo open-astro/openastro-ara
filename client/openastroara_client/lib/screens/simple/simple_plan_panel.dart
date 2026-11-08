@@ -368,14 +368,49 @@ PlanetariumSelection simpleSelectionOf(TonightSkyObject o) =>
       designations: [o.id, ...o.aliases],
     );
 
+/// A position's altitude above the site at [utc], in degrees. Pure —
+/// unit-tested.
+// shortcut: takes the J2000 position as today's, under half a degree off;
+// enough for above or below the horizon, not for pointing.
+double simpleAltitudeDeg(
+  double raDeg,
+  double decDeg, {
+  required double latitudeDeg,
+  required double longitudeDeg,
+  required DateTime utc,
+}) {
+  double rad(double deg) => deg * math.pi / 180;
+  final days = utc.difference(DateTime.utc(2000, 1, 1, 12)).inSeconds / 86400;
+  final hourAngle = 280.46061837 + 360.98564736629 * days + longitudeDeg - raDeg;
+  final sine =
+      math.sin(rad(decDeg)) * math.sin(rad(latitudeDeg)) +
+      math.cos(rad(decDeg)) * math.cos(rad(latitudeDeg)) * math.cos(rad(hourAngle));
+  return math.asin(sine.clamp(-1.0, 1.0)) * 180 / math.pi;
+}
+
+/// A picked catalog object as the selection, at the site and time now.
+PlanetariumSelection simplePickDso(WidgetRef ref, PlanningDso d) {
+  final site = ref.read(siteSettingsProvider);
+  return simpleSelectionOfDso(
+    d,
+    ref.read(tonightSkyProvider).value ?? const [],
+    latitudeDeg: site.latitudeDeg,
+    longitudeDeg: site.longitudeDeg,
+    utc: ref.read(clockProvider)().toUtc(),
+  );
+}
+
 /// A catalog object (a Sky Album card) as the selection: the ranker's row
 /// when it lists the object under any designation, so altitude and rise come
-/// with it; else the catalog position only, with no altitude and the transit
-/// altitude from [latitudeDeg]. Pure — unit-tested.
+/// with it; else the catalog position, with the altitude computed when
+/// [longitudeDeg] and [utc] are given and the transit altitude from
+/// [latitudeDeg]. Pure — unit-tested.
 PlanetariumSelection simpleSelectionOfDso(
   PlanningDso d,
   List<TonightSkyObject> ranked, {
   required double latitudeDeg,
+  double? longitudeDeg,
+  DateTime? utc,
 }) {
   final keys = {for (final n in [d.id, ...d.aliases]) designationKey(n)};
   final row = ranked
@@ -391,6 +426,15 @@ PlanetariumSelection simpleSelectionOfDso(
     decDeg: d.decDeg,
     raJ2000Hours: d.raDeg / 15,
     decJ2000Deg: d.decDeg,
+    altDeg: longitudeDeg == null || utc == null
+        ? null
+        : simpleAltitudeDeg(
+            d.raDeg,
+            d.decDeg,
+            latitudeDeg: latitudeDeg,
+            longitudeDeg: longitudeDeg,
+            utc: utc,
+          ),
     maxAltDeg: 90 - (latitudeDeg - d.decDeg).abs(),
     designations: [d.id, ...d.aliases],
   );
@@ -668,6 +712,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         gain: gain,
         stopAtDawn: dawn,
         parkAtEnd: true,
+        pauseForFilterSwap: false,
       );
       if (r == null || r.draft) {
         _fail(l10nFor(ref.read(appLocaleProvider)).planRigUnreachable);
@@ -762,6 +807,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       ref.read(selectedSequenceIdProvider.notifier).select(id);
       final r = await createImagingRun(
         null,
+        pauseForFilterSwap: false,
         container: ref.container,
         raDeg: t.raDeg,
         decDeg: t.decDeg,
@@ -844,6 +890,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       ref.read(selectedSequenceIdProvider.notifier).select(id);
       final r = await createImagingRun(
         null,
+        pauseForFilterSwap: false,
         container: ref.container,
         raDeg: t.raDeg,
         decDeg: t.decDeg,
@@ -2010,7 +2057,13 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 hit: hit,
                 onTap: () {
                   _query.text = hit.label;
-                  _search();
+                  // The sheet stays up, so the keyboard must not stay over it.
+                  FocusManager.instance.primaryFocus?.unfocus();
+                  // The target at once, and the Plan sheet stays up.
+                  ref
+                      .read(planetariumSelectionProvider.notifier)
+                      .set(simplePickDso(ref, hit.dso));
+                  setState(() => _suggesting = false);
                 },
               ),
           Row(

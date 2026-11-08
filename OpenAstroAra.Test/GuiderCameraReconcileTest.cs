@@ -195,7 +195,8 @@ namespace OpenAstroAra.Test {
         public async Task Connect_survives_a_read_failure_and_leaves_the_profile_unchanged() {
             await using var rig = await Rig.StartAsync("", 3.75, null, null).ConfigureAwait(false);
             Assert.That(rig.Fake.ReceivedMethods, Does.Contain("get_alpaca_camera_pixelsize"), "the camera read was attempted and failed");
-            rig.Alpaca.Verify(a => a.GetConfiguredDevicesAsync("192.0.2.10", 6800, It.IsAny<CancellationToken>()), Times.Once);
+            rig.Alpaca.Verify(a => a.GetConfiguredDevicesAsync("192.0.2.10", 6800, It.IsAny<CancellationToken>()), Times.AtLeastOnce,
+                "the reconcile reads the slots; the #1665 selection check after the connect may read them too");
             Assert.That(rig.Stored.GuidePixelSize, Is.EqualTo(3.75));
             Assert.That(rig.Stored.GuiderCameraAlpacaUniqueId, Is.EqualTo(""));
             Assert.That(rig.Log.Reconcile(), Is.Empty);

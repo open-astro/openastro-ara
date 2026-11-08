@@ -932,10 +932,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Profile_push_refuses_a_bare_alpaca_selection_before_anything_reaches_the_guider() {
+        public async Task Profile_push_refuses_a_bare_alpaca_selection_and_sends_none_of_it_to_the_guider() {
             // #1306 — the field case: bare "Alpaca Camera"/"Alpaca Mount" with no stored host/port. The
-            // push must throw the typed refusal (→ 422) and send NOTHING, rather than leave the guider on
-            // localhost:0 with its equipment disconnected. Proven red by deleting the guard in PushAsync.
+            // push must throw the typed refusal (→ 422) and send none of the selection, rather than leave the
+            // guider on localhost:0. The twin still follows (#1665).
             await using var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
             fake.OnRpc("get_connected", JsonValue.Create(true));
@@ -958,9 +958,8 @@ namespace OpenAstroAra.Test {
             var ex = await Assert.ThrowsAsync<GuiderSelectionInvalidException>(
                 () => svc.PushGuiderProfileAsync("push-bare", CancellationToken.None)).ConfigureAwait(false);
             Assert.That(ex!.Message, Does.Contain("guide camera 'Alpaca Camera'"));
-            Assert.That(fake.ReceivedMethods.Count, Is.EqualTo(before), "nothing may reach the guider");
+            // #1665 — the twin still follows, but no refused selection is sent.
             Assert.That(fake.ReceivedMethods.Skip(before), Does.Not.Contain("set_selected_camera"));
-            Assert.That(fake.ReceivedMethods.Skip(before), Does.Not.Contain("set_connected"));
         }
 
         [Test]
@@ -991,7 +990,7 @@ namespace OpenAstroAra.Test {
                 () => svc.PushGuiderProfileAsync("push-moved", CancellationToken.None)).ConfigureAwait(false);
 
             Assert.That(ex!.Message, Does.Contain("has moved").And.Contain("now camera/0"));
-            Assert.That(fake.ReceivedMethods.Count, Is.EqualTo(before), "nothing may reach the guider");
+            Assert.That(fake.ReceivedMethods.Skip(before), Does.Not.Contain("set_selected_camera"), "the refused selection is not sent");
 
             // Same server, camera still where it was → the push goes through.
             alpaca.Setup(a => a.GetConfiguredDevicesAsync("127.0.0.1", 6800, It.IsAny<CancellationToken>()))
@@ -2462,6 +2461,111 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_rest_start_the_guider_gives_up_on_ends_at_once_with_the_guiders_reason() {
+            // #1664 — the guider stopped capturing (its Guide Camera was not connected) and said so in a
+            // SettleDone; the start waited out the 30 s star timeout and reported a bare "refused".
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+
+            var accepted = await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => fake.ReceivedMethods.Contains("guide")).ConfigureAwait(false), Is.True);
+            await fake.BroadcastAsync(PhdEvents.SettleDone(status: 1, error: "Stopped capturing")).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.operation_complete").Count == 1).ConfigureAwait(false), Is.True,
+                "the start ends well inside the 30 s guide-star timeout");
+            var op = ws.Of("guider.operation_complete")[0];
+            Assert.That(op.GetProperty("operation").GetString(), Is.EqualTo("guider.start"));
+            Assert.That(op.GetProperty("operation_id").GetString(), Is.EqualTo(accepted.OperationId.ToString()));
+            Assert.That(op.GetProperty("ok").GetBoolean(), Is.False);
+            Assert.That(op.GetProperty("error").GetString(), Does.Contain("Stopped capturing"));
+        }
+
+        [Test]
+        public async Task A_rest_start_that_began_guiding_succeeds_when_its_settle_times_out() {
+            // #1664 review — once guiding has begun, a settle-timeout SettleDone (the guider still guiding) is
+            // the settle verdict, not a failed start; only errors before guiding began end the start.
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            var guiding = 0;
+            var stateAnswersGuiding = 0;
+            fake.OnRpc("get_app_state", _ => {
+                if (Volatile.Read(ref guiding) == 0) { return JsonValue.Create("Stopped"); }
+                Interlocked.Increment(ref stateAnswersGuiding);
+                return JsonValue.Create("Guiding");
+            });
+            fake.OnRpc("get_calibrated", JsonValue.Create(true));
+            fake.OnRpc("get_lock_position", new JsonArray(100.0, 100.0));
+            fake.OnRpc("guide", _ => { Volatile.Write(ref guiding, 1); return JsonValue.Create(0); });
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+
+            await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => stateAnswersGuiding > 0).ConfigureAwait(false), Is.True, "the start saw the guider guiding");
+            await Task.Delay(500).ConfigureAwait(false); // let the start pass its guiding-has-begun point
+            var timedOut = PhdEvents.SettleDone(status: 1, error: "timed-out waiting for guider to settle");
+            for (var i = 0; i < 50 && ws.Of("guider.operation_complete").Count == 0; i++) {
+                await fake.BroadcastAsync(timedOut).ConfigureAwait(false);
+                await Task.Delay(100).ConfigureAwait(false);
+            }
+
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.operation_complete").Count == 1).ConfigureAwait(false), Is.True);
+            var op = ws.Of("guider.operation_complete")[0];
+            Assert.That(op.GetProperty("operation").GetString(), Is.EqualTo("guider.start"));
+            Assert.That(op.GetProperty("ok").GetBoolean(), Is.True, "guiding began; the settle timeout does not fail the start");
+        }
+
+        [Test]
+        public async Task A_rest_start_retries_after_its_own_stop_capture_answers_with_a_settle_error() {
+            // #1664 review — the retry stops the guider; PHD2 answers stop_capture with a SettleDone
+            // "Stopped capturing". That is our own stop, not the guider giving up: the retry must go on.
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            var guides = 0;
+            fake.OnRpc("get_app_state", _ => JsonValue.Create(Volatile.Read(ref guides) == 0 ? "Stopped" : "LostLock"));
+            fake.OnRpc("get_calibrated", JsonValue.Create(true));
+            fake.OnRpc("get_lock_position", new JsonArray(100.0, 100.0));
+            fake.OnRpc("guide", _ => { Interlocked.Increment(ref guides); return JsonValue.Create(0); });
+            fake.OnRpc("stop_capture", req => {
+                _ = fake.BroadcastAsync(PhdEvents.SettleDone(status: 1, error: "Stopped capturing"));
+                return JsonValue.Create(0);
+            });
+            var profile = new HeadlessProfileService();
+            profile.ActiveProfile.GuiderSettings.AutoRetryStartGuiding = true;
+            profile.ActiveProfile.GuiderSettings.AutoRetryStartGuidingTimeoutSeconds = 1;
+            using var svc = new GuiderService(profile, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws: new RecordingBroadcaster(),
+                araProfileResolver: () => (Guid.NewGuid(), "Rig A"));
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null);
+
+            await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => Volatile.Read(ref guides) >= 2, TimeSpan.FromSeconds(20)).ConfigureAwait(false), Is.True,
+                "a second guide RPC went out: the retry survived its own stop_capture");
+        }
+
+        [TestCase("cannot guide while calibrating", "cannot guide while calibrating")]
+        [TestCase("", "refused")]
+        public async Task A_rest_start_the_guider_refuses_carries_its_reason_or_refused(string message, string expected) {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            fake.OnRawRpc("guide", id =>
+                "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":1,\"message\":" + JsonValue.Create(message).ToJsonString() + "},\"id\":" + id + "}");
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+
+            await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.operation_complete").Count == 1).ConfigureAwait(false), Is.True);
+            var op = ws.Of("guider.operation_complete")[0];
+            Assert.That(op.GetProperty("ok").GetBoolean(), Is.False);
+            Assert.That(op.GetProperty("error").GetString(), Is.EqualTo(expected));
+        }
+
+        [Test]
         public async Task A_sequencer_dither_aborted_mid_settle_is_reported_cancelled_not_ok() {
             // #1351 r1 note: WaitForSettling swallows the cancellation and Dither() returns true
             // with no settle verdict — the terminal event must not call that a settled dither.
@@ -2507,6 +2611,241 @@ namespace OpenAstroAra.Test {
             Assert.That(ws.Of("guider.operation_complete"), Is.Empty, "operation_complete is the REST 202's terminal event only");
         }
 
+        private const string RefusedSlot = "guide camera 'Alpaca Camera'";
+
+        private static void SelectBareAlpaca(OpenAstroAra.Profile.Interfaces.IGuiderSettings settings) {
+            settings.GuiderCamera = "Alpaca Camera";
+            settings.GuiderMount = "Alpaca Mount";
+            settings.GuiderAlpacaHost = "";
+            settings.GuiderAlpacaPort = 0;
+        }
+
+        private static void SelectNothing(OpenAstroAra.Profile.Interfaces.IGuiderSettings settings) {
+            settings.GuiderCamera = "";
+            settings.GuiderMount = "";
+        }
+
+        /// <summary>#1665 — connected as "Rig A"; the active profile is then "Rig B", whose push is refused.</summary>
+        private static async Task<(GuiderService Svc, OpenAstroAra.Profile.Interfaces.IGuiderSettings Settings)> OutOfStepAgainstAsync(
+                FakeGuider fake, RecordingBroadcaster? ws = null) {
+            var active = "Rig A";
+            var id = Guid.NewGuid();
+            var profiles = new HeadlessProfileService();
+            var svc = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws: ws,
+                araProfileResolver: () => (id, active));
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false),
+                Is.Not.Null, "the guider never reached Connected against the fake");
+            active = "Rig B";
+            var settings = profiles.ActiveProfile.GuiderSettings;
+            SelectBareAlpaca(settings);
+            await Assert.ThatAsync(() => svc.PushGuiderProfileAsync(null, CancellationToken.None),
+                Throws.TypeOf<GuiderSelectionInvalidException>()).ConfigureAwait(false);
+            return (svc, settings);
+        }
+
+        private static async Task ReconnectAsync(GuiderService svc, FakeGuider fake) {
+            await svc.DisconnectAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null);
+        }
+
+        private static async Task AssertStartReachesTheGuiderAsync(GuiderService svc, FakeGuider fake) {
+            await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => fake.ReceivedMethods.Contains("guide")).ConfigureAwait(false), Is.True);
+            await fake.BroadcastAsync(PhdEvents.SettleDone(status: 1, error: "Stopped capturing")).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task A_refused_push_still_selects_the_active_profiles_twin_and_sends_no_equipment_selection() {
+            await using var fake = FakeGuider.Start();
+            var daemon = new ProfileDaemon(fake);
+
+            var (svc, _) = await OutOfStepAgainstAsync(fake).ConfigureAwait(false);
+            using (svc) {
+                Assert.That(daemon.Profiles.Single(p => p.Id == daemon.SelectedId).Name, Is.EqualTo("Rig B"),
+                    "calibration and darks must not land in the previous profile's twin");
+                Assert.That(fake.ReceivedMethods, Has.No.Member("set_selected_camera"));
+            }
+        }
+
+        [Test]
+        public async Task After_a_refused_push_a_rest_start_fails_with_the_reason_and_sends_no_guide_rpc() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            var ws = new RecordingBroadcaster();
+
+            var (svc, _) = await OutOfStepAgainstAsync(fake, ws).ConfigureAwait(false);
+            using (svc) {
+                await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+
+                Assert.That(await WaitUntilAsync(() => ws.Of("guider.operation_complete").Count == 1, TimeSpan.FromSeconds(3)).ConfigureAwait(false), Is.True);
+                var op = ws.Of("guider.operation_complete")[0];
+                Assert.That(op.GetProperty("ok").GetBoolean(), Is.False);
+                Assert.That(op.GetProperty("error").GetString(), Does.Contain(RefusedSlot));
+                Assert.That(fake.ReceivedMethods, Has.No.Member("guide"));
+            }
+        }
+
+        [Test]
+        public async Task After_a_refused_push_a_runs_start_guiding_throws_the_reason_and_sends_no_guide_rpc() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+
+            var (svc, _) = await OutOfStepAgainstAsync(fake).ConfigureAwait(false);
+            using (svc) {
+                using var bound = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                await Assert.ThatAsync(() => svc.StartGuiding(false, null!, bound.Token),
+                    Throws.InstanceOf<InvalidOperationException>().With.Message.Contain(RefusedSlot)).ConfigureAwait(false);
+                Assert.That(fake.ReceivedMethods, Has.No.Member("guide"));
+            }
+        }
+
+        [Test]
+        public async Task After_a_refused_push_the_dark_library_build_is_409_with_the_reason_and_sends_no_build_rpc() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+
+            var (svc, _) = await OutOfStepAgainstAsync(fake).ConfigureAwait(false);
+            using (svc) {
+                var result = await OpenAstroAra.Server.Endpoints.EquipmentEndpoints.BuildDarkLibraryAsync(new BuildDarkLibraryRequestDto(), null, svc, CancellationToken.None).ConfigureAwait(false);
+
+                var problem = result as Microsoft.AspNetCore.Http.HttpResults.ProblemHttpResult;
+                Assert.That(problem?.StatusCode, Is.EqualTo(409));
+                Assert.That(problem!.ProblemDetails.Detail, Does.Contain(RefusedSlot));
+                Assert.That(fake.ReceivedMethods, Has.No.Member("build_dark_library"));
+            }
+        }
+
+        [Test]
+        public async Task After_a_refused_push_the_defect_map_build_is_409_with_the_reason() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+
+            var (svc, _) = await OutOfStepAgainstAsync(fake).ConfigureAwait(false);
+            using (svc) {
+                var result = await OpenAstroAra.Server.Endpoints.EquipmentEndpoints.BuildDefectMapDarksAsync(new BuildDefectMapDarksRequestDto(), null, svc, CancellationToken.None).ConfigureAwait(false);
+
+                var problem = result as Microsoft.AspNetCore.Http.HttpResults.ProblemHttpResult;
+                Assert.That(problem?.StatusCode, Is.EqualTo(409));
+                Assert.That(problem!.ProblemDetails.Detail, Does.Contain(RefusedSlot));
+            }
+        }
+
+        [Test]
+        public async Task After_a_refused_push_the_guide_camera_focus_loop_refuses_with_the_reason() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+
+            var (svc, _) = await OutOfStepAgainstAsync(fake).ConfigureAwait(false);
+            using (svc) {
+                using var focus = new GuideFocusService(svc, Mock.Of<IPolarAlignFrameFetcher>(), decoder: Mock.Of<IGuideFrameDecoder>());
+
+                await Assert.ThatAsync(() => focus.StartAsync(new GuideFocusStartRequestDto(), CancellationToken.None),
+                    Throws.InstanceOf<InvalidOperationException>().With.Message.Contain(RefusedSlot)).ConfigureAwait(false);
+            }
+        }
+
+        [Test]
+        public async Task A_refused_push_shows_its_reason_in_the_runtime_snapshot_until_a_push_succeeds() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+
+            var (svc, settings) = await OutOfStepAgainstAsync(fake).ConfigureAwait(false);
+            using (svc) {
+                Assert.That((await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime.OutOfStepReason, Does.Contain(RefusedSlot));
+
+                SelectNothing(settings);
+                await svc.PushGuiderProfileAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+                Assert.That((await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime.OutOfStepReason, Is.Null);
+                await AssertStartReachesTheGuiderAsync(svc, fake).ConfigureAwait(false);
+            }
+        }
+
+        [Test]
+        public async Task A_push_that_fails_marks_the_guider_out_of_step_and_a_start_sends_no_guide_rpc() {
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_connected", JsonValue.Create(false));
+            fake.OnRpc("set_connected", _ => throw new InvalidOperationException("simulated: equipment failed to connect"));
+            var ws = new RecordingBroadcaster();
+            var profiles = new HeadlessProfileService();
+            profiles.ActiveProfile.GuiderSettings.GuiderCamera = "Bogus Camera";
+            using var svc = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws: ws);
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null);
+
+            await Assert.ThatAsync(() => svc.PushGuiderProfileAsync(null, CancellationToken.None),
+                Throws.TypeOf<GuiderRpcException>()).ConfigureAwait(false);
+
+            Assert.That((await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime.OutOfStepReason, Does.Contain("reconnect"));
+            await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.operation_complete").Count == 1, TimeSpan.FromSeconds(3)).ConfigureAwait(false), Is.True);
+            Assert.That(fake.ReceivedMethods, Has.No.Member("guide"));
+        }
+
+        [Test]
+        public async Task An_unchecked_select_push_does_not_clear_the_out_of_step_state_of_a_bad_selection() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+
+            var (svc, _) = await OutOfStepAgainstAsync(fake).ConfigureAwait(false);
+            using (svc) {
+                await svc.PushGuiderProfileAsync(null, CancellationToken.None, refuseUnservedSelection: false).ConfigureAwait(false);
+
+                Assert.That((await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime.OutOfStepReason, Does.Contain(RefusedSlot));
+            }
+        }
+
+        [Test]
+        public async Task An_unchecked_select_push_of_a_good_selection_clears_the_out_of_step_state() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+
+            var (svc, settings) = await OutOfStepAgainstAsync(fake).ConfigureAwait(false);
+            using (svc) {
+                SelectNothing(settings);
+                await svc.PushGuiderProfileAsync(null, CancellationToken.None, refuseUnservedSelection: false).ConfigureAwait(false);
+
+                Assert.That((await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime.OutOfStepReason, Is.Null);
+            }
+        }
+
+        [Test]
+        public async Task A_reconnect_with_a_good_selection_clears_the_out_of_step_state() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+
+            var (svc, settings) = await OutOfStepAgainstAsync(fake).ConfigureAwait(false);
+            using (svc) {
+                SelectNothing(settings);
+                await ReconnectAsync(svc, fake).ConfigureAwait(false);
+
+                Assert.That((await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime.OutOfStepReason, Is.Null);
+                await AssertStartReachesTheGuiderAsync(svc, fake).ConfigureAwait(false);
+            }
+        }
+
+        [Test]
+        public async Task A_reconnect_with_a_still_bad_selection_stays_out_of_step() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+
+            var (svc, _) = await OutOfStepAgainstAsync(fake).ConfigureAwait(false);
+            using (svc) {
+                await ReconnectAsync(svc, fake).ConfigureAwait(false);
+
+                Assert.That(await PollAsync(svc, d => d.Runtime.OutOfStepReason is not null).ConfigureAwait(false), Is.Not.Null,
+                    "the connect-time push sends the selection unchecked, so the connect has to judge it");
+            }
+        }
+
         private static async Task<GuiderDto?> PollAsync(GuiderService svc, Func<GuiderDto, bool> predicate) {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             try {
@@ -2525,8 +2864,8 @@ namespace OpenAstroAra.Test {
             return null;
         }
 
-        private static async Task<bool> WaitUntilAsync(Func<bool> condition) {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        private static async Task<bool> WaitUntilAsync(Func<bool> condition, TimeSpan? timeout = null) {
+            using var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(10));
             while (!cts.IsCancellationRequested) {
                 if (condition()) {
                     return true;

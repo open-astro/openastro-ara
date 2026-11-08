@@ -229,7 +229,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 CalibrationDirection: calibration?.Direction,
                 CalibrationStep: calibration?.Step,
                 CalibrationDistancePx: calibration is { } cal ? Math.Round(cal.Distance, 1) : null,
-                Profiles: _guider.ProfilesSnapshot.Select(p => new GuiderProfileDto(p.Id, p.Name)).ToList());
+                Profiles: _guider.ProfilesSnapshot.Select(p => new GuiderProfileDto(p.Id, p.Name)).ToList(),
+                OutOfStepReason: _outOfStepReason);
             return Task.FromResult<GuiderDto?>(new GuiderDto("PHD2_Single", "PHD2", _state, runtime));
         }
     }
@@ -348,10 +349,11 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         // gives up the guide camera, and a stale lease or an open polar alignment is cleared, so the
         // guider does not refuse with "polar-alignment session in progress" (review of #1365).
         _ = RunAndReportAsync(accepted, async () => {
+            ThrowIfOutOfStep("Start guiding");
             await ReleaseGuideCameraQuietlyAsync().ConfigureAwait(false);
             await ClearPaSessionQuietlyAsync(guider, CancellationToken.None).ConfigureAwait(false);
             return await guider.StartGuiding(forceCalibration: false, _noProgress, CancellationToken.None).ConfigureAwait(false);
-        }, ditherGuider: null);
+        }, ditherGuider: null, startGuider: guider);
         return Task.FromResult(accepted);
     }
 
@@ -396,7 +398,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
     /// </summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Fire-and-forget boundary: the op's fault becomes the terminal event's error instead of an unobserved task exception.")]
-    private async Task RunAndReportAsync(OperationAcceptedDto accepted, Func<Task<bool>> op, PHD2Guider? ditherGuider) {
+    private async Task RunAndReportAsync(OperationAcceptedDto accepted, Func<Task<bool>> op, PHD2Guider? ditherGuider, PHD2Guider? startGuider = null) {
         bool ok;
         string? error = null;
         try {
@@ -412,7 +414,8 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         } else if (!ok) {
             // A false return is the guider saying no (not guiding, already stopped, RPC refused); a
             // refusal that names its reason (calibrating, paused) keeps it, as the sequencer's path does.
-            error ??= ditherGuider?.LastSettleError ?? "refused";
+            // #1664 — a failed start carries the guider's own reason (e.g. "Stopped capturing").
+            error ??= ditherGuider?.LastSettleError ?? startGuider?.LastStartError ?? "refused";
         }
         await PublishOperationCompleteAsync(accepted, ok, error).ConfigureAwait(false);
         if (ditherGuider is not null) {
@@ -494,6 +497,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 ReconcileTask = ReconcileGuideCameraAsync(guider, ct);
                 Interlocked.Increment(ref _reconcileStarts);
                 await ReconcileTask.ConfigureAwait(false);
+                await RecheckSelectionAsync(ct).ConfigureAwait(false);
             }
         } catch (OperationCanceledException) {
             // Superseded by a newer connect/disconnect — that operation already owns the state;
@@ -874,6 +878,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             _guider.Disconnect();
             _guider.Dispose();
             _guider = null;
+            _outOfStepReason = null;
             ResetPaResidual();
             ResetStarLostWatchLocked();
         }
