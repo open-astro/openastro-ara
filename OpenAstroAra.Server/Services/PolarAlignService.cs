@@ -264,6 +264,11 @@ namespace OpenAstroAra.Server.Services {
                         "site latitude must be configured (non-zero) before polar alignment — the routine measures against your site's celestial pole");
                 }
                 var settings = _profileStore.GetPolarAlignSettings();
+                // #1711: a capture the previous run abandoned may still be exposing; the guider refuses a new one until it ends.
+                await guiderClient.WaitForCaptureIdleAsync(ct).ConfigureAwait(false);
+                lock (_gate) {
+                    _abandonedCaptureDebts.Clear(); // idle: that capture's event has been delivered, nothing is owed
+                }
                 await guiderClient.SetPaSessionAsync(active: true, timeoutS: LeaseTimeoutSeconds, ct).ConfigureAwait(false);
                 int gen;
                 int startSeq;
@@ -281,8 +286,8 @@ namespace OpenAstroAra.Server.Services {
                     _lastFrame = null;
                     gen = ++_generation;
                     _lastCaptureFault = null; // fresh run — stale capture faults must not color its failures
-                    // _abandonedCaptureDebts is deliberately NOT reset: a capture abandoned by the
-                    // JUST-STOPPED run may still deliver its event into this run (review r2).
+                    // _abandonedCaptureDebts was cleared above, after the guider reported idle: a capture
+                    // abandoned by the just-stopped run has delivered its event by now.
                     startSeq = ++_startSeq;
                 }
                 _runCts = new CancellationTokenSource();

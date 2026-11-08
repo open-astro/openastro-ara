@@ -2753,6 +2753,42 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_guide_camera_focus_start_waits_for_an_earlier_capture_before_its_first_one() {
+            // #1711: the same lease and capture call as polar align — a focus start while the guider is still
+            // exposing an earlier frame must not send its own capture_single_frame into the guider's refusal.
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            fake.OnRpc("get_app_state", JsonValue.Create("Stopped"));
+            fake.OnRpc("set_pa_session", _ => new JsonObject { ["active"] = true, ["expires_in_s"] = 600 });
+            var active = 0;
+            var refused = 0;
+            fake.OnRpc("capture_single_frame", req => {
+                if (Interlocked.Exchange(ref active, 1) == 1) {
+                    Interlocked.Increment(ref refused);
+                    throw new InvalidOperationException("cannot capture single frame when capture is currently active");
+                }
+                _ = Task.Run(async () => {
+                    await Task.Delay(800).ConfigureAwait(false);
+                    Volatile.Write(ref active, 0);
+                    await fake.BroadcastAsync(new JsonObject {
+                        ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
+                        ["Inst"] = 1, ["Success"] = false, ["Error"] = "no camera",
+                    }).ConfigureAwait(false);
+                });
+                return JsonValue.Create(0);
+            });
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A").ConfigureAwait(false);
+            await svc.RequireConnectedGuider().CaptureSolverFrameAsync(100, null, null, null, null, true, CancellationToken.None).ConfigureAwait(false);
+            using var focus = new GuideFocusService(svc, Mock.Of<IPolarAlignFrameFetcher>(), decoder: Mock.Of<IGuideFrameDecoder>());
+
+            await focus.StartAsync(new GuideFocusStartRequestDto(0.1), CancellationToken.None).ConfigureAwait(false);
+            await Task.Delay(300).ConfigureAwait(false);
+            await focus.StopAsync().ConfigureAwait(false);
+
+            Assert.That(Volatile.Read(ref refused), Is.Zero, "the loop's first capture went out while the guider was still exposing");
+        }
+
+        [Test]
         public async Task A_refused_push_shows_its_reason_in_the_runtime_snapshot_until_a_push_succeeds() {
             await using var fake = FakeGuider.Start();
             _ = new ProfileDaemon(fake);

@@ -222,6 +222,8 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
                 if (GuiderBusy(guider.State)) {
                     throw new InvalidOperationException($"the guider is {guider.State.ToLowerInvariant()} — stop guiding before focusing the guide camera");
                 }
+                // #1711: a capture an earlier polar-align run abandoned may still be exposing.
+                await guider.WaitForCaptureIdleAsync(ct).ConfigureAwait(false);
                 // The daemon's single-client lease: refused by the daemon too when it is guiding/calibrating.
                 await guider.SetPaSessionAsync(active: true, timeoutS: LeaseTimeoutSeconds, ct).ConfigureAwait(false);
             }

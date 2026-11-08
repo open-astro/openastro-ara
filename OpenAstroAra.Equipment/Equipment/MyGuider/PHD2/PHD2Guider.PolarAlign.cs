@@ -64,8 +64,30 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// the capture requested a save.</summary>
         public event EventHandler<SingleFrameCompleteEventArgs>? SingleFrameComplete;
 
-        private void RaiseSingleFrameComplete(bool success, string? error, string? path, string? filename) =>
+        /// <summary>How long past its exposure an acked capture is still presumed running.</summary>
+        public TimeSpan CaptureBusyGrace { get; set; } = TimeSpan.FromSeconds(5);
+
+        // UTC ticks by which the capture we last started should have announced its end; 0 = none in flight.
+        // The guider refuses a second capture_single_frame while one exposes, and gives no RPC to ask.
+        private long _captureBusyUntilTicks;
+
+        private void RaiseSingleFrameComplete(bool success, string? error, string? path, string? filename) {
+            Interlocked.Exchange(ref _captureBusyUntilTicks, 0);
             SingleFrameComplete?.Invoke(this, new SingleFrameCompleteEventArgs(success, error, path, filename));
+        }
+
+        /// <summary>Waits until the capture this client last started has announced its end. A capture that
+        /// outlives its exposure plus <see cref="CaptureBusyGrace"/> is given up on (the next call then
+        /// proceeds) and throws, so a lost event fails one start rather than every later one.</summary>
+        public async Task WaitForCaptureIdleAsync(CancellationToken ct) {
+            while (Interlocked.Read(ref _captureBusyUntilTicks) is var until and not 0) {
+                if (DateTime.UtcNow.Ticks > until) {
+                    Interlocked.CompareExchange(ref _captureBusyUntilTicks, 0, until);
+                    throw new InvalidOperationException("the guide camera is still busy with an earlier capture — wait a few seconds and try again");
+                }
+                await Task.Delay(50, ct).ConfigureAwait(false);
+            }
+        }
 
         /// <summary>
         /// Validates the §45 solver-frame parameters at the send site and builds the wire request. A saved
@@ -141,6 +163,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (response.error != null) {
                 throw new GuiderRpcException("capture_single_frame", response.error.code, response.error.message);
             }
+            Interlocked.Exchange(ref _captureBusyUntilTicks,
+                (DateTime.UtcNow + TimeSpan.FromMilliseconds(exposureMs ?? 0) + CaptureBusyGrace).Ticks);
         }
 
         /// <summary>

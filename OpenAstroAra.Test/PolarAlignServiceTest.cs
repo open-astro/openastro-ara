@@ -798,44 +798,43 @@ namespace OpenAstroAra.Test {
                 "the stale event owed by the timed-out capture must be swallowed, never fetched");
         }
 
-        [Test]
-        public async Task A_capture_abandoned_by_stop_cannot_leak_its_frame_into_the_next_run() {
-            // Review r2: Stop/restart cancels the capture wait via ct (OperationCanceledException,
-            // not TimeoutException) — the daemon still owes that capture's event, and the debt must
-            // survive the run boundary so the NEXT run swallows the late event instead of adopting
-            // a stale frame into fresh geometry. Run 1's first capture acks and never completes;
-            // Stop lands while it waits. Run 2's captures each deliver the OLD run's stale event
-            // once, then their own — only fresh frames may be fetched.
-            var paCalls = new ConcurrentQueue<bool>();
-            await using var fake = StartFake(paCalls, answerCaptures: false);
-            var captureCount = 0;
-            var staleDelivered = 0;
+        // A guider that, like the real one, refuses a capture while an earlier one is still exposing and
+        // announces each capture's end on SingleFrameComplete. Capture n (1-based) ends after delaysMs[n-1].
+        private static void OnCapturesRefusedWhileActive(FakeGuider fake, Func<int, int> delayMsFor, Action<int>? onCapture = null) {
+            var active = 0;
+            var count = 0;
             fake.OnRpc("capture_single_frame", req => {
-                var n = Interlocked.Increment(ref captureCount);
-                if (n == 1) {
-                    return JsonValue.Create(0); // run 1: ack, never complete — Stop abandons the wait
+                if (Interlocked.Exchange(ref active, 1) == 1) {
+                    throw new InvalidOperationException("cannot capture single frame when capture is currently active");
                 }
-                _ = Task.Run(async () => {
-                    await Task.Delay(20).ConfigureAwait(false);
-                    if (Interlocked.Exchange(ref staleDelivered, 1) == 0) {
-                        // Run 1's debt, delivered late into run 2 — exactly once.
+                var n = Interlocked.Increment(ref count);
+                onCapture?.Invoke(n);
+                var delay = delayMsFor(n);
+                if (delay >= 0) {
+                    _ = Task.Run(async () => {
+                        await Task.Delay(delay).ConfigureAwait(false);
+                        Volatile.Write(ref active, 0);
                         await fake.BroadcastAsync(new JsonObject {
                             ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
                             ["Inst"] = 1, ["Success"] = true,
-                            ["Path"] = "/var/lib/openastro-guider/.openastro-guider/save_image_stale",
-                            ["Filename"] = "save_image_stale",
+                            ["Path"] = "/var/lib/openastro-guider/.openastro-guider/save_image_" + n,
+                            ["Filename"] = "save_image_" + n,
                         }).ConfigureAwait(false);
-                        await Task.Delay(30).ConfigureAwait(false);
-                    }
-                    await fake.BroadcastAsync(new JsonObject {
-                        ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
-                        ["Inst"] = 1, ["Success"] = true,
-                        ["Path"] = "/var/lib/openastro-guider/.openastro-guider/save_image_fresh",
-                        ["Filename"] = "save_image_fresh",
-                    }).ConfigureAwait(false);
-                });
+                    });
+                }
                 return JsonValue.Create(0);
             });
+        }
+
+        [Test]
+        public async Task A_start_right_after_a_stop_waits_for_the_guiders_capture_to_finish() {
+            // #1711: Stop abandons the capture the guider is still exposing; a Start within seconds sent a
+            // second capture_single_frame, which the guider refused three times ("capture is currently
+            // active") and the seed failed. Start must wait for the earlier capture's SingleFrameComplete.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls, answerCaptures: false);
+            var firstCaptureAcked = 0;
+            OnCapturesRefusedWhileActive(fake, n => n == 1 ? 1500 : 20, n => { if (n == 1) { Volatile.Write(ref firstCaptureAcked, 1); } });
             using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
             var fetcher = new FakeFrameFetcher();
             var solver = new ScriptedSolver();
@@ -843,10 +842,9 @@ namespace OpenAstroAra.Test {
             using var svc = NewService(guider, solver, fetcher: fetcher);
 
             await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
-            // Give run 1 time to ack its first capture and park on the completion wait.
             using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10))) {
-                while (Volatile.Read(ref captureCount) < 1) {
-                    await Task.Delay(25, cts.Token).ConfigureAwait(false);
+                while (Volatile.Read(ref firstCaptureAcked) == 0) {
+                    await Task.Delay(10, cts.Token).ConfigureAwait(false);
                 }
             }
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
@@ -854,10 +852,31 @@ namespace OpenAstroAra.Test {
             await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
-            Assert.That(status.State, Is.EqualTo("adjusting"));
-            Assert.That(fetcher.Fetched, Is.Not.Empty);
-            Assert.That(fetcher.Fetched.Select(f => f.Filename), Is.All.EqualTo("save_image_fresh"),
+            Assert.That(status.State, Is.EqualTo("adjusting"), "the restart seeds normally once the guider is idle");
+            Assert.That(fetcher.Fetched.Select(f => f.Filename), Does.Not.Contain("save_image_1"),
                 "run 1's abandoned capture must never leak its frame into run 2");
+        }
+
+        [Test]
+        public async Task A_start_fails_with_a_busy_message_when_the_guiders_capture_never_ends() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls, answerCaptures: false);
+            var firstCaptureAcked = 0;
+            OnCapturesRefusedWhileActive(fake, n => -1, n => Volatile.Write(ref firstCaptureAcked, 1));
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            guider.RequireConnectedGuider().CaptureBusyGrace = TimeSpan.FromMilliseconds(300);
+            using var svc = NewService(guider, new ScriptedSolver());
+
+            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10))) {
+                while (Volatile.Read(ref firstCaptureAcked) == 0) {
+                    await Task.Delay(10, cts.Token).ConfigureAwait(false);
+                }
+            }
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(null, CancellationToken.None));
+            Assert.That(ex!.Message, Does.Contain("guide camera is still busy"));
         }
 
         [Test]
