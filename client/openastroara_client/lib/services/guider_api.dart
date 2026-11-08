@@ -17,12 +17,24 @@ abstract interface class GuiderClient {
   Future<void> disconnect();
 
   /// Start guiding by hand (the daemon picks a star, calibrates if needed and
-  /// settles). 202-Accepted.
-  Future<void> startGuiding();
+  /// settles). 202-Accepted; returns the operation id its
+  /// `guider.operation_complete` event will carry, or null when none came back.
+  Future<String?> startGuiding();
 
   /// Stop guiding (the guider stops its exposures too). 202-Accepted.
   Future<void> stopGuiding();
   void close();
+}
+
+/// #1664 — the daemon accepted a start and the guider then gave up on it.
+/// [reason] is the guider's own words ("Stopped capturing"), or null when it
+/// gave none.
+class GuideStartFailed implements Exception {
+  const GuideStartFailed(this.reason);
+  final String? reason;
+
+  @override
+  String toString() => reason == null ? "Guiding didn't start" : "Guiding didn't start: $reason";
 }
 
 /// Client wrapper around the §63 guider equipment surface
@@ -78,8 +90,11 @@ class GuiderApi implements GuiderClient {
   }
 
   @override
-  Future<void> startGuiding() async {
-    await _dio.post<void>('/api/v1/equipment/guider/start');
+  Future<String?> startGuiding() async {
+    final res = await _dio.post<dynamic>('/api/v1/equipment/guider/start');
+    final data = res.data;
+    final id = data is Map<String, dynamic> ? data['operation_id'] : null;
+    return id is String ? id : null;
   }
 
   @override

@@ -2458,6 +2458,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String guideStartFailed(String reason) {
+    return 'Guiding didn\'t start: $reason.';
+  }
+
+  @override
+  String get guideStartFailedNoReason =>
+      'Guiding didn\'t start. See the Guider log for why.';
+
+  @override
   String get guideExposureOwn => 'The guider\'s own';
 
   @override

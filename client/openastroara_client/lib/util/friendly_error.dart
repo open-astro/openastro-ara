@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import '../l10n/l10n.dart';
+import '../services/guider_api.dart' show GuideStartFailed;
 import 'gps_site_fill.dart' show clientPlatform, thisDeviceLabel;
 
 /// Turns whatever went wrong into a sentence a person can act on.
@@ -56,6 +57,11 @@ String friendlyError(AppLocalizations l, Object error, {String? action}) {
     };
   }
 
+  // #1664 — the guider's own reason, not "Couldn't start guiding."
+  if (error is GuideStartFailed) {
+    final reason = error.reason;
+    return reason == null ? l.guideStartFailedNoReason : l.guideStartFailed(reason);
+  }
   if (error is SocketException) {
     return '$prefix — ${l.errorNoAnswer(thisDeviceLabel(clientPlatform))}';
   }

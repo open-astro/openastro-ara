@@ -2462,6 +2462,111 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_rest_start_the_guider_gives_up_on_ends_at_once_with_the_guiders_reason() {
+            // #1664 — the guider stopped capturing (its Guide Camera was not connected) and said so in a
+            // SettleDone; the start waited out the 30 s star timeout and reported a bare "refused".
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+
+            var accepted = await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => fake.ReceivedMethods.Contains("guide")).ConfigureAwait(false), Is.True);
+            await fake.BroadcastAsync(PhdEvents.SettleDone(status: 1, error: "Stopped capturing")).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.operation_complete").Count == 1).ConfigureAwait(false), Is.True,
+                "the start ends well inside the 30 s guide-star timeout");
+            var op = ws.Of("guider.operation_complete")[0];
+            Assert.That(op.GetProperty("operation").GetString(), Is.EqualTo("guider.start"));
+            Assert.That(op.GetProperty("operation_id").GetString(), Is.EqualTo(accepted.OperationId.ToString()));
+            Assert.That(op.GetProperty("ok").GetBoolean(), Is.False);
+            Assert.That(op.GetProperty("error").GetString(), Does.Contain("Stopped capturing"));
+        }
+
+        [Test]
+        public async Task A_rest_start_that_began_guiding_succeeds_when_its_settle_times_out() {
+            // #1664 review — once guiding has begun, a settle-timeout SettleDone (the guider still guiding) is
+            // the settle verdict, not a failed start; only errors before guiding began end the start.
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            var guiding = 0;
+            var stateAnswersGuiding = 0;
+            fake.OnRpc("get_app_state", _ => {
+                if (Volatile.Read(ref guiding) == 0) { return JsonValue.Create("Stopped"); }
+                Interlocked.Increment(ref stateAnswersGuiding);
+                return JsonValue.Create("Guiding");
+            });
+            fake.OnRpc("get_calibrated", JsonValue.Create(true));
+            fake.OnRpc("get_lock_position", new JsonArray(100.0, 100.0));
+            fake.OnRpc("guide", _ => { Volatile.Write(ref guiding, 1); return JsonValue.Create(0); });
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+
+            await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => stateAnswersGuiding > 0).ConfigureAwait(false), Is.True, "the start saw the guider guiding");
+            await Task.Delay(500).ConfigureAwait(false); // let the start pass its guiding-has-begun point
+            var timedOut = PhdEvents.SettleDone(status: 1, error: "timed-out waiting for guider to settle");
+            for (var i = 0; i < 50 && ws.Of("guider.operation_complete").Count == 0; i++) {
+                await fake.BroadcastAsync(timedOut).ConfigureAwait(false);
+                await Task.Delay(100).ConfigureAwait(false);
+            }
+
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.operation_complete").Count == 1).ConfigureAwait(false), Is.True);
+            var op = ws.Of("guider.operation_complete")[0];
+            Assert.That(op.GetProperty("operation").GetString(), Is.EqualTo("guider.start"));
+            Assert.That(op.GetProperty("ok").GetBoolean(), Is.True, "guiding began; the settle timeout does not fail the start");
+        }
+
+        [Test]
+        public async Task A_rest_start_retries_after_its_own_stop_capture_answers_with_a_settle_error() {
+            // #1664 review — the retry stops the guider; PHD2 answers stop_capture with a SettleDone
+            // "Stopped capturing". That is our own stop, not the guider giving up: the retry must go on.
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            var guides = 0;
+            fake.OnRpc("get_app_state", _ => JsonValue.Create(Volatile.Read(ref guides) == 0 ? "Stopped" : "LostLock"));
+            fake.OnRpc("get_calibrated", JsonValue.Create(true));
+            fake.OnRpc("get_lock_position", new JsonArray(100.0, 100.0));
+            fake.OnRpc("guide", _ => { Interlocked.Increment(ref guides); return JsonValue.Create(0); });
+            fake.OnRpc("stop_capture", req => {
+                _ = fake.BroadcastAsync(PhdEvents.SettleDone(status: 1, error: "Stopped capturing"));
+                return JsonValue.Create(0);
+            });
+            var profile = new HeadlessProfileService();
+            profile.ActiveProfile.GuiderSettings.AutoRetryStartGuiding = true;
+            profile.ActiveProfile.GuiderSettings.AutoRetryStartGuidingTimeoutSeconds = 1;
+            using var svc = new GuiderService(profile, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws: new RecordingBroadcaster(),
+                araProfileResolver: () => (Guid.NewGuid(), "Rig A"));
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null);
+
+            await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => Volatile.Read(ref guides) >= 2, TimeSpan.FromSeconds(20)).ConfigureAwait(false), Is.True,
+                "a second guide RPC went out: the retry survived its own stop_capture");
+        }
+
+        [TestCase("cannot guide while calibrating", "cannot guide while calibrating")]
+        [TestCase("", "refused")]
+        public async Task A_rest_start_the_guider_refuses_carries_its_reason_or_refused(string message, string expected) {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            fake.OnRawRpc("guide", id =>
+                "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":1,\"message\":" + JsonValue.Create(message).ToJsonString() + "},\"id\":" + id + "}");
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+
+            await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.operation_complete").Count == 1).ConfigureAwait(false), Is.True);
+            var op = ws.Of("guider.operation_complete")[0];
+            Assert.That(op.GetProperty("ok").GetBoolean(), Is.False);
+            Assert.That(op.GetProperty("error").GetString(), Is.EqualTo(expected));
+        }
+
+        [Test]
         public async Task A_sequencer_dither_aborted_mid_settle_is_reported_cancelled_not_ok() {
             // #1351 r1 note: WaitForSettling swallows the cancellation and Dither() returns true
             // with no settle verdict — the terminal event must not call that a settled dither.
@@ -2525,8 +2630,8 @@ namespace OpenAstroAra.Test {
             return null;
         }
 
-        private static async Task<bool> WaitUntilAsync(Func<bool> condition) {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        private static async Task<bool> WaitUntilAsync(Func<bool> condition, TimeSpan? timeout = null) {
+            using var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(10));
             while (!cts.IsCancellationRequested) {
                 if (condition()) {
                     return true;

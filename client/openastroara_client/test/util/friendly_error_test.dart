@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/services/guider_api.dart' show GuideStartFailed;
 import 'package:openastroara/util/friendly_error.dart';
 import 'package:flutter/widgets.dart' show Locale;
 import 'package:openastroara/l10n/l10n.dart';
@@ -12,6 +13,13 @@ import 'package:openastroara/l10n/l10n.dart';
 final _en = lookupAppLocalizations(const Locale('en'));
 
 void main() {
+  test("a start the guider gave up on reads as its reason, or points at the Guider log (#1664)", () {
+    expect(friendlyError(_en, const GuideStartFailed('Stopped capturing'), action: 'start guiding'),
+        "Guiding didn't start: Stopped capturing.");
+    expect(friendlyError(_en, const GuideStartFailed(null), action: 'start guiding'),
+        "Guiding didn't start. See the Guider log for why.");
+  });
+
   test('connection timeout reads as an actionable sentence, not raw Dio text',
       () {
     final e = DioException(

@@ -2458,6 +2458,15 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String guideStartFailed(String reason) {
+    return 'Guiding didn\'t start: $reason.';
+  }
+
+  @override
+  String get guideStartFailedNoReason =>
+      'Guiding didn\'t start. See the Guider log for why.';
+
+  @override
   String get guideExposureOwn => 'The guider\'s own';
 
   @override
@@ -5139,6 +5148,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String guideStopRefused(String state) {
     return 'O guia não parou: continua $state. Tente Parar de novo.';
   }
+
+  @override
+  String guideStartFailed(String reason) {
+    return 'A guiagem não começou: $reason.';
+  }
+
+  @override
+  String get guideStartFailedNoReason =>
+      'A guiagem não começou. Veja o log do guia para saber por quê.';
 
   @override
   String get guideExposureOwn => 'O do guia';

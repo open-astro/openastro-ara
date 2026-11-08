@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/screens/simple/simple_guide_panel.dart';
-import 'package:openastroara/services/guider_api.dart' show GuiderClient;
+import 'package:openastroara/services/guider_api.dart' show GuiderClient, GuideStartFailed;
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
@@ -25,6 +25,9 @@ class _Guider extends GuiderStatusNotifier {
   final Map<String, dynamic> json;
   final calls = <String>[];
 
+  /// What the start throws: the daemon's word that it failed (#1664).
+  Object? startError;
+
   /// The rig acts a moment after the ask: the state doesn't change yet.
   final bool lag;
 
@@ -37,6 +40,7 @@ class _Guider extends GuiderStatusNotifier {
   @override
   Future<void> startGuiding() async {
     calls.add('start');
+    if (startError != null) throw startError!;
     if (lag) return;
     state = AsyncData(GuiderStatus.fromJson({...json, 'runtime': <String, dynamic>{...json['runtime'] as Map<String, dynamic>, 'state': 'looping'}}));
   }
@@ -252,6 +256,18 @@ void main() {
     expect(_g.calls, ['stop']);
     await tester.pump(const Duration(seconds: 11)); // still paused after 10 s of reads
     expect(c.read(simpleMessagesProvider).single.title, "The guider didn't stop: it is still paused. Try Stop again.");
+  });
+
+  testWidgets("a start the guider gives up on says why in a pill, and the shutter is Start again (#1664)",
+      (tester) async {
+    final c = await _pump(tester, _wire(runtime: 'stopped'), lag: true, child: const SimpleGuideShutter(),
+        rig: [simpleModeActiveProvider.overrideWithValue(true)]);
+    _g.startError = const GuideStartFailed('Stopped capturing');
+    await tester.tap(find.byType(SimpleGuideShutter));
+    await tester.pump();
+    expect(_g.calls, ['start']);
+    expect(c.read(simpleMessagesProvider).single.title, "Guiding didn't start: Stopped capturing.");
+    expect(find.bySemanticsLabel('Start guiding'), findsOneWidget);
   });
 
   testWidgets('no guider: the greyed shutter says why when tapped (user, 2026-11-04)', (tester) async {

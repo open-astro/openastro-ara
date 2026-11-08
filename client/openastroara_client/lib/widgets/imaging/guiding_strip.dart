@@ -18,6 +18,8 @@ import '../../state/guider/pa_residual_state.dart';
 import '../../state/guider/live_guiding_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../l10n/l10n.dart';
+import '../../services/guider_api.dart' show GuideStartFailed;
+import '../../util/friendly_error.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/guide_graph_stats.dart';
 import '../../util/phd2_guide_log.dart';
@@ -964,8 +966,9 @@ class _GuideButtonState extends ConsumerState<_GuideButton> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
-          content: Text(
-              '${guiding ? 'Stop guiding' : 'Guide'} failed: ${describeRequestError(e)}')));
+          content: Text(e is GuideStartFailed
+              ? friendlyError(context.l10n, e)
+              : '${guiding ? 'Stop guiding' : 'Guide'} failed: ${describeRequestError(e)}')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

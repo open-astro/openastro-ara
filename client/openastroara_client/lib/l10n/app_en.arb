@@ -3437,6 +3437,15 @@
     "description": "Simple Mode pill: a guider Stop the rig accepted but did not act on; {state} is the guider phase.",
     "placeholders": {"state": {"type": "String"}}
   },
+  "guideStartFailed": "Guiding didn't start: {reason}.",
+  "@guideStartFailed": {
+    "description": "Simple Mode pill: the guider accepted a Start and then gave up; {reason} is the guider's own words, e.g. Stopped capturing (#1664).",
+    "placeholders": {"reason": {"type": "String"}}
+  },
+  "guideStartFailedNoReason": "Guiding didn't start. See the Guider log for why.",
+  "@guideStartFailedNoReason": {
+    "description": "Simple Mode pill: the guider gave up on a Start without saying why (#1664)."
+  },
   "guideExposureOwn": "The guider's own",
   "@guideExposureOwn": {
     "description": "Guide exposure picker value when the profile leaves it to the guider"

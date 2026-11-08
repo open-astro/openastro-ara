@@ -37,6 +37,7 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ### Fixed
 
+- A start of guiding that fails now says why: the Guider's reason (for example its Guide Camera not connected) shows in a pill and the start ends at once instead of waiting out the 30 s guide-star timeout (#1664). A settle timeout after guiding has begun does not fail the start.
 - Simple Mode: a device window, the OpenAstro Ara sheet and Search no longer stay open on top of each other on a wide window (#1674). Opening one closes the others; before, the Ara sheet could hide a device window's labels and controls, such as a switch's On.
 - Emergency Stop now halts a turning rotator where it is (#1671). Before, the stop never reached the rotator: a move started from a window kept going, and a plan's rotate only stopped being waited on. A rotator that refuses the halt is called out as "ROTATOR HALT FAILED — it may still be turning". The Emergency Stop confirmation lists the rotator among what it does.
 - The daemon keeps one log: Polar Align runs and every plate solve are now in `logs/` and in the bug report, not a separate `NINA/Logs` file (#1591). Core log lines now read `File.cs|Member|42|message`, without quotes around each value.
