@@ -26,6 +26,9 @@ import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
+import 'package:openastroara/models/filter_wheel_status.dart';
+import 'package:openastroara/models/equipment_device_status.dart' show EquipmentConnectionState;
+import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/planning/sky_model_calibration_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
@@ -234,6 +237,18 @@ class _Site extends SiteSettingsNotifier {
   SiteSettings build() => SiteSettings(bortleClass: 6);
 }
 
+/// A filter wheel the daemon retains, or none.
+class _Wheel extends FilterWheelNotifier {
+  _Wheel(this.present);
+  final bool present;
+  @override
+  Future<FilterWheelStatus?> build() async => present
+      ? FilterWheelStatus(
+          deviceId: 'w', name: 'Wheel', connectionState: EquipmentConnectionState.connected,
+          runtimeState: 'idle', currentSlot: 0, slots: const [])
+      : null;
+}
+
 class _SiteAt extends SiteSettingsNotifier {
   _SiteAt(this.site);
   final SiteSettings site;
@@ -277,6 +292,7 @@ Future<ProviderContainer> _pump(WidgetTester tester, _Seq seq, Widget child,
     List<PlanningFilter> filters = _lrgb,
     List<TonightSkyObject> tonight = const []}) async {
   final container = ProviderContainer(overrides: [
+    filterWheelProvider.overrideWith(() => _Wheel(true)),
     ...overrides.cast(),
     tonightSkyProvider.overrideWith((ref) async => tonight),
     sequenceApiProvider.overrideWith((ref) => seq),
@@ -349,13 +365,44 @@ void main() {
     expect(osc.single.frameCount, 60);
   });
 
+  test('a plan for a rig that cannot change filters is one unnamed row (#1737)', () {
+    final rows = simpleRunDefaultPlan(_lrgb, 300, canChangeFilters: false);
+    expect(rows, hasLength(1));
+    expect(rows.single.filterName, '');
+    expect(rows.single.frameCount, 60);
+  });
+
+  testWidgets('picking an object with no site set (0, 0) gives it no computed altitude (#1737)', (tester) async {
+    const dso = PlanningDso(id: 'X1', name: 'Overhead', type: 'G', magnitude: 9, raDeg: 280.46, decDeg: -33);
+    Future<PlanetariumSelection> pick(SiteSettings site) async {
+      late PlanetariumSelection sel;
+      await tester.pumpWidget(ProviderScope(
+        key: UniqueKey(),
+        overrides: [
+          siteSettingsProvider.overrideWith(() => _SiteAt(site)),
+          tonightSkyProvider.overrideWith((ref) async => const []),
+          clockProvider.overrideWithValue(() => DateTime.utc(2000, 1, 1, 12)),
+        ],
+        child: Consumer(builder: (context, ref, _) {
+          sel = simplePickDso(ref, dso);
+          return const SizedBox();
+        }),
+      ));
+      return sel;
+    }
+
+    expect((await pick(const SiteSettings())).altDeg, isNull);
+    expect((await pick(const SiteSettings(latitudeDeg: -33, longitudeDeg: 10))).altDeg, isNotNull);
+  });
+
   group('frames fill the dark window', () {
     TonightSkyObject m31(double hours) => TonightSkyObject(
         id: 'm31', name: 'M31', type: 'Galaxy', magnitude: 3.4, raDeg: 10.7, decDeg: 41.3,
         altitudeDeg: 62, maxAltitudeDeg: 74, remainingHours: hours);
 
-    Future<ProviderContainer> plan(List<TonightSkyObject> tonight) async {
+    Future<ProviderContainer> plan(List<TonightSkyObject> tonight, {bool wheel = true}) async {
       final c = ProviderContainer(overrides: [
+        filterWheelProvider.overrideWith(() => _Wheel(wheel)),
         tonightSkyProvider.overrideWith((ref) async => tonight),
         planetariumSelectionProvider.overrideWith(() => _Sel(_m31)),
         filterSetProvider.overrideWith(() => _Filters()),
@@ -363,9 +410,16 @@ void main() {
       addTearDown(c.dispose);
       c.listen(simpleRunPlanProvider, (_, _) {});
       await c.read(tonightSkyProvider.future);
+      await c.read(filterWheelProvider.future);
       await Future<void>.delayed(Duration.zero);
       return c;
     }
+
+    test('a rig that cannot change filters gets one row; with a wheel the rows are the filters\' (#1737)', () async {
+      final bare = await plan([m31(2)], wheel: false);
+      expect(bare.read(simpleRunPlanProvider).map((s) => s.filterName), [''], reason: 'one row, no filter implied');
+      expect((await plan([m31(2)])).read(simpleRunPlanProvider).map((s) => s.filterName), ['L', 'R', 'G', 'B']);
+    });
 
     test('a settings re-read that changes nothing keeps the rows; a queued target\'s rows stay while editing',
         () async {
@@ -624,6 +678,7 @@ void main() {
         sequenceApiProvider.overrideWith((ref) => api ? seq : null),
         planetariumSelectionProvider.overrideWith(() => _Sel(_m31)),
         filterSetProvider.overrideWith(() => _Filters()),
+        filterWheelProvider.overrideWith(() => _Wheel(true)),
       ]);
       addTearDown(c.dispose);
       c.listen(simpleRunProvider, (_, _) {});

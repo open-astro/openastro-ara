@@ -14,6 +14,7 @@ import '../../models/sequence/nina_dom.dart' show childrenOf, withChildren;
 import '../../models/sequence/sequence_summary.dart';
 import '../../services/sequence_api.dart' show SequenceClient;
 import '../../state/equipment/camera_state.dart';
+import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/planning/sky_model_calibration_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sequencer/sequence_list_state.dart';
@@ -69,7 +70,8 @@ import 'simple_shell.dart'
 
 /// The first plan for a filter set: LRGB when the set has any of it, else the
 /// narrowband filters, else every filter; one row with no filter name when
-/// there is no choice to make (OSC). The rows split [remainingDarkHours]
+/// there is no choice to make (OSC) or the rig cannot change filters
+/// ([canChangeFilters] false: every row would shoot through the same glass). The rows split [remainingDarkHours]
 /// (60 frames without a window) evenly. Pure — unit-tested.
 // Subs start at the profile's default exposure; the sheet offers the
 // suggested ones (simpleRunSuggestion).
@@ -77,8 +79,9 @@ List<FilterPlanStep> simpleRunDefaultPlan(
   List<PlanningFilter> filters,
   double exposureSeconds, {
   double? remainingDarkHours,
+  bool canChangeFilters = true,
 }) {
-  if (!planOptionsAvailable(filters)) {
+  if (!canChangeFilters || !planOptionsAvailable(filters)) {
     return [
       FilterPlanStep(
         filterName: '',
@@ -231,6 +234,7 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
       imagingDefaultsProvider.select((d) => d.defaultExposure),
       (_, _) => _reseed(),
     );
+    ref.listen(filterWheelProvider.select((w) => w.value != null), (_, _) => _reseed());
     _darkHours = ref.read(simpleDarkHoursProvider);
     return _defaults();
   }
@@ -239,6 +243,8 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
     ref.read(filterSetProvider).filters,
     ref.read(imagingDefaultsProvider).defaultExposure.inMilliseconds / 1000,
     remainingDarkHours: _darkHours,
+    // A wheel the daemon retains, connected or not (readRigCapabilities' rule).
+    canChangeFilters: ref.read(filterWheelProvider).value != null,
   );
 
   void _reseed() {
@@ -395,7 +401,8 @@ PlanetariumSelection simplePickDso(WidgetRef ref, PlanningDso d) {
     d,
     ref.read(tonightSkyProvider).value ?? const [],
     latitudeDeg: site.latitudeDeg,
-    longitudeDeg: site.longitudeDeg,
+    // 0, 0 is the unset site (as tonight_sky_state reads it): no altitude from a made-up position.
+    longitudeDeg: site.latitudeDeg == 0 && site.longitudeDeg == 0 ? null : site.longitudeDeg,
     utc: ref.read(clockProvider)().toUtc(),
   );
 }

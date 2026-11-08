@@ -1015,8 +1015,9 @@ public partial class Program {
         // any in-flight reconnect ladder.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<FaultReactionService>());
 
-        // §35.3 — emergency stop (abort runs → abort exposure → stop guiding →
-        // park → flat light off), behind POST /api/v1/server/emergency-stop.
+        // §35.3 — emergency stop (abort runs → halt rotator → abort exposure →
+        // stop focus/Bahtinov/autofocus/polar → stop guiding → stop mount where it is → flat light
+        // off → cooler off), behind POST /api/v1/server/emergency-stop.
         // Same optional-dep + sequencer-resolver pattern as the reaction engine.
         builder.Services.AddSingleton<EmergencyStopService>(sp =>
             new EmergencyStopService(

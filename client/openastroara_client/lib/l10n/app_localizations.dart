@@ -3078,7 +3078,7 @@ abstract class AppLocalizations {
   /// Emergency Stop confirm dialog: what the stop does
   ///
   /// In en, this message translates to:
-  /// **'This aborts the running sequence and the in-flight exposure, stops guiding, halts the rotator, parks the mount, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.'**
+  /// **'This aborts the running sequence, halts the rotator where it is, aborts the in-flight exposure, stops the guide-camera focus loop, the Bahtinov readout, autofocus and polar alignment, stops guiding, stops the mount where it is with tracking off, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.'**
   String get estopConfirmBody;
 
   /// Emergency Stop confirm dialog: cancel button

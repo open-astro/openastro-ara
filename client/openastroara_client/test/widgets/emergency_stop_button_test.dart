@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/screens/simple/simple_message_pills.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
+import 'package:openastroara/l10n/app_localizations_en.dart';
+import 'package:openastroara/l10n/app_localizations_pt.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/server_api.dart';
 import 'package:openastroara/state/saved_server_state.dart';
@@ -63,6 +65,19 @@ class _Prefs extends SimpleModePrefsService {
 
 void main() {
   late _FakeServerApi fake;
+
+  test('the confirmation says the mount stops where it is and names every step, in both languages (#1737)', () {
+    final en = AppLocalizationsEn().estopConfirmBody.toLowerCase();
+    final pt = AppLocalizationsPtBr().estopConfirmBody.toLowerCase();
+    expect(en, isNot(contains('park')));
+    expect(pt, isNot(contains('estacion')));
+    for (final step in ['where it is', 'tracking', 'bahtinov', 'autofocus', 'polar']) {
+      expect(en, contains(step));
+    }
+    for (final step in ['onde ela', 'rastreamento', 'bahtinov', 'autofoco', 'polar']) {
+      expect(pt, contains(step));
+    }
+  });
 
   Future<void> pumpButton(
     WidgetTester tester, {
