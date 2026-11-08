@@ -9,6 +9,11 @@ name: Merge queue
 # edits its workflow, so this stays a separate file. The real `review` check and
 # its verdict have already passed by the time a PR can enter the queue, and a
 # merge group holds nothing new for the bot to read.
+#
+# The three jobs after `review` carry the names of the jobs in pr-body.yml. That
+# workflow reads the pull request body, which a merge group does not have, so
+# each name reports success here. Making those checks required in branch
+# protection then cannot time out the queue.
 
 on:
   merge_group:
@@ -21,3 +26,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: echo "Reviewed on the pull request; nothing to review on a merge group."
+
+  falsified-by:
+    name: falsified-by (PR body)
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Checked on the pull request body; a merge group has none."
+
+  pr-template:
+    name: pr-template (PR body)
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Checked on the pull request body; a merge group has none."
+
+  decision-records:
+    name: decision-records (PR body)
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Checked on the pull request body; a merge group has none."
