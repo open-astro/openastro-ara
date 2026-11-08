@@ -426,6 +426,8 @@ class SequenceRunStateInfo {
       currentTargetName: _str(payload['current_target_name']) ?? currentTargetName,
       startedUtc: startedUtc,
       completedUtc: completedUtc,
+      // An older daemon omits it; a rebuild without it read 0 frames mid-run.
+      framesCaptured: _intOrNull(payload['frames_captured']) ?? framesCaptured,
       instructionsCompleted:
           _intOrNull(payload['instructions_completed']) ?? instructionsCompleted,
       instructionsTotal: _intOrNull(payload['instructions_total']) ?? instructionsTotal,

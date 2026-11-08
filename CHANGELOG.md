@@ -41,6 +41,7 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ### Fixed
 
+- A running plan's frame count no longer drops to 0: each live progress update reset it, and progress updates now carry the count.
 - Simple Mode plans no longer stop to ask for a filter change on a rig without a filter wheel.
 - Simple Mode no longer shows the "Capture calibration frames tonight?" popup when a plan starts; an unanswered run ends without flats, as before.
 - Simple Mode: a target picked in Search now becomes the plan's target at once, and an object outside tonight's ranked list shows its real altitude instead of being called below the horizon.
