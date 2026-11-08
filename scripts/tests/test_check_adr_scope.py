@@ -123,6 +123,11 @@ class AdrScopeTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout, "0001-a.md: rules 1, 2\n0002-b.md: rules 1\n")
 
+    def test_list_reads_a_record_the_shape_check_reads_even_without_a_zero_prefix(self):
+        self.write("docs/adr/1000-c.md", RECORD_B)
+        out = self.run_script("--list", stdin="lib/c.dart\n").stdout
+        self.assertIn("1000-c.md: rules 1", out)
+
     def test_list_single_star_does_not_cross_a_directory(self):
         r = self.run_script("--list", stdin="lib/a/sub/x.dart\n")
         self.assertEqual(r.stdout, "")

@@ -5,7 +5,8 @@ The decision records in docs/adr/ are the rules the decision-record gate
 holds every pull request to, so changing one changes the rules. A PR that adds,
 edits, renames or deletes a file under docs/adr/ passes this check only
 when a repository collaborator with write, maintain or admin permission has
-posted, as a PR comment or a review, a line that reads exactly
+posted, as a PR comment (a review body does not count: the workflow
+runs on comments, not reviews), a line that reads exactly
 
     ADR authorized <head sha>
 
@@ -70,7 +71,7 @@ def decide(changed, head_sha, statements, permission_of, records_at=lambda _sha:
     """Return (state, description) for one PR.
 
     changed: every path the PR adds, edits, deletes or renames (old and new
-    names). statements: [(login, body)] for every PR comment and review.
+    names). statements: [(login, body)] for every PR comment.
     permission_of: login -> the login's repository permission, or None.
     records_at: sha -> {path: blob sha} for the decision records at that
     commit, or None when the commit cannot be resolved.
@@ -80,7 +81,7 @@ def decide(changed, head_sha, statements, permission_of, records_at=lambda _sha:
         return "success", "No decision record changed"
     head = head_sha.lower()
     at_head = None
-    aged = None  # (sha, names of the records that differ at the head) of the last aged authorization in statement order (issue comments, then reviews)
+    aged = None  # (sha, names of the records that differ at the head) of the last aged authorization in statement order
     for login, body in statements:
         if not login or login.endswith("[bot]"):
             continue
@@ -188,8 +189,6 @@ def run(repo, pr, post_status):
             changed.append(f["previous_filename"])
     statements = [(c.get("user", {}).get("login", ""), c.get("body", ""))
                   for c in gh_list("repos/%s/issues/%s/comments?per_page=100" % (repo, pr))]
-    statements += [(r.get("user", {}).get("login", ""), r.get("body", ""))
-                   for r in gh_list("repos/%s/pulls/%s/reviews?per_page=100" % (repo, pr))]
     state, description = decide(changed, head_sha, statements, permission_lookup(repo), records_lookup(repo))
     print("%s: %s on %s: %s" % (CONTEXT, state, head_sha[:12], description))
     if post_status:

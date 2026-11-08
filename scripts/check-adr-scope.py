@@ -49,7 +49,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from adr_grammar import (  # noqa: E402  (the one owner of the Rules grammar)
     DECISION_DIR, DECISION_FILE_RE, DECISION_RULE_RE, CODE_SPAN_ONLY_RE, ROOT,
-    decision_sections as _decision_sections, glob_match as _glob_match)
+    decision_sections as _decision_sections, glob_match as _glob_match, read_records)
 SECTION = "decision records"
 # A record number, not an issue or PR number such as #1415 (#1416 review).
 RECORD_NUMBER_RE = re.compile(r"(?<![#\d])\b(\d{4})\b")
@@ -174,11 +174,6 @@ def checklist_findings(scope, review):
     findings += ["the review marks %s rule %d as a defect but its last line is %r, not the Issues-found sign-off"
                  % (key + (last,)) for key, v in sorted(verdicts.items()) if "defect" in v and bare != ISSUES_SIGN_OFF]
     return findings
-
-
-def read_records(root):
-    directory = Path(root) / DECISION_DIR
-    return {p.name: p.read_text(encoding="utf-8", errors="replace") for p in directory.glob("0*.md")}
 
 
 def changed_since(base):

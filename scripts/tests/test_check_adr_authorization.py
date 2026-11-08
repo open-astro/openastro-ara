@@ -256,5 +256,29 @@ class RecordsLookupTest(unittest.TestCase):
         self.assertIsNone(self.lookup()(self.OLD_FULL))
 
 
+class RunReadsCommentsOnlyTest(unittest.TestCase):
+    def test_a_review_body_is_not_read_as_an_authorization(self):
+        asked = []
+
+        def fake_gh_list(path):
+            asked.append(path)
+            if path.endswith("/files?per_page=100"):
+                return [{"filename": R5}]
+            if "/comments" in path:
+                return []
+            return [{"user": {"login": "writer"}, "body": "ADR authorized " + HEAD[:12]}]
+
+        saved = (auth.gh, auth.gh_list, auth.permission_lookup, auth.records_lookup)
+        auth.gh = lambda *a: HEAD + "\n"
+        auth.gh_list = fake_gh_list
+        auth.permission_lookup = lambda repo: PERMS.get
+        auth.records_lookup = lambda repo: (lambda _sha: None)
+        try:
+            auth.run("o/r", "1", False)
+        finally:
+            auth.gh, auth.gh_list, auth.permission_lookup, auth.records_lookup = saved
+        self.assertFalse([a for a in asked if "/reviews" in a])
+
+
 if __name__ == "__main__":
     unittest.main()
