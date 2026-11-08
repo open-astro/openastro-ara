@@ -58,7 +58,8 @@ tmp="$dest/$artifact"
 # success) so a partial/leftover download never lingers in fixtures/.
 trap 'rm -f "$tmp"' EXIT
 echo "downloading $artifact ($tag)..." >&2
-curl -fsSL -o "$tmp" "$base_url/$tag/$artifact"
+# GitHub release downloads answer 504 at times (#1706).
+curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$tmp" "$base_url/$tag/$artifact"
 
 if command -v sha256sum >/dev/null 2>&1; then
   actual="$(sha256sum "$tmp" | awk '{print $1}')"
