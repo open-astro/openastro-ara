@@ -123,7 +123,7 @@ String simplePolarPhase(PolarAlignLive live, AppLocalizations l10n) =>
         l10n.polarPhaseRough,
       PolarAlignStates.adjusting => l10n.polarPhaseAdjusting,
       PolarAlignStates.paused => l10n.polarPhasePaused,
-      PolarAlignStates.checking => l10n.polarPhaseChecking(live.checkSolvesDone),
+      PolarAlignStates.checking => l10n.polarPhaseChecking(live.checkSolvesDone, live.checkSolvesTotal),
       PolarAlignStates.checked => l10n.polarPhaseChecked,
       PolarAlignStates.failed => l10n.polarPhaseFailed,
       _ => l10n.polarPhaseReady,
@@ -134,10 +134,18 @@ String simplePolarPhase(PolarAlignLive live, AppLocalizations l10n) =>
 String? simplePolarSideText(PolarAlignLive live, AppLocalizations l10n) =>
     polarSideOfPoleText(l10n, live.altErrorArcmin, live.azErrorArcmin);
 
-/// The checked verdict's word: the daemon's own verdict, or the local bands on
-/// the total for a token this build does not know.
-String simplePolarVerdictLabel(PolarAlignCheckResult r) =>
-    (polarRatingForVerdict(r.verdict) ?? polarErrorRating(r.totalErrorArcmin)).$1;
+/// The checked verdict's word in the user's language: the daemon's own verdict
+/// token, or the local bands on the total for a token this build does not know.
+String simplePolarVerdictLabel(PolarAlignCheckResult r, AppLocalizations l10n) {
+  final token = polarRatingForVerdict(r.verdict) == null ? polarVerdictFor(r.totalErrorArcmin) : r.verdict;
+  return switch (token) {
+    'excellent' => l10n.polarVerdictExcellent,
+    'very_good' => l10n.polarVerdictVeryGood,
+    'good' => l10n.polarVerdictGood,
+    'rough' => l10n.polarVerdictRough,
+    _ => l10n.polarVerdictFarOff,
+  };
+}
 
 /// The polar-align camera's latest frame, refetched after each finished
 /// frame; null until there is one. Keeps the previous picture while the next
@@ -373,9 +381,9 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
             if (live.phase == PolarAlignStates.checked && live.checkResult != null)
               Text(
                 live.checkResult!.fineDeltaArcmin == null
-                    ? l10n.polarCheckedLine(simplePolarVerdictLabel(live.checkResult!))
+                    ? l10n.polarCheckedLine(simplePolarVerdictLabel(live.checkResult!, l10n))
                     : l10n.polarCheckedVsFine(
-                        simplePolarVerdictLabel(live.checkResult!),
+                        simplePolarVerdictLabel(live.checkResult!, l10n),
                         live.checkResult!.fineDeltaArcmin!.toStringAsFixed(1),
                       ),
                 key: const Key('simple-polar-checked'),

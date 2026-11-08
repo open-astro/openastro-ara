@@ -88,9 +88,14 @@ public sealed class MainCameraPointingSolver : IPolarAlignMainCameraSolver {
             return null;
         }
         var camera = await _camera.GetAsync(ct).ConfigureAwait(false);
-        return camera?.State == OpenAstroAra.Server.Contracts.EquipmentConnectionState.Connected
+        if (camera?.State != OpenAstroAra.Server.Contracts.EquipmentConnectionState.Connected) {
+            return "the main camera is not connected — connect it, or start polar alignment at the fine stage";
+        }
+        // A live view or a sequence holding the camera would fail every rough frame as "camera busy"
+        // after the mount has homed and slewed; say so first (an unnamed start falls back to fine).
+        return _camera.IsFreeToCapture(this)
             ? null
-            : "the main camera is not connected — connect it, or start polar alignment at the fine stage";
+            : "the main camera is busy (a live view or a sequence holds it) — stop it, or start polar alignment at the fine stage";
     }
 
     /// <summary>The mount's reported pointing, or null when it is not connected.</summary>

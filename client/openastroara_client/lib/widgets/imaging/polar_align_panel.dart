@@ -582,7 +582,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
       case PolarAlignStates.homing:
         return live.waitingForHome ? 'Put the mount at Home' : 'Going Home';
       case PolarAlignStates.checking:
-        return 'Checking ${live.checkSolvesDone}/3';
+        return 'Checking ${live.checkSolvesDone}/${live.checkSolvesTotal}';
       case PolarAlignStates.checked:
         return 'Checked';
       case PolarAlignStates.seeding:
@@ -731,7 +731,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           const SizedBox.square(dimension: 28, child: CircularProgressIndicator(strokeWidth: 2.5)),
           const SizedBox(height: 20),
           Text(
-            'Check solve ${live.checkSolvesDone} of 3',
+            'Check solve ${live.checkSolvesDone} of ${live.checkSolvesTotal}',
             key: const Key('polar-align-check-progress'),
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
           ),

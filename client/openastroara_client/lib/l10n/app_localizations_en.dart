@@ -861,9 +861,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarPhaseRough => 'Rough step';
 
   @override
-  String polarPhaseChecking(int done) {
-    return 'Checking $done of 3';
+  String polarPhaseChecking(int done, int total) {
+    return 'Checking $done of $total';
   }
+
+  @override
+  String get polarVerdictExcellent => 'Excellent';
+
+  @override
+  String get polarVerdictVeryGood => 'Very good';
+
+  @override
+  String get polarVerdictGood => 'Good';
+
+  @override
+  String get polarVerdictRough => 'Rough';
+
+  @override
+  String get polarVerdictFarOff => 'Far off';
 
   @override
   String get polarPhaseChecked => 'Checked';

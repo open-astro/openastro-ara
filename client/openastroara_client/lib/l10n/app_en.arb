@@ -1159,14 +1159,37 @@
   "@polarPhaseRough": {
     "description": "Simple Mode Polar align panel: routine phase: the coarse (main camera at Home) stage"
   },
-  "polarPhaseChecking": "Checking {done} of 3",
+  "polarPhaseChecking": "Checking {done} of {total}",
   "@polarPhaseChecking": {
-    "description": "Simple Mode Polar align panel: routine phase: the three-point check, solves done so far",
+    "description": "Simple Mode Polar align panel: routine phase: the three-point check, solves done so far of the daemon's total",
     "placeholders": {
       "done": {
         "type": "int"
+      },
+      "total": {
+        "type": "int"
       }
     }
+  },
+  "polarVerdictExcellent": "Excellent",
+  "@polarVerdictExcellent": {
+    "description": "Simple Mode Polar align panel: the daemon's check verdict 'excellent' (1 arcminute or better)"
+  },
+  "polarVerdictVeryGood": "Very good",
+  "@polarVerdictVeryGood": {
+    "description": "Simple Mode Polar align panel: the daemon's check verdict 'very_good' (3 arcminutes or better)"
+  },
+  "polarVerdictGood": "Good",
+  "@polarVerdictGood": {
+    "description": "Simple Mode Polar align panel: the daemon's check verdict 'good' (10 arcminutes or better)"
+  },
+  "polarVerdictRough": "Rough",
+  "@polarVerdictRough": {
+    "description": "Simple Mode Polar align panel: the daemon's check verdict 'rough' (30 arcminutes or better)"
+  },
+  "polarVerdictFarOff": "Far off",
+  "@polarVerdictFarOff": {
+    "description": "Simple Mode Polar align panel: the daemon's check verdict 'far_off' (worse than 30 arcminutes)"
   },
   "polarPhaseChecked": "Checked",
   "@polarPhaseChecked": {

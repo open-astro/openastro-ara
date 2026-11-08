@@ -10,6 +10,7 @@ import '../screens/simple/simple_plan_panel.dart'
 import '../screens/simple/simple_guide_panel.dart'
     show simpleGuideActive, simpleGuiding;
 import '../screens/simple/simple_polar_panel.dart' show simplePolarActive;
+import '../models/polar_align.dart' show PolarAlignStates;
 import '../util/friendly_error.dart';
 import 'app_locale_state.dart';
 import 'guider/guider_state.dart';
@@ -228,8 +229,12 @@ class NightSetupNotifier extends Notifier<NightSetupStep?> {
     ref.read(simpleShowingProvider.notifier)._show(step.screen);
     // Entering polar align starts the routine (an Night Setup-only exception
     // to the shutter starting things; its red square still stops it).
+    // Not over a finished check: coming back to the step must show the
+    // verdict, not wipe it and send the mount Home again unasked.
+    final polarLive = ref.read(polarAlignLiveProvider);
     if (step == NightSetupStep.polarAlign &&
-        !simplePolarActive(ref.read(polarAlignLiveProvider))) {
+        !simplePolarActive(polarLive) &&
+        polarLive.phase != PolarAlignStates.checked) {
       final api = ref.read(polarAlignApiProvider);
       if (api != null) unawaited(_stepAction(api.start, (l) => l.polarActionStart));
     }

@@ -1515,11 +1515,41 @@ abstract class AppLocalizations {
   /// **'Rough step'**
   String get polarPhaseRough;
 
-  /// Simple Mode Polar align panel: routine phase: the three-point check, solves done so far
+  /// Simple Mode Polar align panel: routine phase: the three-point check, solves done so far of the daemon's total
   ///
   /// In en, this message translates to:
-  /// **'Checking {done} of 3'**
-  String polarPhaseChecking(int done);
+  /// **'Checking {done} of {total}'**
+  String polarPhaseChecking(int done, int total);
+
+  /// Simple Mode Polar align panel: the daemon's check verdict 'excellent' (1 arcminute or better)
+  ///
+  /// In en, this message translates to:
+  /// **'Excellent'**
+  String get polarVerdictExcellent;
+
+  /// Simple Mode Polar align panel: the daemon's check verdict 'very_good' (3 arcminutes or better)
+  ///
+  /// In en, this message translates to:
+  /// **'Very good'**
+  String get polarVerdictVeryGood;
+
+  /// Simple Mode Polar align panel: the daemon's check verdict 'good' (10 arcminutes or better)
+  ///
+  /// In en, this message translates to:
+  /// **'Good'**
+  String get polarVerdictGood;
+
+  /// Simple Mode Polar align panel: the daemon's check verdict 'rough' (30 arcminutes or better)
+  ///
+  /// In en, this message translates to:
+  /// **'Rough'**
+  String get polarVerdictRough;
+
+  /// Simple Mode Polar align panel: the daemon's check verdict 'far_off' (worse than 30 arcminutes)
+  ///
+  /// In en, this message translates to:
+  /// **'Far off'**
+  String get polarVerdictFarOff;
 
   /// Simple Mode Polar align panel: routine phase: the three-point check has its result
   ///

@@ -861,9 +861,24 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarPhaseRough => 'Rough step';
 
   @override
-  String polarPhaseChecking(int done) {
-    return 'Checking $done of 3';
+  String polarPhaseChecking(int done, int total) {
+    return 'Checking $done of $total';
   }
+
+  @override
+  String get polarVerdictExcellent => 'Excellent';
+
+  @override
+  String get polarVerdictVeryGood => 'Very good';
+
+  @override
+  String get polarVerdictGood => 'Good';
+
+  @override
+  String get polarVerdictRough => 'Rough';
+
+  @override
+  String get polarVerdictFarOff => 'Far off';
 
   @override
   String get polarPhaseChecked => 'Checked';
@@ -3684,9 +3699,24 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get polarPhaseRough => 'Etapa grosseira';
 
   @override
-  String polarPhaseChecking(int done) {
-    return 'Verificando $done de 3';
+  String polarPhaseChecking(int done, int total) {
+    return 'Verificando $done de $total';
   }
+
+  @override
+  String get polarVerdictExcellent => 'Excelente';
+
+  @override
+  String get polarVerdictVeryGood => 'Muito bom';
+
+  @override
+  String get polarVerdictGood => 'Bom';
+
+  @override
+  String get polarVerdictRough => 'Grosseiro';
+
+  @override
+  String get polarVerdictFarOff => 'Muito fora';
 
   @override
   String get polarPhaseChecked => 'Verificado';

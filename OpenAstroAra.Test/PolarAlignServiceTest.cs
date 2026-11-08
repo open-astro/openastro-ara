@@ -2052,7 +2052,8 @@ namespace OpenAstroAra.Test {
             var slews = new ConcurrentQueue<Coordinates>();
             var mount = NewHomeMount(canFindHome: false, slews);
             var ws = new WsRecorder();
-            using var svc = NewService(guider, new HintFollowingSolver(), mount, ws, mainCamera: new FakeMainCamera(), store: NewHomeStore());
+            var solver = new HintFollowingSolver();
+            using var svc = NewService(guider, solver, mount, ws, mainCamera: new FakeMainCamera(), store: NewHomeStore());
 
             await svc.StartAsync(PolarAlignStages.Coarse, null, CancellationToken.None).ConfigureAwait(false);
             await WaitForEventAsync(ws, WsEventCatalog.PolarAlignNeedsHome).ConfigureAwait(false);
@@ -2083,6 +2084,10 @@ namespace OpenAstroAra.Test {
             Assert.That(targets.Length, Is.EqualTo(4));
             Assert.That(targets[2].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg - 5.0).Within(1e-6), "relative to the stale reading");
             Assert.That(targets[2].RADegrees, Is.EqualTo(targets[1].RADegrees).Within(1e-6), "same RA as the reading");
+            // The guide-camera solver (no blind fallback) is told the camera looks near the pole, not the
+            // stale Dec 80° the reading says: the fine seeds would otherwise miss the search radius.
+            Assert.That(solver.Hints, Is.Not.Empty);
+            Assert.That(solver.Hints.All(h => h.Dec is double d && Math.Abs(d - PolarAlignService.SeedDecDeg) < 1e-6), Is.True, "hints sit at Dec 85° after a hand-set Home");
         }
 
         [Test]

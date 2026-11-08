@@ -76,7 +76,7 @@ namespace OpenAstroAra.Server.Services {
         private async Task<PolarAlignSolveOutcome> CaptureMainCameraAsync(
                 IPolarAlignMainCameraSolver mainCamera, string frameId, (double RaDeg, double DecDeg)? hint,
                 PolarAlignSettingsDto settings, int gen, FrameTiming timing, CancellationToken ct) {
-            var exposure = settings.CoarseExposureSeconds > 0 ? settings.CoarseExposureSeconds : settings.ExposureSeconds;
+            var exposure = settings.CoarseExposureSeconds; // always > 0: PolarAlignSettingsClamp on every read
             timing.ExposureSeconds = exposure;
             var start = Stopwatch.GetTimestamp();
             await PublishFrameStartedAsync(gen, frameId, exposure).ConfigureAwait(false);
@@ -161,18 +161,13 @@ namespace OpenAstroAra.Server.Services {
                 LiveCapture capture, Func<Task> renewLeaseIfDue, SiteSettingsDto site, PolarAlignSettingsDto settings,
                 bool afterManualHome, int gen, CancellationToken ct) {
             var north = site.LatitudeDeg > 0;
-            // An Alpaca mount refuses SlewToCoordinatesAsync while not tracking ("requires Tracking to be
-            // true", the iOptron on the CM4, 2026-11-05).
-            if (!_mount.GetInfo().TrackingEnabled) {
-                await TurnTrackingOnOrFailAsync(gen, ct).ConfigureAwait(false);
-                LogTrackingEnabled();
-            }
+            await EnsureTrackingOnAsync(gen, ct).ConfigureAwait(false);
 
             // From Home the camera looks along the axis: the two seed frames would coincide.
             await LeaveTheAxisAsync(settings, afterManualHome, gen, ct).ConfigureAwait(false);
 
             // ── seed: frame A at the current pointing ──
-            var hintA = CurrentMountPointingJnow();
+            var hintA = SeedHint(CurrentMountPointingJnow(), afterManualHome, north);
             var a = await SolveSeedFrameAsync(capture, "seed-a", hintA, settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("seed-a", a.RaDegJnow, a.DecDegJnow);
 
@@ -190,7 +185,7 @@ namespace OpenAstroAra.Server.Services {
             // tiny solved ΔRA for a 30° turn — the fit then rejects every seed.
             var signedRotationDeg = Wrap180(slewedPointing.RaDeg - mountRaDeg);
             var rotationDeg = Math.Abs(signedRotationDeg);
-            var b = await SolveSeedFrameAsync(capture, "seed-b", slewedPointing, settings, gen, ct).ConfigureAwait(false);
+            var b = await SolveSeedFrameAsync(capture, "seed-b", SeedHint(slewedPointing, afterManualHome, north), settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("seed-b", b.RaDegJnow, b.DecDegJnow);
             var bTime = DateTimeOffset.UtcNow;
             var axis = FitAxis(a, b, rotationDeg, north, raIncreasing: signedRotationDeg > 0);
@@ -235,10 +230,7 @@ namespace OpenAstroAra.Server.Services {
             var north = site.LatitudeDeg > 0;
             await SetStageAsync(gen, PolarAlignStages.Check, settings.UseHome ? "homing" : "checking").ConfigureAwait(false);
             var manualHome = await GoHomeAsync(settings, renew, startPointing, gen, ct).ConfigureAwait(false);
-            if (!_mount.GetInfo().TrackingEnabled) {
-                await TurnTrackingOnOrFailAsync(gen, ct).ConfigureAwait(false);
-                LogTrackingEnabled();
-            }
+            await EnsureTrackingOnAsync(gen, ct).ConfigureAwait(false);
             if (_runFrameSize is null) {
                 // A run that began at the check never read the guide frame size (StartAsync clears it per run).
                 _runFrameSize = await ReadGuideFrameSizeAsync(guiderClient, ct).ConfigureAwait(false);
@@ -252,19 +244,19 @@ namespace OpenAstroAra.Server.Services {
             var dirSign = AwayFromMeridianSign(ra0);
             LiveCapture capture = (frameId, hint, s, timing, token) => CaptureAndSolveAsync(guiderClient, workDir, frameId, hint, s, gen, timing, token);
 
-            var s1 = await SolveSeedFrameAsync(capture, "check-1", (ra0, dec0), settings, gen, ct).ConfigureAwait(false);
+            var s1 = await SolveSeedFrameAsync(capture, "check-1", SeedHint((ra0, dec0), manualHome, north), settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("check-1", s1.RaDegJnow, s1.DecDegJnow);
             await NoteCheckSolveAsync(gen, 1).ConfigureAwait(false);
 
             var p1 = await TurnRaAsync(ra0, dec0, dirSign * step, settings, gen, ct).ConfigureAwait(false);
             var mountTurn1 = FoldTolerantTurnDeg(p1.RaDeg - ra0);
-            var s2 = await SolveSeedFrameAsync(capture, "check-2", p1, settings, gen, ct).ConfigureAwait(false);
+            var s2 = await SolveSeedFrameAsync(capture, "check-2", SeedHint(p1, manualHome, north), settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("check-2", s2.RaDegJnow, s2.DecDegJnow);
             await NoteCheckSolveAsync(gen, 2).ConfigureAwait(false);
 
             var p2 = await TurnRaAsync(p1.RaDeg, dec0, dirSign * step, settings, gen, ct).ConfigureAwait(false);
             var mountTurn2 = FoldTolerantTurnDeg(p2.RaDeg - p1.RaDeg);
-            var s3 = await SolveSeedFrameAsync(capture, "check-3", p2, settings, gen, ct).ConfigureAwait(false);
+            var s3 = await SolveSeedFrameAsync(capture, "check-3", SeedHint(p2, manualHome, north), settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("check-3", s3.RaDegJnow, s3.DecDegJnow);
             await NoteCheckSolveAsync(gen, 3).ConfigureAwait(false);
             var at = DateTimeOffset.UtcNow;
@@ -290,7 +282,9 @@ namespace OpenAstroAra.Server.Services {
                     $"the three check solves do not describe a turn about one axis (turn mismatch {mismatch:F1}°, cone {axis.ConeDeg:F2}°) — " +
                     "the mount may not have turned as it reported (a slipping clutch, a stalled motor); check it and run the check again");
             }
-            var total = Math.Sqrt(altErr * altErr + azErr * azErr);
+            // Rounded first: the verdict and the total the client colours by must sit in the same band
+            // (1.004′ is "excellent" at 1.00′, not "very_good" beside a 1.0′ readout).
+            var total = Math.Round(Math.Sqrt(altErr * altErr + azErr * azErr), 2);
             double? fine = null;
             double? fineDelta = null;
             lock (_gate) {
@@ -304,7 +298,7 @@ namespace OpenAstroAra.Server.Services {
             var result = new PolarAlignCheckResultDto(
                 AltitudeErrorArcmin: Math.Round(altErr, 2),
                 AzimuthErrorArcmin: Math.Round(azErr, 2),
-                TotalErrorArcmin: Math.Round(total, 2),
+                TotalErrorArcmin: total,
                 ConeHalfAngleDeg: Math.Round(axis.ConeDeg, 3),
                 TurnMismatchDeg: Math.Round(mismatch, 3),
                 FineErrorArcmin: fine is double f ? Math.Round(f, 2) : null,
@@ -377,12 +371,7 @@ namespace OpenAstroAra.Server.Services {
             if (!settings.UseHome) {
                 if (returnTo is { } start) {
                     LogReturningToStart(start.RaDeg, start.DecDeg);
-                    // The previous stage's live loop left tracking off on purpose: a deliberate switch-on,
-                    // not the "tracking dropped" the slew guard would otherwise report.
-                    if (!_mount.GetInfo().TrackingEnabled) {
-                        await TurnTrackingOnOrFailAsync(gen, ct).ConfigureAwait(false);
-                        LogTrackingEnabled();
-                    }
+                    await EnsureTrackingOnAsync(gen, ct).ConfigureAwait(false);
                     var target = new Coordinates(start.RaDeg, start.DecDeg, Epoch.JNOW, Coordinates.RAType.Degrees);
                     await SlewOrFailAsync(target, "the mount refused the slew back to where this run started — slew it there from the mount controls, then start again", gen, ct).ConfigureAwait(false);
                     await Task.Delay(TimeSpan.FromSeconds(settings.SettleSeconds), ct).ConfigureAwait(false);
@@ -429,6 +418,25 @@ namespace OpenAstroAra.Server.Services {
             await PublishStageAsync(gen, CurrentStage() ?? PolarAlignStages.Coarse, "homing", solvesDone: 0).ConfigureAwait(false);
             return true;
         }
+
+        /// <summary>A stage's deliberate switch-on before its slews — the previous stage's live loop left
+        /// tracking off on purpose, and an Alpaca mount refuses SlewToCoordinatesAsync while not tracking
+        /// ("requires Tracking to be true", the iOptron on the CM4, 2026-11-05). Distinct from the slew
+        /// guard's "tracking dropped" (<see cref="KeepTrackingOnForSlewAsync"/>), which is a mid-run fault.</summary>
+        private async Task EnsureTrackingOnAsync(int gen, CancellationToken ct) {
+            if (_mount.GetInfo().TrackingEnabled) {
+                return;
+            }
+            await TurnTrackingOnOrFailAsync(gen, ct).ConfigureAwait(false);
+            LogTrackingEnabled();
+        }
+
+        /// <summary>The solver's hint for a seed or check frame. After a Home the user set by hand the mount's
+        /// reading is stale (whatever the last GoTo left), but the camera, five degrees off the axis, looks
+        /// at |Dec| ≈ 85° whatever the RA: near the pole any RA is within the search radius, while the stale
+        /// Dec (20°, say) would put the hint 65° off and fail every seed on a solver without blind fallback.</summary>
+        private static (double RaDeg, double DecDeg)? SeedHint((double RaDeg, double DecDeg)? pointing, bool afterManualHome, bool north) =>
+            pointing is { } p && afterManualHome ? (p.RaDeg, north ? SeedDecDeg : -SeedDecDeg) : pointing;
 
         /// <summary>Park until the user's Continue/Next, keeping the guider lease alive.</summary>
         private async Task WaitForAdvanceAsync(int gen, Func<Task> renewLeaseIfDue, CancellationToken ct) {

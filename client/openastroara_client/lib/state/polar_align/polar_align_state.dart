@@ -59,6 +59,9 @@ class PolarAlignLive {
 
   /// Check stage: solves done so far (0–3).
   final int checkSolvesDone;
+
+  /// Check stage: solves the daemon takes (`check_solves_total`); 3 unless it says otherwise.
+  final int checkSolvesTotal;
   final PolarAlignCheckResult? checkResult;
 
   const PolarAlignLive({
@@ -77,6 +80,7 @@ class PolarAlignLive {
     this.stage,
     this.waitingForHome = false,
     this.checkSolvesDone = 0,
+    this.checkSolvesTotal = 3,
     this.checkResult,
   });
 
@@ -104,6 +108,7 @@ class PolarAlignLive {
     String? stage,
     bool? waitingForHome,
     int? checkSolvesDone,
+    int? checkSolvesTotal,
     PolarAlignCheckResult? checkResult,
   }) =>
       PolarAlignLive(
@@ -127,6 +132,7 @@ class PolarAlignLive {
         stage: stage ?? this.stage,
         waitingForHome: waitingForHome ?? this.waitingForHome,
         checkSolvesDone: checkSolvesDone ?? this.checkSolvesDone,
+        checkSolvesTotal: checkSolvesTotal ?? this.checkSolvesTotal,
         checkResult: checkResult ?? this.checkResult,
       );
 }
@@ -168,6 +174,8 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
             : current.phase,
         checkSolvesDone:
             (event.payload['check_solves_done'] as num?)?.toInt() ?? 0,
+        checkSolvesTotal:
+            (event.payload['check_solves_total'] as num?)?.toInt() ?? current.checkSolvesTotal,
         waitingForHome: false,
         clearFrameInProgress: true,
         // A new stage measures afresh: the previous stage's readout (and its
@@ -180,7 +188,7 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
     case PolarAlignWsEvents.checked:
       return current.copyWith(
         phase: PolarAlignStates.checked,
-        checkSolvesDone: 3,
+        checkSolvesDone: current.checkSolvesTotal,
         checkResult: PolarAlignCheckResult.fromJson(event.payload),
         altErrorArcmin: _num(event.payload, 'altitude_error_arcmin'),
         azErrorArcmin: _num(event.payload, 'azimuth_error_arcmin'),

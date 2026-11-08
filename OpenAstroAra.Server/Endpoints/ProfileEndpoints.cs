@@ -659,14 +659,9 @@ public static class ProfileEndpoints {
         }
         // The turn and rough-exposure knobs have no control in the app yet (#1736), and an older build
         // stored any value: a stored value outside the range must not make the panel's own edits (the
-        // whole DTO comes back on every PUT) fail over a field the user cannot reach. Clamp, don't refuse.
-        body = body with {
-            SeedRotationDeg = double.IsFinite(body.SeedRotationDeg) ? Math.Clamp(body.SeedRotationDeg, 5.0, 120.0) : 60.0,
-            CheckStepDeg = double.IsFinite(body.CheckStepDeg) ? Math.Clamp(body.CheckStepDeg, 5.0, 60.0) : 30.0,
-            CoarseExposureSeconds = double.IsFinite(body.CoarseExposureSeconds) && body.CoarseExposureSeconds > 0
-                ? Math.Min(body.CoarseExposureSeconds, 60.0)
-                : 3.0,
-        };
+        // whole DTO comes back on every PUT) fail over a field the user cannot reach. Clamp, don't refuse
+        // — the same table the service applies on every read (PolarAlignSettingsClamp).
+        body = PolarAlignSettingsClamp.Apply(body);
         store.PutPolarAlignSettings(body);
         return Results.Ok(body);
     }

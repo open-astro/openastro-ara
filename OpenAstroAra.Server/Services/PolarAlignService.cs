@@ -95,6 +95,8 @@ namespace OpenAstroAra.Server.Services {
         private double? _altErrorArcmin;
         private double? _azErrorArcmin;
         private int _liveIterations;
+        // Every live frame of the run, failed ones included — the frame-id counter across the stages.
+        private int _liveFrames;
         private DateTimeOffset _startedAt;
         private bool _captureRequested;
         private bool _waitingForCapture;
@@ -347,7 +349,7 @@ namespace OpenAstroAra.Server.Services {
                     throw new InvalidOperationException(
                         "site latitude must be configured (non-zero) before polar alignment — the routine measures against your site's celestial pole");
                 }
-                var settings = _profileStore.GetPolarAlignSettings();
+                var settings = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings());
                 var mainCamera = _mainCamera;
                 if (stage == PolarAlignStages.Coarse) {
                     // Before the mount moves: a camera that is off would otherwise home, slew, and then
@@ -390,6 +392,7 @@ namespace OpenAstroAra.Server.Services {
                     _altErrorArcmin = null;
                     _azErrorArcmin = null;
                     _liveIterations = 0;
+                    _liveFrames = 0;
                     _startedAt = DateTimeOffset.UtcNow;
                     _captureRequested = false;
                     _waitingForCapture = false;
@@ -726,11 +729,12 @@ namespace OpenAstroAra.Server.Services {
                 Func<PolarAlignSolveOutcome, DateTimeOffset, (double AltErr, double AzErr)> toError,
                 (double RaDeg, double DecDeg)? initialHint, Func<Task> renewLeaseIfDue,
                 int gen, CancellationToken ct) {
-            // The count runs on across the stages: frame ids stay unique within a run and the §45.13 row
+            // The count runs on across the stages: frame ids stay unique within a run (failed frames
+            // included — a counter of solves alone would hand the next stage a used id) and the §45.13 row
             // counts every live frame, not the last stage's.
             int iteration;
             lock (_gate) {
-                iteration = _liveIterations;
+                iteration = _liveFrames;
             }
             var consecutiveFailures = 0;
             var hint = initialHint;
@@ -740,7 +744,7 @@ namespace OpenAstroAra.Server.Services {
                     return; // the user moves the routine on — the caller owns the next stage
                 }
                 // Re-read every frame: exposure, binning, cadence and loop mode apply mid-run.
-                var settings = _profileStore.GetPolarAlignSettings();
+                var settings = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings());
                 if (settings.LoopMode == PolarAlignLoopModes.SingleFrame) {
                     var requested = await WaitForCaptureRequestAsync(gen, renewLeaseIfDue, ct).ConfigureAwait(false);
                     if (requested is null) {
@@ -756,6 +760,11 @@ namespace OpenAstroAra.Server.Services {
                 var iterationStart = DateTimeOffset.UtcNow;
                 await renewLeaseIfDue().ConfigureAwait(false);
                 iteration++;
+                lock (_gate) {
+                    if (_generation == gen) {
+                        _liveFrames = iteration;
+                    }
+                }
                 var frameId = "live-" + iteration.ToString(CultureInfo.InvariantCulture);
                 var timing = new FrameTiming();
                 PolarAlignSolveOutcome s;
@@ -863,10 +872,10 @@ namespace OpenAstroAra.Server.Services {
                     lock (_gate) {
                         if (_captureRequested) {
                             _captureRequested = false;
-                            return _profileStore.GetPolarAlignSettings();
+                            return PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings());
                         }
                     }
-                    var settings = _profileStore.GetPolarAlignSettings();
+                    var settings = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings());
                     if (settings.LoopMode != PolarAlignLoopModes.SingleFrame) {
                         return settings;
                     }
