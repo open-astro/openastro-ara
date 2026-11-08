@@ -109,6 +109,35 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Execute_StopsARunningGuideCameraFocusLoop() {
+            // The loop takes the guide camera's frames through the guider; stopping guiding does not end it.
+            var focus = new Mock<IGuideFocusService>();
+            focus.SetupGet(f => f.IsActive).Returns(true);
+            focus.Setup(f => f.StopAsync()).Returns(Task.CompletedTask);
+
+            var result = await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                guideFocus: focus.Object).ExecuteAsync();
+
+            focus.Verify(f => f.StopAsync(), Times.Once);
+            Assert.That(result.FailedRungs, Is.Empty);
+        }
+
+        [Test]
+        public async Task Execute_AnIdleGuideCameraFocusLoop_IsNotPoked() {
+            var focus = new Mock<IGuideFocusService>();
+            focus.SetupGet(f => f.IsActive).Returns(false);
+
+            await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                guideFocus: focus.Object).ExecuteAsync();
+
+            focus.Verify(f => f.StopAsync(), Times.Never);
+        }
+
+        [Test]
         public async Task Execute_HaltsAConnectedRotator() {
             // A rotator turning when Stop is pressed (from Simple Mode, the full UI or a plan's
             // rotate) must stop where it is: aborting the run only stops the sequencer waiting.

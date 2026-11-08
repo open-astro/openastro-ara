@@ -37,6 +37,7 @@ public sealed partial class EmergencyStopService {
     private readonly ITelescopeService? _telescope;
     private readonly IFlatDeviceService? _flatDevice;
     private readonly IRotatorService? _rotator;
+    private readonly IGuideFocusService? _guideFocus;
     private readonly INotificationService? _notifications;
     private readonly IWsBroadcaster? _ws;
     private readonly ILogger<EmergencyStopService> _logger;
@@ -63,13 +64,15 @@ public sealed partial class EmergencyStopService {
             INotificationService? notifications = null,
             IWsBroadcaster? ws = null,
             ILogger<EmergencyStopService>? logger = null,
-            IRotatorService? rotator = null) {
+            IRotatorService? rotator = null,
+            IGuideFocusService? guideFocus = null) {
         _camera = camera;
         _sequencerResolver = sequencerResolver;
         _guider = guider;
         _telescope = telescope;
         _flatDevice = flatDevice;
         _rotator = rotator;
+        _guideFocus = guideFocus;
         _notifications = notifications;
         _ws = ws;
         _logger = logger ?? NullLogger<EmergencyStopService>.Instance;
@@ -119,6 +122,11 @@ public sealed partial class EmergencyStopService {
             _camera is null ? null : async () => (await _camera.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _camera is null ? null : ct => _camera.AbortExposureAsync(ct)).ConfigureAwait(false);
         if (exposureOutcome is RungOutcome.Failed) { failedRungs.Add("abort_exposure"); }
+        // The guide-camera focus loop borrows frames through the guider, so stopping guiding doesn't end it.
+        var guideFocusOutcome = await RungAsync("stop guide focus",
+            _guideFocus is null ? null : () => Task.FromResult(_guideFocus.IsActive),
+            _guideFocus is null ? null : _ => _guideFocus.StopAsync()).ConfigureAwait(false);
+        if (guideFocusOutcome is RungOutcome.Failed) { failedRungs.Add("stop_guide_focus"); }
         var guidingOutcome = await RungAsync("stop guiding",
             _guider is null ? null : async () => (await _guider.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _guider is null ? null : async ct => await _guider.StopGuidingAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);

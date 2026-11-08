@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/filter_wheel_status.dart';
+import 'package:openastroara/models/guide_focus.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart' show SimpleGuideGainSlider;
 import 'package:openastroara/screens/simple/simple_focus_panel.dart' show SimpleGuideLiveShutter;
@@ -44,9 +45,11 @@ class _Live extends AutofocusLiveNotifier {
 }
 
 class _GuideFocus extends GuideFocusNotifier {
+  _GuideFocus(this.live0);
+  final GuideFocusLive live0;
   final calls = <String>[];
   @override
-  GuideFocusLive build() => GuideFocusLive.idle;
+  GuideFocusLive build() => live0;
   @override
   Future<void> start({required double exposureSec, int? binning}) async => calls.add('start $exposureSec');
   @override
@@ -57,8 +60,10 @@ late ProviderContainer _c;
 late _GuideFocus _g;
 
 Future<void> _pump(WidgetTester tester, Widget child,
-    {String guider = 'connected', String runtime = 'stopped', String wheel = 'connected'}) async {
-  _g = _GuideFocus();
+    {String guider = 'connected', String runtime = 'stopped', String wheel = 'connected', bool guideRunning = false}) async {
+  _g = _GuideFocus(guideRunning
+      ? const GuideFocusLive(status: GuideFocusStatus(active: true, state: 'running', exposureSec: 2, seq: 1))
+      : GuideFocusLive.idle);
   _c = ProviderContainer(overrides: [
     cameraStatusProvider.overrideWith(_Camera.new),
     guiderStatusProvider.overrideWith(() => _Guider(guider, runtime)),
@@ -131,6 +136,16 @@ void main() {
     await tester.pump();
     await tester.pump(); // the guider's status loads once the pick first asks for it
     expect(find.byType(SimpleGuideLiveShutter), findsNothing, reason: 'the shutter is the main camera again');
+  });
+
+  testWidgets('a guide loop found running: the Guide row can still be picked, to reach its stop', (tester) async {
+    await _pump(tester, const SimpleSettingsPopover(), guideRunning: true);
+    await tester.tap(_row('guide'));
+    await tester.pump();
+    expect(_c.read(previewCameraProvider), PreviewCamera.guide);
+    await tester.tap(_row('main'), warnIfMissed: false);
+    await tester.pump();
+    expect(_c.read(previewCameraProvider), PreviewCamera.guide, reason: 'leaving would strand it with no stop');
   });
 
   testWidgets('Filter shows only with a filter wheel connected', (tester) async {

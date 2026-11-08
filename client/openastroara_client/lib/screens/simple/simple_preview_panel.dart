@@ -383,9 +383,6 @@ class SimpleSettingsPopover extends ConsumerWidget {
     final looping = ref.watch(liveViewControllerProvider);
     final caps = ref.watch(cameraStatusProvider).asData?.value?.capabilities;
     final guide = simplePreviewGuide(ref);
-    final guideLive = ref.watch(
-      guideFocusProvider.select((g) => g.status.active),
-    );
     final wheel =
         ref.watch(filterWheelProvider).asData?.value?.connectionState ==
         EquipmentConnectionState.connected;
@@ -396,8 +393,8 @@ class SimpleSettingsPopover extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         spacing: AraSpace.s8,
         children: [
-          // Locked while frames run: switching would strand them with no stop.
-          ..._previewCameraRows(context, ref, locked: looping || guideLive),
+          // Leaving a running camera would strand it with no stop.
+          ..._previewCameraRows(context, ref, looping: looping),
           // No title: the chip that opened it says what it is (user,
           // 2026-11-04).
           if (guide) ...[
@@ -470,7 +467,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
   List<Widget> _previewCameraRows(
     BuildContext context,
     WidgetRef ref, {
-    required bool locked,
+    required bool looping,
   }) {
     final l10n = context.l10n;
     final camera = ref.watch(cameraStatusProvider).asData?.value;
@@ -488,7 +485,9 @@ class SimpleSettingsPopover extends ConsumerWidget {
       bool enabled,
     ) {
       final selected = (value == PreviewCamera.guide) == guide;
-      final on = enabled && !locked;
+      // Guide stays pickable while its loop runs: that is how its stop is reached.
+      final on =
+          enabled && !(value == PreviewCamera.guide ? looping : guideActive);
       return Semantics(
         button: true,
         selected: selected,

@@ -53,7 +53,16 @@ enum SimpleFocusScope { main, guide }
 
 class SimpleFocusScopeNotifier extends Notifier<SimpleFocusScope> {
   @override
-  SimpleFocusScope build() => SimpleFocusScope.main;
+  SimpleFocusScope build() {
+    // A guide loop outlives the app: found running, Focus goes where its stop
+    // is (the choice is locked while it reads, so Main would strand it).
+    ref.listen(guideFocusProvider.select((g) => g.status.active), (_, active) {
+      if (active) state = SimpleFocusScope.guide;
+    });
+    return ref.read(guideFocusProvider).status.active
+        ? SimpleFocusScope.guide
+        : SimpleFocusScope.main;
+  }
 
   void set(SimpleFocusScope scope) => state = scope;
 }
