@@ -2731,6 +2731,14 @@ class AppLocalizationsPt extends AppLocalizations {
   String albumSinceLastVisit(String changes) {
     return '$changes since your last visit';
   }
+
+  @override
+  String get wizardGuideCameraIsMainCamera =>
+      'The Main Camera can\'t also be the Guide Camera. Guiding needs a separate Guide Camera, because two programs on one sensor break guiding. Pick another camera, or choose None.';
+
+  @override
+  String get wizardDarksSkippedPushFailed =>
+      'Dark-library build skipped: the guider didn\'t take the new profile. Build it from the Guider panel once the profile push succeeds.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -5485,4 +5493,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String albumSinceLastVisit(String changes) {
     return '$changes desde a última visita';
   }
+
+  @override
+  String get wizardGuideCameraIsMainCamera =>
+      'A câmera principal não pode ser também a câmera de guiagem. A guiagem precisa de uma câmera de guiagem separada, porque dois programas no mesmo sensor quebram a guiagem. Escolha outra câmera ou selecione Nenhuma.';
+
+  @override
+  String get wizardDarksSkippedPushFailed =>
+      'Biblioteca de darks não iniciada: o guiador não aceitou o novo perfil. Crie-a no painel do Guiador depois que o envio do perfil funcionar.';
 }

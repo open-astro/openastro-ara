@@ -34,6 +34,9 @@ Map<String, dynamic> profileDraftToJson(ProfileDraft d) {
     'skipped_screens': [...d.skippedScreens]..sort(),
     'cleared_fields': [...d.clearedFields]..sort(),
     'device_names': Map<String, String>.from(d.deviceNames),
+    'device_endpoints': {
+      for (final e in d.deviceEndpoints.entries) e.key: [...e.value],
+    },
     'equipment': strip({
       'camera': d.equipment.cameraDeviceId,
       'filter_wheel': d.equipment.filterWheelDeviceId,
@@ -205,6 +208,17 @@ ProfileDraft profileDraftFromJson(Map<String, dynamic> json) {
     for (final e in (json['device_names'] as Map).entries) {
       if (e.key is String && e.value is String) {
         d.deviceNames[e.key as String] = e.value as String;
+      }
+    }
+  }
+
+  if (json['device_endpoints'] is Map) {
+    for (final e in (json['device_endpoints'] as Map).entries) {
+      if (e.key is String && e.value is List) {
+        d.deviceEndpoints[e.key as String] = [
+          for (final h in e.value as List)
+            if (h is String) h,
+        ];
       }
     }
   }

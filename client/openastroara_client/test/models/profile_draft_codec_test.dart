@@ -18,6 +18,7 @@ void main() {
     d.skippedScreens.addAll([2, 4]);
     d.clearedFields.add(ClearableField.saveDirectory);
     d.deviceNames['cam-1'] = 'ZWO ASI2600MC';
+    d.deviceEndpoints['cam-1'] = ['localhost:32323/0', '127.0.0.1:32323/0'];
     d.equipment
       ..cameraDeviceId = 'cam-1'
       ..mountDeviceId = 'mnt-1'
@@ -99,6 +100,8 @@ void main() {
     expect(back.skippedScreens, {2, 4});
     expect(back.clearedFields, {ClearableField.saveDirectory});
     expect(back.deviceNames, {'cam-1': 'ZWO ASI2600MC'});
+    expect(back.deviceEndpoints,
+        {'cam-1': ['localhost:32323/0', '127.0.0.1:32323/0']});
     expect(back.equipment.switchDeviceIds, ['sw-1', 'sw-2']);
     expect(back.equipment.filterWheelDeviceId, isNull);
     expect(back.telescope.focalLengthMm, 250);

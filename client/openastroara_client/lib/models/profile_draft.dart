@@ -67,6 +67,11 @@ class ProfileDraft {
   // is recreated on every visit, the draft persists for the session.
   final Map<String, String> deviceNames = <String, String>{};
 
+  // The Alpaca endpoints ("host:port/N", one per host spelling the daemon
+  // reported) behind an assigned device, keyed by uniqueId. The Guiding step
+  // compares them with the Guide Camera pick: one camera cannot do both jobs.
+  final Map<String, List<String>> deviceEndpoints = <String, List<String>>{};
+
   // Server id of the profile this draft was persisted as, set on the first
   // successful create during Save. A retry after a mid-save failure re-uses it
   // (re-applying the sections) instead of orphaning a new profile each attempt.

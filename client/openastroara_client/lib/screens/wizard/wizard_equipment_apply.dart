@@ -1,9 +1,11 @@
 import 'package:dio/dio.dart';
 
+import '../../l10n/l10n.dart';
 import '../../models/profile_draft.dart';
 import '../../models/server.dart';
 import '../../services/equipment_discovery_api.dart';
 import '../../state/settings/equipment_connection_state.dart';
+import '../../util/friendly_error.dart';
 
 /// §37 wizard finish — hand the assigned equipment to the daemon.
 ///
@@ -23,6 +25,7 @@ import '../../state/settings/equipment_connection_state.dart';
 Future<List<String>> applyWizardEquipment(
   AraServer server,
   EquipmentSlots slots,
+  AppLocalizations l,
 ) async {
   // No-op when nothing was assigned at all: the user skipped the discovery
   // step, so treating every slot as a deliberate "None" would disconnect and
@@ -72,7 +75,7 @@ Future<List<String>> applyWizardEquipment(
             () => dio.post<void>('/api/v1/equipment/$segment/disconnect'));
         continue;
       }
-      final note = await _connect(dio, discovery, type, segment, assignedId, label);
+      final note = await _connect(dio, discovery, type, segment, assignedId, label, l);
       if (note != null) notes.add(note);
     }
 
@@ -85,7 +88,7 @@ Future<List<String>> applyWizardEquipment(
       for (final id in slots.switchDeviceIds) {
         final note = await _connect(
             dio, discovery, EquipmentDeviceType.switchDevice, 'switch', id,
-            'Switch');
+            'Switch', l);
         if (note != null) notes.add(note);
       }
     }
@@ -106,6 +109,7 @@ Future<String?> _connect(
   String segment,
   String assignedId,
   String label,
+  AppLocalizations l,
 ) async {
   try {
     final devices = await discovery.discover(type);
@@ -120,7 +124,7 @@ Future<String?> _connect(
     );
     return null;
   } on DioException catch (e) {
-    return '$label: ${e.message ?? 'network error'}';
+    return '$label: ${friendlyError(l, e, action: 'connect')}';
   }
 }
 

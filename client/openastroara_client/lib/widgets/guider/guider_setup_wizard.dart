@@ -147,6 +147,31 @@ bool isBareAlpacaChoice(String selection) =>
   return (host: m.group(1)!, port: port, device: device);
 }
 
+/// True when the guide-camera [guideChoice] is the same Alpaca device as one of
+/// the Main Camera's [mainEndpoints] ("host:port/N"): same port, device number
+/// and host, with loopback spellings equal. Mirrors the daemon's
+/// `CameraConnectGuard.IsGuiderCamera`, minus "this machine's other addresses"
+/// (shortcut: the client can't list the rig's addresses; the daemon still
+/// refuses those at connect, and the finish note then says why).
+bool guideCameraIsMainCamera(String? guideChoice, List<String> mainEndpoints) {
+  final guide = parseAlpacaChoiceEndpoint(guideChoice ?? '');
+  if (guide == null) return false;
+  String norm(String h) {
+    final t = h.trim().toLowerCase().replaceAll(RegExp(r'\.$'), '');
+    return t == '127.0.0.1' || t == '::1' ? 'localhost' : t;
+  }
+  for (final e in mainEndpoints) {
+    final main = parseAlpacaChoiceEndpoint('[$e]');
+    if (main != null &&
+        main.port == guide.port &&
+        main.device == guide.device &&
+        norm(main.host) == norm(guide.host)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /// Open the §63 guider setup wizard.
 Future<void> showGuiderSetupWizard(BuildContext context) => showDialog<void>(
       context: context,

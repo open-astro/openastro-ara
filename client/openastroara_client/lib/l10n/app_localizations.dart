@@ -4676,6 +4676,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{changes} since your last visit'**
   String albumSinceLastVisit(String changes);
+
+  /// Setup wizard, Guiding step: shown under the Guide Camera picker (and holds Next) when it resolves to the same Alpaca device as the Main Camera
+  ///
+  /// In en, this message translates to:
+  /// **'The Main Camera can\'t also be the Guide Camera. Guiding needs a separate Guide Camera, because two programs on one sensor break guiding. Pick another camera, or choose None.'**
+  String get wizardGuideCameraIsMainCamera;
+
+  /// Setup wizard finish note: the guider profile push failed, so the dark-library build was not started
+  ///
+  /// In en, this message translates to:
+  /// **'Dark-library build skipped: the guider didn\'t take the new profile. Build it from the Guider panel once the profile push succeeds.'**
+  String get wizardDarksSkippedPushFailed;
 }
 
 class _AppLocalizationsDelegate

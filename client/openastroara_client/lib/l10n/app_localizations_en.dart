@@ -2731,4 +2731,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String albumSinceLastVisit(String changes) {
     return '$changes since your last visit';
   }
+
+  @override
+  String get wizardGuideCameraIsMainCamera =>
+      'The Main Camera can\'t also be the Guide Camera. Guiding needs a separate Guide Camera, because two programs on one sensor break guiding. Pick another camera, or choose None.';
+
+  @override
+  String get wizardDarksSkippedPushFailed =>
+      'Dark-library build skipped: the guider didn\'t take the new profile. Build it from the Guider panel once the profile push succeeds.';
 }

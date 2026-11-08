@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -89,9 +93,11 @@ class _FastProfileApi extends ProfileApi {
 class _FakeGuiderEquipment implements GuiderEquipmentClient {
   int pushes = 0;
   bool pushThrows = false;
+  Object? pushError;
   @override
   Future<void> pushProfile({bool tuningOnly = false}) async {
     pushes++;
+    if (pushError != null) throw pushError!;
     if (pushThrows) throw Exception('guider unreachable');
   }
 
@@ -140,10 +146,14 @@ Future<ProviderContainer> _pump(
   required _FastProfileApi api,
   required _FakeGuiderEquipment guider,
   required _FakeCalibration calibration,
+  AraServer server = const AraServer(hostname: 'daemon', port: 5555),
 }) async {
+  // Tall surface: the Done view stacks notes under the progress line.
+  tester.view.physicalSize = const Size(800, 1600);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
   final container = ProviderContainer(overrides: [
-    activeServerProvider
-        .overrideWithValue(const AraServer(hostname: 'daemon', port: 5555)),
+    activeServerProvider.overrideWithValue(server),
     guiderEquipmentApiProvider.overrideWithValue(guider),
     guiderCalibrationApiFactoryProvider.overrideWithValue((_) => calibration),
     // The Done view watches guiderBuildActivityProvider, which would open a
@@ -254,5 +264,121 @@ void main() {
 
     expect(guider.pushes, 0);
     expect(calibration.builds, 0);
+  });
+
+  DioException refusal(int status, String detail) => DioException(
+        requestOptions: RequestOptions(path: '/x'),
+        type: DioExceptionType.badResponse,
+        response: Response(
+          requestOptions: RequestOptions(path: '/x'),
+          statusCode: status,
+          data: {'title': 'refused', 'detail': detail},
+        ),
+        message: 'This exception was thrown because the response has a '
+            'status code of $status and RequestOptions.validateStatus was '
+            'configured to throw',
+      );
+
+  testWidgets('a refused guider push shows the server\'s reason, skips the '
+      'dark-library build and says so', (tester) async {
+    final guider = _FakeGuiderEquipment()
+      ..pushError = refusal(422, 'The guide camera is the main imaging camera.');
+    final calibration = _FakeCalibration();
+    await _pump(tester,
+        api: _FastProfileApi(), guider: guider, calibration: calibration);
+
+    await tester.tap(find.text('Save Profile'));
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(find.textContaining('The guide camera is the main imaging camera.'),
+        findsOneWidget);
+    expect(find.textContaining('when the guider is reachable'), findsNothing);
+    expect(calibration.builds, 0,
+        reason: 'darks would shoot with the previous profile\'s guide camera');
+    expect(find.textContaining('Dark-library build skipped'), findsOneWidget);
+    expect(find.text('You\'re all set'), findsNothing);
+  });
+
+  testWidgets('an unreachable guider keeps the "when the guider is reachable" '
+      'advice and still skips the build', (tester) async {
+    final guider = _FakeGuiderEquipment()
+      ..pushError = DioException.connectionError(
+          requestOptions: RequestOptions(path: '/x'), reason: 'refused');
+    final calibration = _FakeCalibration();
+    await _pump(tester,
+        api: _FastProfileApi(), guider: guider, calibration: calibration);
+
+    await tester.tap(find.text('Save Profile'));
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(find.textContaining('when the guider is reachable'), findsOneWidget);
+    expect(calibration.builds, 0);
+  });
+
+  testWidgets('a Main Camera connect refused with 409 shows the server\'s '
+      'reason, not the Dio exception text', (tester) async {
+    late HttpServer http;
+    // The test binding swaps in a client that answers every request with 400.
+    final overrides = HttpOverrides.current;
+    HttpOverrides.global = null;
+    addTearDown(() => HttpOverrides.global = overrides);
+    await tester.runAsync(() async {
+      http = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      http.listen((req) async {
+        req.response.headers.contentType = ContentType('application', 'json');
+        if (req.uri.path == '/api/v1/equipment/discover/camera') {
+          req.response.write(jsonEncode([
+            {
+              'unique_id': 'cam-1',
+              'name': 'Sim camera',
+              'type': 'camera',
+              'host_name': 'localhost',
+              'ip_address': '127.0.0.1',
+              'ip_port': 32323,
+              'alpaca_device_number': 0,
+              'use_https': false,
+            }
+          ]));
+        } else if (req.uri.path == '/api/v1/equipment/camera/connect') {
+          req.response.statusCode = 409;
+          req.response.headers.contentType =
+              ContentType('application', 'problem+json');
+          req.response.write(jsonEncode({
+            'title': 'guide_camera_in_use',
+            'detail': 'The guider is using this camera.',
+          }));
+        } else {
+          req.response.write('{}');
+        }
+        await req.response.close();
+      });
+    });
+    addTearDown(() => http.close(force: true));
+    final container = await _pump(tester,
+        api: _FastProfileApi(),
+        guider: _FakeGuiderEquipment(),
+        calibration: _FakeCalibration(),
+        server: AraServer(hostname: '127.0.0.1', port: http.port));
+    container.read(wizardControllerProvider).draft.equipment.cameraDeviceId =
+        'cam-1';
+
+    await tester.tap(find.text('Save Profile'));
+    for (var i = 0; i < 40; i++) {
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(find.textContaining('Camera: The guider is using this camera.'),
+        findsOneWidget);
+    expect(find.textContaining('RequestOptions'), findsNothing);
+    expect(find.textContaining('DioException'), findsNothing);
+    // Elapse the Dio request timeouts armed inside the fake-async zone.
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(minutes: 1));
   });
 }
