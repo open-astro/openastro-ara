@@ -8,7 +8,7 @@ The daemon used to probe for a USB GPS by opening every `/dev/ttyUSB*` and `/dev
 
 ## Decision
 
-We decided (2026-10-11, [#1305](https://github.com/open-astro/openastro-ara/issues/1305)) that the daemon never reads a GPS receiver. A USB GPS dongle goes on the computer running the client, which reads the NMEA itself and pushes the fix as `gps-client`; phones push `gps-mobile`. A user who wants the Pi's clock disciplined with no client attached runs gpsd and chrony. Ara stays out of serial ports it does not own.
+We decided (2026-10-11, [#1305](https://github.com/open-astro/openastro-ara/issues/1305)) that the daemon never reads a GPS receiver. A USB GPS dongle goes on the computer running the client, which reads the NMEA itself and pushes the fix as `gps-client`. The daemon also accepts `gps-mobile`, which no client sends yet. A user who wants the Pi's clock disciplined with no client attached runs gpsd and chrony. Ara stays out of serial ports it does not own.
 
 ## Rules
 

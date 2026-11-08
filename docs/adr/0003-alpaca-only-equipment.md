@@ -28,6 +28,7 @@ We decided during the port ([`design/PORT_PLAYBOOK.md`](../../design/PORT_PLAYBO
 - A user with COM, INDI or INDIGO equipment runs a bridge, and the docs point them at one.
 - A driver bug stays a bug until its author fixes it; Ara does not ship a workaround.
 - High-frame-rate capture never goes through Alpaca; planetary capture lives in §77's own engine.
+- `CoolingFanInterlock.IsThermalSwitchDevice` picks the cooling fan switch by device name, which breaks rule 2. [#1700](https://github.com/open-astro/openastro-ara/issues/1700) tracks the fix.
 
 ## How to reverse
 
