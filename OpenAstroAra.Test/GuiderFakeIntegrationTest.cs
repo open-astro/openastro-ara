@@ -2767,6 +2767,30 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_push_that_fails_marks_the_guider_out_of_step_and_a_start_sends_no_guide_rpc() {
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_connected", JsonValue.Create(false));
+            fake.OnRpc("set_connected", _ => throw new InvalidOperationException("simulated: equipment failed to connect"));
+            var ws = new RecordingBroadcaster();
+            var profiles = new HeadlessProfileService();
+            profiles.ActiveProfile.GuiderSettings.GuiderCamera = "Bogus Camera";
+            using var svc = new GuiderService(profiles, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws: ws);
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null);
+
+            await Assert.ThatAsync(() => svc.PushGuiderProfileAsync(null, CancellationToken.None),
+                Throws.TypeOf<GuiderRpcException>()).ConfigureAwait(false);
+
+            Assert.That((await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime.OutOfStepReason, Does.Contain("reconnect"));
+            await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.operation_complete").Count == 1, TimeSpan.FromSeconds(3)).ConfigureAwait(false), Is.True);
+            Assert.That(fake.ReceivedMethods, Has.No.Member("guide"));
+        }
+
+        [Test]
         public async Task A_reconnect_with_a_good_selection_clears_the_out_of_step_state() {
             await using var fake = FakeGuider.Start();
             _ = new ProfileDaemon(fake);
