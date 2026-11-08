@@ -2486,6 +2486,15 @@ class AppLocalizationsEn extends AppLocalizations {
       'Guiding didn\'t start. See the Guider log for why.';
 
   @override
+  String get guideAggressiveness => 'Aggressiveness';
+
+  @override
+  String get guideAxisRa => 'RA';
+
+  @override
+  String get guideAxisDec => 'Dec';
+
+  @override
   String get guideRaAggressiveness => 'RA aggressiveness';
 
   @override

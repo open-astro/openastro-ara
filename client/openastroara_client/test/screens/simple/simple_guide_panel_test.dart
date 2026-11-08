@@ -86,6 +86,9 @@ class _GuiderEquipment implements GuiderEquipmentClient {
 
 Future<ProviderContainer> _pump(WidgetTester tester, Map<String, dynamic> wire,
     {Widget child = const SimpleGuidePanel(), bool lag = false, List<Override> rig = const []}) async {
+  // Tall enough that the whole panel is on screen, so nothing needs scrolling.
+  tester.view.physicalSize = const Size(2400, 3600);
+  addTearDown(tester.view.resetPhysicalSize);
   _g = _Guider(wire, lag: lag);
   final c = ProviderContainer(overrides: [guiderStatusProvider.overrideWith(() => _g), ...rig]);
   addTearDown(c.dispose);
@@ -309,6 +312,56 @@ void main() {
     expect(_g.calls, ['stop']);
     c.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 11));
+  });
+
+  testWidgets('RA and Dec aggressiveness are sliders, 0-100 % in 5s, kept in the profile and sent to the guider live',
+      (tester) async {
+    final eq = _GuiderEquipment();
+    final rig = [profileApiProvider.overrideWithValue(_Profile()), guiderEquipmentApiProvider.overrideWithValue(eq)];
+    final c = await _pump(tester, _wire(), rig: rig);
+    final ra = tester.widget<Slider>(find.byKey(const Key('simple-guide-aggressiveness-ra')));
+    expect((ra.min, ra.max, ra.divisions), (0.0, 1.0, 20));
+    final slider = find.byKey(const Key('simple-guide-aggressiveness-ra'));
+    expect(tester.getCenter(find.text('RA')).dy, moreOrLessEquals(tester.getCenter(slider).dy, epsilon: 1), reason: 'one line');
+    expect(tester.getCenter(find.text('70 %').first).dy, moreOrLessEquals(tester.getCenter(slider).dy, epsilon: 1));
+    ra.onChangeEnd!(0.55);
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).raAggressiveness, closeTo(0.55, 1e-9));
+    expect(eq.pushes, [true], reason: 'tuning only, so guiding goes on');
+    tester.widget<Slider>(find.byKey(const Key('simple-guide-aggressiveness-dec'))).onChangeEnd!(0.4);
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).decAggressiveness, closeTo(0.4, 1e-9));
+    expect(eq.pushes, [true, true]);
+  });
+
+  testWidgets('Dec guide mode is picked in the Guider panel and sent to the guider live', (tester) async {
+    final eq = _GuiderEquipment();
+    final rig = [profileApiProvider.overrideWithValue(_Profile()), guiderEquipmentApiProvider.overrideWithValue(eq)];
+    final c = await _pump(tester, _wire(), rig: rig);
+    final tile = tester.widget<SimplePresetTile<String>>(find.byKey(const Key('simple-guide-dec-mode')));
+    expect(tile.options, ['auto', 'north', 'south', 'off']);
+    tile.onSelected('north');
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).decGuideMode, 'north');
+    expect(eq.pushes, [true]);
+  });
+
+  testWidgets('the guiding settings sit after Gain and before Dither (user, 2026-11-09)', (tester) async {
+    await _pump(tester, _wire());
+    final tops = [
+      for (final k in [
+        'simple-guider-gain',
+        'simple-guide-aggressiveness-ra',
+        'simple-guide-aggressiveness-dec',
+        'simple-guide-dec-mode',
+        'simple-window-row-Dither',
+      ])
+        tester.getTopLeft(find.byKey(Key(k))).dy,
+    ];
+    expect(tops, orderedEquals([...tops]..sort()));
   });
 
   testWidgets('Dither every: frames up and down, Off below 1, kept in the profile', (tester) async {

@@ -73,37 +73,9 @@ void main() {
       expect(find.byKey(Key('simple-window-row-$gone')), findsNothing, reason: '$gone moved to Guide mode');
     }
     expect(find.byKey(const Key('simple-guider-gain')), findsOneWidget);
-  });
-
-  testWidgets('RA and Dec aggressiveness are sliders, 0-100 % in 5s, kept in the profile and sent to the guider live',
-      (tester) async {
-    final eq = _GuiderEquipment();
-    final c = await _pump(tester, _wire(), equipment: eq);
-    final ra = tester.widget<Slider>(find.byKey(const Key('simple-guide-aggressiveness-ra')));
-    expect((ra.min, ra.max, ra.divisions), (0.0, 1.0, 20));
-    ra.onChangeEnd!(0.55);
-    await tester.pump();
-    await tester.pump();
-    expect(c.read(phd2SettingsProvider).raAggressiveness, closeTo(0.55, 1e-9));
-    expect(eq.pushes, [true], reason: 'tuning only, so guiding goes on');
-    tester.widget<Slider>(find.byKey(const Key('simple-guide-aggressiveness-dec'))).onChangeEnd!(0.4);
-    await tester.pump();
-    await tester.pump();
-    expect(c.read(phd2SettingsProvider).decAggressiveness, closeTo(0.4, 1e-9));
-    expect(eq.pushes, [true, true]);
-  });
-
-  testWidgets('Dec guide mode is picked in the window and sent to the guider live', (tester) async {
-    final eq = _GuiderEquipment();
-    final c = await _pump(tester, _wire(), equipment: eq);
-    for (final m in ['auto', 'north', 'south', 'off']) {
-      expect(find.byKey(Key('simple-guide-dec-mode-$m')), findsOneWidget, reason: m);
+    for (final gone in ['simple-guide-aggressiveness-ra', 'simple-guide-aggressiveness-dec', 'simple-guide-dec-mode']) {
+      expect(find.byKey(Key(gone)), findsNothing, reason: '$gone is a Guider setting (user, 2026-11-09)');
     }
-    await tester.tap(find.byKey(const Key('simple-guide-dec-mode-north')));
-    await tester.pump();
-    await tester.pump();
-    expect(c.read(phd2SettingsProvider).decGuideMode, 'north');
-    expect(eq.pushes, [true]);
   });
 
   testWidgets('not connected says so', (tester) async {

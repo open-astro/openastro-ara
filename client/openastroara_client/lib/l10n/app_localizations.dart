@@ -4287,6 +4287,24 @@ abstract class AppLocalizations {
   /// **'Guiding didn\'t start. See the Guider log for why.'**
   String get guideStartFailedNoReason;
 
+  /// No description provided for @guideAggressiveness.
+  ///
+  /// In en, this message translates to:
+  /// **'Aggressiveness'**
+  String get guideAggressiveness;
+
+  /// Right ascension, the short axis name beside its slider
+  ///
+  /// In en, this message translates to:
+  /// **'RA'**
+  String get guideAxisRa;
+
+  /// Declination, the short axis name beside its slider
+  ///
+  /// In en, this message translates to:
+  /// **'Dec'**
+  String get guideAxisDec;
+
   /// No description provided for @guideRaAggressiveness.
   ///
   /// In en, this message translates to:

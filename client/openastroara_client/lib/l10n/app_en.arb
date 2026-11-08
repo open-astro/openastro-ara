@@ -3466,6 +3466,15 @@
   "@guideStartFailedNoReason": {
     "description": "Simple Mode pill: the guider gave up on a Start without saying why (#1664)."
   },
+  "guideAggressiveness": "Aggressiveness",
+  "guideAxisRa": "RA",
+  "@guideAxisRa": {
+    "description": "Right ascension, the short axis name beside its slider"
+  },
+  "guideAxisDec": "Dec",
+  "@guideAxisDec": {
+    "description": "Declination, the short axis name beside its slider"
+  },
   "guideRaAggressiveness": "RA aggressiveness",
   "guideDecAggressiveness": "Dec aggressiveness",
   "guideDecMode": "Dec guide mode",
