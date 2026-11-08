@@ -820,7 +820,8 @@ public static class PolarAlignStages {
     public static bool IsValid(string? stage) => stage is Coarse or Fine or Check;
 }
 
-/// <summary><c>POST /polaralign/start</c> body (optional): the stage to begin at. Null/absent = coarse.</summary>
+/// <summary><c>POST /polaralign/start</c> body (optional): the stage to begin at. Null/absent = coarse, or
+/// fine when the coarse stage cannot run (main camera off, optics unset, no solver).</summary>
 public sealed record PolarAlignStartRequestDto(string? Stage = null);
 
 /// <summary>The check stage's three-point result: the axis error against the apparent pole, the

@@ -742,7 +742,8 @@ public static partial class EquipmentEndpoints {
         var polar = equipment.MapGroup("/polaralign");
         polar.MapGet("/status", async (IPolarAlignService svc, CancellationToken ct) =>
             Results.Ok(await svc.GetStatusAsync(ct)));
-        // Optional body {stage: coarse|fine|check}; none = coarse (Home + main-camera solves).
+        // Optional body {stage: coarse|fine|check}; none = coarse (Home + main-camera solves), or fine when
+        // the coarse stage cannot run (main camera off, optics unset, no solver).
         polar.MapPost("/start", async ([FromHeader(Name = "Idempotency-Key")] string? key,
                 [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] PolarAlignStartRequestDto? body,
                 IPolarAlignService svc, CancellationToken ct) =>

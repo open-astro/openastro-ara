@@ -227,8 +227,7 @@ public static class ProfileEndpoints {
             .WithSummary("Replace the active profile's autofocus settings.");
 
         // One view of the knobs: what the daemon will use, not what an older build stored.
-        profile.MapGet("/polar-align", (IProfileStore store) =>
-                Results.Ok(PolarAlignSettingsClamp.Apply(store.GetPolarAlignSettings())))
+        profile.MapGet("/polar-align", GetPolarAlignSettings)
             .Produces<PolarAlignSettingsDto>(StatusCodes.Status200OK)
             .WithName("GetPolarAlignSettings")
             .WithSummary("Get the active profile's §45 polar-alignment settings.");
@@ -645,6 +644,12 @@ public static class ProfileEndpoints {
     /// <summary>§45.12 — <c>PUT /profile/polar-align</c>. The live loop re-reads these settings before
     /// every frame, so a bad exposure or an unknown loop mode must be refused at the write boundary
     /// (400) rather than reaching the camera. Extracted so the 400s are unit-testable without a host.</summary>
+    /// <summary>§45.12 — what the daemon will use, not what an older build stored: the turn and
+    /// rough-exposure knobs come back clamped (PolarAlignSettingsClamp), as every read in the service
+    /// applies them.</summary>
+    internal static IResult GetPolarAlignSettings(IProfileStore store) =>
+        Results.Ok(PolarAlignSettingsClamp.Apply(store.GetPolarAlignSettings()));
+
     internal static IResult PutPolarAlignSettings(PolarAlignSettingsDto body, IProfileStore store) {
         if (!(double.IsFinite(body.ExposureSeconds) && body.ExposureSeconds > 0 && body.ExposureSeconds <= 60)) {
             return Results.Problem(detail: "exposure_seconds must be greater than 0 and at most 60",
