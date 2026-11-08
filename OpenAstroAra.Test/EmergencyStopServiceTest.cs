@@ -110,6 +110,96 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Execute_StopsARunningGuideCameraFocusLoop() {
+            // The loop takes the guide camera's frames through the guider; stopping guiding does not end it.
+            var focus = new Mock<IGuideFocusService>();
+            focus.SetupGet(f => f.IsActive).Returns(true);
+            focus.Setup(f => f.StopAsync()).Returns(Task.CompletedTask);
+
+            var result = await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                guideFocus: focus.Object).ExecuteAsync();
+
+            focus.Verify(f => f.StopAsync(), Times.Once);
+            Assert.That(result.FailedRungs, Is.Empty);
+        }
+
+        [Test]
+        public async Task Execute_StopsARunningBahtinovReadout() {
+            var bahtinov = new Mock<IBahtinovFocusService>();
+            bahtinov.SetupGet(b => b.IsActive).Returns(true);
+            bahtinov.Setup(b => b.StopAsync()).Returns(Task.CompletedTask);
+
+            var result = await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                bahtinov: bahtinov.Object).ExecuteAsync();
+
+            bahtinov.Verify(b => b.StopAsync(), Times.Once);
+            Assert.That(result.FailedRungs, Is.Empty);
+        }
+
+        [Test]
+        public async Task Execute_CancelsARunningAutofocus() {
+            var tracker = new AutofocusRunTracker();
+            using var run = new CancellationTokenSource();
+            tracker.Begin("classic", 100, 5, null, null, run);
+
+            var result = await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                autofocus: tracker).ExecuteAsync();
+
+            Assert.That(run.IsCancellationRequested, Is.True);
+            Assert.That(result.FailedRungs, Is.Empty);
+        }
+
+        [Test]
+        public async Task Execute_StopsPolarAlignment() {
+            var polar = new Mock<IPolarAlignService>();
+            polar.Setup(p => p.GetStatusAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PolarAlignStateDto("adjusting", 12, 10, 2, 5, null));
+            polar.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Accepted);
+
+            var result = await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                polarAlign: polar.Object).ExecuteAsync();
+
+            polar.Verify(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(result.FailedRungs, Is.Empty);
+        }
+
+        [Test]
+        public async Task Execute_AFinishedPolarAlignment_IsNotReset() {
+            // A stray Stop publishes "stopped", which clears the client's aligned result.
+            var polar = new Mock<IPolarAlignService>();
+            polar.Setup(p => p.GetStatusAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PolarAlignStateDto("stopped", 2.8, 2.3, 1.5, 99, null));
+
+            await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                polarAlign: polar.Object).ExecuteAsync();
+
+            polar.Verify(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Execute_AnIdleGuideCameraFocusLoop_IsNotPoked() {
+            var focus = new Mock<IGuideFocusService>();
+            focus.SetupGet(f => f.IsActive).Returns(false);
+
+            await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                guideFocus: focus.Object).ExecuteAsync();
+
+            focus.Verify(f => f.StopAsync(), Times.Never);
+        }
+
+        [Test]
         public async Task Execute_HaltsAConnectedRotator() {
             // A rotator turning when Stop is pressed (from Simple Mode, the full UI or a plan's
             // rotate) must stop where it is: aborting the run only stops the sequencer waiting.

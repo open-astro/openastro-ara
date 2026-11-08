@@ -1203,6 +1203,36 @@ abstract class AppLocalizations {
   /// **'Stars'**
   String get previewStars;
 
+  /// Why the Main row in Preview's Camera field is locked while the guide camera loops
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the guide camera\'s frames first.'**
+  String get previewStopGuideFrames;
+
+  /// Empty screen in Preview with the guide camera picked and no guide frame yet
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the shutter for the guide camera\'s frames'**
+  String get previewGuideEmpty;
+
+  /// Simple Mode pill when a run starts on a profile set to ask about flats
+  ///
+  /// In en, this message translates to:
+  /// **'No flats this run'**
+  String get simpleNoFlatsThisRun;
+
+  /// Why the run takes no flats and where to change it; the setting names match the English-only Settings panel
+  ///
+  /// In en, this message translates to:
+  /// **'Your profile asks before each run, and Simple Mode doesn\'t ask. Turn off Simple Mode in Settings → Rig, then set Capture calibration after a sequence under Settings → Session → Calibration.'**
+  String get simpleNoFlatsThisRunDetail;
+
+  /// Simple Mode: label above the list of connected cameras in Preview's settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get previewCamera;
+
   /// Simple Mode: exposure length, as an Info tile label and the Preview settings picker label
   ///
   /// In en, this message translates to:
@@ -3183,6 +3213,30 @@ abstract class AppLocalizations {
   /// **'CAMERA COOLER STILL ON (switching it off failed)'**
   String get estopFailCooler;
 
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'GUIDE-CAMERA FOCUS LOOP MAY STILL BE RUNNING (stop failed)'**
+  String get estopFailGuideFocus;
+
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'BAHTINOV READOUT MAY STILL BE RUNNING (stop failed)'**
+  String get estopFailBahtinov;
+
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'AUTOFOCUS MAY STILL BE RUNNING (cancel failed)'**
+  String get estopFailAutofocus;
+
+  /// Emergency Stop failed step
+  ///
+  /// In en, this message translates to:
+  /// **'POLAR ALIGNMENT MAY STILL BE RUNNING (stop failed)'**
+  String get estopFailPolarAlign;
+
   /// Emergency Stop failed step the app has no wording for; step is the daemon's token
   ///
   /// In en, this message translates to:
@@ -4256,6 +4310,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Guiding didn\'t start. See the Guider log for why.'**
   String get guideStartFailedNoReason;
+
+  /// No description provided for @guideAggressiveness.
+  ///
+  /// In en, this message translates to:
+  /// **'Aggressiveness'**
+  String get guideAggressiveness;
+
+  /// Right ascension, the short axis name beside its slider
+  ///
+  /// In en, this message translates to:
+  /// **'RA'**
+  String get guideAxisRa;
+
+  /// Declination, the short axis name beside its slider
+  ///
+  /// In en, this message translates to:
+  /// **'Dec'**
+  String get guideAxisDec;
+
+  /// No description provided for @guideRaAggressiveness.
+  ///
+  /// In en, this message translates to:
+  /// **'RA aggressiveness'**
+  String get guideRaAggressiveness;
+
+  /// No description provided for @guideDecAggressiveness.
+  ///
+  /// In en, this message translates to:
+  /// **'Dec aggressiveness'**
+  String get guideDecAggressiveness;
+
+  /// No description provided for @guideDecMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Dec guide mode'**
+  String get guideDecMode;
+
+  /// No description provided for @guideDecAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get guideDecAuto;
+
+  /// No description provided for @guideDecNorth.
+  ///
+  /// In en, this message translates to:
+  /// **'North'**
+  String get guideDecNorth;
+
+  /// No description provided for @guideDecSouth.
+  ///
+  /// In en, this message translates to:
+  /// **'South'**
+  String get guideDecSouth;
 
   /// Guide exposure picker value when the profile leaves it to the guider
   ///

@@ -200,6 +200,31 @@ void main() {
     expect(container.read(simpleMessagesProvider).first.title, startsWith('CHECK THE RIG: ROTATOR HALT FAILED'));
   });
 
+  for (final (rung, phrase) in const [
+    ('stop_guide_focus', 'GUIDE-CAMERA FOCUS LOOP MAY STILL BE RUNNING'),
+    ('stop_bahtinov', 'BAHTINOV READOUT MAY STILL BE RUNNING'),
+    ('cancel_autofocus', 'AUTOFOCUS MAY STILL BE RUNNING'),
+    ('stop_polar_align', 'POLAR ALIGNMENT MAY STILL BE RUNNING'),
+  ]) {
+    testWidgets('a failed $rung is called out in words, not its wire token', (tester) async {
+      await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true);
+      fake.result = EmergencyStopResult(
+        alreadyInProgress: false,
+        runsAborted: 0,
+        exposureAborted: true,
+        guidingStopped: true,
+        mountStopped: true,
+        flatPanelLightOff: false,
+        failedRungs: [rung],
+      );
+      await activateWithoutPointer(tester);
+      await activateWithoutPointer(tester);
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
+      expect(container.read(simpleMessagesProvider).first.title, startsWith('CHECK THE RIG: $phrase'));
+    });
+  }
+
   testWidgets('Simple Mode: a stop that went through stays in its pill until closed (user, 2026-11-04: 6 s was too fast)',
       (tester) async {
     await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true, pills: true);

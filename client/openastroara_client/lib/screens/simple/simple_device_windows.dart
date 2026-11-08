@@ -1874,9 +1874,8 @@ class _AutofocusButton extends ConsumerWidget {
   }
 }
 
-/// The guider's window, titled with its camera like Camera's: what it is
-/// doing, the guiding RMS, the guide camera's gain, and how often and how far
-/// a plan dithers (the profile's, so every run Ara builds uses them).
+/// The guide camera's window, titled with its camera like Camera's: its
+/// connection and gain. The guider's own settings are in the Guider panel.
 class SimpleGuiderWindow extends ConsumerStatefulWidget {
   const SimpleGuiderWindow({super.key, this.inSettings = false});
 
@@ -1974,11 +1973,48 @@ Future<void> simpleSaveGuider(
   }
 }
 
+/// The Guider panel's slider row: label, slider and value on one line, so the
+/// panel still fits an iPad without scrolling. [slider] carries the name and
+/// value for screen readers, so the row's own text is left out of them.
+Widget simpleSliderRow(
+  BuildContext context,
+  String label,
+  Widget slider,
+  String value,
+) {
+  final scale = MediaQuery.textScalerOf(context).scale;
+  return Row(
+    children: [
+      ExcludeSemantics(
+        child: SizedBox(
+          width: scale(44),
+          child: Text(label, style: kSimpleText, maxLines: 1),
+        ),
+      ),
+      Expanded(child: SizedBox(height: 44, child: slider)),
+      ExcludeSemantics(
+        child: SizedBox(
+          width: scale(48),
+          child: Text(
+            value,
+            style: kSimpleText,
+            textAlign: TextAlign.end,
+            maxLines: 1,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
 /// The guide camera's gain: the guider's own scale, percent of the camera's
 /// range, set when the thumb is let go (Guide mode and the Guide Camera
 /// window share it).
 class SimpleGuideGainSlider extends ConsumerStatefulWidget {
-  const SimpleGuideGainSlider({super.key});
+  const SimpleGuideGainSlider({super.key, this.oneLine = false});
+
+  /// Label, slider and value on one line, for the Guider panel's height.
+  final bool oneLine;
 
   @override
   ConsumerState<SimpleGuideGainSlider> createState() =>
@@ -1992,15 +2028,12 @@ class _SimpleGuideGainSliderState extends ConsumerState<SimpleGuideGainSlider> {
   Widget build(BuildContext context) {
     final gain =
         _drag ?? ref.watch(phd2SettingsProvider).guideCameraGain.toDouble();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        simpleWindowRow(
-          context.l10n.deviceGain,
-          id: 'Gain',
-          Text('${gain.round()} %', style: kSimpleText),
-        ),
-        Slider(
+    // Merged: Slider's own node carries the value as its label, so a plain
+    // Semantics parent would leave VoiceOver's adjustable node unnamed.
+    final slider = MergeSemantics(
+      child: Semantics(
+        label: context.l10n.deviceGain,
+        child: Slider(
           key: const Key('simple-guider-gain'),
           min: 0,
           max: 100,
@@ -2018,6 +2051,22 @@ class _SimpleGuideGainSliderState extends ConsumerState<SimpleGuideGainSlider> {
             );
           },
         ),
+      ),
+    );
+    final value = Text('${gain.round()} %', style: kSimpleText);
+    if (widget.oneLine) {
+      return simpleSliderRow(
+        context,
+        context.l10n.deviceGain,
+        slider,
+        '${gain.round()} %',
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        simpleWindowRow(context.l10n.deviceGain, id: 'Gain', value),
+        slider,
       ],
     );
   }

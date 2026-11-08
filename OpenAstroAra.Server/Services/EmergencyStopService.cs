@@ -22,7 +22,8 @@ namespace OpenAstroAra.Server.Services;
 /// abort active sequence runs FIRST (so a still-running instruction can't
 /// start a fresh exposure or slew behind the stop), then halt the rotator
 /// where it is (aborting a run only stops the sequencer waiting on its move,
-/// #1671), abort the in-flight exposure, stop guiding, stop the mount where it is, switch
+/// #1671), abort the in-flight exposure, stop the guide-camera focus loop, the Bahtinov readout,
+/// a running autofocus and polar alignment, stop guiding, stop the mount where it is, switch
 /// the flat panel's light off, and switch the camera's cooler off. Every rung is best-effort — a
 /// dead device must never block the remaining rungs — and the result reports honestly what each rung did.
 /// The <c>safety.emergency_stop</c> WS event fires up-front so WILMA can
@@ -37,6 +38,10 @@ public sealed partial class EmergencyStopService {
     private readonly ITelescopeService? _telescope;
     private readonly IFlatDeviceService? _flatDevice;
     private readonly IRotatorService? _rotator;
+    private readonly IGuideFocusService? _guideFocus;
+    private readonly IBahtinovFocusService? _bahtinov;
+    private readonly AutofocusRunTracker? _autofocus;
+    private readonly IPolarAlignService? _polarAlign;
     private readonly INotificationService? _notifications;
     private readonly IWsBroadcaster? _ws;
     private readonly ILogger<EmergencyStopService> _logger;
@@ -63,13 +68,21 @@ public sealed partial class EmergencyStopService {
             INotificationService? notifications = null,
             IWsBroadcaster? ws = null,
             ILogger<EmergencyStopService>? logger = null,
-            IRotatorService? rotator = null) {
+            IRotatorService? rotator = null,
+            IGuideFocusService? guideFocus = null,
+            IBahtinovFocusService? bahtinov = null,
+            AutofocusRunTracker? autofocus = null,
+            IPolarAlignService? polarAlign = null) {
         _camera = camera;
         _sequencerResolver = sequencerResolver;
         _guider = guider;
         _telescope = telescope;
         _flatDevice = flatDevice;
         _rotator = rotator;
+        _guideFocus = guideFocus;
+        _bahtinov = bahtinov;
+        _autofocus = autofocus;
+        _polarAlign = polarAlign;
         _notifications = notifications;
         _ws = ws;
         _logger = logger ?? NullLogger<EmergencyStopService>.Instance;
@@ -119,6 +132,24 @@ public sealed partial class EmergencyStopService {
             _camera is null ? null : async () => (await _camera.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _camera is null ? null : ct => _camera.AbortExposureAsync(ct)).ConfigureAwait(false);
         if (exposureOutcome is RungOutcome.Failed) { failedRungs.Add("abort_exposure"); }
+        // The guide-camera focus loop borrows frames through the guider, so stopping guiding doesn't end it.
+        var guideFocusOutcome = await RungAsync("stop guide focus",
+            _guideFocus is null ? null : () => Task.FromResult(_guideFocus.IsActive),
+            _guideFocus is null ? null : _ => _guideFocus.StopAsync()).ConfigureAwait(false);
+        if (guideFocusOutcome is RungOutcome.Failed) { failedRungs.Add("stop_guide_focus"); }
+        var bahtinovOutcome = await RungAsync("stop bahtinov readout",
+            _bahtinov is null ? null : () => Task.FromResult(_bahtinov.IsActive),
+            _bahtinov is null ? null : _ => _bahtinov.StopAsync()).ConfigureAwait(false);
+        if (bahtinovOutcome is RungOutcome.Failed) { failedRungs.Add("stop_bahtinov"); }
+        var autofocusOutcome = await RungAsync("cancel autofocus",
+            _autofocus is null ? null : () => Task.FromResult(_autofocus.IsRunning),
+            _autofocus is null ? null : _ => { _autofocus.TryCancel(); return Task.CompletedTask; }).ConfigureAwait(false);
+        if (autofocusOutcome is RungOutcome.Failed) { failedRungs.Add("cancel_autofocus"); }
+        // Only a routine that runs: a stray Stop would clear a finished alignment's result.
+        var polarOutcome = await RungAsync("stop polar alignment",
+            _polarAlign is null ? null : async () => (await _polarAlign.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State is "seeding" or "adjusting" or "paused",
+            _polarAlign is null ? null : async ct => await _polarAlign.StopAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);
+        if (polarOutcome is RungOutcome.Failed) { failedRungs.Add("stop_polar_align"); }
         var guidingOutcome = await RungAsync("stop guiding",
             _guider is null ? null : async () => (await _guider.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _guider is null ? null : async ct => await _guider.StopGuidingAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);

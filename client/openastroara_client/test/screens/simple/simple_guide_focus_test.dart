@@ -51,7 +51,7 @@ late _GuideFocus _g;
 late _Live _af;
 
 Future<void> _pump(WidgetTester tester,
-    {GuideFocusLive live = GuideFocusLive.idle, String guider = 'connected', bool oag = false, Widget child = const SimpleFocusPanel()}) async {
+    {GuideFocusLive live = GuideFocusLive.idle, String guider = 'connected', bool oag = false, bool pickGuide = true, Widget child = const SimpleFocusPanel()}) async {
   _g = _GuideFocus(live);
   _af = _Live();
   _c = ProviderContainer(overrides: [
@@ -61,7 +61,7 @@ Future<void> _pump(WidgetTester tester,
   ]);
   addTearDown(_c.dispose);
   if (oag) _c.read(phd2SettingsProvider.notifier).setGuiderSetupType('oag');
-  _c.read(simpleFocusScopeProvider.notifier).set(SimpleFocusScope.guide);
+  if (pickGuide) _c.read(simpleFocusScopeProvider.notifier).set(SimpleFocusScope.guide);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: _c,
     child: MaterialApp(home: Scaffold(body: Center(child: child))),
@@ -109,6 +109,21 @@ void main() {
     await _pump(tester, live: GuideFocusLive(status: _live([3.0])));
     expect(tester.widget<InkWell>(find.descendant(of: find.byKey(const Key('simple-focus-scope-main')), matching: find.byType(InkWell))).onTap,
         isNull);
+  });
+
+  testWidgets('a guide loop found running on reopening puts Focus on Guide, where its square stops it', (tester) async {
+    await _pump(tester, live: GuideFocusLive(status: _live([3.0])), pickGuide: false, child: const SimpleFocusShutter());
+    expect(_c.read(simpleFocusScopeProvider), SimpleFocusScope.guide);
+    await tester.tap(find.byType(SimpleFocusShutter));
+    expect(_g.calls, ['stop']);
+  });
+
+  testWidgets('a guide loop that shows up after opening moves Focus to Guide too', (tester) async {
+    await _pump(tester, pickGuide: false, child: const SimpleFocusShutter());
+    expect(_c.read(simpleFocusScopeProvider), SimpleFocusScope.main);
+    _g.state = GuideFocusLive(status: _live([3.0]));
+    await tester.pump();
+    expect(_c.read(simpleFocusScopeProvider), SimpleFocusScope.guide);
   });
 
   testWidgets("the shutter starts the guide camera's live focus, and its square stops it", (tester) async {

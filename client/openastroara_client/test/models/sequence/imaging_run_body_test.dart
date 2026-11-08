@@ -801,6 +801,21 @@ void main() {
       expect(conditionsOf(loops.single).single['Iterations'], 10);
     });
 
+    test('a rig that does not pause for a filter swap gets no Wait-for-User',
+        () {
+      final b = buildTargetBlock(
+        raDeg: 10,
+        decDeg: 20,
+        exposureSeconds: 60,
+        frameCount: 10,
+        filterPlan: plan,
+        rig: const RigCapabilities(pauseForFilterSwap: false),
+      );
+      final types = childrenOf(b).map((c) => c[r'$type'] as String?).toList();
+      expect(types, isNot(contains(waitForUserType)));
+      expect(types, isNot(contains(switchFilterType)));
+    });
+
     test('manualFilterSwap emits Wait-for-User pauses instead of SwitchFilter',
         () {
       final b = buildTargetBlock(

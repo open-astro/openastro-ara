@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
@@ -86,6 +87,9 @@ class _GuiderEquipment implements GuiderEquipmentClient {
 
 Future<ProviderContainer> _pump(WidgetTester tester, Map<String, dynamic> wire,
     {Widget child = const SimpleGuidePanel(), bool lag = false, List<Override> rig = const []}) async {
+  // Tall enough that the whole panel is on screen, so nothing needs scrolling.
+  tester.view.physicalSize = const Size(2400, 3600);
+  addTearDown(tester.view.resetPhysicalSize);
   _g = _Guider(wire, lag: lag);
   final c = ProviderContainer(overrides: [guiderStatusProvider.overrideWith(() => _g), ...rig]);
   addTearDown(c.dispose);
@@ -309,6 +313,90 @@ void main() {
     expect(_g.calls, ['stop']);
     c.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 11));
+  });
+
+  testWidgets('RA and Dec aggressiveness are sliders, 0-100 % in 5s, kept in the profile and sent to the guider live',
+      (tester) async {
+    final eq = _GuiderEquipment();
+    final rig = [profileApiProvider.overrideWithValue(_Profile()), guiderEquipmentApiProvider.overrideWithValue(eq)];
+    final c = await _pump(tester, _wire(), rig: rig);
+    final ra = tester.widget<Slider>(find.byKey(const Key('simple-guide-aggressiveness-ra')));
+    expect((ra.min, ra.max, ra.divisions), (0.0, 1.0, 20));
+    final slider = find.byKey(const Key('simple-guide-aggressiveness-ra'));
+    expect(tester.getCenter(find.text('RA')).dy, moreOrLessEquals(tester.getCenter(slider).dy, epsilon: 1), reason: 'one line');
+    expect(tester.getCenter(find.text('70 %').first).dy, moreOrLessEquals(tester.getCenter(slider).dy, epsilon: 1));
+    ra.onChangeEnd!(0.55);
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).raAggressiveness, closeTo(0.55, 1e-9));
+    expect(eq.pushes, [true], reason: 'tuning only, so guiding goes on');
+    tester.widget<Slider>(find.byKey(const Key('simple-guide-aggressiveness-dec'))).onChangeEnd!(0.4);
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).decAggressiveness, closeTo(0.4, 1e-9));
+    expect(eq.pushes, [true, true]);
+  });
+
+  testWidgets('Dec guide mode is picked in the Guider panel and sent to the guider live', (tester) async {
+    final eq = _GuiderEquipment();
+    final rig = [profileApiProvider.overrideWithValue(_Profile()), guiderEquipmentApiProvider.overrideWithValue(eq)];
+    final c = await _pump(tester, _wire(), rig: rig);
+    final tile = tester.widget<SimplePresetTile<String>>(find.byKey(const Key('simple-guide-dec-mode')));
+    expect(tile.options, ['auto', 'north', 'south', 'off']);
+    tile.onSelected('north');
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).decGuideMode, 'north');
+    expect(eq.pushes, [true]);
+  });
+
+  testWidgets('the Gain slider is named on the node VoiceOver adjusts, and an increase still saves it', (tester) async {
+    final handle = tester.ensureSemantics();
+    final eq = _GuiderEquipment();
+    final rig = [profileApiProvider.overrideWithValue(_Profile()), guiderEquipmentApiProvider.overrideWithValue(eq)];
+    final c = await _pump(tester, _wire(), rig: rig);
+    await tester.pump();
+    final gain = tester.getSemantics(find.byKey(const Key('simple-guider-gain')));
+    expect(gain.getSemanticsData().hasAction(SemanticsAction.increase), isTrue, reason: 'the adjustable node');
+    expect(gain.getSemanticsData().label, contains('Gain'));
+    final before = c.read(phd2SettingsProvider).guideCameraGain;
+    gain.owner!.performAction(gain.id, SemanticsAction.increase);
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).guideCameraGain, greaterThan(before));
+    expect(eq.pushes, [true]);
+    handle.dispose();
+  });
+
+  testWidgets('RA and Dec aggressiveness are named on the nodes VoiceOver adjusts', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, _wire());
+    await tester.pump();
+    for (final (key, name) in [('ra', 'RA aggressiveness'), ('dec', 'Dec aggressiveness')]) {
+      final node = tester.getSemantics(find.byKey(Key('simple-guide-aggressiveness-$key'))).getSemanticsData();
+      expect(node.hasAction(SemanticsAction.increase), isTrue, reason: '$key: the adjustable node');
+      expect(node.label, contains(name));
+    }
+    // One stop per slider: the row's own label and value would read it twice.
+    for (final label in ['RA', 'Dec']) {
+      expect(find.bySemanticsLabel(RegExp('^$label\$')), findsNothing, reason: label);
+    }
+    handle.dispose();
+  });
+
+  testWidgets('the guiding settings sit after Gain and before Dither (user, 2026-11-09)', (tester) async {
+    await _pump(tester, _wire());
+    final tops = [
+      for (final k in [
+        'simple-guider-gain',
+        'simple-guide-aggressiveness-ra',
+        'simple-guide-aggressiveness-dec',
+        'simple-guide-dec-mode',
+        'simple-window-row-Dither',
+      ])
+        tester.getTopLeft(find.byKey(Key(k))).dy,
+    ];
+    expect(tops, orderedEquals([...tops]..sort()));
   });
 
   testWidgets('Dither every: frames up and down, Off below 1, kept in the profile', (tester) async {

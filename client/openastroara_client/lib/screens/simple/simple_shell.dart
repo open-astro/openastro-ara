@@ -14,7 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/library/live_library_state.dart' show libraryFilterProvider;
 import '../../state/time_sync_state.dart' show timeSyncApiProvider;
 import '../../state/sky_atlas/tonight_sky_state.dart'
-    show planningSettingsBootstrapProvider, tonightSkyProvider;
+    show planningSettingsBootstrapProvider;
 import '../../models/frame_histogram.dart';
 import '../../models/guider_status.dart';
 import '../../services/equipment_device_api.dart' show describeEquipmentError;
@@ -506,6 +506,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       case SimpleSkyHit(:final suggestion):
         // As Plan's search: the sky, pointed at it, its card offering Image this.
         setState(() => _sky = true);
+        ref
+            .read(planetariumSelectionProvider.notifier)
+            .set(simplePickDso(ref, suggestion.dso));
         ref.read(planetariumSearchProvider.notifier).search(suggestion.label);
       case SimpleSettingHit(section: 'Guide'):
         _pickMode(SimpleModeScreen.guide);
@@ -532,11 +535,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         builder: (albumContext) => SkyAlbumScreen(
           onImageTarget: (d) {
             // Read while the album still watches the ranker (it auto-disposes).
-            final sel = simpleSelectionOfDso(
-              d,
-              ref.read(tonightSkyProvider).value ?? const [],
-              latitudeDeg: ref.read(siteSettingsProvider).latitudeDeg,
-            );
+            final sel = simplePickDso(ref, d);
             Navigator.of(albumContext).pop();
             ref.read(planetariumSelectionProvider.notifier).set(sel);
             _imagePick();
@@ -748,7 +747,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         simplePolarActive(ref.watch(polarAlignLiveProvider));
     // Focus can show its run's frame, measured stars circled, when asked.
     // Manual shows the Bahtinov readout's crop, spikes and all, there.
-    final focusFrame = shown != SimpleModeScreen.focus
+    // Preview on the guide camera shows the frames the guider gives it.
+    final focusFrame = shown == SimpleModeScreen.preview
+        ? (simplePreviewGuide(ref)
+              ? ref.watch(guideFocusProvider.select((l) => l.frame))
+              : null)
+        : shown != SimpleModeScreen.focus
         ? null
         : ref.watch(simpleFocusScopeProvider) == SimpleFocusScope.guide
         ? ref.watch(guideFocusProvider.select((l) => l.frame))
@@ -757,11 +761,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         : ref.watch(simpleFocusStarsShownProvider)
         ? ref.watch(autofocusLiveProvider.select((l) => l.frame))
         : null;
+    // On the guide camera only its own frames count: the main camera's last
+    // one would read as the guide camera's.
+    final guidePreview = simpleShowsGuidePreview(ref);
     final hasFrame =
         polarFrame ||
         focusFrame != null ||
-        ref.watch(lastCapturedFrameIdProvider) != null ||
-        ref.watch(liveViewControllerProvider);
+        (!guidePreview &&
+            (ref.watch(lastCapturedFrameIdProvider) != null ||
+                ref.watch(liveViewControllerProvider)));
     // The first frame takes the screen back from a Sky opened before it.
     if (hasFrame && !_hadFrame) _sky = false;
     _hadFrame = hasFrame;
@@ -973,7 +981,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             child: IgnorePointer(
                               child: Center(
                                 child: Text(
-                                  context.l10n.shellTapShutter,
+                                  !guidePreview
+                                      ? context.l10n.shellTapShutter
+                                      : ref.watch(
+                                          guideFocusProvider.select(
+                                            (g) => g.status.active,
+                                          ),
+                                        )
+                                      ? context.l10n.guideFocusStarting
+                                      : context.l10n.previewGuideEmpty,
                                   style: TextStyle(
                                     fontSize: 20,
                                     letterSpacing: 2,
@@ -1134,12 +1150,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   left: 0,
                                   right: kSimpleInset * 2 + railWidth,
                                   top: popoverTop,
-                                  bottom: guidedStep
-                                      ? betweenBottom
-                                      : popoverBottom,
+                                  // Plan's bottom limit; the plan squares,
+                                  // which its sheet moves, stay clear.
+                                  bottom: planSquares && !guidedStep
+                                      ? popoverBottom
+                                      : betweenBottom,
                                   child: CustomSingleChildLayout(
                                     delegate: _BesideRail(
-                                      centre: guidedStep,
+                                      centre:
+                                          guidedStep ||
+                                          (_popover == _Popover.settings &&
+                                              shown == SimpleModeScreen.guide),
                                       preferredTop: math.max(
                                         0,
                                         rightRailTop - popoverTop,
@@ -1428,7 +1449,7 @@ class _Fade extends StatelessWidget {
   }
 }
 
-/// One floating panel: overlay scrim, 10 px corners, no border.
+/// One floating panel: overlay scrim, 10 px corners, a Hairline contour.
 /// Every Simple Mode panel's look: the 90 % scrim over a blur of the image
 /// behind ([AraBlur.panel]), first the Settings sheet's and the device
 /// windows', now every panel's, for legibility (user, 2026-11-04).
@@ -1444,6 +1465,11 @@ class SimplePanel extends StatelessWidget {
       key: const Key('simple-frosted-surface'),
       padding: padding,
       decoration: const BoxDecoration(color: AraColors.overlayScrim),
+      // On top, not a border, so the contour takes no room from the content.
+      foregroundDecoration: BoxDecoration(
+        border: Border.all(color: AraColors.border),
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: child,
     ),
   );
@@ -1875,7 +1901,7 @@ class _RightRail extends ConsumerWidget {
             const PolarAlignSettings(),
         ref.context.l10n,
       ),
-      _ => simpleSettingsSummary(ref),
+      _ => simpleSettingsSummary(context, ref),
     };
     return named == null
         ? label
@@ -2097,7 +2123,8 @@ bool _guidingShown(WidgetRef ref) => ref.watch(
 );
 
 // The histogram is for saved frames (the daemon analyses those).
-String? _histogramFrame(WidgetRef ref) => ref.watch(liveViewControllerProvider)
+String? _histogramFrame(WidgetRef ref) =>
+    ref.watch(liveViewControllerProvider) || simpleShowsGuidePreview(ref)
     ? null
     : ref.watch(lastCapturedFrameIdProvider);
 

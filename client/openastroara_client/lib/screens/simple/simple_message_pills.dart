@@ -106,7 +106,10 @@ class _SimpleMessagePillsState extends ConsumerState<SimpleMessagePills> {
             child: simpleFrost(
               Material(
               color: AraColors.overlayScrim,
-              borderRadius: BorderRadius.circular(10),
+              shape: RoundedRectangleBorder(
+                side: const BorderSide(color: AraColors.border),
+                borderRadius: BorderRadius.circular(10),
+              ),
               child: InkWell(
                 key: const Key('simple-messages-more'),
                 borderRadius: BorderRadius.circular(10),
@@ -183,7 +186,7 @@ class _Pill extends ConsumerWidget {
         decoration: BoxDecoration(
           color: AraColors.overlayScrim,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: outline ?? Colors.transparent),
+          border: Border.all(color: outline ?? AraColors.border),
         ),
         child: Stack(
           children: [

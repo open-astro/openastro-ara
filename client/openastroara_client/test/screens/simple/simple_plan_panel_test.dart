@@ -509,6 +509,28 @@ void main() {
     expect(simpleSelectionOf(later).belowHorizon, isTrue);
   });
 
+  test('the altitude of a position from the site at a moment', () {
+    // At J2000.0 the sidereal time at longitude 0 is 280.46°: a star there with the site's declination is overhead.
+    final utc = DateTime.utc(2000, 1, 1, 12);
+    expect(simpleAltitudeDeg(280.46, -33, latitudeDeg: -33, longitudeDeg: 0, utc: utc), closeTo(90, 0.1));
+    expect(simpleAltitudeDeg(100.46, -33, latitudeDeg: -33, longitudeDeg: 0, utc: utc), closeTo(-24, 0.1),
+        reason: 'twelve hours from the meridian');
+    // Away from the epoch and off the prime meridian: the time and the site both count (review, #1708).
+    // The expected value is from the IAU 1982 sidereal-time polynomial, not this formula.
+    expect(simpleAltitudeDeg(10.68, 41.27, latitudeDeg: 40, longitudeDeg: -75, utc: DateTime.utc(2026, 11, 9, 3)),
+        closeTo(84.08, 0.05));
+  });
+
+  test('an object outside the ranking still gets its real altitude, so it is not called below the horizon', () {
+    const up = PlanningDso(id: 'X1', name: 'Overhead', type: 'G', magnitude: 9, raDeg: 280.46, decDeg: -33);
+    const down = PlanningDso(id: 'X2', name: 'Under', type: 'G', magnitude: 9, raDeg: 100.46, decDeg: -33);
+    final utc = DateTime.utc(2000, 1, 1, 12);
+    final high = simpleSelectionOfDso(up, const [], latitudeDeg: -33, longitudeDeg: 0, utc: utc);
+    expect(high.altDeg, closeTo(90, 0.1));
+    expect(high.belowHorizon, isFalse);
+    expect(simpleSelectionOfDso(down, const [], latitudeDeg: -33, longitudeDeg: 0, utc: utc).belowHorizon, isTrue);
+  });
+
   test('an album card becomes the selection: the ranker row when listed, else the catalog position', () {
     const m31 = PlanningDso(
         id: 'NGC0224', name: 'Andromeda Galaxy', type: 'G', magnitude: 3.4, raDeg: 10.68, decDeg: 41.27,
@@ -577,6 +599,13 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-run-queue')));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('a plan on a rig with no filter wheel never stops to ask for a filter change', (tester) async {
+    final (_, seq) = await run(tester);
+    await create(tester);
+    expect(seq.bodies, isNotEmpty);
+    expect(seq.bodies.toString(), isNot(contains('WaitForUser')));
+  });
 
   Future<void> imaging(WidgetTester tester, ProviderContainer c, _Seq seq, SequenceRunStateInfo state) async {
     seq.runState = state;
@@ -789,7 +818,7 @@ void main() {
       expect(c.read(simpleRunProvider).targets.single.gain, 200, reason: 'kept with the target, for an edit');
     });
 
-    testWidgets('typing offers matching objects as you go; tapping one searches it', (tester) async {
+    testWidgets('typing offers matching objects as you go; tapping one picks it and the sheet stays', (tester) async {
       var showSky = 0;
       final c = await _pump(
           tester,
@@ -809,10 +838,16 @@ void main() {
       expect(find.textContaining('M 31'), findsOneWidget);
       expect(find.textContaining('Andromeda Galaxy'), findsOneWidget, reason: 'the common name beside the designation');
       expect(tester.getSize(find.byKey(const Key('simple-run-suggestion-0'))).height, greaterThanOrEqualTo(44));
+      FocusNode field() => tester
+          .widget<EditableText>(find.descendant(of: find.byKey(const Key('simple-run-search')), matching: find.byType(EditableText)))
+          .focusNode;
+      expect(field().hasFocus, isTrue, reason: 'precondition: typing in it');
       await tester.tap(find.textContaining('M 31'));
       await tester.pump();
-      expect(c.read(planetariumSearchProvider), 'M 31');
-      expect(showSky, 1);
+      expect(field().hasFocus, isFalse, reason: 'on an iPad the keyboard would stay over the sheet');
+      expect(c.read(planetariumSelectionProvider)?.name, 'Andromeda Galaxy', reason: 'the pick is the target at once');
+      expect(c.read(planetariumSearchProvider), isNull, reason: 'nothing to look up');
+      expect(showSky, 0, reason: 'the Plan sheet stays up');
       expect(find.byKey(const Key('simple-run-suggestion-0')), findsNothing, reason: 'the list closes on a pick');
     });
 

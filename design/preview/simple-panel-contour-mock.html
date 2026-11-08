@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simple Mode Panel Contour</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: three crops side by side at the spot that failed on the night, then one full iPad stage.
+     Single dark look on purpose: DESIGN.md tokens (lib/theme/ara_colors.dart), as the other design/preview mocks. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --hair: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+    --ok: #4CAF50; --info: #42A5F5; --link: #64B5F6; --sel: #1976D2; --tile: rgba(56,56,56,.55); --errt: #FF8A80; --err: #E53935;
+    --scrim: rgba(26,26,26,.9);
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys);
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+  body.night .filterable { filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(.75); }
+  .page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; }
+  h2 { font-size: 15px; font-weight: 600; margin: 8px 0 0; }
+  p.note { color: var(--text2); margin: 0; max-width: 78ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
+  .group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--hair); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--hair); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+  .crops { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .crop-card { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .crop-card b { font-size: 13px; font-weight: 600; }
+  .crop-card span { color: var(--text2); font-size: 12px; }
+  .crop { position: relative; height: 300px; overflow: hidden; border-radius: 10px; border: 1px solid #2a2a2a; }
+  .crop .ipad { position: absolute; top: 0; left: 0; transform-origin: 0 0; border: 0; border-radius: 0; }
+  .stage-wrap { overflow-x: auto; }
+  @media (max-width: 760px) { .crops { grid-template-columns: minmax(0, 1fr); } }
+
+  .ipad { width: 1024px; height: 640px; position: relative; overflow: hidden; border-radius: 18px; border: 1px solid #333; background: #202020; flex: none; }
+  .frame { position: absolute; left: 190px; right: 142px; top: 0; bottom: 0; background-size: 256px 256px; }
+  .ipad.grey .frame { background-color: #424244; }
+  .ipad.sky .frame { background-color: #0b0c10; }
+  .ipad.flat .frame { background-color: #f4f4f4; }
+  .star { position: absolute; width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid #4CD964; }
+  .ipad.flat .star { display: none; }
+
+  /* The contour is drawn on top of the surface (Flutter: foregroundDecoration), so nothing moves by a pixel. */
+  .sf { background: var(--scrim); border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line, transparent); }
+  .ipad.none { --line: transparent; }
+  .ipad.hair { --line: #404040; }
+  .ipad.light { --line: #A0A0A0; }
+
+  .strip { position: absolute; left: 16px; top: 16px; right: 16px; height: 56px; display: flex; align-items: center; gap: 16px; padding: 0 14px; font-size: 12px; color: var(--text2); }
+  .dotx { display: inline-flex; gap: 6px; align-items: center; } .dotx i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .strip .sp { flex: 1; }
+  .rail { position: absolute; left: 16px; top: 220px; width: 76px; display: flex; flex-direction: column; gap: 14px; padding: 12px 6px; font-size: 12px; color: var(--text2); text-align: center; }
+  .pill { position: absolute; right: 16px; top: 88px; height: 36px; padding: 0 14px; display: flex; gap: 8px; align-items: center; font-size: 13px; white-space: nowrap; }
+  .pill i { width: 9px; height: 9px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--info); }
+  .pill em { font-style: normal; color: var(--text2); }
+  .msg { position: absolute; left: 206px; top: 88px; width: 300px; padding: 10px 12px; font-size: 13px; line-height: 1.35; }
+  .msg b { font-weight: 500; } .msg span { color: var(--errt); }
+  .right { position: absolute; right: 16px; top: 250px; width: 72px; padding: 10px 4px; display: flex; flex-direction: column; align-items: center; gap: 10px; font-size: 12px; }
+  .shutter { width: 46px; height: 46px; border-radius: 50%; border: 2px solid #eee; display: grid; place-items: center; }
+  .shutter u { width: 18px; height: 18px; background: var(--err); border-radius: 3px; display: block; }
+
+  .panel { position: absolute; right: 100px; top: 136px; width: 400px; padding: 12px 16px; display: flex; flex-direction: column; gap: 4px; }
+  .pseg { display: grid; grid-template-columns: 1fr 1fr; background: var(--tile); border-radius: 8px; overflow: hidden; }
+  .pseg div { height: 40px; display: grid; place-items: center; color: var(--text2); font-size: 14px; }
+  .pseg .on { background: #1565C0; color: #fff; border-radius: 8px; }
+  .row { display: flex; align-items: center; gap: 10px; min-height: 40px; color: var(--link); font-size: 14px; }
+  .row .sp { flex: 1; } .row small { color: var(--text2); font-size: 12px; }
+  .mini { display: inline-grid; grid-template-columns: 1fr 1fr; width: 92px; background: var(--tile); border-radius: 8px; overflow: hidden; }
+  .mini div { height: 36px; display: grid; place-items: center; color: var(--text2); font-size: 13px; }
+  .mini .on { background: #1565C0; color: #fff; }
+  .fact { color: var(--text2); font-size: 12px; }
+  .hfr { font-size: 32px; line-height: 1.15; }
+  .panel svg { width: 100%; height: 160px; display: block; }
+</style>
+
+<div class="page">
+  <h1>Simple Mode panel contour</h1>
+  <p class="note">The crops show the spot from the night's screenshot: the Focus panel sitting half over the frame and half over the dark area beside it. Pick the background and compare. Nothing shifts between versions: the line is drawn on top of the panel.</p>
+
+  <div class="controls">
+    <div class="group"><span class="lbl">Behind the panel</span>
+      <div class="seg" id="bg">
+        <button data-v="grey" aria-pressed="true">Grey frame</button>
+        <button data-v="sky" aria-pressed="false">Dark sky</button>
+        <button data-v="flat" aria-pressed="false">White flat</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">Night mode</span>
+      <div class="seg" id="night">
+        <button data-v="off" aria-pressed="true">Off</button>
+        <button data-v="on" aria-pressed="false">On</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="crops">
+    <div class="crop-card"><b>Today</b><span>No contour</span><div class="crop" data-c="none"></div></div>
+    <div class="crop-card"><b>A. Hairline</b><span>1 px #404040, the existing border colour</span><div class="crop" data-c="hair"></div></div>
+    <div class="crop-card"><b>B. Light outline</b><span>1 px #A0A0A0, the existing secondary text colour</span><div class="crop" data-c="light"></div></div>
+  </div>
+
+  <h2>Whole screen</h2>
+  <div class="controls">
+    <div class="group"><span class="lbl">Contour</span>
+      <div class="seg" id="full">
+        <button data-v="none" aria-pressed="false">Today</button>
+        <button data-v="hair" aria-pressed="true">A. Hairline</button>
+        <button data-v="light" aria-pressed="false">B. Light outline</button>
+      </div>
+    </div>
+  </div>
+  <div class="stage-wrap"><div id="stage"></div></div>
+  <p class="note">Every floating surface in this picture gets the line: the status strip, both rails, the status pill, the message pill and the mode panel. Example readings only.</p>
+</div>
+
+<script>
+  // Sensor noise for the frame, drawn once and shared by every stage.
+  function noise(alpha) {
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const x = c.getContext('2d'), d = x.createImageData(256, 256);
+    for (let i = 0; i < d.data.length; i += 4) {
+      const v = Math.random() * 255;
+      d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = Math.random() * alpha;
+    }
+    x.putImageData(d, 0, 0);
+    return c.toDataURL();
+  }
+  const grain = noise(38);
+
+  const stars = [[260,190],[330,300],[420,160],[470,420],[300,520],[560,250],[610,590],[720,120],[860,210],[880,560],[400,600],[640,110]];
+
+  function curve() {
+    // Example V-curve, position 125 to 375, best near 236.
+    const L = 42, R = 360, T = 8, B = 118, maxY = 3.7;
+    const xs = p => L + (p - 125) / 250 * (R - L), ys = h => B - h / maxY * (B - T);
+    const pts = []; for (let p = 145; p <= 355; p += 16.2) pts.push([p, 0.96 + Math.pow((p - 236) / 74, 2)]);
+    const dots = pts.map(([p, h]) => `<circle cx="${xs(p).toFixed(1)}" cy="${ys(h).toFixed(1)}" r="4" fill="#E0E0E0"/>`).join('');
+    const line = pts.map(([p, h], i) => `${i ? 'L' : 'M'}${xs(p).toFixed(1)} ${ys(h).toFixed(1)}`).join(' ');
+    const yt = [0, 1, 2, 3].map(v => `<line x1="${L}" x2="${R}" y1="${ys(v)}" y2="${ys(v)}" stroke="#404040" stroke-width=".5"/><text x="${L - 6}" y="${ys(v) + 4}" text-anchor="end">${v}</text>`).join('');
+    const xt = [125, 200, 300, 375].map(p => `<text x="${xs(p)}" y="${B + 16}" text-anchor="middle">${p}</text>`).join('');
+    return `<svg viewBox="0 0 368 160" fill="#E0E0E0" font-size="11" font-family="system-ui,sans-serif" role="img" aria-label="Example V-curve of HFR against focuser position">
+      <rect x="${L}" y="${T}" width="${R - L}" height="${B - T}" fill="none" stroke="#404040"/>${yt}${xt}
+      <path d="${line}" fill="none" stroke="#42A5F5" stroke-width="2"/>${dots}
+      <line x1="${xs(236)}" x2="${xs(236)}" y1="${T}" y2="${B}" stroke="#42A5F5" stroke-dasharray="4 3"/>
+      <text x="${(L + R) / 2}" y="${B + 36}" text-anchor="middle">Focuser position</text>
+      <text transform="translate(10 ${(T + B) / 2}) rotate(-90)" text-anchor="middle">HFR (px)</text></svg>`;
+  }
+
+  function ipad(contour, bg) {
+    const dots = stars.map(([x, y]) => `<div class="star" style="left:${x - 190}px;top:${y}px"></div>`).join('');
+    return `<div class="ipad filterable ${contour} ${bg}">
+      <div class="frame" style="background-image:url(${grain})">${dots}</div>
+      <div class="strip sf"><span class="dotx"><i></i>Camera</span><span class="dotx"><i></i>Mount</span><span class="dotx"><i></i>Guider</span><span class="dotx"><i></i>Focuser</span><span class="sp"></span><span>Search</span><span>Settings</span></div>
+      <div class="rail sf"><div>Sky</div><div>Info</div><div>Library</div><div>Sky Album</div></div>
+      <div class="msg sf"><b>Polar alignment failed</b> <span>· the seed frame failed to solve after 3 attempts</span></div>
+      <div class="pill sf"><i></i>Focus <em>Measuring focuser backlash…</em></div>
+      <div class="right sf"><div>Focus</div><div class="shutter"><u></u></div><div>Auto</div></div>
+      <div class="panel sf">
+        <div class="pseg"><div class="on">Main</div><div>Guide</div></div>
+        <div class="pseg"><div class="on">Auto</div><div>Manual</div></div>
+        <div class="row">Sweeping, probe 10 of 15<span class="sp"></span><small>Measured stars</small><span class="mini"><div class="on">On</div><div>Off</div></span></div>
+        <div class="fact">Focuser at 236 · 14.9 °C · ZWO EAF</div>
+        <div class="hfr">HFR 0.96</div>
+        ${curve()}
+      </div>
+    </div>`;
+  }
+
+  const state = { bg: 'grey', full: 'hair' };
+
+  function render() {
+    document.querySelectorAll('.crop').forEach(el => {
+      el.innerHTML = ipad(el.dataset.c, state.bg);
+      const stage = el.firstElementChild;
+      // Show x 500 to 1024, y 120 to 640 of the stage, scaled to the card.
+      const s = Math.min(el.clientWidth / 524, 1);
+      stage.style.transform = `scale(${s})`;
+      stage.style.left = `${-500 * s}px`;
+      stage.style.top = `${-125 * s}px`;
+      el.style.height = `${Math.round(515 * s)}px`;
+    });
+    document.getElementById('stage').innerHTML = ipad(state.full, state.bg);
+  }
+
+  function seg(id, apply) {
+    const root = document.getElementById(id);
+    root.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      root.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      apply(b.dataset.v);
+    });
+  }
+  seg('bg', v => { state.bg = v; render(); });
+  seg('full', v => { state.full = v; render(); });
+  seg('night', v => document.body.classList.toggle('night', v === 'on'));
+  addEventListener('resize', render);
+  render();
+</script>

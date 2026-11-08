@@ -1251,6 +1251,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 ["current_instruction_description"] = run.CurrentInstructionDescription,
                 ["current_target_name"] = run.CurrentTargetName,
                 ["current_instruction_progress"] = run.CurrentInstructionProgress,
+                ["frames_captured"] = run.FramesCaptured,
             };
             var (estimatedTotal, estimatedRemaining) = run.EstimatedSeconds();
             payload["estimated_total_seconds"] = estimatedTotal;

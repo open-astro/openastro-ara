@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/sequencer/sequence_list_state.dart';
+import '../state/simple_messages_state.dart';
+import '../state/simple_mode_state.dart';
 import '../state/ws/ws_providers.dart';
 import '../util/friendly_error.dart';
 import '../l10n/l10n.dart';
@@ -34,14 +36,35 @@ class _AutoFlatsPromptListenerState
 
   @override
   Widget build(BuildContext context) {
+    final simple =
+        (ref.watch(simpleModeProvider).value ?? false) &&
+        (ref.watch(simpleModeFeatureProvider).value ?? false);
     ref.listen(wsEventsProvider, (previous, next) {
       final event = next.asData?.value;
       if (event == null || event.type != 'sequence.auto_flats_prompt') return;
+      // Simple Mode has no popups; an unanswered run ends without flats.
+      if (simple) {
+        _sayNoFlats();
+        return;
+      }
       final sequenceId = event.payload['sequence_id'];
       if (sequenceId is! String || sequenceId.isEmpty) return;
       _showPrompt(sequenceId);
     });
     return widget.child;
+  }
+
+  /// Stays until closed: the run starts this, and the imager may be gone by
+  /// the time a fading pill would have said it.
+  void _sayNoFlats() {
+    final messages = ref.read(simpleMessagesProvider.notifier);
+    final title = context.l10n.simpleNoFlatsThisRun;
+    if (ref.read(simpleMessagesProvider).any((m) => m.title == title)) return;
+    messages.show(
+      SimpleMessageKind.warning,
+      title,
+      detail: context.l10n.simpleNoFlatsThisRunDetail,
+    );
   }
 
   void _showPrompt(String sequenceId) {

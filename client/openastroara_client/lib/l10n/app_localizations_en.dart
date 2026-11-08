@@ -695,6 +695,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get previewStars => 'Stars';
 
   @override
+  String get previewStopGuideFrames => 'Stop the guide camera\'s frames first.';
+
+  @override
+  String get previewGuideEmpty =>
+      'Tap the shutter for the guide camera\'s frames';
+
+  @override
+  String get simpleNoFlatsThisRun => 'No flats this run';
+
+  @override
+  String get simpleNoFlatsThisRunDetail =>
+      'Your profile asks before each run, and Simple Mode doesn\'t ask. Turn off Simple Mode in Settings → Rig, then set Capture calibration after a sequence under Settings → Session → Calibration.';
+
+  @override
+  String get previewCamera => 'Camera';
+
+  @override
   String get previewExposure => 'Exposure';
 
   @override
@@ -1828,6 +1845,22 @@ class AppLocalizationsEn extends AppLocalizations {
       'CAMERA COOLER STILL ON (switching it off failed)';
 
   @override
+  String get estopFailGuideFocus =>
+      'GUIDE-CAMERA FOCUS LOOP MAY STILL BE RUNNING (stop failed)';
+
+  @override
+  String get estopFailBahtinov =>
+      'BAHTINOV READOUT MAY STILL BE RUNNING (stop failed)';
+
+  @override
+  String get estopFailAutofocus =>
+      'AUTOFOCUS MAY STILL BE RUNNING (cancel failed)';
+
+  @override
+  String get estopFailPolarAlign =>
+      'POLAR ALIGNMENT MAY STILL BE RUNNING (stop failed)';
+
+  @override
   String estopFailOther(String step) {
     return '$step FAILED';
   }
@@ -2465,6 +2498,33 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get guideStartFailedNoReason =>
       'Guiding didn\'t start. See the Guider log for why.';
+
+  @override
+  String get guideAggressiveness => 'Aggressiveness';
+
+  @override
+  String get guideAxisRa => 'RA';
+
+  @override
+  String get guideAxisDec => 'Dec';
+
+  @override
+  String get guideRaAggressiveness => 'RA aggressiveness';
+
+  @override
+  String get guideDecAggressiveness => 'Dec aggressiveness';
+
+  @override
+  String get guideDecMode => 'Dec guide mode';
+
+  @override
+  String get guideDecAuto => 'Auto';
+
+  @override
+  String get guideDecNorth => 'North';
+
+  @override
+  String get guideDecSouth => 'South';
 
   @override
   String get guideExposureOwn => 'The guider\'s own';

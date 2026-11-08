@@ -21,6 +21,7 @@ import 'simple_device_windows.dart'
     show
         SimpleGuideGainSlider,
         simpleSaveGuider,
+        simpleSliderRow,
         simpleWindowRow,
         simpleWindowStepper;
 import 'simple_preview_panel.dart'
@@ -271,7 +272,7 @@ class SimpleGuidePanel extends ConsumerWidget {
                 onPressed: ref.read(nightSetupProvider.notifier).next,
                 child: Text(l10n.guidedDoneStartImaging),
               ),
-            const Divider(height: AraSpace.s16),
+            const Divider(height: AraSpace.s8),
             // The guide camera's exposure, picked as Preview's; set live.
             SimplePresetTile<int>(
               key: const Key('simple-guide-exposure'),
@@ -291,7 +292,40 @@ class SimpleGuidePanel extends ConsumerWidget {
                 live: true,
               ),
             ),
-            const SimpleGuideGainSlider(),
+            const SimpleGuideGainSlider(oneLine: true),
+            Text(l10n.guideAggressiveness, style: AraText.caption),
+            _SimpleAggressiveness(
+              id: 'ra',
+              axis: l10n.guideAxisRa,
+              label: l10n.guideRaAggressiveness,
+              value: phd2.raAggressiveness,
+              set: (p, v) => p.setRaAggressiveness(v),
+            ),
+            _SimpleAggressiveness(
+              id: 'dec',
+              axis: l10n.guideAxisDec,
+              label: l10n.guideDecAggressiveness,
+              value: phd2.decAggressiveness,
+              set: (p, v) => p.setDecAggressiveness(v),
+            ),
+            SimplePresetTile<String>(
+              key: const Key('simple-guide-dec-mode'),
+              label: l10n.guideDecMode,
+              value: phd2.decGuideMode,
+              options: const ['auto', 'north', 'south', 'off'],
+              format: (m) => switch (m) {
+                'north' => l10n.guideDecNorth,
+                'south' => l10n.guideDecSouth,
+                'off' => l10n.deviceOff,
+                _ => l10n.guideDecAuto,
+              },
+              onSelected: (m) => simpleSaveGuider(
+                context,
+                ref,
+                (p) => p.setDecGuideMode(m),
+                live: true,
+              ),
+            ),
             simpleWindowRow(
               l10n.deviceDither,
               id: 'Dither',
@@ -340,4 +374,65 @@ class SimpleGuidePanel extends ConsumerWidget {
     WidgetRef ref,
     void Function(Phd2SettingsNotifier) change,
   ) => simpleSaveGuider(context, ref, change);
+}
+
+/// How strongly the guider corrects one axis: 0-100 % in 5s, set when the
+/// thumb is let go and sent to the guider live, so guiding goes on.
+class _SimpleAggressiveness extends ConsumerStatefulWidget {
+  const _SimpleAggressiveness({
+    required this.id,
+    required this.axis,
+    required this.label,
+    required this.value,
+    required this.set,
+  });
+
+  final String id;
+  final String axis;
+  final String label;
+  final double value;
+  final void Function(Phd2SettingsNotifier, double) set;
+
+  @override
+  ConsumerState<_SimpleAggressiveness> createState() =>
+      _SimpleAggressivenessState();
+}
+
+class _SimpleAggressivenessState extends ConsumerState<_SimpleAggressiveness> {
+  double? _drag;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = _drag ?? widget.value;
+    final percent = '${(value * 100).round()} %';
+    return simpleSliderRow(
+      context,
+      widget.axis,
+      // Merged: Slider's own node carries the value as its label.
+      MergeSemantics(
+        child: Semantics(
+          label: widget.label,
+          child: Slider(
+            key: Key('simple-guide-aggressiveness-${widget.id}'),
+            min: 0,
+            max: 1,
+            divisions: 20,
+            value: value.clamp(0, 1),
+            label: percent,
+            onChanged: (v) => setState(() => _drag = v),
+            onChangeEnd: (v) {
+              setState(() => _drag = null);
+              simpleSaveGuider(
+                context,
+                ref,
+                (p) => widget.set(p, v),
+                live: true,
+              );
+            },
+          ),
+        ),
+      ),
+      percent,
+    );
+  }
 }

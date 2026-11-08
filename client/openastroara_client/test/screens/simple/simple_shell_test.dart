@@ -98,7 +98,9 @@ import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
-import 'package:openastroara/theme/ara_metrics.dart' show AraBlur;
+import 'package:openastroara/theme/ara_metrics.dart' show AraBlur, AraSpace;
+import 'package:openastroara/widgets/imaging/frame_viewer.dart' show FrameViewer;
+import 'package:openastroara/models/guide_focus.dart';
 import 'package:openastroara/screens/simple/simple_safety_alarm.dart';
 import 'package:openastroara/state/night_mode_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
@@ -430,6 +432,12 @@ class _Clock implements TimeSyncClient {
   Future<void> pushClientTime(DateTime utcNow) async => pushed.add(utcNow);
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+class _GuideStarting extends GuideFocusNotifier {
+  @override
+  GuideFocusLive build() =>
+      const GuideFocusLive(status: GuideFocusStatus(active: true, state: 'running', exposureSec: 2, seq: 0));
 }
 
 class _GuiderUp extends GuiderStatusNotifier {
@@ -926,6 +934,18 @@ void main() {
     expect(find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.byIcon(Icons.tune)), findsOneWidget);
   });
 
+  testWidgets("Preview with Guide picked fills the screen with the guide camera's frames", (tester) async {
+    final container = await _pump(tester, const Size(1024, 768), gear: [
+      guideFocusProvider.overrideWith(_GuideFrame.new),
+      guiderStatusProvider.overrideWith(() => _GuiderAt('stopped')),
+    ]);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-focus-frame')), findsNothing, reason: 'the main camera to start');
+    container.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-focus-frame')), findsOneWidget);
+  });
+
   testWidgets("Focus: Measured stars On fills the screen with the run's frame, circles and all", (tester) async {
     final container = await _pump(tester, const Size(1024, 768), gear: [
       autofocusLiveProvider.overrideWith(() => _LiveFrame()),
@@ -1135,6 +1155,42 @@ void main() {
         reason: 'under the status pill');
   });
 
+  testWidgets("with the histogram showing, a mode panel stops above the bottom row, like Plan's sheet (user, 2026-11-09)",
+      (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final c = await _pump(tester, const Size(1024, 768), histogram: _histogram,
+        gear: [guiderStatusProvider.overrideWith(_GuiderUp.new)]);
+    await _frame(tester, c);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-guide')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final panel = tester.getRect(find.byKey(const Key('simple-guide-panel')));
+    final row = tester.getRect(find.byKey(const Key('simple-histogram')));
+    expect(panel.bottom, lessThanOrEqualTo(row.top - AraSpace.s8));
+  });
+
+  testWidgets("the Guider panel sits centred between the status pill and the bottom row, like Plan's sheet (user, 2026-11-09)",
+      (tester) async {
+    const pillBottom = kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight;
+    const roomBottom = 768 - kSimpleInset - kSimpleBarHeight; // a connected guider shows the bottom row
+    await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(_GuiderUp.new)]);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-guide')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final panel = tester.getRect(find.byKey(const Key('simple-guide-panel')));
+    expect(panel.center.dy, closeTo((pillBottom + roomBottom) / 2, 1));
+  });
+
   testWidgets('Guide is a mode: its shutter starts guiding, its chip shows the RMS and opens the Guide panel',
       (tester) async {
     // User, 2026-11-04: guiding moves from the guider's window to a mode on the rail.
@@ -1332,7 +1388,8 @@ void main() {
 
   testWidgets('the settings chip opens Exposure from a list, the Gain slider under it, Filter and Loop/Single',
       (tester) async {
-    final container = await _pump(tester, const Size(1024, 768));
+    final container = await _pump(tester, const Size(1024, 768),
+        gear: [filterWheelProvider.overrideWith(() => _FilterWheel(EquipmentConnectionState.connected))]);
     expect(find.text(_summary(container)), findsOneWidget, reason: 'the chip reads the settings');
     await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
@@ -1702,6 +1759,16 @@ void main() {
     expect(find.text('Edit M31'), findsNothing);
   });
 
+  testWidgets('a panel has the Hairline contour, drawn on top so nothing moves', (tester) async {
+    // The night's screenshot: over a frame or side area of its own colour a panel's edge disappeared.
+    await tester.pumpWidget(const MaterialApp(home: Center(child: SimplePanel(child: SizedBox(width: 120, height: 80)))));
+    expect(tester.getSize(find.byType(SimplePanel)), const Size(120, 80));
+    final surface = tester.widget<Container>(find.byKey(const Key('simple-frosted-surface')));
+    final line = surface.foregroundDecoration! as BoxDecoration;
+    expect((line.border! as Border).top, const BorderSide(color: AraColors.border));
+    expect(line.borderRadius, BorderRadius.circular(10));
+  });
+
   group('#1572 a rail or image tap while editing a queued target', () {
     Future<ProviderContainer> edit(WidgetTester tester) async {
       final container = await _pump(tester, const Size(1024, 768), plan: _queuedM31);
@@ -1914,6 +1981,33 @@ void main() {
     final clipped = tester.getRect(find.text('Clipped'));
     expect(clipped.top, greaterThan(hfr.top), reason: 'one fact per line');
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets("Preview on Guide with no guide frame says so, and does not show the main camera's last frame or histogram",
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), histogram: _histogram,
+        gear: [guiderStatusProvider.overrideWith(() => _GuiderAt('stopped'))]);
+    await _frame(tester, c);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-histogram')), findsOneWidget, reason: 'precondition: Main shows it');
+    c.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
+    await tester.pump();
+    await tester.pump();
+    expect(find.byType(FrameViewer), findsNothing);
+    expect(find.byKey(const Key('simple-histogram')), findsNothing);
+    expect(find.text("Tap the shutter for the guide camera's frames"), findsOneWidget);
+  });
+
+  testWidgets("Preview on Guide says Starting, not to tap the shutter, while the loop waits for its first frame", (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), gear: [
+      guideFocusProvider.overrideWith(_GuideStarting.new),
+      guiderStatusProvider.overrideWith(() => _GuiderAt('stopped')),
+    ]);
+    c.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Starting…'), findsOneWidget);
+    expect(find.text("Tap the shutter for the guide camera's frames"), findsNothing);
   });
 
   testWidgets('Info shows the last frame facts as tiles in the bottom-left corner', (tester) async {
@@ -2167,6 +2261,7 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-search-sky-0')));
     await tester.pump();
     expect(c.read(planetariumSearchProvider), 'M 31');
+    expect(c.read(planetariumSelectionProvider), isNotNull, reason: "the hit is Plan's target at once");
     expect(find.byKey(const Key('simple-planetarium')), findsOneWidget, reason: 'the sky, pointed at it');
   });
 
@@ -3490,7 +3585,7 @@ void main() {
     Focus.of(tester.element(fold)).requestFocus();
     await tester.pump();
     expect(find.ancestor(of: fold, matching: find.byWidgetPredicate((w) =>
-        w is DecoratedBox && (w.decoration as BoxDecoration).border != null)), findsOneWidget,
+        w is DecoratedBox && (w.decoration as BoxDecoration).border?.top.color == AraColors.accentInfo)), findsOneWidget,
         reason: 'a visible focus ring');
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
