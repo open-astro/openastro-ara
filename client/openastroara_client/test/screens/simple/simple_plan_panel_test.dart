@@ -515,6 +515,10 @@ void main() {
     expect(simpleAltitudeDeg(280.46, -33, latitudeDeg: -33, longitudeDeg: 0, utc: utc), closeTo(90, 0.1));
     expect(simpleAltitudeDeg(100.46, -33, latitudeDeg: -33, longitudeDeg: 0, utc: utc), closeTo(-24, 0.1),
         reason: 'twelve hours from the meridian');
+    // Away from the epoch and off the prime meridian: the time and the site both count (review, #1708).
+    // The expected value is from the IAU 1982 sidereal-time polynomial, not this formula.
+    expect(simpleAltitudeDeg(10.68, 41.27, latitudeDeg: 40, longitudeDeg: -75, utc: DateTime.utc(2026, 11, 9, 3)),
+        closeTo(84.08, 0.05));
   });
 
   test('an object outside the ranking still gets its real altitude, so it is not called below the horizon', () {
