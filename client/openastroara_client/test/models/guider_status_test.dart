@@ -79,6 +79,15 @@ void main() {
       expect(s.isGuiding, isFalse);
     });
 
+    test('the out-of-step reason makes a different status, so listeners rebuild (#1665)', () {
+      GuiderStatus at(String? reason) => GuiderStatus.fromJson(<String, dynamic>{
+        'state': 'connected',
+        'runtime': <String, dynamic>{'state': 'stopped', 'out_of_step_reason': reason},
+      });
+      expect(at('refused'), isNot(at(null)));
+      expect(at('refused'), at('refused'));
+    });
+
     test('a calibrating guider carries the leg, step and distance', () {
       final s = GuiderStatus.fromJson(<String, dynamic>{
         'device_id': 'phd2',

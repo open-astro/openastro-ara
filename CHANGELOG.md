@@ -37,6 +37,7 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ### Changed
 
+- Emergency Stop now stops the mount where it is: it aborts any slew or manual move and switches tracking off. It no longer parks, because a park is a slew that can repeat the fault you pressed Stop for. The API field `park_requested` is now `mount_stopped` on this path, and the failed step `park` is now `stop_mount` (#1672).
 - The architecture decisions now live in `docs/adr/`: nine accepted records cover the daemon and client split, Alpaca-only equipment, client-side planning, the trusted-LAN single-client model, the Wayland-only Linux client, ASTAP, GPS on the client and Simple Mode, and three proposed records (0011 to 0013) from an architecture review describe code that does not exist yet. `design/PORT_PLAYBOOK.md`, `design/README.md`, the Simple Mode brief and the Sky Album spec point at the records instead of repeating them.
 
 ### Fixed
@@ -48,6 +49,7 @@ at the top. This happens in the same commit that pushes the release tag.
 - A guide-camera focus loop left running can always be stopped: Simple Mode's Focus opens on Guide when it finds one running, Preview's Guide row stays selectable, and Emergency Stop now ends the loop too. Emergency Stop also stops the Bahtinov readout, a running autofocus and polar alignment.
 - Simple Mode: every floating panel and message pill now has a 1 px Hairline contour, so a panel no longer disappears when the frame or dark area behind it matches its colour. The line is drawn on top of the panel and moves nothing; a warning or error pill keeps its own colour.
 - Simple Mode: the autofocus V-curve in the Focus panel is now tall enough to read. The chart was 80 pt tall and its axes left the plot only 18 pt, so the curve was flat and the HFR labels collided; it is now 160 pt, as in the full UI.
+- After you create a profile that becomes active, the Guider now moves to that profile's guider twin. If its guider settings are refused, Start guiding, polar alignment, the dark library and the guide-camera focus loop refuse at once and say why, instead of using the previous profile's Guide Camera (#1665).
 - A start of guiding that fails now says why: the Guider's reason (for example its Guide Camera not connected) shows in a pill and the start ends at once instead of waiting out the 30 s guide-star timeout (#1664). A settle timeout after guiding has begun does not fail the start.
 - Simple Mode: a device window, the OpenAstro Ara sheet and Search no longer stay open on top of each other on a wide window (#1674). Opening one closes the others; before, the Ara sheet could hide a device window's labels and controls, such as a switch's On.
 - Emergency Stop now halts a turning rotator where it is (#1671). Before, the stop never reached the rotator: a move started from a window kept going, and a plan's rotate only stopped being waited on. A rotator that refuses the halt is called out as "ROTATOR HALT FAILED — it may still be turning". The Emergency Stop confirmation lists the rotator among what it does.

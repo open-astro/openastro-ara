@@ -18,10 +18,10 @@ import '../state/ws/client_session_state.dart';
 /// status bar. Press and hold for 2 s ("Hold to confirm", a fill sweeping
 /// across) → the daemon aborts
 /// the running sequence, halts the rotator, aborts the in-flight exposure, stops guiding,
-/// parks the mount, switches the flat panel light off and the camera's
+/// stops the mount where it is, switches the flat panel light off and the camera's
 /// cooler off. The snackbar
 /// reports honestly what each rung did (a dead mount says so instead of
-/// pretending it parked). Letting go early sends nothing. Keyboard and
+/// pretending it stopped). Letting go early sends nothing. Keyboard and
 /// screen-reader activation can't hold, so they get the confirm dialog
 /// ("Stop everything now?") instead; Simple Mode's versions, which show no
 /// popups, ask them to press again within 3 s (PRESS AGAIN).
@@ -217,13 +217,13 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
 
   /// Wire tokens → operator-facing failure phrases. Every attempted-but-
   /// failed rung is loud — a hung guider that kept correcting is exactly as
-  /// dangerous as an unparked mount, so no rung fails silently.
+  /// dangerous as a mount still moving, so no rung fails silently.
   static String _failurePhrase(AppLocalizations l, String rung) =>
       switch (rung) {
         'abort_runs' => l.estopFailAbortRuns,
         'abort_exposure' => l.estopFailAbortExposure,
         'stop_guiding' => l.estopFailStopGuiding,
-        'park' => l.estopFailPark,
+        'stop_mount' => l.estopFailStopMount,
         'halt_rotator' => l.estopFailRotator,
         'flat_panel_light_off' => l.estopFailFlatPanel,
         'cooler_off' => l.estopFailCooler,
@@ -244,7 +244,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
       r.runsAborted > 0 ? l.estopRunsAborted(r.runsAborted) : l.estopNoSequence,
       if (r.exposureAborted) l.estopExposureAborted,
       if (r.guidingStopped) l.estopGuidingStopped,
-      if (r.parkRequested) l.estopParkRequested,
+      if (r.mountStopped) l.estopMountStopped,
       if (r.flatPanelLightOff) l.estopFlatPanelOff,
       if (r.coolerOff) l.estopCoolerOff,
     ];

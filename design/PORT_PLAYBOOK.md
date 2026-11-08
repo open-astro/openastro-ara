@@ -1426,7 +1426,7 @@ When AI can't run the UI locally (e.g., CI environment, headless), AI states thi
 | `e2e_connect_and_idle.dart` | mDNS discovery → connect → server-state hydration → §60.4 snapshot matches WILMA's reconstructed state |
 | `e2e_run_mock_sequence.dart` | Connect → wizard with simulator profile → start 2-frame sequence → preview JPEGs appear → sequence completes cleanly |
 | `e2e_disconnect_reconnect_resume.dart` | Mid-sequence WS disconnect → wait 30 s → reconnect → resume protocol per §60.9 → caught-up state matches expected |
-| `e2e_emergency_stop.dart` | Start sequence → trigger emergency stop per §35.3 → mount parks, camera aborts, alarm fires per §35.5 |
+| `e2e_emergency_stop.dart` | Start sequence → trigger emergency stop per §35.3 → mount stops, camera aborts, alarm fires per §35.5 |
 | `e2e_changelog_modal.dart` | Update server version mid-session simulation → reconnect → changelog modal appears per §33.7 |
 
 **Test environment** (CI job):
@@ -2472,7 +2472,7 @@ Future: UPS GPIO signal pin can trigger a proactive checkpoint + park sequence a
 **Pause vs Abort vs Stop:**
 - **Pause** — described above; everything stays connected and ready; resume restores the running state
 - **Abort** — sequence ends; mount stays where it is; cooler stays on; user controls what happens next
-- **Emergency Stop** (§35.3) — sequence ends; mount parks per §35 safety policy; the cooler is switched straight off as the stop's last rung, whatever `cooler_warmup_on_session_end` says (§28.13 does not apply to it); equipment disconnects per safety policy
+- **Emergency Stop** (§35.3) — sequence ends; the mount stops where it is (§35.3 step 3); the cooler is switched straight off as the stop's last rung, whatever `cooler_warmup_on_session_end` says (§28.13 does not apply to it); equipment disconnects per safety policy
 
 ### 28.13 Cooler warmup at session end
 
@@ -4462,7 +4462,7 @@ Persistent **[Emergency Stop]** button in WILMA's main app shell (top-right of s
 Server shutdown sequence:
 1. Camera: abort current exposure
 2. Guider (PHD2): stop guiding
-3. Mount: park (or home if no park position configured)
+3. Mount: abort any slew or manual move, then switch tracking off, so it stops where it is. Never a park, a home or a slew: if the slew or park code is at fault, parking would repeat the fault. A parked mount gets neither call. Reported as `mount_stopped`; a fault in either call is the failed rung `stop_mount`, and tracking off is still attempted when the abort faults
 4. Filter wheel / focuser / rotator: leave in place (no auto-move; user can intervene). A rotator that is turning is halted where it is (ASCOM `Halt`, no target; reported as the failed rung `halt_rotator` when the halt faults), run right after the sequence abort, since aborting a run only stops the sequencer waiting on its move (#1671)
 5. Flat panel: turn off (if connected, and configured to do so)
 6. Camera cooler: switch off (if the camera is connected and its cooler is on; reported as `cooler_off`, a refusal as the failed rung `cooler_off`)
@@ -5771,7 +5771,7 @@ Execute fault's configured action per profile
    Continue   = log, keep going (use for benign / informational faults)
    Notify     = queued WebSocket event, sequence continues
    Pause      = sequence pauses at next safe point, equipment stays connected, user resumes manually
-   Abort+park = full §35.3 emergency stop sequence (camera abort, guider stop, mount park, etc.)
+   Abort+park = abort the sequence and park (camera abort, guider stop, mount park, etc.)
 ```
 
 Per-fault action is configurable in profile safety policies (§35 extension), with the defaults below.
@@ -8313,7 +8313,7 @@ Centered on one principle: **whenever the mount is moving autonomously, the user
 | Control | What it does | When visible | After triggering |
 |---|---|---|---|
 | **Stop Mount** (§57) | Issues Alpaca `AbortSlew()` — mount halts in place; nothing else touched | Contextual — only during autonomous slews | Sequence pauses; mount stays where halted; cooler/guider/etc. keep running. Modal prompts [Verify Position] / [Resume] / [Skip Target] / [End Session] |
-| **Emergency Stop** (§35.3) | Full session abort — camera abort, guider stop, mount park, sequence aborted | Persistent — always visible in WILMA shell | Session over |
+| **Emergency Stop** (§35.3) | Full session abort — camera abort, guider stop, mount stopped where it is, sequence aborted | Persistent — always visible in WILMA shell | Session over |
 
 Different buttons, different colors, different positions, different consequences. Stop Mount = "this slew is going somewhere I don't like." Emergency Stop = "kill everything now." Users learn the distinction quickly because each only appears when contextually relevant.
 
@@ -10322,6 +10322,8 @@ ARA profile "Field rig AM5"     ↔ PHD2 profile "ara-field-am5"
 
 PHD2 preserves per-profile calibration + dark library data, so switching ARA profiles never loses guider state for either rig.
 
+**The Guider follows the active profile (#1665).** Creating a profile that becomes active runs the same follow as selecting one, after the clone when the create is a duplicate. Creating without activating leaves the Guider alone. Unlike a select, the create runs the selection checks (#1306, #1308). A push refused by those checks still selects or creates the active profile's twin and sends no equipment selection. A refused or failed push, or a connect whose selection fails the same checks, leaves the Guider **out of step** with the reason recorded. A push or connect whose selection passes the checks clears it. A select's follow is not refused, but its selection is judged the same way after the push, so it cannot clear a bad selection. A disconnect makes the state unknown. While out of step, Start guiding, a run's Start Guiding, polar alignment, the dark library and defect map builds, and the guide-camera focus loop refuse up front with the reason and send no capture RPC. `runtime.out_of_step_reason` carries the same text.
+
 ### 63.5 Profile parameters ARA pushes to PHD2
 
 Captured by §37.3 Screen 10 wizard, pushed via `set_profile_setup` (which accepts any subset of fields):
@@ -10445,7 +10447,7 @@ If `openastro-phd2` is not installed (user opted out of Recommends, or removed i
 |---|---|---|
 | `GET` | `/api/v1/guider/status` | PHD2 lifecycle state + version + last-seen app state + connected equipment |
 | `POST` | `/api/v1/equipment/guider/restart` | Force `systemctl restart openastro-guider`; idempotent per §60.5. Only when the profile's guider host is this machine (§63.3 host gate, #1192) — for a remote host it is a logged no-op that still returns 202 |
-| `POST` | `/api/v1/guider/profile/push` | Push current ARA-profile params to PHD2; runs the disconnect-update-reconnect sequence. 409 disconnected guider; 422 when the post-push reconnect fails, or (#1306) when a bare `Alpaca …` selection has no Alpaca host/port to serve it (nothing is sent; the message names the slot) |
+| `POST` | `/api/v1/guider/profile/push` | Push current ARA-profile params to PHD2; runs the disconnect-update-reconnect sequence. 409 disconnected guider; 422 when the post-push reconnect fails, or (#1306) when a bare `Alpaca …` selection has no Alpaca host/port to serve it (no equipment selection is sent, but the active profile's twin still follows, #1665; the message names the slot) |
 | `POST` | `/api/v1/guider/dark-library/build` | Initiate dark library build (with prompt-cover modal flow on client) |
 | `GET` | `/api/v1/guider/dark-library/state` | Returns `get_calibration_files_status` result (paths, exists, loaded, frame count) |
 | `DELETE` | `/api/v1/guider/dark-library` | `delete_calibration_files({delete_dark_library: true})` for current profile |

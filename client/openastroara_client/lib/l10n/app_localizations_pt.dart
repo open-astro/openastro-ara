@@ -1787,7 +1787,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get estopGuidingStopped => 'guiding stopped';
 
   @override
-  String get estopParkRequested => 'mount told to park';
+  String get estopMountStopped => 'mount stopped';
 
   @override
   String get estopFlatPanelOff => 'flat panel light off';
@@ -1817,7 +1817,7 @@ class AppLocalizationsPt extends AppLocalizations {
       'GUIDING MAY STILL BE ACTIVE (stop failed)';
 
   @override
-  String get estopFailPark => 'MOUNT PARK FAILED — verify it manually';
+  String get estopFailStopMount => 'MOUNT STOP FAILED — verify it manually';
 
   @override
   String get estopFailRotator =>
@@ -4496,7 +4496,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get estopGuidingStopped => 'guiagem parada';
 
   @override
-  String get estopParkRequested => 'montagem instruída a estacionar';
+  String get estopMountStopped => 'montagem parada';
 
   @override
   String get estopFlatPanelOff => 'luz do painel de flat desligada';
@@ -4526,8 +4526,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'A GUIAGEM PODE AINDA ESTAR ATIVA (falha ao parar)';
 
   @override
-  String get estopFailPark =>
-      'FALHA AO ESTACIONAR A MONTAGEM — verifique manualmente';
+  String get estopFailStopMount =>
+      'FALHA AO PARAR A MONTAGEM — verifique manualmente';
 
   @override
   String get estopFailRotator =>

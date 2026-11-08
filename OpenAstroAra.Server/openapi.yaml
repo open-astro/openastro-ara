@@ -9308,7 +9308,7 @@ components:
         - runs_aborted
         - exposure_aborted
         - guiding_stopped
-        - park_requested
+        - mount_stopped
         - flat_panel_light_off
         - failed_rungs
       type: object
@@ -9325,7 +9325,7 @@ components:
           type: boolean
         guiding_stopped:
           type: boolean
-        park_requested:
+        mount_stopped:
           type: boolean
         flat_panel_light_off:
           type: boolean

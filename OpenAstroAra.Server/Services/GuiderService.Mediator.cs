@@ -123,6 +123,7 @@ public sealed partial class GuiderService : IGuiderMediator {
         if (guider is null) {
             return false;
         }
+        ThrowIfOutOfStep("A run's Start Guiding");
         await ReleaseGuideCameraQuietlyAsync().ConfigureAwait(false);
         await ClearPaSessionQuietlyAsync(guider, token).ConfigureAwait(false);
         return await guider.StartGuiding(forceCalibration, progress ?? _noProgress, token).ConfigureAwait(false);

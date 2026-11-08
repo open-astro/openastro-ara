@@ -26,7 +26,7 @@ namespace OpenAstroAra.Test {
 
     /// <summary>
     /// §35.3 — <see cref="EmergencyStopService"/>: the stop ladder (abort runs
-    /// → abort exposure → stop guiding → park → flat light off), best-effort
+    /// → abort exposure → stop guiding → stop mount → flat light off), best-effort
     /// rung isolation (one dead device never blocks the rest), the honest
     /// result DTO, the event-before-action ordering, headless null-dep
     /// tolerance, and the single-flight double-press guard.
@@ -46,6 +46,9 @@ namespace OpenAstroAra.Test {
 
         private static readonly OperationAcceptedDto Accepted =
             new(Guid.NewGuid(), "test", DateTimeOffset.UtcNow, null);
+
+        private static readonly string[] StopMountFailed = { "stop_mount" };
+        private static readonly string[] AbortThenTrackingOff = { "abort", "tracking_off" };
 
         [SetUp]
         public void SetUp() {
@@ -78,7 +81,6 @@ namespace OpenAstroAra.Test {
                 .ReturnsAsync(new FlatDeviceDto("f1", "Panel", EquipmentConnectionState.Connected, null!));
             sequencer.Setup(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(1);
             guider.Setup(g => g.StopGuidingAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Accepted);
-            telescope.Setup(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Accepted);
             flat.Setup(f => f.ApplyFlatPanelAsync(It.IsAny<FlatPanelRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Accepted);
         }
 
@@ -95,15 +97,14 @@ namespace OpenAstroAra.Test {
                 Assert.That(result.RunsAborted, Is.EqualTo(1));
                 Assert.That(result.ExposureAborted, Is.True);
                 Assert.That(result.GuidingStopped, Is.True);
-                Assert.That(result.ParkRequested, Is.True);
+                Assert.That(result.MountStopped, Is.True);
                 Assert.That(result.FlatPanelLightOff, Is.True);
                 Assert.That(result.FailedRungs, Is.Empty);
             });
             sequencer.Verify(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Once);
             camera.Verify(c => c.AbortExposureAsync(It.IsAny<CancellationToken>()), Times.Once);
             guider.Verify(g => g.StopGuidingAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
-            telescope.Verify(t => t.ParkAsync(
-                It.Is<ParkRequestDto>(r => r.Reason == "emergency_stop"), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+            telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
             flat.Verify(f => f.ApplyFlatPanelAsync(
                 It.Is<FlatPanelRequestDto>(r => r.LightOn == false && r.OpenCover == null), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
         }
@@ -311,19 +312,111 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Execute_ADeadMount_NeverBlocksTheRemainingRungs() {
-            telescope.Setup(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            telescope.Setup(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException("mount driver hung"));
 
             var result = await Build().ExecuteAsync();
 
             Assert.Multiple(() => {
-                Assert.That(result.ParkRequested, Is.False, "the result reports the failed rung honestly");
-                Assert.That(result.FailedRungs, Has.Count.EqualTo(1).And.Contains("park"),
+                Assert.That(result.MountStopped, Is.False, "the result reports the failed rung honestly");
+                Assert.That(result.FailedRungs, Has.Count.EqualTo(1).And.Contains("stop_mount"),
                     "an attempted-but-faulted rung is named; the untouched rungs are not");
                 Assert.That(result.FlatPanelLightOff, Is.True, "the rung AFTER the dead device still runs");
                 Assert.That(result.GuidingStopped, Is.True);
             });
             flat.Verify(f => f.ApplyFlatPanelAsync(It.IsAny<FlatPanelRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task Execute_StopsTheMountWhereItIs_WithNoParkHomeOrSlew() {
+            var calls = new List<string>();
+            telescope.Setup(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()))
+                .Callback(() => calls.Add("abort")).Returns(Task.CompletedTask);
+            telescope.Setup(t => t.SetTrackingAsync(false, It.IsAny<CancellationToken>()))
+                .Callback(() => calls.Add("tracking_off")).Returns(Task.CompletedTask);
+
+            await Build().ExecuteAsync();
+
+            Assert.That(calls, Is.EqualTo(AbortThenTrackingOff));
+            telescope.Verify(t => t.GetAsync(It.IsAny<CancellationToken>()), Times.AtLeastOnce);
+            telescope.Verify(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()), Times.Once);
+            telescope.Verify(t => t.SetTrackingAsync(false, It.IsAny<CancellationToken>()), Times.Once);
+            telescope.VerifyNoOtherCalls();
+        }
+
+        [Test]
+        public async Task Execute_AnAbortFault_StillSendsTrackingOff_AndFailsTheMountRung() {
+            telescope.Setup(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("abort refused"));
+
+            var result = await Build().ExecuteAsync();
+
+            Assert.That(result.FailedRungs, Is.EqualTo(StopMountFailed));
+            telescope.Verify(t => t.SetTrackingAsync(false, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task Execute_AHungAbort_StillSendsTrackingOff_AndFailsTheMountRung() {
+            var never = new TaskCompletionSource();
+            telescope.Setup(t => t.AbortSlewAsync(It.IsAny<CancellationToken>())).Returns(never.Task);
+            var service = Build();
+            service.RungTimeout = TimeSpan.FromMilliseconds(50);
+
+            var result = await service.ExecuteAsync();
+
+            Assert.That(result.FailedRungs, Is.EqualTo(StopMountFailed));
+            telescope.Verify(t => t.SetTrackingAsync(false, It.IsAny<CancellationToken>()), Times.Once);
+            never.TrySetResult();
+        }
+
+        [Test]
+        public async Task Execute_ATrackingFault_FailsTheMountRung_AndLaterRungsStillRun() {
+            telescope.Setup(t => t.SetTrackingAsync(false, It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("tracking refused"));
+
+            var result = await Build().ExecuteAsync();
+
+            Assert.Multiple(() => {
+                Assert.That(result.FailedRungs, Is.EqualTo(StopMountFailed));
+                Assert.That(result.FlatPanelLightOff, Is.True, "the rung after the mount still runs");
+            });
+        }
+
+        [Test]
+        public async Task Execute_AParkedMount_GetsNeitherCall_AndIsNotAFailure() {
+            telescope.Setup(t => t.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new TelescopeDto("t1", "Mount", EquipmentConnectionState.Connected, null,
+                    new TelescopeStateDto("parked", null, null, Tracking: false, Parked: true, AtHome: false)));
+
+            var result = await Build().ExecuteAsync();
+
+            Assert.That(result.FailedRungs, Is.Empty);
+            telescope.Verify(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()), Times.Never);
+            telescope.Verify(t => t.SetTrackingAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Execute_ADisconnectedMount_GetsNeitherCall_AndIsNotAFailure() {
+            telescope.Setup(t => t.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new TelescopeDto("t1", "Mount", EquipmentConnectionState.Disconnected, null, null!));
+
+            var result = await Build().ExecuteAsync();
+
+            Assert.That(result.FailedRungs, Is.Empty);
+            telescope.Verify(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()), Times.Never);
+            telescope.Verify(t => t.SetTrackingAsync(It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Execute_TheActionTakenPayload_SaysMountStopped_NotParkRequested() {
+            string? actionTaken = null;
+            ws.Setup(w => w.PublishAsync(WsEventCatalog.SafetyActionTaken, It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback<string, System.Text.Json.JsonElement, CancellationToken>((_, e, _) => actionTaken = e.GetRawText())
+                .Returns(Task.CompletedTask);
+
+            await Build().ExecuteAsync();
+
+            Assert.That(actionTaken, Does.Contain("\"mount_stopped\":true").And.Not.Contain("park_requested"));
         }
 
         [Test]
@@ -337,7 +430,7 @@ namespace OpenAstroAra.Test {
                 Assert.That(result.RunsAborted, Is.EqualTo(0));
                 Assert.That(result.ExposureAborted, Is.False);
                 Assert.That(result.GuidingStopped, Is.False);
-                Assert.That(result.ParkRequested, Is.False);
+                Assert.That(result.MountStopped, Is.False);
                 Assert.That(result.FlatPanelLightOff, Is.False);
                 Assert.That(result.FailedRungs, Is.Empty,
                     "absent devices are not failures — a headless daemon must not scream");
@@ -386,7 +479,7 @@ namespace OpenAstroAra.Test {
                 Assert.That(result.FlatPanelLightOff, Is.False);
                 Assert.That(result.FailedRungs, Is.Empty,
                     "disconnected is a routine state, not a fault");
-                Assert.That(result.ParkRequested, Is.True, "the connected rungs still run");
+                Assert.That(result.MountStopped, Is.True, "the connected rungs still run");
             });
             flat.Verify(f => f.ApplyFlatPanelAsync(It.IsAny<FlatPanelRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never,
                 "a disconnected device is never poked — its throw would be a false alarm");
@@ -410,7 +503,7 @@ namespace OpenAstroAra.Test {
                 Assert.That(result.ExposureAborted, Is.False);
                 Assert.That(result.FailedRungs, Has.Count.EqualTo(1).And.Contains("abort_exposure"),
                     "a hang degrades to a loud failure, never a stall");
-                Assert.That(result.ParkRequested, Is.True, "the rungs behind the hung device still run");
+                Assert.That(result.MountStopped, Is.True, "the rungs behind the hung device still run");
                 Assert.That(result.FlatPanelLightOff, Is.True);
             });
 
@@ -427,7 +520,7 @@ namespace OpenAstroAra.Test {
             var result = await Build().ExecuteAsync();
 
             Assert.That(result.RunsAborted, Is.EqualTo(0));
-            Assert.That(result.ParkRequested, Is.True, "an idle rig still parks — the point is 'nothing moves'");
+            Assert.That(result.MountStopped, Is.True, "an idle rig's mount is still stopped — the point is 'nothing moves'");
         }
     }
 }

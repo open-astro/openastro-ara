@@ -218,6 +218,7 @@ public sealed partial class GuideFocusService : IGuideFocusService, IDisposable 
             PHD2Guider? guider = null;
             if (_syntheticFrames is null) {
                 guider = _guider.RequireConnectedGuider(); // "guider is not connected" → 409
+                _guider.ThrowIfOutOfStep("The guide-camera focus loop"); // → 409, with the reason
                 if (GuiderBusy(guider.State)) {
                     throw new InvalidOperationException($"the guider is {guider.State.ToLowerInvariant()} — stop guiding before focusing the guide camera");
                 }

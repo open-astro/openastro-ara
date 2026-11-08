@@ -132,6 +132,14 @@ void main() {
     expect(StatusLevel.busy.color, AraColors.accentWarning);
   });
 
+  testWidgets('idle and out of step: the reason replaces how to start, before Start is pressed (#1665)', (tester) async {
+    final wire = _wire(runtime: 'stopped');
+    (wire['runtime'] as Map<String, dynamic>)['out_of_step_reason'] = 'The Guider does not have this profile.';
+    await _pump(tester, wire);
+    expect(find.text('The Guider does not have this profile.'), findsOneWidget);
+    expect(find.textContaining('Tap the shutter to start guiding'), findsNothing);
+  });
+
   testWidgets('the Guide panel: what it is doing and its RMS, in arcseconds', (tester) async {
     await _pump(tester, _wire());
     expect(find.text('Guiding'), findsOneWidget);
