@@ -20,8 +20,8 @@ import 'simple_night_setup.dart'
 import 'simple_device_windows.dart'
     show
         SimpleGuideGainSlider,
-        kSimpleGuideLabelWidth,
         simpleSaveGuider,
+        simpleSliderRow,
         simpleWindowRow,
         simpleWindowStepper;
 import 'simple_preview_panel.dart'
@@ -405,50 +405,34 @@ class _SimpleAggressivenessState extends ConsumerState<_SimpleAggressiveness> {
   Widget build(BuildContext context) {
     final value = _drag ?? widget.value;
     final percent = '${(value * 100).round()} %';
-    final scale = MediaQuery.textScalerOf(context).scale;
-    // One line each, so the panel still fits an iPad without scrolling.
-    return Row(
-      children: [
-        SizedBox(
-          width: scale(kSimpleGuideLabelWidth),
-          child: Text(widget.axis, style: kSimpleText, maxLines: 1),
-        ),
-        Expanded(
-          child: SizedBox(
-            height: 44,
-            child: Semantics(
-              label: widget.label,
-              child: Slider(
-                key: Key('simple-guide-aggressiveness-${widget.id}'),
-                min: 0,
-                max: 1,
-                divisions: 20,
-                value: value.clamp(0, 1),
-                label: percent,
-                onChanged: (v) => setState(() => _drag = v),
-                onChangeEnd: (v) {
-                  setState(() => _drag = null);
-                  simpleSaveGuider(
-                    context,
-                    ref,
-                    (p) => widget.set(p, v),
-                    live: true,
-                  );
-                },
-              ),
-            ),
+    return simpleSliderRow(
+      context,
+      widget.axis,
+      // Merged: Slider's own node carries the value as its label.
+      MergeSemantics(
+        child: Semantics(
+          label: widget.label,
+          child: Slider(
+            key: Key('simple-guide-aggressiveness-${widget.id}'),
+            min: 0,
+            max: 1,
+            divisions: 20,
+            value: value.clamp(0, 1),
+            label: percent,
+            onChanged: (v) => setState(() => _drag = v),
+            onChangeEnd: (v) {
+              setState(() => _drag = null);
+              simpleSaveGuider(
+                context,
+                ref,
+                (p) => widget.set(p, v),
+                live: true,
+              );
+            },
           ),
         ),
-        SizedBox(
-          width: scale(48),
-          child: Text(
-            percent,
-            style: kSimpleText,
-            textAlign: TextAlign.end,
-            maxLines: 1,
-          ),
-        ),
-      ],
+      ),
+      percent,
     );
   }
 }

@@ -9,6 +9,7 @@ import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/services/ws_event_stream.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/auto_flats_prompt_listener.dart';
@@ -139,6 +140,11 @@ void main() {
       await tester.pump();
 
       expect(find.text('Capture calibration frames tonight?'), findsOneWidget);
+      expect(
+        ProviderScope.containerOf(tester.element(find.byType(AutoFlatsPromptListener))).read(simpleMessagesProvider),
+        isEmpty,
+        reason: 'the full UI asks; it has no pill to show',
+      );
 
       await tester.tap(find.text('Remember my choice (stop asking)'));
       await tester.pump();
@@ -161,6 +167,21 @@ void main() {
 
       expect(find.text('Capture calibration frames tonight?'), findsNothing);
       expect(client.calls, 0);
+    });
+
+    testWidgets('Simple Mode says in one pill that this run takes no flats', (tester) async {
+      List<SimpleMessage> pills() => ProviderScope.containerOf(tester.element(find.byType(AutoFlatsPromptListener)))
+          .read(simpleMessagesProvider);
+      final (conn, _) = await pumpListener(tester, simple: true);
+      await tester.pump();
+      emitPrompt(conn);
+      await tester.pump();
+      await tester.pump();
+      emitPrompt(conn, seq: 2);
+      await tester.pump();
+      await tester.pump();
+      expect(pills().map((m) => (m.kind, m.title)), [(SimpleMessageKind.warning, 'No flats this run')]);
+      expect(pills().single.detail, contains('Settings → Session → Calibration'));
     });
 
     testWidgets('"Not tonight" posts later without remember', (tester) async {

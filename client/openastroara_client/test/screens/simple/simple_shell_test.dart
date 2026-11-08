@@ -99,6 +99,8 @@ import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/theme/ara_metrics.dart' show AraBlur, AraSpace;
+import 'package:openastroara/widgets/imaging/frame_viewer.dart' show FrameViewer;
+import 'package:openastroara/models/guide_focus.dart';
 import 'package:openastroara/screens/simple/simple_safety_alarm.dart';
 import 'package:openastroara/state/night_mode_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
@@ -430,6 +432,12 @@ class _Clock implements TimeSyncClient {
   Future<void> pushClientTime(DateTime utcNow) async => pushed.add(utcNow);
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+class _GuideStarting extends GuideFocusNotifier {
+  @override
+  GuideFocusLive build() =>
+      const GuideFocusLive(status: GuideFocusStatus(active: true, state: 'running', exposureSec: 2, seq: 0));
 }
 
 class _GuiderUp extends GuiderStatusNotifier {
@@ -1973,6 +1981,33 @@ void main() {
     final clipped = tester.getRect(find.text('Clipped'));
     expect(clipped.top, greaterThan(hfr.top), reason: 'one fact per line');
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets("Preview on Guide with no guide frame says so, and does not show the main camera's last frame or histogram",
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), histogram: _histogram,
+        gear: [guiderStatusProvider.overrideWith(() => _GuiderAt('stopped'))]);
+    await _frame(tester, c);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-histogram')), findsOneWidget, reason: 'precondition: Main shows it');
+    c.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
+    await tester.pump();
+    await tester.pump();
+    expect(find.byType(FrameViewer), findsNothing);
+    expect(find.byKey(const Key('simple-histogram')), findsNothing);
+    expect(find.text("Tap the shutter for the guide camera's frames"), findsOneWidget);
+  });
+
+  testWidgets("Preview on Guide says Starting, not to tap the shutter, while the loop waits for its first frame", (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), gear: [
+      guideFocusProvider.overrideWith(_GuideStarting.new),
+      guiderStatusProvider.overrideWith(() => _GuiderAt('stopped')),
+    ]);
+    c.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('Starting…'), findsOneWidget);
+    expect(find.text("Tap the shutter for the guide camera's frames"), findsNothing);
   });
 
   testWidgets('Info shows the last frame facts as tiles in the bottom-left corner', (tester) async {

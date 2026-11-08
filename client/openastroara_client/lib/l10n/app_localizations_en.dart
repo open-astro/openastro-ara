@@ -695,6 +695,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get previewStars => 'Stars';
 
   @override
+  String get previewStopGuideFrames => 'Stop the guide camera\'s frames first.';
+
+  @override
+  String get previewGuideEmpty =>
+      'Tap the shutter for the guide camera\'s frames';
+
+  @override
+  String get simpleNoFlatsThisRun => 'No flats this run';
+
+  @override
+  String get simpleNoFlatsThisRunDetail =>
+      'Your profile asks before each run, and Simple Mode doesn\'t ask. To take flats, set Capture calibration after a sequence under Settings → Session → Calibration.';
+
+  @override
   String get previewCamera => 'Camera';
 
   @override

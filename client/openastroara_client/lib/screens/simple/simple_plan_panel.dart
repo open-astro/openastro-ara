@@ -2057,6 +2057,8 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 hit: hit,
                 onTap: () {
                   _query.text = hit.label;
+                  // The sheet stays up, so the keyboard must not stay over it.
+                  FocusManager.instance.primaryFocus?.unfocus();
                   // The target at once, and the Plan sheet stays up.
                   ref
                       .read(planetariumSelectionProvider.notifier)

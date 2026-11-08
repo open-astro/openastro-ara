@@ -20,6 +20,8 @@ import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/simple_messages_state.dart';
+import '../../state/simple_night_setup_state.dart'
+    show SimpleModeScreen, simpleShowingProvider;
 import '../../models/sequence/sequence_summary.dart';
 import '../../state/stats/server_internal_state_state.dart';
 import '../../theme/ara_colors.dart';
@@ -112,6 +114,12 @@ bool simplePreviewGuide(WidgetRef ref) {
   return ref.watch(guideFocusProvider.select((g) => g.status.active)) ||
       !guideFocusBusy(guider);
 }
+
+/// Preview is the screen on show and it is on the guide camera, so what is
+/// on screen, and every fact about it, comes from that camera.
+bool simpleShowsGuidePreview(WidgetRef ref) =>
+    ref.watch(simpleShowingProvider) == SimpleModeScreen.preview &&
+    simplePreviewGuide(ref);
 
 final previewShotProvider = NotifierProvider<_PreviewShot, PreviewShot>(
   _PreviewShot.new,
@@ -228,6 +236,7 @@ class SimpleInfoPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (simpleShowsGuidePreview(ref)) return const _GuideInfoTiles();
     final looping = ref.watch(liveViewControllerProvider);
     final id = ref.watch(lastCapturedFrameIdProvider);
     final params = ref.watch(exposureControllerProvider);
@@ -255,6 +264,35 @@ class SimpleInfoPanel extends ConsumerWidget {
       (l10n.previewClipped, clipped),
     ];
     return SimpleFactTiles(facts: facts);
+  }
+}
+
+/// Info on the guide camera: its loop's latest measurement, exposure and gain.
+/// No filter or clipping: the guide frames don't carry them.
+class _GuideInfoTiles extends ConsumerWidget {
+  const _GuideInfoTiles();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final status = ref.watch(guideFocusProvider.select((g) => g.status));
+    final seconds = status.active
+        ? status.exposureSec
+        : ref.watch(simpleGuideExposureProvider);
+    final gain = ref.watch(
+      phd2SettingsProvider.select((p) => p.guideCameraGain),
+    );
+    return SimpleFactTiles(
+      facts: [
+        (l10n.previewHfr, status.latest?.hfr.toStringAsFixed(2) ?? '—'),
+        (l10n.previewStars, status.latest?.stars.toString() ?? '—'),
+        (
+          l10n.previewExposure,
+          formatExposure(Duration(milliseconds: (seconds * 1000).round())),
+        ),
+        (l10n.deviceGain, '$gain %'),
+      ],
+    );
   }
 }
 
@@ -394,7 +432,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
         spacing: AraSpace.s8,
         children: [
           // Leaving a running camera would strand it with no stop.
-          ..._previewCameraRows(context, ref, looping: looping),
+          ..._previewCameraRows(context, ref),
           // No title: the chip that opened it says what it is (user,
           // 2026-11-04).
           if (guide) ...[
@@ -464,11 +502,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
 
   /// "Camera", then one row per connected camera: its role over its model.
   /// The guide camera is greyed out, saying why, while the guider holds it.
-  List<Widget> _previewCameraRows(
-    BuildContext context,
-    WidgetRef ref, {
-    required bool looping,
-  }) {
+  List<Widget> _previewCameraRows(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final camera = ref.watch(cameraStatusProvider).asData?.value;
     final guider = ref.watch(guiderStatusProvider).value;
@@ -476,18 +510,23 @@ class SimpleSettingsPopover extends ConsumerWidget {
     final guideActive = ref.watch(
       guideFocusProvider.select((g) => g.status.active),
     );
-    final blocked = guideFocusBlocker(l10n, guider, active: guideActive);
+    // A guide loop already running keeps its row: its stop is reached there.
+    final blocked =
+        guideFocusBlocker(l10n, guider, active: guideActive) ??
+        (simpleMainCameraBusy(ref) && !guideActive
+            ? l10n.shellMainCameraBusy
+            : null);
+    // Leaving Guide while its loop runs would strand it with no stop.
+    final lockedMain = guideActive ? l10n.previewStopGuideFrames : null;
     Widget row(
       PreviewCamera value,
       String id,
       String role,
       String detail,
-      bool enabled,
+      String? why,
     ) {
       final selected = (value == PreviewCamera.guide) == guide;
-      // Guide stays pickable while its loop runs: that is how its stop is reached.
-      final on =
-          enabled && !(value == PreviewCamera.guide ? looping : guideActive);
+      final on = why == null;
       return Semantics(
         button: true,
         selected: selected,
@@ -500,7 +539,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
             borderRadius: BorderRadius.circular(8),
             onTap: on
                 ? () => ref.read(previewCameraProvider.notifier).set(value)
-                : null,
+                : () => simpleSayWhy(context, why),
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 48),
               child: Padding(
@@ -527,13 +566,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
                             ),
                           ),
                           if (detail.isNotEmpty)
-                            Text(
-                              detail,
-                              style: kSimpleText.copyWith(
-                                fontSize: 12,
-                                color: AraColors.textSecondary,
-                              ),
-                            ),
+                            Text(detail, style: AraText.caption),
                         ],
                       ),
                     ),
@@ -558,8 +591,8 @@ class SimpleSettingsPopover extends ConsumerWidget {
           PreviewCamera.main,
           'main',
           l10n.focusScopeMain,
-          camera!.name,
-          true,
+          lockedMain ?? camera!.name,
+          lockedMain,
         ),
       if (guider?.isConnected ?? false)
         row(
@@ -569,7 +602,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
           blocked ??
               ref.watch(deviceDriverProvider('guidecamera')).value?.name ??
               '',
-          blocked == null,
+          blocked,
         ),
     ];
     if (rows.isEmpty) return const [];

@@ -834,8 +834,13 @@ void main() {
       expect(find.textContaining('M 31'), findsOneWidget);
       expect(find.textContaining('Andromeda Galaxy'), findsOneWidget, reason: 'the common name beside the designation');
       expect(tester.getSize(find.byKey(const Key('simple-run-suggestion-0'))).height, greaterThanOrEqualTo(44));
+      FocusNode field() => tester
+          .widget<EditableText>(find.descendant(of: find.byKey(const Key('simple-run-search')), matching: find.byType(EditableText)))
+          .focusNode;
+      expect(field().hasFocus, isTrue, reason: 'precondition: typing in it');
       await tester.tap(find.textContaining('M 31'));
       await tester.pump();
+      expect(field().hasFocus, isFalse, reason: 'on an iPad the keyboard would stay over the sheet');
       expect(c.read(planetariumSelectionProvider)?.name, 'Andromeda Galaxy', reason: 'the pick is the target at once');
       expect(c.read(planetariumSearchProvider), isNull, reason: 'nothing to look up');
       expect(showSky, 0, reason: 'the Plan sheet stays up');

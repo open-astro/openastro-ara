@@ -14,6 +14,10 @@ import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/guide_focus_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
+import 'package:openastroara/state/imaging/capture_progress_state.dart';
+import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 
 class _Camera extends CameraStatusNotifier {
@@ -44,6 +48,18 @@ class _Live extends AutofocusLiveNotifier {
   AutofocusLive build() => const AutofocusLive();
 }
 
+class _Capture extends CaptureProgressNotifier {
+  _Capture(this.phase);
+  final CapturePhase phase;
+  @override
+  CaptureProgress build() => CaptureProgress(phase: phase);
+}
+
+class _Run extends SequenceRunStateNotifier {
+  @override
+  Future<SequenceRunStateInfo?> build() async => null;
+}
+
 class _GuideFocus extends GuideFocusNotifier {
   _GuideFocus(this.live0);
   final GuideFocusLive live0;
@@ -60,15 +76,28 @@ late ProviderContainer _c;
 late _GuideFocus _g;
 
 Future<void> _pump(WidgetTester tester, Widget child,
-    {String guider = 'connected', String runtime = 'stopped', String wheel = 'connected', bool guideRunning = false}) async {
+    {String guider = 'connected',
+    String runtime = 'stopped',
+    String wheel = 'connected',
+    bool guideRunning = false,
+    CapturePhase capture = CapturePhase.idle,
+    bool guideSample = false}) async {
   _g = _GuideFocus(guideRunning
-      ? const GuideFocusLive(status: GuideFocusStatus(active: true, state: 'running', exposureSec: 2, seq: 1))
+      ? GuideFocusLive(
+          status: GuideFocusStatus(
+              active: true,
+              state: 'running',
+              exposureSec: 2,
+              seq: 1,
+              latest: guideSample ? const GuideFocusSample(seq: 1, hfr: 2.34, stars: 12, peakAdu: 900, fwhm: 3) : null))
       : GuideFocusLive.idle);
   _c = ProviderContainer(overrides: [
     cameraStatusProvider.overrideWith(_Camera.new),
     guiderStatusProvider.overrideWith(() => _Guider(guider, runtime)),
     filterWheelProvider.overrideWith(() => _Wheel(wheel)),
     guideFocusProvider.overrideWith(() => _g),
+    captureProgressProvider.overrideWith(() => _Capture(capture)),
+    sequenceRunStateProvider.overrideWith(_Run.new),
     autofocusLiveProvider.overrideWith(_Live.new),
     deviceDriverProvider.overrideWith(
         (ref, type) async => type == 'guidecamera' ? const DeviceDriver(name: 'ZWO ASI120MM Mini') : null),
@@ -77,6 +106,7 @@ Future<void> _pump(WidgetTester tester, Widget child,
   // Keep the autoDispose driver alive, as the panel's listeners do on a running app.
   _c.listen(deviceDriverProvider('guidecamera'), (_, _) {});
   await tester.pumpWidget(UncontrolledProviderScope(
+    key: ObjectKey(_c), // a test that pumps twice gets a fresh scope for its new container
     container: _c,
     child: MaterialApp(home: Scaffold(body: Center(child: child is SimpleShutter ? child : SingleChildScrollView(child: child)))),
   ));
@@ -106,6 +136,54 @@ void main() {
     await tester.pump();
     expect(_c.read(previewCameraProvider), PreviewCamera.main);
     expect(find.descendant(of: _row('guide'), matching: find.textContaining('Stop the guider first')), findsOneWidget);
+    await tester.pump(kSimpleResultLife); // the tap's pill fades
+  });
+
+  testWidgets('while the main camera is taking a frame the Guide row is locked and says why', (tester) async {
+    await _pump(tester, const SimpleSettingsPopover(), capture: CapturePhase.exposing);
+    await tester.tap(_row('guide'), warnIfMissed: false);
+    await tester.pump();
+    expect(_c.read(previewCameraProvider), PreviewCamera.main);
+    expect(find.descendant(of: _row('guide'), matching: find.textContaining('main camera is busy')), findsOneWidget);
+    expect(find.descendant(of: _row('guide'), matching: find.text('ZWO ASI120MM Mini')), findsNothing);
+    await tester.pump(kSimpleResultLife); // the tap's pill fades
+  });
+
+  testWidgets('tapping a locked Guide row says why in a pill', (tester) async {
+    await _pump(tester, const SimpleSettingsPopover(), capture: CapturePhase.exposing);
+    await tester.tap(_row('guide'), warnIfMissed: false);
+    await tester.pump();
+    expect(_c.read(simpleMessagesProvider).map((m) => m.title), contains(contains('main camera is busy')));
+    await tester.pump(kSimpleResultLife);
+  });
+
+  testWidgets('with a guide loop running the Main row is locked, and says why on the row and in a pill', (tester) async {
+    await _pump(tester, const SimpleSettingsPopover(), guideRunning: true);
+    const why = "Stop the guide camera's frames first.";
+    expect(find.descendant(of: _row('main'), matching: find.text(why)), findsOneWidget);
+    await tester.tap(_row('main'), warnIfMissed: false);
+    await tester.pump();
+    expect(_c.read(simpleMessagesProvider).map((m) => m.title), contains(why));
+    await tester.pump(kSimpleResultLife);
+  });
+
+  testWidgets("on Guide the Info tiles describe the guide camera's frames, with no main-camera facts", (tester) async {
+    await _pump(tester, const SimpleInfoPanel(), guideRunning: true, guideSample: true);
+    _c.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
+    await tester.pump();
+    await tester.pump();
+    for (final text in ['2.34', '12', '2 s', 'Gain']) {
+      expect(find.text(text), findsOneWidget, reason: text);
+    }
+    expect(find.text('Clipped'), findsNothing);
+    expect(find.text('Gain · offset'), findsNothing);
+  });
+
+  testWidgets('a guide loop found running stays reachable while the main camera is taking a frame', (tester) async {
+    await _pump(tester, const SimpleSettingsPopover(), guideRunning: true, capture: CapturePhase.exposing);
+    await tester.tap(_row('guide'));
+    await tester.pump();
+    expect(_c.read(previewCameraProvider), PreviewCamera.guide, reason: 'its stop is on that row');
   });
 
   testWidgets('picking Guide swaps to its own exposure and gain, with no Filter or Loop / Single', (tester) async {
@@ -146,6 +224,7 @@ void main() {
     await tester.tap(_row('main'), warnIfMissed: false);
     await tester.pump();
     expect(_c.read(previewCameraProvider), PreviewCamera.guide, reason: 'leaving would strand it with no stop');
+    await tester.pump(kSimpleResultLife); // the tap's pill fades
   });
 
   testWidgets('Filter shows only with a filter wheel connected', (tester) async {

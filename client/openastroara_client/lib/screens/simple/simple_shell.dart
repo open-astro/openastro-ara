@@ -761,11 +761,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         : ref.watch(simpleFocusStarsShownProvider)
         ? ref.watch(autofocusLiveProvider.select((l) => l.frame))
         : null;
+    // On the guide camera only its own frames count: the main camera's last
+    // one would read as the guide camera's.
+    final guidePreview = simpleShowsGuidePreview(ref);
     final hasFrame =
         polarFrame ||
         focusFrame != null ||
-        ref.watch(lastCapturedFrameIdProvider) != null ||
-        ref.watch(liveViewControllerProvider);
+        (!guidePreview &&
+            (ref.watch(lastCapturedFrameIdProvider) != null ||
+                ref.watch(liveViewControllerProvider)));
     // The first frame takes the screen back from a Sky opened before it.
     if (hasFrame && !_hadFrame) _sky = false;
     _hadFrame = hasFrame;
@@ -977,7 +981,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             child: IgnorePointer(
                               child: Center(
                                 child: Text(
-                                  context.l10n.shellTapShutter,
+                                  !guidePreview
+                                      ? context.l10n.shellTapShutter
+                                      : ref.watch(
+                                          guideFocusProvider.select(
+                                            (g) => g.status.active,
+                                          ),
+                                        )
+                                      ? context.l10n.guideFocusStarting
+                                      : context.l10n.previewGuideEmpty,
                                   style: TextStyle(
                                     fontSize: 20,
                                     letterSpacing: 2,
@@ -2111,7 +2123,8 @@ bool _guidingShown(WidgetRef ref) => ref.watch(
 );
 
 // The histogram is for saved frames (the daemon analyses those).
-String? _histogramFrame(WidgetRef ref) => ref.watch(liveViewControllerProvider)
+String? _histogramFrame(WidgetRef ref) =>
+    ref.watch(liveViewControllerProvider) || simpleShowsGuidePreview(ref)
     ? null
     : ref.watch(lastCapturedFrameIdProvider);
 

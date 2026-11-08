@@ -695,6 +695,20 @@ class AppLocalizationsPt extends AppLocalizations {
   String get previewStars => 'Stars';
 
   @override
+  String get previewStopGuideFrames => 'Stop the guide camera\'s frames first.';
+
+  @override
+  String get previewGuideEmpty =>
+      'Tap the shutter for the guide camera\'s frames';
+
+  @override
+  String get simpleNoFlatsThisRun => 'No flats this run';
+
+  @override
+  String get simpleNoFlatsThisRunDetail =>
+      'Your profile asks before each run, and Simple Mode doesn\'t ask. To take flats, set Capture calibration after a sequence under Settings → Session → Calibration.';
+
+  @override
   String get previewCamera => 'Camera';
 
   @override
@@ -3420,6 +3434,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get previewStars => 'Estrelas';
+
+  @override
+  String get previewStopGuideFrames =>
+      'Pare os quadros da câmera guia primeiro.';
+
+  @override
+  String get previewGuideEmpty =>
+      'Toque no obturador para ver os quadros da câmera guia';
+
+  @override
+  String get simpleNoFlatsThisRun => 'Sem flats nesta sessão';
+
+  @override
+  String get simpleNoFlatsThisRunDetail =>
+      'Seu perfil pergunta antes de cada sessão, e o Modo Simples não pergunta. Para fazer flats, ajuste Capture calibration after a sequence em Ajustes → Session → Calibration.';
 
   @override
   String get previewCamera => 'Câmera';

@@ -1203,6 +1203,30 @@ abstract class AppLocalizations {
   /// **'Stars'**
   String get previewStars;
 
+  /// Why the Main row in Preview's Camera field is locked while the guide camera loops
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the guide camera\'s frames first.'**
+  String get previewStopGuideFrames;
+
+  /// Empty screen in Preview with the guide camera picked and no guide frame yet
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the shutter for the guide camera\'s frames'**
+  String get previewGuideEmpty;
+
+  /// Simple Mode pill when a run starts on a profile set to ask about flats
+  ///
+  /// In en, this message translates to:
+  /// **'No flats this run'**
+  String get simpleNoFlatsThisRun;
+
+  /// Why the run takes no flats and where to change it; the setting names match the English-only Settings panel
+  ///
+  /// In en, this message translates to:
+  /// **'Your profile asks before each run, and Simple Mode doesn\'t ask. To take flats, set Capture calibration after a sequence under Settings → Session → Calibration.'**
+  String get simpleNoFlatsThisRunDetail;
+
   /// Simple Mode: label above the list of connected cameras in Preview's settings.
   ///
   /// In en, this message translates to:

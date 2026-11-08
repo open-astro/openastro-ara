@@ -928,6 +928,22 @@
   "@previewStars": {
     "description": "Simple Mode Info tile label: number of stars detected in the last frame"
   },
+  "previewStopGuideFrames": "Stop the guide camera's frames first.",
+  "@previewStopGuideFrames": {
+    "description": "Why the Main row in Preview's Camera field is locked while the guide camera loops"
+  },
+  "previewGuideEmpty": "Tap the shutter for the guide camera's frames",
+  "@previewGuideEmpty": {
+    "description": "Empty screen in Preview with the guide camera picked and no guide frame yet"
+  },
+  "simpleNoFlatsThisRun": "No flats this run",
+  "@simpleNoFlatsThisRun": {
+    "description": "Simple Mode pill when a run starts on a profile set to ask about flats"
+  },
+  "simpleNoFlatsThisRunDetail": "Your profile asks before each run, and Simple Mode doesn't ask. To take flats, set Capture calibration after a sequence under Settings → Session → Calibration.",
+  "@simpleNoFlatsThisRunDetail": {
+    "description": "Why the run takes no flats and where to change it; the setting names match the English-only Settings panel"
+  },
   "previewCamera": "Camera",
   "@previewCamera": {
     "description": "Simple Mode: label above the list of connected cameras in Preview's settings."

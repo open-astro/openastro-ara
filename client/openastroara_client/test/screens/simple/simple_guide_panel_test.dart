@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
@@ -347,6 +348,40 @@ void main() {
     await tester.pump();
     expect(c.read(phd2SettingsProvider).decGuideMode, 'north');
     expect(eq.pushes, [true]);
+  });
+
+  testWidgets('the Gain slider is named on the node VoiceOver adjusts, and an increase still saves it', (tester) async {
+    final handle = tester.ensureSemantics();
+    final eq = _GuiderEquipment();
+    final rig = [profileApiProvider.overrideWithValue(_Profile()), guiderEquipmentApiProvider.overrideWithValue(eq)];
+    final c = await _pump(tester, _wire(), rig: rig);
+    await tester.pump();
+    final gain = tester.getSemantics(find.byKey(const Key('simple-guider-gain')));
+    expect(gain.getSemanticsData().hasAction(SemanticsAction.increase), isTrue, reason: 'the adjustable node');
+    expect(gain.getSemanticsData().label, contains('Gain'));
+    final before = c.read(phd2SettingsProvider).guideCameraGain;
+    gain.owner!.performAction(gain.id, SemanticsAction.increase);
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).guideCameraGain, greaterThan(before));
+    expect(eq.pushes, [true]);
+    handle.dispose();
+  });
+
+  testWidgets('RA and Dec aggressiveness are named on the nodes VoiceOver adjusts', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, _wire());
+    await tester.pump();
+    for (final (key, name) in [('ra', 'RA aggressiveness'), ('dec', 'Dec aggressiveness')]) {
+      final node = tester.getSemantics(find.byKey(Key('simple-guide-aggressiveness-$key'))).getSemanticsData();
+      expect(node.hasAction(SemanticsAction.increase), isTrue, reason: '$key: the adjustable node');
+      expect(node.label, contains(name));
+    }
+    // One stop per slider: the row's own label and value would read it twice.
+    for (final label in ['RA', 'Dec']) {
+      expect(find.bySemanticsLabel(RegExp('^$label\$')), findsNothing, reason: label);
+    }
+    handle.dispose();
   });
 
   testWidgets('the guiding settings sit after Gain and before Dither (user, 2026-11-09)', (tester) async {
