@@ -116,9 +116,10 @@ namespace OpenAstroAra.Server.Services {
         /// <param name="homeFirst">Go Home before the seed. True after the coarse stage (its seed turn and
         /// its tracking-off live loop left the mount an hour angle or more from Home, and a second turn
         /// "away from the meridian" from there could reach a GEM's limit or flip the pier mid-seed) and
-        /// for a fine start on a mount that can find Home while <c>use_home</c> is set — "Adjust again"
-        /// after a check starts from the check's last turn, the same hazard. A mount without Find Home
-        /// starts from where the user put it.</param>
+        /// for every fine start while <c>use_home</c> is set — "Adjust again" after a check starts from the
+        /// check's last turn, the same hazard. A mount without Find Home is asked for Home (the
+        /// <c>needs_home</c> wait), as in the other stages; <c>use_home: false</c> starts from where the
+        /// user put it.</param>
         private async Task RunFineStageAsync(
                 PHD2Guider guiderClient, string workDir, SiteSettingsDto site, PolarAlignSettingsDto settings, bool homeFirst,
                 (double RaDeg, double DecDeg)? startPointing, Func<Task> renew, int gen, CancellationToken ct) {

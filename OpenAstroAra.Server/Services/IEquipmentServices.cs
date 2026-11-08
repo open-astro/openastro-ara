@@ -383,8 +383,10 @@ public interface IPolarAlignService {
     bool IsActive { get; }
     Task<PolarAlignStateDto> GetStatusAsync(CancellationToken ct);
     Task<OperationAcceptedDto> StartAsync(string? idempotencyKey, CancellationToken ct);
-    /// <summary>Begin at <paramref name="stage"/> (<see cref="PolarAlignStages"/>; null = coarse). Throws
-    /// <see cref="InvalidOperationException"/> (→ 409) for an unknown stage or a failed preflight.</summary>
+    /// <summary>Begin at <paramref name="stage"/> (<see cref="PolarAlignStages"/>; null = coarse, or fine
+    /// when the coarse stage cannot run). Throws <see cref="ArgumentException"/> for an unknown stage (the
+    /// endpoint answers 400 before calling) and <see cref="InvalidOperationException"/> (→ 409) for a
+    /// failed preflight.</summary>
     Task<OperationAcceptedDto> StartAsync(string? stage, string? idempotencyKey, CancellationToken ct);
     /// <summary>Advance: Continue when the routine waits for the mount at Home, Next from the coarse
     /// stage to the fine stage, Next from the fine stage to the check. Throws

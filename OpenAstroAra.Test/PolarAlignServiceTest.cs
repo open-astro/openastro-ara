@@ -1988,6 +1988,41 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_fine_start_on_a_mount_without_Find_Home_asks_for_Home_first() {
+            // The same hazard on a mount the user homes by hand: with use_home on, a fine start opens in
+            // homing and waits for Continue (needs_home) instead of seeding from wherever the last turn left
+            // the mount; nothing moves until the user says the mount is at Home.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var slews = new ConcurrentQueue<Coordinates>();
+            var mount = NewHomeMount(canFindHome: false, slews);
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, new HintFollowingSolver(), mount, ws, store: NewHomeStore());
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var started = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignStarted).ConfigureAwait(false);
+            Assert.That(started.GetProperty("state").GetString(), Is.EqualTo("homing"));
+            await WaitForEventAsync(ws, WsEventCatalog.PolarAlignNeedsHome).ConfigureAwait(false);
+            var waiting = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(waiting.State, Is.EqualTo("homing"));
+            Assert.That(waiting.Stage, Is.EqualTo(PolarAlignStages.Fine));
+            Assert.That(waiting.WaitingForHome, Is.True);
+            Assert.That(slews, Is.Empty, "nothing moves until the user says the mount is at Home");
+            mount.Verify(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never);
+
+            await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var seeded = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            Assert.That(seeded.State, Is.EqualTo("adjusting"));
+            Assert.That(seeded.WaitingForHome, Is.False);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            var targets = slews.ToArray();
+            Assert.That(targets.Length, Is.EqualTo(2), "from the hand-set Home: off the axis to Dec 85°, then the seed turn");
+            Assert.That(targets[0].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6));
+        }
+
+        [Test]
         public async Task Done_after_the_check_ends_the_routine_and_publishes_stopped() {
             var paCalls = new ConcurrentQueue<bool>();
             await using var fake = StartFake(paCalls);
