@@ -2791,6 +2791,33 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_unchecked_select_push_does_not_clear_the_out_of_step_state_of_a_bad_selection() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+
+            var (svc, _) = await OutOfStepAgainstAsync(fake).ConfigureAwait(false);
+            using (svc) {
+                await svc.PushGuiderProfileAsync(null, CancellationToken.None, refuseUnservedSelection: false).ConfigureAwait(false);
+
+                Assert.That((await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime.OutOfStepReason, Does.Contain(RefusedSlot));
+            }
+        }
+
+        [Test]
+        public async Task An_unchecked_select_push_of_a_good_selection_clears_the_out_of_step_state() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+
+            var (svc, settings) = await OutOfStepAgainstAsync(fake).ConfigureAwait(false);
+            using (svc) {
+                SelectNothing(settings);
+                await svc.PushGuiderProfileAsync(null, CancellationToken.None, refuseUnservedSelection: false).ConfigureAwait(false);
+
+                Assert.That((await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime.OutOfStepReason, Is.Null);
+            }
+        }
+
+        [Test]
         public async Task A_reconnect_with_a_good_selection_clears_the_out_of_step_state() {
             await using var fake = FakeGuider.Start();
             _ = new ProfileDaemon(fake);

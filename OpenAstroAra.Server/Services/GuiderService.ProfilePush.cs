@@ -100,8 +100,13 @@ public sealed partial class GuiderService {
             MarkOutOfStep(ex.Message);
             throw;
         }
-        lock (_gate) {
-            _outOfStepReason = null;
+        if (refuseUnservedSelection) {
+            lock (_gate) {
+                _outOfStepReason = null;
+            }
+        } else {
+            // A select's push skipped the checks, so passing proves nothing: the selection is judged here.
+            await RecheckSelectionAsync(ct).ConfigureAwait(false);
         }
         var payload = new JsonObject {
             ["methods"] = new JsonArray(methods.Select(m => (JsonNode)JsonValue.Create(m)).ToArray()),
@@ -141,10 +146,10 @@ public sealed partial class GuiderService {
         }
     }
 
-    // #1665 — the connect-time push sends the selection unchecked, so the connect judges it here.
+    // #1665 — the connect-time push and a select's push send the selection unchecked, so it is judged here.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Post-connect check boundary: it must never turn a good connect into Error; the state stays unknown and the fault is logged.")]
-    private async Task RecheckSelectionAfterConnectAsync(CancellationToken ct) {
+        Justification = "Check boundary after a push that already landed: it must never turn a good connect or push into a failure; the state is left as it was and the fault is logged.")]
+    private async Task RecheckSelectionAsync(CancellationToken ct) {
         try {
             var reason = await DescribeSelectionProblemAsync(_profileService.ActiveProfile.GuiderSettings, ct).ConfigureAwait(false);
             if (reason is not null) {
@@ -171,7 +176,7 @@ public sealed partial class GuiderService {
     [LoggerMessage(Level = LogLevel.Warning, Message = "{Operation} refused, guider out of step with the active profile (#1665): {Reason}")]
     private partial void LogRefusedOutOfStep(string operation, string reason);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Guider selection check after connect failed; out-of-step state stays unknown (#1665)")]
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Guider selection check failed; out-of-step state left as it was (#1665)")]
     private partial void LogSelectionRecheckFailed(Exception exception);
 
     private async Task<string?> DescribeCameraPinProblemAsync(IGuiderSettings settings, CancellationToken ct) {

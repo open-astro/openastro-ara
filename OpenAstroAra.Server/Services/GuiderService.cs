@@ -497,7 +497,7 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
                 ReconcileTask = ReconcileGuideCameraAsync(guider, ct);
                 Interlocked.Increment(ref _reconcileStarts);
                 await ReconcileTask.ConfigureAwait(false);
-                await RecheckSelectionAfterConnectAsync(ct).ConfigureAwait(false);
+                await RecheckSelectionAsync(ct).ConfigureAwait(false);
             }
         } catch (OperationCanceledException) {
             // Superseded by a newer connect/disconnect — that operation already owns the state;
