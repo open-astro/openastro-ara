@@ -77,16 +77,8 @@ void main() {
       const rough = PolarAlignLive(
           phase: PolarAlignStates.adjusting, stage: PolarAlignStages.coarse, zone: 'green');
       expect(polarAlignStepState(rough), SetupStepState.inProgress);
-      // The hand-off keeps the rough readout while the fine stage homes and
-      // seeds: not done until the fine stage is reading for itself.
-      expect(
-          polarAlignStepState(rough.copyWith(
-              stage: PolarAlignStages.fine, phase: PolarAlignStates.homing)),
-          SetupStepState.inProgress);
-      expect(
-          polarAlignStepState(rough.copyWith(
-              stage: PolarAlignStages.fine, phase: PolarAlignStates.seeding)),
-          SetupStepState.inProgress);
+      // A fine-stage green is the fine stage's own (a new stage starts with no
+      // readout), so it counts.
       expect(polarAlignStepState(rough.copyWith(stage: PolarAlignStages.fine)),
           SetupStepState.done);
     });

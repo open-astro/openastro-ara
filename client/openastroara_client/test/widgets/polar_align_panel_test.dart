@@ -308,11 +308,13 @@ void main() {
     });
 
     test('the rough stage names the side of the pole', () {
-      expect(polarSideOfPoleText(null, 3), isNull);
-      expect(polarSideOfPoleText(40, 12), 'The mount axis sits above and east of the pole.');
-      expect(polarSideOfPoleText(-40, -12), 'The mount axis sits below and west of the pole.');
-      expect(polarSideOfPoleText(0.1, -12), 'The mount axis sits west of the pole.');
-      expect(polarSideOfPoleText(0.1, 0.2), 'The mount axis is on the pole.');
+      final en = lookupAppLocalizations(const Locale('en'));
+      expect(polarSideOfPoleText(en, null, 3), isNull);
+      expect(polarSideOfPoleText(en, 40, 12), 'The mount axis sits above and east of the pole.');
+      expect(polarSideOfPoleText(en, -40, -12), 'The mount axis sits below and west of the pole.');
+      expect(polarSideOfPoleText(en, 0.1, -12), 'The mount axis sits west of the pole.');
+      expect(polarSideOfPoleText(en, 3, 0.2), 'The mount axis sits above the pole.');
+      expect(polarSideOfPoleText(en, 0.1, 0.2), 'The mount axis is on the pole.');
     });
 
     testWidgets('idle offers the full routine, the fine-only start and the check-only start', (tester) async {
@@ -579,6 +581,17 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('1.0 s · capture 1.6 s · solve 0.5 s · RA 09h14m40s  Dec +87°10′56″'), findsOneWidget);
       expect(find.byKey(const Key('polar-align-last-solve')), findsNothing);
+    });
+
+    test('the checked card shows the verdict the daemon sent', () {
+      // One band table: the daemon's token picks the words, and the local bands
+      // agree with it for every total.
+      expect(polarRatingForVerdict('excellent')!.$1, 'Excellent');
+      expect(polarRatingForVerdict('far_off')!.$1, 'Far off');
+      expect(polarRatingForVerdict('splendid'), isNull);
+      for (final total in [0.5, 1.0, 2.9, 3.0, 9.9, 10.0, 29.9, 30.0, 31.0]) {
+        expect(polarRatingForVerdict(polarVerdictFor(total)), polarErrorRating(total), reason: '$total′');
+      }
     });
 
     testWidgets('the rough stage does not fetch the guide camera frame', (tester) async {

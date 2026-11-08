@@ -82,6 +82,9 @@ namespace OpenAstroAra.Server.Services {
             await PublishFrameStartedAsync(gen, frameId, exposure).ConfigureAwait(false);
             try {
                 var s = await mainCamera.CaptureAndSolveAsync(exposure, hint, ct).ConfigureAwait(false);
+                // A result, solved or not, means the frame reached the solver: whatever failed before was
+                // the capture layer's and is over — an unsolved pole field is a sky/focus answer, like the
+                // guider path's. (A stale "camera busy" here would relabel it capture_rejected.)
                 lock (_gate) {
                     if (_generation == gen) {
                         _framesCaptured++;
@@ -94,17 +97,9 @@ namespace OpenAstroAra.Server.Services {
                 throw;
             } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException) {
                 throw; // user-fixable setup problem — fail the routine with the solver's message
-            } catch (CameraBusyException ex) {
-                RecordCaptureFault(gen, frameId, ex.Message);
-                return new PolarAlignSolveOutcome(false, 0, 0);
-            } catch (CameraUnavailableException ex) {
-                // The camera dropped mid-run: a capture-layer fault, so an exhausted seed names the
-                // camera (capture_rejected), not focus or sky.
-                RecordCaptureFault(gen, frameId, ex.Message);
-                return new PolarAlignSolveOutcome(false, 0, 0);
             } catch (Exception ex) {
-                // A camera, store or driver fault (a timeout, a mediator exception): the capture layer's,
-                // so an exhausted seed quotes it instead of blaming focus and sky.
+                // Busy, disconnected, a store or driver fault, a timeout: all the capture layer's, so an
+                // exhausted seed quotes the message (capture_rejected) instead of blaming focus and sky.
                 RecordCaptureFault(gen, frameId, ex.Message);
                 return new PolarAlignSolveOutcome(false, 0, 0);
             } finally {
@@ -559,6 +554,12 @@ namespace OpenAstroAra.Server.Services {
                 // A Next that landed after the previous stage's loop took its own (a double tap in the
                 // hand-off) must not be spent on this stage's first check — it would skip the stage.
                 _advanceRequested = false;
+                // A new stage measures afresh: the previous stage's readout must not stand for it on the
+                // status, in a session row written by a Stop during its homing, or in the client's fold.
+                // (The fine stage's last readout the check compares with was copied before this call.)
+                _altErrorArcmin = null;
+                _azErrorArcmin = null;
+                _lastFrame = null;
             }
             LogStage(stage, state);
             return PublishStageAsync(gen, stage, state, solvesDone: 0);

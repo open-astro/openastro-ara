@@ -266,16 +266,22 @@ enum PolarSide { above, below, east, west }
   return (vertical: vertical, side: side);
 }
 
-/// Rough stage: which side of the pole the axis sits, in words (the Full UI's
-/// English). Pure — unit-tested.
-String? polarSideOfPoleText(double? altArcmin, double? azArcmin) {
+/// Rough stage: which side of the pole the axis sits, in words, in the user's
+/// language — the one sentence the Full UI and Simple Mode share. Null until
+/// both errors are known. Pure — unit-tested.
+String? polarSideOfPoleText(AppLocalizations l10n, double? altArcmin, double? azArcmin) {
   final where = polarSideOfPole(altArcmin, azArcmin);
   if (where == null) return null;
-  if (where.vertical == null && where.side == null) return 'The mount axis is on the pole.';
-  final parts = [?where.vertical?.name, ?where.side?.name];
+  if (where.vertical == null && where.side == null) return l10n.polarSideOnPole;
+  final parts = [
+    if (where.vertical == PolarSide.above) l10n.polarSideAbove,
+    if (where.vertical == PolarSide.below) l10n.polarSideBelow,
+    if (where.side == PolarSide.east) l10n.polarSideEast,
+    if (where.side == PolarSide.west) l10n.polarSideWest,
+  ];
+  final joined = parts.join(l10n.polarSideJoin);
   // "above the pole" but "east of the pole" / "above and east of the pole".
-  final of = where.side == null ? '' : 'of ';
-  return 'The mount axis sits ${parts.join(' and ')} ${of}the pole.';
+  return where.side == null ? l10n.polarSideSitsVertical(joined) : l10n.polarSideSits(joined);
 }
 
 class PolarAlignPanel extends ConsumerStatefulWidget {
@@ -769,7 +775,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   Widget _checkedBody(PolarAlignLive live, Color color) {
     final r = live.checkResult;
     final total = r?.totalErrorArcmin ?? live.totalErrorArcmin;
-    final rating = total == null ? null : polarErrorRating(total);
+    // The daemon's verdict when it sent one; the local bands only for a token this build does not know.
+    final rating = (r == null ? null : polarRatingForVerdict(r.verdict)) ??
+        (total == null ? null : polarErrorRating(total));
     final delta = r?.fineDeltaArcmin;
     final alt = r?.altErrorArcmin ?? live.altErrorArcmin;
     final az = r?.azErrorArcmin ?? live.azErrorArcmin;
@@ -1042,7 +1050,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     final inTolerance = live.totalErrorArcmin != null && live.totalErrorArcmin! <= _toleranceArcmin;
     final single = _settings.loopMode == PolarAlignLoopModes.single;
     final coarse = live.stage == PolarAlignStages.coarse;
-    final side = coarse ? polarSideOfPoleText(live.altErrorArcmin, live.azErrorArcmin) : null;
+    final side = coarse ? polarSideOfPoleText(context.l10n, live.altErrorArcmin, live.azErrorArcmin) : null;
     return FitColumn(
       children: [
         if (coarse) ...[

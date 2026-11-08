@@ -403,9 +403,12 @@ namespace OpenAstroAra.Server.Services {
                 }
                 _runCts = new CancellationTokenSource();
                 var runToken = _runCts.Token;
-                _runTask = Task.Run(() => RunRoutineAsync(guiderClient, mainCamera, site, settings, stage, gen, startSeq, runToken), CancellationToken.None);
                 LogStarted(stage);
+                // `started` goes out BEFORE the run task exists: the run's first event (needs_home on a
+                // mount without Find Home) is only a directory create and two GetInfo calls away, and a
+                // client that folds `started` after it would drop the Continue button.
                 await PublishAsync(WsEventCatalog.PolarAlignStarted, new JsonObject { ["state"] = initialState, ["stage"] = stage }).ConfigureAwait(false);
+                _runTask = Task.Run(() => RunRoutineAsync(guiderClient, mainCamera, site, settings, stage, gen, startSeq, runToken), CancellationToken.None);
                 return Accepted("polar-align.start", idempotencyKey);
             } finally {
                 _opLock.Release();
@@ -633,8 +636,10 @@ namespace OpenAstroAra.Server.Services {
                     laterStage = true;
                 }
                 await RunCheckStageAsync(guiderClient, workDir, site, settings, laterStage ? startPointing : null, renew, gen, ct).ConfigureAwait(false);
-            } catch (OperationCanceledException) {
-                // Stop — the stopping path owns the state + events.
+            } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+                // Stop — the stopping path owns the state + events. Any other cancellation (a solver or
+                // HTTP timeout surfacing as TaskCanceledException) is a failure like any other below: left
+                // here it would end the run silently with the state still "adjusting" and the lease held.
             } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException ex) when (IsCurrent(gen)) {
                 // Solver setup problems (guide optics unset, ASTAP path wrong) are user-fixable —
                 // surface the solver's own actionable message, not internal_error.
