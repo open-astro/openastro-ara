@@ -177,8 +177,15 @@ public static partial class ProfilesEndpoints {
                 "until the guider is connected and idle); ?dark_library=keep spares the dark library. " +
                 "The body says what happened to the guider profile.");
 
-        profiles.MapPost("/{id:guid}/select", (Guid id, IProfileRepository repo, IGuiderService guider,
+        profiles.MapPost("/{id:guid}/select", async (Guid id, IProfileRepository repo, IGuiderService guider,
+                ActiveRunSessionRegistry runs, ProfileDeviceSwitch devices,
                 Microsoft.Extensions.Logging.ILoggerFactory loggerFactory) => {
+                // #1710 — a switch changes which devices are connected, so never under a run.
+                if (runs.HasAny) {
+                    return Results.Problem("a sequence run is active — stop it before switching profiles",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                var alreadyActive = repo.ActiveId == id;
                 if (!repo.SelectProfile(id)) {
                     return Results.NotFound();
                 }
@@ -190,13 +197,21 @@ public static partial class ProfilesEndpoints {
                 // to flip — the next guider connect maps the twin anyway — and the select
                 // response must not wait on daemon RPCs.
                 _ = PushGuiderAfterProfileSwitchAsync(guider, loggerFactory.CreateLogger("ProfilesEndpoints"), refuseUnservedSelection: false);
-                return Results.Ok(repo.List());
+                // Not the request's token: a client that drops mid-way must not leave half a rig.
+                var messages = alreadyActive
+                    ? Array.Empty<ProfileDeviceMessageDto>()
+                    : await devices.ApplyAsync(CancellationToken.None).ConfigureAwait(false);
+                var list = repo.List();
+                return Results.Ok(new ProfileSelectResultDto(list.ActiveId, list.Profiles, messages));
             })
-            .Produces<ProfileListDto>(StatusCodes.Status200OK)
+            .Produces<ProfileSelectResultDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("SelectProfile")
             .WithSummary("Make a profile active (loads its settings into the live store). A " +
-                "connected guider follows: its twin profile is selected/created to match.");
+                "connected guider follows: its twin profile is selected/created to match. The " +
+                "devices follow too: Safety Monitor off first, then every device the profile does " +
+                "not remember, then its remembered devices on. Refused (409) while a run is active.");
 
         return app;
     }

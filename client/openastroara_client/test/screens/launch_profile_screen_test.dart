@@ -24,16 +24,18 @@ class _FakeApi extends ProfileApi {
   String? activeId = 'id-1';
   final List<String> selectCalls = [];
   Object? selectError;
+  List<ProfileDeviceMessage> selectMessages = const [];
 
   @override
   Future<ProfileList> listProfiles() async =>
       ProfileList(activeId: activeId, profiles: List.of(profiles));
 
   @override
-  Future<void> selectProfile(String id) async {
+  Future<List<ProfileDeviceMessage>> selectProfile(String id) async {
     selectCalls.add(id);
     if (selectError != null) throw selectError!;
     activeId = id;
+    return selectMessages;
   }
 
   final List<String> deleteCalls = [];
@@ -120,6 +122,24 @@ void main() {
     await tester.pumpAndSettle();
     expect(container.read(profileGatePassedProvider), isFalse);
     expect(find.text('daemon said no'), findsOneWidget);
+  });
+
+  testWidgets('a device that failed the switch is named in a SnackBar and the gate still passes',
+      (tester) async {
+    final api = _FakeApi()
+      ..selectMessages = const [
+        ProfileDeviceMessage(deviceName: 'AM5', message: 'Could not connect.'),
+      ];
+    final c = await _pump(tester, api);
+    await tester.tap(find.text('My Backyard Rig'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Travel Rig').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Image'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.textContaining('AM5: Could not connect.'), findsOneWidget);
+    expect(c.read(profileGatePassedProvider), isTrue);
   });
 
   testWidgets('no profiles: dropdown + Image hidden, Add / Import remain',

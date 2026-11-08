@@ -17,7 +17,11 @@ import '../../state/sky_atlas/tonight_sky_state.dart'
     show planningSettingsBootstrapProvider;
 import '../../models/frame_histogram.dart';
 import '../../models/guider_status.dart';
+import '../../models/discovered_device.dart';
 import '../../services/equipment_device_api.dart' show describeEquipmentError;
+import '../../state/settings/equipment_connection_state.dart'
+    show EquipmentDeviceType;
+import '../../widgets/equipment/alpaca_chooser_dialog.dart';
 import '../../services/equipment_driver_api.dart';
 import '../../models/polar_align.dart';
 import '../../state/app_shell_state.dart';
@@ -2657,18 +2661,21 @@ class _Gear extends ConsumerWidget {
       children: [
         _GearRow(
           id: 'camera',
+          deviceType: EquipmentDeviceType.camera,
           type: l10n.shellSectionCamera,
           provider: cameraStatusProvider,
           onOpen: () => onOpen('Camera'),
         ),
         _GearRow(
           id: 'mount',
+          deviceType: EquipmentDeviceType.mount,
           type: l10n.shellSectionMount,
           provider: mountProvider,
           onOpen: () => onOpen('Mount'),
         ),
         _GearRow(
           id: 'focuser',
+          deviceType: EquipmentDeviceType.focuser,
           type: l10n.shellSectionFocuser,
           provider: focuserProvider,
           onOpen: () => onOpen('Focuser'),
@@ -2676,18 +2683,21 @@ class _Gear extends ConsumerWidget {
         _GuiderGearRow(onOpen: () => onOpen('Guider')),
         _GearRow(
           id: 'filterwheel',
+          deviceType: EquipmentDeviceType.filterWheel,
           type: l10n.shellFilterWheel,
           provider: filterWheelProvider,
           onOpen: () => onOpen('Filter wheel'),
         ),
         _GearRow(
           id: 'rotator',
+          deviceType: EquipmentDeviceType.rotator,
           type: l10n.shellRotator,
           provider: rotatorProvider,
           onOpen: () => onOpen('Rotator'),
         ),
         _GearRow(
           id: 'flat',
+          deviceType: EquipmentDeviceType.flatPanel,
           type: l10n.shellFlatPanel,
           provider: flatPanelProvider,
           onOpen: () => onOpen('Flat panel'),
@@ -2695,23 +2705,99 @@ class _Gear extends ConsumerWidget {
         _SwitchGearRows(onOpen: () => onOpen('Switches')),
         _GearRow(
           id: 'dome',
+          deviceType: EquipmentDeviceType.dome,
           type: l10n.shellDome,
           provider: domeProvider,
           onOpen: () => onOpen('Dome'),
         ),
         _GearRow(
           id: 'weather',
+          deviceType: EquipmentDeviceType.weather,
           type: l10n.shellWeather,
           provider: weatherProvider,
           onOpen: () => onOpen('Weather'),
         ),
         _GearRow(
           id: 'safety',
+          deviceType: EquipmentDeviceType.safetyMonitor,
           type: l10n.shellSafetyMonitor,
           provider: safetyMonitorProvider,
           onOpen: () => onOpen('Safety monitor'),
         ),
+        const _AddGearRow(),
       ],
+    );
+  }
+}
+
+/// Devices this rig has none of yet: pick one through the Full UI's chooser.
+class _AddGearRow extends ConsumerWidget {
+  const _AddGearRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    (EquipmentDeviceType, String, Future<bool> Function(DiscoveredDevice))
+    entry<T extends EquipmentDeviceStatus>(
+      EquipmentDeviceType type,
+      String label,
+      AsyncNotifierProvider<EquipmentDeviceNotifier<T>, T?> provider,
+    ) => (type, label, ref.read(provider.notifier).connect);
+    final missing = [
+      if (ref.watch(cameraStatusProvider).value == null)
+        entry(EquipmentDeviceType.camera, l10n.shellSectionCamera, cameraStatusProvider),
+      if (ref.watch(mountProvider).value == null)
+        entry(EquipmentDeviceType.mount, l10n.shellSectionMount, mountProvider),
+      if (ref.watch(focuserProvider).value == null)
+        entry(EquipmentDeviceType.focuser, l10n.shellSectionFocuser, focuserProvider),
+      if (ref.watch(filterWheelProvider).value == null)
+        entry(EquipmentDeviceType.filterWheel, l10n.shellFilterWheel, filterWheelProvider),
+      if (ref.watch(rotatorProvider).value == null)
+        entry(EquipmentDeviceType.rotator, l10n.shellRotator, rotatorProvider),
+      if (ref.watch(flatPanelProvider).value == null)
+        entry(EquipmentDeviceType.flatPanel, l10n.shellFlatPanel, flatPanelProvider),
+      if (ref.watch(domeProvider).value == null)
+        entry(EquipmentDeviceType.dome, l10n.shellDome, domeProvider),
+      if (ref.watch(weatherProvider).value == null)
+        entry(EquipmentDeviceType.weather, l10n.shellWeather, weatherProvider),
+      if (ref.watch(safetyMonitorProvider).value == null)
+        entry(EquipmentDeviceType.safetyMonitor, l10n.shellSafetyMonitor, safetyMonitorProvider),
+      if ((ref.watch(switchListProvider).value ?? const []).isEmpty)
+        (
+          EquipmentDeviceType.switchDevice,
+          l10n.shellSwitches,
+          ref.read(switchListProvider.notifier).connect,
+        ),
+    ];
+    if (missing.isEmpty) return const SizedBox.shrink();
+    return _gearTile(
+      id: 'add',
+      title: l10n.shellAddDevice,
+      dot: StatusLevel.disconnected,
+      word: missing.map((m) => m.$2).join(', '),
+      verb: null,
+      label: null,
+      action: null,
+      choose: (context) async {
+        final pick = await showDialog<int>(
+          context: context,
+          builder: (context) => SimpleDialog(
+            title: Text(l10n.shellAddDevice),
+            children: [
+              for (final (i, m) in missing.indexed)
+                SimpleDialogOption(
+                  key: Key('simple-gear-add-${m.$1.name}'),
+                  onPressed: () => Navigator.of(context).pop(i),
+                  child: Text(m.$2),
+                ),
+            ],
+          ),
+        );
+        if (pick == null || !context.mounted) return;
+        final (type, label, connect) = missing[pick];
+        await _chooseDevice(context, type, label, connect);
+      },
+      onOpen: null,
     );
   }
 }
@@ -2721,6 +2807,7 @@ class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
     required this.id,
     required this.type,
     required this.provider,
+    required this.deviceType,
     this.onOpen,
   });
 
@@ -2729,15 +2816,20 @@ class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
 
   final String id;
   final String type;
+  final EquipmentDeviceType deviceType;
   final AsyncNotifierProvider<EquipmentDeviceNotifier<T>, T?> provider;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(provider).value;
-    // Never set up on this rig: nothing to show (the Advanced UI picks gear).
-    if (status == null) return const SizedBox.shrink();
     final notifier = ref.read(provider.notifier);
     final l10n = context.l10n;
+    // Connect only reconnects what the rig remembers (#1710): Choose picks a
+    // device, through the Full UI's chooser.
+    Future<void> choose(BuildContext context) =>
+        _chooseDevice(context, deviceType, type, notifier.connect);
+    // Never set up on this rig: the Add a device row picks it.
+    if (status == null) return const SizedBox.shrink();
     // The dot is the top bar chip's, so the two always agree.
     final dot = equipmentStatusLevel(status);
     final word = switch (status.connectionState) {
@@ -2770,6 +2862,7 @@ class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
       verb: verb,
       label: label,
       action: action,
+      choose: status.isConnected || status.isConnecting ? null : choose,
       onOpen: onOpen,
     );
   }
@@ -2791,6 +2884,14 @@ class _SwitchGearRows extends ConsumerWidget {
       children: [for (final d in devices) _row(context, ref, d)],
     );
   }
+
+  Future<void> Function(BuildContext) _choose(WidgetRef ref) =>
+      (context) => _chooseDevice(
+        context,
+        EquipmentDeviceType.switchDevice,
+        context.l10n.shellSwitches,
+        ref.read(switchListProvider.notifier).connect,
+      );
 
   Widget _row(BuildContext context, WidgetRef ref, SwitchDevice d) {
     final notifier = ref.read(switchListProvider.notifier);
@@ -2837,6 +2938,11 @@ class _SwitchGearRows extends ConsumerWidget {
       verb: verb,
       label: label,
       action: action,
+      choose:
+          d.connectionState == SwitchConnectionState.connected ||
+              d.connectionState == SwitchConnectionState.connecting
+          ? null
+          : _choose(ref),
       onOpen: onOpen,
     );
   }
@@ -2902,6 +3008,33 @@ class _GuiderGearRow extends ConsumerWidget {
   }
 }
 
+/// Opens the Full UI's device chooser; [connect] takes the picked device.
+Future<void> _chooseDevice(
+  BuildContext context,
+  EquipmentDeviceType type,
+  String typeLabel,
+  Future<bool> Function(DiscoveredDevice device) connect,
+) {
+  final notify = userNotifier(context);
+  final l10n = context.l10n;
+  return showAlpacaChooserDialog(
+    context,
+    type,
+    deviceTypeLabel: typeLabel,
+    onPick: (device) async {
+      try {
+        await connect(device);
+      } catch (e) {
+        notify(
+          l10n.shellGearActionFailed(l10n.shellConnect, device.name),
+          detail: describeEquipmentError(e),
+          error: true,
+        );
+      }
+    },
+  );
+}
+
 Widget _gearTile({
   required String id,
   required String title,
@@ -2912,6 +3045,7 @@ Widget _gearTile({
   required String? label,
   required Future<void> Function()? action,
   required VoidCallback? onOpen,
+  Future<void> Function(BuildContext context)? choose,
 }) {
   // Ink, so the focus and press highlight paints over the fill, not under.
   final row = Ink(
@@ -2957,6 +3091,15 @@ Widget _gearTile({
                 }
               },
               child: Text(label),
+            ),
+          ),
+        if (choose != null)
+          Builder(
+            builder: (context) => TextButton(
+              key: Key('simple-gear-$id-choose'),
+              style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+              onPressed: () => choose(context),
+              child: Text(context.l10n.shellChooseDevice),
             ),
           ),
         if (onOpen != null)

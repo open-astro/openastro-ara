@@ -232,7 +232,10 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
     try {
       final list = ref.read(profileManagementProvider).value;
       if (list != null && list.activeId != id) {
-        await ref.read(profileManagementProvider.notifier).select(id);
+        showProfileDeviceMessages(
+          messenger,
+          await ref.read(profileManagementProvider.notifier).select(id),
+        );
       }
       ref.read(profileGatePassedProvider.notifier).pass();
     } catch (e) {

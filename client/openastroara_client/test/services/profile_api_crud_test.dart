@@ -122,6 +122,24 @@ void main() {
       expect(a.path, '/api/v1/profiles/id-9/select');
     });
 
+    test(
+      'selectProfile returns the devices the daemon could not bring up',
+      () async {
+        final a = _RecordingAdapter(
+          body: {
+            'active_id': 'id-9',
+            'profiles': <Object>[],
+            'device_messages': [
+              {'device_name': 'AM5', 'message': 'Could not connect.'},
+            ],
+          },
+        );
+        final messages = await _api(a).selectProfile('id-9');
+        expect(messages.single.deviceName, 'AM5');
+        expect(messages.single.message, 'Could not connect.');
+      },
+    );
+
     test('deleteProfile DELETEs /api/v1/profiles/{id}', () async {
       final a = _RecordingAdapter();
       await _api(a).deleteProfile('id-9');

@@ -721,11 +721,13 @@ public partial class Program {
         // {profileDir}/equipment-selection.json so EquipmentAutoConnectService can
         // re-establish it on boot. Written at the connect chokepoint (ConnectGatedAsync).
         builder.Services.AddSingleton<IEquipmentSelectionStore>(sp =>
-            new EquipmentSelectionStore(profileDir, sp.GetRequiredService<ILogger<EquipmentSelectionStore>>()));
+            new EquipmentSelectionStore(profileDir, sp.GetRequiredService<ILogger<EquipmentSelectionStore>>(),
+                activeProfile: () => sp.GetService<IProfileRepository>()?.ActiveId));
 
         // §52.1 — connects remembered devices without re-discovery; shared by auto-connect-on-boot
         // (EquipmentAutoConnectService) and the manual POST /equipment/{type}/reconnect endpoints.
         builder.Services.AddSingleton<IEquipmentReconnector, EquipmentReconnector>();
+        builder.Services.AddSingleton<ProfileDeviceSwitch>();
 
         // §14e — tenth real device service and the head of the capture path: live Alpaca camera
         // (caps + cooler/state runtime) whose StartExposure runs a REAL capture — exposure →

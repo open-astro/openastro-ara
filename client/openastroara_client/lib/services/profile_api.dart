@@ -65,9 +65,20 @@ class ProfileApi {
   }
 
   /// §37 multi-profile — make a profile active (`POST /api/v1/profiles/{id}/select`),
-  /// loading its settings into the live store.
-  Future<void> selectProfile(String id) async {
-    await _dio.post<void>('/api/v1/profiles/${Uri.encodeComponent(id)}/select');
+  /// loading its settings into the live store. Returns one message per device
+  /// that did not come up (#1710); a failed device never fails the switch.
+  Future<List<ProfileDeviceMessage>> selectProfile(String id) async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/profiles/${Uri.encodeComponent(id)}/select',
+      // The daemon waits up to 30 s for the new profile's devices to settle.
+      options: Options(receiveTimeout: const Duration(seconds: 45)),
+    );
+    final raw = res.data?['device_messages'];
+    return [
+      if (raw is List)
+        for (final m in raw.whereType<Map<dynamic, dynamic>>())
+          ProfileDeviceMessage.fromJson(Map<String, dynamic>.from(m)),
+    ];
   }
 
   /// §63.4 — what the daemon knows about the profile's OpenAstro Guider profile

@@ -363,6 +363,8 @@
   "shellNotConnected": "Não conectado",
   "shellDisconnect": "Desconectar",
   "shellReconnect": "Reconectar",
+  "shellAddDevice": "Adicionar um dispositivo",
+  "shellChooseDevice": "Escolher…",
   "shellConnect": "Conectar",
   "shellCouldntSave": "Não foi possível salvar",
   "shellCouldntSetClock": "Não foi possível acertar o relógio do setup",

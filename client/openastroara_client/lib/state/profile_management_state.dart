@@ -102,8 +102,13 @@ class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
     }
   }
 
-  /// Make [id] the active profile, then refresh. Throws on transport failure.
-  Future<void> select(String id) => _mutate((api) => api.selectProfile(id));
+  /// Make [id] the active profile, then refresh. Returns the devices the
+  /// daemon could not bring up. Throws on transport failure.
+  Future<List<ProfileDeviceMessage>> select(String id) async {
+    var messages = const <ProfileDeviceMessage>[];
+    await _mutate((api) async => messages = await api.selectProfile(id));
+    return messages;
+  }
 
   /// Rename [id], then refresh. Throws on transport failure.
   Future<void> rename(String id, String name) => _mutate((api) => api.renameProfile(id, name));

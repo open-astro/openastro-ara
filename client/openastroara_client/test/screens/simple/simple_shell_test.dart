@@ -2733,7 +2733,7 @@ void main() {
     final page = find.byKey(const Key('simple-gear'));
     expect(find.text('Devices'), findsOneWidget, reason: 'only in the section list, no page title');
     expect(find.descendant(of: page, matching: find.textContaining('ASI2600MM')), findsOneWidget);
-    expect(find.descendant(of: page, matching: find.textContaining('Filter wheel')), findsNothing, reason: 'never set up');
+    expect(find.byKey(const Key('simple-gear-filterwheel')), findsNothing, reason: 'never set up: no row of its own');
     await tester.tap(find.byKey(const Key('simple-gear-camera-disconnect')));
     await tester.tap(find.byKey(const Key('simple-gear-focuser-reconnect')));
     await tester.tap(find.byKey(const Key('simple-gear-mount-connect')));
@@ -2741,6 +2741,34 @@ void main() {
     expect(camera.calls, ['disconnect']);
     expect(focuser.calls, ['reconnect']);
     expect(mount.calls, ['reconnect'], reason: 'Connect: the device the rig remembers, no chooser');
+  });
+
+  testWidgets('Devices picks a device through the full UI chooser, set up before or not', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      mountProvider.overrideWith(() => _Mount(EquipmentConnectionState.disconnected)),
+    ]);
+    await _openSection(tester, 'Devices');
+    expect(find.byKey(const Key('simple-gear-camera-connect')), findsNothing, reason: 'nothing remembered to reconnect');
+    await tester.ensureVisible(find.byKey(const Key('simple-gear-add-choose')));
+    await tester.tap(find.byKey(const Key('simple-gear-add-choose')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-gear-add-camera')));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget, reason: 'the chooser the Full UI cards open');
+    expect(find.text('Cancel'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-gear-mount-choose')));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+  });
+
+  testWidgets('a connected device offers no Choose', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      mountProvider.overrideWith(() => _Mount(EquipmentConnectionState.connected)),
+    ]);
+    await _openSection(tester, 'Devices');
+    expect(find.byKey(const Key('simple-gear-mount-choose')), findsNothing);
   });
 
   testWidgets('a Connect the rig refuses says why in a pill instead of looking like a dead button', (tester) async {

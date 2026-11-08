@@ -6786,7 +6786,7 @@ paths:
     post:
       tags:
         - Profiles
-      summary: 'Make a profile active (loads its settings into the live store). A connected guider follows: its twin profile is selected/created to match.'
+      summary: 'Make a profile active (loads its settings into the live store). A connected guider follows: its twin profile is selected/created to match. The devices follow too: Safety Monitor off first, then every device the profile does not remember, then its remembered devices on. Refused (409) while a run is active.'
       operationId: SelectProfile
       parameters:
         - name: id
@@ -6801,9 +6801,15 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProfileListDto'
+                $ref: '#/components/schemas/ProfileSelectResultDto'
         '404':
           description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
           content:
             application/problem+json:
               schema:
@@ -13080,6 +13086,16 @@ components:
           type:
             - 'null'
             - string
+    ProfileDeviceMessageDto:
+      required:
+        - device_name
+        - message
+      type: object
+      properties:
+        device_name:
+          type: string
+        message:
+          type: string
     ProfileListDto:
       required:
         - active_id
@@ -13114,6 +13130,26 @@ components:
         updated_utc:
           type: string
           format: date-time
+    ProfileSelectResultDto:
+      required:
+        - active_id
+        - profiles
+        - device_messages
+      type: object
+      properties:
+        active_id:
+          type:
+            - 'null'
+            - string
+          format: uuid
+        profiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProfileMetaDto'
+        device_messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProfileDeviceMessageDto'
     ProfileShareDto:
       required:
         - profile_id

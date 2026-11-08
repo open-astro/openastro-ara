@@ -1754,6 +1754,14 @@
   "@shellReconnect": {
     "description": "Simple Mode Settings › Devices row button after a failure"
   },
+  "shellAddDevice": "Add a device",
+  "@shellAddDevice": {
+    "description": "Simple Mode Settings › Devices row and dialog title: pick a device this rig has none of yet"
+  },
+  "shellChooseDevice": "Choose…",
+  "@shellChooseDevice": {
+    "description": "Simple Mode Settings › Devices row button: open the device chooser"
+  },
   "shellConnect": "Connect",
   "@shellConnect": {
     "description": "Simple Mode Settings › Devices row button"

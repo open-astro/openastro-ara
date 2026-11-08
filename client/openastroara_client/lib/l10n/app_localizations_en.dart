@@ -1278,6 +1278,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellReconnect => 'Reconnect';
 
   @override
+  String get shellAddDevice => 'Add a device';
+
+  @override
+  String get shellChooseDevice => 'Choose…';
+
+  @override
   String get shellConnect => 'Connect';
 
   @override
