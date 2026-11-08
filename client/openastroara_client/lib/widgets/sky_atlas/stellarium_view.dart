@@ -33,6 +33,7 @@ import '../../util/gps_site_fill.dart' show clientPlatform, isTouchPlatform;
 import '../../util/search_route.dart';
 import 'custom_target_dialog.dart';
 import 'linux_planetarium_overlay.dart';
+import 'planetarium_search_listener.dart';
 import 'rotation_assist_panel.dart';
 import 'tonight_sky_panel.dart';
 import '../../state/simple_messages_state.dart';
@@ -535,15 +536,6 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
       // so clear() doesn't re-wake this listener.)
       ref.read(planetariumCommandProvider.notifier).clear();
     });
-    // A search typed in Simple Mode Plan's sheet runs through this view's
-    // own search, as if typed in its search bar.
-    ref.listen<String?>(planetariumSearchProvider, (_, q) {
-      if (q == null) return;
-      ref.read(planetariumSearchProvider.notifier).clear();
-      _searchCtrl.text = q;
-      unawaited(_submitSearch());
-    });
-
     // Site / optics edits made in Options reach the page even with no daemon
     // to poll (online, the page's own polling of the profile endpoints does
     // the same job; the push is harmless there — same values).
@@ -607,13 +599,25 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
             ),
     );
 
+    // A search typed in Simple Mode Plan's sheet runs through this view's
+    // own search, as if typed in its search bar; mounted only now the view is
+    // ready, so an earlier search waits.
+    Widget searchable(Widget view) => PlanetariumSearchListener(
+      onSearch: (q) {
+        _searchCtrl.text = q;
+        unawaited(_submitSearch());
+      },
+      child: view,
+    );
     if (widget.bare) {
-      return ColoredBox(
-        color: AraColors.bgPrimary,
-        child: Column(children: [planetarium]),
+      return searchable(
+        ColoredBox(
+          color: AraColors.bgPrimary,
+          child: Column(children: [planetarium]),
+        ),
       );
     }
-    return ColoredBox(
+    return searchable(ColoredBox(
       color: AraColors.bgPrimary,
       child: Column(
         children: [
@@ -662,7 +666,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
           ),
         ],
       ),
-    );
+    ));
   }
 }
 
