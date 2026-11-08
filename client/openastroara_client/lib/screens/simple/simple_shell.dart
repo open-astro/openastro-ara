@@ -141,7 +141,19 @@ const double kSimpleStopSize = 60;
 /// The one popover open beside a rail, if any. [settings] is the chip's: the
 /// current mode's options (Preview's exposure, Focus's panel).
 /// [menu] is the top bar's Settings menu.
-enum _Popover { none, modes, settings, queue, menu, search, ara }
+enum _Popover {
+  none,
+  modes,
+  settings,
+  queue,
+  menu,
+  search,
+  ara;
+
+  /// Opens in the device window's top-left corner, so the two never stay up
+  /// together, at any width (#1674).
+  bool get topLeft => this == search || this == ara;
+}
 
 /// Simple Mode (ALP-4810): the latest frame fills the window and only the
 /// shutter is always out. A right rail holds the mode (tap for the five
@@ -451,7 +463,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       setState(() {
         _clean = false;
         _device = window;
-        if (!_sideBySide(context)) _popover = _Popover.none;
+        if (_popover.topLeft || !_sideBySide(context)) {
+          _popover = _Popover.none;
+        }
       });
       return;
     }
@@ -600,7 +614,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   void _toggleNow(_Popover p) {
     // Settings covers everything; a rail menu that would cover the camera
     // window closes it.
-    if (p == _Popover.menu || !_sideBySide(context)) _device = null;
+    if (p == _Popover.menu || p.topLeft || !_sideBySide(context)) {
+      _device = null;
+    }
     // The sheet opened from the queue's Add target / edit outranks every
     // popover, so a rail tap closes it first (it used to stay up for good on
     // a touchscreen, user 2026-11-03); the chip, which opens that sheet, just
@@ -661,7 +677,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
             _device = _device == panel ? null : panel;
             // It would cover the open rail menu, or sit under Settings.
             if (_device != null &&
-                (_popover == _Popover.menu || !_sideBySide(context))) {
+                (_popover == _Popover.menu ||
+                    _popover.topLeft ||
+                    !_sideBySide(context))) {
               _popover = _Popover.none;
             }
           });
