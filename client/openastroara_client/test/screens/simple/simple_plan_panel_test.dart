@@ -1329,7 +1329,7 @@ void main() {
     expect(c.read(simpleRunProvider).busy, isFalse);
   });
 
-  testWidgets('no storage disk: the daemon\'s words and Open Storage, which leaves for the full UI\'s page', (tester) async {
+  testWidgets('no storage disk: the daemon\'s words and Open Storage, which asks the shell for Storage', (tester) async {
     final seq = _Seq()
       ..startError = DioException(
         requestOptions: RequestOptions(),

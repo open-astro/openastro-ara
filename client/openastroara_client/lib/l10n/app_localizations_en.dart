@@ -2739,4 +2739,41 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get wizardDarksSkippedPushFailed =>
       'Dark-library build skipped: the guider didn\'t take the new profile. Build it from the Guider panel once the profile push succeeds.';
+
+  @override
+  String get shellStorageSavedTo => 'Frames are saved to';
+
+  @override
+  String get shellStorageInternal => 'Internal storage';
+
+  @override
+  String shellStorageFreeOf(String free, String total) {
+    return '$free free of $total';
+  }
+
+  @override
+  String get shellStorageNotPlugged =>
+      'No disk is plugged in. Frames can\'t be saved.';
+
+  @override
+  String get shellStorageUnreadable =>
+      'Couldn\'t read the rig\'s storage. Frames can\'t be saved.';
+
+  @override
+  String get shellStorageFull => 'The disk is full. Frames can\'t be saved.';
+
+  @override
+  String get shellStorageChoose => 'Choose disk';
+
+  @override
+  String get shellStorageEject => 'Eject';
+
+  @override
+  String get shellStorageCheck => 'Check disk';
+
+  @override
+  String get searchSettingStorage => 'Storage';
+
+  @override
+  String get searchWordsStorage => 'disk drive frames save space eject usb';
 }

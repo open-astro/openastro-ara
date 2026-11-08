@@ -4688,6 +4688,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dark-library build skipped: the guider didn\'t take the new profile. Build it from the Guider panel once the profile push succeeds.'**
   String get wizardDarksSkippedPushFailed;
+
+  /// Simple Mode Settings › Rig › Storage block: label above the disk's name
+  ///
+  /// In en, this message translates to:
+  /// **'Frames are saved to'**
+  String get shellStorageSavedTo;
+
+  /// Simple Mode Settings › Rig › Storage block: name when no external disk is the store
+  ///
+  /// In en, this message translates to:
+  /// **'Internal storage'**
+  String get shellStorageInternal;
+
+  /// Simple Mode Settings › Rig › Storage block: free and total space
+  ///
+  /// In en, this message translates to:
+  /// **'{free} free of {total}'**
+  String shellStorageFreeOf(String free, String total);
+
+  /// Simple Mode Settings › Rig › Storage block: red line, no space figures
+  ///
+  /// In en, this message translates to:
+  /// **'No disk is plugged in. Frames can\'t be saved.'**
+  String get shellStorageNotPlugged;
+
+  /// Simple Mode Settings › Rig › Storage block: red line, the read failed
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t read the rig\'s storage. Frames can\'t be saved.'**
+  String get shellStorageUnreadable;
+
+  /// Simple Mode Settings › Rig › Storage block: red line, no free space
+  ///
+  /// In en, this message translates to:
+  /// **'The disk is full. Frames can\'t be saved.'**
+  String get shellStorageFull;
+
+  /// Simple Mode Settings › Rig › Storage block: button, pick the disk frames are saved to
+  ///
+  /// In en, this message translates to:
+  /// **'Choose disk'**
+  String get shellStorageChoose;
+
+  /// Simple Mode Settings › Rig › Storage block: button, safely remove the disk
+  ///
+  /// In en, this message translates to:
+  /// **'Eject'**
+  String get shellStorageEject;
+
+  /// Simple Mode Settings › Rig › Storage block: button, check the disk's filesystem
+  ///
+  /// In en, this message translates to:
+  /// **'Check disk'**
+  String get shellStorageCheck;
+
+  /// Simple Mode search panel: a setting's name as a result; should match its name in Settings
+  ///
+  /// In en, this message translates to:
+  /// **'Storage'**
+  String get searchSettingStorage;
+
+  /// Simple Mode search panel: other words for Storage
+  ///
+  /// In en, this message translates to:
+  /// **'disk drive frames save space eject usb'**
+  String get searchWordsStorage;
 }
 
 class _AppLocalizationsDelegate

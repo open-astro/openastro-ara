@@ -49,6 +49,7 @@ import 'package:openastroara/state/client_gps_state.dart' show clientGpsPrefsSer
 import 'package:openastroara/state/time_sync_state.dart';
 import 'package:openastroara/models/stats/server_internal_state.dart';
 import 'package:openastroara/services/storage_space_api.dart';
+import 'package:openastroara/services/storage_devices_api.dart';
 import 'package:openastroara/state/stats/server_internal_state_state.dart';
 import 'package:openastroara/screens/app_shell.dart';
 import 'package:openastroara/models/polar_align.dart';
@@ -2330,6 +2331,20 @@ void main() {
     expect(find.byKey(const Key('sky')), findsOneWidget, reason: 'Sky still opens it over a frame');
   });
 
+  testWidgets('Search for storage lands on Rig, where the Storage block is', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-search-button')));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('simple-search-field')), 'storage');
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-search-setting-0')));
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const Key('simple-storage')), findsOneWidget);
+    expect(find.byType(SettingsShell), findsNothing);
+  });
+
   testWidgets('Search finds the Guide Camera section, and Dither in Guide mode where it lives (#1586)',
       (tester) async {
     await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => _GuiderUp())]);
@@ -2489,6 +2504,7 @@ void main() {
     await tester.tap(pt);
     await tester.pump();
     expect(c.read(appLocaleProvider), const Locale('pt', 'BR'));
+    await tester.ensureVisible(find.byKey(const Key('simple-menu-language-system'))); // Rig is longer now
     await tester.tap(find.byKey(const Key('simple-menu-language-system')));
     await tester.pump();
     expect(c.read(appLocaleProvider), isNull);
@@ -2705,18 +2721,14 @@ void main() {
     expect((m.kind, m.title, m.detail), (SimpleMessageKind.error, "Couldn't save that", 'Rig not connected'));
   });
 
-  testWidgets('Logs & bug report opens over Simple Mode; Back comes back', (tester) async {
+  testWidgets('Rig holds the bug report and client log actions inline: no Full UI Settings, Simple Mode stays on', (tester) async {
     final c = await _pump(tester, const Size(1024, 768));
     await _openSection(tester, 'Rig');
-    await tester.ensureVisible(find.text('Logs & bug report')); // Rig scrolls
-    await tester.tap(find.text('Logs & bug report'));
-    await tester.pumpAndSettle();
-    expect(find.byType(SettingsShell), findsOneWidget);
-    expect(c.read(selectedSettingsPanelProvider), 'support.logs');
-    expect(c.read(simpleModeProvider).value, isTrue);
-    await tester.tap(find.byTooltip('Back'));
-    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Send me a bug report')); // Rig scrolls
+    expect(find.text('Send me a bug report'), findsOneWidget);
+    expect(find.text('Save client log'), findsOneWidget, reason: 'savable with no rig');
     expect(find.byType(SettingsShell), findsNothing);
+    expect(c.read(simpleModeProvider).value, isTrue);
   });
 
   testWidgets('Devices lists the profile\'s devices with their state: Disconnect, Connect, Reconnect after a failure; '
@@ -3308,20 +3320,61 @@ void main() {
     expect(find.byKey(const Key('simple-gear-camera-disconnect')), findsNothing);
   });
 
-  testWidgets('a jump to a settings panel (gear chips, Open Storage) opens it over Simple Mode', (tester) async {
-    // The test font is wider than the real one and overflows the Storage panel.
-    tester.platformDispatcher.textScaleFactorTestValue = 0.5;
-    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+  testWidgets('Settings › Rig shows the store drive: its name, free space and the three actions', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), storage: const StorageSpace(saveDirectory: '/mnt/sky', isFallback: false, freeBytes: 412 * 1000000000, totalBytes: 900 * 1000000000),
+        gear: [storageDevicesProvider.overrideWith((ref) async => [const StorageDevice(path: '/dev/sda1', label: 'SkyDrive', removable: true, isSystemDisk: false, isAraStore: true, uuid: 'u')])]);
+    await _openSection(tester, 'Rig');
+    await tester.ensureVisible(find.byKey(const Key('simple-storage')));
+    await tester.pump();
+    expect(find.text('Frames are saved to'), findsOneWidget);
+    expect(find.text('SkyDrive'), findsOneWidget);
+    expect(find.text('412 GB free of 900 GB'), findsOneWidget);
+    expect(find.byKey(const Key('simple-storage-problem')), findsNothing);
+    for (final k in ['choose', 'eject', 'check']) {
+      expect(tester.getSize(find.byKey(Key('simple-storage-$k'))).height, greaterThanOrEqualTo(44));
+    }
+    expect(tester.widget<FilledButton>(find.byKey(const Key('simple-storage-choose'))).onPressed, isNotNull);
+    expect(c.read(simpleModeProvider).value, isTrue);
+  });
+
+  testWidgets('Settings › Rig Storage: no disk plugged in says so in red', (tester) async {
+    await _pump(tester, const Size(1024, 768), storage: const StorageSpace(saveDirectory: '/mnt/sky', isFallback: false));
+    await _openSection(tester, 'Rig');
+    await tester.ensureVisible(find.byKey(const Key('simple-storage')));
+    expect(find.text("No disk is plugged in. Frames can't be saved."), findsOneWidget);
+  });
+
+  testWidgets('Settings › Rig Storage with no rig: the status says so and every action is disabled', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await _openSection(tester, 'Rig');
+    await tester.ensureVisible(find.byKey(const Key('simple-storage')));
+    expect(find.descendant(of: find.byKey(const Key('simple-storage')), matching: find.text('Rig not connected')), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.byKey(const Key('simple-storage-choose'))).onPressed, isNull);
+    expect(tester.widget<OutlinedButton>(find.descendant(of: find.byKey(const Key('simple-storage-eject')), matching: find.byWidgetPredicate((w) => w is OutlinedButton))).onPressed, isNull);
+    expect(tester.widget<OutlinedButton>(find.descendant(of: find.byKey(const Key('simple-storage-check')), matching: find.byWidgetPredicate((w) => w is OutlinedButton))).onPressed, isNull);
+  });
+
+  testWidgets('Open Storage opens Settings on Rig with Storage in view, over Simple Mode', (tester) async {
     final c = await _pump(tester, const Size(1024, 768));
     c.read(selectedSettingsPanelProvider.notifier).select('session.storage');
     c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
     await tester.pumpAndSettle();
+    expect(find.byType(SettingsShell), findsNothing);
+    expect(find.byKey(const Key('simple-menu')), findsOneWidget);
+    expect(find.byKey(const Key('simple-storage')), findsOneWidget);
+    expect(tester.getRect(find.byKey(const Key('simple-storage'))).bottom, lessThanOrEqualTo(768));
+    expect(c.read(simpleModeProvider).value, isTrue);
+  });
+
+  testWidgets('a jump to another settings panel opens it over Simple Mode', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    c.read(selectedSettingsPanelProvider.notifier).select('session.storage_other');
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    await tester.pumpAndSettle();
     expect(find.byType(SettingsShell), findsOneWidget);
-    expect(c.read(selectedSettingsPanelProvider), 'session.storage');
     expect(c.read(simpleModeProvider).value, isTrue);
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
-    // A second jump opens it again.
     c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
     await tester.pumpAndSettle();
     expect(find.byType(SettingsShell), findsOneWidget);

@@ -2739,6 +2739,43 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get wizardDarksSkippedPushFailed =>
       'Dark-library build skipped: the guider didn\'t take the new profile. Build it from the Guider panel once the profile push succeeds.';
+
+  @override
+  String get shellStorageSavedTo => 'Frames are saved to';
+
+  @override
+  String get shellStorageInternal => 'Internal storage';
+
+  @override
+  String shellStorageFreeOf(String free, String total) {
+    return '$free free of $total';
+  }
+
+  @override
+  String get shellStorageNotPlugged =>
+      'No disk is plugged in. Frames can\'t be saved.';
+
+  @override
+  String get shellStorageUnreadable =>
+      'Couldn\'t read the rig\'s storage. Frames can\'t be saved.';
+
+  @override
+  String get shellStorageFull => 'The disk is full. Frames can\'t be saved.';
+
+  @override
+  String get shellStorageChoose => 'Choose disk';
+
+  @override
+  String get shellStorageEject => 'Eject';
+
+  @override
+  String get shellStorageCheck => 'Check disk';
+
+  @override
+  String get searchSettingStorage => 'Storage';
+
+  @override
+  String get searchWordsStorage => 'disk drive frames save space eject usb';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -5501,4 +5538,43 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get wizardDarksSkippedPushFailed =>
       'Biblioteca de darks não iniciada: o guiador não aceitou o novo perfil. Crie-a no painel do Guiador depois que o envio do perfil funcionar.';
+
+  @override
+  String get shellStorageSavedTo => 'Os quadros são salvos em';
+
+  @override
+  String get shellStorageInternal => 'Armazenamento interno';
+
+  @override
+  String shellStorageFreeOf(String free, String total) {
+    return '$free livres de $total';
+  }
+
+  @override
+  String get shellStorageNotPlugged =>
+      'Nenhum disco conectado. Não é possível salvar os quadros.';
+
+  @override
+  String get shellStorageUnreadable =>
+      'Não foi possível ler o armazenamento do equipamento. Não é possível salvar os quadros.';
+
+  @override
+  String get shellStorageFull =>
+      'O disco está cheio. Não é possível salvar os quadros.';
+
+  @override
+  String get shellStorageChoose => 'Escolher disco';
+
+  @override
+  String get shellStorageEject => 'Ejetar';
+
+  @override
+  String get shellStorageCheck => 'Verificar disco';
+
+  @override
+  String get searchSettingStorage => 'Armazenamento';
+
+  @override
+  String get searchWordsStorage =>
+      'disco hd ssd quadros salvar espaço ejetar usb';
 }
