@@ -3770,5 +3770,57 @@
   "@albumSinceLastVisit": {
     "description": "Sky Album header after a sync brought cards; {changes} is albumNewCards and/or albumTiersUp joined by ' · '",
     "placeholders": {"changes": {"type": "String"}}
+  },
+  "shellStorageSavedTo": "Frames are saved to",
+  "@shellStorageSavedTo": {
+    "description": "Simple Mode Settings › Rig › Storage block: label above the disk's name"
+  },
+  "shellStorageInternal": "Internal storage",
+  "@shellStorageInternal": {
+    "description": "Simple Mode Settings › Rig › Storage block: name when no external disk is the store"
+  },
+  "shellStorageFreeOf": "{free} free of {total}",
+  "@shellStorageFreeOf": {
+    "description": "Simple Mode Settings › Rig › Storage block: free and total space",
+    "placeholders": {
+      "free": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "shellStorageNotPlugged": "No disk is plugged in. Frames can't be saved.",
+  "@shellStorageNotPlugged": {
+    "description": "Simple Mode Settings › Rig › Storage block: red line, no space figures"
+  },
+  "shellStorageUnreadable": "Couldn't read the rig's storage. Frames can't be saved.",
+  "@shellStorageUnreadable": {
+    "description": "Simple Mode Settings › Rig › Storage block: red line, the read failed"
+  },
+  "shellStorageFull": "The disk is full. Frames can't be saved.",
+  "@shellStorageFull": {
+    "description": "Simple Mode Settings › Rig › Storage block: red line, no free space"
+  },
+  "shellStorageChoose": "Choose disk",
+  "@shellStorageChoose": {
+    "description": "Simple Mode Settings › Rig › Storage block: button, pick the disk frames are saved to"
+  },
+  "shellStorageEject": "Eject",
+  "@shellStorageEject": {
+    "description": "Simple Mode Settings › Rig › Storage block: button, safely remove the disk"
+  },
+  "shellStorageCheck": "Check disk",
+  "@shellStorageCheck": {
+    "description": "Simple Mode Settings › Rig › Storage block: button, check the disk's filesystem"
+  },
+  "searchSettingStorage": "Storage",
+  "@searchSettingStorage": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchWordsStorage": "disk drive frames save space eject usb",
+  "@searchWordsStorage": {
+    "description": "Simple Mode search panel: other words for Storage"
   }
 }

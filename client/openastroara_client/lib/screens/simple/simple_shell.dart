@@ -88,6 +88,7 @@ import '../settings/settings_shell.dart';
 import '../shell_listeners.dart';
 import 'simple_night_setup.dart';
 import 'simple_device_windows.dart';
+import 'simple_rig_storage.dart';
 import 'simple_focus_panel.dart';
 import '../../state/focus/autofocus_live_state.dart' show autofocusLiveProvider;
 import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
@@ -319,8 +320,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   }
 
   /// The full Settings page over Simple Mode, on whatever panel was picked
-  /// last. Every device dot opens its own window now (#1662); only Logs and
-  /// Open Storage still land here, until #1659 and #1660.
+  /// last. Devices open their windows (#1662), Logs and Storage sit in Rig
+  /// (#1659, #1660); any other panel still lands here.
   void _openSettings() {
     setState(() => _popover = _Popover.none);
     unawaited(
@@ -493,6 +494,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   /// The Settings sheet's section to open on (a search hit names one).
   String _menuSection = 'Rig';
+
+  /// Counts Open Storage jumps: the Rig page scrolls to Storage and the new
+  /// key rebuilds the sheet when it is already open.
+  int _revealStorage = 0;
 
   void _openMenu({String section = 'Rig'}) {
     _menuSection = section;
@@ -667,8 +672,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
             .read(selectedTabIndexProvider.notifier)
             .select(previous ?? kLiveTabIndex);
         _restoringTab = false;
-        // A device opens its own window; the other panels (Logs, Storage)
-        // still get the full Settings page over Simple Mode.
+        // A device opens its own window and Storage opens Rig with its block
+        // in view; the other panels get the full Settings page over Simple
+        // Mode.
         final panel = ref.read(selectedSettingsPanelProvider);
         if (_deviceWindows.containsKey(panel)) {
           // The dot again closes it; another device's dot swaps it.
@@ -681,6 +687,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                     !_sideBySide(context))) {
               _popover = _Popover.none;
             }
+          });
+        } else if (panel == 'session.storage') {
+          setState(() {
+            _device = null;
+            _menuSection = 'Rig';
+            _revealStorage++;
+            _popover = _Popover.menu;
           });
         } else {
           _openSettings();
@@ -1328,20 +1341,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                             simpleRailScale(context),
                                       ),
                                       child: _SettingsSheet(
-                                        key: ValueKey(_menuSection),
+                                        key: ValueKey((
+                                          _menuSection,
+                                          _revealStorage,
+                                        )),
                                         section: _menuSection,
+                                        revealStorage: _revealStorage > 0,
                                         onClose: () => setState(
                                           () => _popover = _Popover.none,
                                         ),
-                                        onLogs: () {
-                                          ref
-                                              .read(
-                                                selectedSettingsPanelProvider
-                                                    .notifier,
-                                              )
-                                              .select('support.logs');
-                                          _openSettings();
-                                        },
                                       ),
                                     ),
                                   ),
@@ -2419,13 +2427,15 @@ class _SettingsSheet extends ConsumerStatefulWidget {
     super.key,
     this.section = 'Rig',
     required this.onClose,
-    required this.onLogs,
+    this.revealStorage = false,
   });
 
   /// The section it opens on.
   final String section;
   final VoidCallback onClose;
-  final VoidCallback onLogs;
+
+  /// Rig opens scrolled to its Storage block (Plan's Open Storage).
+  final bool revealStorage;
 
   @override
   ConsumerState<_SettingsSheet> createState() => _SettingsSheetState();
@@ -2600,7 +2610,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
               child: switch (_section) {
                 'Rig' => _ThisRig(
                   onClose: widget.onClose,
-                  onLogs: widget.onLogs,
+                  revealStorage: widget.revealStorage,
                 ),
                 'Camera' => const SimpleCameraWindow(inSettings: true),
                 'Mount' => const SimpleMountWindow(inSettings: true),
@@ -2988,10 +2998,10 @@ Widget _gearTile({
 /// (a permanent pier, asked once), the way out of Simple Mode, the version
 /// and the logs.
 class _ThisRig extends ConsumerWidget {
-  const _ThisRig({required this.onClose, required this.onLogs});
+  const _ThisRig({required this.onClose, this.revealStorage = false});
 
   final VoidCallback onClose;
-  final VoidCallback onLogs;
+  final bool revealStorage;
 
   /// Apply a value and keep it in the profile; a failed save says so.
   static Future<void> _save(
@@ -3454,10 +3464,10 @@ class _ThisRig extends ConsumerWidget {
               (name, v ?? '—'),
           ],
         ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(onPressed: onLogs, child: Text(l10n.shellLogs)),
-        ),
+        const Divider(height: AraSpace.s16),
+        SimpleStorageBlock(reveal: revealStorage),
+        const Divider(height: AraSpace.s16),
+        const SimpleLogsBlock(),
       ],
     );
   }

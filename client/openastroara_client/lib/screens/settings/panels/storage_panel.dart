@@ -467,9 +467,9 @@ class _DestinationCard extends ConsumerWidget {
               // plugs in a drive that already holds a season of frames.
               _RescanButton(),
               const SizedBox(width: 8),
-              _CheckDiskButton(),
+              StorageCheckDiskButton(),
               const SizedBox(width: 8),
-              _EjectButton(),
+              StorageEjectButton(),
               const SizedBox(width: 8),
               FilledButton(
                 onPressed: () => showStorageDriveDialog(context, ref),
@@ -574,12 +574,24 @@ class _CopyRow extends ConsumerWidget {
 /// §29 safe removal — flush + unmount before pulling the take-home drive.
 /// Linux caches writes; yanking a mounted drive can lose the last seconds
 /// of the night and leaves the exFAT dirty bit set.
-class _EjectButton extends ConsumerStatefulWidget {
+class StorageEjectButton extends ConsumerStatefulWidget {
+  const StorageEjectButton({
+    super.key,
+    this.label = 'Eject',
+    this.enabled = true,
+    this.minHeight,
+  });
+
+  /// Simple Mode hosts this with its own words, no-rig state and 44 pt height.
+  final String label;
+  final bool enabled;
+  final double? minHeight;
+
   @override
-  ConsumerState<_EjectButton> createState() => _EjectButtonState();
+  ConsumerState<StorageEjectButton> createState() => _EjectButtonState();
 }
 
-class _EjectButtonState extends ConsumerState<_EjectButton> {
+class _EjectButtonState extends ConsumerState<StorageEjectButton> {
   bool _busy = false;
 
   Future<void> _run() async {
@@ -627,7 +639,10 @@ class _EjectButtonState extends ConsumerState<_EjectButton> {
   @override
   Widget build(BuildContext context) {
     return OutlinedButton.icon(
-      onPressed: _busy ? null : _run,
+      onPressed: _busy || !widget.enabled ? null : _run,
+      style: widget.minHeight == null
+          ? null
+          : OutlinedButton.styleFrom(minimumSize: Size(0, widget.minHeight!)),
       icon: _busy
           ? const SizedBox(
               width: 14,
@@ -635,7 +650,7 @@ class _EjectButtonState extends ConsumerState<_EjectButton> {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           : const Icon(Icons.eject, size: 16),
-      label: const Text('Eject'),
+      label: Text(widget.label),
     );
   }
 }
@@ -643,12 +658,24 @@ class _EjectButtonState extends ConsumerState<_EjectButton> {
 /// §29 user-triggered filesystem check. exFAT (the take-home format) has no
 /// journal, so after a field power cut this is how the drive gets healthy —
 /// deliberately a button, never an automatic scan.
-class _CheckDiskButton extends ConsumerStatefulWidget {
+class StorageCheckDiskButton extends ConsumerStatefulWidget {
+  const StorageCheckDiskButton({
+    super.key,
+    this.label = 'Check disk',
+    this.enabled = true,
+    this.minHeight,
+  });
+
+  final String label;
+  final bool enabled;
+  final double? minHeight;
+
   @override
-  ConsumerState<_CheckDiskButton> createState() => _CheckDiskButtonState();
+  ConsumerState<StorageCheckDiskButton> createState() =>
+      _CheckDiskButtonState();
 }
 
-class _CheckDiskButtonState extends ConsumerState<_CheckDiskButton> {
+class _CheckDiskButtonState extends ConsumerState<StorageCheckDiskButton> {
   bool _busy = false;
 
   Future<void> _run() async {
@@ -720,14 +747,17 @@ class _CheckDiskButtonState extends ConsumerState<_CheckDiskButton> {
   @override
   Widget build(BuildContext context) {
     return OutlinedButton(
-      onPressed: _busy ? null : _run,
+      onPressed: _busy || !widget.enabled ? null : _run,
+      style: widget.minHeight == null
+          ? null
+          : OutlinedButton.styleFrom(minimumSize: Size(0, widget.minHeight!)),
       child: _busy
           ? const SizedBox(
               width: 14,
               height: 14,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
-          : const Text('Check disk'),
+          : Text(widget.label),
     );
   }
 }

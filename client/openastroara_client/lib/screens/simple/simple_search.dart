@@ -63,6 +63,7 @@ List<(String, String, String)> _settings(AppLocalizations l) => [
   (l.searchSettingChangeRig, 'Rig', l.searchWordsChangeRig),
   (l.searchSettingVersions, 'Rig', l.searchWordsVersions),
   (l.searchSettingLogs, 'Rig', l.searchWordsLogs),
+  (l.searchSettingStorage, 'Rig', l.searchWordsStorage),
   (l.searchSectionDevices, 'Devices', l.searchWordsDevices),
   (l.searchSettingConnect, 'Devices', l.searchWordsDevices),
   (l.searchSettingDisconnect, 'Devices', l.searchWordsDevices),

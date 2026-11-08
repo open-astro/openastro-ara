@@ -762,5 +762,16 @@
   "albumCardNew": "nova",
   "albumCardTierUp": "subiu de nível",
   "albumTiersUp": "{count, plural, =1{1 nível acima} other{{count} níveis acima}}",
-  "albumSinceLastVisit": "{changes} desde a última visita"
+  "albumSinceLastVisit": "{changes} desde a última visita",
+  "shellStorageSavedTo": "Os quadros são salvos em",
+  "shellStorageInternal": "Armazenamento interno",
+  "shellStorageFreeOf": "{free} livres de {total}",
+  "shellStorageNotPlugged": "Nenhum disco conectado. Não é possível salvar os quadros.",
+  "shellStorageUnreadable": "Não foi possível ler o armazenamento do equipamento. Não é possível salvar os quadros.",
+  "shellStorageFull": "O disco está cheio. Não é possível salvar os quadros.",
+  "shellStorageChoose": "Escolher disco",
+  "shellStorageEject": "Ejetar",
+  "shellStorageCheck": "Verificar disco",
+  "searchSettingStorage": "Armazenamento",
+  "searchWordsStorage": "disco hd ssd quadros salvar espaço ejetar usb"
 }
