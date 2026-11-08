@@ -88,6 +88,11 @@ import 'package:openastroara/models/flat_panel_status.dart';
 import 'package:openastroara/state/equipment/flat_panel_state.dart';
 import 'package:openastroara/models/weather_status.dart';
 import 'package:openastroara/state/equipment/weather_state.dart';
+import 'package:openastroara/models/dome_status.dart';
+import 'package:openastroara/state/equipment/dome_state.dart';
+import 'package:openastroara/models/safety_monitor_status.dart';
+import 'package:openastroara/state/equipment/safety_monitor_state.dart';
+import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
@@ -301,6 +306,75 @@ SwitchDevice _switch(String id, String name, SwitchConnectionState state) => Swi
     connectionState: state,
     ports: const [SwitchPort(id: 0, name: 'Dew 1', value: 0, min: 0, max: 100, canWrite: true)]);
 
+class _Windy extends WeatherNotifier with _Calls<WeatherStatus> {
+  @override
+  Future<WeatherStatus?> build() async => WeatherStatus.fromJson({
+        ..._wire('CloudWatcher', EquipmentConnectionState.connected),
+        'captured_at': DateTime.now().toUtc().toIso8601String(),
+        'wind_speed_ms': 11.4,
+      });
+}
+
+/// A rig whose safety policies load as [policies], or fail to.
+class _PoliciesApi extends ProfileApi {
+  _PoliciesApi(this.policies) : super(const AraServer(hostname: 'test', port: 1));
+  final SafetyPolicies? policies;
+  @override
+  Future<SafetyPolicies> getSafetyPolicies() async => policies ?? (throw StateError('unreachable'));
+}
+
+/// Fails its first safety-policies read, then answers with the weather on.
+class _FlakyPoliciesApi extends ProfileApi {
+  _FlakyPoliciesApi() : super(const AraServer(hostname: 'test', port: 1));
+  int calls = 0;
+  @override
+  Future<SafetyPolicies> getSafetyPolicies() async {
+    if (++calls == 1) throw StateError('unreachable');
+    return const SafetyPolicies(weatherTriggersEnabled: true);
+  }
+}
+
+/// The rig the app talks to; [use] switches to another server.
+class _Rig extends Notifier<ProfileApi?> {
+  _Rig(this.first);
+  final ProfileApi first;
+  @override
+  ProfileApi? build() => first;
+  void use(ProfileApi api) => state = api;
+}
+
+final _rigProvider = NotifierProvider<_Rig, ProfileApi?>(() => throw UnimplementedError('override it'));
+
+class _Dome extends DomeNotifier with _Calls<DomeStatus> {
+  _Dome(this.state0);
+  final EquipmentConnectionState state0;
+  Map<String, dynamic> _json(String runtime) => {
+        ..._wire('ScopeDome', state0),
+        'capabilities': {'can_set_shutter': true, 'can_set_azimuth': true, 'can_park': true},
+        'runtime': {'state': runtime, 'azimuth_deg': 212.0},
+      };
+  @override
+  Future<DomeStatus?> build() async => DomeStatus.fromJson(_json('idle'));
+
+  /// What the dome reports next ("slewing", "shutter_moving", "idle").
+  void report(String runtime) => state = AsyncData(DomeStatus.fromJson(_json(runtime)));
+
+  @override
+  Future<bool> park() async => true;
+}
+
+class _Safety extends SafetyMonitorNotifier with _Calls<SafetyMonitorStatus> {
+  _Safety(this.state0);
+  final EquipmentConnectionState state0;
+  Map<String, dynamic> _json(bool safe, DateTime? at) =>
+      {..._wire('Solo', state0), 'safe': safe, 'last_transition_at': at?.toUtc().toIso8601String()};
+  @override
+  Future<SafetyMonitorStatus?> build() async => SafetyMonitorStatus.fromJson(_json(true, null));
+
+  /// What the monitor reads next, and when it last changed.
+  void report(bool safe, [DateTime? at]) => state = AsyncData(SafetyMonitorStatus.fromJson(_json(safe, at)));
+}
+
 class _Weather extends WeatherNotifier with _Calls<WeatherStatus> {
   _Weather(this.state0);
   final EquipmentConnectionState state0;
@@ -312,16 +386,17 @@ class _Weather extends WeatherNotifier with _Calls<WeatherStatus> {
 class _FlatPanel extends FlatPanelNotifier with _Calls<FlatPanelStatus> {
   _FlatPanel(this.state0);
   final EquipmentConnectionState state0;
-  Map<String, dynamic> _json(String runtime, {bool warming = false}) => {
+  Map<String, dynamic> _json(String runtime, {bool warming = false, bool cover = true}) => {
         ..._wire('Flip-Flat', state0),
-        'runtime': {'state': runtime, 'max_brightness': 255, 'light_warming': warming},
+        'runtime': {'state': runtime, 'max_brightness': 255, 'light_warming': warming, 'has_cover': cover},
       };
   @override
   Future<FlatPanelStatus?> build() async => FlatPanelStatus.fromJson(_json('cover_closed'));
 
-  /// What the panel reports next ("cover_moving", "cover_closed", "light_on").
-  void report(String runtime, {bool warming = false}) =>
-      state = AsyncData(FlatPanelStatus.fromJson(_json(runtime, warming: warming)));
+  /// What the panel reports next ("cover_moving", "cover_closed", "light_on");
+  /// [cover] false for a light-only panel.
+  void report(String runtime, {bool warming = false, bool cover = true}) =>
+      state = AsyncData(FlatPanelStatus.fromJson(_json(runtime, warming: warming, cover: cover)));
 }
 
 class _Mount extends MountNotifier with _Calls<MountStatus> {
@@ -436,6 +511,9 @@ class _GuideOpticsApi extends ProfileApi {
   _GuideOpticsApi(this.unsetReads) : super(const AraServer(hostname: 'test', port: 1));
   int unsetReads;
   int reads = 0;
+  // The status pill loads the safety policies; no network here.
+  @override
+  Future<SafetyPolicies> getSafetyPolicies() async => throw StateError('unreachable');
   @override
   Future<Phd2Settings> getPhd2Settings() async => ++reads > unsetReads
       ? const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75)
@@ -584,6 +662,9 @@ class _OpticsApi extends ProfileApi {
   _OpticsApi(this.optics) : super(const AraServer(hostname: 'test', port: 1));
   OpticsSettings optics;
   final puts = <OpticsSettings>[];
+  // The status pill loads the safety policies; no network here.
+  @override
+  Future<SafetyPolicies> getSafetyPolicies() async => throw StateError('unreachable');
   @override
   Future<OpticsSettings> getOptics() async => optics;
   @override
@@ -2910,6 +2991,52 @@ void main() {
         findsOneWidget);
   });
 
+  for (final (name, panel, key, row, override) in [
+    ('dome', 'eq.dome', 'simple-device-dome', 'ScopeDome',
+        domeProvider.overrideWith(() => _Dome(EquipmentConnectionState.connected))),
+    ('safety monitor', 'eq.safety', 'simple-device-safety', 'Solo',
+        safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected))),
+  ]) {
+    testWidgets('the $name\'s dot opens its window and closes it again; Settings lists it under Devices',
+        (tester) async {
+      final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [override]);
+      Future<void> dot() async {
+        c.read(selectedSettingsPanelProvider.notifier).select(panel);
+        c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+        await tester.pumpAndSettle();
+      }
+      await dot();
+      expect(find.byKey(Key(key)), findsOneWidget);
+      expect(find.byType(SettingsShell), findsNothing, reason: 'never the full UI\'s Settings page');
+      await dot();
+      expect(find.byKey(Key(key)), findsNothing);
+      await _openSection(tester, 'Devices');
+      await tester.tap(find.textContaining(row));
+      await tester.pump();
+      expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(Key(key))),
+          findsOneWidget, reason: 'its Devices row opens the same window');
+    });
+  }
+
+  testWidgets('Settings lists the dome and the safety monitor only while the rig knows them', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true);
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-menu-nav-Dome')), findsNothing);
+    expect(find.byKey(const Key('simple-menu-nav-Safety monitor')), findsNothing);
+  });
+
+  testWidgets('no device dot opens the full UI\'s Settings page', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true);
+    for (final panel in ['eq.camera', 'eq.mount', 'eq.focuser', 'eq.filterwheel', 'eq.rotator', 'eq.switch',
+        'eq.flat', 'eq.weather', 'eq.safety', 'eq.dome', 'eq.guider']) {
+      c.read(selectedSettingsPanelProvider.notifier).select(panel);
+      c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsShell), findsNothing, reason: panel);
+    }
+  });
+
   testWidgets('Settings lists the weather station only while the rig knows one', (tester) async {
     await _pump(tester, const Size(1024, 768), linkUp: true);
     await tester.tap(find.byTooltip('Settings'));
@@ -3660,6 +3787,198 @@ void main() {
     flat.report('light_on');
     await tester.pump();
     expect(find.descendant(of: pill, matching: find.textContaining('Flat panel')), findsNothing, reason: 'ready');
+  });
+
+  testWidgets('the dome turning and its shutter opening show in the status pill; a tap opens its window',
+      (tester) async {
+    final dome = _Dome(EquipmentConnectionState.connected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [domeProvider.overrideWith(() => dome)]);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Dome')), findsNothing);
+    dome.report('slewing');
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Moving…')), findsOneWidget);
+    final dot = tester.widget<StatusDot>(find.descendant(of: pill, matching: find.byType(StatusDot)));
+    expect((dot.color, dot.ring), (AraColors.accentConnected, false));
+    expect(tester.widget<StatusBlink>(find.descendant(of: pill, matching: find.byType(StatusBlink))).on, isTrue);
+    await tester.tap(find.descendant(of: pill, matching: find.textContaining('Dome')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const Key('simple-device-dome')), findsOneWidget, reason: 'the pill opens its window');
+    dome.report('shutter_moving');
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Opening…')), findsOneWidget,
+        reason: 'closed before it moved, so it is opening');
+    final ring = tester.widget<StatusDot>(find.descendant(of: pill, matching: find.byType(StatusDot)));
+    expect((ring.color, ring.ring), (AraColors.accentInfo, true), reason: 'a change between two states');
+    dome.report('idle');
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Dome')), findsNothing, reason: 'stopped');
+  });
+
+  testWidgets('weather past its limit shows in the Safety pill even while the monitor reads Safe', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
+      weatherProvider.overrideWith(() => _Windy()),
+      profileApiProvider.overrideWithValue(_PoliciesApi(const SafetyPolicies(weatherTriggersEnabled: true))),
+    ]);
+    await tester.pump();
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Wind 41 km/h, over the 36 km/h limit')),
+        findsOneWidget, reason: 'the daemon holds the plan for the wind; the pill says why');
+    expect(find.descendant(of: pill, matching: find.textContaining('limit.')), findsNothing,
+        reason: 'a pill detail carries no full stop');
+  });
+
+  testWidgets('no weather in the Safety pill until the safety policies have loaded', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
+      weatherProvider.overrideWith(() => _Windy()),
+      profileApiProvider.overrideWithValue(_PoliciesApi(null)),
+    ]);
+    c.read(safetyPoliciesProvider.notifier).state = const SafetyPolicies(weatherTriggersEnabled: true);
+    await tester.pump();
+    await tester.pump();
+    expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41')),
+        findsNothing, reason: 'the defaults are not the rig\'s: nothing beats a wrong promise');
+  });
+
+  testWidgets('a failed policies load is retried', (tester) async {
+    final api = _FlakyPoliciesApi();
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
+      weatherProvider.overrideWith(() => _Windy()),
+      profileApiProvider.overrideWithValue(api),
+    ]);
+    await tester.pump();
+    await tester.pump();
+    expect(api.calls, greaterThan(0));
+    // Anything that rebuilds the pill retries after the failed first load.
+    c.read(safetyPoliciesProvider.notifier).state = const SafetyPolicies(weatherTriggersEnabled: true);
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41')),
+        findsOneWidget, reason: 'one unreachable moment does not silence the pill for the session');
+  });
+
+  testWidgets('a new rig whose policies have not loaded shows no weather from the old rig\'s limits',
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
+      weatherProvider.overrideWith(() => _Windy()),
+      _rigProvider.overrideWith(() => _Rig(_PoliciesApi(const SafetyPolicies(weatherTriggersEnabled: true)))),
+      profileApiProvider.overrideWith((ref) => ref.watch(_rigProvider)),
+    ]);
+    await tester.pump();
+    await tester.pump();
+    final wind = find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41'));
+    expect(wind, findsOneWidget, reason: 'precondition: rig A\'s limits loaded, weather triggers on');
+    c.read(_rigProvider.notifier).use(_PoliciesApi(null));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(wind, findsNothing, reason: 'rig B\'s load failed: its weather is not read against rig A\'s limits');
+  });
+
+  testWidgets('a dome Park asked in its window shows in the status pill at once', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true,
+        gear: [domeProvider.overrideWith(() => _Dome(EquipmentConnectionState.connected))]);
+    c.read(selectedSettingsPanelProvider.notifier).select('eq.dome');
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-dome-park')));
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Parking…')), findsOneWidget,
+        reason: 'from the tap, before the dome reports moving');
+    await tester.pump(const Duration(seconds: 4));
+    expect(find.descendant(of: pill, matching: find.textContaining('Dome')), findsNothing,
+        reason: 'nothing moved: the ask goes');
+  });
+
+  testWidgets('the safety monitor\'s Unsafe stays in the status pill, steady amber, with since when',
+      (tester) async {
+    final safety = _Safety(EquipmentConnectionState.connected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [safetyMonitorProvider.overrideWith(() => safety)]);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Safety monitor')), findsNothing);
+    safety.report(false, DateTime(2026, 11, 8, 2, 14));
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Unsafe since 02:14')), findsOneWidget);
+    final dot = tester.widget<StatusDot>(find.descendant(of: pill, matching: find.byType(StatusDot)));
+    expect((dot.color, dot.ring), (AraColors.accentWarning, false));
+    expect(find.descendant(of: pill, matching: find.byType(StatusBlink)).evaluate()
+        .every((e) => !(e.widget as StatusBlink).on), isTrue, reason: 'steady');
+    await tester.tap(find.descendant(of: pill, matching: find.textContaining('Safety monitor')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const Key('simple-device-safety')), findsOneWidget, reason: 'the pill opens its window');
+    safety.report(true, DateTime(2026, 11, 8, 3, 0));
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Safety monitor')), findsNothing, reason: 'safe');
+  });
+
+  testWidgets('a device that isn\'t connected shows no pill, whatever its runtime state says (#1668)', (tester) async {
+    final rotator = _Rotator(EquipmentConnectionState.disconnected);
+    final flat = _FlatPanel(EquipmentConnectionState.disconnected);
+    final dome = _Dome(EquipmentConnectionState.disconnected);
+    final safety = _Safety(EquipmentConnectionState.disconnected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      rotatorProvider.overrideWith(() => rotator),
+      flatPanelProvider.overrideWith(() => flat),
+      domeProvider.overrideWith(() => dome),
+      safetyMonitorProvider.overrideWith(() => safety),
+    ]);
+    await tester.pump();
+    rotator.report('moving');
+    flat.report('cover_moving', warming: true);
+    dome.report('slewing');
+    safety.report(false, DateTime(2026, 11, 8, 2, 14));
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    for (final name in ['Rotator', 'Flat panel', 'Dome', 'Safety monitor']) {
+      expect(find.descendant(of: pill, matching: find.textContaining(name)), findsNothing, reason: name);
+    }
+  });
+
+  testWidgets('a light-only flat panel never shows a cover pill (#1668)', (tester) async {
+    final flat = _FlatPanel(EquipmentConnectionState.connected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [flatPanelProvider.overrideWith(() => flat)]);
+    await tester.pump();
+    flat.report('cover_moving', cover: false);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Cover moving…')), findsNothing);
+    flat.report('light_on', warming: true, cover: false);
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Light warming up…')), findsOneWidget);
+  });
+
+  testWidgets('with four or more pills up, the safety monitor\'s Unsafe is among the three shown (#1668)', (tester) async {
+    final rotator = _Rotator(EquipmentConnectionState.connected);
+    final flat = _FlatPanel(EquipmentConnectionState.connected);
+    final dome = _Dome(EquipmentConnectionState.connected);
+    final safety = _Safety(EquipmentConnectionState.connected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      rotatorProvider.overrideWith(() => rotator),
+      flatPanelProvider.overrideWith(() => flat),
+      domeProvider.overrideWith(() => dome),
+      safetyMonitorProvider.overrideWith(() => safety),
+    ]);
+    await tester.pump();
+    rotator.report('moving');
+    flat.report('cover_moving');
+    dome.report('slewing');
+    safety.report(false, DateTime(2026, 11, 8, 2, 14));
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Unsafe since 02:14')), findsOneWidget);
+    expect(find.descendant(of: pill, matching: find.text('+1')), findsOneWidget,
+        reason: 'four up: three shown, one folded, and it isn\'t the Unsafe');
   });
 
   testWidgets('a scheduled plan waiting on the rig: the pill says when it starts', (tester) async {

@@ -32,8 +32,15 @@ import '../../widgets/status_indicator.dart'
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/equipment/focuser_state.dart';
+import '../../state/equipment/dome_state.dart';
+import '../../state/equipment/dome_shutter_state.dart';
 import '../../state/equipment/flat_panel_state.dart';
 import '../../state/equipment/rotator_state.dart';
+import '../../state/equipment/safety_monitor_state.dart';
+import '../../state/equipment/weather_state.dart';
+import '../../services/profile_api.dart';
+import '../../state/profile_management_state.dart';
+import '../../state/settings/safety_policies_state.dart';
 import '../../state/equipment/switch_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
@@ -50,6 +57,10 @@ import 'simple_device_windows.dart'
     show
         SimpleGainSlider,
         simpleCelsius,
+        simpleClockTime,
+        simpleDomeAskLabel,
+        simpleDomeAskProvider,
+        simpleWeatherBreaches,
         simpleMountMotionProvider,
         simpleSwitchSettingProvider;
 import 'simple_shell.dart'
@@ -1022,6 +1033,25 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
   /// Where the sensor was when the pill first saw it cooling: the bar's 0.
   double? _coolStart;
 
+  /// The rig's own safety limits have loaded: Simple Mode never opens the
+  /// policies page that loads them, and the defaults are not the rig's, so
+  /// no weather breach is read from them before (#1690 audit).
+  bool _policiesLoaded = false;
+  bool _hydrating = false;
+
+  /// The api the policies were (being) loaded from: another server loads again.
+  ProfileApi? _loadedFor;
+
+  Future<void> _hydratePolicies(ProfileApi api) async {
+    try {
+      await ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api);
+      if (mounted && _loadedFor == api) setState(() => _policiesLoaded = true);
+    } catch (_) {
+      // Stays unloaded (nothing said beats a wrong promise); a rebuild retries.
+      if (mounted && _loadedFor == api) _hydrating = false;
+    }
+  }
+
   @override
   void dispose() {
     _ticker.dispose();
@@ -1085,6 +1115,35 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final rotator = ref.watch(rotatorProvider).value;
     // The flat panel's cover moving or its light warming up (#1668).
     final flat = ref.watch(flatPanelProvider).value;
+    // The dome turning (a slew, park or home) or its shutter moving (#1668).
+    final dome = ref.watch(domeProvider).value;
+    final shutter = ref.watch(domeShutterProvider);
+    // A dome move asked in its window, from the tap (as a park is).
+    final domeAsk = ref.watch(simpleDomeAskProvider);
+    // The safety monitor reading Unsafe, still there after the alarm is
+    // silenced (#1668).
+    final safety = ref.watch(safetyMonitorProvider).value;
+    final unsafe = safety != null && safety.isConnected && !safety.safe;
+    // Weather past its limits holds a plan too (the daemon's same checks),
+    // even while the monitor reads Safe: the pill says which (#1690 audit).
+    final policies = ref.watch(safetyPoliciesProvider);
+    final profileApi = ref.watch(profileApiProvider);
+    if (profileApi != _loadedFor) {
+      _loadedFor = profileApi;
+      _hydrating = false;
+      _policiesLoaded = false;
+    }
+    if (!_hydrating && profileApi != null) {
+      _hydrating = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _hydratePolicies(profileApi);
+      });
+    }
+    final weather = ref.watch(weatherProvider).value;
+    final breach =
+        _policiesLoaded && policies.weatherTriggersEnabled && weather != null
+        ? simpleWeatherBreaches(l10n, weather, policies).firstOrNull
+        : null;
     // The focuser moving, whoever moved it; autofocus has its own pill.
     final focuser = ref.watch(focuserProvider).value;
     final settingPort = ref.watch(switchActingProvider)
@@ -1171,6 +1230,26 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           working: planActive && !paused,
           footProgress: run.currentInstructionProgress,
         ),
+      // Unsafe right after the plan: it is why a plan holds. Steady amber,
+      // not error red: the monitor works, the sky doesn't.
+      if (unsafe)
+        _PillData(
+          SimpleStatusOrigin.safetyMonitor,
+          l10n.shellSafetyMonitor,
+          safety.lastTransitionAt == null
+              ? l10n.deviceUnsafe
+              : l10n.deviceUnsafeSince(
+                  simpleClockTime(safety.lastTransitionAt!.toLocal()),
+                ),
+          AraColors.accentWarning,
+        )
+      else if (breach != null)
+        _PillData(
+          SimpleStatusOrigin.safetyMonitor,
+          l10n.shellSafetyMonitor,
+          breach,
+          AraColors.accentWarning,
+        ),
       if (parking != null)
         _PillData(
           SimpleStatusOrigin.mount,
@@ -1228,8 +1307,9 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           AraColors.accentInfo,
           ring: true,
         ),
-      // The cover moving wins over the light warming up.
-      if (flat != null && flat.isConnected && flat.isMoving)
+      // The cover moving wins over the light warming up; a light-only panel
+      // has no cover to move (#1668).
+      if (flat != null && flat.isConnected && flat.hasCover && flat.isMoving)
         _PillData(
           SimpleStatusOrigin.flatPanel,
           l10n.shellFlatPanel,
@@ -1242,6 +1322,50 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           SimpleStatusOrigin.flatPanel,
           l10n.shellFlatPanel,
           l10n.deviceLightWarmingUp,
+          AraColors.accentInfo,
+          ring: true,
+        ),
+      // The dome turning is working (blinking green); its shutter on its way
+      // is a change between two states (blue ring), Opening… / Closing…
+      // when Ara saw where it started.
+      if (dome != null && dome.isConnected && domeAsk != null)
+        switch (simpleDomeAskLabel(l10n, domeAsk)) {
+          (final text, true) => _PillData(
+            SimpleStatusOrigin.dome,
+            l10n.shellDome,
+            text,
+            AraColors.accentInfo,
+            ring: true,
+          ),
+          (final text, false) => _PillData(
+            SimpleStatusOrigin.dome,
+            l10n.shellDome,
+            text,
+            AraColors.accentConnected,
+            working: true,
+          ),
+        }
+      else if (dome != null &&
+          dome.isConnected &&
+          dome.runtimeState == 'slewing')
+        _PillData(
+          SimpleStatusOrigin.dome,
+          l10n.shellDome,
+          l10n.deviceMoving,
+          AraColors.accentConnected,
+          working: true,
+        )
+      else if (dome != null &&
+          dome.isConnected &&
+          dome.runtimeState == 'shutter_moving')
+        _PillData(
+          SimpleStatusOrigin.dome,
+          l10n.shellDome,
+          switch (shutter?.opening) {
+            true => l10n.deviceOpening,
+            false => l10n.deviceClosing,
+            null => l10n.deviceShutterMoving,
+          },
           AraColors.accentInfo,
           ring: true,
         ),

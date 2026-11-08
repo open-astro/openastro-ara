@@ -42,6 +42,13 @@ class DomeNotifier extends EquipmentDeviceNotifier<DomeStatus> {
   @override
   EquipmentDeviceClient<DomeStatus>? readClient() => ref.read(domeApiProvider);
 
+  /// Read every 1.5 s for up to 5 min of a move, not ~60 s: a shutter or a
+  /// long turn outlasts that, and the Simple Mode Dome window times the
+  /// shutter from its reads (#1662). A dome stuck moving still drops to the
+  /// liveness poll after it.
+  @override
+  int get settlePollCap => 200;
+
   Future<bool> openShutter() =>
       performAction((api) => api.command('shutter/open'));
 

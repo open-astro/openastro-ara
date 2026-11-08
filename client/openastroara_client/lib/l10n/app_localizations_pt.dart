@@ -305,6 +305,142 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceCouldntChangeFlatPanel => 'Couldn\'t change the flat panel';
 
   @override
+  String get shellSafetyMonitor => 'Safety monitor';
+
+  @override
+  String get deviceShutter => 'Shutter';
+
+  @override
+  String get deviceShutterMoving => 'Shutter moving…';
+
+  @override
+  String get deviceAzimuth => 'Azimuth';
+
+  @override
+  String get deviceAtHome => 'At home';
+
+  @override
+  String get deviceHome => 'Home';
+
+  @override
+  String get deviceStop => 'Stop';
+
+  @override
+  String get deviceStopDome => 'Stop the dome';
+
+  @override
+  String get devicePlanRunningChangeDome =>
+      'A plan is running. Change the dome anyway?';
+
+  @override
+  String get deviceCouldntMoveDome => 'Couldn\'t move the dome';
+
+  @override
+  String get deviceCouldntStopDome => 'Couldn\'t stop the dome';
+
+  @override
+  String get deviceDomeReadFailed => 'Dome read failed — check the device.';
+
+  @override
+  String get deviceSafe => 'Safe';
+
+  @override
+  String get deviceUnsafe => 'Unsafe';
+
+  @override
+  String deviceSafetySince(String time, String duration) {
+    return 'since $time · $duration';
+  }
+
+  @override
+  String deviceUnsafeSince(String time) {
+    return 'Unsafe since $time';
+  }
+
+  @override
+  String deviceResumesAfterSafe(int minutes) {
+    return 'Resumes $minutes min after Safe';
+  }
+
+  @override
+  String get deviceStaysPaused => 'Stays paused until you resume';
+
+  @override
+  String get deviceOpening => 'Opening…';
+
+  @override
+  String get deviceClosing => 'Closing…';
+
+  @override
+  String get deviceTurn => 'Turn';
+
+  @override
+  String deviceTurnTo(String angle) {
+    return 'Turn to $angle';
+  }
+
+  @override
+  String get deviceShutterFault => 'Shutter fault: open or close again.';
+
+  @override
+  String get deviceFindingHome => 'Finding home…';
+
+  @override
+  String deviceTurningTo(String angle) {
+    return 'Turning to $angle…';
+  }
+
+  @override
+  String deviceReasonSentence(String reason) {
+    return '$reason.';
+  }
+
+  @override
+  String get deviceWhy => 'Why';
+
+  @override
+  String get deviceWhatAraDoes => 'What Ara does';
+
+  @override
+  String deviceMonitorNoReason(String name) {
+    return '$name says unsafe. It doesn\'t say why: check the device.';
+  }
+
+  @override
+  String deviceWindOverLimit(String value, int limit) {
+    return 'Wind $value km/h, over the $limit km/h limit';
+  }
+
+  @override
+  String deviceHumidityOverLimit(String value, int limit) {
+    return 'Humidity $value %, over the $limit % limit';
+  }
+
+  @override
+  String deviceDewUnderMargin(String value, String limit) {
+    return 'Dew point $value °C below the air, under the $limit °C margin';
+  }
+
+  @override
+  String deviceMonitorReadsSafe(String name) {
+    return '$name reads Safe';
+  }
+
+  @override
+  String get deviceOnUnsafePause =>
+      'On unsafe, Ara pauses the plan, parks and closes the dome.';
+
+  @override
+  String get deviceOnUnsafePark => 'On unsafe, Ara parks; the plan carries on.';
+
+  @override
+  String get deviceOnUnsafeAbort => 'On unsafe, Ara stops the plan and parks.';
+
+  @override
+  String get deviceOnUnsafeIgnore =>
+      'On unsafe, Ara does nothing; imaging carries on.';
+
+  @override
   String get deviceFlatPanelUnconfirmed =>
       'The flat panel didn\'t make that change';
 
@@ -2829,6 +2965,145 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get deviceCouldntChangeFlatPanel =>
       'Não foi possível alterar o painel de flat';
+
+  @override
+  String get shellSafetyMonitor => 'Monitor de segurança';
+
+  @override
+  String get deviceShutter => 'Janela';
+
+  @override
+  String get deviceShutterMoving => 'Janela em movimento…';
+
+  @override
+  String get deviceAzimuth => 'Azimute';
+
+  @override
+  String get deviceAtHome => 'Na posição inicial';
+
+  @override
+  String get deviceHome => 'Início';
+
+  @override
+  String get deviceStop => 'Parar';
+
+  @override
+  String get deviceStopDome => 'Parar a cúpula';
+
+  @override
+  String get devicePlanRunningChangeDome =>
+      'Há um plano em andamento. Alterar a cúpula mesmo assim?';
+
+  @override
+  String get deviceCouldntMoveDome => 'Não foi possível mover a cúpula';
+
+  @override
+  String get deviceCouldntStopDome => 'Não foi possível parar a cúpula';
+
+  @override
+  String get deviceDomeReadFailed =>
+      'Falha ao ler a cúpula — verifique o dispositivo.';
+
+  @override
+  String get deviceSafe => 'Seguro';
+
+  @override
+  String get deviceUnsafe => 'Inseguro';
+
+  @override
+  String deviceSafetySince(String time, String duration) {
+    return 'desde $time · $duration';
+  }
+
+  @override
+  String deviceUnsafeSince(String time) {
+    return 'Inseguro desde $time';
+  }
+
+  @override
+  String deviceResumesAfterSafe(int minutes) {
+    return 'Retoma $minutes min após Seguro';
+  }
+
+  @override
+  String get deviceStaysPaused => 'Fica pausado até você retomar';
+
+  @override
+  String get deviceOpening => 'Abrindo…';
+
+  @override
+  String get deviceClosing => 'Fechando…';
+
+  @override
+  String get deviceTurn => 'Girar';
+
+  @override
+  String deviceTurnTo(String angle) {
+    return 'Girar para $angle';
+  }
+
+  @override
+  String get deviceShutterFault => 'Falha na janela: abra ou feche de novo.';
+
+  @override
+  String get deviceFindingHome => 'Buscando a posição inicial…';
+
+  @override
+  String deviceTurningTo(String angle) {
+    return 'Girando para $angle…';
+  }
+
+  @override
+  String deviceReasonSentence(String reason) {
+    return '$reason.';
+  }
+
+  @override
+  String get deviceWhy => 'Por quê';
+
+  @override
+  String get deviceWhatAraDoes => 'O que o Ara faz';
+
+  @override
+  String deviceMonitorNoReason(String name) {
+    return '$name indica inseguro. Ele não diz o motivo: verifique o dispositivo.';
+  }
+
+  @override
+  String deviceWindOverLimit(String value, int limit) {
+    return 'Vento $value km/h, acima do limite de $limit km/h';
+  }
+
+  @override
+  String deviceHumidityOverLimit(String value, int limit) {
+    return 'Umidade $value %, acima do limite de $limit %';
+  }
+
+  @override
+  String deviceDewUnderMargin(String value, String limit) {
+    return 'Ponto de orvalho $value °C abaixo do ar, menos que a margem de $limit °C';
+  }
+
+  @override
+  String deviceMonitorReadsSafe(String name) {
+    return '$name indica Seguro';
+  }
+
+  @override
+  String get deviceOnUnsafePause =>
+      'Se inseguro, o Ara pausa o plano, estaciona e fecha a cúpula.';
+
+  @override
+  String get deviceOnUnsafePark =>
+      'Se inseguro, o Ara estaciona; o plano continua.';
+
+  @override
+  String get deviceOnUnsafeAbort =>
+      'Se inseguro, o Ara interrompe o plano e estaciona.';
+
+  @override
+  String get deviceOnUnsafeIgnore =>
+      'Se inseguro, o Ara não faz nada; a captura continua.';
 
   @override
   String get deviceFlatPanelUnconfirmed =>
