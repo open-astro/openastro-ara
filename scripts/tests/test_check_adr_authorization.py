@@ -163,7 +163,7 @@ class AgedDescriptionTest(unittest.TestCase):
         self.assertTrue(desc.endswith("'ADR authorized 0123456789ab'"), desc)
 
     def test_hostile_path_names_are_escaped_to_the_count_form(self):
-        for label, bad in (("newline", "docs/adr/0009-a\n::error::x.md"), ("bidi", "docs/adr/0009-a‮b.md")):
+        for label, bad in (("newline", "docs/adr/0009-a\n::error::x.md"), ("bidi", "docs/adr/0009-a\u202eb.md")):
             with self.subTest(label=label):
                 self.snaps[HEAD] = {bad: "n"}
                 self.snaps[OLD] = {bad: "o"}
