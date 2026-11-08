@@ -88,6 +88,10 @@ import 'package:openastroara/models/flat_panel_status.dart';
 import 'package:openastroara/state/equipment/flat_panel_state.dart';
 import 'package:openastroara/models/weather_status.dart';
 import 'package:openastroara/state/equipment/weather_state.dart';
+import 'package:openastroara/models/dome_status.dart';
+import 'package:openastroara/state/equipment/dome_state.dart';
+import 'package:openastroara/models/safety_monitor_status.dart';
+import 'package:openastroara/state/equipment/safety_monitor_state.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
@@ -300,6 +304,36 @@ SwitchDevice _switch(String id, String name, SwitchConnectionState state) => Swi
     name: name,
     connectionState: state,
     ports: const [SwitchPort(id: 0, name: 'Dew 1', value: 0, min: 0, max: 100, canWrite: true)]);
+
+class _Dome extends DomeNotifier with _Calls<DomeStatus> {
+  _Dome(this.state0);
+  final EquipmentConnectionState state0;
+  Map<String, dynamic> _json(String runtime) => {
+        ..._wire('ScopeDome', state0),
+        'capabilities': {'can_set_shutter': true, 'can_set_azimuth': true, 'can_park': true},
+        'runtime': {'state': runtime, 'azimuth_deg': 212.0},
+      };
+  @override
+  Future<DomeStatus?> build() async => DomeStatus.fromJson(_json('idle'));
+
+  /// What the dome reports next ("slewing", "shutter_moving", "idle").
+  void report(String runtime) => state = AsyncData(DomeStatus.fromJson(_json(runtime)));
+
+  @override
+  Future<bool> park() async => true;
+}
+
+class _Safety extends SafetyMonitorNotifier with _Calls<SafetyMonitorStatus> {
+  _Safety(this.state0);
+  final EquipmentConnectionState state0;
+  Map<String, dynamic> _json(bool safe, DateTime? at) =>
+      {..._wire('Solo', state0), 'safe': safe, 'last_transition_at': at?.toUtc().toIso8601String()};
+  @override
+  Future<SafetyMonitorStatus?> build() async => SafetyMonitorStatus.fromJson(_json(true, null));
+
+  /// What the monitor reads next, and when it last changed.
+  void report(bool safe, [DateTime? at]) => state = AsyncData(SafetyMonitorStatus.fromJson(_json(safe, at)));
+}
 
 class _Weather extends WeatherNotifier with _Calls<WeatherStatus> {
   _Weather(this.state0);
@@ -2910,6 +2944,52 @@ void main() {
         findsOneWidget);
   });
 
+  for (final (name, panel, key, row, override) in [
+    ('dome', 'eq.dome', 'simple-device-dome', 'ScopeDome',
+        domeProvider.overrideWith(() => _Dome(EquipmentConnectionState.connected))),
+    ('safety monitor', 'eq.safety', 'simple-device-safety', 'Solo',
+        safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected))),
+  ]) {
+    testWidgets('the $name\'s dot opens its window and closes it again; Settings lists it under Devices',
+        (tester) async {
+      final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [override]);
+      Future<void> dot() async {
+        c.read(selectedSettingsPanelProvider.notifier).select(panel);
+        c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+        await tester.pumpAndSettle();
+      }
+      await dot();
+      expect(find.byKey(Key(key)), findsOneWidget);
+      expect(find.byType(SettingsShell), findsNothing, reason: 'never the full UI\'s Settings page');
+      await dot();
+      expect(find.byKey(Key(key)), findsNothing);
+      await _openSection(tester, 'Devices');
+      await tester.tap(find.textContaining(row));
+      await tester.pump();
+      expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.byKey(Key(key))),
+          findsOneWidget, reason: 'its Devices row opens the same window');
+    });
+  }
+
+  testWidgets('Settings lists the dome and the safety monitor only while the rig knows them', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true);
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-menu-nav-Dome')), findsNothing);
+    expect(find.byKey(const Key('simple-menu-nav-Safety monitor')), findsNothing);
+  });
+
+  testWidgets('no device dot opens the full UI\'s Settings page', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true);
+    for (final panel in ['eq.camera', 'eq.mount', 'eq.focuser', 'eq.filterwheel', 'eq.rotator', 'eq.switch',
+        'eq.flat', 'eq.weather', 'eq.safety', 'eq.dome', 'eq.guider']) {
+      c.read(selectedSettingsPanelProvider.notifier).select(panel);
+      c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+      await tester.pumpAndSettle();
+      expect(find.byType(SettingsShell), findsNothing, reason: panel);
+    }
+  });
+
   testWidgets('Settings lists the weather station only while the rig knows one', (tester) async {
     await _pump(tester, const Size(1024, 768), linkUp: true);
     await tester.tap(find.byTooltip('Settings'));
@@ -3660,6 +3740,73 @@ void main() {
     flat.report('light_on');
     await tester.pump();
     expect(find.descendant(of: pill, matching: find.textContaining('Flat panel')), findsNothing, reason: 'ready');
+  });
+
+  testWidgets('the dome turning and its shutter opening show in the status pill; a tap opens its window',
+      (tester) async {
+    final dome = _Dome(EquipmentConnectionState.connected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [domeProvider.overrideWith(() => dome)]);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Dome')), findsNothing);
+    dome.report('slewing');
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Moving…')), findsOneWidget);
+    final dot = tester.widget<StatusDot>(find.descendant(of: pill, matching: find.byType(StatusDot)));
+    expect((dot.color, dot.ring), (AraColors.accentConnected, false));
+    expect(tester.widget<StatusBlink>(find.descendant(of: pill, matching: find.byType(StatusBlink))).on, isTrue);
+    await tester.tap(find.descendant(of: pill, matching: find.textContaining('Dome')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const Key('simple-device-dome')), findsOneWidget, reason: 'the pill opens its window');
+    dome.report('shutter_moving');
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Opening…')), findsOneWidget,
+        reason: 'closed before it moved, so it is opening');
+    final ring = tester.widget<StatusDot>(find.descendant(of: pill, matching: find.byType(StatusDot)));
+    expect((ring.color, ring.ring), (AraColors.accentInfo, true), reason: 'a change between two states');
+    dome.report('idle');
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Dome')), findsNothing, reason: 'stopped');
+  });
+
+  testWidgets('a dome Park asked in its window shows in the status pill at once', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true,
+        gear: [domeProvider.overrideWith(() => _Dome(EquipmentConnectionState.connected))]);
+    c.read(selectedSettingsPanelProvider.notifier).select('eq.dome');
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-dome-park')));
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Parking…')), findsOneWidget,
+        reason: 'from the tap, before the dome reports moving');
+    await tester.pump(const Duration(seconds: 4));
+    expect(find.descendant(of: pill, matching: find.textContaining('Dome')), findsNothing,
+        reason: 'nothing moved: the ask goes');
+  });
+
+  testWidgets('the safety monitor\'s Unsafe stays in the status pill, steady amber, with since when',
+      (tester) async {
+    final safety = _Safety(EquipmentConnectionState.connected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [safetyMonitorProvider.overrideWith(() => safety)]);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Safety monitor')), findsNothing);
+    safety.report(false, DateTime(2026, 11, 8, 2, 14));
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Unsafe since 02:14')), findsOneWidget);
+    final dot = tester.widget<StatusDot>(find.descendant(of: pill, matching: find.byType(StatusDot)));
+    expect((dot.color, dot.ring), (AraColors.accentWarning, false));
+    expect(find.descendant(of: pill, matching: find.byType(StatusBlink)).evaluate()
+        .every((e) => !(e.widget as StatusBlink).on), isTrue, reason: 'steady');
+    await tester.tap(find.descendant(of: pill, matching: find.textContaining('Safety monitor')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byKey(const Key('simple-device-safety')), findsOneWidget, reason: 'the pill opens its window');
+    safety.report(true, DateTime(2026, 11, 8, 3, 0));
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Safety monitor')), findsNothing, reason: 'safe');
   });
 
   testWidgets('a scheduled plan waiting on the rig: the pill says when it starts', (tester) async {

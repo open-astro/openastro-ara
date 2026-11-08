@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-08T03:29:00+13:00",
+  "generatedAt": "2026-11-08T15:10:00+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -784,6 +784,22 @@
       "description": "The Weather window's readings as tiles, two across (tile fill, 10 pt corners), all 80 pt tall (scaled with the text; captions at most two lines): a 22 pt Text Secondary icon in front of the reading big (22 pt, 600, tabular) with its unit in 13 pt Text Secondary, its name under it in 12 pt (sky quality's mag/arcsec² on its own line under the name). Order: cloud cover, sky quality, temperature, dew point, humidity, rain, wind (km/h, compass point and gusts in the caption), then the computed moon (lit % and phase). An odd count's last tile spans the row. A reading past the rig's safety limit, while weather triggers safety, gets a 1.5 pt amber outline, an amber icon and the limit on its own amber line under the name; the number is amber only when it is the value past the limit (a gust past it colours \"gusts N\" in the caption instead, and the caption then drops the other details so the gust stays whole). \"Updated 8 s ago\" under the tiles turns amber past a minute (#1662).",
       "html": "<div class=\"ds-wx\"><div class=\"ds-wx-t\"><b>12<small>%</small></b><span>Cloud cover</span></div><div class=\"ds-wx-t ds-wx-over\"><b>88<small>%</small></b><span>Humidity</span><span class=\"ds-wx-lim\">limit 85 %</span></div><div class=\"ds-wx-t ds-wx-wide\"><b>3<small>%</small></b><span>Moon · Waning crescent</span></div></div>",
       "css": ".ds-wx{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:328px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif} .ds-wx-t{background:rgba(56,56,56,.55);border-radius:10px;padding:8px 12px;min-height:64px;display:flex;flex-direction:column;justify-content:center;box-sizing:border-box} .ds-wx-t b{font-size:22px;font-weight:600;color:#E0E0E0;font-variant-numeric:tabular-nums} .ds-wx-t small{font-size:13px;font-weight:400;color:#A0A0A0;margin-left:3px} .ds-wx-t span{font-size:12px;color:#A0A0A0} .ds-wx-over{box-shadow:inset 0 0 0 1.5px #FFB300} .ds-wx-over b{color:#FFB300} .ds-wx-wide{grid-column:1/-1} .ds-wx-lim{color:#FFB300!important}"
+    },
+    {
+      "name": "Dome Clamshell + Dial (Simple Mode)",
+      "kind": "custom",
+      "refersTo": "simple-dome-front-dial",
+      "description": "The Dome window's two 150 pt drawings side by side under the azimuth, the dial on the left and the clamshell on the right, the clamshell filling its box so both read the same size. The dial from above: North up, ticks every 10°, the slit at the azimuth (32° wide), a thin green slit for the target, the rotator's hub (green play / red stop square). The clamshell from the front, a Baader AllSky style dome: a sphere on a base with sloped shoulders and a round plinth, the door up into the sphere, each side of the top two nested shells on one centre hinge bolt (closed, no gap); opening, they fan down to the base's shoulders, the outer twice as fast, over the dome's last measured shutter time, blue edges while moving. The Shutter row sits 12 pt below. Under 96 pt each, only the dial (#1662).",
+      "html": "<div class=\"ds-dome\"><svg viewBox=\"0 0 150 150\" width=\"150\" height=\"150\"><path d=\"M75 62 L75 10 A52 52 0 0 1 120 36 Z\" fill=\"#8c8c8c\" stroke=\"#A0A0A0\"/><path d=\"M75 62 L75 10 A52 52 0 0 0 30 36 Z\" fill=\"#8c8c8c\" stroke=\"#A0A0A0\"/><path d=\"M23 62 A52 52 0 0 0 127 62 Z\" fill=\"#5a5a5a\" stroke=\"#A0A0A0\"/></svg><svg viewBox=\"0 0 150 150\" width=\"150\" height=\"150\"><circle cx=\"75\" cy=\"75\" r=\"72\" fill=\"#383838\" stroke=\"#404040\"/><circle cx=\"75\" cy=\"75\" r=\"22\" fill=\"#1A1A1A\" stroke=\"#404040\"/></svg></div>",
+      "css": ".ds-dome{display:flex;gap:12px;justify-content:space-between;width:328px}"
+    },
+    {
+      "name": "Safety State Tile (Simple Mode)",
+      "kind": "custom",
+      "refersTo": "simple-safety-state",
+      "description": "The Safety monitor window's one tile (tile fill, 10 pt corners, 80 pt): a 34 pt shield and \"Safe\" in Connected green, or \"Unsafe\" in Warning amber with a 1.5 pt amber outline, 26 pt 600; \"since 02:14 · 1 h 12 min\" under it in 12 pt, local 24 h time. While Unsafe a caption under the tile says what the safety policy does next (\"Resumes 10 min after Safe\" / \"Stays paused until you resume\") once the policies load (#1662). Under it, while the rig is unsafe, Why (the monitor gives no reason; weather past its limits in amber) and What Ara does (the On unsafe policy in words, the resume line), 12 pt headings over 13 pt rows with 18 pt icons.",
+      "html": "<div class=\"ds-safe\"><span class=\"ds-safe-i\">⛨</span><div><b>Unsafe</b><span>since 02:14 · 1 h 12 min</span></div></div>",
+      "css": ".ds-safe{display:flex;gap:12px;align-items:center;width:328px;min-height:80px;box-sizing:border-box;padding:8px 12px;border-radius:10px;background:rgba(56,56,56,.55);box-shadow:inset 0 0 0 1.5px #FFB300;color:#FFB300;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif} .ds-safe-i{font-size:34px} .ds-safe b{display:block;font-size:26px;font-weight:600} .ds-safe span{font-size:12px;color:#A0A0A0}"
     },
     {
       "name": "Message Pill: Question (Simple Mode)",

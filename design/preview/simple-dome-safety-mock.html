@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dome and Safety Windows</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0,0">
+<style>
+  /* Layout: one iPad-sized stage with the Simple Mode Dome or Safety monitor window over the image.
+     Single dark look on purpose: DESIGN.md tokens (lib/theme/ara_colors.dart), as the other design/preview mocks. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+    --ok: #4CAF50; --info: #42A5F5; --sel: #1976D2; --tile: #383838; --warn: #FFB300; --err: #E53935;
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys);
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+  body.night { filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(.75); }
+  .page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 80ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  .group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .group[hidden] { display: none; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  .seg button:disabled { color: #666; cursor: default; }
+  button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+  .stage-wrap { overflow-x: auto; }
+  .ipad { width: 1024px; height: 640px; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 60% 45%, #3a3f4c 0, #12141a 55%, #08090c 100%); }
+  .strip { position: absolute; left: 16px; right: 16px; top: 16px; height: 56px; background: rgba(26,26,26,.9); border-radius: 10px;
+           display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 13px; color: var(--text2); }
+  .dot { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; } .dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .dot.hot { outline: 1.5px solid var(--sel); outline-offset: 4px; border-radius: 6px; color: var(--text); }
+  .dot.off i { background: #666; } .dot.err i { background: var(--err); } .dot.unsafe i { background: var(--warn); }
+  .pills { position: absolute; right: 16px; top: 88px; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+  .pill { background: rgba(26,26,26,.9); border-radius: 18px; padding: 6px 14px; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+  .pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .pill.blink i { animation: blink 1s steps(2, start) infinite; }
+  .pill.ring i { background: transparent; box-shadow: inset 0 0 0 2px var(--info); }
+  .pill.uns { color: var(--warn); } .pill.uns i { background: var(--warn); }
+  @keyframes blink { to { visibility: hidden; } }
+
+  .win { position: absolute; top: 88px; width: 360px; background: rgba(26,26,26,.9); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+         border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+  .head { display: flex; align-items: center; gap: 8px; font-weight: 600; min-height: 32px; }
+  .head i { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
+  .head.off i { background: #666; } .head.err i { background: var(--err); }
+  .r { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+  .r .l { flex: 1; }
+  .r .seg { flex: 0 0 auto; } .r .seg button { min-height: 36px; min-width: 76px; }
+  .caption { color: var(--text2); font-size: 12px; padding-top: 4px; }
+  .caption b { color: var(--text); font-weight: 500; }
+  .moving { color: var(--ok); } .moving.blink { animation: blink 1s steps(2, start) infinite; }
+  .info { color: var(--info); }
+  .err { color: #FF8A80; }
+  .ver { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 10px; display: grid; grid-template-columns: auto 1fr; gap: 2px 24px; }
+  .ver b { grid-column: 1 / -1; margin-bottom: 4px; } .ver span:nth-child(even) { color: var(--text2); }
+  .btns { display: flex; gap: 8px; padding-top: 4px; }
+  .btn { flex: 1; min-height: 44px; border-radius: 8px; border: 1px solid var(--border); background: rgba(56,56,56,.55); color: var(--text); font: 600 14px var(--sys); cursor: pointer; }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .btn.stop { border-color: var(--err); color: #FF8A80; }
+  .btn.go { background: var(--sel); border-color: var(--sel); color: #fff; }
+  .confirm { border: 1px solid var(--warn); border-radius: 10px; padding: 10px 12px; margin-top: 6px; display: flex; flex-direction: column; gap: 8px; }
+  .confirm p { margin: 0; color: var(--warn); }
+  .ms { font-family: 'Material Symbols Outlined'; font-weight: normal; font-style: normal; line-height: 1; white-space: nowrap; -webkit-font-smoothing: antialiased; font-feature-settings: 'liga'; }
+
+  /* Safety */
+  .state { background: rgba(56,56,56,.55); border-radius: 10px; padding: 10px 14px; min-height: 80px; display: flex; align-items: center; gap: 12px; }
+  .state .ms { font-size: 34px; }
+  .state .n { font-size: 26px; font-weight: 600; line-height: 1.15; }
+  .state .k { font-size: 12px; color: var(--text2); font-variant-numeric: tabular-nums; }
+  .state.safe { color: var(--ok); } .state.unsafe { color: var(--warn); box-shadow: inset 0 0 0 1.5px var(--warn); }
+  .why { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; }
+  .why .row { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
+  .why .row .ms { font-size: 18px; color: var(--text2); margin-top: 1px; }
+  .why .row.warn, .why .row.warn .ms { color: var(--warn); }
+  .why .h { color: var(--text2); font-size: 12px; text-transform: none; }
+
+  /* Dome side view */
+  .domewrap { display: flex; gap: 14px; align-items: center; }
+  .domewrap svg { flex: 0 0 auto; }
+  .dial { cursor: grab; touch-action: none; } .dial:active { cursor: grabbing; }
+  .nudge { display: flex; gap: 8px; } .nudge .btn { flex: 0 0 56px; font-size: 18px; }
+  .side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .big { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .big small { font-size: 13px; font-weight: 400; color: var(--text2); margin-left: 4px; }
+
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .notes div { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+  .notes h2 { font-size: 14px; margin: 0 0 4px; }
+  .notes p { margin: 0; color: var(--text2); font-size: 13px; }
+  .notes div.new { border-color: var(--sel); }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <h1>Dome and Safety monitor windows (v14)</h1>
+  <p class="note">v3 (2026-11-08): the dome is seen from the side, and the shutter (or roof) slides open and shut over about as long as the real one takes. The Safety monitor window says why it is unsafe, as far as Ara knows, and what Ara does about it. The buttons in the Dome window work; set "Shutter takes" short to watch a whole move.</p>
+
+  <div class="controls">
+    <div class="group"><span class="lbl">Window</span>
+      <div class="seg" role="group" aria-label="Window" id="dev">
+        <button aria-pressed="true" data-v="dome">Dome</button>
+        <button aria-pressed="false" data-v="safety">Safety monitor</button>
+      </div>
+    </div>
+    <div class="group" data-for="dome"><span class="lbl">Dome layout</span>
+      <div class="seg" role="group" aria-label="Dome layout" id="layout">
+        <button aria-pressed="true" data-v="a">A · Side + dial from above (recommended)</button>
+        <button aria-pressed="false" data-v="b">B · Dial from above only</button>
+        <button aria-pressed="false" data-v="c">C · Side only, ◀ ▶ to turn</button>
+      </div>
+    </div>
+    <div class="group" data-for="dome"><span class="lbl">Dome kind</span>
+      <div class="seg" role="group" aria-label="Dome kind" id="kind">
+        <button aria-pressed="true" data-v="full">Rotating dome</button>
+        <button aria-pressed="false" data-v="roof">Roll-off roof</button>
+        <button aria-pressed="false" data-v="nopark">No park, no home</button>
+      </div>
+    </div>
+    <div class="group" data-for="dome"><span class="lbl">Shutter takes</span>
+      <div class="seg" role="group" aria-label="Shutter takes" id="secs">
+        <button aria-pressed="false" data-v="8">8 s</button>
+        <button aria-pressed="true" data-v="45">45 s</button>
+        <button aria-pressed="false" data-v="90">90 s</button>
+      </div>
+    </div>
+    <div class="group" data-for="dome"><span class="lbl">Plan</span>
+      <div class="seg" role="group" aria-label="Plan" id="plan">
+        <button aria-pressed="true" data-v="idle">No plan running</button>
+        <button aria-pressed="false" data-v="run">Plan running (asks first)</button>
+      </div>
+    </div>
+    <div class="group" data-for="safety"><span class="lbl">Monitor reads</span>
+      <div class="seg" role="group" aria-label="Monitor reads" id="safe">
+        <button aria-pressed="false" data-v="safe">Safe</button>
+        <button aria-pressed="true" data-v="unsafe">Unsafe</button>
+      </div>
+    </div>
+    <div class="group" data-for="safety"><span class="lbl">Weather</span>
+      <div class="seg" role="group" aria-label="Weather" id="wx">
+        <button aria-pressed="true" data-v="none">No station / triggers off</button>
+        <button aria-pressed="false" data-v="ok">Within limits</button>
+        <button aria-pressed="false" data-v="over">Wind past its limit</button>
+      </div>
+    </div>
+    <div class="group" data-for="safety"><span class="lbl">On unsafe (policy)</span>
+      <div class="seg" role="group" aria-label="On unsafe" id="onu">
+        <button aria-pressed="true" data-v="pause_and_park">Pause + park + close dome</button>
+        <button aria-pressed="false" data-v="park_only">Park only</button>
+        <button aria-pressed="false" data-v="abort_and_park">Abort + park</button>
+        <button aria-pressed="false" data-v="ignore">Ignore</button>
+      </div>
+    </div>
+    <div class="group" data-for="safety"><span class="lbl">Auto-resume (policy)</span>
+      <div class="seg" role="group" aria-label="Auto-resume" id="resume">
+        <button aria-pressed="true" data-v="on">On, 10 min</button>
+        <button aria-pressed="false" data-v="off">Off</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">State</span>
+      <div class="seg" role="group" aria-label="State" id="state">
+        <button aria-pressed="true" data-v="live">Connected</button>
+        <button aria-pressed="false" data-v="error">Read failed</button>
+        <button aria-pressed="false" data-v="off">Not connected</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">Opened from</span>
+      <div class="seg" role="group" aria-label="Opened from" id="from">
+        <button aria-pressed="true" data-v="dot">Dot</button>
+        <button aria-pressed="false" data-v="settings">Settings</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">View</span>
+      <div class="seg" role="group" aria-label="View" id="view">
+        <button aria-pressed="true" data-v="day">Normal</button>
+        <button aria-pressed="false" data-v="night">Night (red)</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-wrap">
+    <div class="ipad">
+      <div class="strip">
+        <span class="dot"><i></i>Camera</span><span class="dot"><i></i>Mount</span>
+        <span class="dot"><i></i>Focuser</span><span class="dot"><i></i>Guider</span>
+        <span class="dot"><i></i>Weather</span>
+        <span class="dot" id="dotDome" data-v="dome"><i></i>Dome</span>
+        <span class="dot" id="dotSafety" data-v="safety"><i></i>Safety</span>
+      </div>
+      <div class="pills" id="pills"></div>
+      <div class="win" id="win"></div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="new"><h2>Dome: an all-sky clamshell, from the front</h2><p>v12 (user, 2026-11-08, Baader AllSky front photo; no sky disc or scope inside, user): the sphere seen from the front, on its base (sloped shoulders, straight sides, a round plinth) with the door running from the sphere down to the plinth. Each side of the top is two nested shells fanned on a bolt just above the centre. Closed, the outer shells meet at the crown and the inner ones cover the band below. Opening, both fan outward and down, the outer one twice as fast, so a V opens at the top and widens until the shells lie stacked over the lower half, stopping with their lower edges on the base's shoulders (user), and the top is open; closing reverses it. The drawing no longer turns with the azimuth: the dial from above shows where the opening points. A roll-off roof is a shed whose roof slides off to the side.</p></div>
+    <div class="new"><h2>Turning the dome</h2><p>A: the side view shows the shutter, the dial from above turns the dome, both 150 pt side by side under the reading. Drag round the dial (or scroll, or arrow keys) to a target: a dashed green slit and "→ 245°" beside the azimuth; the middle's green play turns it there, and is the red stop square while it turns, as the rotator dial. B: one 170 pt dial does both: the slit's dark part grows in from the wall as the shutter opens (no side view). C: the side view only, with ◀ ▶ in 5° steps and "Turn to 245°". While a plan runs, a turn asks first. Uses the daemon's existing slew; no daemon change.</p></div>
+    <div class="new"><h2>Opening and closing, timed</h2><p>The daemon says only "shutter moving", not how far. Ara knows which way (from what was asked, or the state before), so the window says "Opening…" or "Closing…" and slides the shutter over the time this dome took last time, timed from the last full move it saw and kept on this device; 60 s until it has seen one. If the dome is slower, the shutter waits just short of the end until it reports done; if faster, it snaps there. Reduce motion: no slide, it jumps.</p></div>
+    <div class="new"><h2>Why unsafe</h2><p>An ASCOM safety monitor reports only safe or unsafe, never why: the cause is inside the device (its own cloud, rain or wind limits). So the window names the device and says it doesn't give a reason. What Ara can add: a weather reading past its safety limit (when "Weather triggers safety" is on), the same check the daemon makes and the Weather window marks in amber. That one shows even while the monitor reads Safe, since Ara then treats the rig as unsafe too.</p></div>
+    <div class="new"><h2>What Ara does</h2><p>Read-only lines from the safety policy, shown while unsafe: "On unsafe: pause the plan, park and close the dome", then "Resumes 10 min after Safe" or "Stays paused until you resume". The policy loads when the window opens and is never written here; it is edited in the full UI.</p></div>
+    <div><h2>Moving</h2><p>"Moving…" blinking green while it turns, parks or finds home; "Opening…" / "Closing…" with a blue ring dot while the shutter goes (a change between two states). Segments and Park / Home lock; Stop never locks. While a plan runs, a shutter change, Park or Home asks first; Stop never asks.</p></div>
+    <div><h2>Stays in the full UI</h2><p>Dome: slew to azimuth, sync, set park here, auto-connect, slaving. Safety: editing On unsafe, auto-resume and its delay, auto-connect.</p></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const S = { layout: 'a', dev: 'dome', kind: 'full', secs: 45, plan: 'idle', safe: 'unsafe', wx: 'none', onu: 'pause_and_park', resume: 'on', conn: 'live', from: 'dot', view: 'day' };
+  // f: shutter 0 closed .. 1 open. dir: +1 opening, -1 closing, 0 still.
+  const D = { tgt: null, az: 212, target: null, f: 0, dir: 0, moveStart: 0, parked: false, home: false, ask: null };
+  const PARK_AZ = 180, HOME_AZ = 0;
+  const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  const win = document.getElementById('win'), pills = document.getElementById('pills');
+  const unsafeSince = new Date(Date.now() - (72 * 60 + 14) * 1000);
+  const safeSince = new Date(Date.now() - (3 * 60 + 41) * 60000);
+  const hhmm = d => d.toTimeString().slice(0, 5);
+  function dur(ms) { const m = Math.floor(ms / 60000); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + (m % 60) + ' min'; }
+  const caps = () => ({ full: { shutter: 1, az: 1, park: 1, home: 1 }, roof: { shutter: 1 }, nopark: { shutter: 1, az: 1 } })[S.kind];
+  const turning = () => D.target != null;
+  const shutterMoving = () => D.dir !== 0;
+  const busy = () => turning() || shutterMoving();
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = (now - last) / 1000; last = now;
+    let changed = false;
+    if (D.target != null) {
+      const d = ((D.target - D.az + 540) % 360) - 180, step = 12 * dt;
+      if (Math.abs(d) <= step) { D.az = D.target; D.parked = D.going === 'park'; D.home = D.going === 'home'; D.target = null; }
+      else D.az = (D.az + Math.sign(d) * step + 360) % 360;
+      changed = true;
+    }
+    if (D.dir !== 0) {
+      D.f = reduce ? (D.dir > 0 ? 1 : 0) : Math.min(1, Math.max(0, D.f + D.dir * dt / S.secs));
+      if ((D.dir > 0 && D.f >= 1) || (D.dir < 0 && D.f <= 0)) D.dir = 0;
+      changed = true;
+    }
+    if (changed) render();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  function act(what) {
+    if (!['stop', 'left', 'right'].includes(what) && S.plan === 'run' && D.ask !== what) { D.ask = what; render(); return; }
+    D.ask = null;
+    if (what === 'stop') { D.target = null; D.dir = 0; render(); return; }
+    if (what === 'left' || what === 'right') { D.ask = null; D.tgt = (((D.tgt ?? Math.round(D.az)) + (what === 'left' ? -5 : 5)) % 360 + 360) % 360; render(); return; }
+    if (what === 'open' && D.f < 1) { D.dir = 1; D.parked = false; }
+    if (what === 'close' && D.f > 0) D.dir = -1;
+    if (what === 'park') { D.going = 'park'; D.target = PARK_AZ; D.home = false; }
+    if (what === 'home') { D.going = 'home'; D.target = HOME_AZ; D.parked = false; }
+    if (what === 'go' && D.tgt != null) { D.going = 'slew'; D.target = D.tgt; D.tgt = null; D.parked = false; D.home = false; }
+    render();
+  }
+
+  // Front view of an all-sky clamshell (user's Baader AllSky photos, 2026-11-08): a sphere seen from
+  // the front, on its base. Each side of the top is two nested shells, fanned on a bolt just above the
+  // sphere's centre: closed, the outer shell covers the top (from the crown down to about 10 / 2
+  // o'clock) and the inner one the band below it, meeting the other side's at the crown. Opening, both
+  // fan outward and down, the outer one twice as fast, until they lie stacked over the lower half and
+  // the whole top is open; a V opens between them on the way.
+  function domeSide(size = 150) {
+    const W = size, H = size, k = size / 150, cx = W / 2, cy = 62 * k, R = 52 * k;
+    // theta: degrees from straight up, clockwise; side +1 right, -1 left (mirrored).
+    const pt = (side, th, r, px, py) => [px + side * Math.sin(th * Math.PI / 180) * r, py - Math.cos(th * Math.PI / 180) * r];
+    const fan = (side, th1, th2, r, px, py) => {
+      const [a1, b1] = pt(side, th1, r, px, py), [a2, b2] = pt(side, th2, r, px, py);
+      return `M${px},${py} L${a1},${b1} A${r},${r} 0 0 ${side > 0 ? 1 : 0} ${a2},${b2} Z`; };
+    let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Dome, ${Math.round(D.f * 100)} % open">`;
+    s += `<defs><linearGradient id="sh" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a8a8a8"/><stop offset="1" stop-color="#6a6a6a"/></linearGradient>
+      <linearGradient id="lo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#808080"/><stop offset="1" stop-color="#4a4a4a"/></linearGradient></defs>`;
+    // The sphere's lower half stays, with its hexagonal-topped door.
+    s += `<path d="M${cx - R},${cy} A${R},${R} 0 0 0 ${cx + R},${cy} Z" fill="url(#lo)" stroke="var(--text2)" stroke-width="1"/>`;
+    // The base under the sphere (user's photo): sloped shoulders out from the sphere, straight
+    // sides, on a round plinth.
+    const sy = cy + R * 0.3, sh = cy + R * 0.8, by = cy + R * 1.08, dw = 12 * k;
+    s += `<path d="M${cx - dw},${sy} L${cx - R * 0.92},${sh} L${cx - R * 0.92},${by} L${cx + R * 0.92},${by} L${cx + R * 0.92},${sh} L${cx + dw},${sy} Z" fill="url(#lo)" stroke="var(--text2)" stroke-width="1"/>`;
+    s += `<rect x="${cx - R * 1.04}" y="${by}" width="${R * 2.08}" height="${4 * k}" rx="${2 * k}" fill="#8a8a8a" stroke="var(--text2)" stroke-width="1"/>`;
+    // The door with its hexagonal top, from the sphere down to the plinth.
+    const dy = cy + 14 * k;
+    s += `<path d="M${cx - dw},${by} L${cx - dw},${dy + 6 * k} L${cx - dw / 2},${dy} L${cx + dw / 2},${dy} L${cx + dw},${dy + 6 * k} L${cx + dw},${by} Z" fill="url(#lo)" stroke="var(--text2)" stroke-width="1"/>`;
+    const edge = shutterMoving() ? 'var(--info)' : 'var(--text2)', f = D.f;
+    for (const side of [-1, 1]) {
+      const px = cx, py = cy; // one hinge point: closed, no gap at the crown
+      // Inner shell first (under), then the outer one over it.
+      s += `<path d="${fan(side, 46 + 36 * f, 92 + 40 * f, R + 1 * k, px, py)}" fill="url(#sh)" stroke="${edge}" stroke-width="1.2"/>`;
+      s += `<path d="${fan(side, -3 + 83 * f, 52 + 80 * f, R + 3 * k, px, py)}" fill="url(#sh)" stroke="${edge}" stroke-width="1.3"/>`;
+    }
+    s += `<circle cx="${cx}" cy="${cy}" r="${3 * k}" fill="#d0d0d0" stroke="#555" stroke-width="1"/>`;
+    return s + '</svg>';
+  }
+  // From above, North up: the slit at the azimuth (its open part dark, growing from the wall in as
+  // the shutter opens), the target as a dashed slit, Start / Stop in the middle.
+  function domeTop(size, withShutter) {
+    const c = size / 2, R = c - 4, k = size / 150;
+    const pt = (deg, r) => [c + Math.sin(deg * Math.PI / 180) * r, c - Math.cos(deg * Math.PI / 180) * r];
+    const wedge = (deg, r0, r1, w) => { const [a, b] = pt(deg - w, r1), [d, e] = pt(deg + w, r1), [f, g] = pt(deg + w, r0), [h, i] = pt(deg - w, r0);
+      return `M${h},${i} L${a},${b} A${r1},${r1} 0 0 1 ${d},${e} L${f},${g} Z`; };
+    let s = `<svg class="dial" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="slider" aria-label="Dome azimuth" aria-valuenow="${Math.round(D.az)}" aria-valuetext="${Math.round(D.az)} degrees${D.tgt != null ? ', target ' + D.tgt + ' degrees' : ''}">`;
+    s += `<circle cx="${c}" cy="${c}" r="${R}" fill="rgba(56,56,56,.85)" stroke="var(--border)" stroke-width="1.5"/>`;
+    for (let i = 0; i < 36; i++) { const [x1, y1] = pt(i * 10, R - (i % 9 === 0 ? 10 : i % 3 === 0 ? 6 : 3)), [x2, y2] = pt(i * 10, R);
+      s += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--text2)" stroke-width="${i % 9 === 0 ? 1.6 : 1}"/>`; }
+    for (const [l, d] of [['N', 0], ['E', 90], ['S', 180], ['W', 270]]) { const [x, y] = pt(d, R - 18 * k); s += `<text x="${x}" y="${y + 4}" text-anchor="middle" font-size="${11 * k}" fill="var(--text2)">${l}</text>`; }
+    const r0 = 26 * k, r1 = R - 1;
+    if (D.tgt != null) s += `<path d="${wedge(D.tgt, r0, r1, 16)}" fill="none" stroke="var(--ok)" stroke-dasharray="3 3" stroke-width="1.5"/>`;
+    s += `<path d="${wedge(D.az, r0, r1, 16)}" fill="rgba(110,110,110,.95)" stroke="${turning() ? 'var(--ok)' : 'var(--text)'}" stroke-width="1.4"/>`;
+    if (withShutter && D.f > 0.01) s += `<path d="${wedge(D.az, r1 - (r1 - r0) * D.f, r1, 15)}" fill="#0d1018"/>`;
+    // Hub: Start (green play with a target, grey without) turns into Stop (red square) while it turns.
+    const hub = 22 * k;
+    s += `<g data-act="${turning() ? 'stop' : D.tgt != null ? 'go' : ''}" style="cursor:${turning() || D.tgt != null ? 'pointer' : 'default'}" role="button" aria-label="${turning() ? 'Stop the dome' : D.tgt != null ? 'Turn to ' + D.tgt + '°' : 'Turn'}">`;
+    s += `<circle cx="${c}" cy="${c}" r="${hub}" fill="#1A1A1A" stroke="var(--border)"/>`;
+    if (turning()) s += `<rect x="${c - 8 * k}" y="${c - 8 * k}" width="${16 * k}" height="${16 * k}" rx="2" fill="var(--err)"/>`;
+    else s += `<path d="M${c - 6 * k},${c - 10 * k} L${c + 10 * k},${c} L${c - 6 * k},${c + 10 * k} Z" fill="${D.tgt != null ? 'var(--ok)' : '#666'}"/>`;
+    return s + '</g></svg>';
+  }
+
+  function roofSide() {
+    const W = 160, H = 130, ground = 122, l = 26, r = 134, wallTop = 70;
+    const off = D.f * (r - l + 10);
+    let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Roll-off roof, ${Math.round(D.f * 100)} % open">`;
+    s += `<line x1="4" y1="${ground}" x2="156" y2="${ground}" stroke="var(--border)" stroke-width="1.5"/>`;
+    s += `<line x1="${r}" y1="${wallTop - 6}" x2="158" y2="${wallTop - 6}" stroke="var(--text2)" stroke-width="1.5"/>`;
+    s += `<rect x="${l}" y="${wallTop}" width="${r - l}" height="${ground - wallTop}" fill="rgba(56,56,56,.85)" stroke="var(--border)" stroke-width="1.2"/>`;
+    s += `<line x1="${l + 4}" y1="${wallTop - 1}" x2="${r - 4}" y2="${wallTop - 1}" stroke="#0d1018" stroke-width="2"/>`;
+    s += `<path d="M${l - 4 + off},${wallTop} L${(l + r) / 2 + off},${wallTop - 26} L${r + 4 + off},${wallTop} Z" fill="rgba(80,80,80,.95)" stroke="${shutterMoving() ? 'var(--info)' : 'var(--text2)'}" stroke-width="1.2"/>`;
+    return s + '</svg>';
+  }
+
+  function moveWord() {
+    if (turning()) return `<div class="caption moving blink" style="font-size:14px">Moving…</div>`;
+    if (shutterMoving()) {
+      const left = Math.ceil((D.dir > 0 ? 1 - D.f : D.f) * S.secs);
+      return `<div class="caption info" style="font-size:14px">${D.dir > 0 ? 'Opening…' : 'Closing…'} <span style="color:var(--text2);font-size:12px">about ${left} s</span></div>`;
+    }
+    return '';
+  }
+  function where() { return D.parked ? 'Parked' : D.home ? 'At home' : ''; }
+  function shutterRow(c) {
+    if (!c.shutter) return '';
+    const dis = busy() || D.ask ? 'disabled' : '';
+    const open = D.f >= 1 || D.dir > 0, label = S.kind === 'roof' ? 'Roof' : 'Shutter';
+    return `<div class="r"><span class="l">${label}</span><div class="seg" role="group" aria-label="${label}">
+      <button aria-pressed="${open}" data-act="open" ${dis}>Open</button><button aria-pressed="${!open}" data-act="close" ${dis}>Closed</button></div></div>`;
+  }
+  function buttons(c) {
+    const b = [];
+    if (c.park) b.push(`<button class="btn" data-act="park" ${busy() || D.ask ? 'disabled' : ''}>Park</button>`);
+    if (c.home) b.push(`<button class="btn" data-act="home" ${busy() || D.ask ? 'disabled' : ''}>Home</button>`);
+    if (busy()) b.push(`<button class="btn stop" data-act="stop"><span style="display:inline-block;width:14px;height:14px;background:var(--err);border-radius:2px;vertical-align:-2px;margin-right:8px"></span>Stop</button>`);
+    return b.length ? `<div class="btns">${b.join('')}</div>` : '';
+  }
+  const ASK = { go: 'Turn the dome anyway?', open: 'Open the shutter anyway?', close: 'Close the shutter anyway?', park: 'Park the dome anyway?', home: 'Find home anyway?' };
+  function confirmBox() {
+    if (!D.ask) return '';
+    return `<div class="confirm"><p>A plan is running. ${ASK[D.ask]}</p><div class="btns"><button class="btn" data-act="cancel">Cancel</button><button class="btn go" data-act="${D.ask}">Change anyway</button></div></div>`;
+  }
+
+  function renderDome(body) {
+    const c = caps();
+    const tgt = D.tgt != null ? ` <span style="color:var(--ok);font-size:13px;font-weight:400">→ ${D.tgt}°</span>` : '';
+    const reading = c.az
+      ? `<div class="big">${Math.round(D.az)}°<small>${DIRS[Math.round(D.az / 45) % 8]}</small>${tgt}</div><div class="caption" style="padding-top:0">Azimuth${where() ? ' · ' + where() : ''}</div>`
+      : `<div class="big" style="font-size:22px">${D.f >= 1 ? 'Open' : D.f <= 0 ? 'Closed' : Math.round(D.f * 100) + ' % open'}</div><div class="caption" style="padding-top:0">Roof</div>`;
+    if (S.kind === 'roof') {
+      body.push(`<div class="domewrap">${roofSide()}<div class="side">${reading}${moveWord()}</div></div>`);
+    } else if (S.layout === 'a') {
+      body.push(`<div class="side">${reading}${moveWord()}</div>`);
+      body.push(`<div class="domewrap" style="justify-content:space-between">${domeSide()}${domeTop(150, false)}</div>`);
+    } else if (S.layout === 'b') {
+      body.push(`<div class="domewrap">${domeTop(170, true)}<div class="side">${reading}${moveWord()}</div></div>`);
+    } else {
+      body.push(`<div class="domewrap">${domeSide()}<div class="side">${reading}${moveWord()}</div></div>`);
+      const dis = busy() || D.ask ? 'disabled' : '';
+      body.push(`<div class="nudge"><button class="btn" data-act="left" ${dis} aria-label="Turn 5 degrees left">◀</button><button class="btn go" style="flex:1" data-act="go" ${D.tgt == null || dis ? 'disabled' : ''}>${D.tgt == null ? 'Turn' : 'Turn to ' + D.tgt + '°'}</button><button class="btn" data-act="right" ${dis} aria-label="Turn 5 degrees right">▶</button></div>`);
+    }
+    body.push(shutterRow(c));
+    body.push(buttons(c));
+    body.push(confirmBox());
+  }
+
+  const ONU = {
+    pause_and_park: 'On unsafe, Ara pauses the plan, parks and closes the dome.',
+    park_only: 'On unsafe, Ara parks; the plan carries on.',
+    abort_and_park: 'On unsafe, Ara stops the plan and parks.',
+    ignore: 'On unsafe, Ara does nothing; imaging carries on.',
+  };
+  function renderSafety(body) {
+    const monSafe = S.safe === 'safe';
+    const wxOver = S.wx === 'over';
+    const rigUnsafe = !monSafe || wxOver;
+    const since = monSafe ? safeSince : unsafeSince;
+    const sinceLine = `since ${hhmm(since)} · ${dur(Date.now() - since)}`;
+    body.push(`<div class="state ${monSafe ? 'safe' : 'unsafe'}" role="group" aria-label="${monSafe ? 'Safe' : 'Unsafe'}, ${sinceLine}">
+      <span class="ms" aria-hidden="true">${monSafe ? 'verified_user' : 'gpp_maybe'}</span>
+      <div><div class="n">${monSafe ? 'Safe' : 'Unsafe'}</div><div class="k">${sinceLine}</div></div></div>`);
+    if (!rigUnsafe) return;
+    const rows = [];
+    if (!monSafe) rows.push(`<div class="row"><span class="ms" aria-hidden="true">sensors</span><span>Alpaca Safety Monitor Simulator says unsafe. It doesn't say why: check the device.</span></div>`);
+    if (wxOver) rows.push(`<div class="row warn"><span class="ms" aria-hidden="true">air</span><span>Wind 41 km/h, over the 36 km/h limit${monSafe ? ': Ara treats the rig as unsafe' : ''}.</span></div>`);
+    const next = S.resume === 'on' ? 'Resumes 10 min after Safe.' : 'Stays paused until you resume.';
+    rows.push(`<div class="row"><span class="ms" aria-hidden="true">shield</span><span>${ONU[S.onu]}${S.onu === 'pause_and_park' ? ' ' + next : ''}</span></div>`);
+    body.push(`<div class="why"><span class="h">Why</span>${rows.slice(0, -1).join('')}<span class="h" style="padding-top:4px">What Ara does</span>${rows[rows.length - 1]}</div>`);
+  }
+
+  function render() {
+    document.querySelectorAll('[data-for]').forEach(g => g.hidden = g.dataset.for !== S.dev);
+    const off = S.conn === 'off', err = S.conn === 'error', isDome = S.dev === 'dome';
+    for (const [id, dev] of [['dotDome', 'dome'], ['dotSafety', 'safety']]) {
+      const d = document.getElementById(id), me = S.dev === dev;
+      d.classList.toggle('hot', me);
+      d.classList.toggle('off', me && off); d.classList.toggle('err', me && err);
+      d.classList.toggle('unsafe', dev === 'safety' && S.safe === 'unsafe' && !(me && (off || err)));
+    }
+    const p = [];
+    if (S.safe === 'unsafe' && !(S.dev === 'safety' && (off || err))) p.push(`<div class="pill uns"><i></i>Safety monitor · Unsafe since ${hhmm(unsafeSince)}</div>`);
+    if (isDome && !off && !err && turning()) p.push('<div class="pill blink"><i></i>Dome · Moving…</div>');
+    if (isDome && !off && !err && shutterMoving()) p.push(`<div class="pill ring"><i></i>Dome · ${D.dir > 0 ? 'Opening' : 'Closing'}…</div>`);
+    pills.innerHTML = p.join('');
+
+    win.style.left = isDome ? '470px' : '560px';
+    const body = [];
+    const name = isDome ? (S.kind === 'roof' ? 'Dome · Roll-off roof' : 'Dome · Alpaca Dome Simulator') : 'Safety monitor · Alpaca Safety Monitor Simulator';
+    body.push(`<div class="head${off ? ' off' : err ? ' err' : ''}"><i></i>${name}</div>`);
+    if (off) body.push('<div class="caption">Not connected</div>');
+    else if (err) body.push(`<div class="r err">${isDome ? 'Dome read failed — check the device.' : 'Sensor read failed — check the device.'}</div>`);
+    else if (isDome) renderDome(body);
+    else renderSafety(body);
+    if (S.from === 'settings') body.push(isDome
+      ? '<div class="ver"><b>Versions</b><span>Driver</span><span>OmniSim Dome 0.4</span></div>'
+      : '<div class="ver"><b>Versions</b><span>Driver</span><span>OmniSim SafetyMonitor 0.4</span></div>');
+    win.innerHTML = body.join('');
+  }
+
+  // Drag round the dial to pick a target (1° steps); the wheel or arrow keys step 1°.
+  let dragging = false;
+  const setFrom = (svg, e) => { const r = svg.getBoundingClientRect(), dx = e.clientX - r.left - r.width / 2, dy = e.clientY - r.top - r.height / 2;
+    if (Math.hypot(dx, dy) < r.width * 0.17) return; // the hub
+    D.tgt = Math.round((Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360) % 360; render(); };
+  win.addEventListener('pointerdown', e => { const svg = e.target.closest('.dial'); if (!svg || e.target.closest('[data-act]') || busy()) return; dragging = true; setFrom(svg, e); });
+  window.addEventListener('pointermove', e => { if (!dragging) return; const svg = win.querySelector('.dial'); if (svg) setFrom(svg, e); });
+  window.addEventListener('pointerup', () => { dragging = false; });
+  win.addEventListener('wheel', e => { if (!e.target.closest('.dial') || busy()) return; e.preventDefault(); D.tgt = (((D.tgt ?? Math.round(D.az)) + (e.deltaY > 0 ? 1 : -1)) % 360 + 360) % 360; render(); }, { passive: false });
+
+  win.addEventListener('click', e => {
+    const t = e.target.closest('[data-act]'); if (!t || t.disabled || !t.dataset.act) return;
+    if (t.dataset.act === 'cancel') { D.ask = null; render(); return; }
+    act(t.dataset.act);
+  });
+  function bind(id, key, after) {
+    const el = document.getElementById(id);
+    el.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+      S[key] = b.dataset.v; after && after(); render();
+    });
+  }
+  const selectDev = v => { S.dev = v; document.querySelectorAll('#dev button').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.v === v))); render(); };
+  ['dotDome', 'dotSafety'].forEach(id => document.getElementById(id).addEventListener('click', e => selectDev(e.currentTarget.dataset.v)));
+  bind('layout', 'layout'); bind('dev', 'dev'); bind('kind', 'kind'); bind('safe', 'safe'); bind('wx', 'wx'); bind('onu', 'onu'); bind('resume', 'resume');
+  bind('secs', 'secs', () => { S.secs = Number(S.secs); });
+  bind('state', 'conn'); bind('from', 'from');
+  bind('plan', 'plan', () => { D.ask = null; });
+  bind('view', 'view', () => document.body.classList.toggle('night', S.view === 'night'));
+  setInterval(() => { if (S.dev === 'safety') render(); }, 30000);
+  render();
+})();
+</script>
+</body>
+</html>

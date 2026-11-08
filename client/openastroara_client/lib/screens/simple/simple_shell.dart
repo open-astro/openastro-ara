@@ -307,10 +307,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   }
 
   /// The full Settings page over Simple Mode, on whatever panel was picked
-  /// last (Logs, a device dot).
-  // shortcut: a device dot still opens the full Settings page; each device
-  // gets its own window from its dot as it is built
-  // (design/briefs/simple-mode-settings.md).
+  /// last. Every device dot opens its own window now (#1662); only Logs and
+  /// Open Storage still land here, until #1659 and #1660.
   void _openSettings() {
     setState(() => _popover = _Popover.none);
     unawaited(
@@ -334,6 +332,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     'eq.switch': SimpleSwitchesWindow(),
     'eq.flat': SimpleFlatPanelWindow(),
     'eq.weather': SimpleWeatherWindow(),
+    'eq.safety': SimpleSafetyMonitorWindow(),
+    'eq.dome': SimpleDomeWindow(),
     'eq.guider': SimpleGuiderWindow(),
   };
 
@@ -442,6 +442,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       SimpleStatusOrigin.rotator => 'eq.rotator',
       SimpleStatusOrigin.switches => 'eq.switch',
       SimpleStatusOrigin.flatPanel => 'eq.flat',
+      SimpleStatusOrigin.dome => 'eq.dome',
+      SimpleStatusOrigin.safetyMonitor => 'eq.safety',
       SimpleStatusOrigin.guiderCamera => 'eq.guider',
       _ => null,
     };
@@ -650,8 +652,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
             .read(selectedTabIndexProvider.notifier)
             .select(previous ?? kLiveTabIndex);
         _restoringTab = false;
-        // A device with its own window opens it; the rest still get the full
-        // Settings page over Simple Mode.
+        // A device opens its own window; the other panels (Logs, Storage)
+        // still get the full Settings page over Simple Mode.
         final panel = ref.read(selectedSettingsPanelProvider);
         if (_deviceWindows.containsKey(panel)) {
           // The dot again closes it; another device's dot swaps it.
@@ -2457,6 +2459,20 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
           (c) => glyph(Icons.cloud_outlined, c),
           true,
         ),
+      if (ref.watch(safetyMonitorProvider.select((v) => v.value != null)))
+        (
+          'Safety monitor',
+          l10n.shellSafetyMonitor,
+          (c) => glyph(Icons.verified_user_outlined, c),
+          true,
+        ),
+      if (ref.watch(domeProvider.select((v) => v.value != null)))
+        (
+          'Dome',
+          l10n.shellDome,
+          (c) => EquipmentGlyph.dome(size: 20, color: c),
+          true,
+        ),
       if (ref.watch(guiderStatusProvider.select((v) => v.value != null)))
         (
           'Guider',
@@ -2551,6 +2567,10 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                 'Switches' => const SimpleSwitchesWindow(inSettings: true),
                 'Flat panel' => const SimpleFlatPanelWindow(inSettings: true),
                 'Weather' => const SimpleWeatherWindow(inSettings: true),
+                'Safety monitor' => const SimpleSafetyMonitorWindow(
+                  inSettings: true,
+                ),
+                'Dome' => const SimpleDomeWindow(inSettings: true),
                 'Guider' => const SimpleGuiderWindow(inSettings: true),
                 _ => _Gear(onOpen: (id) => setState(() => _section = id)),
               },
@@ -2628,12 +2648,23 @@ class _Gear extends ConsumerWidget {
           onOpen: () => onOpen('Flat panel'),
         ),
         _SwitchGearRows(onOpen: () => onOpen('Switches')),
-        _GearRow(id: 'dome', type: l10n.shellDome, provider: domeProvider),
+        _GearRow(
+          id: 'dome',
+          type: l10n.shellDome,
+          provider: domeProvider,
+          onOpen: () => onOpen('Dome'),
+        ),
         _GearRow(
           id: 'weather',
           type: l10n.shellWeather,
           provider: weatherProvider,
           onOpen: () => onOpen('Weather'),
+        ),
+        _GearRow(
+          id: 'safety',
+          type: l10n.shellSafetyMonitor,
+          provider: safetyMonitorProvider,
+          onOpen: () => onOpen('Safety monitor'),
         ),
       ],
     );

@@ -5,6 +5,7 @@ import 'package:clock/clock.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter/services.dart' show HapticFeedback, LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,9 +20,12 @@ import '../../models/weather_status.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../models/guider_status.dart';
 import '../../state/equipment/filter_wheel_state.dart';
+import '../../state/equipment/dome_state.dart';
+import '../../state/equipment/dome_shutter_state.dart';
 import '../../state/equipment/flat_panel_state.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/equipment/rotator_state.dart';
+import '../../state/equipment/safety_monitor_state.dart';
 import '../../state/equipment/switch_state.dart';
 import '../../state/equipment/weather_state.dart';
 import '../../state/guider/guider_equipment_state.dart';
@@ -477,10 +481,15 @@ class _OnOff extends StatelessWidget {
     this.ids = ('on', 'off'),
     this.enabled = true,
     this.fill = false,
+    this.known = true,
   });
 
   final String id;
   final bool on;
+
+  /// False: the state isn't known (a faulted shutter), so neither segment
+  /// reads as selected and both take a tap.
+  final bool known;
   final ValueChanged<bool> onChanged;
   final (String, String)? labels;
   final (String, String) ids;
@@ -509,9 +518,9 @@ class _OnOff extends StatelessWidget {
             child: SimpleSegment(
               key: Key('$id-$key'),
               label: word,
-              selected: on == v,
+              selected: known && on == v,
               radius: 8,
-              onTap: on == v || !enabled ? null : () => onChanged(v),
+              onTap: (known && on == v) || !enabled ? null : () => onChanged(v),
             ),
           ),
       ],
@@ -2443,11 +2452,15 @@ class _RotatorHub extends StatelessWidget {
     required this.moving,
     required this.label,
     required this.onTap,
+    this.inkKey = const Key('simple-rotator-hub'),
   });
 
   final bool moving;
   final String label;
   final VoidCallback? onTap;
+
+  /// The tap target's Key (the Dome window's dial has one too).
+  final Key inkKey;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -2460,7 +2473,7 @@ class _RotatorHub extends StatelessWidget {
       shape: const CircleBorder(side: BorderSide(color: AraColors.border)),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        key: const Key('simple-rotator-hub'),
+        key: inkKey,
         onTap: onTap,
         child: Center(
           child: moving
@@ -4019,6 +4032,1187 @@ class _WeatherTile extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The weather readings past the rig's safety limits, as the daemon checks
+/// them (§35.1): the worse of wind speed and gust, humidity, and the air's
+/// margin over the dew point. A reading the station doesn't report, or a NaN,
+/// breaches nothing.
+List<String> simpleWeatherBreaches(
+  AppLocalizations l10n,
+  WeatherStatus w,
+  SafetyPolicies p,
+) {
+  bool ok(double? v) => v != null && v.isFinite;
+  String n(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+  final speed = w.windSpeedMs, gust = w.windGustMs;
+  final nan =
+      (speed != null && !speed.isFinite) || (gust != null && !gust.isFinite);
+  final wind = nan
+      ? null
+      : ok(speed) && ok(gust)
+      ? math.max(speed!, gust!)
+      : ok(speed)
+      ? speed
+      : gust;
+  final t = w.temperatureC, dew = w.dewPointC, hum = w.humidityPct;
+  return [
+    if (wind != null && wind * 3.6 > p.maxWindKmh)
+      l10n.deviceWindOverLimit((wind * 3.6).toStringAsFixed(0), p.maxWindKmh),
+    if (ok(hum) && hum! > p.maxHumidityPct)
+      l10n.deviceHumidityOverLimit(hum.toStringAsFixed(0), p.maxHumidityPct),
+    if (ok(t) && ok(dew) && t! - dew! < p.minDewDeltaC)
+      l10n.deviceDewUnderMargin(n(t - dew), n(p.minDewDeltaC)),
+  ];
+}
+
+/// A local time of day as the windows and pills show it: 24 h, "02:14".
+String simpleClockTime(DateTime t) =>
+    '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+/// A dome move that would disturb a running plan, so it asks first.
+enum _DomeMove { open, close, park, home, turn }
+
+/// A dome move Simple Mode asked for, and a turn's target.
+typedef SimpleDomeAsk = ({SimpleDomeAskKind kind, int? target});
+
+enum SimpleDomeAskKind { park, home, turn, open, close }
+
+/// A dome move Simple Mode asked for, until the dome is done: the Dome
+/// window's moving line and the status pill say what was asked ("Parking…",
+/// "Turning to 245°…") from the tap, as Mount's Park does. A fast dome, or
+/// one already there, moves between two reads and would show nothing
+/// otherwise. Null when none is under way.
+class SimpleDomeAskNotifier extends Notifier<SimpleDomeAsk?> {
+  /// The dome was seen moving since the ask: still again means done.
+  bool _moved = false;
+
+  /// Nothing moved this long after the ask: it was already there.
+  Timer? _still;
+
+  @override
+  SimpleDomeAsk? build() {
+    ref.onDispose(() => _still?.cancel());
+    ref.listen(domeProvider.select((s) => s.value), (_, d) {
+      if (state == null) return;
+      if (d == null || !d.isConnected || d.runtimeState == 'error') {
+        return clear();
+      }
+      if (d.isBusy) {
+        _moved = true;
+        _still?.cancel();
+        _still = null;
+      } else if (_moved) {
+        clear();
+      }
+    });
+    return null;
+  }
+
+  void ask(SimpleDomeAsk a) {
+    state = a;
+    _moved = false;
+    _still?.cancel();
+    _still = Timer(const Duration(seconds: 3), () {
+      if (!_moved) clear();
+    });
+  }
+
+  void clear() {
+    _still?.cancel();
+    _still = null;
+    state = null;
+  }
+}
+
+final simpleDomeAskProvider =
+    NotifierProvider<SimpleDomeAskNotifier, SimpleDomeAsk?>(
+      SimpleDomeAskNotifier.new,
+    );
+
+/// What a dome ask reads while under way, and whether it is a change between
+/// two states (the shutter: blue) rather than working (a move: green).
+(String, bool) simpleDomeAskLabel(AppLocalizations l10n, SimpleDomeAsk a) =>
+    switch (a.kind) {
+      SimpleDomeAskKind.park => (l10n.deviceParking, false),
+      SimpleDomeAskKind.home => (l10n.deviceFindingHome, false),
+      SimpleDomeAskKind.turn => (l10n.deviceTurningTo('${a.target}°'), false),
+      SimpleDomeAskKind.open => (l10n.deviceOpening, true),
+      SimpleDomeAskKind.close => (l10n.deviceClosing, true),
+    };
+
+/// The dome's window: the azimuth with its compass point (and a turn's
+/// target), then side by side the dome as it looks from the front, its two
+/// pairs of shells fanning open and shut over about as long as this dome's
+/// shutter takes, and a dial from above to turn it (drag to a target, play
+/// in its middle; Stop while it moves). Then the shutter as Open / Closed,
+/// Park and Home. Only what the dome says it can do shows. Sync, set park
+/// and slaving stay in the full UI (#1662, mock
+/// `design/preview/simple-dome-safety-mock.html` v12, the Baader AllSky
+/// clamshell from the user's photos).
+class SimpleDomeWindow extends ConsumerStatefulWidget {
+  const SimpleDomeWindow({super.key, this.inSettings = false});
+
+  /// In Settings the window ends with the dome's versions.
+  final bool inSettings;
+
+  @override
+  ConsumerState<SimpleDomeWindow> createState() => _SimpleDomeWindowState();
+}
+
+class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
+  /// A move asked for while a plan runs: the window asks first.
+  _DomeMove? _asking;
+
+  /// The dial's target, waiting for its play; whole degrees.
+  int? _target;
+
+  /// The target a Turn asked about while a plan runs.
+  int? _askingTarget;
+
+  /// The drawing and the dial, each at most.
+  static const double _art = 150;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final s = ref.watch(domeProvider).value;
+    final children = <Widget>[
+      SimpleDeviceHeader(type: l10n.shellDome, status: s),
+    ];
+    if (s?.connectionState == EquipmentConnectionState.error) {
+      children.add(
+        Text(
+          l10n.deviceDomeReadFailed,
+          style: kSimpleText.copyWith(color: AraColors.errorText),
+        ),
+      );
+    } else if (s == null || !s.isConnected) {
+      children.add(
+        Text(
+          s?.isConnecting ?? false
+              ? l10n.deviceConnecting
+              : l10n.deviceNotConnected,
+          style: AraText.caption,
+        ),
+      );
+    } else {
+      // Watched, so it's known by the time a control is used.
+      final planRunning =
+          ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
+      final shutter = ref.watch(domeShutterProvider);
+      final caps = s.capabilities;
+      final locked = _asking != null || s.isBusy;
+      void send(_DomeMove move) =>
+          planRunning ? setState(() => _asking = move) : _run(move);
+      final turning = s.runtimeState == 'slewing';
+      // Turning is working: blinking green; the shutter on its way between
+      // open and closed is a change: blue (DESIGN.md status rule). Which way
+      // it goes is Ara's, from the shutter's state before it moved.
+      // The line keeps its room while still, so the window keeps its size
+      // as the dome starts and stops (user, 2026-11-08).
+      final ask = ref.watch(simpleDomeAskProvider);
+      final asked = ask == null ? null : simpleDomeAskLabel(l10n, ask);
+      final Widget moving = s.runtimeState == 'error'
+          // The daemon reads the shutter as faulted: in the moving line's
+          // place, so the window keeps its size.
+          ? Text(
+              l10n.deviceShutterFault,
+              style: kSimpleText.copyWith(color: AraColors.errorText),
+            )
+          : asked != null
+          ? (asked.$2
+                ? Text(
+                    asked.$1,
+                    style: kSimpleText.copyWith(color: AraColors.accentInfo),
+                  )
+                : StatusBlink(
+                    on: true,
+                    child: Text(
+                      asked.$1,
+                      style: kSimpleText.copyWith(
+                        color: AraColors.accentConnected,
+                      ),
+                    ),
+                  ))
+          : !s.isBusy
+          ? Visibility(
+              visible: false,
+              maintainSize: true,
+              maintainAnimation: true,
+              maintainState: true,
+              child: Text(l10n.deviceShutterMoving, style: kSimpleText),
+            )
+          : turning
+          ? StatusBlink(
+              on: true,
+              child: Text(
+                l10n.deviceMoving,
+                style: kSimpleText.copyWith(color: AraColors.accentConnected),
+              ),
+            )
+          : Text(switch (shutter?.opening) {
+              true => l10n.deviceOpening,
+              false => l10n.deviceClosing,
+              null => l10n.deviceShutterMoving,
+            }, style: kSimpleText.copyWith(color: AraColors.accentInfo));
+      final where = s.parked
+          ? l10n.deviceParked
+          : s.atHome
+          ? l10n.deviceAtHome
+          : null;
+      final az = s.azimuthDeg;
+      // A dome that turns and reports where; a roll-off roof has no azimuth.
+      final rotates = (caps?.canSetAzimuth ?? false) && az != null;
+      if (rotates) {
+        const points = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
+        children.add(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            spacing: AraSpace.s4,
+            children: [
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.end,
+                spacing: AraSpace.s4,
+                children: [
+                  Text(
+                    simpleDegrees(az),
+                    style: kSimpleText.copyWith(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w600,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      l10n.deviceCompass(points[(az / 45).round() % 8]),
+                      style: kSimpleText.copyWith(
+                        color: AraColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                  if (_target != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        '→ ${_target!}°',
+                        key: const Key('simple-dome-target'),
+                        style: kSimpleText.copyWith(
+                          color: AraColors.accentConnected,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              Text(
+                where == null
+                    ? l10n.deviceAzimuth
+                    : '${l10n.deviceAzimuth} · $where',
+                style: AraText.caption.copyWith(fontSize: 12),
+              ),
+              moving,
+            ],
+          ),
+        );
+      } else {
+        if (where != null) children.add(Text(where, style: AraText.caption));
+        children.add(moving);
+      }
+      final face = _DomeFront(
+        key: const Key('simple-dome-front'),
+        open: s.shutterOpen,
+        move: s.runtimeState == 'shutter_moving' ? shutter : null,
+      );
+      children.add(
+        LayoutBuilder(
+          builder: (context, box) {
+            if (!rotates) {
+              return Align(
+                alignment: Alignment.centerLeft,
+                child: SizedBox.square(
+                  dimension: math.min(_art, box.maxWidth),
+                  child: face,
+                ),
+              );
+            }
+            // Side by side, each up to 150 pt; too narrow for both (under
+            // 96 pt each), the dial alone: it is the control.
+            final each = math.min(_art, (box.maxWidth - AraSpace.s12) / 2);
+            final dial = _DomeDial(
+              key: const Key('simple-dome-dial'),
+              size: each < 96 ? math.min(_art, box.maxWidth) : each,
+              azimuth: az,
+              target: _target,
+              enabled: !locked,
+              onTarget: (t) => setState(() => _target = t),
+              hub: _RotatorHub(
+                inkKey: const Key('simple-dome-hub'),
+                moving: s.isBusy,
+                label: s.isBusy
+                    ? l10n.deviceStopDome
+                    : _target == null
+                    ? l10n.deviceTurn
+                    : l10n.deviceTurnTo('${_target!}°'),
+                // Stop never locks and never asks.
+                onTap: s.isBusy
+                    ? _stop
+                    : !locked && _target != null
+                    ? () => planRunning
+                          ? setState(() {
+                              _asking = _DomeMove.turn;
+                              _askingTarget = _target;
+                            })
+                          : _turn(_target!)
+                    : null,
+              ),
+            );
+            if (each < 96) return Center(child: dial);
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              // The dial, the control, on the left; the drawing on the right
+              // (user, 2026-11-08).
+              children: [
+                dial,
+                SizedBox.square(dimension: each, child: face),
+              ],
+            );
+          },
+        ),
+      );
+      if (caps?.canSetShutter ?? false) {
+        children.add(
+          // Clear of the drawing's plinth (user, 2026-11-08).
+          const SizedBox(height: AraSpace.s12),
+        );
+        children.add(
+          simpleWindowRow(
+            l10n.deviceShutter,
+            _OnOff(
+              id: 'simple-dome-shutter',
+              ids: ('open', 'closed'),
+              labels: (l10n.deviceOpen, l10n.deviceClosed),
+              on: s.shutterOpen,
+              // Faulted: neither reads as selected, so either clears it.
+              known: s.runtimeState != 'error',
+              enabled: !locked,
+              onChanged: (open) =>
+                  send(open ? _DomeMove.open : _DomeMove.close),
+            ),
+            id: 'dome-shutter',
+          ),
+        );
+      }
+      final buttons = [
+        if (caps?.canPark ?? false)
+          Expanded(
+            child: _RotatorButton(
+              key: const Key('simple-dome-park'),
+              label: l10n.devicePark,
+              onTap: locked ? null : () => send(_DomeMove.park),
+            ),
+          ),
+        if (caps?.canFindHome ?? false)
+          Expanded(
+            child: _RotatorButton(
+              key: const Key('simple-dome-home'),
+              label: l10n.deviceHome,
+              onTap: locked ? null : () => send(_DomeMove.home),
+            ),
+          ),
+      ];
+      if (buttons.isNotEmpty) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.only(top: AraSpace.s4),
+            child: Row(spacing: AraSpace.s8, children: buttons),
+          ),
+        );
+      }
+      // Without the dial's middle, Stop is a tile, dimmed while still so the
+      // window keeps its size.
+      if (!rotates) {
+        children.add(
+          _RotatorButton(
+            key: const Key('simple-dome-stop'),
+            label: l10n.deviceStop,
+            onTap: s.isBusy ? _stop : null,
+          ),
+        );
+      }
+      if (_asking != null) {
+        final move = _asking!;
+        final target = _askingTarget;
+        children.add(
+          simpleWindowConfirm(
+            question: l10n.devicePlanRunningChangeDome,
+            confirm: l10n.deviceChangeAnyway,
+            onCancel: () => setState(() {
+              _asking = null;
+              _askingTarget = null;
+            }),
+            onConfirm: () {
+              setState(() {
+                _asking = null;
+                _askingTarget = null;
+              });
+              move == _DomeMove.turn ? _turn(target!) : _run(move);
+            },
+          ),
+        );
+      }
+    }
+    if (widget.inSettings) {
+      children.addAll(
+        _versions(context, ref.watch(deviceDriverProvider('dome')).value),
+      );
+    }
+    return Column(
+      key: const Key('simple-device-dome'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s4,
+      children: children,
+    );
+  }
+
+  Future<void> _turn(int target) async {
+    setState(() => _target = null); // spent, as the rotator's Start
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.dome);
+    final l10n = context.l10n;
+    final asks = ref.read(simpleDomeAskProvider.notifier)
+      ..ask((kind: SimpleDomeAskKind.turn, target: target));
+    try {
+      final performed = await ref
+          .read(domeProvider.notifier)
+          .slew(target.toDouble());
+      if (!performed) {
+        asks.clear();
+        _sayBusy(ref, l10n);
+      }
+    } catch (e) {
+      asks.clear();
+      notify(
+        l10n.deviceCouldntMoveDome,
+        detail: describeEquipmentError(e),
+        error: true,
+      );
+    }
+  }
+
+  Future<void> _run(_DomeMove move) async {
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.dome);
+    final l10n = context.l10n;
+    final n = ref.read(domeProvider.notifier);
+    if (move == _DomeMove.open || move == _DomeMove.close) {
+      ref.read(domeShutterProvider.notifier).asked();
+    }
+    final asks = ref.read(simpleDomeAskProvider.notifier)
+      ..ask((
+        kind: switch (move) {
+          _DomeMove.open => SimpleDomeAskKind.open,
+          _DomeMove.close => SimpleDomeAskKind.close,
+          _DomeMove.park => SimpleDomeAskKind.park,
+          _ => SimpleDomeAskKind.home,
+        },
+        target: null,
+      ));
+    try {
+      final performed = await switch (move) {
+        _DomeMove.open => n.openShutter(),
+        _DomeMove.close => n.closeShutter(),
+        _DomeMove.park => n.park(),
+        _DomeMove.home => n.findHome(),
+        _DomeMove.turn => throw StateError('a turn goes through _turn'),
+      };
+      if (!performed) {
+        asks.clear();
+        _sayBusy(ref, l10n);
+      }
+    } catch (e) {
+      asks.clear();
+      notify(
+        l10n.deviceCouldntMoveDome,
+        detail: describeEquipmentError(e),
+        error: true,
+      );
+    }
+  }
+
+  Future<void> _stop() async {
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.dome);
+    final l10n = context.l10n;
+    ref.read(simpleDomeAskProvider.notifier).clear();
+    try {
+      final performed = await ref.read(domeProvider.notifier).abortSlew();
+      if (!performed) _sayBusy(ref, l10n);
+    } catch (e) {
+      notify(
+        l10n.deviceCouldntStopDome,
+        detail: describeEquipmentError(e),
+        error: true,
+      );
+    }
+  }
+}
+
+/// The dome from the front: the shells closed ([open] false), open, or on
+/// their way ([move]), redrawn each frame while they move.
+class _DomeFront extends StatefulWidget {
+  const _DomeFront({super.key, required this.open, required this.move});
+
+  final bool open;
+  final DomeShutterMove? move;
+
+  @override
+  State<_DomeFront> createState() => _DomeFrontState();
+}
+
+class _DomeFrontState extends State<_DomeFront>
+    with SingleTickerProviderStateMixin {
+  late final Ticker _ticker = createTicker((_) => setState(() {}));
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_DomeFront old) {
+    super.didUpdateWidget(old);
+    _sync();
+  }
+
+  void _sync() {
+    final run = widget.move?.opening != null;
+    if (run && !_ticker.isActive) _ticker.start();
+    if (!run && _ticker.isActive) _ticker.stop();
+  }
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final m = widget.move;
+    // Reduce motion: no slide, the shells sit where they were until done.
+    final p = MediaQuery.disableAnimationsOf(context)
+        ? 0.0
+        : m?.progressAt(clock.now()) ?? 0;
+    final open = switch (m?.opening) {
+      true => p,
+      false => 1 - p,
+      // A move whose start Ara didn't see: half open, still.
+      null when m != null => 0.5,
+      null => widget.open ? 1.0 : 0.0,
+    };
+    // Says nothing the reading and the segments don't.
+    return ExcludeSemantics(
+      child: CustomPaint(
+        painter: _AllSkyDomePainter(open: open, moving: m != null),
+      ),
+    );
+  }
+}
+
+/// A Baader AllSky style clamshell from the front (user's photos,
+/// 2026-11-08): a sphere on a base with sloped shoulders and a round plinth,
+/// the door running up into the sphere. Each side of the top is two nested
+/// shells fanned on a bolt at the centre. Closed ([open] 0) the outer shells
+/// meet at the crown; opening, both fan outward and down, the outer one
+/// twice as fast, until at 1 they lie stacked over the lower half, their
+/// lower edges on the base's shoulders.
+class _AllSkyDomePainter extends CustomPainter {
+  _AllSkyDomePainter({required this.open, required this.moving});
+
+  final double open;
+  final bool moving;
+
+  static const _lower = [Color(0xFF808080), Color(0xFF4A4A4A)];
+  static const _shell = [Color(0xFFA8A8A8), Color(0xFF6A6A6A)];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Drawn on a 120 grid so the dome fills its box, as tall as the dial
+    // beside it is wide (user, 2026-11-08).
+    final k = size.shortestSide / 120;
+    final cx = size.width / 2, cy = 57 * k, r = 52 * k;
+    final edge = Paint()
+      ..color = moving ? AraColors.accentInfo : AraColors.textSecondary
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    final line = Paint()
+      ..color = AraColors.textSecondary
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    Paint fill(List<Color> c, Rect rect) => Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: c,
+      ).createShader(rect);
+    final sphere = Rect.fromCircle(center: Offset(cx, cy), radius: r);
+    // The fixed lower half.
+    final lower = Path()
+      ..moveTo(cx - r, cy)
+      ..arcTo(sphere, math.pi, -math.pi, false)
+      ..close();
+    canvas.drawPath(lower, fill(_lower, sphere));
+    canvas.drawPath(lower, line);
+    // The base: sloped shoulders out from the door, straight sides, a plinth.
+    final sy = cy + r * 0.3, sh = cy + r * 0.8, by = cy + r * 1.08;
+    final dw = 12 * k;
+    final base = Path()
+      ..moveTo(cx - dw, sy)
+      ..lineTo(cx - r * 0.92, sh)
+      ..lineTo(cx - r * 0.92, by)
+      ..lineTo(cx + r * 0.92, by)
+      ..lineTo(cx + r * 0.92, sh)
+      ..lineTo(cx + dw, sy)
+      ..close();
+    canvas.drawPath(base, fill(_lower, base.getBounds()));
+    canvas.drawPath(base, line);
+    final plinth = RRect.fromRectAndRadius(
+      Rect.fromLTWH(cx - r * 1.04, by, r * 2.08, 4 * k),
+      Radius.circular(2 * k),
+    );
+    canvas.drawRRect(plinth, Paint()..color = const Color(0xFF8A8A8A));
+    canvas.drawRRect(plinth, line);
+    // The door, its top cut like a hexagon.
+    final dy = cy + 14 * k;
+    final door = Path()
+      ..moveTo(cx - dw, by)
+      ..lineTo(cx - dw, dy + 6 * k)
+      ..lineTo(cx - dw / 2, dy)
+      ..lineTo(cx + dw / 2, dy)
+      ..lineTo(cx + dw, dy + 6 * k)
+      ..lineTo(cx + dw, by)
+      ..close();
+    canvas.drawPath(door, fill(_lower, door.getBounds()));
+    canvas.drawPath(door, line);
+    // The shells: theta in degrees from straight up, clockwise on the right
+    // side and mirrored on the left.
+    for (final side in [-1.0, 1.0]) {
+      // One hinge point for all four shells, so closed they meet with no gap
+      // (user, 2026-11-08).
+      final pivot = Offset(cx, cy);
+      Path fan(double from, double to, double radius) {
+        final rect = Rect.fromCircle(center: pivot, radius: radius);
+        final start = side > 0
+            ? (from - 90) * math.pi / 180
+            : (-90 - from) * math.pi / 180;
+        final sweep = side * (to - from) * math.pi / 180;
+        return Path()
+          ..moveTo(pivot.dx, pivot.dy)
+          ..arcTo(rect, start, sweep, false)
+          ..close();
+      }
+
+      // Fully open, both stop with their lower edge on the base's shoulder
+      // (132° from straight up), not past it.
+      final inner = fan(46 + 36 * open, 92 + 40 * open, r + 1 * k);
+      final outer = fan(-3 + 83 * open, 52 + 80 * open, r + 3 * k);
+      for (final shell in [inner, outer]) {
+        canvas.drawPath(shell, fill(_shell, shell.getBounds()));
+        canvas.drawPath(shell, edge);
+      }
+    }
+    // The hinge bolt, over all four shells.
+    final bolt = Offset(cx, cy);
+    canvas.drawCircle(bolt, 3 * k, Paint()..color = const Color(0xFFD0D0D0));
+    canvas.drawCircle(bolt, 3 * k, line);
+  }
+
+  @override
+  bool shouldRepaint(_AllSkyDomePainter old) =>
+      old.open != open || old.moving != moving;
+}
+
+/// The dome from above, North up: the slit at the azimuth, a turn's target
+/// as a green slit. Drag round it or tap it to pick the target (whole
+/// degrees); a mouse wheel steps it a degree a notch and two fingers on a
+/// trackpad 7 pt a degree, down clockwise, as the rotator's dial, both from
+/// the target already picked. [hub] in its middle goes there.
+class _DomeDial extends StatefulWidget {
+  const _DomeDial({
+    super.key,
+    required this.size,
+    required this.azimuth,
+    required this.target,
+    required this.enabled,
+    required this.onTarget,
+    required this.hub,
+  });
+
+  final double size;
+  final double azimuth;
+  final int? target;
+  final bool enabled;
+  final ValueChanged<int> onTarget;
+  final Widget hub;
+
+  @override
+  State<_DomeDial> createState() => _DomeDialState();
+}
+
+class _DomeDialState extends State<_DomeDial> {
+  /// This drag is a trackpad's two-finger pan: it steps, it doesn't point
+  /// (where the fingers rest is no target; #1662, the target jumped there).
+  bool _panned = false;
+  double _travel = 0;
+
+  /// The target last sent: several scroll steps can land before the
+  /// window rebuilds with it.
+  int? _sent;
+
+  int get _from => _sent ?? widget.target ?? widget.azimuth.round() % 360;
+
+  @override
+  void didUpdateWidget(_DomeDial old) {
+    super.didUpdateWidget(old);
+    if (widget.target != _sent) _sent = widget.target; // spent, or set here
+  }
+
+  void _send(int deg) {
+    _sent = deg;
+    widget.onTarget(deg);
+  }
+
+  void _step(int n) {
+    if (n == 0) return;
+    HapticFeedback.selectionClick();
+    _send(((_from + n) % 360 + 360) % 360);
+  }
+
+  void _point(Offset p) {
+    final size = widget.size;
+    final d = p - Offset(size / 2, size / 2);
+    // The middle is the hub's.
+    if (d.distance < size * 0.18) return;
+    final deg = (math.atan2(d.dx, -d.dy) * 180 / math.pi + 360).round() % 360;
+    if (deg != _from) {
+      HapticFeedback.selectionClick();
+      _send(deg);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final enabled = widget.enabled;
+    final size = widget.size;
+    return Semantics(
+      slider: true,
+      label: l10n.deviceAzimuth,
+      value: '$_from°',
+      increasedValue: '${(_from + 1) % 360}°',
+      decreasedValue: '${(_from + 359) % 360}°',
+      onIncrease: enabled ? () => _step(1) : null,
+      onDecrease: enabled ? () => _step(-1) : null,
+      child: SizedBox.square(
+        dimension: size,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Listener(
+              onPointerSignal: (e) {
+                if (e is! PointerScrollEvent || !enabled) return;
+                // Claimed, so the sheet under the window doesn't scroll too.
+                GestureBinding.instance.pointerSignalResolver.register(e, (e) {
+                  final dy = (e as PointerScrollEvent).scrollDelta.dy;
+                  if (dy != 0) _step(dy > 0 ? 1 : -1);
+                });
+              },
+              child: GestureDetector(
+                dragStartBehavior: DragStartBehavior.down,
+                onTapUp: enabled ? (d) => _point(d.localPosition) : null,
+                onPanStart: enabled
+                    ? (d) {
+                        _panned = d.kind == PointerDeviceKind.trackpad;
+                        _travel = 0;
+                        if (!_panned) _point(d.localPosition);
+                      }
+                    : null,
+                onPanUpdate: enabled
+                    ? (d) {
+                        if (!_panned) return _point(d.localPosition);
+                        _travel += d.delta.dy;
+                        final n = (_travel / 7).truncate();
+                        _travel -= n * 7;
+                        _step(n);
+                      }
+                    : null,
+                child: Opacity(
+                  opacity: enabled ? 1 : 0.4,
+                  child: ExcludeSemantics(
+                    child: CustomPaint(
+                      size: Size.square(size),
+                      painter: _DomeDialPainter(
+                        azimuth: widget.azimuth,
+                        target: widget.target,
+                        scaler: MediaQuery.textScalerOf(context),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox.square(dimension: size * 0.3, child: widget.hub),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DomeDialPainter extends CustomPainter {
+  _DomeDialPainter({
+    required this.azimuth,
+    required this.target,
+    required this.scaler,
+  });
+
+  final double azimuth;
+  final int? target;
+  final TextScaler scaler;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = size.shortestSide / 2 - 3;
+    final k = size.shortestSide / 150;
+    canvas.drawCircle(c, r, Paint()..color = AraColors.tileFill);
+    canvas.drawCircle(
+      c,
+      r,
+      Paint()
+        ..color = AraColors.border
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+    Offset at(double deg, double radius) =>
+        c +
+        Offset(
+          math.sin(deg * math.pi / 180) * radius,
+          -math.cos(deg * math.pi / 180) * radius,
+        );
+    final tick = Paint()
+      ..color = AraColors.textSecondary
+      ..strokeWidth = 1;
+    for (var i = 0; i < 36; i++) {
+      final len = i % 9 == 0 ? 10 : (i % 3 == 0 ? 6 : 3);
+      canvas.drawLine(at(i * 10.0, r - len * k), at(i * 10.0, r), tick);
+    }
+    for (final (label, deg) in [
+      ('N', 0.0),
+      ('E', 90.0),
+      ('S', 180.0),
+      ('W', 270.0),
+    ]) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: TextStyle(fontSize: 11 * k, color: AraColors.textSecondary),
+        ),
+        textDirection: TextDirection.ltr,
+        textScaler: scaler,
+      )..layout();
+      tp.paint(
+        canvas,
+        at(deg, r - 20 * k) - Offset(tp.width / 2, tp.height / 2),
+      );
+      tp.dispose();
+    }
+    Path slit(double deg) {
+      // 32° wide (user, 2026-11-08: 16° read too narrow).
+      const w = 16 * math.pi / 180;
+      final mid = (deg - 90) * math.pi / 180;
+      final r0 = 26 * k;
+      return Path()
+        ..moveTo(c.dx + math.cos(mid - w) * r0, c.dy + math.sin(mid - w) * r0)
+        ..arcTo(
+          Rect.fromCircle(center: c, radius: r - 1),
+          mid - w,
+          2 * w,
+          false,
+        )
+        ..lineTo(c.dx + math.cos(mid + w) * r0, c.dy + math.sin(mid + w) * r0)
+        ..close();
+    }
+
+    if (target != null) {
+      // Dashed would need a path dash; a thin green outline reads as "to be".
+      canvas.drawPath(
+        slit(target!.toDouble()),
+        Paint()
+          ..color = AraColors.accentConnected
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5,
+      );
+    }
+    final now = slit(azimuth);
+    canvas.drawPath(now, Paint()..color = const Color(0xF26E6E6E));
+    canvas.drawPath(
+      now,
+      Paint()
+        ..color = AraColors.textPrimary
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_DomeDialPainter old) =>
+      old.azimuth != azimuth || old.target != target || old.scaler != scaler;
+}
+
+/// The safety monitor's window: Safe or Unsafe and since when, and while
+/// Unsafe what the rig's safety policy does next. Read-only; the policies
+/// stay in the full UI (#1662, mock
+/// `design/preview/simple-dome-safety-mock.html`).
+class SimpleSafetyMonitorWindow extends ConsumerStatefulWidget {
+  const SimpleSafetyMonitorWindow({super.key, this.inSettings = false});
+
+  /// In Settings the window ends with the monitor's versions.
+  final bool inSettings;
+
+  @override
+  ConsumerState<SimpleSafetyMonitorWindow> createState() =>
+      _SimpleSafetyMonitorWindowState();
+}
+
+class _SimpleSafetyMonitorWindowState
+    extends ConsumerState<SimpleSafetyMonitorWindow> {
+  /// The policies came from the rig: until then the defaults could say the
+  /// wrong thing, so the window says nothing about what happens next.
+  bool _policiesLoaded = false;
+
+  /// "since 02:14 · 1 h 12 min" counts on.
+  late final Timer _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _tick = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
+    // Read, never written here: Simple Mode never opens the policies page
+    // that loads them otherwise.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final api = ref.read(profileApiProvider);
+      if (api == null) return;
+      try {
+        await ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api);
+        if (mounted) setState(() => _policiesLoaded = true);
+      } catch (_) {
+        // Stays unloaded: nothing said beats a wrong promise.
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick.cancel();
+    super.dispose();
+  }
+
+  /// "7 min", "1 h 12 min".
+  static String _for(Duration d) {
+    final min = math.max(0, d.inMinutes);
+    return min >= 60 ? '${min ~/ 60} h ${min % 60} min' : '$min min';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final s = ref.watch(safetyMonitorProvider).value;
+    final children = <Widget>[
+      SimpleDeviceHeader(type: l10n.shellSafetyMonitor, status: s),
+    ];
+    if (s?.connectionState == EquipmentConnectionState.error) {
+      // A failed read shows no state, so an old Safe can't pass for live.
+      children.add(
+        Text(
+          l10n.deviceSensorReadFailed,
+          style: kSimpleText.copyWith(color: AraColors.errorText),
+        ),
+      );
+    } else if (s == null || !s.isConnected) {
+      children.add(
+        Text(
+          s?.isConnecting ?? false
+              ? l10n.deviceConnecting
+              : l10n.deviceNotConnected,
+          style: AraText.caption,
+        ),
+      );
+    } else {
+      final safe = s.safe;
+      // Unsafe takes the warning colour (#1662), not the error red: the
+      // monitor works, the sky doesn't.
+      final colour = safe ? AraColors.accentConnected : AraColors.accentWarning;
+      final word = safe ? l10n.deviceSafe : l10n.deviceUnsafe;
+      final at = s.lastTransitionAt;
+      final since = at == null
+          ? null
+          : l10n.deviceSafetySince(
+              simpleClockTime(at.toLocal()),
+              _for(clock.now().difference(at)),
+            );
+      children.add(
+        Semantics(
+          container: true,
+          label: since == null ? word : '$word, $since',
+          excludeSemantics: true,
+          child: Container(
+            key: const Key('simple-safety-state'),
+            constraints: const BoxConstraints(minHeight: 80),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AraSpace.s12,
+              vertical: AraSpace.s8,
+            ),
+            decoration: BoxDecoration(
+              color: AraColors.tileFill,
+              borderRadius: BorderRadius.circular(10),
+              border: safe ? null : Border.all(color: colour, width: 1.5),
+            ),
+            child: Row(
+              spacing: AraSpace.s12,
+              children: [
+                Icon(
+                  safe
+                      ? Icons.verified_user_outlined
+                      : Icons.gpp_maybe_outlined,
+                  size: 34,
+                  color: colour,
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        word,
+                        style: kSimpleText.copyWith(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w600,
+                          color: colour,
+                        ),
+                      ),
+                      if (since != null)
+                        Text(
+                          since,
+                          style: AraText.caption.copyWith(
+                            fontSize: 12,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      final p = _policiesLoaded ? ref.watch(safetyPoliciesProvider) : null;
+      final w = ref.watch(weatherProvider).value;
+      // Weather past its limits makes the rig unsafe too (the daemon's same
+      // checks, §35.1), even while the monitor reads Safe.
+      final breaches = p != null && p.weatherTriggersEnabled && w != null
+          ? simpleWeatherBreaches(l10n, w, p)
+          : const <String>[];
+      if (!safe || breaches.isNotEmpty) {
+        Widget heading(String text) => Padding(
+          padding: const EdgeInsets.only(top: AraSpace.s8),
+          child: Text(text, style: AraText.caption.copyWith(fontSize: 12)),
+        );
+        Widget row(IconData icon, String text, {bool warn = false}) => Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: AraSpace.s8,
+          children: [
+            Icon(
+              icon,
+              size: 18,
+              color: warn ? AraColors.accentWarning : AraColors.textSecondary,
+            ),
+            Expanded(
+              child: Text(
+                text,
+                style: kSimpleText.copyWith(
+                  fontSize: 13,
+                  color: warn ? AraColors.accentWarning : null,
+                ),
+              ),
+            ),
+          ],
+        );
+        children.add(heading(l10n.deviceWhy));
+        // An ASCOM safety monitor reports safe or unsafe, never why.
+        if (!safe) {
+          children.add(
+            row(
+              Icons.sensors,
+              l10n.deviceMonitorNoReason(
+                s.name.isEmpty ? l10n.shellSafetyMonitor : s.name,
+              ),
+            ),
+          );
+        }
+        for (final b in breaches) {
+          children.add(
+            row(
+              Icons.air,
+              safe ? l10n.deviceRigUnsafeByWeather(b) : b,
+              warn: true,
+            ),
+          );
+        }
+        // What the rig's policy does, once it has loaded: a default could
+        // promise the wrong thing.
+        if (p != null) {
+          children.addAll([
+            heading(l10n.deviceWhatAraDoes),
+            row(Icons.shield_outlined, switch (p.onUnsafe) {
+              UnsafeAction.pauseAndPark => l10n.deviceOnUnsafePause,
+              UnsafeAction.parkOnly => l10n.deviceOnUnsafePark,
+              UnsafeAction.abortAndPark => l10n.deviceOnUnsafeAbort,
+              UnsafeAction.ignore => l10n.deviceOnUnsafeIgnore,
+            }),
+            // Only a paused plan resumes (the daemon tracks paused runs).
+            if (p.onUnsafe == UnsafeAction.pauseAndPark)
+              Padding(
+                padding: const EdgeInsets.only(left: 26),
+                child: Text(
+                  p.autoResumeWhenSafe
+                      ? l10n.deviceResumesAfterSafe(p.resumeDelayMin)
+                      : l10n.deviceStaysPaused,
+                  style: AraText.caption.copyWith(fontSize: 12),
+                ),
+              ),
+          ]);
+        }
+      }
+    }
+    if (widget.inSettings) {
+      children.addAll(
+        _versions(
+          context,
+          ref.watch(deviceDriverProvider('safetymonitor')).value,
+        ),
+      );
+    }
+    return Column(
+      key: const Key('simple-device-safety'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s4,
+      children: children,
     );
   }
 }
