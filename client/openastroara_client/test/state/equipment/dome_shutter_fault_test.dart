@@ -21,12 +21,27 @@ DomeStatus _status(String runtime, bool open) => DomeStatus.fromJson({
   'runtime': {'state': runtime, 'shutter_open': open},
 });
 
+class _Times extends DomeShutterTimesService {
+  final saved = <Map<String, double>>[];
+  @override
+  Future<Map<String, double>> load() async => {};
+  @override
+  Future<void> save(Map<String, double> next) async => saved.add(next);
+}
+
 void main() {
   late ProviderContainer c;
+  late _Times times;
   late List<DomeShutterMove?> seen;
 
   Future<_Dome> setUp0() async {
-    c = ProviderContainer(overrides: [domeProvider.overrideWith(_Dome.new)]);
+    times = _Times();
+    c = ProviderContainer(
+      overrides: [
+        domeProvider.overrideWith(_Dome.new),
+        domeShutterTimesServiceProvider.overrideWithValue(times),
+      ],
+    );
     addTearDown(c.dispose);
     await c.read(domeProvider.future);
     seen = [];
@@ -70,4 +85,34 @@ void main() {
       );
     },
   );
+
+  for (final cut in ['error', 'slewing']) {
+    test('a timed close cut short by $cut is not saved as its time', () async {
+      final dome = await setUp0();
+      final t0 = DateTime(2026, 11, 8, 21);
+      await withClock(Clock.fixed(t0), () async {
+        c.read(domeShutterProvider.notifier).asked();
+        dome.report('shutter_moving', open: false);
+      });
+      await withClock(
+        Clock.fixed(t0.add(const Duration(seconds: 8))),
+        () async {
+          dome.report(cut, open: false);
+        },
+      );
+      expect(times.saved, isEmpty, reason: '$cut reads closed whatever it did');
+    });
+  }
+
+  test('a Close started under a slew is never read as opening', () async {
+    final dome = await setUp0();
+    dome.report('slewing', open: true);
+    dome.report('slewing', open: false);
+    dome.report('shutter_moving', open: false);
+    expect(c.read(domeShutterProvider)!.opening, isNot(true));
+    expect(
+      seen.whereType<DomeShutterMove>().any((m) => m.opening == true),
+      isFalse,
+    );
+  });
 }

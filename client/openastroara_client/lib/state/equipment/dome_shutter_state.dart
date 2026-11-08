@@ -156,6 +156,7 @@ class DomeShutterNotifier extends Notifier<DomeShutterMove?> {
           s != null &&
           s.isConnected &&
           move.opening != null &&
+          !_unsure(s) &&
           s.shutterOpen == move.opening) {
         final took = clock.now().difference(move.startedAt).inMilliseconds;
         if (took >= 1000 && took <= 600000) {
@@ -169,8 +170,18 @@ class DomeShutterNotifier extends Notifier<DomeShutterMove?> {
 
   /// A faulted shutter reads shutter_open false whatever its real position,
   /// so a move after a fault has no known direction.
-  bool? _openBefore(DomeStatus s) =>
-      s.runtimeState == 'error' ? null : s.shutterOpen;
+  /// A turning dome reads shutter_open false while the shutter is in transit,
+  /// so the reading there says nothing: keep what was known before.
+  bool? _openBefore(DomeStatus s) => switch (s.runtimeState) {
+    'error' => null,
+    'slewing' => _wasOpen,
+    _ => s.shutterOpen,
+  };
+
+  /// error and slewing both read shutter_open false whatever the shutter did:
+  /// a move that ended there reached no known end.
+  bool _unsure(DomeStatus s) =>
+      s.runtimeState == 'error' || s.runtimeState == 'slewing';
 }
 
 final domeShutterProvider =

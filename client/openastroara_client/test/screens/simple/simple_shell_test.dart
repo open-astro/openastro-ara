@@ -323,6 +323,17 @@ class _PoliciesApi extends ProfileApi {
   Future<SafetyPolicies> getSafetyPolicies() async => policies ?? (throw StateError('unreachable'));
 }
 
+/// Fails its first safety-policies read, then answers with the weather on.
+class _FlakyPoliciesApi extends ProfileApi {
+  _FlakyPoliciesApi() : super(const AraServer(hostname: 'test', port: 1));
+  int calls = 0;
+  @override
+  Future<SafetyPolicies> getSafetyPolicies() async {
+    if (++calls == 1) throw StateError('unreachable');
+    return const SafetyPolicies(weatherTriggersEnabled: true);
+  }
+}
+
 class _Dome extends DomeNotifier with _Calls<DomeStatus> {
   _Dome(this.state0);
   final EquipmentConnectionState state0;
@@ -3821,6 +3832,25 @@ void main() {
     await tester.pump();
     expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41')),
         findsNothing, reason: 'the defaults are not the rig\'s: nothing beats a wrong promise');
+  });
+
+  testWidgets('a failed policies load is retried, and a new rig loads its own', (tester) async {
+    final api = _FlakyPoliciesApi();
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
+      weatherProvider.overrideWith(() => _Windy()),
+      profileApiProvider.overrideWithValue(api),
+    ]);
+    await tester.pump();
+    await tester.pump();
+    expect(api.calls, greaterThan(0));
+    // Anything that rebuilds the pill retries after the failed first load.
+    c.read(safetyPoliciesProvider.notifier).state = const SafetyPolicies(weatherTriggersEnabled: true);
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41')),
+        findsOneWidget, reason: 'one unreachable moment does not silence the pill for the session');
   });
 
   testWidgets('a dome Park asked in its window shows in the status pill at once', (tester) async {

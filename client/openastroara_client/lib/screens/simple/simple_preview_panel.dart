@@ -1039,12 +1039,16 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
   bool _policiesLoaded = false;
   bool _hydrating = false;
 
+  /// The api the policies were (being) loaded from: another server loads again.
+  ProfileApi? _loadedFor;
+
   Future<void> _hydratePolicies(ProfileApi api) async {
     try {
       await ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api);
-      if (mounted) setState(() => _policiesLoaded = true);
+      if (mounted && _loadedFor == api) setState(() => _policiesLoaded = true);
     } catch (_) {
-      // Stays unloaded: nothing said beats a wrong promise.
+      // Stays unloaded (nothing said beats a wrong promise); a rebuild retries.
+      if (mounted && _loadedFor == api) _hydrating = false;
     }
   }
 
@@ -1124,6 +1128,11 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     // even while the monitor reads Safe: the pill says which (#1690 audit).
     final policies = ref.watch(safetyPoliciesProvider);
     final profileApi = ref.watch(profileApiProvider);
+    if (profileApi != _loadedFor) {
+      _loadedFor = profileApi;
+      _hydrating = false;
+      _policiesLoaded = false;
+    }
     if (!_hydrating && profileApi != null) {
       _hydrating = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
