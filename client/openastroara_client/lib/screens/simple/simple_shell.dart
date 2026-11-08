@@ -1138,9 +1138,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   left: 0,
                                   right: kSimpleInset * 2 + railWidth,
                                   top: popoverTop,
-                                  bottom: guidedStep
-                                      ? betweenBottom
-                                      : popoverBottom,
+                                  // Plan's bottom limit; the plan squares,
+                                  // which its sheet moves, stay clear.
+                                  bottom: planSquares && !guidedStep
+                                      ? popoverBottom
+                                      : betweenBottom,
                                   child: CustomSingleChildLayout(
                                     delegate: _BesideRail(
                                       centre: guidedStep,

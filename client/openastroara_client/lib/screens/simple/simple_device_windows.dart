@@ -1973,11 +1973,17 @@ Future<void> simpleSaveGuider(
   }
 }
 
+/// The label column of the Guider panel's one-line sliders, before text scale.
+const double kSimpleGuideLabelWidth = 44;
+
 /// The guide camera's gain: the guider's own scale, percent of the camera's
 /// range, set when the thumb is let go (Guide mode and the Guide Camera
 /// window share it).
 class SimpleGuideGainSlider extends ConsumerStatefulWidget {
-  const SimpleGuideGainSlider({super.key});
+  const SimpleGuideGainSlider({super.key, this.oneLine = false});
+
+  /// Label, slider and value on one line, for the Guider panel's height.
+  final bool oneLine;
 
   @override
   ConsumerState<SimpleGuideGainSlider> createState() =>
@@ -1991,32 +1997,50 @@ class _SimpleGuideGainSliderState extends ConsumerState<SimpleGuideGainSlider> {
   Widget build(BuildContext context) {
     final gain =
         _drag ?? ref.watch(phd2SettingsProvider).guideCameraGain.toDouble();
+    final slider = Slider(
+      key: const Key('simple-guider-gain'),
+      min: 0,
+      max: 100,
+      divisions: 20,
+      value: gain.clamp(0, 100),
+      label: '${gain.round()} %',
+      onChanged: (v) => setState(() => _drag = v),
+      onChangeEnd: (v) {
+        setState(() => _drag = null);
+        simpleSaveGuider(
+          context,
+          ref,
+          (p) => p.setGuideCameraGain(v.round()),
+          live: true,
+        );
+      },
+    );
+    final value = Text('${gain.round()} %', style: kSimpleText);
+    if (widget.oneLine) {
+      final scale = MediaQuery.textScalerOf(context).scale;
+      return Row(
+        children: [
+          SizedBox(
+            width: scale(kSimpleGuideLabelWidth),
+            child: Text(
+              context.l10n.deviceGain,
+              style: kSimpleText,
+              maxLines: 1,
+            ),
+          ),
+          Expanded(child: SizedBox(height: 44, child: slider)),
+          SizedBox(
+            width: scale(48),
+            child: Align(alignment: Alignment.centerRight, child: value),
+          ),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        simpleWindowRow(
-          context.l10n.deviceGain,
-          id: 'Gain',
-          Text('${gain.round()} %', style: kSimpleText),
-        ),
-        Slider(
-          key: const Key('simple-guider-gain'),
-          min: 0,
-          max: 100,
-          divisions: 20,
-          value: gain.clamp(0, 100),
-          label: '${gain.round()} %',
-          onChanged: (v) => setState(() => _drag = v),
-          onChangeEnd: (v) {
-            setState(() => _drag = null);
-            simpleSaveGuider(
-              context,
-              ref,
-              (p) => p.setGuideCameraGain(v.round()),
-              live: true,
-            );
-          },
-        ),
+        simpleWindowRow(context.l10n.deviceGain, id: 'Gain', value),
+        slider,
       ],
     );
   }

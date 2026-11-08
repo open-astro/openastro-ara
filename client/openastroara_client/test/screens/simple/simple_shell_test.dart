@@ -98,7 +98,7 @@ import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
-import 'package:openastroara/theme/ara_metrics.dart' show AraBlur;
+import 'package:openastroara/theme/ara_metrics.dart' show AraBlur, AraSpace;
 import 'package:openastroara/screens/simple/simple_safety_alarm.dart';
 import 'package:openastroara/state/night_mode_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
@@ -1145,6 +1145,26 @@ void main() {
     expect(panel.bottom, lessThanOrEqualTo(768 - kSimpleInset));
     expect(panel.top, greaterThanOrEqualTo(kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight),
         reason: 'under the status pill');
+  });
+
+  testWidgets("with the histogram showing, a mode panel stops above the bottom row, like Plan's sheet (user, 2026-11-09)",
+      (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final c = await _pump(tester, const Size(1024, 768), histogram: _histogram,
+        gear: [guiderStatusProvider.overrideWith(_GuiderUp.new)]);
+    await _frame(tester, c);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-guide')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final panel = tester.getRect(find.byKey(const Key('simple-guide-panel')));
+    final row = tester.getRect(find.byKey(const Key('simple-histogram')));
+    expect(panel.bottom, lessThanOrEqualTo(row.top - AraSpace.s8));
   });
 
   testWidgets('Guide is a mode: its shutter starts guiding, its chip shows the RMS and opens the Guide panel',

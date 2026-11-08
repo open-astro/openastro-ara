@@ -20,6 +20,7 @@ import 'simple_night_setup.dart'
 import 'simple_device_windows.dart'
     show
         SimpleGuideGainSlider,
+        kSimpleGuideLabelWidth,
         simpleSaveGuider,
         simpleWindowRow,
         simpleWindowStepper;
@@ -271,7 +272,7 @@ class SimpleGuidePanel extends ConsumerWidget {
                 onPressed: ref.read(nightSetupProvider.notifier).next,
                 child: Text(l10n.guidedDoneStartImaging),
               ),
-            const Divider(height: AraSpace.s16),
+            const Divider(height: AraSpace.s8),
             // The guide camera's exposure, picked as Preview's; set live.
             SimplePresetTile<int>(
               key: const Key('simple-guide-exposure'),
@@ -291,7 +292,7 @@ class SimpleGuidePanel extends ConsumerWidget {
                 live: true,
               ),
             ),
-            const SimpleGuideGainSlider(),
+            const SimpleGuideGainSlider(oneLine: true),
             Text(l10n.guideAggressiveness, style: AraText.caption),
             _SimpleAggressiveness(
               id: 'ra',
@@ -409,29 +410,32 @@ class _SimpleAggressivenessState extends ConsumerState<_SimpleAggressiveness> {
     return Row(
       children: [
         SizedBox(
-          width: scale(32),
+          width: scale(kSimpleGuideLabelWidth),
           child: Text(widget.axis, style: kSimpleText, maxLines: 1),
         ),
         Expanded(
-          child: Semantics(
-            label: widget.label,
-            child: Slider(
-              key: Key('simple-guide-aggressiveness-${widget.id}'),
-              min: 0,
-              max: 1,
-              divisions: 20,
-              value: value.clamp(0, 1),
-              label: percent,
-              onChanged: (v) => setState(() => _drag = v),
-              onChangeEnd: (v) {
-                setState(() => _drag = null);
-                simpleSaveGuider(
-                  context,
-                  ref,
-                  (p) => widget.set(p, v),
-                  live: true,
-                );
-              },
+          child: SizedBox(
+            height: 44,
+            child: Semantics(
+              label: widget.label,
+              child: Slider(
+                key: Key('simple-guide-aggressiveness-${widget.id}'),
+                min: 0,
+                max: 1,
+                divisions: 20,
+                value: value.clamp(0, 1),
+                label: percent,
+                onChanged: (v) => setState(() => _drag = v),
+                onChangeEnd: (v) {
+                  setState(() => _drag = null);
+                  simpleSaveGuider(
+                    context,
+                    ref,
+                    (p) => widget.set(p, v),
+                    live: true,
+                  );
+                },
+              ),
             ),
           ),
         ),
