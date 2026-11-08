@@ -35,6 +35,10 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Changed
+
+- The architecture decisions now live in `docs/adr/`: nine accepted records cover the daemon and client split, Alpaca-only equipment, client-side planning, the trusted-LAN single-client model, the Wayland-only Linux client, ASTAP, GPS on the client and Simple Mode, and three proposed records (0011 to 0013) from an architecture review describe code that does not exist yet. `design/PORT_PLAYBOOK.md`, `design/README.md`, the Simple Mode brief and the Sky Album spec point at the records instead of repeating them.
+
 ### Fixed
 
 - A start of guiding that fails now says why: the Guider's reason (for example its Guide Camera not connected) shows in a pill and the start ends at once instead of waiting out the 30 s guide-star timeout (#1664). A settle timeout after guiding has begun does not fail the start.
