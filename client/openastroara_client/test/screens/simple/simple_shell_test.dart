@@ -2941,6 +2941,51 @@ void main() {
         findsOneWidget);
   });
 
+  // One panel in the top-left corner at a time (#1674): the switches' window under
+  // the Ara sheet hid its labels and most of an On segment (user, 2026-11-08).
+  testWidgets('a device window, the Ara sheet and Search shut each other out, side by side or not (#1674)',
+      (tester) async {
+    final rotator = _Rotator(EquipmentConnectionState.connected);
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      rotatorProvider.overrideWith(() => rotator),
+    ]);
+    final window = find.byKey(const Key('simple-device-rotator'));
+    final sheet = find.byKey(const Key('simple-ara-sheet'));
+    final search = find.byKey(const Key('simple-search'));
+    Future<void> dot() async {
+      c.read(selectedSettingsPanelProvider.notifier).select('eq.rotator');
+      c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+      await tester.pumpAndSettle();
+    }
+    Future<void> tap(String key) async {
+      await tester.tap(find.byKey(Key(key)));
+      await tester.pumpAndSettle();
+    }
+
+    await tap('simple-ara-mark');
+    await dot();
+    expect(window, findsOneWidget, reason: 'a dot closes the Ara sheet');
+    expect(sheet, findsNothing, reason: 'a dot closes the Ara sheet');
+    await tap('simple-ara-mark');
+    expect(window, findsNothing, reason: 'the Ara mark closes the window');
+    expect(sheet, findsOneWidget, reason: 'the Ara mark closes the window');
+    await tap('simple-search-button');
+    await dot();
+    expect(window, findsOneWidget, reason: 'a dot closes Search');
+    expect(search, findsNothing, reason: 'a dot closes Search');
+    await tap('simple-search-button');
+    expect(window, findsNothing, reason: 'Search closes the window');
+    expect(search, findsOneWidget, reason: 'Search closes the window');
+    await tap('simple-ara-mark');
+    rotator.report('moving');
+    await tester.pump();
+    await tester.tap(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Rotator')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(window, findsOneWidget, reason: 'the pill opens the window as the dot does');
+    expect(sheet, findsNothing, reason: 'the pill opens the window as the dot does');
+  });
+
   testWidgets('the flat panel\'s dot opens its window and closes it again; Settings lists it under Devices',
       (tester) async {
     final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
