@@ -41,6 +41,7 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ### Fixed
 
+- Simple Mode: the autofocus V-curve in the Focus panel is now tall enough to read. The chart was 80 pt tall and its axes left the plot only 18 pt, so the curve was flat and the HFR labels collided; it is now 160 pt, as in the full UI.
 - A start of guiding that fails now says why: the Guider's reason (for example its Guide Camera not connected) shows in a pill and the start ends at once instead of waiting out the 30 s guide-star timeout (#1664). A settle timeout after guiding has begun does not fail the start.
 - Simple Mode: a device window, the OpenAstro Ara sheet and Search no longer stay open on top of each other on a wide window (#1674). Opening one closes the others; before, the Ara sheet could hide a device window's labels and controls, such as a switch's On.
 - Emergency Stop now halts a turning rotator where it is (#1671). Before, the stop never reached the rotator: a move started from a window kept going, and a plan's rotate only stopped being waited on. A rotator that refuses the halt is called out as "ROTATOR HALT FAILED — it may still be turning". The Emergency Stop confirmation lists the rotator among what it does.

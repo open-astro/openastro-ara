@@ -430,7 +430,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   ],
                 ),
               if (run.probes.isNotEmpty)
-                SizedBox(height: 80, child: VCurveChart(run: run)),
+                SizedBox(height: 160, child: VCurveChart(run: run)),
               // Icon + colour + text (DESIGN.md): the tint alone all but
               // vanishes in night mode.
               if (weak != null)
