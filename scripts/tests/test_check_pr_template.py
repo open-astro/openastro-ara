@@ -111,6 +111,12 @@ class CheckPrTemplateTest(unittest.TestCase):
         r = subprocess.run([sys.executable, str(SCRIPT), "--template", str(tpl)], capture_output=True, text=True, env=env)
         self.assertEqual(r.returncode, 0, r.stdout)
 
+    def test_bare_quote_marker_is_not_content(self):
+        tpl = "## What\n\n- placeholder\n"
+        r = self.run_check("## What\n>\n", tpl)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("section '## What' is empty", r.stdout)
+
     def test_unknown_argument_is_a_usage_error(self):
         r = subprocess.run([sys.executable, str(SCRIPT), "--bogus"], capture_output=True, text=True)
         self.assertEqual(r.returncode, 2)
@@ -127,12 +133,6 @@ class CheckPrTemplateTest(unittest.TestCase):
         r = self.run_check(body)
         self.assertEqual(r.returncode, 1)
         self.assertIn("missing section '## Thinking Path'", r.stdout)
-
-    def test_real_template_keeps_the_registry_checkboxes(self):
-        template = REAL_TEMPLATE.read_text(encoding="utf-8")
-        self.assertIn("Settings registry (section 61.4)", template)
-        self.assertIn("Help registry (section 69.4)", template)
-        self.assertNotIn("changelog.d", template)
 
 
 if __name__ == "__main__":

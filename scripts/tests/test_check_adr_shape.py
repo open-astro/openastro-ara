@@ -177,6 +177,30 @@ class AdrShapeTest(unittest.TestCase):
         self.write("docs/adr/README.md", README + "- [Gone](0002-gone.md)\n")
         self.assert_fails("indexed but absent: 0002-gone.md")
 
+    def test_first_line_must_be_a_title(self):
+        self.write("docs/adr/0001-title.md", RECORD.replace("# Title", "Title"))
+        self.assert_fails("the first line is not a `# ` title")
+
+    def test_rules_section_without_a_numbered_rule_fails(self):
+        self.write("docs/adr/0001-title.md", RECORD[:RECORD.index("1. The cache")] + RECORD[RECORD.index("## Alternatives"):])
+        self.assert_fails("`## Rules` has no numbered rule")
+
+    def test_repeated_section_fails(self):
+        self.record("## Links", "## Context\n\nAgain.\n\n## Links")
+        self.assert_fails("section `## Context` appears 2 times")
+
+    def test_single_star_in_a_scope_stays_inside_one_directory(self):
+        self.write("lib/deep/x/y.md", "x\n")
+        self.record("`lib/cache/*.dart`", "`lib/*.md`")
+        self.assert_fails("scope `lib/*.md` matches no tracked file")
+        self.record("`lib/cache/*.dart`", "`lib/**/*.md`")
+        r = self.run_check()
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_directory_without_records_fails(self):
+        (self.root / "docs/adr/0001-title.md").unlink()
+        self.assert_fails("holds no decision record")
+
     def test_bad_file_name_fails(self):
         self.write("docs/adr/1-bad.md", RECORD)
         self.assert_fails("the name is not NNNN-<lowercase-slug>.md")

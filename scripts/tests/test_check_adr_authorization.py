@@ -34,6 +34,10 @@ def decide(changed, statements, records_at=lambda _sha: None, head=HEAD):
     return auth.decide(changed, head, statements, PERMS.get, records_at)
 
 
+def setattr_all(saved):
+    auth.gh, auth.gh_list, auth.permission_lookup, auth.records_lookup = saved
+
+
 class DecideTest(unittest.TestCase):
     def test_pr_with_no_record_passes(self):
         self.assertEqual(decide(["OpenAstroAra.Server/X.cs"], [])[0], "success")
@@ -58,7 +62,8 @@ class DecideTest(unittest.TestCase):
         self.assertEqual(state, "failure")
 
     def test_wrong_short_or_embedded_authorizations_do_not_count(self):
-        for body in ("ADR authorized fedcba9", "ADR authorized 012345", "I think ADR authorized 0123456 is fine"):
+        for body in ("ADR authorized fedcba9", "ADR authorized 012345", "I think ADR authorized 0123456 is fine",
+                     "Not yet: ADR authorized 0123456"):
             with self.subTest(body=body):
                 self.assertEqual(decide(REC, [("writer", body)])[0], "failure")
 
@@ -67,7 +72,25 @@ class DecideTest(unittest.TestCase):
         self.assertEqual(decide(REC, [("writer", body)])[0], "success")
 
     def test_rename_away_from_the_directory_still_needs_authorization(self):
-        self.assertEqual(decide(["scripts/y.py", "docs/adr/0009-x.md"], [])[0], "failure")
+        """run() lists a renamed file under both names, so moving a record out of the directory is still a change."""
+        posted = []
+
+        def fake_gh_list(path):
+            if "/files" in path:
+                return [{"filename": "docs/other/0009-x.md", "previous_filename": "docs/adr/0009-x.md"}]
+            return []
+
+        def fake_gh(*args):
+            if args[:2] == ("api", "-X"):
+                posted.append(args)
+            return HEAD + "\n"
+
+        saved = (auth.gh, auth.gh_list, auth.permission_lookup, auth.records_lookup)
+        auth.gh, auth.gh_list = fake_gh, fake_gh_list
+        auth.permission_lookup, auth.records_lookup = (lambda repo: PERMS.get), (lambda repo: (lambda sha: None))
+        self.addCleanup(lambda: setattr_all(saved))
+        auth.run("o/r", "7", True)
+        self.assertIn("state=failure", posted[0])
 
     def test_long_login_keeps_the_description_within_a_commit_status(self):
         state, desc = auth.decide(REC, HEAD, [("w" * 200, "ADR authorized 0123456")], lambda _l: "write")

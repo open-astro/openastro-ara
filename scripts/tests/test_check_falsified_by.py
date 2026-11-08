@@ -131,11 +131,16 @@ class FalsifiedByTest(unittest.TestCase):
     def test_csharp_xunit_fact(self):
         self.assert_new_case("AlbumTests.Merges", (CS, cs_test("AlbumTests", "Merges", attr="[Fact]")))
 
-    def test_csharp_helper_without_attribute_is_not_a_case(self):
+    def test_csharp_methods_are_named_for_their_own_class(self):
+        text = ("namespace T {\npublic class AlphaTests {\n    [Test]\n    public void One() {}\n}\n"
+                "public class BetaTests {\n    [Test]\n    public void Two() {}\n}\n}\n")
         self.start_branch()
-        self.write(CS, "namespace T { public class AlbumTests { public void Helper() {} } }\n")
+        self.write(CS, text)
         self.commit("head")
-        self.assertEqual(self.run_check().returncode, 0)
+        r = self.run_check()
+        self.assertIn("'AlphaTests.One'", r.stdout)
+        self.assertIn("'BetaTests.Two'", r.stdout)
+        self.assertNotIn("BetaTests.One", r.stdout)
 
     def test_csharp_harness_project_is_not_a_test_project(self):
         self.start_branch()
@@ -265,6 +270,7 @@ class FalsifiedByTest(unittest.TestCase):
     def test_merge_parent_base_ignores_cases_other_prs_landed(self):
         self.write(DART, "void main() { test('old', () {}); }\n")
         self.commit("base")
+        opened = self.git("rev-parse", "HEAD")
         self.git("checkout", "-q", "-b", "pr")
         self.write(DART, "void main() { test('old', () {}); test('mine', () {}); }\n")
         self.commit("pr")
@@ -273,6 +279,11 @@ class FalsifiedByTest(unittest.TestCase):
         self.commit("other pr")
         self.git("checkout", "-q", "-B", "merge", "master")
         self.git("merge", "-q", "--no-ff", "-m", "merge", "pr")
+        # the base the PR opened on counts the other PR's case as new ...
+        r = self.run_check(self.body("mine"), base=opened)
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("'other'", r.stdout)
+        # ... the merge's first parent does not
         r = self.run_check(self.body("mine"), base="merge-parent")
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertIn("(1 new case(s)", r.stdout)
@@ -280,6 +291,24 @@ class FalsifiedByTest(unittest.TestCase):
         self.git("checkout", "-q", "pr")
         r = self.run_check(self.body("mine"), base="merge-parent")
         self.assertEqual(r.returncode, 0, r.stdout)
+
+
+    def test_merge_parent_needs_no_named_base_branch(self):
+        """On a pull_request run the checkout is a merge commit; HEAD^1 is the base even when no branch is called master."""
+        self.write(DART, "void main() { test('old', () {}); }\n")
+        self.commit("base")
+        self.git("checkout", "-q", "-b", "pr")
+        self.write(DART, "void main() { test('old', () {}); test('mine', () {}); }\n")
+        self.commit("pr")
+        self.git("checkout", "-q", "master")
+        self.write("README.md", "docs\n")
+        self.commit("other pr")
+        self.git("merge", "-q", "--no-ff", "-m", "merge", "pr")
+        self.git("branch", "-q", "-m", "master", "trunk")
+        self.git("branch", "-q", "-D", "pr")
+        r = self.run_check(self.body("mine"), base="merge-parent")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertEqual(self.run_check(self.body("mine")).returncode, 2)
 
 
 if __name__ == "__main__":

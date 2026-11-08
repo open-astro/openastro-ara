@@ -143,7 +143,7 @@ class AdrScopeTest(unittest.TestCase):
         self.commit("edit record")
         r = self.body_check("## Decision records\n\n- None\n")
         self.assertEqual(r.returncode, 1)
-        self.assertIn("the '## Decision records' section does not name docs/adr/0001-a.md", r.stdout)
+        self.assertIn("decision-records: the '## Decision records' section does not name docs/adr/0001-a.md", r.stdout)
         self.assertEqual(self.body_check("## Decision records\n\n- 0001: wording\n").returncode, 0)
 
     def test_none_passes_when_no_record_changed(self):
@@ -225,7 +225,7 @@ class AdrScopeTest(unittest.TestCase):
                 self.assertEqual(self.checklist(SCOPE, defect.replace(OK, decorated % ISSUES)).returncode, 0)
 
     def test_last_line_that_only_contains_the_words_is_not_the_sign_off(self):
-        defect = REVIEW.replace("rule 2: n/a", "rule 2: defect").replace(OK, "Issues found, but " + OK)
+        defect = REVIEW.replace("rule 2: n/a", "rule 2: defect").replace(OK, ISSUES + ", but " + OK)
         self.assertEqual(self.checklist(SCOPE, defect).returncode, 1)
 
     def test_malformed_scope_line_fails(self):
