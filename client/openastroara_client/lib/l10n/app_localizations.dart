@@ -3114,8 +3114,8 @@ abstract class AppLocalizations {
   /// Emergency Stop result list item
   ///
   /// In en, this message translates to:
-  /// **'mount told to park'**
-  String get estopParkRequested;
+  /// **'mount stopped'**
+  String get estopMountStopped;
 
   /// Emergency Stop result list item
   ///
@@ -3162,8 +3162,8 @@ abstract class AppLocalizations {
   /// Emergency Stop failed step
   ///
   /// In en, this message translates to:
-  /// **'MOUNT PARK FAILED — verify it manually'**
-  String get estopFailPark;
+  /// **'MOUNT STOP FAILED — verify it manually'**
+  String get estopFailStopMount;
 
   /// Emergency Stop failed step
   ///
