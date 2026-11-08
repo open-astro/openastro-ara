@@ -2277,6 +2277,18 @@ abstract class AppLocalizations {
   /// **'Reconnect'**
   String get shellReconnect;
 
+  /// Simple Mode Settings › Devices row and dialog title: pick a device this rig has none of yet
+  ///
+  /// In en, this message translates to:
+  /// **'Add a device'**
+  String get shellAddDevice;
+
+  /// Simple Mode Settings › Devices row button: open the device chooser
+  ///
+  /// In en, this message translates to:
+  /// **'Choose…'**
+  String get shellChooseDevice;
+
   /// Simple Mode Settings › Devices row button
   ///
   /// In en, this message translates to:

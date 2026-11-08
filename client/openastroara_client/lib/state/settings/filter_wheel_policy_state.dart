@@ -13,26 +13,38 @@ import '../saved_server_state.dart';
 /// (best-effort, trusted LAN).
 class FilterWheelPolicy {
   final bool homeOnFirstConnect;
-  const FilterWheelPolicy({this.homeOnFirstConnect = true});
+
+  /// #1667 — on a filter change, move the focuser by the two filters' offset difference.
+  final bool useFilterWheelOffsets;
+  const FilterWheelPolicy({
+    this.homeOnFirstConnect = true,
+    this.useFilterWheelOffsets = false,
+  });
 
   factory FilterWheelPolicy.fromJson(Map<String, dynamic> json) =>
       FilterWheelPolicy(
         homeOnFirstConnect: (json['home_on_first_connect'] as bool?) ?? true,
+        useFilterWheelOffsets: (json['use_filter_wheel_offsets'] as bool?) ?? false,
       );
 
-  Map<String, dynamic> toJson() => {'home_on_first_connect': homeOnFirstConnect};
+  Map<String, dynamic> toJson() => {
+        'home_on_first_connect': homeOnFirstConnect,
+        'use_filter_wheel_offsets': useFilterWheelOffsets,
+      };
 
-  FilterWheelPolicy copyWith({bool? homeOnFirstConnect}) => FilterWheelPolicy(
+  FilterWheelPolicy copyWith({bool? homeOnFirstConnect, bool? useFilterWheelOffsets}) => FilterWheelPolicy(
         homeOnFirstConnect: homeOnFirstConnect ?? this.homeOnFirstConnect,
+        useFilterWheelOffsets: useFilterWheelOffsets ?? this.useFilterWheelOffsets,
       );
 
   @override
   bool operator ==(Object other) =>
       other is FilterWheelPolicy &&
-      other.homeOnFirstConnect == homeOnFirstConnect;
+      other.homeOnFirstConnect == homeOnFirstConnect &&
+      other.useFilterWheelOffsets == useFilterWheelOffsets;
 
   @override
-  int get hashCode => homeOnFirstConnect.hashCode;
+  int get hashCode => Object.hash(homeOnFirstConnect, useFilterWheelOffsets);
 }
 
 class FilterWheelPolicyNotifier extends Notifier<FilterWheelPolicy>
@@ -45,6 +57,11 @@ class FilterWheelPolicyNotifier extends Notifier<FilterWheelPolicy>
 
   void setHomeOnFirstConnect(bool v) {
     state = state.copyWith(homeOnFirstConnect: v);
+    Future.microtask(_tryPersist);
+  }
+
+  void setUseFilterWheelOffsets(bool v) {
+    state = state.copyWith(useFilterWheelOffsets: v);
     Future.microtask(_tryPersist);
   }
 

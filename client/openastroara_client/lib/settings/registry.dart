@@ -2063,6 +2063,22 @@ const List<Setting> settingsRegistry = [
     defaultValue: true,
     profilePath: 'filter_wheel_policy.home_on_first_connect',
   ),
+  Setting(
+    id: 'eq.filterwheel.use_focus_offsets',
+    label: 'Move the focuser by each filter\'s offset',
+    description: 'After a filter change, move the focuser by the difference between the two filters\' focus offsets.',
+    keywords: [
+      'filter wheel',
+      'focus offset',
+      'offset',
+      'parfocal',
+      'focuser',
+    ],
+    path: ['Settings', 'Equipment', 'Filter Wheel'],
+    type: SettingType.bool(),
+    defaultValue: false,
+    profilePath: 'filter_wheel_policy.use_filter_wheel_offsets',
+  ),
 
   // §52.1 connection lifecycle — per-device-type auto-connect toggles. 10
   // individual entries (vs one composite) so ⌘K "guider connect" /

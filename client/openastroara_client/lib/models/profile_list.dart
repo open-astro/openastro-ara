@@ -1,5 +1,19 @@
 import 'profile_meta.dart';
 
+/// One device's problem after a profile switch (#1710), as the daemon words it.
+class ProfileDeviceMessage {
+  final String deviceName;
+  final String message;
+
+  const ProfileDeviceMessage({required this.deviceName, required this.message});
+
+  factory ProfileDeviceMessage.fromJson(Map<String, dynamic> json) =>
+      ProfileDeviceMessage(
+        deviceName: json['device_name'] as String? ?? '',
+        message: json['message'] as String? ?? '',
+      );
+}
+
 /// Mirrors `ProfileListDto` from the daemon's §37 multi-profile API
 /// (`GET /api/v1/profiles`): the known profiles plus which one is active.
 class ProfileList {

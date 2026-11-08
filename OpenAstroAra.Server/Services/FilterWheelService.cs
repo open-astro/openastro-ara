@@ -73,6 +73,9 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
     // #1075 — the Ara profile store (null in REST-only unit tests): the first-connect home is a
     // profile policy (FilterWheelPolicyDto.HomeOnFirstConnect) the user can turn off.
     private readonly IProfileStore? _profileStore;
+    private readonly FilterFocusOffset? _focusOffset; // #1667 — null in tests that don't exercise offsets
+    // #1667 — the slot the focuser is compensated for; kept across an unconfirmed change so its retry still moves.
+    private int? _focusBaseline;
     private AlpacaFilterWheel? _client;
     private DiscoveredDeviceDto? _device;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
@@ -108,7 +111,9 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
         OpenAstroAra.Profile.Interfaces.IProfileService? profileService = null,
         EquipmentEventPublisher? events = null,
         IEquipmentFaultSink? faults = null,
-        IProfileStore? profileStore = null) {
+        IProfileStore? profileStore = null,
+        FilterFocusOffset? focusOffset = null) {
+        _focusOffset = focusOffset;
         _logger = logger ?? NullLogger<FilterWheelService>.Instance;
         _profileStore = profileStore;
         _events = events;
@@ -202,6 +207,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
             // while disconnected validates against the live (absent) slots and reports "not
             // connected" rather than an ArgumentOutOfRange against a prior session's slots.
             _slots = null;
+            _focusBaseline = null;
             if (_device is not null) {
                 SetState(EquipmentConnectionState.Disconnected);
             }
@@ -224,6 +230,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
             ObjectDisposedException.ThrowIf(_disposed, this);
             client = _state == EquipmentConnectionState.Connected ? _client : null;
             slots = _slots;
+            _focusBaseline ??= _runtime.CurrentSlot;
         }
         // ASCOM addresses slots by a short; validate before the narrowing cast so an out-of-range
         // position fails loudly (with a 4xx) instead of silently wrapping (e.g. (short)32768 ==
@@ -244,16 +251,19 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
         // #1066 — an explicitly requested slot is a deliberate position: it retires the pending
         // first-connect home, so the change's own follow-up refresh can never override it with 0.
         RetirePendingHome();
-        _ = Task.Run(() => ChangeInBackground(client, position), CancellationToken.None);
+        _ = Task.Run(() => ChangeInBackgroundAsync(client, position), CancellationToken.None);
         return Task.FromResult(Accepted("filter-wheel.change", idempotencyKey));
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background change boundary: setting the blocking ASCOM Position can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client before/during the change; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    private void ChangeInBackground(AlpacaFilterWheel client, int position) {
+    private async Task ChangeInBackgroundAsync(AlpacaFilterWheel client, int position) {
         try {
             client.Position = (short)position; // triggers the wheel to rotate; Position reads -1 while moving
             RefreshCacheOnce();
+            if (_focusOffset is { Enabled: true } && await WaitForPositionAsync(client, (short)position, CancellationToken.None).ConfigureAwait(false)) {
+                await ApplyFocusOffsetAsync(position, CancellationToken.None).ConfigureAwait(false);
+            }
         } catch (Exception ex) {
             LogChangeFailed(ex, position);
         }

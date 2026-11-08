@@ -1278,6 +1278,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellReconnect => 'Reconnect';
 
   @override
+  String get shellAddDevice => 'Add a device';
+
+  @override
+  String get shellChooseDevice => 'Choose…';
+
+  @override
   String get shellConnect => 'Connect';
 
   @override
@@ -4065,6 +4071,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get shellReconnect => 'Reconectar';
+
+  @override
+  String get shellAddDevice => 'Adicionar um dispositivo';
+
+  @override
+  String get shellChooseDevice => 'Escolher…';
 
   @override
   String get shellConnect => 'Conectar';

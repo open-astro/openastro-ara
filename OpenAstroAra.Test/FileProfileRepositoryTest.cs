@@ -132,6 +132,17 @@ public class FileProfileRepositoryTest {
     }
 
     [Test]
+    public void Deleting_a_profile_deletes_its_remembered_devices() {
+        var b = _repo.Create("B", settings: null, makeActive: false);
+        var file = EquipmentSelectionStore.ProfileFile(Path.Combine(_dir, "profiles"), b.Id);
+        File.WriteAllText(file, "{}");
+
+        _repo.Delete(b.Id).Should().Be(ProfileDeleteResult.Deleted);
+
+        File.Exists(file).Should().BeFalse();
+    }
+
+    [Test]
     public void Delete_removes_a_non_active_profile_and_404s_an_unknown_id() {
         var activeId = _repo.ActiveId!.Value;
         _repo.Delete(Guid.NewGuid()).Should().Be(ProfileDeleteResult.NotFound);

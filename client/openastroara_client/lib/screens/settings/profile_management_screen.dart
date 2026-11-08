@@ -123,7 +123,9 @@ class _ProfileListView extends ConsumerWidget {
     final notifier = ref.read(profileManagementProvider.notifier);
     switch (action) {
       case 'select':
-        await _run(messenger, () => notifier.select(p.id), 'Couldn\'t switch profile');
+        await _run(messenger, () async {
+          showProfileDeviceMessages(messenger, await notifier.select(p.id));
+        }, 'Couldn\'t switch profile');
         break;
       case 'rename':
         final name = await _promptName(context, initial: p.name);

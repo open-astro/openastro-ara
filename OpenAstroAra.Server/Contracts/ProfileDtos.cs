@@ -669,7 +669,10 @@ public sealed record FilterWheelLabelsDto(System.Collections.Generic.IReadOnlyLi
 /// <summary>#1075 — filter-wheel behaviour policy. <c>HomeOnFirstConnect</c>: whether the daemon
 /// parks the wheel on slot 0 (conventionally L) the first time it connects after the daemon
 /// starts (#1066). Off = the wheel is left exactly where the driver reports it.</summary>
-public sealed record FilterWheelPolicyDto(bool HomeOnFirstConnect = true) {
+public sealed record FilterWheelPolicyDto(
+    bool HomeOnFirstConnect = true,
+    // #1667 — on a filter change, move the focuser by the difference between the two filters' offsets.
+    bool UseFilterWheelOffsets = false) {
     public static FilterWheelPolicyDto Default { get; } = new();
 }
 

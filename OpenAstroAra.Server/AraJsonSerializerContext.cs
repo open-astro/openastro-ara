@@ -218,6 +218,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(StoredProfileDto))]
 [JsonSerializable(typeof(ProfileMetaDto))]
 [JsonSerializable(typeof(ProfileListDto))]
+[JsonSerializable(typeof(ProfileSelectResultDto))]
 [JsonSerializable(typeof(CreateProfileRequestDto))]
 [JsonSerializable(typeof(RenameProfileRequestDto))]
 [JsonSerializable(typeof(GuiderTwinPreviewDto))]

@@ -42,6 +42,16 @@ public sealed record ProfileListDto(
     Guid? ActiveId,
     IReadOnlyList<ProfileMetaDto> Profiles);
 
+/// <summary>Response for <c>POST /api/v1/profiles/{id}/select</c>: the list, plus one message for
+/// each device that did not come up after the switch. A device that fails never fails the switch.</summary>
+public sealed record ProfileSelectResultDto(
+    Guid? ActiveId,
+    IReadOnlyList<ProfileMetaDto> Profiles,
+    IReadOnlyList<ProfileDeviceMessageDto> DeviceMessages);
+
+/// <summary>One device's outcome after a profile switch, in words for the user.</summary>
+public sealed record ProfileDeviceMessageDto(string DeviceName, string Message);
+
 /// <summary>
 /// Body for <c>POST /api/v1/profiles</c>. <paramref name="Settings"/> is the
 /// full settings to store; when null the server clones the current active

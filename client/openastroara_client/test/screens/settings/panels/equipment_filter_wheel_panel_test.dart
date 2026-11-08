@@ -136,6 +136,20 @@ void main() {
     expect(find.textContaining('focus offset'), findsNothing);
   });
 
+  testWidgets('the focus-offset row toggles the policy, off by default', (tester) async {
+    await _pump(tester, null);
+    final rowText = find.text("Move the focuser by each filter's offset");
+    expect(rowText, findsOneWidget);
+    final container = ProviderScope.containerOf(tester.element(rowText));
+    expect(container.read(filterWheelPolicyProvider).useFilterWheelOffsets, isFalse);
+    final toggle = find.ancestor(of: rowText, matching: find.byType(SettingsSwitchRow));
+    await tester.ensureVisible(toggle);
+    await tester.tap(find.descendant(of: toggle, matching: find.byType(Switch)));
+    await tester.pump();
+    expect(container.read(filterWheelPolicyProvider).useFilterWheelOffsets, isTrue);
+    await tester.pump(const Duration(seconds: 20));
+  });
+
   testWidgets('the first-connect home policy toggle is shown and flips the setting (#1075)',
       (tester) async {
     await _pump(tester, null);

@@ -46,9 +46,10 @@ class _FakeProfileApi extends ProfileApi {
     profiles: [for (final id in known) ProfileMeta(id: id, name: id)],
   );
   @override
-  Future<void> selectProfile(String id) async {
+  Future<List<ProfileDeviceMessage>> selectProfile(String id) async {
     selected.add(id);
     activeId = id;
+    return const [];
   }
 
   @override
