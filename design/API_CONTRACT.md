@@ -1243,6 +1243,18 @@ its start and the client has nothing to do with it.
 **Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1equipment~1polaralign~1next`; `PolarAlignService.Stages.cs`, `PolarAlignGeometry.FitAxisThreePoint`, `MainCameraPointingSolver`.
 
 **Related:** #1591, #1686 (the plate-solve routine this builds on), §45.16 (the 2-point call, now revisited for the check); tests `PolarAlignServiceTest` (`Coarse_stage_*`, `Check_stage_*`, `Next_*`), `PolarAlignGeometryTest` (`Three_point_fit_*`), client `polar_align_state_test` (stages), `polar_align_panel_test`.
+## 2026-11-08 — Polar Align coarse stage measures the axis (seed turn) instead of reading the camera's pointing at Home as the axis (#1727)
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/polaralign/start` (`stage: coarse`), `GET …/polaralign/status`, WS `polar_align.started` / `polar_align.stage` / `polar_align.progress` with `stage: coarse`.
+
+**Decision:** the coarse stage runs the §45 seed-and-adjust routine on the main camera: Home (as before), the slew to Dec 85°, one RA turn of `seed_rotation_deg` with a main-camera solve at each end, the two-point axis fit, then the live loop with tracking off. Its states are now the fine stage's — `homing` → `seeding` → `adjusting`/`paused` — where before it went `homing` → `adjusting` and never slewed; a run started with `use_home: false` opens in `seeding`, not `adjusting`. The readout's meaning is unchanged (alt/az error of the axis), only its source: a measured axis, never a pointing.
+
+**Reasoning:** on the first real night the camera-as-axis zero sat 75′ from the fine stage's seed and the three-point check agreed with the fine stage; a camera is a degree off the axis at Home on an ordinary rig, and a readout shown to the arcminute must not carry that. No wire shape changes — clients already render `seeding` for the fine stage and the Simple panel's phase text covers it.
+
+**Spec ref:** `PolarAlignService.Stages.cs` (`RunSeededAdjustAsync`, shared by `RunCoarseStageAsync` and `RunFineStageAsync`).
+
+**Related:** #1727, #1591; test `PolarAlignServiceTest.Coarse_stage_homes_the_mount_measures_the_axis_with_a_main_camera_seed_turn_and_Next_moves_to_fine`.
+
 ## 2026-11-08 — Emergency Stop reports `mount_stopped`, not `park_requested` (#1672)
 
 **Endpoint(s) or area:** `POST /api/v1/server/emergency-stop`, WebSocket `safety.action_taken` with `action: emergency_stop`

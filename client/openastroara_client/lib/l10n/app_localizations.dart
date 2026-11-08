@@ -1530,7 +1530,7 @@ abstract class AppLocalizations {
   /// Simple Mode Polar align panel: rough stage before the first solve
   ///
   /// In en, this message translates to:
-  /// **'The main camera at Home is read as the mount axis. Waiting for the first solve…'**
+  /// **'The main camera measures the mount axis with a turn in RA, then follows your knob moves. Waiting for the first solve…'**
   String get polarRoughWaiting;
 
   /// Simple Mode Polar align panel: what to do when the mount cannot find Home

@@ -238,7 +238,7 @@
   "polarPhaseRough": "Etapa grosseira",
   "polarPhaseChecking": "Verificando {done} de 3",
   "polarPhaseChecked": "Verificado",
-  "polarRoughWaiting": "A câmera principal na posição inicial é lida como o eixo da montagem. Aguardando a primeira resolução…",
+  "polarRoughWaiting": "A câmera principal mede o eixo da montagem com um giro em AR e depois acompanha os seus ajustes. Aguardando a primeira resolução…",
   "polarNeedsHomeHint": "Esta montagem não encontra a posição inicial sozinha. Contrapesos para baixo, tubo apontado para o polo, depois Continuar.",
   "polarCheckedLine": "Verificação em três pontos: {verdict}",
   "polarCheckedVsFine": "Verificação em três pontos: {verdict}, {delta}′ da leitura fina",

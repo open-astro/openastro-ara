@@ -1026,7 +1026,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         if (coarse) ...[
           _callout(
             side == null
-                ? 'Rough step — the main camera at Home is read as the axis. Waiting for the first solve…'
+                ? 'Rough step — the main camera measures the mount axis with a turn in RA, then follows your knob moves. Waiting for the first solve…'
                 : '$side Make the big moves now; the fine step takes over from a few degrees in.',
             AraColors.accentInfo,
             Icons.explore_outlined,

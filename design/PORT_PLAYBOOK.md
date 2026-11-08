@@ -6536,12 +6536,20 @@ by more than 2′ with the seed at 60°.
 
 **Revisited 2026-11-07 (#1591).** The CM4 night of 2026-11-04 met the revisit condition (the bullseye
 said "Excellent" while the mount was degrees off). The answer is not a 3-point *seed* but a 3-point
-*check* after the adjust loop: the routine is now three stages — coarse (Home, main-camera solves
-read as the axis, rough but it shows which side of the pole), fine (this section's 2-point seed and
-live loop, with the seed turn's default raised to **60°**), and a check (Home, Dec 85°, three
-guide-camera solves 30° apart, `FitAxisThreePoint`, no adjusting). The check shares no input with
-the fine readout, and the gap between them (`fine_delta_arcmin`, logged on every run) is the
-evidence this section asked for. API_CONTRACT.md 2026-11-07 has the wire shape.
+*check* after the adjust loop: the routine is now three stages — coarse (Home, then this section's
+2-point seed and live loop on the *main camera*, for the big moves), fine (the same seed and live
+loop on the guide camera, with the seed turn's default raised to **60°**), and a check (Home, Dec
+85°, three guide-camera solves 30° apart, `FitAxisThreePoint`, no adjusting). The check shares no
+input with the fine readout, and the gap between them (`fine_delta_arcmin`, logged on every run) is
+the evidence this section asked for. API_CONTRACT.md 2026-11-07 has the wire shape.
+
+**Coarse stage, revised 2026-11-08 (#1727).** The first cut read each main-camera solve at Home as
+the axis itself. On the first real night (GNTO, 2026-11-07) that zero sat 75′ in azimuth from the
+fine stage's seed, and the three-point check sided with the fine stage: at Home the camera is not on
+the axis (cone error, non-orthogonality, the Home position), by a degree on an ordinary rig. The
+coarse stage now runs the seed turn and the two-point fit too; only the camera (and its 3 s
+exposure) differs from the fine stage. Nothing in a polar-align readout is ever a pointing read as
+the axis any more.
 
 ---
 

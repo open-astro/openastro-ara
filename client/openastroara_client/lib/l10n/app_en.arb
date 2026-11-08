@@ -1172,7 +1172,7 @@
   "@polarPhaseChecked": {
     "description": "Simple Mode Polar align panel: routine phase: the three-point check has its result"
   },
-  "polarRoughWaiting": "The main camera at Home is read as the mount axis. Waiting for the first solve…",
+  "polarRoughWaiting": "The main camera measures the mount axis with a turn in RA, then follows your knob moves. Waiting for the first solve…",
   "@polarRoughWaiting": {
     "description": "Simple Mode Polar align panel: rough stage before the first solve"
   },

@@ -31,9 +31,9 @@ abstract final class PolarAlignStates {
       state == checking;
 }
 
-/// The routine's stages (`PolarAlignStateDto.stage`): coarse (Home, one
-/// main-camera solve per frame read as the axis), fine (the guide-camera seed
-/// + live loop), check (Home, three guide-camera solves, an exact fit).
+/// The routine's stages (`PolarAlignStateDto.stage`): coarse (Home, then the
+/// seed turn + live loop on the main camera), fine (the same on the guide
+/// camera), check (Home, three guide-camera solves, an exact fit).
 abstract final class PolarAlignStages {
   static const coarse = 'coarse';
   static const fine = 'fine';

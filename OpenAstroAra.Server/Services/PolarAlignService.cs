@@ -40,10 +40,10 @@ namespace OpenAstroAra.Server.Services {
     /// (<see cref="ITelescopeMediator"/>), and the <see cref="PolarAlignGeometry"/> math.
     ///
     /// <para><b>Stages</b> (<see cref="PolarAlignStages"/>, the partial in PolarAlignService.Stages.cs):
-    /// <c>coarse</c> (Home, main-camera solves read as the axis — rough, shows which side of the
-    /// pole), <c>fine</c> (the guide-camera routine below), <c>check</c> (Home, three guide-camera
-    /// solves with two RA turns, an exact three-point fit, state <c>checked</c>). The user's Next
-    /// moves from one to the next.</para>
+    /// <c>coarse</c> (Home, then the seed-and-adjust routine below on the main camera — slower frames,
+    /// for the big moves), <c>fine</c> (the same routine on the guide camera), <c>check</c> (Home,
+    /// three guide-camera solves with two RA turns, an exact three-point fit, state <c>checked</c>).
+    /// The user's Next moves from one to the next.</para>
     ///
     /// <para><b>Fine-stage state machine</b> (the <c>state</c> string in <see cref="PolarAlignStateDto"/>):
     /// <c>idle</c> → Start → <c>seeding</c> (frame A → RA slew Δ away from the meridian → frame B →
@@ -280,9 +280,9 @@ namespace OpenAstroAra.Server.Services {
         public Task<OperationAcceptedDto> StartAsync(string? idempotencyKey, CancellationToken ct) =>
             StartAsync(stage: null, idempotencyKey, ct);
 
-        /// <summary>Begin at <paramref name="stage"/>: <c>coarse</c> (default) → Home + main-camera
-        /// solves; <c>fine</c> → the guide-camera seed + live loop from the current pointing; <c>check</c>
-        /// → Home + the three-point measurement only.</summary>
+        /// <summary>Begin at <paramref name="stage"/>: <c>coarse</c> (default) → Home + the main-camera
+        /// seed and live loop; <c>fine</c> → the guide-camera seed + live loop from the current pointing;
+        /// <c>check</c> → Home + the three-point measurement only.</summary>
         public async Task<OperationAcceptedDto> StartAsync(string? stage, string? idempotencyKey, CancellationToken ct) {
             stage ??= PolarAlignStages.Coarse;
             if (!PolarAlignStages.IsValid(stage)) {
@@ -329,9 +329,6 @@ namespace OpenAstroAra.Server.Services {
                 }
                 // The coarse and check stages open with the mount going Home; the fine stage seeds at once.
                 var initialState = stage == PolarAlignStages.Fine || !settings.UseHome ? "seeding" : "homing";
-                if (stage == PolarAlignStages.Coarse && !settings.UseHome) {
-                    initialState = "adjusting";
-                }
                 await guiderClient.SetPaSessionAsync(active: true, timeoutS: LeaseTimeoutSeconds, ct).ConfigureAwait(false);
                 int gen;
                 int startSeq;
@@ -616,8 +613,8 @@ namespace OpenAstroAra.Server.Services {
         private delegate Task<PolarAlignSolveOutcome> LiveCapture(
             string frameId, (double RaDeg, double DecDeg)? hint, PolarAlignSettingsDto settings, FrameTiming timing, CancellationToken ct);
 
-        /// <summary>The live loop shared by the coarse stage (main camera, each solve read as the axis) and
-        /// the fine stage (guide camera, §45.8 reverse-projection from the seed). Captures and solves until
+        /// <summary>The live loop shared by the coarse stage (main camera) and the fine stage (guide camera),
+        /// both reading each solve as a §45.8 reverse-projection from the seed. Captures and solves until
         /// Stop cancels it, or the user taps Next — then it returns normally. <paramref name="toError"/>
         /// turns a good solve (and its time) into the alt/az error.</summary>
         private async Task SolveLoopAsync(
@@ -774,14 +771,14 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>Seed frames must solve — retry a few times, then fail the routine (a seed that
         /// can't solve means clouds/focus problems the live loop can't fix either).</summary>
         private async Task<PolarAlignSolveOutcome> SolveSeedFrameAsync(
-                PHD2Guider guiderClient, string workDir, string frameId,
+                LiveCapture capture, string frameId,
                 (double RaDeg, double DecDeg)? hint, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
             var anyFrameReachedSolver = false;
             for (var attempt = 1; attempt <= SeedSolveAttempts; attempt++) {
                 var timing = new FrameTiming();
                 // One id per attempt, on frame_started and frame_complete alike.
                 var attemptId = frameId + "-" + attempt.ToString(CultureInfo.InvariantCulture);
-                var s = await CaptureAndSolveAsync(guiderClient, workDir, attemptId, hint, settings, gen, timing, ct).ConfigureAwait(false);
+                var s = await capture(attemptId, hint, settings, timing, ct).ConfigureAwait(false);
                 await CompleteFrameAsync(gen, attemptId, s, timing, s.Success ? 0 : attempt).ConfigureAwait(false);
                 if (s.Success) {
                     return s;

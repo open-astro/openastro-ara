@@ -1979,12 +1979,12 @@ paths:
           schema:
             type: string
       requestBody:
-        description: Optional. The stage to begin at; absent = coarse (Home + main-camera solves).
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PolarAlignStartRequestDto'
-        required: false
+              oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/PolarAlignStartRequestDto'
       responses:
         '200':
           description: OK
@@ -1992,7 +1992,6 @@ paths:
     post:
       tags:
         - Equipment
-      summary: Continue (the mount was put at Home by hand) or Next (coarse → fine, fine → check). 409 when nothing waits on the user.
       parameters:
         - name: Idempotency-Key
           in: header
@@ -12846,14 +12845,6 @@ components:
             - number
             - string
           format: double
-    PolarAlignStartRequestDto:
-      type: object
-      properties:
-        stage:
-          type: string
-          nullable: true
-          enum: [coarse, fine, check]
-      additionalProperties: false
     PolarAlignSettingsDto:
       type: object
       properties:
@@ -12903,16 +12894,29 @@ components:
           type: string
           default: loop
         check_step_deg:
-          type: number
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
           format: double
           default: 30
         coarse_exposure_seconds:
-          type: number
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
           format: double
           default: 3
         use_home:
           type: boolean
           default: true
+    PolarAlignStartRequestDto:
+      type: object
+      properties:
+        stage:
+          type:
+            - 'null'
+            - string
     PreflightChecklistDto:
       required:
         - generated_utc

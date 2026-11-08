@@ -808,9 +808,9 @@ public sealed record GuiderAlpacaDiscoveryDto(IReadOnlyList<string> Servers);
 
 // ─── Polar Alignment (§10.6 row 12) ───────────────────────────────────────────
 
-/// <summary>The routine's stages (<see cref="PolarAlignStateDto.Stage"/>): <c>coarse</c> — the mount at
-/// Home, one main-camera solve per frame read as the axis (rough, shows which side of the pole);
-/// <c>fine</c> — the guide-camera two-point seed + live adjust loop; <c>check</c> — back Home, three
+/// <summary>The routine's stages (<see cref="PolarAlignStateDto.Stage"/>): <c>coarse</c> — the mount goes
+/// Home, then the two-point seed + live adjust loop on the main camera (slower frames, for the big moves);
+/// <c>fine</c> — the same seed + live adjust loop on the guide camera; <c>check</c> — back Home, three
 /// guide-camera solves with two RA turns, an exact three-point axis fit, no adjusting.</summary>
 public static class PolarAlignStages {
     public const string Coarse = "coarse";

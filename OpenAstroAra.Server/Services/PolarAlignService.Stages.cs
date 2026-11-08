@@ -30,15 +30,16 @@ namespace OpenAstroAra.Server.Services {
 
     /// <summary>
     /// The three stages of the polar-align routine. <b>Coarse</b>: the mount goes Home (Find Home, or
-    /// the user puts it there and taps Continue); with tracking off, every main-camera solve is read
-    /// as the RA axis itself (at Home the camera looks along the axis, give or take cone error) and
-    /// compared with the apparent pole — rough, but it shows how far off and on which side while
-    /// the user makes the big knob moves. <b>Fine</b>: the §45 guide-camera routine — from Home the
-    /// mount first slews to Dec 85° (a camera on the axis gives the two-point fit no chord), then the
-    /// seed turn, the fit and the live adjust loop. <b>Check</b>: Home again, Dec 85°, three
-    /// guide-camera solves with two RA turns of <c>CheckStepDeg</c>, an exact three-point fit, and a
-    /// verdict beside the fine stage's last readout. Nothing is adjusted in the check; it says how
-    /// good the alignment really is (#1591).
+    /// the user puts it there and taps Continue), slews to Dec 85°, and the §45 seed-and-adjust
+    /// routine runs on the <i>main camera's</i> frames — a seed turn, the two-point axis fit, then the
+    /// live loop that reads knob moves — rough only in its cadence (the main camera's longer
+    /// exposure and solve), good for the big moves on which side of the pole. It used to read the
+    /// main camera's pointing at Home as the axis itself; that put its zero a degree off (#1727),
+    /// because at Home the camera is not on the axis (cone error, the Home position). <b>Fine</b>:
+    /// the same routine on the guide camera, which solves a frame a second. <b>Check</b>: Home again,
+    /// Dec 85°, three guide-camera solves with two RA turns of <c>CheckStepDeg</c>, an exact
+    /// three-point fit, and a verdict beside the fine stage's last readout. Nothing is adjusted in
+    /// the check; it says how good the alignment really is (#1591).
     /// </summary>
     public sealed partial class PolarAlignService {
 
@@ -57,14 +58,12 @@ namespace OpenAstroAra.Server.Services {
                     "the coarse stage needs the main camera's plate solver, which this daemon has not wired up — start at the fine stage instead");
             var renew = MakeLeaseRenewer(guiderClient, ct);
             await GoHomeAsync(settings, renew, gen, ct).ConfigureAwait(false);
-            // Tracking off: the solved pointing then moves only with the knobs (§45.8's premise).
-            SetTracking(false);
-            await SetStageAsync(gen, PolarAlignStages.Coarse, "adjusting").ConfigureAwait(false);
-            await SolveLoopAsync(
-                capture: (frameId, hint, s, timing, token) => CaptureMainCameraAsync(mainCamera, frameId, hint, s, gen, timing, token),
-                // At Home the pointing IS the axis: its distance from the apparent pole is the error.
-                toError: (s, at) => PolarAlignGeometry.AxisError(s.RaDegJnow, s.DecDegJnow, site.LatitudeDeg, site.LongitudeDeg, at),
-                initialHint: CurrentMountPointingJnow(), renew, gen, ct).ConfigureAwait(false);
+            await SetStageAsync(gen, PolarAlignStages.Coarse, "seeding").ConfigureAwait(false);
+            // The axis is MEASURED (seed turn + two-point fit), never read off the camera's pointing at
+            // Home: on 2026-11-07 the camera-as-axis reading sat 75′ from the fine stage's seed (#1727).
+            await RunSeededAdjustAsync(
+                (frameId, hint, s, timing, token) => CaptureMainCameraAsync(mainCamera, frameId, hint, s, gen, timing, token),
+                renew, site, settings, gen, ct).ConfigureAwait(false);
             LogStageAdvanced(PolarAlignStages.Coarse, PolarAlignStages.Fine);
         }
 
@@ -110,14 +109,7 @@ namespace OpenAstroAra.Server.Services {
 
         private async Task RunFineStageAsync(
                 PHD2Guider guiderClient, string workDir, SiteSettingsDto site, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
-            var north = site.LatitudeDeg > 0;
             await SetStageAsync(gen, PolarAlignStages.Fine, "seeding").ConfigureAwait(false);
-            // An Alpaca mount refuses SlewToCoordinatesAsync while not tracking ("requires Tracking to be
-            // true", the iOptron on the CM4, 2026-11-05).
-            if (!_mount.GetInfo().TrackingEnabled) {
-                await TurnTrackingOnOrFailAsync(ct).ConfigureAwait(false);
-                LogTrackingEnabled();
-            }
 
             // ── §45.4 binning from the camera: ask the daemon for the guide camera's frame once per
             // run. A daemon without the RPC (or a refused call) is not a failure — auto falls back
@@ -127,12 +119,43 @@ namespace OpenAstroAra.Server.Services {
             var binningSource = settings.Binning == PolarAlignBinning.Auto ? "auto" : "profile";
             LogBinningChosen(chosenBinning, binningSource, _runFrameSize?.Width ?? 0, _runFrameSize?.Height ?? 0);
 
+            await RunSeededAdjustAsync(
+                (frameId, hint, s, timing, token) => CaptureAndSolveAsync(guiderClient, workDir, frameId, hint, s, gen, timing, token),
+                MakeLeaseRenewer(guiderClient, ct), site, settings, gen, ct).ConfigureAwait(false);
+
+            // Next: remember the fine readout the check will be compared with.
+            lock (_gate) {
+                if (_generation == gen && _altErrorArcmin is double alt && _azErrorArcmin is double az) {
+                    _fineFinalErrorArcmin = Math.Sqrt(alt * alt + az * az);
+                }
+            }
+            LogStageAdvanced(PolarAlignStages.Fine, PolarAlignStages.Check);
+        }
+
+        // ── the seed-and-adjust routine the coarse and fine stages share ─────────────────────
+
+        /// <summary>Leave the axis, seed the axis fit with two frames around an RA turn, then run the
+        /// live adjust loop until the user's Next. <paramref name="capture"/> is the camera: the main
+        /// camera's capture-and-solve in the coarse stage, the guider's in the fine stage. Everything
+        /// else — the Dec-85° slew, the turn away from the meridian, the two-point fit, the §45.8
+        /// reverse-projection — is the same, so the two stages differ only in the camera and its
+        /// cadence, never in what the readout means.</summary>
+        private async Task RunSeededAdjustAsync(
+                LiveCapture capture, Func<Task> renewLeaseIfDue, SiteSettingsDto site, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
+            var north = site.LatitudeDeg > 0;
+            // An Alpaca mount refuses SlewToCoordinatesAsync while not tracking ("requires Tracking to be
+            // true", the iOptron on the CM4, 2026-11-05).
+            if (!_mount.GetInfo().TrackingEnabled) {
+                await TurnTrackingOnOrFailAsync(ct).ConfigureAwait(false);
+                LogTrackingEnabled();
+            }
+
             // From Home the camera looks along the axis: the two seed frames would coincide.
             await LeaveTheAxisAsync(settings, ct).ConfigureAwait(false);
 
             // ── seed: frame A at the current pointing ──
             var hintA = CurrentMountPointingJnow();
-            var a = await SolveSeedFrameAsync(guiderClient, workDir, "seed-a", hintA, settings, gen, ct).ConfigureAwait(false);
+            var a = await SolveSeedFrameAsync(capture, "seed-a", hintA, settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("seed-a", a.RaDegJnow, a.DecDegJnow);
 
             // ── RA slew Δ, away from the meridian so the arc cannot cross it (a crossing risks
@@ -149,7 +172,7 @@ namespace OpenAstroAra.Server.Services {
             // tiny solved ΔRA for a 30° turn — the fit then rejects every seed.
             var signedRotationDeg = Wrap180(slewedPointing.RaDeg - mountRaDeg);
             var rotationDeg = Math.Abs(signedRotationDeg);
-            var b = await SolveSeedFrameAsync(guiderClient, workDir, "seed-b", slewedPointing, settings, gen, ct).ConfigureAwait(false);
+            var b = await SolveSeedFrameAsync(capture, "seed-b", slewedPointing, settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("seed-b", b.RaDegJnow, b.DecDegJnow);
             var bTime = DateTimeOffset.UtcNow;
             var axis = FitAxis(a, b, rotationDeg, north, raIncreasing: signedRotationDeg > 0);
@@ -166,7 +189,7 @@ namespace OpenAstroAra.Server.Services {
             SetErrors(gen, seedAltErr, seedAzErr, "adjusting", frameId: null); // keeps the seed-b attempt's id
             await PublishProgressAsync(gen, 0, seedAltErr, seedAzErr, solved: true).ConfigureAwait(false);
             await SolveLoopAsync(
-                capture: (frameId, hint, s, timing, token) => CaptureAndSolveAsync(guiderClient, workDir, frameId, hint, s, gen, timing, token),
+                capture,
                 toError: (s, at) => {
                     // §45.8 reverse-projection: the pointing's alt/az delta since the seed IS the knob
                     // adjustment (rigid mount, tracking stopped). Azimuth-knob turns are rotations about
@@ -183,15 +206,7 @@ namespace OpenAstroAra.Server.Services {
                         * Math.Cos(axisAltDeg * Math.PI / 180.0) * 60.0 * (north ? 1.0 : -1.0);
                     return (altErr, azErr);
                 },
-                initialHint: (b.RaDegJnow, b.DecDegJnow), MakeLeaseRenewer(guiderClient, ct), gen, ct).ConfigureAwait(false);
-
-            // Next: remember the fine readout the check will be compared with.
-            lock (_gate) {
-                if (_generation == gen && _altErrorArcmin is double alt && _azErrorArcmin is double az) {
-                    _fineFinalErrorArcmin = Math.Sqrt(alt * alt + az * az);
-                }
-            }
-            LogStageAdvanced(PolarAlignStages.Fine, PolarAlignStages.Check);
+                initialHint: (b.RaDegJnow, b.DecDegJnow), renewLeaseIfDue, gen, ct).ConfigureAwait(false);
         }
 
         // ── check ────────────────────────────────────────────────────────────────────────────
@@ -217,20 +232,21 @@ namespace OpenAstroAra.Server.Services {
             var (ra0, dec0) = CurrentMountPointingJnow()
                 ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
             var dirSign = AwayFromMeridianSign(ra0);
+            LiveCapture capture = (frameId, hint, s, timing, token) => CaptureAndSolveAsync(guiderClient, workDir, frameId, hint, s, gen, timing, token);
 
-            var s1 = await SolveSeedFrameAsync(guiderClient, workDir, "check-1", (ra0, dec0), settings, gen, ct).ConfigureAwait(false);
+            var s1 = await SolveSeedFrameAsync(capture, "check-1", (ra0, dec0), settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("check-1", s1.RaDegJnow, s1.DecDegJnow);
             await NoteCheckSolveAsync(gen, 1).ConfigureAwait(false);
 
             var p1 = await TurnRaAsync(ra0, dec0, dirSign * step, settings, ct).ConfigureAwait(false);
             var mountTurn1 = Wrap180(p1.RaDeg - ra0);
-            var s2 = await SolveSeedFrameAsync(guiderClient, workDir, "check-2", p1, settings, gen, ct).ConfigureAwait(false);
+            var s2 = await SolveSeedFrameAsync(capture, "check-2", p1, settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("check-2", s2.RaDegJnow, s2.DecDegJnow);
             await NoteCheckSolveAsync(gen, 2).ConfigureAwait(false);
 
             var p2 = await TurnRaAsync(p1.RaDeg, dec0, dirSign * step, settings, ct).ConfigureAwait(false);
             var mountTurn2 = Wrap180(p2.RaDeg - p1.RaDeg);
-            var s3 = await SolveSeedFrameAsync(guiderClient, workDir, "check-3", p2, settings, gen, ct).ConfigureAwait(false);
+            var s3 = await SolveSeedFrameAsync(capture, "check-3", p2, settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("check-3", s3.RaDegJnow, s3.DecDegJnow);
             await NoteCheckSolveAsync(gen, 3).ConfigureAwait(false);
             var at = DateTimeOffset.UtcNow;

@@ -508,7 +508,8 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(guider, new ScriptedSolver { Fallback = Unsolved }, ws: ws);
 
-            await svc.StartAsync(null, CancellationToken.None).ConfigureAwait(false);
+            // The fine stage: this bench wires no main camera, and the coarse stage is refused without one.
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
 
             Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("guider_out_of_step"));
@@ -1749,14 +1750,23 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        /// <summary>The main camera's capture-and-solve: a camera <see cref="OffsetDeg"/> off the RA axis on a
+        /// mount whose axis sits on the true pole. It answers at the hint's RA, <see cref="OffsetDeg"/> further
+        /// from the pole than the Dec-85° circle the stage slews to — so every frame lies on one circle about
+        /// the pole and only a measured axis (not the pointing read as the axis) comes out error-free. A fixed
+        /// <see cref="Answer"/> overrides that.</summary>
         private sealed class FakeMainCamera : IPolarAlignMainCameraSolver {
-            public PolarAlignSolveOutcome Answer { get; set; } = new(true, 0.0, 89.0);
+            public PolarAlignSolveOutcome? Answer { get; set; }
+            public double OffsetDeg { get; set; } = 1.25;
             public int Calls;
             public ConcurrentQueue<double> Exposures { get; } = new();
             public Task<PolarAlignSolveOutcome> CaptureAndSolveAsync(double exposureSeconds, (double RaDeg, double DecDeg)? hintJnow, CancellationToken ct) {
                 Interlocked.Increment(ref Calls);
                 Exposures.Enqueue(exposureSeconds);
-                return Task.FromResult(Answer);
+                if (Answer is { } fixedAnswer) {
+                    return Task.FromResult(fixedAnswer);
+                }
+                return Task.FromResult(new PolarAlignSolveOutcome(true, hintJnow?.RaDeg ?? 0.0, PolarAlignService.SeedDecDeg - OffsetDeg));
             }
         }
 
@@ -1803,14 +1813,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Coarse_stage_homes_the_mount_reads_main_camera_solves_as_the_axis_and_Next_moves_to_fine() {
+        public async Task Coarse_stage_homes_the_mount_measures_the_axis_with_a_main_camera_seed_turn_and_Next_moves_to_fine() {
             var paCalls = new ConcurrentQueue<bool>();
             await using var fake = StartFake(paCalls);
             using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
             var slews = new ConcurrentQueue<Coordinates>();
             var mount = NewHomeMount(canFindHome: true, slews);
-            // The main camera at Home sees RA 0 / Dec 89: the axis is 1° from the pole.
-            var mainCamera = new FakeMainCamera { Answer = new PolarAlignSolveOutcome(true, 0.0, 89.0) };
+            // #1727 — a main camera 1.25° off the RA axis on a mount whose axis IS the pole. Read as the
+            // axis (the 2026-11-07 coarse stage) that camera reports a 75′ error that is not there.
+            var mainCamera = new FakeMainCamera { OffsetDeg = 1.25 };
             var ws = new WsRecorder();
             using var svc = NewService(guider, new HintFollowingSolver(), mount, ws, mainCamera: mainCamera);
 
@@ -1820,16 +1831,24 @@ namespace OpenAstroAra.Test {
             Assert.That(coarse.State, Is.EqualTo("adjusting"));
             Assert.That(coarse.Stage, Is.EqualTo(PolarAlignStages.Coarse));
             mount.Verify(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Once);
-            Assert.That(slews, Is.Empty, "the coarse stage never slews — the mount sits at Home");
-            Assert.That(mainCamera.Calls, Is.GreaterThan(0));
+            Assert.That(mainCamera.Calls, Is.GreaterThanOrEqualTo(3), "two seed frames and at least one live frame");
             Assert.That(mainCamera.Exposures.TryPeek(out var exposure) && exposure == 3.0, Is.True, "the coarse exposure, not the guide exposure");
-            // 1° from the pole, less the ~1′ refraction term: the total is about a degree.
-            Assert.That(coarse.CurrentErrorArcmin, Is.EqualTo(60.0).Within(2.5));
+            // The axis is measured from the seed turn, so the camera's offset cancels: only the ~1′
+            // refraction term is left — never the 75′ the pointing-as-axis reading gave.
+            Assert.That(coarse.CurrentErrorArcmin, Is.LessThan(3.0));
+            var coarseTargets = slews.ToArray();
+            Assert.That(coarseTargets.Length, Is.EqualTo(2), "leave the axis, then the seed turn — before the first live frame");
+            Assert.That(coarseTargets[0].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6), "from Home the camera is on the axis: slew to Dec 85° first");
+            Assert.That(coarseTargets[1].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6), "the seed turn stays at that Dec");
+            Assert.That(Math.Abs(((coarseTargets[1].RADegrees - coarseTargets[0].RADegrees + 540) % 360) - 180), Is.EqualTo(30.0).Within(1e-6), "the test store's 30° seed turn");
             var progress = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignProgress).ConfigureAwait(false);
             Assert.That(progress.GetProperty("stage").GetString(), Is.EqualTo(PolarAlignStages.Coarse));
+            Assert.That(ws.Events.Any(e => e.Type == WsEventCatalog.PolarAlignStage
+                && e.Payload.GetProperty("stage").GetString() == PolarAlignStages.Coarse
+                && e.Payload.GetProperty("state").GetString() == "seeding"), Is.True, "the coarse stage seeds like the fine one");
             mount.Verify(m => m.SetTrackingEnabled(false), Times.AtLeastOnce, "the pointing must move only with the knobs");
 
-            // Next: the fine stage. From Home the camera sits on the axis, so it first slews to Dec 85°.
+            // Next: the fine stage. The mount is already off the axis at Dec 85°, so only its own seed turn follows.
             await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false);
             PolarAlignStateDto fine;
             using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20))) {
@@ -1841,10 +1860,9 @@ namespace OpenAstroAra.Test {
             }
             Assert.That(fine.State, Is.EqualTo("adjusting"));
             var targets = slews.ToArray();
-            Assert.That(targets.Length, Is.GreaterThanOrEqualTo(2));
-            Assert.That(targets[0].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6), "leave the axis first");
-            Assert.That(targets[1].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6), "the seed turn stays at that Dec");
-            Assert.That(Math.Abs(((targets[1].RADegrees - targets[0].RADegrees + 540) % 360) - 180), Is.EqualTo(30.0).Within(1e-6), "the test store's 30° seed turn");
+            Assert.That(targets.Length, Is.EqualTo(3), "the fine stage adds its seed turn only");
+            Assert.That(targets[2].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6), "the fine seed turn stays at Dec 85°");
+            Assert.That(Math.Abs(((targets[2].RADegrees - targets[1].RADegrees + 540) % 360) - 180), Is.EqualTo(30.0).Within(1e-6), "the test store's 30° seed turn");
             Assert.That(ws.Events.Any(e => e.Type == WsEventCatalog.PolarAlignStage
                 && e.Payload.GetProperty("stage").GetString() == PolarAlignStages.Fine), Is.True);
 

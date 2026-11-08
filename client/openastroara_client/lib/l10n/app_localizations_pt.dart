@@ -870,7 +870,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get polarRoughWaiting =>
-      'The main camera at Home is read as the mount axis. Waiting for the first solve…';
+      'The main camera measures the mount axis with a turn in RA, then follows your knob moves. Waiting for the first solve…';
 
   @override
   String get polarNeedsHomeHint =>
@@ -3665,7 +3665,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarRoughWaiting =>
-      'A câmera principal na posição inicial é lida como o eixo da montagem. Aguardando a primeira resolução…';
+      'A câmera principal mede o eixo da montagem com um giro em AR e depois acompanha os seus ajustes. Aguardando a primeira resolução…';
 
   @override
   String get polarNeedsHomeHint =>
