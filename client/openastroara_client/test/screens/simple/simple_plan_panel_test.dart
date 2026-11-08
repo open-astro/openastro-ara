@@ -807,7 +807,7 @@ void main() {
       expect(c.read(simpleRunProvider).targets.single.gain, 200, reason: 'kept with the target, for an edit');
     });
 
-    testWidgets('typing offers matching objects as you go; tapping one searches it', (tester) async {
+    testWidgets('typing offers matching objects as you go; tapping one picks it and the sheet stays', (tester) async {
       var showSky = 0;
       final c = await _pump(
           tester,
@@ -829,9 +829,9 @@ void main() {
       expect(tester.getSize(find.byKey(const Key('simple-run-suggestion-0'))).height, greaterThanOrEqualTo(44));
       await tester.tap(find.textContaining('M 31'));
       await tester.pump();
-      expect(c.read(planetariumSearchProvider), 'M 31');
       expect(c.read(planetariumSelectionProvider)?.name, 'Andromeda Galaxy', reason: 'the pick is the target at once');
-      expect(showSky, 1);
+      expect(c.read(planetariumSearchProvider), isNull, reason: 'nothing to look up');
+      expect(showSky, 0, reason: 'the Plan sheet stays up');
       expect(find.byKey(const Key('simple-run-suggestion-0')), findsNothing, reason: 'the list closes on a pick');
     });
 

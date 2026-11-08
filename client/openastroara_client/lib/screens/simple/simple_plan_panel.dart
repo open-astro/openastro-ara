@@ -2053,11 +2053,11 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 hit: hit,
                 onTap: () {
                   _query.text = hit.label;
-                  // The target at once: the sky's own report may not come.
+                  // The target at once, and the Plan sheet stays up.
                   ref
                       .read(planetariumSelectionProvider.notifier)
                       .set(simplePickDso(ref, hit.dso));
-                  _search();
+                  setState(() => _suggesting = false);
                 },
               ),
           Row(
