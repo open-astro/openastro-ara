@@ -61,8 +61,10 @@ class PolarAlignCheckResult {
   /// How far the solved turns disagreed with what the mount said it turned.
   final double turnMismatchDeg;
 
-  /// The fine stage's last readout, and |check − fine|; null when the run
-  /// began at the check.
+  /// The fine stage's last readout (its total), and the distance between the
+  /// check's axis and the fine stage's — alt and az both, so a readout of the
+  /// same size on the other side of the pole still shows as a disagreement;
+  /// null when the run began at the check.
   final double? fineErrorArcmin;
   final double? fineDeltaArcmin;
 

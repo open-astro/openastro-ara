@@ -147,7 +147,6 @@ namespace OpenAstroAra.Server.Services {
             // readout of the same size on the other side of the pole still shows as a disagreement.
             lock (_gate) {
                 if (_generation == gen && _altErrorArcmin is double alt && _azErrorArcmin is double az) {
-                    _fineFinalErrorArcmin = Math.Sqrt(alt * alt + az * az);
                     _fineFinalAltArcmin = alt;
                     _fineFinalAzArcmin = az;
                 }
@@ -263,13 +262,13 @@ namespace OpenAstroAra.Server.Services {
             await NoteCheckSolveAsync(gen, 1).ConfigureAwait(false);
 
             var p1 = await TurnRaAsync(ra0, dec0, dirSign * step, settings, gen, ct).ConfigureAwait(false);
-            var mountTurn1 = Wrap180(p1.RaDeg - ra0);
+            var mountTurn1 = FoldTolerantTurnDeg(p1.RaDeg - ra0);
             var s2 = await SolveSeedFrameAsync(capture, "check-2", p1, settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("check-2", s2.RaDegJnow, s2.DecDegJnow);
             await NoteCheckSolveAsync(gen, 2).ConfigureAwait(false);
 
             var p2 = await TurnRaAsync(p1.RaDeg, dec0, dirSign * step, settings, gen, ct).ConfigureAwait(false);
-            var mountTurn2 = Wrap180(p2.RaDeg - p1.RaDeg);
+            var mountTurn2 = FoldTolerantTurnDeg(p2.RaDeg - p1.RaDeg);
             var s3 = await SolveSeedFrameAsync(capture, "check-3", p2, settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("check-3", s3.RaDegJnow, s3.DecDegJnow);
             await NoteCheckSolveAsync(gen, 3).ConfigureAwait(false);
@@ -287,7 +286,7 @@ namespace OpenAstroAra.Server.Services {
             // mount that turns by other than it reports (the open question behind #1591).
             var turn1 = PolarAlignGeometry.TurnAboutAxisDeg(axis.RaDeg, axis.DecDeg, s1.RaDegJnow, s1.DecDegJnow, s2.RaDegJnow, s2.DecDegJnow);
             var turn2 = PolarAlignGeometry.TurnAboutAxisDeg(axis.RaDeg, axis.DecDeg, s2.RaDegJnow, s2.DecDegJnow, s3.RaDegJnow, s3.DecDegJnow);
-            var mismatch = Math.Max(Math.Abs(Math.Abs(turn1) - Math.Abs(mountTurn1)), Math.Abs(Math.Abs(turn2) - Math.Abs(mountTurn2)));
+            var mismatch = Math.Max(Math.Abs(Math.Abs(turn1) - mountTurn1), Math.Abs(Math.Abs(turn2) - mountTurn2));
             // No verdict from a fit the geometry does not support: three solves of one field (a mount that
             // reports turns it did not make — a slipping clutch, a stalled motor) still pass the coincidence
             // guards on noise and fit a random axis that can land near the pole by chance.
@@ -297,11 +296,11 @@ namespace OpenAstroAra.Server.Services {
                     "the mount may not have turned as it reported (a slipping clutch, a stalled motor); check it and run the check again");
             }
             var total = Math.Sqrt(altErr * altErr + azErr * azErr);
-            double? fine;
+            double? fine = null;
             double? fineDelta = null;
             lock (_gate) {
-                fine = _fineFinalErrorArcmin;
                 if (_fineFinalAltArcmin is double fAlt && _fineFinalAzArcmin is double fAz) {
+                    fine = Math.Sqrt(fAlt * fAlt + fAz * fAz);
                     // The distance between the two measured axes, not the difference of their sizes: a
                     // fine readout the same size on the other side of the pole is a 2′ disagreement, not 0.
                     fineDelta = Math.Sqrt((altErr - fAlt) * (altErr - fAlt) + (azErr - fAz) * (azErr - fAz));
@@ -429,6 +428,10 @@ namespace OpenAstroAra.Server.Services {
             } finally {
                 SetWaitingForHome(gen, false);
             }
+            // Tell the client at once that Continue was taken: the check stage slews off the axis before its
+            // next state event, and a panel still showing Continue would invite a second (refused) tap while
+            // the mount moves.
+            await PublishStageAsync(gen, CurrentStage() ?? PolarAlignStages.Coarse, "homing", solvesDone: 0).ConfigureAwait(false);
             return true;
         }
 
@@ -463,6 +466,15 @@ namespace OpenAstroAra.Server.Services {
             LogLeavingAxis(decDeg, target.Dec);
             await SlewOrFailAsync(target, "the mount refused the slew from Home to Dec 85° — slew it there from the mount controls, then start again", gen, ct).ConfigureAwait(false);
             await Task.Delay(TimeSpan.FromSeconds(settings.SettleSeconds), ct).ConfigureAwait(false);
+        }
+
+        /// <summary>The size of the mount's own RA turn from two of its pointing readings. A synced mount can
+        /// report Dec past ±90° (the Dec axis over the pole), and <see cref="CurrentMountPointingJnow"/> folds
+        /// such a reading by 180° in RA; one folded reading between two solves would make a 30° turn read as
+        /// 150°. A check step is at most 60°, so the turn and its 180° complement are never confused.</summary>
+        private static double FoldTolerantTurnDeg(double rawDeltaDeg) {
+            var a = Math.Abs(Wrap180(rawDeltaDeg));
+            return Math.Min(a, 180.0 - a);
         }
 
         /// <summary>With HA = LST − RA, decreasing RA increases HA (further west): turn west when
