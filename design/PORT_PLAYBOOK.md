@@ -1679,7 +1679,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
   - **Explicitly NOT doing — search-radius escalation.** The binary hinted (`-r 30`) → blind (`-r 180`) path already covers the bad-hint case. A larger *hinted* radius only slows ASTAP and raises false-match risk; multi-tier escalation adds complexity for no gain over the blind retry.
   - **Dependency on the FOV-aware `-d` work above:** blind failover only *succeeds* if the Pi-side database has adequate sky coverage at the rig's FOV. Wiring `-d <database_dir>` (the Phase 8 code gap) is therefore also failover insurance, not just a wide-field nicety.
 - **Astrometry.net**: **deferred — see the `P1`–`P5` issue backlog.** ASTAP covers 99% of astrophotography solving needs and is well-maintained, ARM64-native, cross-platform. Adding astrometry.net means another binary management workflow, another index-file download manager (4100 / 4200 / 5000-series catalogs, ~1-30 GB each), and another solver-tuning surface — not worth the complexity for the initial release. Phase 8 strips astrometry.net call sites from inherited NINA code; a future release may add it back if there's user demand.
-- **PlateSolve2**: deleted entirely (Windows-only legacy).
+- **PlateSolve2** and the other NINA solvers (local astrometry.net, PlateSolve3, All Sky Plate Solver, TheSkyX ImageLink, PinPoint): deleted entirely (#1701). A persisted profile that still names one deserializes and resolves to ASTAP, with one warning per run.
 
 ---
 

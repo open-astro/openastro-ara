@@ -25,7 +25,7 @@ namespace OpenAstroAra.Test {
     /// was removed. A profile still carrying that setting — on the primary (<c>PlateSolverType</c>) path or the
     /// blind (<c>BlindSolverType</c>) path — must resolve to ASTAP (the shipped backend) rather than a removed/
     /// non-functional solver. Asserted by runtime type name (<c>GetType().Name</c>) because the concrete solver
-    /// classes (<c>ASTAPSolver</c>, <c>LocalPlateSolver</c>) are <c>internal</c> to the PlateSolving assembly —
+    /// class (<c>ASTAPSolver</c>) is <c>internal</c> to the PlateSolving assembly —
     /// so a rename of those classes won't break compilation here; update these literals if you rename them.
     /// </summary>
     [TestFixture]
@@ -36,7 +36,6 @@ namespace OpenAstroAra.Test {
         // update. GetType().Name predates InternalsVisibleTo (#1094) and is kept: the factory contract is
         // "which backend", not a type reference.
         private const string AstapSolver = "ASTAPSolver";
-        private const string LocalSolver = "LocalPlateSolver";
 
         private static IPlateSolveSettings Settings(BlindSolver blind = BlindSolver.ASTAP, PlateSolver primary = PlateSolver.ASTAP, string? database = null) {
             var s = new Mock<IPlateSolveSettings>();
@@ -85,12 +84,24 @@ namespace OpenAstroAra.Test {
             Assert.That(solver.GetType().Name, Is.EqualTo(AstapSolver));
         }
 
-        [Test]
-        public void GetBlindSolver_still_honors_an_explicitly_configured_local_solver() {
-            // Non-removed blind solvers are unchanged — a user who points at a local astrometry.net install
-            // still gets it (this PR only fixes the silent AstrometryNet→ASTAP substitution).
-            var solver = PlateSolverFactory.GetBlindSolver(Settings(blind: BlindSolver.LOCAL));
-            Assert.That(solver.GetType().Name, Is.EqualTo(LocalSolver));
+        [TestCase(PlateSolver.LOCAL)]
+        [TestCase(PlateSolver.PLATESOLVE2)]
+        [TestCase(PlateSolver.PLATESOLVE3)]
+        [TestCase(PlateSolver.ASPS)]
+        [TestCase(PlateSolver.TSXImageLink)]
+        [TestCase(PlateSolver.PINPONT)]
+        public void GetPlateSolver_resolves_every_removed_NINA_solver_to_ASTAP(PlateSolver removed) {
+            var solver = PlateSolverFactory.GetPlateSolver(Settings(primary: removed));
+            Assert.That(solver.GetType().Name, Is.EqualTo(AstapSolver));
+        }
+
+        [TestCase(BlindSolver.LOCAL)]
+        [TestCase(BlindSolver.ASPS)]
+        [TestCase(BlindSolver.PLATESOLVE3)]
+        [TestCase(BlindSolver.PINPOINT)]
+        public void GetBlindSolver_resolves_every_removed_NINA_solver_to_ASTAP(BlindSolver removed) {
+            var solver = PlateSolverFactory.GetBlindSolver(Settings(blind: removed));
+            Assert.That(solver.GetType().Name, Is.EqualTo(AstapSolver));
         }
     }
 }
