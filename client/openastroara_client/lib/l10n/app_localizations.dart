@@ -759,22 +759,22 @@ abstract class AppLocalizations {
   /// **'{name} says unsafe. It doesn\'t say why: check the device.'**
   String deviceMonitorNoReason(String name);
 
-  /// Safety monitor window: the wind (worse of speed and gust) past the safety limit
+  /// Safety monitor window and status pill: the wind (worse of speed and gust) past the safety limit; no full stop, it is a pill detail too
   ///
   /// In en, this message translates to:
-  /// **'Wind {value} km/h, over the {limit} km/h limit.'**
+  /// **'Wind {value} km/h, over the {limit} km/h limit'**
   String deviceWindOverLimit(String value, int limit);
 
   /// Safety monitor window: the humidity past the safety limit
   ///
   /// In en, this message translates to:
-  /// **'Humidity {value} %, over the {limit} % limit.'**
+  /// **'Humidity {value} %, over the {limit} % limit'**
   String deviceHumidityOverLimit(String value, int limit);
 
   /// Safety monitor window: the air too close to the dew point
   ///
   /// In en, this message translates to:
-  /// **'Dew point {value} °C below the air, under the {limit} °C margin.'**
+  /// **'Dew point {value} °C below the air, under the {limit} °C margin'**
   String deviceDewUnderMargin(String value, String limit);
 
   /// Safety monitor window: under Unsafe when the weather, not the monitor, makes the rig unsafe

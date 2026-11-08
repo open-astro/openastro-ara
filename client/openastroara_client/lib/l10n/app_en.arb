@@ -536,15 +536,15 @@
       "name": {"type": "String", "example": "Solo"}
     }
   },
-  "deviceWindOverLimit": "Wind {value} km/h, over the {limit} km/h limit.",
+  "deviceWindOverLimit": "Wind {value} km/h, over the {limit} km/h limit",
   "@deviceWindOverLimit": {
-    "description": "Safety monitor window: the wind (worse of speed and gust) past the safety limit",
+    "description": "Safety monitor window and status pill: the wind (worse of speed and gust) past the safety limit; no full stop, it is a pill detail too",
     "placeholders": {
       "value": {"type": "String", "example": "41"},
       "limit": {"type": "int"}
     }
   },
-  "deviceHumidityOverLimit": "Humidity {value} %, over the {limit} % limit.",
+  "deviceHumidityOverLimit": "Humidity {value} %, over the {limit} % limit",
   "@deviceHumidityOverLimit": {
     "description": "Safety monitor window: the humidity past the safety limit",
     "placeholders": {
@@ -552,7 +552,7 @@
       "limit": {"type": "int"}
     }
   },
-  "deviceDewUnderMargin": "Dew point {value} °C below the air, under the {limit} °C margin.",
+  "deviceDewUnderMargin": "Dew point {value} °C below the air, under the {limit} °C margin",
   "@deviceDewUnderMargin": {
     "description": "Safety monitor window: the air too close to the dew point",
     "placeholders": {

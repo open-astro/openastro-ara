@@ -117,6 +117,7 @@ Future<(ProviderContainer, _Dome)> _pump(
   Locale? locale,
   _Times? times,
   bool reduceMotion = false,
+  double textScale = 1,
 }) async {
   await tester.pumpWidget(const SizedBox());
   await tester.pump();
@@ -139,8 +140,10 @@ Future<(ProviderContainer, _Dome)> _pump(
       child: MaterialApp(
         locale: locale,
         builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context)
-              .copyWith(disableAnimations: reduceMotion),
+          data: MediaQuery.of(context).copyWith(
+            disableAnimations: reduceMotion,
+            textScaler: TextScaler.linear(textScale),
+          ),
           child: child!,
         ),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -447,6 +450,23 @@ void main() {
     }
     expect(find.descendant(of: dial, matching: find.text('W')), findsNothing);
   });
+
+  testWidgets(
+    'the dial\'s compass letters grow with large text, never cut off',
+    (tester) async {
+      // Room for the rest of the window at 2× with the wide test font; the
+      // letters are what this pins.
+      tester.view.physicalSize = const Size(800, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await _pump(tester, _wire(), textScale: 2, width: 600);
+      final dial = find.byKey(const Key('simple-dome-dial'));
+      final n = find.descendant(of: dial, matching: find.text('N'));
+      // 11 pt at 2× is a 22 pt line: a fixed 16 pt box clipped it (#1690
+      // re-audit, WCAG 1.4.4).
+      expect(tester.getSize(n).height, greaterThanOrEqualTo(22));
+    },
+  );
 
   testWidgets('with reduce motion the drawing doesn\'t redraw every frame', (
     tester,

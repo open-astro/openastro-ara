@@ -403,17 +403,17 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String deviceWindOverLimit(String value, int limit) {
-    return 'Wind $value km/h, over the $limit km/h limit.';
+    return 'Wind $value km/h, over the $limit km/h limit';
   }
 
   @override
   String deviceHumidityOverLimit(String value, int limit) {
-    return 'Humidity $value %, over the $limit % limit.';
+    return 'Humidity $value %, over the $limit % limit';
   }
 
   @override
   String deviceDewUnderMargin(String value, String limit) {
-    return 'Dew point $value °C below the air, under the $limit °C margin.';
+    return 'Dew point $value °C below the air, under the $limit °C margin';
   }
 
   @override
@@ -3061,17 +3061,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String deviceWindOverLimit(String value, int limit) {
-    return 'Vento $value km/h, acima do limite de $limit km/h.';
+    return 'Vento $value km/h, acima do limite de $limit km/h';
   }
 
   @override
   String deviceHumidityOverLimit(String value, int limit) {
-    return 'Umidade $value %, acima do limite de $limit %.';
+    return 'Umidade $value %, acima do limite de $limit %';
   }
 
   @override
   String deviceDewUnderMargin(String value, String limit) {
-    return 'Ponto de orvalho $value °C abaixo do ar, menos que a margem de $limit °C.';
+    return 'Ponto de orvalho $value °C abaixo do ar, menos que a margem de $limit °C';
   }
 
   @override

@@ -200,7 +200,7 @@ void main() {
         weather: _windy(),
       );
       expect(
-        find.text('Wind 41 km/h, over the 36 km/h limit.'),
+        find.text('Wind 41 km/h, over the 36 km/h limit'),
         findsOneWidget,
       );
       await _pump(
@@ -232,7 +232,7 @@ void main() {
       expect(find.text('Solo reads Safe'), findsOneWidget);
       expect(find.textContaining('says unsafe'), findsNothing);
       expect(
-        find.text('Wind 41 km/h, over the 36 km/h limit.'),
+        find.text('Wind 41 km/h, over the 36 km/h limit'),
         findsOneWidget,
       );
       expect(find.text('What Ara does'), findsOneWidget);
@@ -253,9 +253,9 @@ void main() {
         'dew_point_c': 7.0,
       },
     );
-    expect(find.text('Humidity 90 %, over the 85 % limit.'), findsOneWidget);
+    expect(find.text('Humidity 90 %, over the 85 % limit'), findsOneWidget);
     expect(
-      find.text('Dew point 1 °C below the air, under the 2 °C margin.'),
+      find.text('Dew point 1 °C below the air, under the 2 °C margin'),
       findsOneWidget,
     );
   });

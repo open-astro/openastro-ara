@@ -1213,7 +1213,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         _PillData(
           SimpleStatusOrigin.safetyMonitor,
           l10n.shellSafetyMonitor,
-          breach.endsWith('.') ? breach.substring(0, breach.length - 1) : breach,
+          breach,
           AraColors.accentWarning,
         ),
       if (parking != null)
@@ -1273,8 +1273,9 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           AraColors.accentInfo,
           ring: true,
         ),
-      // The cover moving wins over the light warming up.
-      if (flat != null && flat.isConnected && flat.isMoving)
+      // The cover moving wins over the light warming up; a light-only panel
+      // has no cover to move (#1668).
+      if (flat != null && flat.isConnected && flat.hasCover && flat.isMoving)
         _PillData(
           SimpleStatusOrigin.flatPanel,
           l10n.shellFlatPanel,

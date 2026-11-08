@@ -4822,6 +4822,8 @@ class _DomeDialState extends State<_DomeDial> {
     final size = widget.size;
     const points = [('n', 0.0), ('e', 90.0), ('s', 180.0), ('w', 270.0)];
     final k = size / 150;
+    final scaler = MediaQuery.textScalerOf(context);
+    final letterBox = Size(scaler.scale(24 * k), scaler.scale(16 * k));
     // Up or right a degree clockwise, as the screen reader's increase and
     // the rotator's dial (#1690 audit: no keyboard path).
     return FocusableActionDetector(
@@ -4909,23 +4911,27 @@ class _DomeDialState extends State<_DomeDial> {
               // The compass points in the reader's language, as the
               // azimuth's own ("245° SO" beside an O, not a W).
               for (final (p, deg) in points)
+                // A box that grows with the text, centred on the point, so
+                // large text isn't cut off (#1690 re-audit, WCAG 1.4.4).
                 Positioned(
                   left:
                       size / 2 +
                       math.sin(deg * math.pi / 180) * (size / 2 - 23 * k) -
-                      12 * k,
+                      letterBox.width / 2,
                   top:
                       size / 2 -
                       math.cos(deg * math.pi / 180) * (size / 2 - 23 * k) -
-                      8 * k,
-                  width: 24 * k,
-                  height: 16 * k,
+                      letterBox.height / 2,
+                  width: letterBox.width,
+                  height: letterBox.height,
                   child: IgnorePointer(
                     child: ExcludeSemantics(
                       child: Center(
                         child: Text(
                           l10n.deviceCompass(p),
                           maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.visible,
                           style: TextStyle(
                             fontSize: 11 * k,
                             height: 1,

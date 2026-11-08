@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-08T14:58:00+13:00",
+  "generatedAt": "2026-11-08T15:11:00+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -789,7 +789,7 @@
       "name": "Dome Clamshell + Dial (Simple Mode)",
       "kind": "custom",
       "refersTo": "simple-dome-front-dial",
-      "description": "The Dome window's two 150 pt drawings side by side under the azimuth, the dial on the left and the clamshell on the right, the clamshell filling its box so both read the same size. The dial from above: North up, ticks every 10°, the slit at the azimuth (32° wide), a thin green slit for the target, the rotator's hub (green play / red stop square). The clamshell from the front, a Baader AllSky style dome: a sphere on a base with sloped shoulders and a round plinth, the door up into the sphere, each side of the top two nested shells on one centre hinge bolt (closed, no gap); opening, they fan down to the base's shoulders, the outer twice as fast, over the dome's last measured shutter time, blue edges while moving. The Shutter row sits 12 pt below. Under 96 pt each, only the dial (#1662).",
+      "description": "The Dome window's two 150 pt drawings side by side under the azimuth, the dial on the left and the clamshell on the right, the clamshell filling its box so both read the same size. The dial from above: North up, ticks every 10°, the slit at the azimuth (32° wide), a thin green slit for the target, N / E / S / W in the reader's language in boxes that grow with the text size, the arrow keys with a 2 pt Info Blue focus ring, the rotator's hub (green play / red stop square). The clamshell from the front, a Baader AllSky style dome: a sphere on a base with sloped shoulders and a round plinth, the door up into the sphere, each side of the top two nested shells on one centre hinge bolt (closed, no gap); opening, they fan down to the base's shoulders, the outer twice as fast, over the dome's last measured shutter time, blue edges while moving. The Shutter row sits 12 pt below. Under 96 pt each, only the dial (#1662).",
       "html": "<div class=\"ds-dome\"><svg viewBox=\"0 0 150 150\" width=\"150\" height=\"150\"><path d=\"M75 62 L75 10 A52 52 0 0 1 120 36 Z\" fill=\"#8c8c8c\" stroke=\"#A0A0A0\"/><path d=\"M75 62 L75 10 A52 52 0 0 0 30 36 Z\" fill=\"#8c8c8c\" stroke=\"#A0A0A0\"/><path d=\"M23 62 A52 52 0 0 0 127 62 Z\" fill=\"#5a5a5a\" stroke=\"#A0A0A0\"/></svg><svg viewBox=\"0 0 150 150\" width=\"150\" height=\"150\"><circle cx=\"75\" cy=\"75\" r=\"72\" fill=\"#383838\" stroke=\"#404040\"/><circle cx=\"75\" cy=\"75\" r=\"22\" fill=\"#1A1A1A\" stroke=\"#404040\"/></svg></div>",
       "css": ".ds-dome{display:flex;gap:12px;justify-content:space-between;width:328px}"
     },

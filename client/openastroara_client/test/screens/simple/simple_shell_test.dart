@@ -356,16 +356,17 @@ class _Weather extends WeatherNotifier with _Calls<WeatherStatus> {
 class _FlatPanel extends FlatPanelNotifier with _Calls<FlatPanelStatus> {
   _FlatPanel(this.state0);
   final EquipmentConnectionState state0;
-  Map<String, dynamic> _json(String runtime, {bool warming = false}) => {
+  Map<String, dynamic> _json(String runtime, {bool warming = false, bool cover = true}) => {
         ..._wire('Flip-Flat', state0),
-        'runtime': {'state': runtime, 'max_brightness': 255, 'light_warming': warming},
+        'runtime': {'state': runtime, 'max_brightness': 255, 'light_warming': warming, 'has_cover': cover},
       };
   @override
   Future<FlatPanelStatus?> build() async => FlatPanelStatus.fromJson(_json('cover_closed'));
 
-  /// What the panel reports next ("cover_moving", "cover_closed", "light_on").
-  void report(String runtime, {bool warming = false}) =>
-      state = AsyncData(FlatPanelStatus.fromJson(_json(runtime, warming: warming)));
+  /// What the panel reports next ("cover_moving", "cover_closed", "light_on");
+  /// [cover] false for a light-only panel.
+  void report(String runtime, {bool warming = false, bool cover = true}) =>
+      state = AsyncData(FlatPanelStatus.fromJson(_json(runtime, warming: warming, cover: cover)));
 }
 
 class _Mount extends MountNotifier with _Calls<MountStatus> {
@@ -3790,6 +3791,8 @@ void main() {
     final pill = find.byType(SimpleStatusPill);
     expect(find.descendant(of: pill, matching: find.textContaining('Wind 41 km/h, over the 36 km/h limit')),
         findsOneWidget, reason: 'the daemon holds the plan for the wind; the pill says why');
+    expect(find.descendant(of: pill, matching: find.textContaining('limit.')), findsNothing,
+        reason: 'a pill detail carries no full stop');
   });
 
   testWidgets('a dome Park asked in its window shows in the status pill at once', (tester) async {
@@ -3829,6 +3832,65 @@ void main() {
     safety.report(true, DateTime(2026, 11, 8, 3, 0));
     await tester.pump();
     expect(find.descendant(of: pill, matching: find.textContaining('Safety monitor')), findsNothing, reason: 'safe');
+  });
+
+  testWidgets('a device that isn\'t connected shows no pill, whatever its runtime state says (#1668)', (tester) async {
+    final rotator = _Rotator(EquipmentConnectionState.disconnected);
+    final flat = _FlatPanel(EquipmentConnectionState.disconnected);
+    final dome = _Dome(EquipmentConnectionState.disconnected);
+    final safety = _Safety(EquipmentConnectionState.disconnected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      rotatorProvider.overrideWith(() => rotator),
+      flatPanelProvider.overrideWith(() => flat),
+      domeProvider.overrideWith(() => dome),
+      safetyMonitorProvider.overrideWith(() => safety),
+    ]);
+    await tester.pump();
+    rotator.report('moving');
+    flat.report('cover_moving', warming: true);
+    dome.report('slewing');
+    safety.report(false, DateTime(2026, 11, 8, 2, 14));
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    for (final name in ['Rotator', 'Flat panel', 'Dome', 'Safety monitor']) {
+      expect(find.descendant(of: pill, matching: find.textContaining(name)), findsNothing, reason: name);
+    }
+  });
+
+  testWidgets('a light-only flat panel never shows a cover pill (#1668)', (tester) async {
+    final flat = _FlatPanel(EquipmentConnectionState.connected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [flatPanelProvider.overrideWith(() => flat)]);
+    await tester.pump();
+    flat.report('cover_moving', cover: false);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Cover moving…')), findsNothing);
+    flat.report('light_on', warming: true, cover: false);
+    await tester.pump();
+    expect(find.descendant(of: pill, matching: find.textContaining('Light warming up…')), findsOneWidget);
+  });
+
+  testWidgets('with four or more pills up, the safety monitor\'s Unsafe is among the three shown (#1668)', (tester) async {
+    final rotator = _Rotator(EquipmentConnectionState.connected);
+    final flat = _FlatPanel(EquipmentConnectionState.connected);
+    final dome = _Dome(EquipmentConnectionState.connected);
+    final safety = _Safety(EquipmentConnectionState.connected);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      rotatorProvider.overrideWith(() => rotator),
+      flatPanelProvider.overrideWith(() => flat),
+      domeProvider.overrideWith(() => dome),
+      safetyMonitorProvider.overrideWith(() => safety),
+    ]);
+    await tester.pump();
+    rotator.report('moving');
+    flat.report('cover_moving');
+    dome.report('slewing');
+    safety.report(false, DateTime(2026, 11, 8, 2, 14));
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Unsafe since 02:14')), findsOneWidget);
+    expect(find.descendant(of: pill, matching: find.text('+1')), findsOneWidget,
+        reason: 'four up: three shown, one folded, and it isn\'t the Unsafe');
   });
 
   testWidgets('a scheduled plan waiting on the rig: the pill says when it starts', (tester) async {

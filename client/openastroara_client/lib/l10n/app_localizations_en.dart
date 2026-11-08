@@ -403,17 +403,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String deviceWindOverLimit(String value, int limit) {
-    return 'Wind $value km/h, over the $limit km/h limit.';
+    return 'Wind $value km/h, over the $limit km/h limit';
   }
 
   @override
   String deviceHumidityOverLimit(String value, int limit) {
-    return 'Humidity $value %, over the $limit % limit.';
+    return 'Humidity $value %, over the $limit % limit';
   }
 
   @override
   String deviceDewUnderMargin(String value, String limit) {
-    return 'Dew point $value °C below the air, under the $limit °C margin.';
+    return 'Dew point $value °C below the air, under the $limit °C margin';
   }
 
   @override
