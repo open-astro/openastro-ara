@@ -2470,6 +2470,24 @@ class AppLocalizationsEn extends AppLocalizations {
       'Guiding didn\'t start. See the Guider log for why.';
 
   @override
+  String get guideRaAggressiveness => 'RA aggressiveness';
+
+  @override
+  String get guideDecAggressiveness => 'Dec aggressiveness';
+
+  @override
+  String get guideDecMode => 'Dec guide mode';
+
+  @override
+  String get guideDecAuto => 'Auto';
+
+  @override
+  String get guideDecNorth => 'North';
+
+  @override
+  String get guideDecSouth => 'South';
+
+  @override
   String get guideExposureOwn => 'The guider\'s own';
 
   @override

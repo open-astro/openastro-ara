@@ -4263,6 +4263,42 @@ abstract class AppLocalizations {
   /// **'Guiding didn\'t start. See the Guider log for why.'**
   String get guideStartFailedNoReason;
 
+  /// No description provided for @guideRaAggressiveness.
+  ///
+  /// In en, this message translates to:
+  /// **'RA aggressiveness'**
+  String get guideRaAggressiveness;
+
+  /// No description provided for @guideDecAggressiveness.
+  ///
+  /// In en, this message translates to:
+  /// **'Dec aggressiveness'**
+  String get guideDecAggressiveness;
+
+  /// No description provided for @guideDecMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Dec guide mode'**
+  String get guideDecMode;
+
+  /// No description provided for @guideDecAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get guideDecAuto;
+
+  /// No description provided for @guideDecNorth.
+  ///
+  /// In en, this message translates to:
+  /// **'North'**
+  String get guideDecNorth;
+
+  /// No description provided for @guideDecSouth.
+  ///
+  /// In en, this message translates to:
+  /// **'South'**
+  String get guideDecSouth;
+
   /// Guide exposure picker value when the profile leaves it to the guider
   ///
   /// In en, this message translates to:

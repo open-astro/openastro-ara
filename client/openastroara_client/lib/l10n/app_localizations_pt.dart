@@ -2470,6 +2470,24 @@ class AppLocalizationsPt extends AppLocalizations {
       'Guiding didn\'t start. See the Guider log for why.';
 
   @override
+  String get guideRaAggressiveness => 'RA aggressiveness';
+
+  @override
+  String get guideDecAggressiveness => 'Dec aggressiveness';
+
+  @override
+  String get guideDecMode => 'Dec guide mode';
+
+  @override
+  String get guideDecAuto => 'Auto';
+
+  @override
+  String get guideDecNorth => 'North';
+
+  @override
+  String get guideDecSouth => 'South';
+
+  @override
   String get guideExposureOwn => 'The guider\'s own';
 
   @override
@@ -5163,6 +5181,24 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get guideStartFailedNoReason =>
       'A guiagem não começou. Veja o log do guia para saber por quê.';
+
+  @override
+  String get guideRaAggressiveness => 'Agressividade em AR';
+
+  @override
+  String get guideDecAggressiveness => 'Agressividade em Dec';
+
+  @override
+  String get guideDecMode => 'Modo de guiagem em Dec';
+
+  @override
+  String get guideDecAuto => 'Auto';
+
+  @override
+  String get guideDecNorth => 'Norte';
+
+  @override
+  String get guideDecSouth => 'Sul';
 
   @override
   String get guideExposureOwn => 'O do guia';

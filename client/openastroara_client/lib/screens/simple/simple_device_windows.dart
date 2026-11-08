@@ -1929,6 +1929,39 @@ class _SimpleGuiderWindowState extends ConsumerState<SimpleGuiderWindow> {
     }
     // The guide camera's gain, the same slider and value as Guide mode's.
     children.add(const SimpleGuideGainSlider());
+    final phd2 = ref.watch(phd2SettingsProvider);
+    final l10n = context.l10n;
+    children.addAll([
+      _SimpleAggressiveness(
+        id: 'ra',
+        label: l10n.guideRaAggressiveness,
+        value: phd2.raAggressiveness,
+        set: (p, v) => p.setRaAggressiveness(v),
+      ),
+      _SimpleAggressiveness(
+        id: 'dec',
+        label: l10n.guideDecAggressiveness,
+        value: phd2.decAggressiveness,
+        set: (p, v) => p.setDecAggressiveness(v),
+      ),
+      Text(l10n.guideDecMode, style: kSimpleText),
+      SimpleSegments<String>(
+        keyPrefix: 'simple-guide-dec-mode',
+        options: [
+          ('auto', l10n.guideDecAuto, 'auto'),
+          ('north', l10n.guideDecNorth, 'north'),
+          ('south', l10n.guideDecSouth, 'south'),
+          ('off', l10n.deviceOff, 'off'),
+        ],
+        selected: phd2.decGuideMode,
+        onPick: (m) => simpleSaveGuider(
+          context,
+          ref,
+          (p) => p.setDecGuideMode(m),
+          live: true,
+        ),
+      ),
+    ]);
     if (widget.inSettings) children.addAll(_versions(context, camera));
     return Column(
       key: const Key('simple-device-guider'),
@@ -1970,6 +2003,59 @@ Future<void> simpleSaveGuider(
       l10n.deviceCouldntSaveThat,
       detail: describeEquipmentError(e),
       error: true,
+    );
+  }
+}
+
+/// How strongly the guider corrects one axis: 0-100 % in 5s, set when the
+/// thumb is let go and sent to the guider live, so guiding goes on.
+class _SimpleAggressiveness extends ConsumerStatefulWidget {
+  const _SimpleAggressiveness({
+    required this.id,
+    required this.label,
+    required this.value,
+    required this.set,
+  });
+
+  final String id;
+  final String label;
+  final double value;
+  final void Function(Phd2SettingsNotifier, double) set;
+
+  @override
+  ConsumerState<_SimpleAggressiveness> createState() =>
+      _SimpleAggressivenessState();
+}
+
+class _SimpleAggressivenessState extends ConsumerState<_SimpleAggressiveness> {
+  double? _drag;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = _drag ?? widget.value;
+    final percent = '${(value * 100).round()} %';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        simpleWindowRow(
+          widget.label,
+          id: 'Aggressiveness ${widget.id}',
+          Text(percent, style: kSimpleText),
+        ),
+        Slider(
+          key: Key('simple-guide-aggressiveness-${widget.id}'),
+          min: 0,
+          max: 1,
+          divisions: 20,
+          value: value.clamp(0, 1),
+          label: percent,
+          onChanged: (v) => setState(() => _drag = v),
+          onChangeEnd: (v) {
+            setState(() => _drag = null);
+            simpleSaveGuider(context, ref, (p) => widget.set(p, v), live: true);
+          },
+        ),
+      ],
     );
   }
 }
