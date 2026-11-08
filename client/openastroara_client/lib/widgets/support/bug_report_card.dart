@@ -10,6 +10,7 @@ import '../../models/bug_report_preparation.dart';
 import '../../services/client_error_log.dart';
 import '../../state/support/bug_report_state.dart';
 import 'client_log_card.dart';
+import 'support_card_row.dart';
 
 /// §54 "Send me a bug report" action — prepares a diagnostic bundle on the
 /// daemon, shows the user exactly what it contains (a PII disclosure, required
@@ -228,12 +229,9 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
       margin: const EdgeInsets.all(8),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Icon(Icons.bug_report_outlined, color: theme.colorScheme.primary),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
+        child: SupportCardRow(
+            icon: Icon(Icons.bug_report_outlined, color: theme.colorScheme.primary),
+            body: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Send me a bug report',
@@ -296,9 +294,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 12),
-            FilledButton.icon(
+            action: FilledButton.icon(
               onPressed: (_busy || api == null) ? null : _run,
               icon: _busy
                   ? const SizedBox(
@@ -309,7 +305,6 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                   : const Icon(Icons.bug_report, size: 18),
               label: const Text('Prepare & download'),
             ),
-          ],
         ),
       ),
     );

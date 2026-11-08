@@ -44,6 +44,20 @@ Widget _host(_MemLog log, {String? Function(String name)? picker}) =>
     );
 
 void main() {
+  testWidgets('the action moves under the text in a phone-width column', (tester) async {
+    // Inline in Simple Mode's Settings on a phone, the column is this narrow.
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(_host(_MemLog()));
+
+    expect(tester.takeException(), isNull, reason: 'nothing overflows');
+    final action = find.widgetWithText(FilledButton, 'Save client log');
+    expect(tester.getTopLeft(action).dy, greaterThan(tester.getBottomLeft(find.text("This app's error log")).dy),
+        reason: 'the action sits under the text');
+  });
+
   testWidgets('renders with no server and no errors recorded', (tester) async {
     await tester.pumpWidget(_host(_MemLog()));
     expect(find.text("This app's error log"), findsOneWidget);

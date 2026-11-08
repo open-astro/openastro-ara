@@ -5,6 +5,7 @@ import '../../services/client_error_log.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
 import '../../util/stream_save_location.dart';
+import 'support_card_row.dart';
 
 /// §54 "Save client log" — exports this app's own error log (#1111). Sits
 /// above the Support tab's connect gate on purpose: a client-side crash is
@@ -61,12 +62,9 @@ class _ClientLogCardState extends ConsumerState<ClientLogCard> {
       margin: const EdgeInsets.all(8),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Icon(Icons.laptop_outlined, color: theme.colorScheme.primary),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
+        child: SupportCardRow(
+            icon: Icon(Icons.laptop_outlined, color: theme.colorScheme.primary),
+            body: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('This app\'s error log', style: theme.textTheme.titleSmall),
@@ -80,9 +78,7 @@ class _ClientLogCardState extends ConsumerState<ClientLogCard> {
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 12),
-            FilledButton.icon(
+            action: FilledButton.icon(
               onPressed: _busy ? null : _save,
               icon: _busy
                   ? const SizedBox(
@@ -93,7 +89,6 @@ class _ClientLogCardState extends ConsumerState<ClientLogCard> {
                   : const Icon(Icons.save_alt, size: 18),
               label: const Text('Save client log'),
             ),
-          ],
         ),
       ),
     );

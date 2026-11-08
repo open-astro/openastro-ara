@@ -11,8 +11,6 @@ import '../../widgets/support/bug_report_card.dart';
 import '../../widgets/support/client_log_card.dart';
 import '../settings/panels/storage_panel.dart';
 
-const double _kCardsWidth = 720;
-
 /// Settings › Rig › Logs & bug report: the Full UI's two save actions, hosted
 /// as they are. The bug report needs the rig; the client log does not.
 class SimpleLogsBlock extends StatelessWidget {
@@ -27,20 +25,7 @@ class SimpleLogsBlock extends StatelessWidget {
         context.l10n.shellLogs,
         style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
       ),
-      // shortcut: the cards are built for the Full UI's wide page and
-      // overflow in Rig's column, so they scroll sideways when it is narrower
-      // than they need; restyle them for Simple Mode if that proves clumsy.
-      LayoutBuilder(
-        builder: (context, box) {
-          const cards = Column(children: [BugReportCard(), ClientLogCard()]);
-          return box.maxWidth >= _kCardsWidth
-              ? cards
-              : const SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SizedBox(width: _kCardsWidth, child: cards),
-                );
-        },
-      ),
+      const Column(children: [BugReportCard(), ClientLogCard()]),
     ],
   );
 }

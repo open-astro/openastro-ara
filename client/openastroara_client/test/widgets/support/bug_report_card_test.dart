@@ -112,6 +112,20 @@ Widget _host(_FakeBugReportClient api,
     );
 
 void main() {
+  testWidgets('the prepare action moves under the text in a phone-width column', (tester) async {
+    // Inline in Simple Mode's Settings on a phone, the column is this narrow.
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(_host(_FakeBugReportClient()));
+
+    expect(tester.takeException(), isNull, reason: 'nothing overflows');
+    final action = find.widgetWithText(FilledButton, 'Prepare & download');
+    expect(tester.getTopLeft(action).dy, greaterThan(tester.getBottomLeft(find.text('Send me a bug report')).dy),
+        reason: 'the action sits under the text');
+  });
+
   testWidgets('renders the prepare action', (tester) async {
     await tester.pumpWidget(_host(_FakeBugReportClient()));
     expect(find.text('Send me a bug report'), findsOneWidget);
