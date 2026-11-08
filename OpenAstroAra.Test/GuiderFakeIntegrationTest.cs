@@ -2517,6 +2517,37 @@ namespace OpenAstroAra.Test {
             Assert.That(op.GetProperty("ok").GetBoolean(), Is.True, "guiding began; the settle timeout does not fail the start");
         }
 
+        [Test]
+        public async Task A_rest_start_retries_after_its_own_stop_capture_answers_with_a_settle_error() {
+            // #1664 review — the retry stops the guider; PHD2 answers stop_capture with a SettleDone
+            // "Stopped capturing". That is our own stop, not the guider giving up: the retry must go on.
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            var guides = 0;
+            fake.OnRpc("get_app_state", _ => JsonValue.Create(Volatile.Read(ref guides) == 0 ? "Stopped" : "LostLock"));
+            fake.OnRpc("get_calibrated", JsonValue.Create(true));
+            fake.OnRpc("get_lock_position", new JsonArray(100.0, 100.0));
+            fake.OnRpc("guide", _ => { Interlocked.Increment(ref guides); return JsonValue.Create(0); });
+            fake.OnRpc("stop_capture", req => {
+                _ = fake.BroadcastAsync(PhdEvents.SettleDone(status: 1, error: "Stopped capturing"));
+                return JsonValue.Create(0);
+            });
+            var profile = new HeadlessProfileService();
+            profile.ActiveProfile.GuiderSettings.AutoRetryStartGuiding = true;
+            profile.ActiveProfile.GuiderSettings.AutoRetryStartGuidingTimeoutSeconds = 1;
+            using var svc = new GuiderService(profile, NewRecovery(),
+                NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws: new RecordingBroadcaster(),
+                araProfileResolver: () => (Guid.NewGuid(), "Rig A"));
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None)
+                .ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null);
+
+            await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => Volatile.Read(ref guides) >= 2, TimeSpan.FromSeconds(20)).ConfigureAwait(false), Is.True,
+                "a second guide RPC went out: the retry survived its own stop_capture");
+        }
+
         [TestCase("cannot guide while calibrating", "cannot guide while calibrating")]
         [TestCase("", "refused")]
         public async Task A_rest_start_the_guider_refuses_carries_its_reason_or_refused(string message, string expected) {
@@ -2599,8 +2630,8 @@ namespace OpenAstroAra.Test {
             return null;
         }
 
-        private static async Task<bool> WaitUntilAsync(Func<bool> condition) {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        private static async Task<bool> WaitUntilAsync(Func<bool> condition, TimeSpan? timeout = null) {
+            using var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromSeconds(10));
             while (!cts.IsCancellationRequested) {
                 if (condition()) {
                     return true;

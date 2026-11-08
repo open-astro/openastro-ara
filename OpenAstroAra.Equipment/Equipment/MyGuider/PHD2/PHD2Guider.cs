@@ -939,6 +939,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
                 await Task.Delay(1000, ct); // 1000ms sleep between retries
 
+                // Our own stop makes PHD2 answer with a SettleDone "Stopped capturing": not the guider giving up.
+                _startArmed = false;
                 await StopGuiding(ct); // used to visual inspect that the guider is in the stopped state before retrying.
 
                 await Task.Delay(5000, ct); // 5000ms sleep between retries
