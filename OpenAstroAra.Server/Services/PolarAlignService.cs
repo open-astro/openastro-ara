@@ -255,7 +255,7 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>Continue / Next: release a routine parked on the user — waiting for the mount at
         /// Home, or in a live loop (coarse → fine, fine → check). 409 otherwise.</summary>
-        public Task<OperationAcceptedDto> NextAsync(string? idempotencyKey, CancellationToken ct) {
+        public async Task<OperationAcceptedDto> NextAsync(string? idempotencyKey, CancellationToken ct) {
             CancellationTokenSource? inFlight;
             lock (_gate) {
                 var waitable = _active && (_waitingForHome || _state is "adjusting" or "paused");
@@ -266,12 +266,20 @@ namespace OpenAstroAra.Server.Services {
                 inFlight = _advanceCts;
             }
             // A capture (and its blind solve, tens of seconds on the main camera) in flight is moot now:
-            // cancel it so the next stage starts at once. Outside the lock — Cancel runs callbacks inline.
-            inFlight?.Cancel();
-            return Task.FromResult(Accepted("polar-align.next", idempotencyKey));
+            // cancel it so the next stage starts at once. Outside the lock — cancellation runs callbacks.
+            if (inFlight is not null) {
+                try {
+                    await inFlight.CancelAsync().ConfigureAwait(false);
+                } catch (ObjectDisposedException) {
+                    // The capture finished and the loop disposed its source between our read and this call.
+                }
+            }
+            return Accepted("polar-align.next", idempotencyKey);
         }
 
         // The live loop's in-flight capture, cancellable by Next; null between captures. Guarded by _gate.
+        // Owned by the loop iteration that created it (a `using`); Dispose only sweeps a reference a
+        // torn-down service might still hold.
         private CancellationTokenSource? _advanceCts;
 
         /// <summary>Consume the user's Continue/Next for this run (false when none is pending).</summary>
@@ -472,6 +480,7 @@ namespace OpenAstroAra.Server.Services {
         public void Dispose() {
             _runCts?.Cancel();
             _runCts?.Dispose();
+            _advanceCts?.Dispose();
             _opLock.Dispose();
             if (_ownsFetcher && _frameFetcher is IDisposable d) {
                 d.Dispose(); // only the self-constructed default — a DI-injected fetcher is container-owned
