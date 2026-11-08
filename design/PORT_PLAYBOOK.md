@@ -6447,7 +6447,10 @@ Polar Alignment section of profile (default values shown):
 - Exposure time: 1 s (the 0.5 s first planned was too little signal for a guide scope at the pole)
 - Binning: auto (`0`, per §45.4; 1–4 overrides)
 - Target tolerance: 1 arcmin (controls when [Done] enables)
-- Initial RA rotation for seed: 30°
+- Initial RA rotation for seed: 60° (`seed_rotation_deg`; was 30° — §45.16 Revisited: a 30° turn amplifies solve noise ~1.9×, 60° passes it through 1:1; clamped to 5–120°)
+- Check-stage turns: 30° each (`check_step_deg`, 5–60°; the three-point check's two RA turns)
+- Rough-stage main-camera exposure: 3 s (`coarse_exposure_seconds`, up to 60 s)
+- Use Home: on (`use_home`; every stage sends the mount Home first, a mount without Find Home is asked; off starts from the current pointing)
 - Loop cadence (target): 1000 ms (a 500 ms loop never fit a capture + fetch + solve on the Pi 4, §45.7)
 - Save PA dark to library: off
 
@@ -6533,6 +6536,23 @@ uncertainty (± 1.8′ on 2026-10-18). Decision: keep the 2-point seed with **Δ
 users with a jittery mount raise `seed_rotation_deg` (60° halves the amplification) rather than
 wait for a third point. Revisit only if a rig shows the bullseye and the §63 residual disagreeing
 by more than 2′ with the seed at 60°.
+
+**Revisited 2026-11-07 (#1591).** The CM4 night of 2026-11-04 met the revisit condition (the bullseye
+said "Excellent" while the mount was degrees off). The answer is not a 3-point *seed* but a 3-point
+*check* after the adjust loop: the routine is now three stages — coarse (Home, then this section's
+2-point seed and live loop on the *main camera*, for the big moves), fine (the same seed and live
+loop on the guide camera, with the seed turn's default raised to **60°**), and a check (Home, Dec
+85°, three guide-camera solves 30° apart, `FitAxisThreePoint`, no adjusting). The check shares no
+input with the fine readout, and the gap between them (`fine_delta_arcmin`, logged on every run) is
+the evidence this section asked for. API_CONTRACT.md 2026-11-07 has the wire shape.
+
+**Coarse stage, revised 2026-11-08 (#1727).** The first cut read each main-camera solve at Home as
+the axis itself. On the first real night (GNTO, 2026-11-07) that zero sat 75′ in azimuth from the
+fine stage's seed, and the three-point check sided with the fine stage: at Home the camera is not on
+the axis (cone error, non-orthogonality, the Home position), by a degree on an ordinary rig. The
+coarse stage now runs the seed turn and the two-point fit too; only the camera (and its 3 s
+exposure) differs from the fine stage. Nothing in a polar-align readout is ever a pointing read as
+the axis any more.
 
 ---
 
@@ -8327,7 +8347,7 @@ The button surfaces (as a large, prominent overlay near the top of the active vi
 - **Recovery slew** — §28 mount-home or slew-to-saved-target during crash recovery
 - **Plate-solve re-center slew** — post-slew correction
 - **Park / unpark / home** — these are also slews; the button appears
-- **Polar-align initial RA rotation** — §45's 30° RA rotation for the seed
+- **Polar-align turns** — §45's 60° RA rotation for the seed and the check stage's two 30° turns
 
 Does **not** appear for:
 - Sidereal tracking (not a slew event)

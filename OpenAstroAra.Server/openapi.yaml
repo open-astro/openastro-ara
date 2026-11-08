@@ -1978,6 +1978,25 @@ paths:
           in: header
           schema:
             type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/PolarAlignStartRequestDto'
+      responses:
+        '200':
+          description: OK
+  /api/v1/equipment/polaralign/next:
+    post:
+      tags:
+        - Equipment
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
       responses:
         '200':
           description: OK
@@ -12877,7 +12896,7 @@ components:
             - number
             - string
           format: double
-          default: 30
+          default: 60
         loop_cadence_ms:
           pattern: '^-?(?:0|[1-9]\d*)$'
           type:
@@ -12895,6 +12914,30 @@ components:
         loop_mode:
           type: string
           default: loop
+        check_step_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 30
+        coarse_exposure_seconds:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 3
+        use_home:
+          type: boolean
+          default: true
+    PolarAlignStartRequestDto:
+      type: object
+      properties:
+        stage:
+          type:
+            - 'null'
+            - string
     PreflightChecklistDto:
       required:
         - generated_utc

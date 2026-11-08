@@ -34,10 +34,12 @@ class _PolarApi implements PolarAlignClient {
   /// What start throws instead (no guide camera, say).
   Object? startError;
   @override
-  Future<void> start() async {
+  Future<void> start({String? stage}) async {
     if (startError case final e?) throw e;
     calls.add('start');
   }
+  @override
+  Future<void> next() async => calls.add('next');
   @override
   Future<void> stop() async => calls.add('stop');
   @override

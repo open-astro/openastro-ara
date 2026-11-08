@@ -160,6 +160,7 @@ namespace OpenAstroAra.Test {
             var polar = new Mock<IPolarAlignService>();
             polar.Setup(p => p.GetStatusAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new PolarAlignStateDto("adjusting", 12, 10, 2, 5, null));
+            polar.Setup(p => p.IsActive).Returns(true);
             polar.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Accepted);
 
             var result = await new EmergencyStopService(
@@ -172,11 +173,32 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Execute_StopsPolarAlignment_InTheCheckStageToo() {
+            // #1591 added homing and checking: a mount mid-Find-Home or between two check turns must stop
+            // like one in the adjust loop (the rung asks IsActive, not a list of state names).
+            var polar = new Mock<IPolarAlignService>();
+            polar.Setup(p => p.GetStatusAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PolarAlignStateDto("checking", null, null, null, 0, null));
+            polar.Setup(p => p.IsActive).Returns(true);
+            polar.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Accepted);
+
+            var result = await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                polarAlign: polar.Object).ExecuteAsync();
+
+            polar.Verify(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(result.FailedRungs, Is.Empty);
+        }
+
+
+        [Test]
         public async Task Execute_AFinishedPolarAlignment_IsNotReset() {
             // A stray Stop publishes "stopped", which clears the client's aligned result.
             var polar = new Mock<IPolarAlignService>();
             polar.Setup(p => p.GetStatusAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new PolarAlignStateDto("stopped", 2.8, 2.3, 1.5, 99, null));
+            polar.Setup(p => p.IsActive).Returns(false);
 
             await new EmergencyStopService(
                 camera.Object, () => sequencer.Object, guider.Object,

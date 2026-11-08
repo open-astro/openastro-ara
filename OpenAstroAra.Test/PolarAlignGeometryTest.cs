@@ -325,5 +325,110 @@ namespace OpenAstroAra.Test {
             Assert.That(rejected, Is.Zero);
             Assert.That(errors[^1], Is.LessThan(3.0), "arcmin; 10 arcsec of solve noise is ~0.6 arcmin median");
         }
+
+        // ── three-point fit (the check stage) ──────────────────────────────────────────────
+
+        private static double SeparationDeg((double RaDeg, double DecDeg) a, (double X, double Y, double Z) b) {
+            var u = Unit(a.RaDeg, a.DecDeg);
+            return Math.Acos(Math.Clamp(u.X * b.X + u.Y * b.Y + u.Z * b.Z, -1, 1)) * 180.0 / Math.PI;
+        }
+
+        private static void AssertThreePointRecovers(double axisRa, double axisDec, double pointRa, double pointDec,
+                double stepDeg, bool north) {
+            var axis = Unit(axisRa, axisDec);
+            var p1 = Unit(pointRa, pointDec);
+            var p2 = Rotate(p1, axis, stepDeg);
+            var p3 = Rotate(p2, axis, stepDeg);
+            var (ra1, dec1) = RaDec(p1);
+            var (ra2, dec2) = RaDec(p2);
+            var (ra3, dec3) = RaDec(p3);
+
+            var fitted = PolarAlignGeometry.FitAxisThreePoint(ra1, dec1, ra2, dec2, ra3, dec3, north);
+
+            Assert.That(SeparationDeg((fitted.RaDeg, fitted.DecDeg), axis), Is.LessThan(1e-6),
+                $"axis ({axisRa},{axisDec}) step={stepDeg}° must be recovered exactly from noise-free pointings");
+            var expectedCone = Math.Acos(Math.Clamp(p1.X * axis.X + p1.Y * axis.Y + p1.Z * axis.Z, -1, 1)) * 180.0 / Math.PI;
+            Assert.That(fitted.ConeHalfAngleDeg, Is.EqualTo(expectedCone).Within(1e-6));
+            // The solved turn about the fitted axis is the step the generator used (RA up = positive).
+            var turn = PolarAlignGeometry.TurnAboutAxisDeg(fitted.RaDeg, fitted.DecDeg, ra1, dec1, ra2, dec2);
+            Assert.That(Math.Abs(turn), Is.EqualTo(Math.Abs(stepDeg)).Within(1e-6));
+        }
+
+        [Test]
+        public void Three_point_fit_recovers_a_known_axis_without_the_rotation() {
+            // The check's own geometry: Dec 85° from Home, two 30° turns.
+            AssertThreePointRecovers(axisRa: 30, axisDec: 89.5, pointRa: 100, pointDec: 85, stepDeg: 30, north: true);
+            // A rougher axis, smaller and larger steps, a pointing further out.
+            AssertThreePointRecovers(210, 88.0, 350, 85, 15, true);
+            AssertThreePointRecovers(210, 88.0, 350, 60, 45, true);
+            // Southern hemisphere: the end nearer the SCP is returned.
+            AssertThreePointRecovers(120, -89.3, 40, -85, 30, north: false);
+        }
+
+        [Test]
+        public void Three_point_fit_has_no_mirror_ambiguity_near_the_pole() {
+            // #1591's regime for the two-point fit: a seed close to the pole picked the mirror
+            // line. Three points fix the circle, so the direction of the turn is not needed.
+            AssertThreePointRecovers(axisRa: 0, axisDec: 89.9, pointRa: 180, pointDec: 85, stepDeg: 30, north: true);
+            AssertThreePointRecovers(0, 89.9, 180, 85, -30, true); // turned the other way
+        }
+
+        [Test]
+        public void Three_point_fit_refuses_coincident_pointings() {
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
+                PolarAlignGeometry.FitAxisThreePoint(10, 85, 10, 85, 40, 85, true), "two coincident pointings");
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
+                PolarAlignGeometry.FitAxisThreePoint(10, 85, 40, 85, 40, 85, true), "the last two coincide");
+        }
+
+        [Test]
+        public void Three_point_fit_reads_points_on_the_equator_as_an_axis_on_the_pole() {
+            // Three distinct points on a sphere always lie on one circle; on the equator that
+            // circle's pole is the celestial pole itself — a perfectly aligned axis, not a failure.
+            var fitted = PolarAlignGeometry.FitAxisThreePoint(0, 0, 10, 0, 20, 0, true);
+            Assert.That(fitted.DecDeg, Is.EqualTo(90.0).Within(1e-9));
+            Assert.That(fitted.ConeHalfAngleDeg, Is.EqualTo(90.0).Within(1e-9));
+        }
+
+        [Test]
+        public void Three_point_fit_refuses_an_axis_far_from_the_target_pole() {
+            // A mount pointed 40° from the pole: the §45 rough-alignment precondition fails.
+            var axis = Unit(0, 50);
+            var p1 = Unit(90, 20);
+            var p2 = Rotate(p1, axis, 30);
+            var p3 = Rotate(p2, axis, 30);
+            var (ra1, dec1) = RaDec(p1);
+            var (ra2, dec2) = RaDec(p2);
+            var (ra3, dec3) = RaDec(p3);
+            Assert.Throws<ArgumentOutOfRangeException>(() =>
+                PolarAlignGeometry.FitAxisThreePoint(ra1, dec1, ra2, dec2, ra3, dec3, true));
+        }
+
+        [Test]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA5394:Do not use insecure randomness",
+            Justification = "Seeded System.Random makes the synthetic solve noise deterministic; test-only, nothing security related.")]
+        public void Three_point_fit_tolerates_solve_noise_at_the_checks_geometry() {
+            // 10″ of per-solve scatter at Dec 85° with 30° steps: the error must stay within the
+            // "excellent" band's resolution (a few arcminutes at worst, mostly under one).
+            var rng = new Random(7);
+            var axis = Unit(30, 89.5);
+            var worst = 0.0;
+            for (var i = 0; i < 200; i++) {
+                var p1 = Unit(100 + i, 85);
+                var p2 = Rotate(p1, axis, 30);
+                var p3 = Rotate(p2, axis, 30);
+                (double, double) Noisy((double X, double Y, double Z) p) {
+                    var (ra, dec) = RaDec(p);
+                    var noise = 10.0 / 3600.0;
+                    return (ra + (rng.NextDouble() - 0.5) * 2 * noise / Math.Cos(dec * Math.PI / 180), dec + (rng.NextDouble() - 0.5) * 2 * noise);
+                }
+                var (ra1, dec1) = Noisy(p1);
+                var (ra2, dec2) = Noisy(p2);
+                var (ra3, dec3) = Noisy(p3);
+                var fitted = PolarAlignGeometry.FitAxisThreePoint(ra1, dec1, ra2, dec2, ra3, dec3, true);
+                worst = Math.Max(worst, SeparationDeg((fitted.RaDeg, fitted.DecDeg), axis) * 60.0);
+            }
+            Assert.That(worst, Is.LessThan(3.0), "arcmin");
+        }
     }
 }

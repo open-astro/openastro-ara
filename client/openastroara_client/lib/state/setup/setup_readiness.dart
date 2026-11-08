@@ -52,17 +52,22 @@ SetupStepState connectStepState(MountStatus? mount, CameraStatus? camera) {
 ///
 /// done = the last solved error sat in the green zone (the zone survives a
 /// clean Stop, so "aligned then stopped the loop" stays satisfied);
-/// problem = the routine failed; inProgress = seeding/adjusting/paused;
+/// problem = the routine failed; inProgress = any running stage;
 /// else pending. This is a THIS-SESSION signal by design: alignment is
 /// physical and per-setup, so a fresh app session starts unaligned.
 SetupStepState polarAlignStepState(PolarAlignLive live) {
-  if (live.zone == 'green') return SetupStepState.done;
-  if (live.phase == PolarAlignStates.failed) return SetupStepState.problem;
-  if (live.phase == PolarAlignStates.seeding ||
-      live.phase == PolarAlignStates.adjusting ||
-      live.phase == PolarAlignStates.paused) {
-    return SetupStepState.inProgress;
+  // The rough stage's green is a first pass on the main camera, not an
+  // alignment: fine and check are still ahead of it. (A new stage starts with
+  // no readout — the daemon and the fold both clear it — so a later stage's
+  // green is its own.)
+  if (live.zone == 'green' && live.stage != PolarAlignStages.coarse) {
+    return SetupStepState.done;
   }
+  if (live.phase == PolarAlignStates.failed) return SetupStepState.problem;
+  // A finished check outside the green zone is a measurement that says
+  // "not aligned": the step needs work, it is not untouched.
+  if (live.phase == PolarAlignStates.checked) return SetupStepState.problem;
+  if (live.isActive) return SetupStepState.inProgress;
   return SetupStepState.pending;
 }
 

@@ -9,7 +9,12 @@ import '../models/server.dart';
 /// tests supply a pure fake; [PolarAlignApi] is the Dio-backed implementation.
 abstract interface class PolarAlignClient {
   Future<PolarAlignStatus?> getStatus();
-  Future<void> start();
+
+  /// Begin at [stage] ([PolarAlignStages]; null = coarse).
+  Future<void> start({String? stage});
+
+  /// Continue (mount at Home) / Next (coarse → fine, fine → check).
+  Future<void> next();
   Future<void> stop();
   Future<void> complete();
   Future<void> requestCapture();
@@ -48,11 +53,21 @@ class PolarAlignApi implements PolarAlignClient {
     }
   }
 
-  /// Begin the routine (preflight: connected guider + mount, configured site).
-  /// 202-Accepted; a failed preflight surfaces as a 409/422 `DioException`.
+  /// Begin the routine (preflight: connected guider + mount, configured site)
+  /// at [stage] (null = coarse). 202-Accepted; a failed preflight surfaces as
+  /// a 409/422 `DioException`.
   @override
-  Future<void> start() async {
-    await _dio.post<void>('/api/v1/equipment/polaralign/start');
+  Future<void> start({String? stage}) async {
+    await _dio.post<void>(
+      '/api/v1/equipment/polaralign/start',
+      data: stage == null ? null : <String, dynamic>{'stage': stage},
+    );
+  }
+
+  /// Continue / Next. 202-Accepted; a 409 when nothing waits on the user.
+  @override
+  Future<void> next() async {
+    await _dio.post<void>('/api/v1/equipment/polaralign/next');
   }
 
   /// Abort — the mount stays where it is; logged as `aborted`. 202-Accepted.
