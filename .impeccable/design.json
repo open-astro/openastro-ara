@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-08T03:29:00+13:00",
+  "generatedAt": "2026-11-08T15:11:00+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -786,6 +786,22 @@
       "css": ".ds-wx{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:328px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif} .ds-wx-t{background:rgba(56,56,56,.55);border-radius:10px;padding:8px 12px;min-height:64px;display:flex;flex-direction:column;justify-content:center;box-sizing:border-box} .ds-wx-t b{font-size:22px;font-weight:600;color:#E0E0E0;font-variant-numeric:tabular-nums} .ds-wx-t small{font-size:13px;font-weight:400;color:#A0A0A0;margin-left:3px} .ds-wx-t span{font-size:12px;color:#A0A0A0} .ds-wx-over{box-shadow:inset 0 0 0 1.5px #FFB300} .ds-wx-over b{color:#FFB300} .ds-wx-wide{grid-column:1/-1} .ds-wx-lim{color:#FFB300!important}"
     },
     {
+      "name": "Dome Clamshell + Dial (Simple Mode)",
+      "kind": "custom",
+      "refersTo": "simple-dome-front-dial",
+      "description": "The Dome window's two 150 pt drawings side by side under the azimuth, the dial on the left and the clamshell on the right, the clamshell filling its box so both read the same size. The dial from above: North up, ticks every 10°, the slit at the azimuth (32° wide), a thin green slit for the target, N / E / S / W in the reader's language in boxes that grow with the text size, the arrow keys with a 2 pt Info Blue focus ring, the rotator's hub (green play / red stop square). The clamshell from the front, a Baader AllSky style dome: a sphere on a base with sloped shoulders and a round plinth, the door up into the sphere, each side of the top two nested shells on one centre hinge bolt (closed, no gap); opening, they fan down to the base's shoulders, the outer twice as fast, over the dome's last measured shutter time, blue edges while moving. The Shutter row sits 12 pt below. Under 96 pt each, only the dial (#1662).",
+      "html": "<div class=\"ds-dome\"><svg viewBox=\"0 0 150 150\" width=\"150\" height=\"150\"><path d=\"M75 62 L75 10 A52 52 0 0 1 120 36 Z\" fill=\"#8c8c8c\" stroke=\"#A0A0A0\"/><path d=\"M75 62 L75 10 A52 52 0 0 0 30 36 Z\" fill=\"#8c8c8c\" stroke=\"#A0A0A0\"/><path d=\"M23 62 A52 52 0 0 0 127 62 Z\" fill=\"#5a5a5a\" stroke=\"#A0A0A0\"/></svg><svg viewBox=\"0 0 150 150\" width=\"150\" height=\"150\"><circle cx=\"75\" cy=\"75\" r=\"72\" fill=\"#383838\" stroke=\"#404040\"/><circle cx=\"75\" cy=\"75\" r=\"22\" fill=\"#1A1A1A\" stroke=\"#404040\"/></svg></div>",
+      "css": ".ds-dome{display:flex;gap:12px;justify-content:space-between;width:328px}"
+    },
+    {
+      "name": "Safety State Tile (Simple Mode)",
+      "kind": "custom",
+      "refersTo": "simple-safety-state",
+      "description": "The Safety monitor window's one tile (tile fill, 10 pt corners, 80 pt): a 34 pt shield and \"Safe\" in Connected green, or \"Unsafe\" in Warning amber with a 1.5 pt amber outline, 26 pt 600; \"since 02:14 · 1 h 12 min\" under it in 12 pt, local 24 h time. While Unsafe a caption under the tile says what the safety policy does next (\"Resumes 10 min after Safe\" / \"Stays paused until you resume\") once the policies load (#1662). Under it, while the rig is unsafe, Why (the monitor gives no reason; weather past its limits in amber) and What Ara does (the On unsafe policy in words, the resume line), 12 pt headings over 13 pt rows with 18 pt icons.",
+      "html": "<div class=\"ds-safe\"><span class=\"ds-safe-i\">⛨</span><div><b>Unsafe</b><span>since 02:14 · 1 h 12 min</span></div></div>",
+      "css": ".ds-safe{display:flex;gap:12px;align-items:center;width:328px;min-height:80px;box-sizing:border-box;padding:8px 12px;border-radius:10px;background:rgba(56,56,56,.55);box-shadow:inset 0 0 0 1.5px #FFB300;color:#FFB300;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif} .ds-safe-i{font-size:34px} .ds-safe b{display:block;font-size:26px;font-weight:600} .ds-safe span{font-size:12px;color:#A0A0A0}"
+    },
+    {
       "name": "Message Pill: Question (Simple Mode)",
       "kind": "custom",
       "refersTo": "message-pill-simple",
@@ -890,6 +906,11 @@
       {
         "name": "The Brand Stays Home Rule",
         "body": "The brand palette lives in two places, the Ara mark and the no-frame wallpaper. It never marks a state, a selection or a call to action.",
+        "section": "colors"
+      },
+      {
+        "name": "The Drawings Stay Grey Rule",
+        "body": "Device-window drawings (the dome clamshell and dial, the flat panel face) use their own grey ramp: dome body #808080 to #4A4A4A, shells #A8A8A8 to #6A6A6A, plinth #8A8A8A, hinge bolt #D0D0D0, dial slit #6E6E6E at 95 %, flat panel face #111111, lids #303030, ribs #242424, glow #FFFBE8 to #B8B29A. They picture hardware and never mark a state; a state on a drawing comes only from a status token.",
         "section": "colors"
       }
     ],

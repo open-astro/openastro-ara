@@ -42,6 +42,8 @@ enum SimpleStatusOrigin {
   rotator,
   switches,
   flatPanel,
+  dome,
+  safetyMonitor,
   guiderCamera,
   focus,
   polar,

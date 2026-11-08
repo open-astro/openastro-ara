@@ -405,6 +405,191 @@
   "@deviceCouldntChangeFlatPanel": {
     "description": "Error message when the flat panel refused a command"
   },
+  "shellSafetyMonitor": "Safety monitor",
+  "@shellSafetyMonitor": {
+    "description": "Simple Mode Settings › Devices row and window title: the safety monitor"
+  },
+  "deviceShutter": "Shutter",
+  "@deviceShutter": {
+    "description": "Dome window: the shutter's row"
+  },
+  "deviceShutterMoving": "Shutter moving…",
+  "@deviceShutterMoving": {
+    "description": "Dome window and status pill: the dome's shutter is opening or closing"
+  },
+  "deviceAzimuth": "Azimuth",
+  "@deviceAzimuth": {
+    "description": "Dome window: the caption under the dome's azimuth"
+  },
+  "deviceAtHome": "At home",
+  "@deviceAtHome": {
+    "description": "Dome window: the dome sits at its home position"
+  },
+  "deviceHome": "Home",
+  "@deviceHome": {
+    "description": "Dome window: button that sends the dome to find its home position"
+  },
+  "deviceStop": "Stop",
+  "@deviceStop": {
+    "description": "Dome window: button that stops the dome"
+  },
+  "deviceStopDome": "Stop the dome",
+  "@deviceStopDome": {
+    "description": "Dome window: screen reader label of the stop square in the dome's middle"
+  },
+  "devicePlanRunningChangeDome": "A plan is running. Change the dome anyway?",
+  "@devicePlanRunningChangeDome": {
+    "description": "Dome window: asked before a shutter change, Park or Home while a plan runs"
+  },
+  "deviceCouldntMoveDome": "Couldn't move the dome",
+  "@deviceCouldntMoveDome": {
+    "description": "Error message when the dome refused a shutter change, Park or Home"
+  },
+  "deviceCouldntStopDome": "Couldn't stop the dome",
+  "@deviceCouldntStopDome": {
+    "description": "Error message when the dome refused Stop"
+  },
+  "deviceDomeReadFailed": "Dome read failed — check the device.",
+  "@deviceDomeReadFailed": {
+    "description": "Dome window: the daemon couldn't read the dome"
+  },
+  "deviceSafe": "Safe",
+  "@deviceSafe": {
+    "description": "Safety monitor window: the monitor reads safe"
+  },
+  "deviceUnsafe": "Unsafe",
+  "@deviceUnsafe": {
+    "description": "Safety monitor window: the monitor reads unsafe"
+  },
+  "deviceSafetySince": "since {time} · {duration}",
+  "@deviceSafetySince": {
+    "description": "Safety monitor window: when the reading last changed (local 24 h time) and how long ago",
+    "placeholders": {
+      "time": {"type": "String", "example": "02:14"},
+      "duration": {"type": "String", "example": "1 h 12 min"}
+    }
+  },
+  "deviceUnsafeSince": "Unsafe since {time}",
+  "@deviceUnsafeSince": {
+    "description": "Status pill detail while the safety monitor reads unsafe (local 24 h time)",
+    "placeholders": {
+      "time": {"type": "String", "example": "02:14"}
+    }
+  },
+  "deviceResumesAfterSafe": "Resumes {minutes} min after Safe",
+  "@deviceResumesAfterSafe": {
+    "description": "Safety monitor window while unsafe: the safety policy resumes the plan this long after the monitor reads safe again",
+    "placeholders": {
+      "minutes": {"type": "int"}
+    }
+  },
+  "deviceStaysPaused": "Stays paused until you resume",
+  "@deviceStaysPaused": {
+    "description": "Safety monitor window while unsafe: the safety policy does not resume the plan by itself"
+  },
+  "deviceOpening": "Opening…",
+  "@deviceOpening": {
+    "description": "Dome window and status pill: the shutter is opening"
+  },
+  "deviceClosing": "Closing…",
+  "@deviceClosing": {
+    "description": "Dome window and status pill: the shutter is closing"
+  },
+  "deviceTurn": "Turn",
+  "@deviceTurn": {
+    "description": "Dome window: screen reader label of the dial's middle with no target yet"
+  },
+  "deviceTurnTo": "Turn to {angle}",
+  "@deviceTurnTo": {
+    "description": "Dome window: screen reader label of the dial's middle, turning the dome to the target",
+    "placeholders": {
+      "angle": {"type": "String", "example": "245°"}
+    }
+  },
+  "deviceShutterFault": "Shutter fault: open or close again.",
+  "@deviceShutterFault": {
+    "description": "Dome window: the daemon reads the dome's shutter as faulted (ASCOM ShutterState.Error)"
+  },
+  "deviceFindingHome": "Finding home…",
+  "@deviceFindingHome": {
+    "description": "Dome window and status pill: the dome is finding its home position"
+  },
+  "deviceTurningTo": "Turning to {angle}…",
+  "@deviceTurningTo": {
+    "description": "Dome window and status pill: the dome is turning to the dial's target",
+    "placeholders": {
+      "angle": {"type": "String", "example": "245°"}
+    }
+  },
+  "deviceReasonSentence": "{reason}.",
+  "@deviceReasonSentence": {
+    "description": "Safety monitor window: a weather reason as a sentence in the Why list (the same words are a status pill's detail without the full stop)",
+    "placeholders": {
+      "reason": {"type": "String", "example": "Wind 41 km/h, over the 36 km/h limit"}
+    }
+  },
+  "deviceWhy": "Why",
+  "@deviceWhy": {
+    "description": "Safety monitor window: heading over the reasons the rig is unsafe"
+  },
+  "deviceWhatAraDoes": "What Ara does",
+  "@deviceWhatAraDoes": {
+    "description": "Safety monitor window: heading over what the safety policy does while unsafe"
+  },
+  "deviceMonitorNoReason": "{name} says unsafe. It doesn't say why: check the device.",
+  "@deviceMonitorNoReason": {
+    "description": "Safety monitor window: an ASCOM safety monitor reports only safe or unsafe, never a reason",
+    "placeholders": {
+      "name": {"type": "String", "example": "Solo"}
+    }
+  },
+  "deviceWindOverLimit": "Wind {value} km/h, over the {limit} km/h limit",
+  "@deviceWindOverLimit": {
+    "description": "Safety monitor window and status pill: the wind (worse of speed and gust) past the safety limit; no full stop, it is a pill detail too",
+    "placeholders": {
+      "value": {"type": "String", "example": "41"},
+      "limit": {"type": "int"}
+    }
+  },
+  "deviceHumidityOverLimit": "Humidity {value} %, over the {limit} % limit",
+  "@deviceHumidityOverLimit": {
+    "description": "Safety monitor window: the humidity past the safety limit",
+    "placeholders": {
+      "value": {"type": "String", "example": "90"},
+      "limit": {"type": "int"}
+    }
+  },
+  "deviceDewUnderMargin": "Dew point {value} °C below the air, under the {limit} °C margin",
+  "@deviceDewUnderMargin": {
+    "description": "Safety monitor window: the air too close to the dew point",
+    "placeholders": {
+      "value": {"type": "String", "example": "1"},
+      "limit": {"type": "String", "example": "2"}
+    }
+  },
+  "deviceMonitorReadsSafe": "{name} reads Safe",
+  "@deviceMonitorReadsSafe": {
+    "description": "Safety monitor window: under Unsafe when the weather, not the monitor, makes the rig unsafe",
+    "placeholders": {
+      "name": {"type": "String", "example": "Solo"}
+    }
+  },
+  "deviceOnUnsafePause": "On unsafe, Ara pauses the plan, parks and closes the dome.",
+  "@deviceOnUnsafePause": {
+    "description": "Safety monitor window: the On unsafe policy Pause + park + close dome"
+  },
+  "deviceOnUnsafePark": "On unsafe, Ara parks; the plan carries on.",
+  "@deviceOnUnsafePark": {
+    "description": "Safety monitor window: the On unsafe policy Park only"
+  },
+  "deviceOnUnsafeAbort": "On unsafe, Ara stops the plan and parks.",
+  "@deviceOnUnsafeAbort": {
+    "description": "Safety monitor window: the On unsafe policy Abort sequence + park"
+  },
+  "deviceOnUnsafeIgnore": "On unsafe, Ara does nothing; imaging carries on.",
+  "@deviceOnUnsafeIgnore": {
+    "description": "Safety monitor window: the On unsafe policy Ignore"
+  },
   "deviceFlatPanelUnconfirmed": "The flat panel didn't make that change",
   "@deviceFlatPanelUnconfirmed": {
     "description": "Error message when the flat panel took a command but never showed it"
