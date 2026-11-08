@@ -90,12 +90,27 @@ public static class SystemEndpoints {
                         return Results.Problem($"Unknown bug-report sharing mode '{request?.Mode}'; expected full, coarse_gps or redacted.",
                             statusCode: StatusCodes.Status400BadRequest);
                     }
+                    // A range is the whole rig's logs, hundreds of MB on a Pi: packed in the background, the app
+                    // polls GET /api/v1/bugreport/{id}. Without one, Ara's newest logs, packed in the request.
+                    if (request?.SinceUtc is DateTimeOffset since) {
+                        if (since > DateTimeOffset.UtcNow) {
+                            return Results.Problem("since_utc is in the future.", statusCode: StatusCodes.Status400BadRequest);
+                        }
+                        return Results.Accepted(value: svc.StartPrepare(mode.Value, since));
+                    }
                     return Results.Accepted(value: await svc.PrepareAsync(idempotencyKey, ct, mode.Value));
                 })
            .Accepts<BugReportPrepareRequestDto>("application/json")
            .Produces<BugReportPreparationDto>(StatusCodes.Status202Accepted)
            .ProducesProblem(StatusCodes.Status400BadRequest)
            .WithName("PrepareBugReport");
+
+        bug.MapGet("/{preparationId:guid}", (Guid preparationId, IBugReportService svc) =>
+                svc.GetPreparation(preparationId) is { } prep ? Results.Ok(prep) : Results.NotFound())
+            .Produces<BugReportPreparationDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("GetBugReportPreparation")
+            .WithSummary("A bug-report preparation's state: preparing (bytes read so far), ready (size, what went in) or failed.");
 
         bug.MapGet("/download",
                 async (Guid preparationId, string? acknowledge, IBugReportService svc, CancellationToken ct) => {
@@ -111,7 +126,8 @@ public static class SystemEndpoints {
                             title: "Bug-report download requires PII acknowledgement",
                             statusCode: StatusCodes.Status403Forbidden,
                             detail: "The bug-report bundle contains the daemon logs, profile.json and a " +
-                                "system-info.json. In the default (full) sharing mode that includes equipment " +
+                                "system-info.json, and with a range the rig's AlpacaBridge, guider, package and " +
+                                "journal logs. In the default (full) sharing mode that includes equipment " +
                                 "credentials, API/notification tokens, precise observatory coordinates, network " +
                                 "endpoints and the local filesystem path; the coarse_gps and redacted modes scrub " +
                                 "some or all of those (§54.5). Show the user this disclosure, then re-request " +

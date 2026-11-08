@@ -60,23 +60,28 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
     private readonly string _profileDir;
     private readonly string _bugReportsDir;
     private readonly ILogger<BugReportService> _logger;
+    private readonly BugReportSources _sources;
+    // Background preparations by id (StartPrepare): the app polls this while a whole-rig bundle packs.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, BugReportPreparationDto> _preparations = new();
     // Serializes prepares: the service is a DI singleton and PrepareAsync is async, so two
     // concurrent prepares could otherwise have one's PruneOldBundles reap the other's
     // just-revealed bundle. One bundle at a time — prepares are user-initiated + occasional.
     private readonly SemaphoreSlim _gate = new(1, 1);
 
-    public BugReportService(string profileDir, ILogger<BugReportService> logger) {
+    public BugReportService(string profileDir, ILogger<BugReportService> logger, BugReportSources? sources = null) {
         ArgumentException.ThrowIfNullOrEmpty(profileDir);
         ArgumentNullException.ThrowIfNull(logger);
         _profileDir = profileDir;
         _bugReportsDir = Path.Combine(profileDir, BugReportsDirName);
         _logger = logger;
+        _sources = sources ?? BugReportSources.ForHost();
     }
 
     // Registered as a DI singleton, so the container disposes this on host shutdown.
     public void Dispose() => _gate.Dispose();
 
-    public async Task<BugReportPreparationDto> PrepareAsync(string? idempotencyKey, CancellationToken ct, BugReportSharingMode mode = BugReportSharingMode.Full) {
+    public async Task<BugReportPreparationDto> PrepareAsync(string? idempotencyKey, CancellationToken ct, BugReportSharingMode mode = BugReportSharingMode.Full,
+            DateTimeOffset? since = null) {
         // idempotencyKey is accepted for contract symmetry but NOT enforced (no key→bundle
         // dedup): a retried prepare stages a fresh bundle each time — retention is bounded
         // separately by PruneOldBundles, not by the key. Log it so an operator retrying a
@@ -94,13 +99,14 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
         Guid id;
         DateTimeOffset completedUtc;
         long sizeBytes;
+        List<BugReportManifestEntry> manifest = [];
         try {
             id = Guid.NewGuid();
             // createdUtc stamps the filename (stable monotonic ordering for the prune sort);
             // completedUtc, captured after the build, is the accurate "bundle ready" time
             // surfaced to the client as CompletedUtc.
             var createdUtc = DateTimeOffset.UtcNow;
-            sizeBytes = await Task.Run(() => BuildBundleCore(id, createdUtc, mode, ct), ct).ConfigureAwait(false);
+            sizeBytes = await Task.Run(() => BuildBundleCore(id, createdUtc, mode, since, manifest, _ => { }, ct), ct).ConfigureAwait(false);
             completedUtc = DateTimeOffset.UtcNow;
         } finally {
             _gate.Release();
@@ -113,10 +119,68 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
             EstimatedSizeBytes: sizeBytes,
             DownloadUrl: DownloadUrl(id),
             CompletedUtc: completedUtc,
-            SharingMode: BugReportRedactor.ToWire(mode));
+            SharingMode: BugReportRedactor.ToWire(mode),
+            Sources: Summarize(manifest),
+            SinceUtc: since);
     }
 
-    private long BuildBundleCore(Guid id, DateTimeOffset createdUtc, BugReportSharingMode mode, CancellationToken ct) {
+    /// <summary>
+    /// Starts packing a bundle in the background and returns its "preparing" record at once: a whole-rig
+    /// bundle reads hundreds of MB of logs on a Pi, longer than a request should wait. <see cref="GetPreparation"/>
+    /// reports its progress (bytes read so far) and, when done, "ready" with the size and the source summary, or
+    /// "failed" with why. Prepares still run one at a time.
+    /// </summary>
+    public BugReportPreparationDto StartPrepare(BugReportSharingMode mode, DateTimeOffset? since) {
+        var id = Guid.NewGuid();
+        var preparing = new BugReportPreparationDto(id, "preparing", 0, null, null, BugReportRedactor.ToWire(mode), SinceUtc: since);
+        _preparations[id] = preparing;
+        PrunePreparations();
+        _ = Task.Run(() => RunPreparationAsync(id, mode, since));
+        return preparing;
+    }
+
+    /// <summary>A preparation's state: the in-memory record while this daemon runs, else a finished bundle
+    /// still on disk (after a restart), else null.</summary>
+    public BugReportPreparationDto? GetPreparation(Guid preparationId) {
+        if (_preparations.TryGetValue(preparationId, out var known)) {
+            return known;
+        }
+        var path = FindBundlePath(preparationId, CancellationToken.None);
+        return path is null ? null : new BugReportPreparationDto(preparationId, "ready", new FileInfo(path).Length, DownloadUrl(preparationId), File.GetLastWriteTimeUtc(path));
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Background boundary: any fault building the bundle becomes a 'failed' record the app shows, never an unobserved task.")]
+    private async Task RunPreparationAsync(Guid id, BugReportSharingMode mode, DateTimeOffset? since) {
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try {
+            var manifest = new List<BugReportManifestEntry>();
+            long read = 0;
+            var size = BuildBundleCore(id, DateTimeOffset.UtcNow, mode, since, manifest, bytes => {
+                read += bytes;
+                _preparations[id] = _preparations[id] with { EstimatedSizeBytes = read };
+            }, CancellationToken.None);
+            _preparations[id] = new BugReportPreparationDto(id, "ready", size, DownloadUrl(id), DateTimeOffset.UtcNow,
+                BugReportRedactor.ToWire(mode), Summarize(manifest), since);
+            LogPrepared(id, _bugReportsDir);
+        } catch (Exception ex) {
+            LogPrepareFailed(ex, id);
+            _preparations[id] = _preparations[id] with { Status = "failed", Error = ex.Message, CompletedUtc = DateTimeOffset.UtcNow };
+        } finally {
+            _gate.Release();
+        }
+    }
+
+    // The finished records only need to outlive the app's poll; keep the newest few. A record still preparing
+    // stays: its background run writes to it.
+    private void PrunePreparations() {
+        foreach (var stale in _preparations.Values.Where(p => p.CompletedUtc is not null).OrderByDescending(p => p.CompletedUtc).Skip(MaxRetainedBundles)) {
+            _preparations.TryRemove(stale.PreparationId, out _);
+        }
+    }
+
+    private long BuildBundleCore(Guid id, DateTimeOffset createdUtc, BugReportSharingMode mode, DateTimeOffset? since,
+            List<BugReportManifestEntry> manifest, Action<long> progress, CancellationToken ct) {
         ct.ThrowIfCancellationRequested();
         Directory.CreateDirectory(_bugReportsDir);
 
@@ -133,21 +197,9 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
                 // before the daemon has written a log or a profile.
                 WriteTextEntry(archive, "system-info.json", BugReportRedactor.RedactText(BuildSystemInfoJson(id, createdUtc, mode), mode));
 
-                var logsDir = Path.Combine(_profileDir, LogsDirName);
-                if (Directory.Exists(logsDir)) {
-                    // Newest MaxBundledLogs only — ordinal-descending filename sort is
-                    // chronological for the openastroara-<date>[_NNN].log naming (same sort
-                    // PruneOldBundles uses), so this takes the most recent few.
-                    var newestLogs = Directory.EnumerateFiles(logsDir, LogGlob, SearchOption.TopDirectoryOnly)
-                        .OrderByDescending(Path.GetFileName, StringComparer.Ordinal)
-                        .Take(MaxBundledLogs);
-                    foreach (var logPath in newestLogs) {
-                        ct.ThrowIfCancellationRequested();
-                        // A single log that vanished (the rolling sink can delete a retained
-                        // file mid-bundle) or is unreadable is skipped, not fatal to the bundle.
-                        TryAddFileEntry(archive, logPath, LogsDirName + "/" + Path.GetFileName(logPath), mode);
-                    }
-                }
+                // Ara's logs (the newest MaxBundledLogs without a range), and with a range every other
+                // source of the rig; a vanished or unreadable file is a manifest line, never fatal.
+                AddLogSources(archive, since, mode, manifest, progress, ct);
 
                 var profilePath = Path.Combine(_profileDir, ProfileFileName);
                 if (File.Exists(profilePath)) {
@@ -155,6 +207,7 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
                     // mode other than Full.
                     TryAddProfileEntry(archive, profilePath, mode);
                 }
+                WriteTextEntry(archive, ManifestFileName, BugReportRedactor.RedactText(ManifestJson(since, manifest), mode));
             }
 
             ct.ThrowIfCancellationRequested();
@@ -256,42 +309,6 @@ public sealed partial class BugReportService : IBugReportService, IDisposable {
             WriteTextEntry(archive, ProfileFileName, BugReportRedactor.RedactProfileJson(json, mode));
             return true;
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
-            LogEntrySkipped(sourcePath, ex);
-            return false;
-        }
-    }
-
-    private bool TryAddFileEntry(ZipArchive archive, string sourcePath, string entryName, BugReportSharingMode mode) {
-        try {
-            if ((File.GetAttributes(sourcePath) & FileAttributes.ReparsePoint) != 0) {
-                // Log the skip so an operator who symlinked a log/profile into place isn't
-                // left wondering why the bundle's logs/ or profile.json is missing.
-                LogSymlinkSkipped(sourcePath);
-                return false;
-            }
-            // Open with FileShare.ReadWrite (not CreateEntryFromFile's FileShare.Read) so the
-            // current rolling log the §29.9 Serilog sink is actively writing can still be read
-            // into the bundle — matches how LogService reads the live log. The whole-file copy
-            // can't honour a CancellationToken mid-stream, so cancellation is checked per-file
-            // by the caller.
-            using var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
-            using var entryStream = entry.Open();
-            // §54.6 credentials are stripped in EVERY mode and §54.4 items in redacted mode, line by
-            // line so a 50 MB log is never held whole in memory. This decodes the file as UTF-8 text:
-            // LogGlob matches only the sink's plain-text openastroara-*.log files; a compressed or
-            // binary log would have to bypass this path. A CLEF line carries a multi-line value
-            // (a PEM block) with escaped newlines, so the per-line pass still sees it whole.
-            using var reader = new StreamReader(source);
-            using var writer = new StreamWriter(entryStream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-            while (reader.ReadLine() is { } line) {
-                writer.WriteLine(BugReportRedactor.RedactText(line, mode));
-            }
-            return true;
-        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
-            // Vanished (rolling sink deleted a retained log) or unreadable between the
-            // directory scan and now — skip it. FileNotFoundException / DirectoryNotFoundException
-            // derive from IOException.
             LogEntrySkipped(sourcePath, ex);
             return false;
         }

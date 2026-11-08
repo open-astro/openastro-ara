@@ -159,10 +159,23 @@ public sealed record BugReportPreparationDto(
     DateTimeOffset? CompletedUtc,
     // §54.3 — the sharing mode the bundle was built with: "full" | "coarse_gps" | "redacted".
     // Optional default keeps the pre-#1185 shape deserializing.
-    string SharingMode = "full");
+    string SharingMode = "full",
+    // What went in, per source (Ara, NINA layer, AlpacaBridge, guider, system, journal): the disclosure lists
+    // it. Null while preparing.
+    IReadOnlyList<BugReportSourceSummaryDto>? Sources = null,
+    // The range the bundle covers (files written since this time); null = Ara's newest logs only.
+    DateTimeOffset? SinceUtc = null,
+    // Why a background preparation failed (Status "failed").
+    string? Error = null);
 
-/// <summary>POST /api/v1/bugreport/prepare body (§54.3): the sharing mode. Absent body or mode = "full".</summary>
-public sealed record BugReportPrepareRequestDto(string? Mode = null);
+/// <summary>One source's share of a bug-report bundle: files, raw bytes, whether a file was cut to its newest
+/// part, and the first note (why a source is missing or partial).</summary>
+public sealed record BugReportSourceSummaryDto(string Source, int Files, long Bytes, bool Truncated, string? Note);
+
+/// <summary>POST /api/v1/bugreport/prepare body (§54.3): the sharing mode, and the range (<c>since_utc</c>).
+/// Absent body or mode = "full"; absent range = Ara's newest logs only, as before. With a range the bundle is
+/// the whole rig's logs written since then, packed in the background (poll <c>GET /api/v1/bugreport/{id}</c>).</summary>
+public sealed record BugReportPrepareRequestDto(string? Mode = null, DateTimeOffset? SinceUtc = null);
 
 // ─── Full backup (ZIP / restore) (§43) ──────────────────────────────────────
 
