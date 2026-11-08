@@ -509,6 +509,24 @@ void main() {
     expect(simpleSelectionOf(later).belowHorizon, isTrue);
   });
 
+  test('the altitude of a position from the site at a moment', () {
+    // At J2000.0 the sidereal time at longitude 0 is 280.46°: a star there with the site's declination is overhead.
+    final utc = DateTime.utc(2000, 1, 1, 12);
+    expect(simpleAltitudeDeg(280.46, -33, latitudeDeg: -33, longitudeDeg: 0, utc: utc), closeTo(90, 0.1));
+    expect(simpleAltitudeDeg(100.46, -33, latitudeDeg: -33, longitudeDeg: 0, utc: utc), closeTo(-24, 0.1),
+        reason: 'twelve hours from the meridian');
+  });
+
+  test('an object outside the ranking still gets its real altitude, so it is not called below the horizon', () {
+    const up = PlanningDso(id: 'X1', name: 'Overhead', type: 'G', magnitude: 9, raDeg: 280.46, decDeg: -33);
+    const down = PlanningDso(id: 'X2', name: 'Under', type: 'G', magnitude: 9, raDeg: 100.46, decDeg: -33);
+    final utc = DateTime.utc(2000, 1, 1, 12);
+    final high = simpleSelectionOfDso(up, const [], latitudeDeg: -33, longitudeDeg: 0, utc: utc);
+    expect(high.altDeg, closeTo(90, 0.1));
+    expect(high.belowHorizon, isFalse);
+    expect(simpleSelectionOfDso(down, const [], latitudeDeg: -33, longitudeDeg: 0, utc: utc).belowHorizon, isTrue);
+  });
+
   test('an album card becomes the selection: the ranker row when listed, else the catalog position', () {
     const m31 = PlanningDso(
         id: 'NGC0224', name: 'Andromeda Galaxy', type: 'G', magnitude: 3.4, raDeg: 10.68, decDeg: 41.27,
@@ -812,6 +830,7 @@ void main() {
       await tester.tap(find.textContaining('M 31'));
       await tester.pump();
       expect(c.read(planetariumSearchProvider), 'M 31');
+      expect(c.read(planetariumSelectionProvider)?.name, 'Andromeda Galaxy', reason: 'the pick is the target at once');
       expect(showSky, 1);
       expect(find.byKey(const Key('simple-run-suggestion-0')), findsNothing, reason: 'the list closes on a pick');
     });

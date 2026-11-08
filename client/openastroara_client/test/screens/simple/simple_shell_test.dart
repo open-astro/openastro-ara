@@ -2190,6 +2190,7 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-search-sky-0')));
     await tester.pump();
     expect(c.read(planetariumSearchProvider), 'M 31');
+    expect(c.read(planetariumSelectionProvider), isNotNull, reason: "the hit is Plan's target at once");
     expect(find.byKey(const Key('simple-planetarium')), findsOneWidget, reason: 'the sky, pointed at it');
   });
 

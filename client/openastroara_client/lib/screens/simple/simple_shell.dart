@@ -14,7 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/library/live_library_state.dart' show libraryFilterProvider;
 import '../../state/time_sync_state.dart' show timeSyncApiProvider;
 import '../../state/sky_atlas/tonight_sky_state.dart'
-    show planningSettingsBootstrapProvider, tonightSkyProvider;
+    show planningSettingsBootstrapProvider;
 import '../../models/frame_histogram.dart';
 import '../../models/guider_status.dart';
 import '../../services/equipment_device_api.dart' show describeEquipmentError;
@@ -506,6 +506,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       case SimpleSkyHit(:final suggestion):
         // As Plan's search: the sky, pointed at it, its card offering Image this.
         setState(() => _sky = true);
+        ref
+            .read(planetariumSelectionProvider.notifier)
+            .set(simplePickDso(ref, suggestion.dso));
         ref.read(planetariumSearchProvider.notifier).search(suggestion.label);
       case SimpleSettingHit(section: 'Guide'):
         _pickMode(SimpleModeScreen.guide);
@@ -532,11 +535,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         builder: (albumContext) => SkyAlbumScreen(
           onImageTarget: (d) {
             // Read while the album still watches the ranker (it auto-disposes).
-            final sel = simpleSelectionOfDso(
-              d,
-              ref.read(tonightSkyProvider).value ?? const [],
-              latitudeDeg: ref.read(siteSettingsProvider).latitudeDeg,
-            );
+            final sel = simplePickDso(ref, d);
             Navigator.of(albumContext).pop();
             ref.read(planetariumSelectionProvider.notifier).set(sel);
             _imagePick();
