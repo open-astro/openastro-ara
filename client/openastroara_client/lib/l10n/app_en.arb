@@ -2483,8 +2483,8 @@
   "@estopGuidingStopped": {
     "description": "Emergency Stop result list item"
   },
-  "estopParkRequested": "mount told to park",
-  "@estopParkRequested": {
+  "estopMountStopped": "mount stopped",
+  "@estopMountStopped": {
     "description": "Emergency Stop result list item"
   },
   "estopFlatPanelOff": "flat panel light off",
@@ -2525,8 +2525,8 @@
   "@estopFailStopGuiding": {
     "description": "Emergency Stop failed step"
   },
-  "estopFailPark": "MOUNT PARK FAILED — verify it manually",
-  "@estopFailPark": {
+  "estopFailStopMount": "MOUNT STOP FAILED — verify it manually",
+  "@estopFailStopMount": {
     "description": "Emergency Stop failed step"
   },
   "estopFailRotator": "ROTATOR HALT FAILED — it may still be turning",

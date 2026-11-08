@@ -1784,7 +1784,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get estopGuidingStopped => 'guiding stopped';
 
   @override
-  String get estopParkRequested => 'mount told to park';
+  String get estopMountStopped => 'mount stopped';
 
   @override
   String get estopFlatPanelOff => 'flat panel light off';
@@ -1814,7 +1814,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'GUIDING MAY STILL BE ACTIVE (stop failed)';
 
   @override
-  String get estopFailPark => 'MOUNT PARK FAILED — verify it manually';
+  String get estopFailStopMount => 'MOUNT STOP FAILED — verify it manually';
 
   @override
   String get estopFailRotator =>

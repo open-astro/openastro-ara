@@ -135,7 +135,7 @@ class EmergencyStopResult {
   final int runsAborted;
   final bool exposureAborted;
   final bool guidingStopped;
-  final bool parkRequested;
+  final bool mountStopped;
   final bool flatPanelLightOff;
 
   /// Rungs that were ATTEMPTED and faulted (wire tokens: abort_runs,
@@ -151,7 +151,7 @@ class EmergencyStopResult {
     required this.runsAborted,
     required this.exposureAborted,
     required this.guidingStopped,
-    required this.parkRequested,
+    required this.mountStopped,
     required this.flatPanelLightOff,
     this.failedRungs = const [],
     this.coolerOff = false,
@@ -163,7 +163,7 @@ class EmergencyStopResult {
         runsAborted: json['runs_aborted'] is int ? json['runs_aborted'] as int : 0,
         exposureAborted: json['exposure_aborted'] == true,
         guidingStopped: json['guiding_stopped'] == true,
-        parkRequested: json['park_requested'] == true,
+        mountStopped: json['mount_stopped'] == true,
         flatPanelLightOff: json['flat_panel_light_off'] == true,
         failedRungs: json['failed_rungs'] is List
             ? (json['failed_rungs'] as List).whereType<String>().toList(growable: false)

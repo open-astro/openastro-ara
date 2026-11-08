@@ -1231,3 +1231,15 @@ its start and the client has nothing to do with it.
 **Spec ref:** `OpenAstroAra.Server/Endpoints/EquipmentEndpoints.cs` (`GetSwitchDriverAsync`, shared `DriverOfAsync`); client `deviceDriverProvider('switch/<id>')`.
 
 **Related:** #1651 (PR #1678); test `DeviceDriverInfoTest.The_switch_route_answers_that_switchs_driver_by_its_id`.
+
+## 2026-11-08 — Emergency Stop reports `mount_stopped`, not `park_requested` (#1672)
+
+**Endpoint(s) or area:** `POST /api/v1/server/emergency-stop`, WebSocket `safety.action_taken` with `action: emergency_stop`
+
+**Decision:** Emergency Stop no longer parks the mount. It sends AbortSlew and then Tracking off. `EmergencyStopResultDto.park_requested` becomes `mount_stopped`, the `safety.action_taken` payload changes the same way, and the failed-rung token `park` becomes `stop_mount`.
+
+**Reasoning:** A park is a slew, and it runs the code that may be at fault. This is a breaking change inside `/api/v1/`, permitted within v0.x, and needs no shim: an older client reads the missing field as false and only drops its "mount told to park" line. An older client shows an unknown failed rung through its generic `{step} FAILED` text. The §35.4 unsafe-weather reaction still parks and keeps `park_requested`.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/components/schemas/EmergencyStopResultDto`
+
+**Related:** PORT_PLAYBOOK.md §35.3 step 3, #1671
