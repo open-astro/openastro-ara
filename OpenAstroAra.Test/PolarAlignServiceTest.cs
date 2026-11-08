@@ -2006,8 +2006,10 @@ namespace OpenAstroAra.Test {
 
             // Coarse: the seed turn (RA 0 → 30). Fine: back to the start (RA 0), then its own turn (RA 30).
             var ras = slews.Select(c => c.RADegrees).ToArray();
-            Assert.That(ras, Is.EqualTo(new[] { 30.0, 0.0, 30.0 }).Within(1e-6));
+            Assert.That(ras, Is.EqualTo(TurnBackTurn).Within(1e-6));
         }
+
+        private static readonly double[] TurnBackTurn = { 30.0, 0.0, 30.0 };
 
         [Test]
         public async Task After_a_hand_placed_Home_the_off_axis_move_is_relative_to_the_mounts_stale_reading() {
