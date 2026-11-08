@@ -315,6 +315,14 @@ class _Windy extends WeatherNotifier with _Calls<WeatherStatus> {
       });
 }
 
+/// A rig whose safety policies load as [policies], or fail to.
+class _PoliciesApi extends ProfileApi {
+  _PoliciesApi(this.policies) : super(const AraServer(hostname: 'test', port: 1));
+  final SafetyPolicies? policies;
+  @override
+  Future<SafetyPolicies> getSafetyPolicies() async => policies ?? (throw StateError('unreachable'));
+}
+
 class _Dome extends DomeNotifier with _Calls<DomeStatus> {
   _Dome(this.state0);
   final EquipmentConnectionState state0;
@@ -481,6 +489,9 @@ class _GuideOpticsApi extends ProfileApi {
   _GuideOpticsApi(this.unsetReads) : super(const AraServer(hostname: 'test', port: 1));
   int unsetReads;
   int reads = 0;
+  // The status pill loads the safety policies; no network here.
+  @override
+  Future<SafetyPolicies> getSafetyPolicies() async => throw StateError('unreachable');
   @override
   Future<Phd2Settings> getPhd2Settings() async => ++reads > unsetReads
       ? const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75)
@@ -629,6 +640,9 @@ class _OpticsApi extends ProfileApi {
   _OpticsApi(this.optics) : super(const AraServer(hostname: 'test', port: 1));
   OpticsSettings optics;
   final puts = <OpticsSettings>[];
+  // The status pill loads the safety policies; no network here.
+  @override
+  Future<SafetyPolicies> getSafetyPolicies() async => throw StateError('unreachable');
   @override
   Future<OpticsSettings> getOptics() async => optics;
   @override
@@ -3782,17 +3796,31 @@ void main() {
   });
 
   testWidgets('weather past its limit shows in the Safety pill even while the monitor reads Safe', (tester) async {
-    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
       safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
       weatherProvider.overrideWith(() => _Windy()),
+      profileApiProvider.overrideWithValue(_PoliciesApi(const SafetyPolicies(weatherTriggersEnabled: true))),
     ]);
-    c.read(safetyPoliciesProvider.notifier).state = const SafetyPolicies(weatherTriggersEnabled: true);
+    await tester.pump();
     await tester.pump();
     final pill = find.byType(SimpleStatusPill);
     expect(find.descendant(of: pill, matching: find.textContaining('Wind 41 km/h, over the 36 km/h limit')),
         findsOneWidget, reason: 'the daemon holds the plan for the wind; the pill says why');
     expect(find.descendant(of: pill, matching: find.textContaining('limit.')), findsNothing,
         reason: 'a pill detail carries no full stop');
+  });
+
+  testWidgets('no weather in the Safety pill until the safety policies have loaded', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
+      weatherProvider.overrideWith(() => _Windy()),
+      profileApiProvider.overrideWithValue(_PoliciesApi(null)),
+    ]);
+    c.read(safetyPoliciesProvider.notifier).state = const SafetyPolicies(weatherTriggersEnabled: true);
+    await tester.pump();
+    await tester.pump();
+    expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41')),
+        findsNothing, reason: 'the defaults are not the rig\'s: nothing beats a wrong promise');
   });
 
   testWidgets('a dome Park asked in its window shows in the status pill at once', (tester) async {

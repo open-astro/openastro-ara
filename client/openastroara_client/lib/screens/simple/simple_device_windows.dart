@@ -4529,10 +4529,12 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
       };
       if (!performed) {
         asks.clear();
+        ref.read(domeShutterProvider.notifier).cancelAsk();
         _sayBusy(ref, l10n);
       }
     } catch (e) {
       asks.clear();
+      ref.read(domeShutterProvider.notifier).cancelAsk();
       notify(
         l10n.deviceCouldntMoveDome,
         detail: describeEquipmentError(e),

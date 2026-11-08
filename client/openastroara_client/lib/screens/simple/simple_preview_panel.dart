@@ -38,6 +38,8 @@ import '../../state/equipment/flat_panel_state.dart';
 import '../../state/equipment/rotator_state.dart';
 import '../../state/equipment/safety_monitor_state.dart';
 import '../../state/equipment/weather_state.dart';
+import '../../services/profile_api.dart';
+import '../../state/profile_management_state.dart';
 import '../../state/settings/safety_policies_state.dart';
 import '../../state/equipment/switch_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
@@ -1031,6 +1033,21 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
   /// Where the sensor was when the pill first saw it cooling: the bar's 0.
   double? _coolStart;
 
+  /// The rig's own safety limits have loaded: Simple Mode never opens the
+  /// policies page that loads them, and the defaults are not the rig's, so
+  /// no weather breach is read from them before (#1690 audit).
+  bool _policiesLoaded = false;
+  bool _hydrating = false;
+
+  Future<void> _hydratePolicies(ProfileApi api) async {
+    try {
+      await ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api);
+      if (mounted) setState(() => _policiesLoaded = true);
+    } catch (_) {
+      // Stays unloaded: nothing said beats a wrong promise.
+    }
+  }
+
   @override
   void dispose() {
     _ticker.dispose();
@@ -1106,8 +1123,16 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     // Weather past its limits holds a plan too (the daemon's same checks),
     // even while the monitor reads Safe: the pill says which (#1690 audit).
     final policies = ref.watch(safetyPoliciesProvider);
+    final profileApi = ref.watch(profileApiProvider);
+    if (!_hydrating && profileApi != null) {
+      _hydrating = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _hydratePolicies(profileApi);
+      });
+    }
     final weather = ref.watch(weatherProvider).value;
-    final breach = policies.weatherTriggersEnabled && weather != null
+    final breach =
+        _policiesLoaded && policies.weatherTriggersEnabled && weather != null
         ? simpleWeatherBreaches(l10n, weather, policies).firstOrNull
         : null;
     // The focuser moving, whoever moved it; autofocus has its own pill.

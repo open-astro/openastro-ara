@@ -101,6 +101,9 @@ class DomeShutterNotifier extends Notifier<DomeShutterMove?> {
   /// The Dome window is about to ask the shutter to open or close.
   void asked() => _askedAt = clock.now();
 
+  /// The open or close was refused or threw: nothing was asked after all.
+  void cancelAsk() => _askedAt = null;
+
   @override
   DomeShutterMove? build() {
     ref.read(domeShutterTimesServiceProvider).load().then((t) {
@@ -115,7 +118,7 @@ class DomeShutterNotifier extends Notifier<DomeShutterMove?> {
     if (s == null || !s.isConnected) return null;
     _device = s.deviceId;
     if (s.runtimeState != 'shutter_moving') {
-      _wasOpen = s.shutterOpen;
+      _wasOpen = _openBefore(s);
       return null;
     }
     return DomeShutterMove(
@@ -161,8 +164,13 @@ class DomeShutterNotifier extends Notifier<DomeShutterMove?> {
         }
       }
     }
-    if (s != null && s.isConnected && !moving) _wasOpen = s.shutterOpen;
+    if (s != null && s.isConnected && !moving) _wasOpen = _openBefore(s);
   }
+
+  /// A faulted shutter reads shutter_open false whatever its real position,
+  /// so a move after a fault has no known direction.
+  bool? _openBefore(DomeStatus s) =>
+      s.runtimeState == 'error' ? null : s.shutterOpen;
 }
 
 final domeShutterProvider =
