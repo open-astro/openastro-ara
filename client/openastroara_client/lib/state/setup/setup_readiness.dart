@@ -56,7 +56,11 @@ SetupStepState connectStepState(MountStatus? mount, CameraStatus? camera) {
 /// else pending. This is a THIS-SESSION signal by design: alignment is
 /// physical and per-setup, so a fresh app session starts unaligned.
 SetupStepState polarAlignStepState(PolarAlignLive live) {
-  if (live.zone == 'green') return SetupStepState.done;
+  // The rough stage's green is a first pass on the main camera, not an
+  // alignment: fine and check are still ahead of it.
+  if (live.zone == 'green' && live.stage != PolarAlignStages.coarse) {
+    return SetupStepState.done;
+  }
   if (live.phase == PolarAlignStates.failed) return SetupStepState.problem;
   if (live.isActive) return SetupStepState.inProgress;
   return SetupStepState.pending;

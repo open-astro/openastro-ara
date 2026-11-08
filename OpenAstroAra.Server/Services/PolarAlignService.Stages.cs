@@ -52,10 +52,7 @@ namespace OpenAstroAra.Server.Services {
         // ── coarse ───────────────────────────────────────────────────────────────────────────
 
         private async Task RunCoarseStageAsync(
-                PHD2Guider guiderClient, SiteSettingsDto site, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
-            var mainCamera = _mainCamera
-                ?? throw new RoutineFailedException("solver_configuration",
-                    "the coarse stage needs the main camera's plate solver, which this daemon has not wired up — start at the fine stage instead");
+                PHD2Guider guiderClient, IPolarAlignMainCameraSolver mainCamera, SiteSettingsDto site, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
             var renew = MakeLeaseRenewer(guiderClient, ct);
             await GoHomeAsync(settings, renew, gen, ct).ConfigureAwait(false);
             await SetStageAsync(gen, PolarAlignStages.Coarse, "seeding").ConfigureAwait(false);
@@ -107,8 +104,15 @@ namespace OpenAstroAra.Server.Services {
 
         // ── fine ─────────────────────────────────────────────────────────────────────────────
 
+        /// <param name="homeFirst">True after the coarse stage: its seed turn and its tracking-off live loop
+        /// left the mount an hour angle or more from Home, and a second turn "away from the meridian" from
+        /// there could reach a GEM's limit or flip the pier mid-seed. Home again first, like the check.</param>
         private async Task RunFineStageAsync(
-                PHD2Guider guiderClient, string workDir, SiteSettingsDto site, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
+                PHD2Guider guiderClient, string workDir, SiteSettingsDto site, PolarAlignSettingsDto settings, bool homeFirst, int gen, CancellationToken ct) {
+            if (homeFirst) {
+                await SetStageAsync(gen, PolarAlignStages.Fine, settings.UseHome ? "homing" : "seeding").ConfigureAwait(false);
+                await GoHomeAsync(settings, MakeLeaseRenewer(guiderClient, ct), gen, ct).ConfigureAwait(false);
+            }
             await SetStageAsync(gen, PolarAlignStages.Fine, "seeding").ConfigureAwait(false);
 
             // ── §45.4 binning from the camera: ask the daemon for the guide camera's frame once per
@@ -146,12 +150,12 @@ namespace OpenAstroAra.Server.Services {
             // An Alpaca mount refuses SlewToCoordinatesAsync while not tracking ("requires Tracking to be
             // true", the iOptron on the CM4, 2026-11-05).
             if (!_mount.GetInfo().TrackingEnabled) {
-                await TurnTrackingOnOrFailAsync(ct).ConfigureAwait(false);
+                await TurnTrackingOnOrFailAsync(gen, ct).ConfigureAwait(false);
                 LogTrackingEnabled();
             }
 
             // From Home the camera looks along the axis: the two seed frames would coincide.
-            await LeaveTheAxisAsync(settings, ct).ConfigureAwait(false);
+            await LeaveTheAxisAsync(settings, gen, ct).ConfigureAwait(false);
 
             // ── seed: frame A at the current pointing ──
             var hintA = CurrentMountPointingJnow();
@@ -163,7 +167,7 @@ namespace OpenAstroAra.Server.Services {
             var (mountRaDeg, mountDecDeg) = CurrentMountPointingJnow()
                 ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
             var dirSign = AwayFromMeridianSign(mountRaDeg);
-            var slewedPointing = await TurnRaAsync(mountRaDeg, mountDecDeg, dirSign * settings.SeedRotationDeg, settings, ct).ConfigureAwait(false);
+            var slewedPointing = await TurnRaAsync(mountRaDeg, mountDecDeg, dirSign * settings.SeedRotationDeg, settings, gen, ct).ConfigureAwait(false);
 
             // ── seed: frame B, then the two-point axis fit. The rotation passed to the fit is
             // the mount's OWN RA change (its encoders measure the turn about the mechanical
@@ -185,7 +189,7 @@ namespace OpenAstroAra.Server.Services {
             // ── live adjust: tracking OFF makes the camera direction stationary in alt/az, so
             // every subsequent solve's alt/az delta from the seed pointing is purely the user's
             // knob adjustment (§45.8) — and the loop needs no further slews.
-            SetTracking(false);
+            SetTracking(gen, false);
             SetErrors(gen, seedAltErr, seedAzErr, "adjusting", frameId: null); // keeps the seed-b attempt's id
             await PublishProgressAsync(gen, 0, seedAltErr, seedAzErr, solved: true).ConfigureAwait(false);
             await SolveLoopAsync(
@@ -218,14 +222,14 @@ namespace OpenAstroAra.Server.Services {
             await SetStageAsync(gen, PolarAlignStages.Check, settings.UseHome ? "homing" : "checking").ConfigureAwait(false);
             await GoHomeAsync(settings, renew, gen, ct).ConfigureAwait(false);
             if (!_mount.GetInfo().TrackingEnabled) {
-                await TurnTrackingOnOrFailAsync(ct).ConfigureAwait(false);
+                await TurnTrackingOnOrFailAsync(gen, ct).ConfigureAwait(false);
                 LogTrackingEnabled();
             }
             if (_runFrameSize is null) {
-                // A run that began at the check never read the guide frame size.
+                // A run that began at the check never read the guide frame size (StartAsync clears it per run).
                 _runFrameSize = await ReadGuideFrameSizeAsync(guiderClient, ct).ConfigureAwait(false);
             }
-            await LeaveTheAxisAsync(settings, ct).ConfigureAwait(false);
+            await LeaveTheAxisAsync(settings, gen, ct).ConfigureAwait(false);
             await SetStageAsync(gen, PolarAlignStages.Check, "checking").ConfigureAwait(false);
 
             var step = settings.CheckStepDeg > 0 ? settings.CheckStepDeg : 30.0;
@@ -238,13 +242,13 @@ namespace OpenAstroAra.Server.Services {
             LogSeedSolve("check-1", s1.RaDegJnow, s1.DecDegJnow);
             await NoteCheckSolveAsync(gen, 1).ConfigureAwait(false);
 
-            var p1 = await TurnRaAsync(ra0, dec0, dirSign * step, settings, ct).ConfigureAwait(false);
+            var p1 = await TurnRaAsync(ra0, dec0, dirSign * step, settings, gen, ct).ConfigureAwait(false);
             var mountTurn1 = Wrap180(p1.RaDeg - ra0);
             var s2 = await SolveSeedFrameAsync(capture, "check-2", p1, settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("check-2", s2.RaDegJnow, s2.DecDegJnow);
             await NoteCheckSolveAsync(gen, 2).ConfigureAwait(false);
 
-            var p2 = await TurnRaAsync(p1.RaDeg, dec0, dirSign * step, settings, ct).ConfigureAwait(false);
+            var p2 = await TurnRaAsync(p1.RaDeg, dec0, dirSign * step, settings, gen, ct).ConfigureAwait(false);
             var mountTurn2 = Wrap180(p2.RaDeg - p1.RaDeg);
             var s3 = await SolveSeedFrameAsync(capture, "check-3", p2, settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("check-3", s3.RaDegJnow, s3.DecDegJnow);
@@ -386,7 +390,7 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>A camera looking along the RA axis (the mount at Home, Dec ≈ 90°) gives the seed and
         /// the check no circle to fit: slew to Dec 85° at the current RA first, tracking on.</summary>
-        private async Task LeaveTheAxisAsync(PolarAlignSettingsDto settings, CancellationToken ct) {
+        private async Task LeaveTheAxisAsync(PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
             var (raDeg, decDeg) = CurrentMountPointingJnow()
                 ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
             if (Math.Abs(decDeg) <= OnAxisDecDeg) {
@@ -394,12 +398,13 @@ namespace OpenAstroAra.Server.Services {
             }
             var target = new Coordinates(raDeg, Math.CopySign(SeedDecDeg, decDeg), Epoch.JNOW, Coordinates.RAType.Degrees);
             LogLeavingAxis(decDeg, target.Dec);
-            await SlewOrFailAsync(target, "the mount refused the slew from Home to Dec 85° — slew it there from the mount controls, then start again", ct).ConfigureAwait(false);
+            await SlewOrFailAsync(target, "the mount refused the slew from Home to Dec 85° — slew it there from the mount controls, then start again", gen, ct).ConfigureAwait(false);
             await Task.Delay(TimeSpan.FromSeconds(settings.SettleSeconds), ct).ConfigureAwait(false);
         }
 
         /// <summary>With HA = LST − RA, decreasing RA increases HA (further west): turn west when
-        /// already west of the meridian, east when east — the arc then cannot cross it.</summary>
+        /// already west of the meridian, east when east — the arc then cannot cross it. The stages that
+        /// turn from far out (a fine stage after the coarse one) go Home first rather than turn further.</summary>
         private double AwayFromMeridianSign(double mountRaDeg) {
             var lstDeg = _mount.GetInfo().SiderealTime * 15.0;
             var haDeg = Wrap180(lstDeg - mountRaDeg);
@@ -410,10 +415,10 @@ namespace OpenAstroAra.Server.Services {
         /// and return the mount's reported pointing afterwards. A mount that reports under 1° of turn fails
         /// as <c>slew_failed</c>.</summary>
         private async Task<(double RaDeg, double DecDeg)> TurnRaAsync(
-                double fromRaDeg, double decDeg, double signedDeltaDeg, PolarAlignSettingsDto settings, CancellationToken ct) {
+                double fromRaDeg, double decDeg, double signedDeltaDeg, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
             var targetRaDeg = (fromRaDeg + signedDeltaDeg + 360.0) % 360.0;
             var target = new Coordinates(targetRaDeg, decDeg, Epoch.JNOW, Coordinates.RAType.Degrees);
-            await SlewOrFailAsync(target, SeedSlewRefusedMessage, ct).ConfigureAwait(false);
+            await SlewOrFailAsync(target, SeedSlewRefusedMessage, gen, ct).ConfigureAwait(false);
             await Task.Delay(TimeSpan.FromSeconds(settings.SettleSeconds), ct).ConfigureAwait(false);
             var after = CurrentMountPointingJnow()
                 ?? throw new RoutineFailedException("mount_fault", "the mount reports no current pointing");
@@ -425,8 +430,8 @@ namespace OpenAstroAra.Server.Services {
             return after;
         }
 
-        private async Task SlewOrFailAsync(Coordinates target, string refusedMessage, CancellationToken ct) {
-            await KeepTrackingOnForSlewAsync(ct).ConfigureAwait(false);
+        private async Task SlewOrFailAsync(Coordinates target, string refusedMessage, int gen, CancellationToken ct) {
+            await KeepTrackingOnForSlewAsync(gen, ct).ConfigureAwait(false);
             bool slewed;
             try {
                 // #1536 — the failure is this routine's to report; as a mount-op fault it would count toward abort-and-park.
@@ -476,6 +481,9 @@ namespace OpenAstroAra.Server.Services {
                 _stage = stage;
                 _state = state;
                 _checkSolvesDone = 0;
+                // A Next that landed after the previous stage's loop took its own (a double tap in the
+                // hand-off) must not be spent on this stage's first check — it would skip the stage.
+                _advanceRequested = false;
             }
             LogStage(stage, state);
             return PublishStageAsync(gen, stage, state, solvesDone: 0);

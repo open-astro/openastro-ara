@@ -1770,20 +1770,22 @@ namespace OpenAstroAra.Test {
             }
         }
 
-        /// <summary>A mount at Home (RA 0, Dec 90) that can find Home; its pointing follows slews.</summary>
+        /// <summary>A mount at Home (RA 0, Dec 90) that can find Home; its pointing follows slews, and Find Home
+        /// puts it back at Home.</summary>
         private static Mock<ITelescopeMediator> NewHomeMount(bool canFindHome, ConcurrentQueue<Coordinates>? slews = null) {
             var mount = new Mock<ITelescopeMediator>();
             var homed = 0;
             mount.Setup(m => m.GetInfo()).Returns(() => new TelescopeInfo {
                 Connected = true, SiderealTime = 20.0, TrackingEnabled = true, CanFindHome = canFindHome, AtHome = homed > 0,
             });
-            var position = new Coordinates(0.0, 90.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            var home = new Coordinates(0.0, 90.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            var position = home;
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
             mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
                 .Callback<Coordinates, CancellationToken>((target, _) => { slews?.Enqueue(target); position = target; })
                 .ReturnsAsync(true);
             mount.Setup(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
-                .Callback(() => Interlocked.Increment(ref homed))
+                .Callback(() => { Interlocked.Increment(ref homed); position = home; })
                 .ReturnsAsync(true);
             mount.Setup(m => m.WaitForSlew(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
             mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns(true);
@@ -1848,7 +1850,9 @@ namespace OpenAstroAra.Test {
                 && e.Payload.GetProperty("state").GetString() == "seeding"), Is.True, "the coarse stage seeds like the fine one");
             mount.Verify(m => m.SetTrackingEnabled(false), Times.AtLeastOnce, "the pointing must move only with the knobs");
 
-            // Next: the fine stage. The mount is already off the axis at Dec 85°, so only its own seed turn follows.
+            // Next: the fine stage. The coarse turn left the mount an hour angle from Home (and its live loop ran
+            // with tracking off), so the fine stage goes Home again before its own Dec-85° slew and seed turn —
+            // never a second turn outward from where the coarse stage stopped.
             await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false);
             PolarAlignStateDto fine;
             using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20))) {
@@ -1859,10 +1863,12 @@ namespace OpenAstroAra.Test {
                 }
             }
             Assert.That(fine.State, Is.EqualTo("adjusting"));
+            mount.Verify(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Exactly(2), "the fine stage homes again after the coarse turn");
             var targets = slews.ToArray();
-            Assert.That(targets.Length, Is.EqualTo(3), "the fine stage adds its seed turn only");
-            Assert.That(targets[2].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6), "the fine seed turn stays at Dec 85°");
-            Assert.That(Math.Abs(((targets[2].RADegrees - targets[1].RADegrees + 540) % 360) - 180), Is.EqualTo(30.0).Within(1e-6), "the test store's 30° seed turn");
+            Assert.That(targets.Length, Is.EqualTo(4), "the fine stage adds its Dec-85° slew from Home and its seed turn");
+            Assert.That(targets[2].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6), "from Home the camera is on the axis again");
+            Assert.That(targets[3].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6), "the fine seed turn stays at Dec 85°");
+            Assert.That(Math.Abs(((targets[3].RADegrees - targets[2].RADegrees + 540) % 360) - 180), Is.EqualTo(30.0).Within(1e-6), "the test store's 30° seed turn");
             Assert.That(ws.Events.Any(e => e.Type == WsEventCatalog.PolarAlignStage
                 && e.Payload.GetProperty("stage").GetString() == PolarAlignStages.Fine), Is.True);
 
@@ -1894,6 +1900,89 @@ namespace OpenAstroAra.Test {
             Assert.That(mainCamera.Calls, Is.GreaterThan(0));
 
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task Two_Nexts_in_a_row_from_the_Home_wait_advance_one_stage_only() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var mount = NewHomeMount(canFindHome: false);
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, new HintFollowingSolver(), mount, ws, mainCamera: new FakeMainCamera());
+
+            await svc.StartAsync(PolarAlignStages.Coarse, null, CancellationToken.None).ConfigureAwait(false);
+            await WaitForEventAsync(ws, WsEventCatalog.PolarAlignNeedsHome).ConfigureAwait(false);
+            // A double tap on Continue: the second Next can land while the state still says homing, after
+            // the wait has already taken the first — it must not be spent on the coarse stage's first check.
+            await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false);
+            try {
+                await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false);
+            } catch (InvalidOperationException) {
+                // The wait woke and the state moved on first: nothing was left to double-spend.
+            }
+            var coarse = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+
+            Assert.That(coarse.State, Is.EqualTo("adjusting"));
+            Assert.That(coarse.Stage, Is.EqualTo(PolarAlignStages.Coarse), "the stray Next must not skip the coarse live loop");
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task A_check_only_run_reads_the_guide_frame_size_afresh() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            using var svc = NewService(guider, new HintFollowingSolver(), NewHomeMount(canFindHome: true));
+
+            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("checked"));
+            Assert.That(fake.ReceivedMethods.Count(m => m == "get_camera_frame_size"), Is.EqualTo(1));
+
+            // The guide camera may have changed between runs: a second check-only run asks again instead
+            // of binning by the last run's frame size.
+            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("checked"));
+            Assert.That(fake.ReceivedMethods.Count(m => m == "get_camera_frame_size"), Is.EqualTo(2));
+        }
+
+        [Test]
+        public async Task A_parked_mount_is_handed_back_the_tracking_it_came_up_with_after_unpark() {
+            // A parked mount reads tracking off. What the user gets back is the tracking the mount came up
+            // with after the unpark (on, here), not the parked reading — the next slew needs tracking on.
+            var (mount, _) = ParkedMount(unparks: true);
+            var trackingWrites = new ConcurrentQueue<bool>();
+            mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Callback<bool>(trackingWrites.Enqueue).Returns(true);
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            using var svc = NewService(guider, solver, mount);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(trackingWrites, Is.Not.Empty);
+            Assert.That(trackingWrites.Last(), Is.True, "the hand-back restores the tracking read after the unpark");
+        }
+
+        [Test]
+        public async Task A_check_only_start_without_Home_opens_in_checking() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var store = NewStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { UseHome = false });
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, new HintFollowingSolver(), NewMount(), ws, store: store);
+
+            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+            var started = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignStarted).ConfigureAwait(false);
+
+            Assert.That(started.GetProperty("state").GetString(), Is.EqualTo("checking"), "the check never seeds");
+            Assert.That((await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("checked"));
         }
 
         [Test]

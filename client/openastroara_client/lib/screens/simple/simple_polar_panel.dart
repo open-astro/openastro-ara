@@ -135,7 +135,12 @@ String simplePolarPhase(PolarAlignLive live, AppLocalizations l10n) =>
 final simplePolarFrameProvider = FutureProvider.autoDispose<Uint8List?>((
   ref,
 ) async {
+  // The rough stage's frames are the main camera's: the guider has no picture.
+  final coarse = ref.watch(
+    polarAlignLiveProvider.select((l) => l.stage == PolarAlignStages.coarse),
+  );
   ref.watch(polarAlignLiveProvider.select((l) => l.lastFrame));
+  if (coarse) return null;
   final api = ref.watch(polarAlignApiProvider);
   return api?.getLiveFrame();
 });

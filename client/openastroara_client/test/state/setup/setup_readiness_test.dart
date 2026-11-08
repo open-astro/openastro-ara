@@ -72,6 +72,15 @@ void main() {
           SetupStepState.done);
     });
 
+    test("the rough stage's green zone is not done yet", () {
+      // Rough is a first pass on the main camera; fine and check are still ahead.
+      const rough = PolarAlignLive(
+          phase: PolarAlignStates.adjusting, stage: PolarAlignStages.coarse, zone: 'green');
+      expect(polarAlignStepState(rough), SetupStepState.inProgress);
+      expect(polarAlignStepState(rough.copyWith(stage: PolarAlignStages.fine)),
+          SetupStepState.done);
+    });
+
     test('red/yellow zones are not done', () {
       expect(
           polarAlignStepState(const PolarAlignLive(

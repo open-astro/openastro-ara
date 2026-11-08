@@ -334,7 +334,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
       final status = await api.getStatus();
       if (status != null) {
         ref.read(polarAlignLiveProvider.notifier).hydrateFromStatus(status);
-        if (status.isActive) unawaited(_loadFrame());
+        if (status.isActive && status.stage != PolarAlignStages.coarse) unawaited(_loadFrame());
       }
       final settings = await api.getSettings();
       if (mounted) {
@@ -452,8 +452,12 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     // in build: it mutates the baseline fields.
     ref.listen(polarAlignLiveProvider, (prev, next) => setState(() => _bolt.track(next)));
     // Each finished frame (solved or not) replaces lastFrame — fetch its image.
+    // Not in the rough stage: its frames are the main camera's, and the guider
+    // has nothing to show (the card hides the picture there anyway).
     ref.listen(polarAlignLiveProvider, (prev, next) {
-      if (next.lastFrame != null && !identical(prev?.lastFrame, next.lastFrame)) {
+      if (next.stage != PolarAlignStages.coarse &&
+          next.lastFrame != null &&
+          !identical(prev?.lastFrame, next.lastFrame)) {
         _loadFrame();
       }
     });

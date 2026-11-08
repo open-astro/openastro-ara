@@ -227,6 +227,11 @@ namespace OpenAstroAra.Server.Services {
                 return await _frameFetcher.FetchLiveFrameJpegAsync(host, guiderClient.ConnectedRpcPort, timeout.Token).ConfigureAwait(false);
             } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
                 throw;
+            } catch (System.Net.Http.HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) {
+                // The guider has no frame yet (the coarse stage shoots the main camera; a run that has
+                // not captured): the normal answer, not a fault worth a stack trace.
+                LogLiveFrameUnavailable("the guider has no frame to show yet");
+                return null;
             } catch (Exception ex) {
                 LogLiveFrameFetchFailed(ex);
                 return null;
@@ -323,12 +328,18 @@ namespace OpenAstroAra.Server.Services {
                         "site latitude must be configured (non-zero) before polar alignment — the routine measures against your site's celestial pole");
                 }
                 var settings = _profileStore.GetPolarAlignSettings();
-                if (stage == PolarAlignStages.Coarse && _mainCamera is null) {
+                var mainCamera = _mainCamera;
+                if (stage == PolarAlignStages.Coarse && mainCamera is null) {
                     throw new InvalidOperationException(
                         "the coarse stage needs the main camera's plate solver, which this daemon has not wired up — start at the fine stage instead");
                 }
-                // The coarse and check stages open with the mount going Home; the fine stage seeds at once.
-                var initialState = stage == PolarAlignStages.Fine || !settings.UseHome ? "seeding" : "homing";
+                // The coarse and check stages open with the mount going Home; without Home each opens
+                // in its own first state (the fine stage always seeds at once).
+                var initialState = stage switch {
+                    PolarAlignStages.Check => settings.UseHome ? "homing" : "checking",
+                    PolarAlignStages.Coarse => settings.UseHome ? "homing" : "seeding",
+                    _ => "seeding",
+                };
                 await guiderClient.SetPaSessionAsync(active: true, timeoutS: LeaseTimeoutSeconds, ct).ConfigureAwait(false);
                 int gen;
                 int startSeq;
@@ -350,6 +361,7 @@ namespace OpenAstroAra.Server.Services {
                     _captureRequested = false;
                     _waitingForCapture = false;
                     _lastFrame = null;
+                    _runFrameSize = null; // read afresh per run — the guide camera may have changed since the last one
                     gen = ++_generation;
                     _lastCaptureFault = null; // fresh run — stale capture faults must not color its failures
                     // _abandonedCaptureDebts is deliberately NOT reset: a capture abandoned by the
@@ -358,7 +370,7 @@ namespace OpenAstroAra.Server.Services {
                 }
                 _runCts = new CancellationTokenSource();
                 var runToken = _runCts.Token;
-                _runTask = Task.Run(() => RunRoutineAsync(guiderClient, site, settings, stage, gen, startSeq, runToken), CancellationToken.None);
+                _runTask = Task.Run(() => RunRoutineAsync(guiderClient, mainCamera, site, settings, stage, gen, startSeq, runToken), CancellationToken.None);
                 LogStarted(stage);
                 await PublishAsync(WsEventCatalog.PolarAlignStarted, new JsonObject { ["state"] = initialState, ["stage"] = stage }).ConfigureAwait(false);
                 return Accepted("polar-align.start", idempotencyKey);
@@ -471,27 +483,30 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>A §42.3 fault recovery (a mount reconnect) can drop tracking between the routine's
         /// switch-on and its slew (CM4, 2026-11-05: six seconds later). Checked just before a slew, not
         /// during one: the iOptron reports tracking off while it slews.</summary>
-        private async Task KeepTrackingOnForSlewAsync(CancellationToken ct) {
+        private async Task KeepTrackingOnForSlewAsync(int gen, CancellationToken ct) {
             if (_mount.GetInfo().TrackingEnabled) {
                 return;
             }
             LogTrackingDropped();
-            await TurnTrackingOnOrFailAsync(ct).ConfigureAwait(false);
+            await TurnTrackingOnOrFailAsync(gen, ct).ConfigureAwait(false);
         }
 
-        private async Task TurnTrackingOnOrFailAsync(CancellationToken ct) {
-            if (!await TurnTrackingOnAsync(ct).ConfigureAwait(false)) {
+        private async Task TurnTrackingOnOrFailAsync(int gen, CancellationToken ct) {
+            if (!await TurnTrackingOnAsync(gen, ct).ConfigureAwait(false)) {
                 throw new RoutineFailedException("tracking_off", TrackingOffMessage);
             }
         }
 
         /// <summary>Set tracking and wait for the mount to report it (a driver can take a moment, and a
-        /// state that never flips means the mount refused). True once it reports tracking.</summary>
+        /// state that never flips means the mount refused). True once it reports tracking. A superseded
+        /// run (Stop, or a newer Start) writes nothing: the mount is the current run's now.</summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "A mount fault while enabling tracking becomes the routine's tracking_off failure.")]
-        private async Task<bool> TurnTrackingOnAsync(CancellationToken ct) {
+        private async Task<bool> TurnTrackingOnAsync(int gen, CancellationToken ct) {
             try {
-                _trackingTouched = true;
+                if (!TryMarkTrackingTouched(gen)) {
+                    throw new OperationCanceledException("the run was superseded before it turned tracking on");
+                }
                 if (!_mount.SetTrackingEnabled(true)) {
                     return false;
                 }
@@ -524,14 +539,18 @@ namespace OpenAstroAra.Server.Services {
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "The run task is the routine's top-level boundary: any escaped exception must land in the 'failed' state + WS error event, never fault an unobserved background task.")]
         private async Task RunRoutineAsync(
-                PHD2Guider guiderClient, SiteSettingsDto site, PolarAlignSettingsDto settings, string stage,
+                PHD2Guider guiderClient, IPolarAlignMainCameraSolver? mainCamera, SiteSettingsDto site, PolarAlignSettingsDto settings, string stage,
                 int gen, int startSeq, CancellationToken ct) {
             // Per-run unique dir: an abandoned (zombie) run and its successor must never share
             // files — this run's cleanup deletes only its own directory.
             var workDir = Path.Combine(Path.GetTempPath(), "ara-polar-align", Guid.NewGuid().ToString("N"));
             // The user's tracking setting, handed back on every exit path once this run has touched it.
-            var priorTracking = _mount.GetInfo().TrackingEnabled;
-            _trackingTouched = false;
+            // Read AFTER the unpark below: a parked mount reports tracking off, and what the user gets
+            // back is the tracking the mount came up with, not the parked reading.
+            bool? priorTracking = null;
+            lock (_gate) {
+                _trackingTouched = false;
+            }
             try {
                 Directory.CreateDirectory(workDir);
 
@@ -545,15 +564,21 @@ namespace OpenAstroAra.Server.Services {
                 // the run then failed with "the RA seed slew was rejected by the mount". The user started a
                 // routine that moves the mount, so unpark it here, before anything else.
                 await UnparkIfParkedAsync(ct).ConfigureAwait(false);
+                priorTracking = _mount.GetInfo().TrackingEnabled;
 
                 // The stages run in order from the one the user started at; each live loop returns
                 // when the user taps Next, and the check ends the run itself (state `checked`).
+                var ranCoarse = false;
                 if (stage == PolarAlignStages.Coarse) {
-                    await RunCoarseStageAsync(guiderClient, site, settings, gen, ct).ConfigureAwait(false);
+                    // StartAsync refused a coarse start without the main camera's solver.
+                    await RunCoarseStageAsync(guiderClient,
+                        mainCamera ?? throw new InvalidOperationException("the coarse stage started without a main-camera solver"),
+                        site, settings, gen, ct).ConfigureAwait(false);
                     stage = PolarAlignStages.Fine;
+                    ranCoarse = true;
                 }
                 if (stage == PolarAlignStages.Fine) {
-                    await RunFineStageAsync(guiderClient, workDir, site, settings, gen, ct).ConfigureAwait(false);
+                    await RunFineStageAsync(guiderClient, workDir, site, settings, homeFirst: ranCoarse, gen, ct).ConfigureAwait(false);
                     stage = PolarAlignStages.Check;
                 }
                 await RunCheckStageAsync(guiderClient, workDir, site, settings, gen, ct).ConfigureAwait(false);
@@ -583,10 +608,27 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        /// <summary>Every tracking write of a run goes through here so the exit knows to hand it back.</summary>
-        private void SetTracking(bool enabled) {
-            _trackingTouched = true;
+        /// <summary>Every tracking write of a run goes through here so the exit knows to hand it back. A
+        /// superseded run writes nothing (see <see cref="TryMarkTrackingTouched"/>).</summary>
+        private void SetTracking(int gen, bool enabled) {
+            if (!TryMarkTrackingTouched(gen)) {
+                return;
+            }
             _mount.SetTrackingEnabled(enabled);
+        }
+
+        /// <summary>Record that the CURRENT run is about to write tracking; false for a superseded
+        /// run (a Stop or a newer Start bumped the generation), whose late write would land on a mount
+        /// the successor now owns — and whose flag would make the successor hand back tracking it
+        /// never touched. Guarded by <c>_gate</c> like every other run-task field.</summary>
+        private bool TryMarkTrackingTouched(int gen) {
+            lock (_gate) {
+                if (_generation != gen) {
+                    return false;
+                }
+                _trackingTouched = true;
+                return true;
+            }
         }
 
         /// <summary>§45.4 — the guide camera's frame size from the daemon, or null when it has no

@@ -581,6 +581,34 @@ void main() {
       expect(find.byKey(const Key('polar-align-last-solve')), findsNothing);
     });
 
+    testWidgets('the rough stage does not fetch the guide camera frame', (tester) async {
+      // Rough-stage frames are the main camera's: the guider has no picture to give, and asking it
+      // for one on every solve only earns a 404 (#1729).
+      final api = _FakePolarAlignClient()
+        ..status = const PolarAlignStatus(
+            state: PolarAlignStates.adjusting, stage: PolarAlignStages.coarse, currentErrorArcmin: 30);
+      await tester.pumpWidget(_harness(
+          api,
+          const PolarAlignLive(
+            phase: PolarAlignStates.adjusting,
+            stage: PolarAlignStages.coarse,
+            totalErrorArcmin: 30,
+            lastFrame: PolarAlignFrameInfo(
+              frameId: 'live-2',
+              solved: true,
+              exposureSeconds: 3,
+              captureMs: 5200,
+              solveMs: 900,
+              raDeg: 138.6667,
+              decDeg: 87.1822,
+            ),
+          )));
+      await tester.pumpAndSettle();
+
+      expect(api.calls, isNot(contains('frame')));
+      expect(find.byKey(const Key('polar-align-live-view')), findsNothing);
+    });
+
     testWidgets('an active routine shows the guide camera live view', (tester) async {
       // A real 64×48 PNG, so the view decodes and lays out the frame.
       final png = (await tester.runAsync(() async {
