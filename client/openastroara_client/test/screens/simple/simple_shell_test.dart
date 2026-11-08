@@ -1167,6 +1167,22 @@ void main() {
     expect(panel.bottom, lessThanOrEqualTo(row.top - AraSpace.s8));
   });
 
+  testWidgets("the Guider panel sits centred between the status pill and the bottom row, like Plan's sheet (user, 2026-11-09)",
+      (tester) async {
+    const pillBottom = kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight;
+    const roomBottom = 768 - kSimpleInset - kSimpleBarHeight; // a connected guider shows the bottom row
+    await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(_GuiderUp.new)]);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-guide')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final panel = tester.getRect(find.byKey(const Key('simple-guide-panel')));
+    expect(panel.center.dy, closeTo((pillBottom + roomBottom) / 2, 1));
+  });
+
   testWidgets('Guide is a mode: its shutter starts guiding, its chip shows the RMS and opens the Guide panel',
       (tester) async {
     // User, 2026-11-04: guiding moves from the guider's window to a mode on the rail.

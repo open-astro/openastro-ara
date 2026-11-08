@@ -1145,7 +1145,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       : betweenBottom,
                                   child: CustomSingleChildLayout(
                                     delegate: _BesideRail(
-                                      centre: guidedStep,
+                                      centre:
+                                          guidedStep ||
+                                          (_popover == _Popover.settings &&
+                                              shown == SimpleModeScreen.guide),
                                       preferredTop: math.max(
                                         0,
                                         rightRailTop - popoverTop,
