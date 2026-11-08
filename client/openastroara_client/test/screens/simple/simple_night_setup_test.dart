@@ -6,6 +6,8 @@ import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
@@ -91,7 +93,15 @@ class _Live extends PolarAlignLiveNotifier {
   void run() => state = const PolarAlignLive(phase: PolarAlignStates.adjusting);
 }
 
-Future<(ProviderContainer, _PolarApi)> _container({bool permanent = false, _Guider? guider}) async {
+class _Run extends SequenceRunStateNotifier {
+  _Run(this.run);
+  final SequenceRunState run;
+  @override
+  Future<SequenceRunStateInfo?> build() async => SequenceRunStateInfo(sequenceId: 's', runId: 'r', state: run);
+}
+
+Future<(ProviderContainer, _PolarApi)> _container(
+    {bool permanent = false, _Guider? guider, SequenceRunState? queue}) async {
   final api = _PolarApi();
   final c = ProviderContainer(overrides: [
     if (guider != null) guiderStatusProvider.overrideWith(() => guider),
@@ -101,8 +111,10 @@ Future<(ProviderContainer, _PolarApi)> _container({bool permanent = false, _Guid
     polarAlignApiProvider.overrideWithValue(api),
     simplePermanentPierPrefsProvider.overrideWithValue(_Prefs(permanent)),
     simpleRunProvider.overrideWith(_Plan.new),
+    if (queue != null) sequenceRunStateProvider.overrideWith(() => _Run(queue)),
   ]);
   addTearDown(c.dispose);
+  if (queue != null) await c.read(sequenceRunStateProvider.future);
   await c.read(simplePermanentPierProvider.future);
   if (guider != null) await c.read(guiderStatusProvider.future);
   c.listen(nightSetupProvider, (_, _) {});
@@ -151,6 +163,28 @@ void main() {
     await Future<void>.value();
     expect(guider.calls, isEmpty, reason: 'no calibration under a frame; the shutter says why');
     c.read(captureProgressProvider.notifier).reset();
+  });
+
+  test('the Guide step starts guiding under a paused Queue, not under a running or aborting one (#1725)', () async {
+    for (final (queue, starts) in [
+      (SequenceRunState.paused, true),
+      (SequenceRunState.pausedAwaitingUser, true),
+      (SequenceRunState.running, false),
+      (SequenceRunState.aborting, false),
+    ]) {
+      final guider = _Guider();
+      final (c, _) = await _container(guider: guider, queue: queue);
+      final plan = c.read(simpleRunProvider.notifier) as _Plan;
+      final pilot = c.read(nightSetupProvider.notifier);
+      pilot.start();
+      plan.queued();
+      c.read(_focus.notifier).set(SetupStepState.done);
+      c.read(_aligned.notifier).set(SetupStepState.done);
+      pilot.next();
+      expect(c.read(nightSetupProvider), NightSetupStep.guide);
+      await Future<void>.value();
+      expect(guider.calls, starts ? ['start'] : isEmpty, reason: '$queue');
+    }
   });
 
   test('with a guider connected, polar align hands over to Guide, which starts guiding on entry', () async {
