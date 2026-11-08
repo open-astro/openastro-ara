@@ -2523,11 +2523,14 @@ namespace OpenAstroAra.Test {
             await using var fake = FakeGuider.Start();
             _ = new ProfileDaemon(fake);
             var guides = 0;
-            fake.OnRpc("get_app_state", _ => JsonValue.Create(Volatile.Read(ref guides) == 0 ? "Stopped" : "LostLock"));
+            var stopped = 0;
+            // Like a real guider: LostLock after the first guide, Stopped once stop_capture has been received.
+            fake.OnRpc("get_app_state", _ => JsonValue.Create(Volatile.Read(ref guides) == 0 || Volatile.Read(ref stopped) == 1 ? "Stopped" : "LostLock"));
             fake.OnRpc("get_calibrated", JsonValue.Create(true));
             fake.OnRpc("get_lock_position", new JsonArray(100.0, 100.0));
             fake.OnRpc("guide", _ => { Interlocked.Increment(ref guides); return JsonValue.Create(0); });
             fake.OnRpc("stop_capture", req => {
+                Volatile.Write(ref stopped, 1);
                 _ = fake.BroadcastAsync(PhdEvents.SettleDone(status: 1, error: "Stopped capturing"));
                 return JsonValue.Create(0);
             });
