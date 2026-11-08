@@ -28,20 +28,32 @@ Color zoneColor(double? totalErrorArcmin) {
 /// Plain-English verdict for a total polar error (label, what it means): the
 /// Polar Align quality card's bands, shared with the guiding strip's
 /// residual-from-guiding readout. Pure — unit-tested.
-(String, String) polarErrorRating(double arcmin) {
+(String, String) polarErrorRating(double arcmin) => _ratingByVerdict[polarVerdictFor(arcmin)]!;
+
+/// The daemon's verdict token for a total error — the same bands as
+/// `PolarAlignService.VerdictFor` (`excellent` ≤1′, `very_good` ≤3′, `good`
+/// ≤10′, `rough` ≤30′, else `far_off`).
+String polarVerdictFor(double arcmin) {
   final a = arcmin.abs();
-  if (a <= 1) {
-    return ('Excellent', "Polar alignment won't limit your exposures.");
-  }
-  if (a <= 3) return ('Very good', 'Plenty for guided imaging.');
-  if (a <= 10) {
-    return ('Good', 'Fine with guiding; keep unguided exposures short.');
-  }
-  if (a <= 30) {
-    return ('Rough', 'Keep adjusting — stars will drift in longer exposures.');
-  }
-  return ('Far off', 'Keep turning the knobs toward the arrows.');
+  if (a <= 1) return 'excellent';
+  if (a <= 3) return 'very_good';
+  if (a <= 10) return 'good';
+  if (a <= 30) return 'rough';
+  return 'far_off';
 }
+
+/// The words for a verdict the daemon sent (`check_result.verdict`), so the
+/// checked card shows the daemon's own call; null for a token this build does
+/// not know (fall back to [polarErrorRating] on the total). Pure — unit-tested.
+(String, String)? polarRatingForVerdict(String verdict) => _ratingByVerdict[verdict];
+
+const _ratingByVerdict = <String, (String, String)>{
+  'excellent': ('Excellent', "Polar alignment won't limit your exposures."),
+  'very_good': ('Very good', 'Plenty for guided imaging.'),
+  'good': ('Good', 'Fine with guiding; keep unguided exposures short.'),
+  'rough': ('Rough', 'Keep adjusting — stars will drift in longer exposures.'),
+  'far_off': ('Far off', 'Keep turning the knobs toward the arrows.'),
+};
 
 /// The icon for [polarErrorRating]'s band.
 IconData polarErrorRatingIcon(double arcmin) {

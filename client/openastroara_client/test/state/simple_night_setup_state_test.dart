@@ -1,4 +1,4 @@
-import 'package:openastroara/models/polar_align.dart' show PolarAlignStates;
+import 'package:openastroara/models/polar_align.dart' show PolarAlignStages, PolarAlignStates;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
@@ -24,7 +24,9 @@ final _aligned = NotifierProvider<_Step, SetupStepState>(() => _Step(SetupStepSt
 class _PolarApi implements PolarAlignClient {
   final calls = <String>[];
   @override
-  Future<void> start() async => calls.add('start');
+  Future<void> start({String? stage}) async => calls.add('start');
+  @override
+  Future<void> next() async => calls.add('next');
   @override
   Future<void> stop() async => calls.add('stop');
   @override
@@ -58,6 +60,7 @@ class _Live extends PolarAlignLiveNotifier {
   @override
   PolarAlignLive build() => const PolarAlignLive();
   void running() => state = PolarAlignLive(phase: PolarAlignStates.adjusting);
+  void checked() => state = const PolarAlignLive(phase: PolarAlignStates.checked, stage: PolarAlignStages.check);
 }
 
 Future<ProviderContainer> _container() async {
@@ -177,6 +180,18 @@ void main() {
     (c.read(polarAlignApiProvider) as _PolarApi).calls.clear();
     return c;
   }
+
+  test('entering Polar over a finished check keeps the verdict: no start, so no Home and no wiped readout', () async {
+    final c = await _container();
+    await c.read(simpleModeProvider.future);
+    await c.read(simpleModeFeatureProvider.future);
+    (c.read(polarAlignLiveProvider.notifier) as _Live).checked();
+    c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.nightSetup);
+    c.read(_focus.notifier).set(SetupStepState.done);
+    c.read(nightSetupProvider.notifier).next();
+    expect(c.read(nightSetupProvider), NightSetupStep.polarAlign);
+    expect((c.read(polarAlignApiProvider) as _PolarApi).calls, isEmpty);
+  });
 
   test('closing Simple Mode on Polar with its routine running stops it once', () async {
     final c = await onPolar();

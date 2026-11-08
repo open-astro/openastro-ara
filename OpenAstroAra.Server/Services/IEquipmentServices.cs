@@ -378,8 +378,20 @@ public enum GuiderTwinDeleteStatus {
 public sealed record GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus Status, string? Reason);
 
 public interface IPolarAlignService {
+    /// <summary>A routine is running (any stage, any state short of a terminal one) — the one test
+    /// Emergency Stop and the start gates need; never a list of state names that a new stage outgrows.</summary>
+    bool IsActive { get; }
     Task<PolarAlignStateDto> GetStatusAsync(CancellationToken ct);
     Task<OperationAcceptedDto> StartAsync(string? idempotencyKey, CancellationToken ct);
+    /// <summary>Begin at <paramref name="stage"/> (<see cref="PolarAlignStages"/>; null = coarse, or fine
+    /// when the coarse stage cannot run). Throws <see cref="ArgumentException"/> for an unknown stage (the
+    /// endpoint answers 400 before calling) and <see cref="InvalidOperationException"/> (→ 409) for a
+    /// failed preflight.</summary>
+    Task<OperationAcceptedDto> StartAsync(string? stage, string? idempotencyKey, CancellationToken ct);
+    /// <summary>Advance: Continue when the routine waits for the mount at Home, Next from the coarse
+    /// stage to the fine stage, Next from the fine stage to the check. Throws
+    /// <see cref="InvalidOperationException"/> (→ 409) when nothing is waiting to advance.</summary>
+    Task<OperationAcceptedDto> NextAsync(string? idempotencyKey, CancellationToken ct);
     /// <summary>Abort: same unwind as complete, logged with outcome <c>aborted</c> (§45 step 10 —
     /// the mount stays put).</summary>
     Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct);

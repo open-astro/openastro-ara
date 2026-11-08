@@ -22,7 +22,9 @@ class _FakePolarAlignClient implements PolarAlignClient {
   @override
   Future<PolarAlignStatus?> getStatus() async => status;
   @override
-  Future<void> start() async => calls.add('start');
+  Future<void> start({String? stage}) async => calls.add(stage == null ? 'start' : 'start:$stage');
+  @override
+  Future<void> next() async => calls.add('next');
   @override
   Future<void> stop() async => calls.add('stop');
   @override
@@ -305,6 +307,103 @@ void main() {
       expect(total.style?.color, AraColors.textPrimary);
     });
 
+    test('the rough stage names the side of the pole', () {
+      final en = lookupAppLocalizations(const Locale('en'));
+      expect(polarSideOfPoleText(en, null, 3), isNull);
+      expect(polarSideOfPoleText(en, 40, 12), 'The mount axis sits above and east of the pole.');
+      expect(polarSideOfPoleText(en, -40, -12), 'The mount axis sits below and west of the pole.');
+      expect(polarSideOfPoleText(en, 0.1, -12), 'The mount axis sits west of the pole.');
+      expect(polarSideOfPoleText(en, 3, 0.2), 'The mount axis sits above the pole.');
+      expect(polarSideOfPoleText(en, 0.1, 0.2), 'The mount axis is on the pole.');
+    });
+
+    testWidgets('idle offers the full routine, the fine-only start and the check-only start', (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(api, const PolarAlignLive()));
+      await _expand(tester);
+      await tester.tap(find.byKey(const Key('polar-align-start-fine')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('polar-align-start-check')));
+      await tester.pumpAndSettle();
+      expect(api.calls, containsAll(['start:fine', 'start:check']));
+    });
+
+    testWidgets('homing waits for the user with Continue when the mount cannot find Home', (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(api, const PolarAlignLive(
+        phase: PolarAlignStates.homing, stage: PolarAlignStages.coarse, waitingForHome: true,
+      )));
+      await _expand(tester);
+      expect(find.byKey(const Key('polar-align-stages')), findsOneWidget);
+      expect(find.text('Put the mount in its home position'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('polar-align-continue')));
+      await tester.pumpAndSettle();
+      expect(api.calls, contains('next'));
+    });
+
+    testWidgets('the rough stage says which side of the pole and Next moves to fine', (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(api, const PolarAlignLive(
+        phase: PolarAlignStates.adjusting, stage: PolarAlignStages.coarse,
+        iteration: 2, altErrorArcmin: 50, azErrorArcmin: -30, totalErrorArcmin: 58.3, zone: 'yellow',
+      )));
+      await _expand(tester);
+      expect(find.byKey(const Key('polar-align-coarse-banner')), findsOneWidget);
+      expect(find.textContaining('above and west of the pole'), findsOneWidget);
+      expect(find.text('Main camera'.toUpperCase()), findsOneWidget);
+      expect(find.byKey(const Key('polar-align-done')), findsNothing, reason: 'Done belongs to the fine stage');
+      await tester.tap(find.byKey(const Key('polar-align-next-fine')));
+      await tester.pumpAndSettle();
+      expect(api.calls, contains('next'));
+    });
+
+    testWidgets('the fine stage offers Check it once inside the tolerance', (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(api, const PolarAlignLive(
+        phase: PolarAlignStates.adjusting, stage: PolarAlignStages.fine,
+        iteration: 9, altErrorArcmin: 0.3, azErrorArcmin: -0.2, totalErrorArcmin: 0.36, zone: 'green',
+      )));
+      await _expand(tester);
+      await tester.tap(find.byKey(const Key('polar-align-next-check')));
+      await tester.pumpAndSettle();
+      expect(api.calls, contains('next'));
+    });
+
+    testWidgets('checking counts the solves', (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(api, const PolarAlignLive(
+        phase: PolarAlignStates.checking, stage: PolarAlignStages.check, checkSolvesDone: 2,
+      )));
+      await tester.pump(); // a spinner runs: no settle
+      expect(find.text('Check solve 2 of 3'), findsOneWidget);
+      expect(find.byKey(const Key('polar-align-abort-checking')), findsOneWidget);
+    });
+
+    testWidgets('checked shows the verdict, the disagreement with the fine stage, and Done', (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(api, const PolarAlignLive(
+        phase: PolarAlignStates.checked, stage: PolarAlignStages.check, checkSolvesDone: 3,
+        altErrorArcmin: -2.1, azErrorArcmin: 4.0, totalErrorArcmin: 4.52, zone: 'green',
+        checkResult: PolarAlignCheckResult(
+          altErrorArcmin: -2.1, azErrorArcmin: 4.0, totalErrorArcmin: 4.52,
+          coneHalfAngleDeg: 5.0, turnMismatchDeg: 0.02,
+          fineErrorArcmin: 0.8, fineDeltaArcmin: 3.72, verdict: 'good',
+        ),
+      )));
+      await _expand(tester);
+      expect(find.byKey(const Key('polar-align-check-result')), findsOneWidget);
+      expect(find.byKey(const Key('polar-align-check-verdict')), findsOneWidget);
+      expect(find.byKey(const Key('polar-align-check-disagree')), findsOneWidget, reason: '3.7′ apart is worth a warning');
+      await tester.ensureVisible(find.byKey(const Key('polar-align-check-done')));
+      await tester.tap(find.byKey(const Key('polar-align-check-done')));
+      await tester.pumpAndSettle();
+      expect(api.calls, contains('complete'));
+      await tester.ensureVisible(find.byKey(const Key('polar-align-adjust-again')));
+      await tester.tap(find.byKey(const Key('polar-align-adjust-again')));
+      await tester.pumpAndSettle();
+      expect(api.calls, contains('start:fine'));
+    });
+
     testWidgets('idle shows Start and posts start', (tester) async {
       final api = _FakePolarAlignClient();
       await tester.pumpWidget(_harness(api, const PolarAlignLive()));
@@ -482,6 +581,45 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('1.0 s · capture 1.6 s · solve 0.5 s · RA 09h14m40s  Dec +87°10′56″'), findsOneWidget);
       expect(find.byKey(const Key('polar-align-last-solve')), findsNothing);
+    });
+
+    test('the checked card shows the verdict the daemon sent', () {
+      // One band table: the daemon's token picks the words, and the local bands
+      // agree with it for every total.
+      expect(polarRatingForVerdict('excellent')!.$1, 'Excellent');
+      expect(polarRatingForVerdict('far_off')!.$1, 'Far off');
+      expect(polarRatingForVerdict('splendid'), isNull);
+      for (final total in [0.5, 1.0, 2.9, 3.0, 9.9, 10.0, 29.9, 30.0, 31.0]) {
+        expect(polarRatingForVerdict(polarVerdictFor(total)), polarErrorRating(total), reason: '$total′');
+      }
+    });
+
+    testWidgets('the rough stage does not fetch the guide camera frame', (tester) async {
+      // Rough-stage frames are the main camera's: the guider has no picture to give, and asking it
+      // for one on every solve only earns a 404 (#1729).
+      final api = _FakePolarAlignClient()
+        ..status = const PolarAlignStatus(
+            state: PolarAlignStates.adjusting, stage: PolarAlignStages.coarse, currentErrorArcmin: 30);
+      await tester.pumpWidget(_harness(
+          api,
+          const PolarAlignLive(
+            phase: PolarAlignStates.adjusting,
+            stage: PolarAlignStages.coarse,
+            totalErrorArcmin: 30,
+            lastFrame: PolarAlignFrameInfo(
+              frameId: 'live-2',
+              solved: true,
+              exposureSeconds: 3,
+              captureMs: 5200,
+              solveMs: 900,
+              raDeg: 138.6667,
+              decDeg: 87.1822,
+            ),
+          )));
+      await tester.pumpAndSettle();
+
+      expect(api.calls, isNot(contains('frame')));
+      expect(find.byKey(const Key('polar-align-live-view')), findsNothing);
     });
 
     testWidgets('an active routine shows the guide camera live view', (tester) async {

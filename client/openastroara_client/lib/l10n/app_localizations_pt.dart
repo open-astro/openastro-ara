@@ -852,6 +852,102 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarPhaseReady => 'Ready';
 
   @override
+  String get polarPhaseHoming => 'Going Home…';
+
+  @override
+  String get polarPhaseNeedsHome => 'Put the mount at Home';
+
+  @override
+  String get polarPhaseRough => 'Rough step';
+
+  @override
+  String polarPhaseChecking(int done, int total) {
+    return 'Checking $done of $total';
+  }
+
+  @override
+  String get polarVerdictExcellent => 'Excellent';
+
+  @override
+  String get polarVerdictVeryGood => 'Very good';
+
+  @override
+  String get polarVerdictGood => 'Good';
+
+  @override
+  String get polarVerdictRough => 'Rough';
+
+  @override
+  String get polarVerdictFarOff => 'Far off';
+
+  @override
+  String get polarPhaseChecked => 'Checked';
+
+  @override
+  String get polarRoughWaiting =>
+      'The main camera measures the mount axis with a turn in RA, then follows your knob moves. Waiting for the first solve…';
+
+  @override
+  String get polarSideOnPole => 'The mount axis is on the pole.';
+
+  @override
+  String polarSideSits(String parts) {
+    return 'The mount axis sits $parts of the pole.';
+  }
+
+  @override
+  String polarSideSitsVertical(String parts) {
+    return 'The mount axis sits $parts the pole.';
+  }
+
+  @override
+  String get polarSideAbove => 'above';
+
+  @override
+  String get polarSideBelow => 'below';
+
+  @override
+  String get polarSideEast => 'east';
+
+  @override
+  String get polarSideWest => 'west';
+
+  @override
+  String get polarSideJoin => ' and ';
+
+  @override
+  String get polarNeedsHomeHint =>
+      'This mount cannot find Home by itself. Counterweights down, tube pointing at the pole, then Continue.';
+
+  @override
+  String polarCheckedLine(String verdict) {
+    return 'Three-point check: $verdict';
+  }
+
+  @override
+  String polarCheckedVsFine(String verdict, String delta) {
+    return 'Three-point check: $verdict, $delta′ from the fine readout';
+  }
+
+  @override
+  String get polarContinue => 'Continue';
+
+  @override
+  String get polarActionContinue => 'continue polar alignment';
+
+  @override
+  String get polarNextFine => 'Next: fine';
+
+  @override
+  String get polarActionNextFine => 'move on to the fine step';
+
+  @override
+  String get polarCheck => 'Check it';
+
+  @override
+  String get polarActionCheck => 'start the check';
+
+  @override
   String get polarAltitude => 'Altitude';
 
   @override
@@ -3592,6 +3688,102 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarPhaseReady => 'Pronto';
+
+  @override
+  String get polarPhaseHoming => 'Indo para a posição inicial…';
+
+  @override
+  String get polarPhaseNeedsHome => 'Coloque a montagem na posição inicial';
+
+  @override
+  String get polarPhaseRough => 'Etapa grosseira';
+
+  @override
+  String polarPhaseChecking(int done, int total) {
+    return 'Verificando $done de $total';
+  }
+
+  @override
+  String get polarVerdictExcellent => 'Excelente';
+
+  @override
+  String get polarVerdictVeryGood => 'Muito bom';
+
+  @override
+  String get polarVerdictGood => 'Bom';
+
+  @override
+  String get polarVerdictRough => 'Grosseiro';
+
+  @override
+  String get polarVerdictFarOff => 'Muito fora';
+
+  @override
+  String get polarPhaseChecked => 'Verificado';
+
+  @override
+  String get polarRoughWaiting =>
+      'A câmera principal mede o eixo da montagem com um giro em AR e depois acompanha os seus ajustes. Aguardando a primeira resolução…';
+
+  @override
+  String get polarSideOnPole => 'O eixo da montagem está sobre o polo.';
+
+  @override
+  String polarSideSits(String parts) {
+    return 'O eixo da montagem fica $parts do polo.';
+  }
+
+  @override
+  String polarSideSitsVertical(String parts) {
+    return 'O eixo da montagem fica $parts do polo.';
+  }
+
+  @override
+  String get polarSideAbove => 'acima';
+
+  @override
+  String get polarSideBelow => 'abaixo';
+
+  @override
+  String get polarSideEast => 'a leste';
+
+  @override
+  String get polarSideWest => 'a oeste';
+
+  @override
+  String get polarSideJoin => ' e ';
+
+  @override
+  String get polarNeedsHomeHint =>
+      'Esta montagem não encontra a posição inicial sozinha. Contrapesos para baixo, tubo apontado para o polo, depois Continuar.';
+
+  @override
+  String polarCheckedLine(String verdict) {
+    return 'Verificação em três pontos: $verdict';
+  }
+
+  @override
+  String polarCheckedVsFine(String verdict, String delta) {
+    return 'Verificação em três pontos: $verdict, $delta′ da leitura fina';
+  }
+
+  @override
+  String get polarContinue => 'Continuar';
+
+  @override
+  String get polarActionContinue => 'continuar o alinhamento polar';
+
+  @override
+  String get polarNextFine => 'Próximo: fino';
+
+  @override
+  String get polarActionNextFine => 'passar para a etapa fina';
+
+  @override
+  String get polarCheck => 'Verificar';
+
+  @override
+  String get polarActionCheck => 'iniciar a verificação';
 
   @override
   String get polarAltitude => 'Altitude';

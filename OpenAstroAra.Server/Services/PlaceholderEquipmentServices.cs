@@ -248,6 +248,7 @@ public sealed class PlaceholderGuiderService : IGuiderService {
 }
 
 public sealed class PlaceholderPolarAlignService : IPolarAlignService {
+    public bool IsActive => false; // the placeholder never runs a routine
     // Unlike the device services, polar align status returns a state
     // record (not nullable) — "idle" when no alignment is in progress.
     public Task<PolarAlignStateDto> GetStatusAsync(CancellationToken ct) =>
@@ -260,6 +261,10 @@ public sealed class PlaceholderPolarAlignService : IPolarAlignService {
             LastFrameId: null));
     public Task<OperationAcceptedDto> StartAsync(string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("polar-align.start", idempotencyKey));
+    public Task<OperationAcceptedDto> StartAsync(string? stage, string? idempotencyKey, CancellationToken ct) =>
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("polar-align.start", idempotencyKey));
+    public Task<OperationAcceptedDto> NextAsync(string? idempotencyKey, CancellationToken ct) =>
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("polar-align.next", idempotencyKey));
     public Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct) =>
         Task.FromResult(PlaceholderEquipmentHelpers.Accepted("polar-align.stop", idempotencyKey));
     public Task<OperationAcceptedDto> CompleteAsync(string? idempotencyKey, CancellationToken ct) =>

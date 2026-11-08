@@ -1497,6 +1497,174 @@ abstract class AppLocalizations {
   /// **'Ready'**
   String get polarPhaseReady;
 
+  /// Simple Mode Polar align panel: routine phase: the mount is finding its home position
+  ///
+  /// In en, this message translates to:
+  /// **'Going Home…'**
+  String get polarPhaseHoming;
+
+  /// Simple Mode Polar align panel: routine phase: waiting for the user to put the mount at Home
+  ///
+  /// In en, this message translates to:
+  /// **'Put the mount at Home'**
+  String get polarPhaseNeedsHome;
+
+  /// Simple Mode Polar align panel: routine phase: the coarse (main camera at Home) stage
+  ///
+  /// In en, this message translates to:
+  /// **'Rough step'**
+  String get polarPhaseRough;
+
+  /// Simple Mode Polar align panel: routine phase: the three-point check, solves done so far of the daemon's total
+  ///
+  /// In en, this message translates to:
+  /// **'Checking {done} of {total}'**
+  String polarPhaseChecking(int done, int total);
+
+  /// Simple Mode Polar align panel: the daemon's check verdict 'excellent' (1 arcminute or better)
+  ///
+  /// In en, this message translates to:
+  /// **'Excellent'**
+  String get polarVerdictExcellent;
+
+  /// Simple Mode Polar align panel: the daemon's check verdict 'very_good' (3 arcminutes or better)
+  ///
+  /// In en, this message translates to:
+  /// **'Very good'**
+  String get polarVerdictVeryGood;
+
+  /// Simple Mode Polar align panel: the daemon's check verdict 'good' (10 arcminutes or better)
+  ///
+  /// In en, this message translates to:
+  /// **'Good'**
+  String get polarVerdictGood;
+
+  /// Simple Mode Polar align panel: the daemon's check verdict 'rough' (30 arcminutes or better)
+  ///
+  /// In en, this message translates to:
+  /// **'Rough'**
+  String get polarVerdictRough;
+
+  /// Simple Mode Polar align panel: the daemon's check verdict 'far_off' (worse than 30 arcminutes)
+  ///
+  /// In en, this message translates to:
+  /// **'Far off'**
+  String get polarVerdictFarOff;
+
+  /// Simple Mode Polar align panel: routine phase: the three-point check has its result
+  ///
+  /// In en, this message translates to:
+  /// **'Checked'**
+  String get polarPhaseChecked;
+
+  /// Simple Mode Polar align panel: rough stage before the first solve
+  ///
+  /// In en, this message translates to:
+  /// **'The main camera measures the mount axis with a turn in RA, then follows your knob moves. Waiting for the first solve…'**
+  String get polarRoughWaiting;
+
+  /// Simple Mode Polar align panel, rough stage: the axis sits within half an arcminute of the pole
+  ///
+  /// In en, this message translates to:
+  /// **'The mount axis is on the pole.'**
+  String get polarSideOnPole;
+
+  /// Simple Mode Polar align panel, rough stage: which side of the pole the axis sits; parts is e.g. 'above and east'
+  ///
+  /// In en, this message translates to:
+  /// **'The mount axis sits {parts} of the pole.'**
+  String polarSideSits(String parts);
+
+  /// Simple Mode Polar align panel, rough stage: the axis sits only above or below the pole (no east/west part), so English drops the 'of'
+  ///
+  /// In en, this message translates to:
+  /// **'The mount axis sits {parts} the pole.'**
+  String polarSideSitsVertical(String parts);
+
+  /// Simple Mode Polar align panel, rough stage: the axis sits above the pole (fills polarSideSits)
+  ///
+  /// In en, this message translates to:
+  /// **'above'**
+  String get polarSideAbove;
+
+  /// Simple Mode Polar align panel, rough stage: the axis sits below the pole (fills polarSideSits)
+  ///
+  /// In en, this message translates to:
+  /// **'below'**
+  String get polarSideBelow;
+
+  /// Simple Mode Polar align panel, rough stage: the axis sits east of the pole (fills polarSideSits)
+  ///
+  /// In en, this message translates to:
+  /// **'east'**
+  String get polarSideEast;
+
+  /// Simple Mode Polar align panel, rough stage: the axis sits west of the pole (fills polarSideSits)
+  ///
+  /// In en, this message translates to:
+  /// **'west'**
+  String get polarSideWest;
+
+  /// Simple Mode Polar align panel, rough stage: joins the two directions in polarSideSits ('above' + ' and ' + 'east')
+  ///
+  /// In en, this message translates to:
+  /// **' and '**
+  String get polarSideJoin;
+
+  /// Simple Mode Polar align panel: what to do when the mount cannot find Home
+  ///
+  /// In en, this message translates to:
+  /// **'This mount cannot find Home by itself. Counterweights down, tube pointing at the pole, then Continue.'**
+  String get polarNeedsHomeHint;
+
+  /// Simple Mode Polar align panel: the check's verdict
+  ///
+  /// In en, this message translates to:
+  /// **'Three-point check: {verdict}'**
+  String polarCheckedLine(String verdict);
+
+  /// Simple Mode Polar align panel: the check's verdict and its disagreement with the fine stage
+  ///
+  /// In en, this message translates to:
+  /// **'Three-point check: {verdict}, {delta}′ from the fine readout'**
+  String polarCheckedVsFine(String verdict, String delta);
+
+  /// Simple Mode Polar align panel: button once the mount is at Home by hand
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get polarContinue;
+
+  /// Completes "Couldn't …" for the Continue button
+  ///
+  /// In en, this message translates to:
+  /// **'continue polar alignment'**
+  String get polarActionContinue;
+
+  /// Simple Mode Polar align panel: button from the rough stage to the fine stage
+  ///
+  /// In en, this message translates to:
+  /// **'Next: fine'**
+  String get polarNextFine;
+
+  /// Completes "Couldn't …" for the Next: fine button
+  ///
+  /// In en, this message translates to:
+  /// **'move on to the fine step'**
+  String get polarActionNextFine;
+
+  /// Simple Mode Polar align panel: button from the fine stage to the three-point check
+  ///
+  /// In en, this message translates to:
+  /// **'Check it'**
+  String get polarCheck;
+
+  /// Completes "Couldn't …" for the Check it button
+  ///
+  /// In en, this message translates to:
+  /// **'start the check'**
+  String get polarActionCheck;
+
   /// Simple Mode Polar align panel: altitude axis row label (bolt to turn)
   ///
   /// In en, this message translates to:

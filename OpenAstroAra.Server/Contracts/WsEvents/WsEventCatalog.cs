@@ -140,6 +140,13 @@ public static class WsEventCatalog {
     public const string PolarAlignFrameComplete = "polar_align.frame_complete";
     public const string PolarAlignPaused = "polar_align.paused";
     public const string PolarAlignError = "polar_align.error";
+    // Stages: stage when the routine moves to a new stage ({stage, state}); needs_home when the
+    // mount cannot find Home and the routine waits for the user's Continue ({stage, message});
+    // checked when the three-point check has its result (the PolarAlignCheckResultDto fields).
+    // started and progress also carry {stage}.
+    public const string PolarAlignStage = "polar_align.stage";
+    public const string PolarAlignNeedsHome = "polar_align.needs_home";
+    public const string PolarAlignChecked = "polar_align.checked";
 
     // §59.10 — collimation health verdict, a free byproduct of a completed autofocus sweep on an obstructed
     // scope (SCT/Mak/RC/Newtonian). Emitted once per sweep when the donut stars yield a confident read;

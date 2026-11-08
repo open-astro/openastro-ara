@@ -236,7 +236,12 @@ public partial class Program {
         // §28 centering — slew → solve → sync → re-slew loop over live equipment (the §58.4 flip recenter uses it).
         builder.Services.AddSingleton<OpenAstroAra.Server.Services.ICenteringService, OpenAstroAra.Server.Services.CenteringService>();
         // §57.4 — Verify-Position after a Stop Mount: one snapshot, solved, beside the mount's figures.
-        builder.Services.AddSingleton<OpenAstroAra.Server.Services.IVerifyPositionService, OpenAstroAra.Server.Services.VerifyPositionService>();
+        // The main-camera capture-and-solve shared by Verify Position and the polar-align coarse stage.
+        builder.Services.AddSingleton<OpenAstroAra.Server.Services.MainCameraPointingSolver>();
+        builder.Services.AddSingleton<OpenAstroAra.Server.Services.IPolarAlignMainCameraSolver>(sp =>
+            sp.GetRequiredService<OpenAstroAra.Server.Services.MainCameraPointingSolver>());
+        builder.Services.AddSingleton<OpenAstroAra.Server.Services.IVerifyPositionService>(sp =>
+            new OpenAstroAra.Server.Services.VerifyPositionService(sp.GetRequiredService<OpenAstroAra.Server.Services.MainCameraPointingSolver>()));
         // §58.4 — the real meridian-flip orchestration (stop guiding → pass meridian → flip slew → recenter →
         // resume guiding), replacing the throwing placeholder. Handed into the sequencer factory below so the
         // MeridianFlipTrigger prototype runs it. Mount-gated to live-validate.
@@ -508,7 +513,8 @@ public partial class Program {
                 sp.GetService<IWsBroadcaster>(),
                 sp.GetRequiredService<IPolarAlignmentLog>(),
                 sp.GetRequiredService<IPolarAlignFrameFetcher>(),
-                () => sp.GetService<IGuideFocusService>()));
+                () => sp.GetService<IGuideFocusService>(),
+                sp.GetRequiredService<IPolarAlignMainCameraSolver>()));
         // Setup → Smart Focus: the guide-camera focus loop (frames through the guider, measured here).
         builder.Services.AddSingleton<IGuideFrameDecoder, CfitsioGuideFrameDecoder>();
         builder.Services.AddSingleton<IGuideFocusService>(sp =>

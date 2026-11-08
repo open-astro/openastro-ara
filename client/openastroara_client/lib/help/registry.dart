@@ -1107,6 +1107,18 @@ const Map<String, Help> helpRegistry = {
     relatedSettings: [],
     keywords: ['bahtinov', 'mask', 'focus', 'spikes', 'manual focuser', 'critical focus zone'],
   ),
+  'setup.polar_align.stages': Help(
+    key: 'setup.polar_align.stages',
+    title: 'Polar alignment in three steps',
+    body:
+        '* **Rough** — the mount goes Home (Find Home, or you put it there and tap *Continue*), slews a few degrees off the axis and turns in RA by the profile\'s seed turn (60° for a new profile) with the *main camera* solving a frame at each end; that measures where the mount\'s axis really points (a camera not square to the axis adds nothing false), then tracking stops and every solve follows your knob moves. The readout says how far from the pole the axis sits and on which side: above or below, east or west. The main camera\'s frames take a few seconds each, so use this step for the big moves and tap **Next: fine** within a few arcminutes.\n'
+        '* **Fine** — the mount goes Home again, and the *guide camera* takes two solved frames around the same turn in RA (from Home the mount first slews a few degrees off the axis, where the turn draws a circle the fit can use), then tracking stops and every solve shows your knob adjustments live. Lower/Raise and Move east/west name the knob to turn.\n'
+        '* **Check** — once inside the tolerance, **Check it** sends the mount Home again and takes three solves, turning the profile\'s check step (30° for a new profile) between them. Three points fix the axis exactly, with nothing taken from the live loop, so the verdict says how good the alignment really is; a check whose three frames do not describe a turn (a slipping clutch) gives no verdict. *Disagreement* is how far the check\'s axis sits from the fine readout\'s: more than 2′ means trust the check and adjust again.\n'
+        '* **Done** without the check ends the routine where it is; *Skip the rough step* and *Check only* on the Start card jump straight to a later step.\n'
+        '* From Home the tube turns about the axis line, so the 60° turn cannot reach the pier; the mount\'s own limits still apply.',
+    relatedSettings: ['eq.guider.guide_focal_length', 'eq.guider.guide_pixel_size'],
+    keywords: ['polar', 'alignment', 'home', 'three point', 'check', 'coarse', 'fine', 'pole', 'east', 'west'],
+  ),
   'setup.focusing.guide': Help(
     key: 'setup.focusing.guide',
     title: 'Focusing the guide camera',
