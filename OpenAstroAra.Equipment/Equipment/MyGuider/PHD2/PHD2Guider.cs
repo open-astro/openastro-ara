@@ -915,6 +915,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
                     if ((await Task.WhenAny(timeout, guidingHasBegun)) == guidingHasBegun) {
                         // Guiding has been started successfully in time
+                        // Disarm: only errors before this point (star pick, calibration, the guider giving up) fail the
+                        // start; a settle timeout from here on is the settle verdict, the guider is still guiding.
+                        _startArmed = false;
                         // Wait for phd2 to settle and exit
                         if (waitForSettle) {
                             await WaitForSettling(progress, ct);
@@ -1387,7 +1390,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         // as WaitForSettling sees the flag drop.
                         _lastSettleError = string.IsNullOrEmpty(settleDone?.Error) ? null : settleDone!.Error;
                         if (_lastSettleError is not null && _startArmed) {
-                            _startGivenUp?.Invoke(_lastSettleError);
+                            try { _startGivenUp?.Invoke(_lastSettleError); } catch (Exception ex) { Logger.Error(ex); }
                         }
                         Settling = false;
                         // A successful SettleDone carries Error "" from the guider, not null: the night of

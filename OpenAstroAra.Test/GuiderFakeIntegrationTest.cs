@@ -2483,6 +2483,40 @@ namespace OpenAstroAra.Test {
             Assert.That(op.GetProperty("error").GetString(), Does.Contain("Stopped capturing"));
         }
 
+        [Test]
+        public async Task A_rest_start_that_began_guiding_succeeds_when_its_settle_times_out() {
+            // #1664 review — once guiding has begun, a settle-timeout SettleDone (the guider still guiding) is
+            // the settle verdict, not a failed start; only errors before guiding began end the start.
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            var guiding = 0;
+            var stateAnswersGuiding = 0;
+            fake.OnRpc("get_app_state", _ => {
+                if (Volatile.Read(ref guiding) == 0) { return JsonValue.Create("Stopped"); }
+                Interlocked.Increment(ref stateAnswersGuiding);
+                return JsonValue.Create("Guiding");
+            });
+            fake.OnRpc("get_calibrated", JsonValue.Create(true));
+            fake.OnRpc("get_lock_position", new JsonArray(100.0, 100.0));
+            fake.OnRpc("guide", _ => { Volatile.Write(ref guiding, 1); return JsonValue.Create(0); });
+            var ws = new RecordingBroadcaster();
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A", ws).ConfigureAwait(false);
+
+            await svc.StartGuidingAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => stateAnswersGuiding > 0).ConfigureAwait(false), Is.True, "the start saw the guider guiding");
+            await Task.Delay(500).ConfigureAwait(false); // let the start pass its guiding-has-begun point
+            var timedOut = PhdEvents.SettleDone(status: 1, error: "timed-out waiting for guider to settle");
+            for (var i = 0; i < 50 && ws.Of("guider.operation_complete").Count == 0; i++) {
+                await fake.BroadcastAsync(timedOut).ConfigureAwait(false);
+                await Task.Delay(100).ConfigureAwait(false);
+            }
+
+            Assert.That(await WaitUntilAsync(() => ws.Of("guider.operation_complete").Count == 1).ConfigureAwait(false), Is.True);
+            var op = ws.Of("guider.operation_complete")[0];
+            Assert.That(op.GetProperty("operation").GetString(), Is.EqualTo("guider.start"));
+            Assert.That(op.GetProperty("ok").GetBoolean(), Is.True, "guiding began; the settle timeout does not fail the start");
+        }
+
         [TestCase("cannot guide while calibrating", "cannot guide while calibrating")]
         [TestCase("", "refused")]
         public async Task A_rest_start_the_guider_refuses_carries_its_reason_or_refused(string message, string expected) {
