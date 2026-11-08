@@ -173,7 +173,11 @@ def skip_balanced(text, i, open_c, close_c):
 
 def csharp_cases(text):
     text = strip_comments(text, csharp=True)
-    classes = [(m.start(), m.group(1)) for m in CLASS_RE.finditer(text)]
+    classes = []  # (name, start of `{`, end of `}`) of each class body
+    for m in CLASS_RE.finditer(text):
+        brace = text.find("{", m.end())
+        if brace != -1:
+            classes.append((m.group(1), brace, skip_balanced(text, brace, "{", "}")))
     names, resume = set(), 0
     for m in TEST_ATTR_RE.finditer(text):
         if m.start() < resume:
@@ -195,7 +199,8 @@ def csharp_cases(text):
         name = re.findall(r"(\w+)\s*(?:<[^<>]*>)?\s*$", sig)
         if not name or "(" not in text[end:end + 400]:
             continue
-        owner = [c for pos, c in classes if pos < start]
+        # the innermost class whose braces hold the attribute (a nested helper class may come first)
+        owner = [c for c, o, e in classes if o < start < e]
         if owner:
             names.add("%s.%s" % (owner[-1], name[0]))
     return names

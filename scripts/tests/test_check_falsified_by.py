@@ -142,6 +142,14 @@ class FalsifiedByTest(unittest.TestCase):
         self.assertIn("'BetaTests.Two'", r.stdout)
         self.assertNotIn("BetaTests.One", r.stdout)
 
+    def test_csharp_nested_class_before_a_test_does_not_rename_it(self):
+        text = ("namespace T {\npublic class OuterTest {\n    private sealed class FakeHandler { }\n"
+                "    [Test]\n    public void Works() {}\n}\n}\n")
+        self.assert_new_case("OuterTest.Works", (CS, text))
+        r = self.run_check(self.body("OuterTest.Works", path=CS))
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertNotIn("FakeHandler", r.stdout)
+
     def test_csharp_harness_project_is_not_a_test_project(self):
         self.start_branch()
         self.write("OpenAstroAra.TestHarness/Fake.cs", cs_test("FakeRig", "Looks"))

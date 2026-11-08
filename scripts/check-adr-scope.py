@@ -56,36 +56,13 @@ RECORD_NUMBER_RE = re.compile(r"(?<![#\d])\b(\d{4})\b")
 HEADING_RE = re.compile(r"^##\s+(.+?)\s*$")
 COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
 SCOPE_LINE_RE = re.compile(r"^(\d{4}-[a-z0-9-]+\.md): rules (\d+(?:, \d+)*)$")
-# Consumers: the workflow step "Fold the decision-record checklist" in .github/workflows/claude-review.yml
-# imports fold_checklist (and through it CHECKLIST_RE, sign_off and the sign-off constants); rename them there too.
 CHECKLIST_RE = re.compile(r"^\s*[-*]\s*`?(\d{4}-[a-z0-9-]+\.md)`?\s+rule\s+(\d+)\s*:\s*(pass|defect|n/a)\s*:\s*\S", re.I)
 ISSUES_SIGN_OFF = "\u26a0\ufe0f Issues found"
-APPROVED_SIGN_OFF = "\u2705 Approved"
 
 
 def sign_off(line):
     """The line without the Markdown emphasis or closing period a sign-off may carry."""
     return line.strip().strip("*_ ").rstrip(".!").strip("*_ ")
-
-
-def fold_checklist(text):
-    """The review with its checklist folded into <details>, or the text unchanged when it has no checklist lines."""
-    lines = text.split("\n")
-    start = next((i for i, l in enumerate(lines) if l.strip().lower() == "## " + SECTION), None)
-    if start is None:
-        return text
-    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
-    last = max((i for i, l in enumerate(lines) if l.strip()), default=-1)
-    if start < last < end and sign_off(lines[last]) in (APPROVED_SIGN_OFF, ISSUES_SIGN_OFF):
-        end = last  # a real sign-off stays outside the fold
-    verdicts = [m.group(3).lower() for l in lines[start + 1:end] if (m := CHECKLIST_RE.match(l))]
-    if not verdicts:
-        return text
-    counts = ", ".join("%d %s" % (verdicts.count(v), v) for v in ("defect", "pass", "n/a") if v in verdicts)
-    summary = "%d rule%s: %s" % (len(verdicts), "" if len(verdicts) == 1 else "s", counts)
-    body = "\n".join(lines[start + 1:end]).strip("\n")
-    folded = ["## Decision records", "", "<details><summary>%s</summary>" % summary, "", body, "", "</details>", ""]
-    return "\n".join(lines[:start] + folded + lines[end:])
 
 
 def record_rules(records):
