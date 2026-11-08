@@ -596,6 +596,13 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('a plan on a rig with no filter wheel never stops to ask for a filter change', (tester) async {
+    final (_, seq) = await run(tester);
+    await create(tester);
+    expect(seq.bodies, isNotEmpty);
+    expect(seq.bodies.toString(), isNot(contains('WaitForUser')));
+  });
+
   Future<void> imaging(WidgetTester tester, ProviderContainer c, _Seq seq, SequenceRunStateInfo state) async {
     seq.runState = state;
     await c.read(sequenceRunStateProvider.notifier).refresh();

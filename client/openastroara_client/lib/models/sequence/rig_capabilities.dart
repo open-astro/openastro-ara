@@ -18,12 +18,17 @@ class RigCapabilities {
   /// wait out a minute for a temperature nothing regulates (#1577).
   final bool coolerRegulates;
 
+  /// Whether a rig without a wheel stops for the user to change the filter.
+  /// Simple Mode's plans don't: the glass in the camera is the session's.
+  final bool pauseForFilterSwap;
+
   const RigCapabilities({
     this.focuser = false,
     this.filterWheel = false,
     this.rotator = false,
     this.guider = false,
     this.coolerRegulates = false,
+    this.pauseForFilterSwap = true,
   });
 
   static const everything = RigCapabilities(
@@ -42,12 +47,14 @@ class RigCapabilities {
     bool? rotator,
     bool? guider,
     bool? coolerRegulates,
+    bool? pauseForFilterSwap,
   }) => RigCapabilities(
     focuser: focuser ?? this.focuser,
     filterWheel: filterWheel ?? this.filterWheel,
     rotator: rotator ?? this.rotator,
     guider: guider ?? this.guider,
     coolerRegulates: coolerRegulates ?? this.coolerRegulates,
+    pauseForFilterSwap: pauseForFilterSwap ?? this.pauseForFilterSwap,
   );
 
   @override

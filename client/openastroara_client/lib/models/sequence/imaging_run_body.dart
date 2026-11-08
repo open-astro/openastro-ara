@@ -290,10 +290,12 @@ Map<String, dynamic> buildTargetBlock({
   // on an OSC or manual rig), a Wait for User that parks the run in the
   // awaiting-user state until the human has swapped the glass and pressed
   // Resume (S58.12-b).
-  Map<String, dynamic> switchTo(String filter) => handSwap
-      ? (_item(waitForUserType)
-          ..['Text'] =
-              'Switch to the ${filter.trim()} filter, then press Resume.')
+  Map<String, dynamic>? switchTo(String filter) => handSwap
+      ? (rig.pauseForFilterSwap
+            ? (_item(waitForUserType)
+                ..['Text'] =
+                    'Switch to the ${filter.trim()} filter, then press Resume.')
+            : null)
       : (_item(switchFilterType)..['Filter'] = buildFilterInfo(filter.trim()));
 
   // One `<name> Imaging` loop: TakeExposure × count, plus the autofocus /
@@ -457,11 +459,11 @@ Map<String, dynamic> buildTargetBlock({
     // one) — focusing through a random previously-loaded filter would hand
     // the whole session a soft start.
     if (plan != null)
-      switchTo(plan.first.filterName)
+      ?switchTo(plan.first.filterName)
     else if (filterName != null &&
         filterName.trim().isNotEmpty &&
         rig.filterWheel)
-      switchTo(filterName),
+      ?switchTo(filterName),
     if (afAtStart) _item(runAutofocusType),
     if (focusFirst) goToTarget,
     if (guide) _item(startGuidingType),
@@ -476,7 +478,7 @@ Map<String, dynamic> buildTargetBlock({
         ..['Duration'] = 0.0,
     if (plan != null)
       for (var i = 0; i < plan.length; i++) ...[
-        if (i > 0) switchTo(plan[i].filterName),
+        if (i > 0) ?switchTo(plan[i].filterName),
         imagingLoop(
           name: '${plan[i].filterName.trim()} Imaging',
           expSeconds: plan[i].exposureSeconds,

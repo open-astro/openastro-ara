@@ -711,6 +711,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         gain: gain,
         stopAtDawn: dawn,
         parkAtEnd: true,
+        pauseForFilterSwap: false,
       );
       if (r == null || r.draft) {
         _fail(l10nFor(ref.read(appLocaleProvider)).planRigUnreachable);
@@ -805,6 +806,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       ref.read(selectedSequenceIdProvider.notifier).select(id);
       final r = await createImagingRun(
         null,
+        pauseForFilterSwap: false,
         container: ref.container,
         raDeg: t.raDeg,
         decDeg: t.decDeg,
@@ -887,6 +889,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       ref.read(selectedSequenceIdProvider.notifier).select(id);
       final r = await createImagingRun(
         null,
+        pauseForFilterSwap: false,
         container: ref.container,
         raDeg: t.raDeg,
         decDeg: t.decDeg,

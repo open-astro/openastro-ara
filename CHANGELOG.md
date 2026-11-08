@@ -41,6 +41,7 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ### Fixed
 
+- Simple Mode plans no longer stop to ask for a filter change on a rig without a filter wheel.
 - Simple Mode no longer shows the "Capture calibration frames tonight?" popup when a plan starts; an unanswered run ends without flats, as before.
 - Simple Mode: a target picked in Search now becomes the plan's target at once, and an object outside tonight's ranked list shows its real altitude instead of being called below the horizon.
 - A guide-camera focus loop left running can always be stopped: Simple Mode's Focus opens on Guide when it finds one running, Preview's Guide row stays selectable, and Emergency Stop now ends the loop too. Emergency Stop also stops the Bahtinov readout, a running autofocus and polar alignment.
