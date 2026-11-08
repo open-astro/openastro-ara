@@ -18,7 +18,7 @@ We decided (2026-09-29, epic [#1204](https://github.com/open-astro/openastro-ara
 ## Alternatives rejected
 
 - **X11 and Wayland both**: covers older and NVIDIA-legacy setups, but doubles the overlay, window chrome and icon code, and each path broke on a different desktop.
-- **X11 only, or Wayland through XWayland**: one path, but the path the distributions are leaving, and XWayland broke the overlay's draw order.
+- **X11 only, or Wayland through XWayland**: one path, but the path the distributions are leaving, and the overlay relies on GtkOverlay draw order on a Wayland surface.
 - **arm64 Linux desktop**: would let the client run on the Pi itself, but no runner tests it and the rig is meant to be driven from another device.
 
 ## Consequences

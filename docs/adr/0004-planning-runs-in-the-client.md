@@ -18,7 +18,7 @@ We decided (2026-07-15, the retired `PORT_DECISIONS.md`) that planning compute b
 ## Alternatives rejected
 
 - **Planning on the rig** (NINA's model, where everything is one process): one implementation and one source of truth, but no planning without the rig powered and reachable, and planning load on the Pi during a run.
-- **Both sides, the client only as a fallback**: works offline, but two implementations of the same math drift, and the daemon copy was the one people saw.
+- **Both sides, the client only as a fallback**: works offline, but two implementations of the same math can drift apart.
 
 ## Consequences
 
