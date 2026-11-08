@@ -100,6 +100,7 @@ class PolarAlignLive {
     double? frameExposureSeconds,
     PolarAlignFrameInfo? lastFrame,
     bool clearFrameInProgress = false,
+    bool clearReadout = false,
     String? stage,
     bool? waitingForHome,
     int? checkSolvesDone,
@@ -108,10 +109,10 @@ class PolarAlignLive {
       PolarAlignLive(
         phase: phase ?? this.phase,
         iteration: iteration ?? this.iteration,
-        altErrorArcmin: altErrorArcmin ?? this.altErrorArcmin,
-        azErrorArcmin: azErrorArcmin ?? this.azErrorArcmin,
-        totalErrorArcmin: totalErrorArcmin ?? this.totalErrorArcmin,
-        zone: zone ?? this.zone,
+        altErrorArcmin: clearReadout ? null : altErrorArcmin ?? this.altErrorArcmin,
+        azErrorArcmin: clearReadout ? null : azErrorArcmin ?? this.azErrorArcmin,
+        totalErrorArcmin: clearReadout ? null : totalErrorArcmin ?? this.totalErrorArcmin,
+        zone: clearReadout ? null : zone ?? this.zone,
         consecutiveSolveFailures:
             consecutiveSolveFailures ?? this.consecutiveSolveFailures,
         errorReason: errorReason ?? this.errorReason,
@@ -157,10 +158,11 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
     case PolarAlignWsEvents.paused:
       return current.copyWith(phase: PolarAlignStates.paused);
     case PolarAlignWsEvents.stage:
+      final nextStage = event.payload['stage'] is String
+          ? event.payload['stage'] as String
+          : current.stage;
       return current.copyWith(
-        stage: event.payload['stage'] is String
-            ? event.payload['stage'] as String
-            : current.stage,
+        stage: nextStage,
         phase: event.payload['state'] is String
             ? event.payload['state'] as String
             : current.phase,
@@ -168,6 +170,9 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
             (event.payload['check_solves_done'] as num?)?.toInt() ?? 0,
         waitingForHome: false,
         clearFrameInProgress: true,
+        // A new stage measures afresh: the previous stage's readout (and its
+        // green) must not stand for it while it homes and seeds.
+        clearReadout: nextStage != current.stage,
       );
     case PolarAlignWsEvents.needsHome:
       return current.copyWith(

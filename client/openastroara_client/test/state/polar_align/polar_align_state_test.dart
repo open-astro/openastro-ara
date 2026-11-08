@@ -232,6 +232,31 @@ void main() {
       expect(moved.phase, PolarAlignStates.seeding);
     });
 
+    test('a new stage clears the readout of the stage before it', () {
+      // Rough reached green; the hand-off to fine must not carry that green
+      // through the fine stage's homing and seeding (or a Stop from them).
+      final folded = foldPolarAlignEvent(
+        const PolarAlignLive(
+            stage: PolarAlignStages.coarse,
+            phase: PolarAlignStates.adjusting,
+            altErrorArcmin: 0.3,
+            azErrorArcmin: -0.2,
+            totalErrorArcmin: 0.36,
+            zone: 'green'),
+        _event(PolarAlignWsEvents.stage, {'stage': 'fine', 'state': 'homing'}),
+      )!;
+      expect(folded.stage, PolarAlignStages.fine);
+      expect(folded.zone, isNull);
+      expect(folded.totalErrorArcmin, isNull);
+      expect(folded.altErrorArcmin, isNull);
+      // The same stage's own state changes keep the readout.
+      final same = foldPolarAlignEvent(
+        const PolarAlignLive(stage: PolarAlignStages.check, phase: PolarAlignStates.homing, zone: 'green'),
+        _event(PolarAlignWsEvents.stage, {'stage': 'check', 'state': 'checking'}),
+      )!;
+      expect(same.zone, 'green');
+    });
+
     test('stage counts the check solves', () {
       final folded = foldPolarAlignEvent(
         const PolarAlignLive(stage: PolarAlignStages.check, phase: PolarAlignStates.checking),

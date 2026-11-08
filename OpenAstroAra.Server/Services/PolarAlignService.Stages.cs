@@ -54,7 +54,7 @@ namespace OpenAstroAra.Server.Services {
         private async Task RunCoarseStageAsync(
                 PHD2Guider guiderClient, IPolarAlignMainCameraSolver mainCamera, SiteSettingsDto site, PolarAlignSettingsDto settings,
                 Func<Task> renew, int gen, CancellationToken ct) {
-            await GoHomeAsync(settings, renew, gen, ct).ConfigureAwait(false);
+            await GoHomeAsync(settings, renew, returnTo: null, gen, ct).ConfigureAwait(false);
             await SetStageAsync(gen, PolarAlignStages.Coarse, "seeding").ConfigureAwait(false);
             // The axis is MEASURED (seed turn + two-point fit), never read off the camera's pointing at
             // Home: on 2026-11-07 the camera-as-axis reading sat 75′ from the fine stage's seed (#1727).
@@ -117,10 +117,10 @@ namespace OpenAstroAra.Server.Services {
         /// starts from where the user put it.</param>
         private async Task RunFineStageAsync(
                 PHD2Guider guiderClient, string workDir, SiteSettingsDto site, PolarAlignSettingsDto settings, bool homeFirst,
-                Func<Task> renew, int gen, CancellationToken ct) {
+                (double RaDeg, double DecDeg)? startPointing, Func<Task> renew, int gen, CancellationToken ct) {
             if (homeFirst) {
                 await SetStageAsync(gen, PolarAlignStages.Fine, settings.UseHome ? "homing" : "seeding").ConfigureAwait(false);
-                await GoHomeAsync(settings, renew, gen, ct).ConfigureAwait(false);
+                await GoHomeAsync(settings, renew, startPointing, gen, ct).ConfigureAwait(false);
             }
             await SetStageAsync(gen, PolarAlignStages.Fine, "seeding").ConfigureAwait(false);
 
@@ -136,10 +136,13 @@ namespace OpenAstroAra.Server.Services {
                 (frameId, hint, s, timing, token) => CaptureAndSolveAsync(guiderClient, workDir, frameId, hint, s, gen, timing, token),
                 renew, site, settings, gen, ct).ConfigureAwait(false);
 
-            // Next: remember the fine readout the check will be compared with.
+            // Next: remember the fine readout the check will be compared with — both components, so a
+            // readout of the same size on the other side of the pole still shows as a disagreement.
             lock (_gate) {
                 if (_generation == gen && _altErrorArcmin is double alt && _azErrorArcmin is double az) {
                     _fineFinalErrorArcmin = Math.Sqrt(alt * alt + az * az);
+                    _fineFinalAltArcmin = alt;
+                    _fineFinalAzArcmin = az;
                 }
             }
             LogStageAdvanced(PolarAlignStages.Fine, PolarAlignStages.Check);
@@ -226,10 +229,10 @@ namespace OpenAstroAra.Server.Services {
 
         private async Task RunCheckStageAsync(
                 PHD2Guider guiderClient, string workDir, SiteSettingsDto site, PolarAlignSettingsDto settings,
-                Func<Task> renew, int gen, CancellationToken ct) {
+                (double RaDeg, double DecDeg)? startPointing, Func<Task> renew, int gen, CancellationToken ct) {
             var north = site.LatitudeDeg > 0;
             await SetStageAsync(gen, PolarAlignStages.Check, settings.UseHome ? "homing" : "checking").ConfigureAwait(false);
-            await GoHomeAsync(settings, renew, gen, ct).ConfigureAwait(false);
+            await GoHomeAsync(settings, renew, startPointing, gen, ct).ConfigureAwait(false);
             if (!_mount.GetInfo().TrackingEnabled) {
                 await TurnTrackingOnOrFailAsync(gen, ct).ConfigureAwait(false);
                 LogTrackingEnabled();
@@ -279,8 +282,14 @@ namespace OpenAstroAra.Server.Services {
             var mismatch = Math.Max(Math.Abs(Math.Abs(turn1) - Math.Abs(mountTurn1)), Math.Abs(Math.Abs(turn2) - Math.Abs(mountTurn2)));
             var total = Math.Sqrt(altErr * altErr + azErr * azErr);
             double? fine;
+            double? fineDelta = null;
             lock (_gate) {
                 fine = _fineFinalErrorArcmin;
+                if (_fineFinalAltArcmin is double fAlt && _fineFinalAzArcmin is double fAz) {
+                    // The distance between the two measured axes, not the difference of their sizes: a
+                    // fine readout the same size on the other side of the pole is a 2′ disagreement, not 0.
+                    fineDelta = Math.Sqrt((altErr - fAlt) * (altErr - fAlt) + (azErr - fAz) * (azErr - fAz));
+                }
             }
             var result = new PolarAlignCheckResultDto(
                 AltitudeErrorArcmin: Math.Round(altErr, 2),
@@ -289,7 +298,7 @@ namespace OpenAstroAra.Server.Services {
                 ConeHalfAngleDeg: Math.Round(axis.ConeDeg, 3),
                 TurnMismatchDeg: Math.Round(mismatch, 3),
                 FineErrorArcmin: fine is double f ? Math.Round(f, 2) : null,
-                FineDeltaArcmin: fine is double g ? Math.Round(Math.Abs(total - g), 2) : null,
+                FineDeltaArcmin: fineDelta is double g ? Math.Round(g, 2) : null,
                 Verdict: VerdictFor(total),
                 MeasuredAt: at);
             LogCheckResult(axis.RaDeg, axis.DecDeg, altErr, azErr, total, axis.ConeDeg, mismatch, fine);
@@ -346,11 +355,20 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>Send the mount Home: Find Home when it can, else park the routine on the user
         /// (state <c>homing</c>, <c>WaitingForHome</c>, the needs_home event) until Continue. Off with
-        /// <c>UseHome</c> = the current pointing is "home".</summary>
+        /// <c>UseHome</c> = where the user put the mount is "home": a later stage slews back to
+        /// <paramref name="returnTo"/> (the run's start pointing) so the stages' turns never add up toward
+        /// a limit; the first stage (null) is already there.</summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Any mount fault during Find Home is this routine's home_failed, with the mount's message; never internal_error.")]
-        private async Task GoHomeAsync(PolarAlignSettingsDto settings, Func<Task> renewLeaseIfDue, int gen, CancellationToken ct) {
+        private async Task GoHomeAsync(
+                PolarAlignSettingsDto settings, Func<Task> renewLeaseIfDue, (double RaDeg, double DecDeg)? returnTo, int gen, CancellationToken ct) {
             if (!settings.UseHome) {
+                if (returnTo is { } start) {
+                    LogReturningToStart(start.RaDeg, start.DecDeg);
+                    var target = new Coordinates(start.RaDeg, start.DecDeg, Epoch.JNOW, Coordinates.RAType.Degrees);
+                    await SlewOrFailAsync(target, "the mount refused the slew back to where this run started — slew it there from the mount controls, then start again", gen, ct).ConfigureAwait(false);
+                    await Task.Delay(TimeSpan.FromSeconds(settings.SettleSeconds), ct).ConfigureAwait(false);
+                }
                 return;
             }
             var info = _mount.GetInfo();
@@ -518,6 +536,9 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4537, Level = LogLevel.Information, Message = "§45 polar-align: the mount cannot find Home — waiting for the user to put it there")]
         private partial void LogWaitingForHome();
+
+        [LoggerMessage(EventId = 4540, Level = LogLevel.Information, Message = "§45 polar-align: no Home in use — slewing back to the run's start pointing RA {RaDeg:F2}° Dec {DecDeg:F2}° before this stage's turn")]
+        private partial void LogReturningToStart(double raDeg, double decDeg);
 
         [LoggerMessage(EventId = 4538, Level = LogLevel.Information, Message = "§45 polar-align: the camera is on the axis (Dec {DecDeg:F2}°) — slewing to Dec {TargetDecDeg:F0}° for the turn")]
         private partial void LogLeavingAxis(double decDeg, double targetDecDeg);

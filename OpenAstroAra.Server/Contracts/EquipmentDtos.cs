@@ -825,8 +825,10 @@ public sealed record PolarAlignStartRequestDto(string? Stage = null);
 
 /// <summary>The check stage's three-point result: the axis error against the apparent pole, the
 /// cone half-angle the three pointings sat at (conditioning), how far the solved turns disagreed
-/// with the mount's reported RA turns, the fine stage's last error for comparison, and the verdict
-/// band (<c>excellent</c> ≤1′, <c>very_good</c> ≤3′, <c>good</c> ≤10′, <c>rough</c> ≤30′, else <c>far_off</c>).</summary>
+/// with the mount's reported RA turns, the fine stage's last error for comparison (<c>FineDeltaArcmin</c>
+/// is the distance between the two measured axes — alt and az both — so a fine readout of the same
+/// size on the other side of the pole still reads as a disagreement), and the verdict band
+/// (<c>excellent</c> ≤1′, <c>very_good</c> ≤3′, <c>good</c> ≤10′, <c>rough</c> ≤30′, else <c>far_off</c>).</summary>
 public sealed record PolarAlignCheckResultDto(
     double AltitudeErrorArcmin,
     double AzimuthErrorArcmin,
@@ -841,7 +843,7 @@ public sealed record PolarAlignCheckResultDto(
 public sealed record PolarAlignStateDto(
     // §45 engine states: homing (Find Home running, or — WaitingForHome — waiting for the user to
     // put the mount at Home and tap Continue), seeding (2-point axis measurement incl. the RA slew),
-    // adjusting (live loop, error fields populated; the coarse stage goes straight here), paused
+    // adjusting (live loop, error fields populated — every stage reaches it through seeding), paused
     // (5 consecutive failed solves — still retrying), checking (the three check solves), checked
     // (terminal: CheckResult populated), failed (fatal routine error; see the polar_align.error WS event).
     string State,    // "idle" | "homing" | "seeding" | "adjusting" | "paused" | "checking" | "checked" | "stopped" | "failed"

@@ -109,6 +109,8 @@ namespace OpenAstroAra.Server.Services {
         private int _checkSolvesDone;
         private PolarAlignCheckResultDto? _checkResult;
         private double? _fineFinalErrorArcmin;
+        private double? _fineFinalAltArcmin;
+        private double? _fineFinalAzArcmin;
         // Written by the run task only: whether this run changed tracking (then the exit restores it).
         private bool _trackingTouched;
         private readonly IPolarAlignMainCameraSolver? _mainCamera;
@@ -254,15 +256,23 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>Continue / Next: release a routine parked on the user — waiting for the mount at
         /// Home, or in a live loop (coarse → fine, fine → check). 409 otherwise.</summary>
         public Task<OperationAcceptedDto> NextAsync(string? idempotencyKey, CancellationToken ct) {
+            CancellationTokenSource? inFlight;
             lock (_gate) {
                 var waitable = _active && (_waitingForHome || _state is "adjusting" or "paused");
                 if (!waitable) {
                     throw new InvalidOperationException("polar alignment has nothing to advance — it is not waiting on you");
                 }
                 _advanceRequested = true;
+                inFlight = _advanceCts;
             }
+            // A capture (and its blind solve, tens of seconds on the main camera) in flight is moot now:
+            // cancel it so the next stage starts at once. Outside the lock — Cancel runs callbacks inline.
+            inFlight?.Cancel();
             return Task.FromResult(Accepted("polar-align.next", idempotencyKey));
         }
+
+        // The live loop's in-flight capture, cancellable by Next; null between captures. Guarded by _gate.
+        private CancellationTokenSource? _advanceCts;
 
         /// <summary>Consume the user's Continue/Next for this run (false when none is pending).</summary>
         private bool TakeAdvanceRequest(int gen) {
@@ -360,6 +370,8 @@ namespace OpenAstroAra.Server.Services {
                     _checkSolvesDone = 0;
                     _checkResult = null;
                     _fineFinalErrorArcmin = null;
+                    _fineFinalAltArcmin = null;
+                    _fineFinalAzArcmin = null;
                     _framesCaptured = 0;
                     _lastFrameId = null;
                     _altErrorArcmin = null;
@@ -513,10 +525,11 @@ namespace OpenAstroAra.Server.Services {
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "A mount fault while enabling tracking becomes the routine's tracking_off failure.")]
         private async Task<bool> TurnTrackingOnAsync(int gen, CancellationToken ct) {
+            // Outside the try: the catch below would otherwise log this as a mount failure.
+            if (!TryMarkTrackingTouched(gen)) {
+                throw new OperationCanceledException("the run was superseded before it turned tracking on");
+            }
             try {
-                if (!TryMarkTrackingTouched(gen)) {
-                    throw new OperationCanceledException("the run was superseded before it turned tracking on");
-                }
                 if (!_mount.SetTrackingEnabled(true)) {
                     return false;
                 }
@@ -576,6 +589,9 @@ namespace OpenAstroAra.Server.Services {
                 await UnparkIfParkedAsync(ct).ConfigureAwait(false);
                 var mountInfo = _mount.GetInfo();
                 priorTracking = mountInfo.TrackingEnabled;
+                // Without Home, "home" is where the user put the mount: the later stages return there
+                // before their turn, so the stages' turns never add up toward a limit.
+                var startPointing = CurrentMountPointingJnow();
                 // One PA-session lease renewer for the whole run: the stages share its clock, so a
                 // hand-off never renews twice back to back.
                 var renew = MakeLeaseRenewer(guiderClient, ct);
@@ -593,10 +609,10 @@ namespace OpenAstroAra.Server.Services {
                 }
                 if (stage == PolarAlignStages.Fine) {
                     var homeFirst = ranCoarse || FineStartHomesFirst(settings, mountInfo);
-                    await RunFineStageAsync(guiderClient, workDir, site, settings, homeFirst, renew, gen, ct).ConfigureAwait(false);
+                    await RunFineStageAsync(guiderClient, workDir, site, settings, homeFirst, startPointing, renew, gen, ct).ConfigureAwait(false);
                     stage = PolarAlignStages.Check;
                 }
-                await RunCheckStageAsync(guiderClient, workDir, site, settings, renew, gen, ct).ConfigureAwait(false);
+                await RunCheckStageAsync(guiderClient, workDir, site, settings, startPointing, renew, gen, ct).ConfigureAwait(false);
             } catch (OperationCanceledException) {
                 // Stop — the stopping path owns the state + events.
             } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException ex) when (IsCurrent(gen)) {
@@ -686,7 +702,12 @@ namespace OpenAstroAra.Server.Services {
                 Func<PolarAlignSolveOutcome, DateTimeOffset, (double AltErr, double AzErr)> toError,
                 (double RaDeg, double DecDeg)? initialHint, Func<Task> renewLeaseIfDue,
                 int gen, CancellationToken ct) {
-            var iteration = 0;
+            // The count runs on across the stages: frame ids stay unique within a run and the §45.13 row
+            // counts every live frame, not the last stage's.
+            int iteration;
+            lock (_gate) {
+                iteration = _liveIterations;
+            }
             var consecutiveFailures = 0;
             var hint = initialHint;
 
@@ -713,7 +734,27 @@ namespace OpenAstroAra.Server.Services {
                 iteration++;
                 var frameId = "live-" + iteration.ToString(CultureInfo.InvariantCulture);
                 var timing = new FrameTiming();
-                var s = await capture(frameId, hint, settings, timing, ct).ConfigureAwait(false);
+                PolarAlignSolveOutcome s;
+                using (var advance = CancellationTokenSource.CreateLinkedTokenSource(ct)) {
+                    lock (_gate) {
+                        if (_generation == gen) {
+                            _advanceCts = advance;
+                        }
+                    }
+                    try {
+                        s = await capture(frameId, hint, settings, timing, advance.Token).ConfigureAwait(false);
+                    } catch (OperationCanceledException) when (!ct.IsCancellationRequested && advance.IsCancellationRequested) {
+                        // Next arrived mid-capture: the frame is moot and the caller owns the next stage.
+                        TakeAdvanceRequest(gen);
+                        return;
+                    } finally {
+                        lock (_gate) {
+                            if (ReferenceEquals(_advanceCts, advance)) {
+                                _advanceCts = null;
+                            }
+                        }
+                    }
+                }
                 if (!s.Success) {
                     consecutiveFailures++;
                     await CompleteFrameAsync(gen, frameId, s, timing, consecutiveFailures).ConfigureAwait(false);
