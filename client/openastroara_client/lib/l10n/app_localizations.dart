@@ -1533,6 +1533,54 @@ abstract class AppLocalizations {
   /// **'The main camera measures the mount axis with a turn in RA, then follows your knob moves. Waiting for the first solve…'**
   String get polarRoughWaiting;
 
+  /// Simple Mode Polar align panel, rough stage: the axis sits within half an arcminute of the pole
+  ///
+  /// In en, this message translates to:
+  /// **'The mount axis is on the pole.'**
+  String get polarSideOnPole;
+
+  /// Simple Mode Polar align panel, rough stage: which side of the pole the axis sits; parts is e.g. 'above and east'
+  ///
+  /// In en, this message translates to:
+  /// **'The mount axis sits {parts} of the pole.'**
+  String polarSideSits(String parts);
+
+  /// Simple Mode Polar align panel, rough stage: the axis sits only above or below the pole (no east/west part), so English drops the 'of'
+  ///
+  /// In en, this message translates to:
+  /// **'The mount axis sits {parts} the pole.'**
+  String polarSideSitsVertical(String parts);
+
+  /// Simple Mode Polar align panel, rough stage: the axis sits above the pole (fills polarSideSits)
+  ///
+  /// In en, this message translates to:
+  /// **'above'**
+  String get polarSideAbove;
+
+  /// Simple Mode Polar align panel, rough stage: the axis sits below the pole (fills polarSideSits)
+  ///
+  /// In en, this message translates to:
+  /// **'below'**
+  String get polarSideBelow;
+
+  /// Simple Mode Polar align panel, rough stage: the axis sits east of the pole (fills polarSideSits)
+  ///
+  /// In en, this message translates to:
+  /// **'east'**
+  String get polarSideEast;
+
+  /// Simple Mode Polar align panel, rough stage: the axis sits west of the pole (fills polarSideSits)
+  ///
+  /// In en, this message translates to:
+  /// **'west'**
+  String get polarSideWest;
+
+  /// Simple Mode Polar align panel, rough stage: joins the two directions in polarSideSits ('above' + ' and ' + 'east')
+  ///
+  /// In en, this message translates to:
+  /// **' and '**
+  String get polarSideJoin;
+
   /// Simple Mode Polar align panel: what to do when the mount cannot find Home
   ///
   /// In en, this message translates to:

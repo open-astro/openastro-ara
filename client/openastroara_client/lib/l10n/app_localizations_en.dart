@@ -873,6 +873,34 @@ class AppLocalizationsEn extends AppLocalizations {
       'The main camera measures the mount axis with a turn in RA, then follows your knob moves. Waiting for the first solve…';
 
   @override
+  String get polarSideOnPole => 'The mount axis is on the pole.';
+
+  @override
+  String polarSideSits(String parts) {
+    return 'The mount axis sits $parts of the pole.';
+  }
+
+  @override
+  String polarSideSitsVertical(String parts) {
+    return 'The mount axis sits $parts the pole.';
+  }
+
+  @override
+  String get polarSideAbove => 'above';
+
+  @override
+  String get polarSideBelow => 'below';
+
+  @override
+  String get polarSideEast => 'east';
+
+  @override
+  String get polarSideWest => 'west';
+
+  @override
+  String get polarSideJoin => ' and ';
+
+  @override
   String get polarNeedsHomeHint =>
       'This mount cannot find Home by itself. Counterweights down, tube pointing at the pole, then Continue.';
 

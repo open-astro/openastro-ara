@@ -1176,6 +1176,48 @@
   "@polarRoughWaiting": {
     "description": "Simple Mode Polar align panel: rough stage before the first solve"
   },
+  "polarSideOnPole": "The mount axis is on the pole.",
+  "@polarSideOnPole": {
+    "description": "Simple Mode Polar align panel, rough stage: the axis sits within half an arcminute of the pole"
+  },
+  "polarSideSits": "The mount axis sits {parts} of the pole.",
+  "@polarSideSits": {
+    "description": "Simple Mode Polar align panel, rough stage: which side of the pole the axis sits; parts is e.g. 'above and east'",
+    "placeholders": {
+      "parts": {
+        "type": "String"
+      }
+    }
+  },
+  "polarSideSitsVertical": "The mount axis sits {parts} the pole.",
+  "@polarSideSitsVertical": {
+    "description": "Simple Mode Polar align panel, rough stage: the axis sits only above or below the pole (no east/west part), so English drops the 'of'",
+    "placeholders": {
+      "parts": {
+        "type": "String"
+      }
+    }
+  },
+  "polarSideAbove": "above",
+  "@polarSideAbove": {
+    "description": "Simple Mode Polar align panel, rough stage: the axis sits above the pole (fills polarSideSits)"
+  },
+  "polarSideBelow": "below",
+  "@polarSideBelow": {
+    "description": "Simple Mode Polar align panel, rough stage: the axis sits below the pole (fills polarSideSits)"
+  },
+  "polarSideEast": "east",
+  "@polarSideEast": {
+    "description": "Simple Mode Polar align panel, rough stage: the axis sits east of the pole (fills polarSideSits)"
+  },
+  "polarSideWest": "west",
+  "@polarSideWest": {
+    "description": "Simple Mode Polar align panel, rough stage: the axis sits west of the pole (fills polarSideSits)"
+  },
+  "polarSideJoin": " and ",
+  "@polarSideJoin": {
+    "description": "Simple Mode Polar align panel, rough stage: joins the two directions in polarSideSits ('above' + ' and ' + 'east')"
+  },
   "polarNeedsHomeHint": "This mount cannot find Home by itself. Counterweights down, tube pointing at the pole, then Continue.",
   "@polarNeedsHomeHint": {
     "description": "Simple Mode Polar align panel: what to do when the mount cannot find Home"

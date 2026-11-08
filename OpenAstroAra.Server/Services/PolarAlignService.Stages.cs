@@ -52,8 +52,8 @@ namespace OpenAstroAra.Server.Services {
         // ── coarse ───────────────────────────────────────────────────────────────────────────
 
         private async Task RunCoarseStageAsync(
-                PHD2Guider guiderClient, IPolarAlignMainCameraSolver mainCamera, SiteSettingsDto site, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
-            var renew = MakeLeaseRenewer(guiderClient, ct);
+                PHD2Guider guiderClient, IPolarAlignMainCameraSolver mainCamera, SiteSettingsDto site, PolarAlignSettingsDto settings,
+                Func<Task> renew, int gen, CancellationToken ct) {
             await GoHomeAsync(settings, renew, gen, ct).ConfigureAwait(false);
             await SetStageAsync(gen, PolarAlignStages.Coarse, "seeding").ConfigureAwait(false);
             // The axis is MEASURED (seed turn + two-point fit), never read off the camera's pointing at
@@ -93,6 +93,11 @@ namespace OpenAstroAra.Server.Services {
             } catch (CameraBusyException ex) {
                 RecordCaptureFault(gen, frameId, ex.Message);
                 return new PolarAlignSolveOutcome(false, 0, 0);
+            } catch (CameraUnavailableException ex) {
+                // The camera dropped mid-run: a capture-layer fault, so an exhausted seed names the
+                // camera (capture_rejected), not focus or sky.
+                RecordCaptureFault(gen, frameId, ex.Message);
+                return new PolarAlignSolveOutcome(false, 0, 0);
             } catch (Exception ex) {
                 LogCaptureFailed(frameId, ex.Message);
                 return new PolarAlignSolveOutcome(false, 0, 0);
@@ -104,14 +109,18 @@ namespace OpenAstroAra.Server.Services {
 
         // ── fine ─────────────────────────────────────────────────────────────────────────────
 
-        /// <param name="homeFirst">True after the coarse stage: its seed turn and its tracking-off live loop
-        /// left the mount an hour angle or more from Home, and a second turn "away from the meridian" from
-        /// there could reach a GEM's limit or flip the pier mid-seed. Home again first, like the check.</param>
+        /// <param name="homeFirst">Go Home before the seed. True after the coarse stage (its seed turn and
+        /// its tracking-off live loop left the mount an hour angle or more from Home, and a second turn
+        /// "away from the meridian" from there could reach a GEM's limit or flip the pier mid-seed) and
+        /// for a fine start on a mount that can find Home while <c>use_home</c> is set — "Adjust again"
+        /// after a check starts from the check's last turn, the same hazard. A mount without Find Home
+        /// starts from where the user put it.</param>
         private async Task RunFineStageAsync(
-                PHD2Guider guiderClient, string workDir, SiteSettingsDto site, PolarAlignSettingsDto settings, bool homeFirst, int gen, CancellationToken ct) {
+                PHD2Guider guiderClient, string workDir, SiteSettingsDto site, PolarAlignSettingsDto settings, bool homeFirst,
+                Func<Task> renew, int gen, CancellationToken ct) {
             if (homeFirst) {
                 await SetStageAsync(gen, PolarAlignStages.Fine, settings.UseHome ? "homing" : "seeding").ConfigureAwait(false);
-                await GoHomeAsync(settings, MakeLeaseRenewer(guiderClient, ct), gen, ct).ConfigureAwait(false);
+                await GoHomeAsync(settings, renew, gen, ct).ConfigureAwait(false);
             }
             await SetStageAsync(gen, PolarAlignStages.Fine, "seeding").ConfigureAwait(false);
 
@@ -125,7 +134,7 @@ namespace OpenAstroAra.Server.Services {
 
             await RunSeededAdjustAsync(
                 (frameId, hint, s, timing, token) => CaptureAndSolveAsync(guiderClient, workDir, frameId, hint, s, gen, timing, token),
-                MakeLeaseRenewer(guiderClient, ct), site, settings, gen, ct).ConfigureAwait(false);
+                renew, site, settings, gen, ct).ConfigureAwait(false);
 
             // Next: remember the fine readout the check will be compared with.
             lock (_gate) {
@@ -216,9 +225,9 @@ namespace OpenAstroAra.Server.Services {
         // ── check ────────────────────────────────────────────────────────────────────────────
 
         private async Task RunCheckStageAsync(
-                PHD2Guider guiderClient, string workDir, SiteSettingsDto site, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
+                PHD2Guider guiderClient, string workDir, SiteSettingsDto site, PolarAlignSettingsDto settings,
+                Func<Task> renew, int gen, CancellationToken ct) {
             var north = site.LatitudeDeg > 0;
-            var renew = MakeLeaseRenewer(guiderClient, ct);
             await SetStageAsync(gen, PolarAlignStages.Check, settings.UseHome ? "homing" : "checking").ConfigureAwait(false);
             await GoHomeAsync(settings, renew, gen, ct).ConfigureAwait(false);
             if (!_mount.GetInfo().TrackingEnabled) {

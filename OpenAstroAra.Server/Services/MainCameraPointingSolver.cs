@@ -32,6 +32,12 @@ namespace OpenAstroAra.Server.Services;
 public interface IPolarAlignMainCameraSolver {
     Task<PolarAlignSolveOutcome> CaptureAndSolveAsync(
         double exposureSeconds, (double RaDeg, double DecDeg)? hintJnow, CancellationToken ct);
+
+    /// <summary>Why the main camera cannot shoot right now (not connected), or null when it can — or
+    /// when the daemon has no camera service to ask. The coarse stage's Start checks this before it
+    /// moves the mount, so a camera that is off refuses at once instead of homing, slewing and then
+    /// blaming the sky.</summary>
+    Task<string?> UnavailableReasonAsync(CancellationToken ct);
 }
 
 /// <summary>
@@ -63,6 +69,16 @@ public sealed class MainCameraPointingSolver : IPolarAlignMainCameraSolver {
         _filterWheelMediator = filterWheelMediator;
         _profileStore = profileStore;
         _camera = camera;
+    }
+
+    public async Task<string?> UnavailableReasonAsync(CancellationToken ct) {
+        if (_camera is null) {
+            return null;
+        }
+        var camera = await _camera.GetAsync(ct).ConfigureAwait(false);
+        return camera?.State == OpenAstroAra.Server.Contracts.EquipmentConnectionState.Connected
+            ? null
+            : "the main camera is not connected — connect it, or start polar alignment at the fine stage";
     }
 
     /// <summary>The mount's reported pointing, or null when it is not connected.</summary>

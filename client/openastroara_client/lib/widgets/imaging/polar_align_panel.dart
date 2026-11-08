@@ -243,23 +243,39 @@ String _secondsLabel(num ms) => '${(ms / 1000).toStringAsFixed(1)} s';
 /// with decoupled Az/Alt readouts fed by `polar_align.progress` WS events,
 /// the §45.11 no-solve retry banner, and Done/Abort. [Done] enables inside the
 /// profile's target tolerance (§45.12).
-/// Rough stage: which side of the pole the axis sits, in words. Pure — unit-tested.
-String? polarSideOfPoleText(double? altArcmin, double? azArcmin) {
+/// Which side of the pole the mount axis sits on, from the rough stage's readout.
+enum PolarSide { above, below, east, west }
+
+/// Rough stage: which side of the pole the axis sits. Null until both errors
+/// are known; both fields null = on the pole (under half an arcminute each
+/// way). Positive az = east of the pole as seen facing it, in both
+/// hemispheres. Pure — the English sentence and Simple Mode's localised one
+/// are built on it.
+({PolarSide? vertical, PolarSide? side})? polarSideOfPole(double? altArcmin, double? azArcmin) {
   if (altArcmin == null || azArcmin == null) return null;
   final vertical = altArcmin.abs() < 0.5
       ? null
       : altArcmin > 0
-          ? 'above'
-          : 'below';
-  // Positive az = east of the pole as seen facing it, in both hemispheres.
+          ? PolarSide.above
+          : PolarSide.below;
   final side = azArcmin.abs() < 0.5
       ? null
       : azArcmin > 0
-          ? 'east'
-          : 'west';
-  if (vertical == null && side == null) return 'The mount axis is on the pole.';
-  final parts = [?vertical, ?side];
-  return 'The mount axis sits ${parts.join(' and ')} of the pole.';
+          ? PolarSide.east
+          : PolarSide.west;
+  return (vertical: vertical, side: side);
+}
+
+/// Rough stage: which side of the pole the axis sits, in words (the Full UI's
+/// English). Pure — unit-tested.
+String? polarSideOfPoleText(double? altArcmin, double? azArcmin) {
+  final where = polarSideOfPole(altArcmin, azArcmin);
+  if (where == null) return null;
+  if (where.vertical == null && where.side == null) return 'The mount axis is on the pole.';
+  final parts = [?where.vertical?.name, ?where.side?.name];
+  // "above the pole" but "east of the pole" / "above and east of the pole".
+  final of = where.side == null ? '' : 'of ';
+  return 'The mount axis sits ${parts.join(' and ')} ${of}the pole.';
 }
 
 class PolarAlignPanel extends ConsumerStatefulWidget {

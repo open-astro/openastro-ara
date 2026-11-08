@@ -57,8 +57,18 @@ SetupStepState connectStepState(MountStatus? mount, CameraStatus? camera) {
 /// physical and per-setup, so a fresh app session starts unaligned.
 SetupStepState polarAlignStepState(PolarAlignLive live) {
   // The rough stage's green is a first pass on the main camera, not an
-  // alignment: fine and check are still ahead of it.
-  if (live.zone == 'green' && live.stage != PolarAlignStages.coarse) {
+  // alignment: fine and check are still ahead of it. And a later stage keeps
+  // the rough readout until its own first solve (homing, seeding), so green
+  // only counts once that stage is reading, or the routine has ended on it.
+  const readingPhases = {
+    PolarAlignStates.adjusting,
+    PolarAlignStates.paused,
+    PolarAlignStates.stopped,
+    PolarAlignStates.checked,
+  };
+  if (live.zone == 'green' &&
+      live.stage != PolarAlignStages.coarse &&
+      readingPhases.contains(live.phase)) {
     return SetupStepState.done;
   }
   if (live.phase == PolarAlignStates.failed) return SetupStepState.problem;

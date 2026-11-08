@@ -93,6 +93,22 @@ void main() {
         '45 s\nSingle');
   });
 
+  test('simplePolarSideText names the side of the pole in the chosen language', () {
+    final en = lookupAppLocalizations(const Locale('en'));
+    final pt = lookupAppLocalizations(const Locale('pt', 'BR'));
+    const rough = PolarAlignLive(
+        phase: PolarAlignStates.adjusting, stage: PolarAlignStages.coarse, altErrorArcmin: 40, azErrorArcmin: 12);
+    expect(simplePolarSideText(rough, en), 'The mount axis sits above and east of the pole.');
+    expect(simplePolarSideText(rough, pt), 'O eixo da montagem fica acima e a leste do polo.');
+    expect(simplePolarSideText(rough.copyWith(altErrorArcmin: -3, azErrorArcmin: 0.1), en),
+        'The mount axis sits below the pole.');
+    expect(simplePolarSideText(rough.copyWith(altErrorArcmin: 0.1, azErrorArcmin: -4), pt),
+        'O eixo da montagem fica a oeste do polo.');
+    expect(simplePolarSideText(rough.copyWith(altErrorArcmin: 0.2, azErrorArcmin: -0.3), en),
+        'The mount axis is on the pole.');
+    expect(simplePolarSideText(const PolarAlignLive(stage: PolarAlignStages.coarse), en), isNull);
+  });
+
   test('simplePolarPhase names each phase', () {
     final en = lookupAppLocalizations(const Locale('en'));
     expect(simplePolarPhase(const PolarAlignLive(), en), 'Ready');

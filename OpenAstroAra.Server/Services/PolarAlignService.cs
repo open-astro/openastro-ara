@@ -29,6 +29,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
 
 namespace OpenAstroAra.Server.Services {
 
@@ -329,16 +330,23 @@ namespace OpenAstroAra.Server.Services {
                 }
                 var settings = _profileStore.GetPolarAlignSettings();
                 var mainCamera = _mainCamera;
-                if (stage == PolarAlignStages.Coarse && mainCamera is null) {
-                    throw new InvalidOperationException(
-                        "the coarse stage needs the main camera's plate solver, which this daemon has not wired up — start at the fine stage instead");
+                if (stage == PolarAlignStages.Coarse) {
+                    if (mainCamera is null) {
+                        throw new InvalidOperationException(
+                            "the coarse stage needs the main camera's plate solver, which this daemon has not wired up — start at the fine stage instead");
+                    }
+                    // Before the mount moves: a camera that is off would otherwise home, slew, and then
+                    // fail the seed as a sky problem.
+                    if (await mainCamera.UnavailableReasonAsync(ct).ConfigureAwait(false) is { } unavailable) {
+                        throw new InvalidOperationException(unavailable);
+                    }
                 }
                 // The coarse and check stages open with the mount going Home; without Home each opens
                 // in its own first state (the fine stage always seeds at once).
                 var initialState = stage switch {
                     PolarAlignStages.Check => settings.UseHome ? "homing" : "checking",
                     PolarAlignStages.Coarse => settings.UseHome ? "homing" : "seeding",
-                    _ => "seeding",
+                    _ => FineStartHomesFirst(settings, mountInfo) ? "homing" : "seeding",
                 };
                 await guiderClient.SetPaSessionAsync(active: true, timeoutS: LeaseTimeoutSeconds, ct).ConfigureAwait(false);
                 int gen;
@@ -425,8 +433,10 @@ namespace OpenAstroAra.Server.Services {
                     _active = false;
                     // A terminal "failed" or "checked" is a real outcome a polling client must still
                     // see — a late/stray Stop must not clobber it back to "stopped" (both already
-                    // published their event, wrote their row and released the lease).
-                    becameStopped = _state is not ("failed" or "checked");
+                    // published their event, wrote their row and released the lease). The user's own
+                    // Done on the checked verdict (Complete) does end it: the client leaves the
+                    // verdict on the stopped event, and the check already wrote the row.
+                    becameStopped = _state is not "failed" && (_state != "checked" || outcome == "complete");
                     if (becameStopped) {
                         _state = "stopped";
                     }
@@ -564,7 +574,11 @@ namespace OpenAstroAra.Server.Services {
                 // the run then failed with "the RA seed slew was rejected by the mount". The user started a
                 // routine that moves the mount, so unpark it here, before anything else.
                 await UnparkIfParkedAsync(ct).ConfigureAwait(false);
-                priorTracking = _mount.GetInfo().TrackingEnabled;
+                var mountInfo = _mount.GetInfo();
+                priorTracking = mountInfo.TrackingEnabled;
+                // One PA-session lease renewer for the whole run: the stages share its clock, so a
+                // hand-off never renews twice back to back.
+                var renew = MakeLeaseRenewer(guiderClient, ct);
 
                 // The stages run in order from the one the user started at; each live loop returns
                 // when the user taps Next, and the check ends the run itself (state `checked`).
@@ -573,15 +587,16 @@ namespace OpenAstroAra.Server.Services {
                     // StartAsync refused a coarse start without the main camera's solver.
                     await RunCoarseStageAsync(guiderClient,
                         mainCamera ?? throw new InvalidOperationException("the coarse stage started without a main-camera solver"),
-                        site, settings, gen, ct).ConfigureAwait(false);
+                        site, settings, renew, gen, ct).ConfigureAwait(false);
                     stage = PolarAlignStages.Fine;
                     ranCoarse = true;
                 }
                 if (stage == PolarAlignStages.Fine) {
-                    await RunFineStageAsync(guiderClient, workDir, site, settings, homeFirst: ranCoarse, gen, ct).ConfigureAwait(false);
+                    var homeFirst = ranCoarse || FineStartHomesFirst(settings, mountInfo);
+                    await RunFineStageAsync(guiderClient, workDir, site, settings, homeFirst, renew, gen, ct).ConfigureAwait(false);
                     stage = PolarAlignStages.Check;
                 }
-                await RunCheckStageAsync(guiderClient, workDir, site, settings, gen, ct).ConfigureAwait(false);
+                await RunCheckStageAsync(guiderClient, workDir, site, settings, renew, gen, ct).ConfigureAwait(false);
             } catch (OperationCanceledException) {
                 // Stop — the stopping path owns the state + events.
             } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException ex) when (IsCurrent(gen)) {
@@ -607,6 +622,13 @@ namespace OpenAstroAra.Server.Services {
                 TryDeleteWorkDir(workDir);
             }
         }
+
+        /// <summary>A fine start goes Home first when the mount can find Home by itself and <c>use_home</c>
+        /// is on — a fine stage after a check ("Adjust again") or a stopped run would otherwise turn
+        /// further out from the last turn. A mount without Find Home starts from where the user put it
+        /// (asking for Home again on every fine start would be a chore, and the user positioned it).</summary>
+        private static bool FineStartHomesFirst(PolarAlignSettingsDto settings, TelescopeInfo mountInfo) =>
+            settings.UseHome && mountInfo.CanFindHome;
 
         /// <summary>Every tracking write of a run goes through here so the exit knows to hand it back. A
         /// superseded run writes nothing (see <see cref="TryMarkTrackingTouched"/>).</summary>
@@ -1115,6 +1137,9 @@ namespace OpenAstroAra.Server.Services {
             }
             PolarAlignmentRecord record;
             lock (_gate) {
+                // The last readout of any stage is a measured axis error: the coarse stage fits the axis
+                // from its own seed turn (#1727), so a run stopped there records a real measurement too,
+                // only one the user had not finished adjusting.
                 var total = _altErrorArcmin is double alt && _azErrorArcmin is double az
                     ? (double?)Math.Sqrt(alt * alt + az * az)
                     : null;

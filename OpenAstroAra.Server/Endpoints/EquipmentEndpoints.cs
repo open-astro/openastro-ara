@@ -1025,6 +1025,10 @@ public static partial class EquipmentEndpoints {
         PolarAlignStartAsync(svc, stage: null, idempotencyKey, ct);
 
     public static async Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, string? stage, string? idempotencyKey, CancellationToken ct) {
+        // A typo in the stage is the caller's mistake (400), not a busy routine (409).
+        if (stage is not null && !PolarAlignStages.IsValid(stage)) {
+            return Results.Problem($"unknown polar-align stage '{stage}' — use coarse, fine or check", statusCode: StatusCodes.Status400BadRequest);
+        }
         try {
             return Results.Accepted(value: await svc.StartAsync(stage, idempotencyKey, ct));
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {

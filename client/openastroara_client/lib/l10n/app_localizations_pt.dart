@@ -873,6 +873,34 @@ class AppLocalizationsPt extends AppLocalizations {
       'The main camera measures the mount axis with a turn in RA, then follows your knob moves. Waiting for the first solve…';
 
   @override
+  String get polarSideOnPole => 'The mount axis is on the pole.';
+
+  @override
+  String polarSideSits(String parts) {
+    return 'The mount axis sits $parts of the pole.';
+  }
+
+  @override
+  String polarSideSitsVertical(String parts) {
+    return 'The mount axis sits $parts the pole.';
+  }
+
+  @override
+  String get polarSideAbove => 'above';
+
+  @override
+  String get polarSideBelow => 'below';
+
+  @override
+  String get polarSideEast => 'east';
+
+  @override
+  String get polarSideWest => 'west';
+
+  @override
+  String get polarSideJoin => ' and ';
+
+  @override
   String get polarNeedsHomeHint =>
       'This mount cannot find Home by itself. Counterweights down, tube pointing at the pole, then Continue.';
 
@@ -3666,6 +3694,34 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get polarRoughWaiting =>
       'A câmera principal mede o eixo da montagem com um giro em AR e depois acompanha os seus ajustes. Aguardando a primeira resolução…';
+
+  @override
+  String get polarSideOnPole => 'O eixo da montagem está sobre o polo.';
+
+  @override
+  String polarSideSits(String parts) {
+    return 'O eixo da montagem fica $parts do polo.';
+  }
+
+  @override
+  String polarSideSitsVertical(String parts) {
+    return 'O eixo da montagem fica $parts do polo.';
+  }
+
+  @override
+  String get polarSideAbove => 'acima';
+
+  @override
+  String get polarSideBelow => 'abaixo';
+
+  @override
+  String get polarSideEast => 'a leste';
+
+  @override
+  String get polarSideWest => 'a oeste';
+
+  @override
+  String get polarSideJoin => ' e ';
 
   @override
   String get polarNeedsHomeHint =>

@@ -129,6 +129,23 @@ String simplePolarPhase(PolarAlignLive live, AppLocalizations l10n) =>
       _ => l10n.polarPhaseReady,
     };
 
+/// The rough stage's side-of-pole sentence in the user's language, or null
+/// until both errors are known. Pure — unit-tested.
+String? simplePolarSideText(PolarAlignLive live, AppLocalizations l10n) {
+  final where = polarSideOfPole(live.altErrorArcmin, live.azErrorArcmin);
+  if (where == null) return null;
+  if (where.vertical == null && where.side == null) return l10n.polarSideOnPole;
+  final parts = [
+    if (where.vertical == PolarSide.above) l10n.polarSideAbove,
+    if (where.vertical == PolarSide.below) l10n.polarSideBelow,
+    if (where.side == PolarSide.east) l10n.polarSideEast,
+    if (where.side == PolarSide.west) l10n.polarSideWest,
+  ];
+  final joined = parts.join(l10n.polarSideJoin);
+  // "above the pole" but "east of the pole" / "above and east of the pole".
+  return where.side == null ? l10n.polarSideSitsVertical(joined) : l10n.polarSideSits(joined);
+}
+
 /// The polar-align camera's latest frame, refetched after each finished
 /// frame; null until there is one. Keeps the previous picture while the next
 /// loads (read `.value`).
@@ -346,7 +363,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
             // Rough stage: which side of the pole, in words.
             if (active && live.stage == PolarAlignStages.coarse)
               Text(
-                polarSideOfPoleText(live.altErrorArcmin, live.azErrorArcmin) ?? l10n.polarRoughWaiting,
+                simplePolarSideText(live, l10n) ?? l10n.polarRoughWaiting,
                 key: const Key('simple-polar-side'),
                 style: kSimpleText,
                 maxLines: 3,
@@ -521,7 +538,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                       onPressed:
                           !_busy &&
                               total != null &&
-                              total < settings.targetToleranceArcmin
+                              total <= settings.targetToleranceArcmin
                           ? () => _run(l10n.polarActionCheck, (api) => api.next())
                           : null,
                       child: Text(l10n.polarCheck),
@@ -534,7 +551,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                       onPressed:
                           !_busy &&
                               total != null &&
-                              total < settings.targetToleranceArcmin
+                              total <= settings.targetToleranceArcmin
                           ? () async {
                               // Read before the await: the panel may have
                               // closed by the time the rig answers.

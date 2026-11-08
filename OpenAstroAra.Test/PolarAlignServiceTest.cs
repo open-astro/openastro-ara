@@ -1758,8 +1758,11 @@ namespace OpenAstroAra.Test {
         private sealed class FakeMainCamera : IPolarAlignMainCameraSolver {
             public PolarAlignSolveOutcome? Answer { get; set; }
             public double OffsetDeg { get; set; } = 1.25;
+            /// <summary>Non-null = the camera cannot shoot (not connected), with the reason.</summary>
+            public string? Unavailable { get; set; }
             public int Calls;
             public ConcurrentQueue<double> Exposures { get; } = new();
+            public Task<string?> UnavailableReasonAsync(CancellationToken ct) => Task.FromResult(Unavailable);
             public Task<PolarAlignSolveOutcome> CaptureAndSolveAsync(double exposureSeconds, (double RaDeg, double DecDeg)? hintJnow, CancellationToken ct) {
                 Interlocked.Increment(ref Calls);
                 Exposures.Enqueue(exposureSeconds);
@@ -1900,6 +1903,73 @@ namespace OpenAstroAra.Test {
             Assert.That(mainCamera.Calls, Is.GreaterThan(0));
 
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task Start_refuses_the_coarse_stage_when_the_main_camera_is_not_connected() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var mount = NewHomeMount(canFindHome: true);
+            var mainCamera = new FakeMainCamera { Unavailable = "the main camera is not connected" };
+            using var svc = NewService(guider, new HintFollowingSolver(), mount, mainCamera: mainCamera);
+
+            // Refused before the mount moves: no lease, no Home, no frame.
+            await AssertThrowsAsync<InvalidOperationException>(() => svc.StartAsync(PolarAlignStages.Coarse, null, CancellationToken.None)).ConfigureAwait(false);
+            Assert.That(paCalls, Is.Empty);
+            mount.Verify(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never);
+            Assert.That(mainCamera.Calls, Is.Zero);
+
+            // The fine stage needs no main camera and still starts.
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task A_fine_start_on_a_mount_that_can_find_Home_homes_first() {
+            // "Adjust again" after a check, or a fine start after a stopped run, begins wherever the last
+            // turn left the mount; another turn outward from there is the GEM-limit hazard. With Find Home
+            // and use_home on, the fine stage homes first.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var slews = new ConcurrentQueue<Coordinates>();
+            var mount = NewHomeMount(canFindHome: true, slews);
+            var ws = new WsRecorder();
+            using var svc = NewService(guider, new HintFollowingSolver(), mount, ws);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var started = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignStarted).ConfigureAwait(false);
+            Assert.That(started.GetProperty("state").GetString(), Is.EqualTo("homing"));
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            mount.Verify(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Once);
+            var targets = slews.ToArray();
+            Assert.That(targets.Length, Is.EqualTo(2), "from Home: off the axis to Dec 85°, then the seed turn");
+            Assert.That(targets[0].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6));
+        }
+
+        [Test]
+        public async Task Done_after_the_check_ends_the_routine_and_publishes_stopped() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var ws = new WsRecorder();
+            var log = new RecordingLog();
+            using var svc = NewService(guider, new HintFollowingSolver(), NewHomeMount(canFindHome: true), ws, log: log);
+
+            await svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("checked"));
+            Assert.That(log.Rows.Count, Is.EqualTo(1), "the check wrote its row");
+
+            // The user's Done on the verdict: the routine ends and the client hears so — no second row.
+            await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("stopped"));
+            Assert.That(ws.Events.Any(e => e.Type == WsEventCatalog.PolarAlignStopped), Is.True);
+            Assert.That(log.Rows.Count, Is.EqualTo(1));
         }
 
         [Test]
