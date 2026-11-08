@@ -35,6 +35,23 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Fixed (bug sweep)
+
+- Switching, creating or deleting the active profile now changes the connected devices. Each profile remembers its own devices, the Safety Monitor drops first, and a running plan refuses the switch (#1710).
+- A filter change moves the focuser by the offset difference when "Move the focuser by each filter's offset" is on (#1667).
+- Unattended shutdown no longer starts for a plan's own wait-for-user step, runs once per failure period, tells you the shutdown time, and waits 30 minutes by default for new profiles (#1712).
+- A polar align or guide-camera focus start waits for the guider's earlier capture (#1711). A seed that fails to solve reports the guide focal length the frame implies (#1715).
+- Leaving an off-axis guider no longer keeps the main scope's focal length as the guide focal length, and guider settings warn when the two match (#1715).
+- Emergency Stop's confirmation no longer says it parks the mount, and lists every step (#1737).
+- Simple Mode: Storage and Logs & bug report are inline in Settings › Rig (#1659, #1660); a paused Queue no longer locks the Guide shutter (#1725); the sky map runs a search sent before it was ready (#1713); a rig that can't change filters plans one row, and an unset site gets no altitude (#1737).
+- The setup wizard refuses one camera as both Main and Guide, shows the server's reason at Save, and skips darks when the guider push failed (#1661).
+- Sky Album cards write the Tier, format numbers for the locale, draw the back's action at 44 px, and decode the Art once during a flip (#1637, #1638, #1640, #1641).
+- The bedtime check counts only tonight's unresolved faults and names the device (#1714).
+
+### Removed (bug sweep)
+
+- The six NINA plate solvers. A profile that names one uses ASTAP and logs a warning once (#1701).
+
 ### Changed
 
 - Emergency Stop now stops the mount where it is: it aborts any slew or manual move and switches tracking off. It no longer parks, because a park is a slew that can repeat the fault you pressed Stop for. The API field `park_requested` is now `mount_stopped` on this path, and the failed step `park` is now `stop_mount` (#1672).
