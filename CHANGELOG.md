@@ -35,6 +35,10 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Changed
+
+- The architecture decisions now live in `docs/adr/`: nine new records cover the daemon and client split, Alpaca-only equipment, client-side planning, the trusted-LAN single-client model, the Wayland-only Linux client, ASTAP, GPS on the client and Simple Mode. `design/PORT_PLAYBOOK.md`, `design/README.md`, the Simple Mode brief and the Sky Album spec point at the records instead of repeating them.
+
 ### Fixed
 
 - Simple Mode: a device window, the OpenAstro Ara sheet and Search no longer stay open on top of each other on a wide window (#1674). Opening one closes the others; before, the Ara sheet could hide a device window's labels and controls, such as a switch's On.

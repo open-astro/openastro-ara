@@ -35,19 +35,12 @@ task; open work is only what the `P1`–`P5` issues say.
 
 ## Standing decisions
 
-Carried over from the retired `PORT_DECISIONS.md` because they still govern new work:
+Architecture decisions are records in [`../docs/adr/`](../docs/adr/README.md). These two are not
+records; the first is carried over from the retired `PORT_DECISIONS.md`:
 
 - **Use each vendored engine's native capabilities first; fill only the gap** (2026-06-26). For
   Stellarium Web, the guider, ASTAP and the NINA-derived code, map and use what the engine already
   does before writing custom code, and keep the custom part minimal.
-- **Planning compute belongs in the client; the Pi keeps execution** (2026-07-15). Target ranking,
-  optimal-sub math, FOV/framing and filter advice live in the client, which must work with no Pi
-  (§2). A new server-side planning endpoint needs a stated justification, such as feeding the
-  execution engine directly.
-- **Linux desktop client: x86-64, Wayland only** (2026-09-29, epic #1204; runner landed
-  2026-10-05 in #1275/#1201). Supported and tested on Ubuntu/Kubuntu 24.04 LTS, Fedora KDE
-  (current) and Arch, one distro per family; glibc floor 2.39. X11 is refused at startup. The
-  server stays an arm64 Debian `.deb` and is unaffected.
 - **Permanent non-goals** are listed in `PORT_PLAYBOOK.md` §55.
 
 CI's `sanity` job verifies `PORT_PLAYBOOK.md`, `COMMIT-PR-RULES.md` and this `README.md` exist and
