@@ -113,7 +113,7 @@
   "deviceWindOverLimit": "Vento {value} km/h, acima do limite de {limit} km/h.",
   "deviceHumidityOverLimit": "Umidade {value} %, acima do limite de {limit} %.",
   "deviceDewUnderMargin": "Ponto de orvalho {value} °C abaixo do ar, menos que a margem de {limit} °C.",
-  "deviceRigUnsafeByWeather": "{reason} O Ara trata o equipamento como inseguro.",
+  "deviceMonitorReadsSafe": "{name} indica Seguro",
   "deviceOnUnsafePause": "Se inseguro, o Ara pausa o plano, estaciona e fecha a cúpula.",
   "deviceOnUnsafePark": "Se inseguro, o Ara estaciona; o plano continua.",
   "deviceOnUnsafeAbort": "Se inseguro, o Ara interrompe o plano e estaciona.",

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-08T15:10:00+13:00",
+  "generatedAt": "2026-11-08T14:58:00+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -906,6 +906,11 @@
       {
         "name": "The Brand Stays Home Rule",
         "body": "The brand palette lives in two places, the Ara mark and the no-frame wallpaper. It never marks a state, a selection or a call to action.",
+        "section": "colors"
+      },
+      {
+        "name": "The Drawings Stay Grey Rule",
+        "body": "Device-window drawings (the dome clamshell and dial, the flat panel face) use their own grey ramp: dome body #808080 to #4A4A4A, shells #A8A8A8 to #6A6A6A, plinth #8A8A8A, hinge bolt #D0D0D0, dial slit #6E6E6E at 95 %, flat panel face #111111, lids #303030, ribs #242424, glow #FFFBE8 to #B8B29A. They picture hardware and never mark a state; a state on a drawing comes only from a status token.",
         "section": "colors"
       }
     ],

@@ -417,8 +417,8 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String deviceRigUnsafeByWeather(String reason) {
-    return '$reason Ara treats the rig as unsafe.';
+  String deviceMonitorReadsSafe(String name) {
+    return '$name reads Safe';
   }
 
   @override
@@ -3075,8 +3075,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String deviceRigUnsafeByWeather(String reason) {
-    return '$reason O Ara trata o equipamento como inseguro.';
+  String deviceMonitorReadsSafe(String name) {
+    return '$name indica Seguro';
   }
 
   @override

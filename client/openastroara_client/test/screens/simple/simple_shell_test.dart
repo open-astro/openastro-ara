@@ -92,6 +92,7 @@ import 'package:openastroara/models/dome_status.dart';
 import 'package:openastroara/state/equipment/dome_state.dart';
 import 'package:openastroara/models/safety_monitor_status.dart';
 import 'package:openastroara/state/equipment/safety_monitor_state.dart';
+import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
@@ -304,6 +305,15 @@ SwitchDevice _switch(String id, String name, SwitchConnectionState state) => Swi
     name: name,
     connectionState: state,
     ports: const [SwitchPort(id: 0, name: 'Dew 1', value: 0, min: 0, max: 100, canWrite: true)]);
+
+class _Windy extends WeatherNotifier with _Calls<WeatherStatus> {
+  @override
+  Future<WeatherStatus?> build() async => WeatherStatus.fromJson({
+        ..._wire('CloudWatcher', EquipmentConnectionState.connected),
+        'captured_at': DateTime.now().toUtc().toIso8601String(),
+        'wind_speed_ms': 11.4,
+      });
+}
 
 class _Dome extends DomeNotifier with _Calls<DomeStatus> {
   _Dome(this.state0);
@@ -3768,6 +3778,18 @@ void main() {
     dome.report('idle');
     await tester.pump();
     expect(find.descendant(of: pill, matching: find.textContaining('Dome')), findsNothing, reason: 'stopped');
+  });
+
+  testWidgets('weather past its limit shows in the Safety pill even while the monitor reads Safe', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
+      weatherProvider.overrideWith(() => _Windy()),
+    ]);
+    c.read(safetyPoliciesProvider.notifier).state = const SafetyPolicies(weatherTriggersEnabled: true);
+    await tester.pump();
+    final pill = find.byType(SimpleStatusPill);
+    expect(find.descendant(of: pill, matching: find.textContaining('Wind 41 km/h, over the 36 km/h limit')),
+        findsOneWidget, reason: 'the daemon holds the plan for the wind; the pill says why');
   });
 
   testWidgets('a dome Park asked in its window shows in the status pill at once', (tester) async {

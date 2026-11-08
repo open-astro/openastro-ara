@@ -777,11 +777,11 @@ abstract class AppLocalizations {
   /// **'Dew point {value} °C below the air, under the {limit} °C margin.'**
   String deviceDewUnderMargin(String value, String limit);
 
-  /// Safety monitor window: the monitor reads safe, but a weather reading past its limit makes the rig unsafe
+  /// Safety monitor window: under Unsafe when the weather, not the monitor, makes the rig unsafe
   ///
   /// In en, this message translates to:
-  /// **'{reason} Ara treats the rig as unsafe.'**
-  String deviceRigUnsafeByWeather(String reason);
+  /// **'{name} reads Safe'**
+  String deviceMonitorReadsSafe(String name);
 
   /// Safety monitor window: the On unsafe policy Pause + park + close dome
   ///

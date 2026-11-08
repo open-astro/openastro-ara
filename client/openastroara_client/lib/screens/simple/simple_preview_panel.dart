@@ -37,6 +37,8 @@ import '../../state/equipment/dome_shutter_state.dart';
 import '../../state/equipment/flat_panel_state.dart';
 import '../../state/equipment/rotator_state.dart';
 import '../../state/equipment/safety_monitor_state.dart';
+import '../../state/equipment/weather_state.dart';
+import '../../state/settings/safety_policies_state.dart';
 import '../../state/equipment/switch_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
@@ -56,6 +58,7 @@ import 'simple_device_windows.dart'
         simpleClockTime,
         simpleDomeAskLabel,
         simpleDomeAskProvider,
+        simpleWeatherBreaches,
         simpleMountMotionProvider,
         simpleSwitchSettingProvider;
 import 'simple_shell.dart'
@@ -1100,6 +1103,13 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     // silenced (#1668).
     final safety = ref.watch(safetyMonitorProvider).value;
     final unsafe = safety != null && safety.isConnected && !safety.safe;
+    // Weather past its limits holds a plan too (the daemon's same checks),
+    // even while the monitor reads Safe: the pill says which (#1690 audit).
+    final policies = ref.watch(safetyPoliciesProvider);
+    final weather = ref.watch(weatherProvider).value;
+    final breach = policies.weatherTriggersEnabled && weather != null
+        ? simpleWeatherBreaches(l10n, weather, policies).firstOrNull
+        : null;
     // The focuser moving, whoever moved it; autofocus has its own pill.
     final focuser = ref.watch(focuserProvider).value;
     final settingPort = ref.watch(switchActingProvider)
@@ -1197,6 +1207,13 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
               : l10n.deviceUnsafeSince(
                   simpleClockTime(safety.lastTransitionAt!.toLocal()),
                 ),
+          AraColors.accentWarning,
+        )
+      else if (breach != null)
+        _PillData(
+          SimpleStatusOrigin.safetyMonitor,
+          l10n.shellSafetyMonitor,
+          breach.endsWith('.') ? breach.substring(0, breach.length - 1) : breach,
           AraColors.accentWarning,
         ),
       if (parking != null)

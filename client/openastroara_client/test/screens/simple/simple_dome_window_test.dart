@@ -1,4 +1,5 @@
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -115,6 +116,7 @@ Future<(ProviderContainer, _Dome)> _pump(
   double width = 328,
   Locale? locale,
   _Times? times,
+  bool reduceMotion = false,
 }) async {
   await tester.pumpWidget(const SizedBox());
   await tester.pump();
@@ -136,6 +138,11 @@ Future<(ProviderContainer, _Dome)> _pump(
       container: c,
       child: MaterialApp(
         locale: locale,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(disableAnimations: reduceMotion),
+          child: child!,
+        ),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
@@ -394,6 +401,72 @@ void main() {
     await tester.sendEventToBinding(g.scroll(const Offset(0, 20)));
     await tester.pump();
     expect(find.text('→ 214°'), findsOneWidget);
+  });
+
+  testWidgets(
+    'a keyboard picks the target: the arrows step it a degree, with a focus ring',
+    (tester) async {
+      final (_, dome) = await _pump(tester, _wire());
+      for (
+        var i = 0;
+        i < 12 &&
+            FocusManager.instance.primaryFocus?.debugLabel !=
+                'simple-dome-dial';
+        i++
+      ) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+      }
+      expect(
+        FocusManager.instance.primaryFocus?.debugLabel,
+        'simple-dome-dial',
+      );
+      expect(_key('dial-focus'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pump();
+      expect(find.text('→ 214°'), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      expect(find.text('→ 213°'), findsOneWidget);
+      expect(dome.calls, isEmpty, reason: 'nothing moves until its middle');
+    },
+  );
+
+  testWidgets('the dial\'s compass letters follow the language', (
+    tester,
+  ) async {
+    await _pump(tester, _wire(), locale: const Locale('pt', 'BR'));
+    final dial = find.byKey(const Key('simple-dome-dial'));
+    for (final letter in ['N', 'L', 'S', 'O']) {
+      expect(
+        find.descendant(of: dial, matching: find.text(letter)),
+        findsOneWidget,
+        reason: letter,
+      );
+    }
+    expect(find.descendant(of: dial, matching: find.text('W')), findsNothing);
+  });
+
+  testWidgets('with reduce motion the drawing doesn\'t redraw every frame', (
+    tester,
+  ) async {
+    final (_, dome) = await _pump(tester, _wire(), reduceMotion: true);
+    await tester.tap(_key('shutter-open'));
+    await tester.pump(const Duration(seconds: 1)); // the tap's ripple ends
+    // Whatever else animates (none of it the drawing) stays as it was.
+    final before = tester.binding.transientCallbackCount;
+    dome.set(_wire(runtime: 'shutter_moving'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Opening…'), findsOneWidget);
+    expect(
+      tester.binding.transientCallbackCount,
+      before,
+      reason: 'no ticker for the shells while motion is off',
+    );
+    dome.set(_wire(open: true));
+    await tester.pump(const Duration(seconds: 4));
   });
 
   testWidgets('without a target the dial\'s middle takes no tap', (

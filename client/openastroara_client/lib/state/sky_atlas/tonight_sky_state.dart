@@ -10,6 +10,7 @@ import '../planning/planning_prefs_state.dart';
 import '../planning/sky_model_calibration_state.dart';
 import '../saved_server_state.dart';
 import '../settings/camera_electronics_state.dart';
+import '../settings/safety_policies_state.dart';
 import '../settings/custom_horizon_state.dart';
 import '../settings/filter_set_state.dart';
 import '../settings/optics_settings_state.dart';
@@ -44,6 +45,8 @@ final planningSettingsBootstrapProvider = FutureProvider<void>((ref) async {
       // §36 custom terrain skyline — the ranker gates visibility on it when
       // the site has useCustomHorizon on.
       ref.read(customHorizonProvider.notifier).hydrateFromServer(api),
+      // The weather limits Simple Mode's Safety pill checks; read only.
+      ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api),
     ]);
   } catch (_) {
     // best-effort: an unreachable daemon leaves the cached/offline state

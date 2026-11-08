@@ -560,11 +560,11 @@
       "limit": {"type": "String", "example": "2"}
     }
   },
-  "deviceRigUnsafeByWeather": "{reason} Ara treats the rig as unsafe.",
-  "@deviceRigUnsafeByWeather": {
-    "description": "Safety monitor window: the monitor reads safe, but a weather reading past its limit makes the rig unsafe",
+  "deviceMonitorReadsSafe": "{name} reads Safe",
+  "@deviceMonitorReadsSafe": {
+    "description": "Safety monitor window: under Unsafe when the weather, not the monitor, makes the rig unsafe",
     "placeholders": {
-      "reason": {"type": "String", "example": "Wind 41 km/h, over the 36 km/h limit."}
+      "name": {"type": "String", "example": "Solo"}
     }
   },
   "deviceOnUnsafePause": "On unsafe, Ara pauses the plan, parks and closes the dome.",

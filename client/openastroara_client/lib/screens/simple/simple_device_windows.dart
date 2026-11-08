@@ -4575,8 +4575,8 @@ class _DomeFrontState extends State<_DomeFront>
   late final Ticker _ticker = createTicker((_) => setState(() {}));
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
     _sync();
   }
 
@@ -4586,8 +4586,12 @@ class _DomeFrontState extends State<_DomeFront>
     _sync();
   }
 
+  /// Runs only while a move of known direction slides; with reduce motion
+  /// the shells stay put, so nothing redraws every frame (#1690 audit).
   void _sync() {
-    final run = widget.move?.opening != null;
+    final run =
+        widget.move?.opening != null &&
+        !MediaQuery.disableAnimationsOf(context);
     if (run && !_ticker.isActive) _ticker.start();
     if (!run && _ticker.isActive) _ticker.stop();
   }
@@ -4771,6 +4775,15 @@ class _DomeDialState extends State<_DomeDial> {
   /// window rebuilds with it.
   int? _sent;
 
+  final _focus = FocusNode(debugLabel: 'simple-dome-dial');
+  bool _focused = false;
+
+  @override
+  void dispose() {
+    _focus.dispose();
+    super.dispose();
+  }
+
   int get _from => _sent ?? widget.target ?? widget.azimuth.round() % 360;
 
   @override
@@ -4807,64 +4820,125 @@ class _DomeDialState extends State<_DomeDial> {
     final l10n = context.l10n;
     final enabled = widget.enabled;
     final size = widget.size;
-    return Semantics(
-      slider: true,
-      label: l10n.deviceAzimuth,
-      value: '$_from°',
-      increasedValue: '${(_from + 1) % 360}°',
-      decreasedValue: '${(_from + 359) % 360}°',
-      onIncrease: enabled ? () => _step(1) : null,
-      onDecrease: enabled ? () => _step(-1) : null,
-      child: SizedBox.square(
-        dimension: size,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Listener(
-              onPointerSignal: (e) {
-                if (e is! PointerScrollEvent || !enabled) return;
-                // Claimed, so the sheet under the window doesn't scroll too.
-                GestureBinding.instance.pointerSignalResolver.register(e, (e) {
-                  final dy = (e as PointerScrollEvent).scrollDelta.dy;
-                  if (dy != 0) _step(dy > 0 ? 1 : -1);
-                });
-              },
-              child: GestureDetector(
-                dragStartBehavior: DragStartBehavior.down,
-                onTapUp: enabled ? (d) => _point(d.localPosition) : null,
-                onPanStart: enabled
-                    ? (d) {
-                        _panned = d.kind == PointerDeviceKind.trackpad;
-                        _travel = 0;
-                        if (!_panned) _point(d.localPosition);
-                      }
-                    : null,
-                onPanUpdate: enabled
-                    ? (d) {
-                        if (!_panned) return _point(d.localPosition);
-                        _travel += d.delta.dy;
-                        final n = (_travel / 7).truncate();
-                        _travel -= n * 7;
-                        _step(n);
-                      }
-                    : null,
-                child: Opacity(
-                  opacity: enabled ? 1 : 0.4,
-                  child: ExcludeSemantics(
-                    child: CustomPaint(
-                      size: Size.square(size),
-                      painter: _DomeDialPainter(
-                        azimuth: widget.azimuth,
-                        target: widget.target,
-                        scaler: MediaQuery.textScalerOf(context),
+    const points = [('n', 0.0), ('e', 90.0), ('s', 180.0), ('w', 270.0)];
+    final k = size / 150;
+    // Up or right a degree clockwise, as the screen reader's increase and
+    // the rotator's dial (#1690 audit: no keyboard path).
+    return FocusableActionDetector(
+      focusNode: _focus,
+      enabled: enabled,
+      onShowFocusHighlight: (v) => setState(() => _focused = v),
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.arrowUp): _DialStep(1),
+        SingleActivator(LogicalKeyboardKey.arrowRight): _DialStep(1),
+        SingleActivator(LogicalKeyboardKey.arrowDown): _DialStep(-1),
+        SingleActivator(LogicalKeyboardKey.arrowLeft): _DialStep(-1),
+      },
+      actions: {
+        _DialStep: CallbackAction<_DialStep>(
+          onInvoke: (i) => enabled ? _step(i.dir) : null,
+        ),
+      },
+      child: Semantics(
+        slider: true,
+        label: l10n.deviceAzimuth,
+        value: '$_from°',
+        increasedValue: '${(_from + 1) % 360}°',
+        decreasedValue: '${(_from + 359) % 360}°',
+        onIncrease: enabled ? () => _step(1) : null,
+        onDecrease: enabled ? () => _step(-1) : null,
+        child: SizedBox.square(
+          dimension: size,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              if (_focused)
+                DecoratedBox(
+                  key: const Key('simple-dome-dial-focus'),
+                  decoration: const ShapeDecoration(
+                    shape: CircleBorder(
+                      side: BorderSide(color: AraColors.accentInfo, width: 2),
+                    ),
+                  ),
+                  child: SizedBox.square(dimension: size),
+                ),
+              Listener(
+                onPointerSignal: (e) {
+                  if (e is! PointerScrollEvent || !enabled) return;
+                  // Claimed, so the sheet under the window doesn't scroll too.
+                  GestureBinding.instance.pointerSignalResolver.register(e, (
+                    e,
+                  ) {
+                    final dy = (e as PointerScrollEvent).scrollDelta.dy;
+                    if (dy != 0) _step(dy > 0 ? 1 : -1);
+                  });
+                },
+                child: GestureDetector(
+                  dragStartBehavior: DragStartBehavior.down,
+                  onTapUp: enabled ? (d) => _point(d.localPosition) : null,
+                  onPanStart: enabled
+                      ? (d) {
+                          _panned = d.kind == PointerDeviceKind.trackpad;
+                          _travel = 0;
+                          if (!_panned) _point(d.localPosition);
+                        }
+                      : null,
+                  onPanUpdate: enabled
+                      ? (d) {
+                          if (!_panned) return _point(d.localPosition);
+                          _travel += d.delta.dy;
+                          final n = (_travel / 7).truncate();
+                          _travel -= n * 7;
+                          _step(n);
+                        }
+                      : null,
+                  child: Opacity(
+                    opacity: enabled ? 1 : 0.4,
+                    child: ExcludeSemantics(
+                      child: CustomPaint(
+                        size: Size.square(size),
+                        painter: _DomeDialPainter(
+                          azimuth: widget.azimuth,
+                          target: widget.target,
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
-            SizedBox.square(dimension: size * 0.3, child: widget.hub),
-          ],
+              // The compass points in the reader's language, as the
+              // azimuth's own ("245° SO" beside an O, not a W).
+              for (final (p, deg) in points)
+                Positioned(
+                  left:
+                      size / 2 +
+                      math.sin(deg * math.pi / 180) * (size / 2 - 23 * k) -
+                      12 * k,
+                  top:
+                      size / 2 -
+                      math.cos(deg * math.pi / 180) * (size / 2 - 23 * k) -
+                      8 * k,
+                  width: 24 * k,
+                  height: 16 * k,
+                  child: IgnorePointer(
+                    child: ExcludeSemantics(
+                      child: Center(
+                        child: Text(
+                          l10n.deviceCompass(p),
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 11 * k,
+                            height: 1,
+                            color: AraColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              SizedBox.square(dimension: size * 0.3, child: widget.hub),
+            ],
+          ),
         ),
       ),
     );
@@ -4872,15 +4946,10 @@ class _DomeDialState extends State<_DomeDial> {
 }
 
 class _DomeDialPainter extends CustomPainter {
-  _DomeDialPainter({
-    required this.azimuth,
-    required this.target,
-    required this.scaler,
-  });
+  _DomeDialPainter({required this.azimuth, required this.target});
 
   final double azimuth;
   final int? target;
-  final TextScaler scaler;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -4908,26 +4977,6 @@ class _DomeDialPainter extends CustomPainter {
     for (var i = 0; i < 36; i++) {
       final len = i % 9 == 0 ? 10 : (i % 3 == 0 ? 6 : 3);
       canvas.drawLine(at(i * 10.0, r - len * k), at(i * 10.0, r), tick);
-    }
-    for (final (label, deg) in [
-      ('N', 0.0),
-      ('E', 90.0),
-      ('S', 180.0),
-      ('W', 270.0),
-    ]) {
-      final tp = TextPainter(
-        text: TextSpan(
-          text: label,
-          style: TextStyle(fontSize: 11 * k, color: AraColors.textSecondary),
-        ),
-        textDirection: TextDirection.ltr,
-        textScaler: scaler,
-      )..layout();
-      tp.paint(
-        canvas,
-        at(deg, r - 20 * k) - Offset(tp.width / 2, tp.height / 2),
-      );
-      tp.dispose();
     }
     Path slit(double deg) {
       // 32° wide (user, 2026-11-08: 16° read too narrow).
@@ -4969,7 +5018,7 @@ class _DomeDialPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_DomeDialPainter old) =>
-      old.azimuth != azimuth || old.target != target || old.scaler != scaler;
+      old.azimuth != azimuth || old.target != target;
 }
 
 /// The safety monitor's window: Safe or Unsafe and since when, and while
@@ -5054,13 +5103,27 @@ class _SimpleSafetyMonitorWindowState
         ),
       );
     } else {
-      final safe = s.safe;
+      final p = _policiesLoaded ? ref.watch(safetyPoliciesProvider) : null;
+      final w = ref.watch(weatherProvider).value;
+      // Weather past its limits makes the rig unsafe too (the daemon's same
+      // checks, §35.1), even while the monitor reads Safe.
+      final breaches = p != null && p.weatherTriggersEnabled && w != null
+          ? simpleWeatherBreaches(l10n, w, p)
+          : const <String>[];
+      final name = s.name.isEmpty ? l10n.shellSafetyMonitor : s.name;
+      final monitorSafe = s.safe;
+      // The card says what the rig is: the monitor's word, or the weather
+      // past its limits while the monitor reads Safe (#1690 audit: a big
+      // green Safe over amber reasons). The monitor's own reading goes under.
+      final safe = monitorSafe && breaches.isEmpty;
       // Unsafe takes the warning colour (#1662), not the error red: the
       // monitor works, the sky doesn't.
       final colour = safe ? AraColors.accentConnected : AraColors.accentWarning;
       final word = safe ? l10n.deviceSafe : l10n.deviceUnsafe;
       final at = s.lastTransitionAt;
-      final since = at == null
+      final since = monitorSafe && !safe
+          ? l10n.deviceMonitorReadsSafe(name)
+          : at == null
           ? null
           : l10n.deviceSafetySince(
               simpleClockTime(at.toLocal()),
@@ -5121,13 +5184,6 @@ class _SimpleSafetyMonitorWindowState
           ),
         ),
       );
-      final p = _policiesLoaded ? ref.watch(safetyPoliciesProvider) : null;
-      final w = ref.watch(weatherProvider).value;
-      // Weather past its limits makes the rig unsafe too (the daemon's same
-      // checks, §35.1), even while the monitor reads Safe.
-      final breaches = p != null && p.weatherTriggersEnabled && w != null
-          ? simpleWeatherBreaches(l10n, w, p)
-          : const <String>[];
       if (!safe || breaches.isNotEmpty) {
         Widget heading(String text) => Padding(
           padding: const EdgeInsets.only(top: AraSpace.s8),
@@ -5155,24 +5211,11 @@ class _SimpleSafetyMonitorWindowState
         );
         children.add(heading(l10n.deviceWhy));
         // An ASCOM safety monitor reports safe or unsafe, never why.
-        if (!safe) {
-          children.add(
-            row(
-              Icons.sensors,
-              l10n.deviceMonitorNoReason(
-                s.name.isEmpty ? l10n.shellSafetyMonitor : s.name,
-              ),
-            ),
-          );
+        if (!monitorSafe) {
+          children.add(row(Icons.sensors, l10n.deviceMonitorNoReason(name)));
         }
         for (final b in breaches) {
-          children.add(
-            row(
-              Icons.air,
-              safe ? l10n.deviceRigUnsafeByWeather(b) : b,
-              warn: true,
-            ),
-          );
+          children.add(row(Icons.air, b, warn: true));
         }
         // What the rig's policy does, once it has loaded: a default could
         // promise the wrong thing.

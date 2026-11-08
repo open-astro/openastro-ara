@@ -218,7 +218,7 @@ void main() {
   );
 
   testWidgets(
-    'the monitor Safe but the wind past its limit: Ara treats the rig as unsafe',
+    'the monitor Safe but the wind past its limit: the card reads Unsafe, the monitor Safe under it',
     (tester) async {
       await _pump(
         tester,
@@ -226,12 +226,13 @@ void main() {
         policies: const SafetyPolicies(weatherTriggersEnabled: true),
         weather: _windy(),
       );
-      expect(find.text('Safe'), findsOneWidget);
+      // The card says what the rig is, not just the monitor (#1690 audit).
+      expect(find.text('Unsafe'), findsOneWidget);
+      expect(_colour(tester, 'Unsafe'), AraColors.accentWarning);
+      expect(find.text('Solo reads Safe'), findsOneWidget);
       expect(find.textContaining('says unsafe'), findsNothing);
       expect(
-        find.text(
-          'Wind 41 km/h, over the 36 km/h limit. Ara treats the rig as unsafe.',
-        ),
+        find.text('Wind 41 km/h, over the 36 km/h limit.'),
         findsOneWidget,
       );
       expect(find.text('What Ara does'), findsOneWidget);
