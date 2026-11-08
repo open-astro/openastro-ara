@@ -86,3 +86,6 @@ referred to by its slug until it is written, and numbered then.
 - [A GPS receiver goes on the client, never the rig](0008-gps-lives-on-the-client.md)
 - [Simple Mode is a second shell over the same rig](0009-simple-mode-is-a-shell-over-the-same-rig.md)
 - [Simple Mode's queue is one sequence on the rig](0010-simple-mode-queue-is-one-sequence-on-the-rig.md)
+- [A device's lifecycle is one module](0011-device-lifecycle-is-one-module.md)
+- [A profile section is declared once](0012-a-profile-section-is-declared-once.md)
+- [Presentations render shared client modules](0013-presentations-render-shared-client-modules.md)
