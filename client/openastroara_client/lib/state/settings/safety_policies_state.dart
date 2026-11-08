@@ -155,7 +155,7 @@ class SafetyPolicies {
     this.firstFlipConfirmed = false,
     this.unattendedEscalation = true,
     this.unattendedShutdownEnabled = true,
-    this.unattendedShutdownWaitMinutes = 10,
+    this.unattendedShutdownWaitMinutes = 30,
     this.calibrationCaptureDefault = CalibrationCaptureDefault.ask,
     this.weatherTriggersEnabled = false,
     this.maxWindKmh = 36,

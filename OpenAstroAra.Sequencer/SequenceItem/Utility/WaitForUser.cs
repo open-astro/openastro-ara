@@ -26,10 +26,10 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
     /// <summary>
     /// §58.12-b — pause the run for a HUMAN step (screw-in filter swap on an
     /// OSC rig, rotating a manual rotator, removing a dew shield…): arms the
-    /// root's pause gate as <see cref="PauseKind.AwaitingUser"/> and returns,
+    /// root's pause gate as <see cref="PauseKind.Prompt"/> and returns,
     /// so the engine suspends at the next instruction boundary in the full
     /// awaiting-user dress (sequence.paused event, client "the rig needs you"
-    /// banner, unattended-shutdown clock armed). The user's explicit Resume
+    /// banner; no unattended-shutdown clock, since the plan asked for this stop). The user's explicit Resume
     /// continues the sequence — the same command that clears every other
     /// awaiting-user pause.
     ///
@@ -59,7 +59,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
                 progress?.Report(new ApplicationStatus() {
                     Status = string.IsNullOrWhiteSpace(Text) ? "Waiting for you — press Resume" : Text
                 });
-                gate.RequestPause(PauseKind.AwaitingUser);
+                gate.RequestPause(PauseKind.Prompt);
             } else {
                 // Standalone/validation execution has no gate — a blocking wait
                 // here would hang a headless run with nobody to resume it.

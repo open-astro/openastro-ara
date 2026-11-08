@@ -360,7 +360,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     // failing while the user has the run paused): the next branch to reach its
     // boundary re-fires this callback and upgrades the state.
     private void OnPauseEntered(Guid sequenceId, RunState run) {
-        var target = run.Gate.PendingKind == OpenAstroAra.Sequencer.Utility.PauseKind.AwaitingUser
+        var kind = run.Gate.PendingKind;
+        var target = kind >= OpenAstroAra.Sequencer.Utility.PauseKind.Prompt
             ? SequenceRunState.PausedAwaitingUser
             : SequenceRunState.Paused;
         if (run.TryTransition(SequenceRunState.Running, target)
@@ -376,8 +377,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             if (run.Root is ISequenceContainer pausedRoot) {
                 run.PausedTarget = FindActiveDeepSkyTarget(pausedRoot);
             }
-            if (target == SequenceRunState.PausedAwaitingUser) {
-                // §58.12 — the rig needs a human; start the unattended-shutdown
+            if (kind == OpenAstroAra.Sequencer.Utility.PauseKind.AwaitingUser) {
+                // §58.12 — a failure left the rig needing a human; start the unattended-shutdown
                 // clock. Runs on the engine thread: the call only arms a timer.
                 _unattendedShutdown?.NotifyRunPausedAwaitingUser(sequenceId, run.RunId);
             }

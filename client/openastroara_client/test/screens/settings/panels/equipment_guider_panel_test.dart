@@ -394,6 +394,18 @@ void main() {
         findsWidgets);
   });
 
+  testWidgets('#1715 a guide scope whose focal length equals the main scope gets a warning', (tester) async {
+    await _pump(tester, const Phd2Settings(guideFocalLength: 375));
+    final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentGuiderPanel)));
+    container.read(opticsSettingsProvider.notifier).setFocalLengthMm(375);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('guider_focal_length_copied')), findsOneWidget);
+
+    container.read(phd2SettingsProvider.notifier).setGuideFocalLength(128);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('guider_focal_length_copied')), findsNothing);
+  });
+
   testWidgets('the rotator picker is offered on an off-axis guider only',
       (tester) async {
     // §63.19 — PHD2 turns its calibration by the rotator it is given, which

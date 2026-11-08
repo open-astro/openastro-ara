@@ -1475,6 +1475,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_wait_for_user_step_pauses_the_run_without_starting_the_unattended_shutdown_countdown() {
+            // #1712: a plan's own prompt (swap the filter, take off the lens cap) is not a failure.
+            using var shutdown = new UnattendedShutdownService();
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForUser { Text = "Switch to the Ha filter" });
+                c.Items.Add(new Annotation { Name = "after" });
+            }), unattendedShutdown: shutdown);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.PausedAwaitingUser);
+
+            Assert.That(shutdown.IsCountingDown, Is.False, "a prompt the plan asked for must not arm the shutdown");
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
         public async Task Abort_wins_over_a_pause_awaiting_user() {
             // §58.12: abort must win over an awaiting-user suspension exactly as it
             // does over an ordinary pause — the run ends Stopped, never wedged.

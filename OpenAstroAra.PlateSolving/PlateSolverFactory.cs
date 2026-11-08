@@ -48,64 +48,27 @@ namespace OpenAstroAra.PlateSolving {
 
     public static class PlateSolverFactory {
 
-        // Set once the AstrometryNet→ASTAP substitution has been logged, so a long automated run logs it once
-        // rather than every solve (see CreateAstapForRemovedAstrometryNet).
-        private static int astrometryNetSubstitutionWarned;
+        // Set once the first removed solver has been substituted, so a long automated run logs it once
+        // rather than every solve.
+        private static int removedSolverWarned;
 
-        /// <summary>
-        /// Creates an instance of a Platesolver depending on the solver
-        /// </summary>
-        /// <param name="plateSolveSettings"></param>
-        /// <param name="solver"> Plate Solver that should be used</param>
-        /// <returns></returns>
-        private static IPlateSolver GetPlateSolver(IPlateSolveSettings plateSolveSettings, PlateSolver solver) {
-            // AstrometryNet (cloud astrometry.net) solver removed per playbook
-            // §18.I "just ASTAP impl per §18.I" — ARA ships local solvers only.
-            return solver switch {
-                PlateSolver.LOCAL => new LocalPlateSolver(plateSolveSettings.CygwinLocation),
-                PlateSolver.PLATESOLVE2 => new Platesolve2Solver(plateSolveSettings.PS2Location),
-                PlateSolver.PLATESOLVE3 => new Platesolve3Solver(plateSolveSettings.PS3Location),
-                PlateSolver.ASPS => new AllSkyPlateSolver(plateSolveSettings.AspsLocation),
-                PlateSolver.TSXImageLink => new TheSkyXImageLinkSolver(plateSolveSettings.TheSkyXHost, plateSolveSettings.TheSkyXPort),
-                PlateSolver.PINPONT => new Dc3PinPointSolver(plateSolveSettings),
-                // The removed AstrometryNet substitutes ASTAP *explicitly* + logs (rather than silently hitting
-                // the default arm), so a profile still carrying it — primary (PlateSolverType) or blind
-                // (BlindSolver.AstrometryNet → PlateSolver.AstrometryNet) both funnel here — doesn't resolve to a
-                // different backend than configured without a trace.
-                PlateSolver.AstrometryNet => CreateAstapForRemovedAstrometryNet(plateSolveSettings),
-                _ => new ASTAPSolver(plateSolveSettings.ASTAPLocation, plateSolveSettings.ASTAPDatabaseLocation),
-            };
-        }
-
-        // Warn once per process: it's a persistent profile-level misconfiguration the user should correct
-        // (e.g. a NINA import that carried AstrometryNet), so a long automated run shouldn't repeat the line
-        // every solve. Warning-level (not Info) — the configured solver silently differs from the one used,
-        // the same degraded-behaviour class as the CenteringSolver sync warnings.
-        private static ASTAPSolver CreateAstapForRemovedAstrometryNet(IPlateSolveSettings plateSolveSettings) {
-            if (Interlocked.CompareExchange(ref astrometryNetSubstitutionWarned, 1, 0) == 0) {
-                Logger.Warning("Plate solve - solver is configured as AstrometryNet, which was removed (§18.I local-solvers-only). Using ASTAP instead.");
+        // ADR 0007: ASTAP is the only solver Ara ships. Every other value (the removed AstrometryNet and the
+        // NINA solvers) still deserializes from a persisted profile and resolves to ASTAP, with a warning.
+        private static ASTAPSolver GetPlateSolver(IPlateSolveSettings plateSolveSettings, string configured, bool removed) {
+            if (removed && Interlocked.CompareExchange(ref removedSolverWarned, 1, 0) == 0) {
+                Logger.Warning($"Plate solve - solver is configured as {configured}, which was removed (ADR 0007: ASTAP only). Using ASTAP instead.");
             }
             return new ASTAPSolver(plateSolveSettings.ASTAPLocation, plateSolveSettings.ASTAPDatabaseLocation);
         }
 
         public static IPlateSolver GetPlateSolver(IPlateSolveSettings plateSolveSettings) {
-            return GetPlateSolver(plateSolveSettings, plateSolveSettings.PlateSolverType);
+            var type = plateSolveSettings.PlateSolverType;
+            return GetPlateSolver(plateSolveSettings, type.ToString(), type != PlateSolver.ASTAP);
         }
 
         public static IPlateSolver GetBlindSolver(IPlateSolveSettings plateSolveSettings) {
-            // BlindSolver.AstrometryNet maps to PlateSolver.AstrometryNet, which GetPlateSolver substitutes
-            // (with a log) to ASTAP — see CreateAstapForRemovedAstrometryNet. Both solver paths share that one
-            // substitution point.
-            var type = plateSolveSettings.BlindSolverType switch {
-                BlindSolver.AstrometryNet => PlateSolver.AstrometryNet,
-                BlindSolver.LOCAL => PlateSolver.LOCAL,
-                BlindSolver.PLATESOLVE3 => PlateSolver.PLATESOLVE3,
-                BlindSolver.ASPS => PlateSolver.ASPS,
-                BlindSolver.PINPOINT => PlateSolver.PINPONT,
-                _ => PlateSolver.ASTAP
-            };
-
-            return GetPlateSolver(plateSolveSettings, type);
+            var type = plateSolveSettings.BlindSolverType;
+            return GetPlateSolver(plateSolveSettings, type.ToString(), type != BlindSolver.ASTAP);
         }
     }
 }

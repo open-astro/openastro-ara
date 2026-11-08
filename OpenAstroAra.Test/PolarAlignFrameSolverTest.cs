@@ -87,6 +87,35 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_measuring_solve_searches_the_scale_and_reports_the_focal_length_it_implies() {
+            // #1715: the profile says 375 mm, the guide frame is 6.04292"/px at 3.75 µm: 128 mm.
+            var store = new InMemoryProfileStore();
+            store.PutPhd2Settings(store.GetPhd2Settings() with { GuideFocalLength = 375, GuidePixelSize = 3.75 });
+            PlateSolveParameter? seen = null;
+            var imageSolver = new Mock<IImageSolver>();
+            imageSolver.Setup(s => s.Solve(It.IsAny<IImageData>(), It.IsAny<PlateSolveParameter>(),
+                    It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()))
+                .Callback<IImageData, PlateSolveParameter, IProgress<ApplicationStatus>?, CancellationToken>((_, p, _, _) => seen = p)
+                .ReturnsAsync(new PlateSolveResult { Success = true, Pixscale = 6.04292 });
+            var factory = new Mock<IPlateSolverFactory>();
+            factory.Setup(f => f.GetPlateSolver(It.IsAny<IPlateSolveSettings>())).Returns(Mock.Of<IPlateSolver>());
+            factory.Setup(f => f.GetImageSolver(It.IsAny<IPlateSolver>(), It.IsAny<IPlateSolver>())).Returns(imageSolver.Object);
+            var sut = new PolarAlignFrameSolver(new HeadlessProfileService(), store, factory.Object);
+
+            var measured = await sut.MeasureFocalLengthAsync(WriteFrame(), 1, 10, 85, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(seen!.SearchScale, Is.True, "no scale hint");
+            Assert.That(measured, Is.EqualTo(128).Within(0.1));
+        }
+
+        [Test]
+        public async Task The_measuring_solve_reports_nothing_when_the_frame_does_not_solve() {
+            var (sut, _) = NewSolver();
+
+            Assert.That(await sut.MeasureFocalLengthAsync(WriteFrame(), 1, null, null, CancellationToken.None).ConfigureAwait(false), Is.Null);
+        }
+
+        [Test]
         public async Task Polar_alignment_solves_fail_fast_with_no_staged_search_and_the_profiles_timeout() {
             // #1136 bot round 3 — the §45 loop's contract is fail-fast-and-retry: without this flag a
             // failed frame would run the last-good-solve, 30° and 90° stages (minutes at the 60 s

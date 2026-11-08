@@ -1100,7 +1100,7 @@ class ProfileApi {
         unattendedShutdownEnabled:
             (j['unattended_shutdown_enabled'] as bool?) ?? true,
         unattendedShutdownWaitMinutes:
-            (j['unattended_shutdown_wait_minutes'] as num?)?.toInt() ?? 10,
+            (j['unattended_shutdown_wait_minutes'] as num?)?.toInt() ?? 30,
         calibrationCaptureDefault: _calibrationCaptureDefaultFromString(
           j['calibration_capture_default'] as String?,
         ),

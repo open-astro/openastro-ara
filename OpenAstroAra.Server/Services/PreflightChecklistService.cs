@@ -101,11 +101,11 @@ public sealed class PreflightChecklistService {
         var focuser = await ReadAsync<FocuserDto>(_focuser is null ? null : () => _focuser.GetAsync(ct)).ConfigureAwait(false);
         var filterWheel = await ReadAsync<FilterWheelDto>(_filterWheel is null ? null : () => _filterWheel.GetAsync(ct)).ConfigureAwait(false);
         var guider = await ReadAsync<GuiderDto>(_guider is null ? null : () => _guider.GetAsync(ct)).ConfigureAwait(false);
-        var unresolvedFaults = await CountUnresolvedFaultsAsync(ct).ConfigureAwait(false);
+        var unresolvedFaults = await ListUnresolvedFaultsAsync(ct).ConfigureAwait(false);
 
         var items = new List<PreflightItemDto> {
             EquipmentItem(camera.Value, telescope.Value, focuser.Value, filterWheel.Value, guider.Value,
-                readFailed: camera.Failed || telescope.Failed, unresolvedFaults: unresolvedFaults),
+                readFailed: camera.Failed || telescope.Failed, unresolvedFaults: unresolvedFaults, NightStart(now)),
             StorageItem(ReadStorage(), storage.MinFreeDiskWarnGb, storage.MinFreeDiskCriticalGb),
             SolverItem(PlateSolveEndpoints.BuildDatabaseStatus(_profiles.GetPlateSolveSettings(), _fileExists)),
             CoolerItem(camera.Value, camera.Failed),
@@ -153,9 +153,11 @@ public sealed class PreflightChecklistService {
         items.All(i => i.Status != Fail) && flips.All(f => f.Standing != "below_floor");
 
     /// <summary>Equipment: the mount and the main camera must be selected AND connected; any other
-    /// selected device that is not connected is a warning; unresolved faults in the log are a warning.</summary>
+    /// selected device that is not connected is a warning; so is an unresolved fault detected since
+    /// <paramref name="nightStart"/> (older ones stay in the full UI's fault log, which Simple Mode cannot open).</summary>
     internal static PreflightItemDto EquipmentItem(CameraDto? camera, TelescopeDto? telescope, FocuserDto? focuser,
-            FilterWheelDto? filterWheel, GuiderDto? guider, bool readFailed, int? unresolvedFaults) {
+            FilterWheelDto? filterWheel, GuiderDto? guider, bool readFailed, IReadOnlyList<FaultDto>? unresolvedFaults,
+            DateTimeOffset nightStart) {
         if (readFailed) {
             return new PreflightItemDto("equipment", Unknown, "Equipment", "Could not read the equipment state.");
         }
@@ -171,14 +173,27 @@ public sealed class PreflightChecklistService {
         if (focuser is { State: not EquipmentConnectionState.Connected } f) optional.Add($"focuser {Describe(f.State)}");
         if (filterWheel is { State: not EquipmentConnectionState.Connected, Manual: false } w) optional.Add($"filter wheel {Describe(w.State)}");
         if (guider is { State: not EquipmentConnectionState.Connected } g) optional.Add($"guider {Describe(g.State)}");
-        if (unresolvedFaults is > 0) {
-            optional.Add(unresolvedFaults == 1 ? "1 unresolved fault in the log" : $"{unresolvedFaults} unresolved faults in the log");
+        var connected = 2 + (focuser is null ? 0 : 1) + (filterWheel is null ? 0 : 1) + (guider is null ? 0 : 1) - optional.Count;
+        var tonight = (unresolvedFaults ?? []).Where(f => f.DetectedUtc >= nightStart).OrderBy(f => f.DetectedUtc).ToList();
+        if (tonight.Count == 1) {
+            optional.Add($"{FaultDevice(tonight[0])}: {FaultKind(tonight[0])} tonight");
+        } else if (tonight.Count > 1) {
+            optional.Add($"{tonight.Count} faults tonight, the first on {FaultDevice(tonight[0])}");
         }
-        var connected = 2 + (focuser is null ? 0 : 1) + (filterWheel is null ? 0 : 1) + (guider is null ? 0 : 1)
-            - optional.Count(o => !o.EndsWith("in the log", StringComparison.Ordinal));
         return optional.Count > 0
             ? new PreflightItemDto("equipment", Warn, "Equipment", Capitalise(string.Join("; ", optional)) + ".")
             : new PreflightItemDto("equipment", Ok, "Equipment", $"All {connected} devices connected and healthy.");
+    }
+
+    private static string FaultDevice(FaultDto f) => string.IsNullOrWhiteSpace(f.EquipmentName) ? f.EquipmentType : f.EquipmentName;
+
+    private static string FaultKind(FaultDto f) => f.FaultType.Replace('_', ' ');
+
+    /// <summary>Local noon of the current night: today's noon, or yesterday's before noon.</summary>
+    internal static DateTimeOffset NightStart(DateTimeOffset now) {
+        var local = now.ToLocalTime();
+        var noon = new DateTimeOffset(local.Year, local.Month, local.Day, 12, 0, 0, local.Offset);
+        return local < noon ? noon.AddDays(-1) : noon;
     }
 
     /// <summary>Storage: graded by the profile's own warn/critical thresholds (the §29 disk monitor's rule).</summary>
@@ -321,13 +336,13 @@ public sealed class PreflightChecklistService {
         }
     }
 
-    // Null = no fault log wired or it could not be read (the item then just omits the fault count).
-    private async Task<int?> CountUnresolvedFaultsAsync(CancellationToken ct) {
+    // Null = no fault log wired or it could not be read (the item then just omits the faults).
+    private async Task<IReadOnlyList<FaultDto>?> ListUnresolvedFaultsAsync(CancellationToken ct) {
         if (_faults is null) {
             return null;
         }
         try {
-            return (await _faults.ListAsync(100, null, null, null, unresolvedOnly: true, null, ct).ConfigureAwait(false)).Items.Count;
+            return (await _faults.ListAsync(100, null, null, null, unresolvedOnly: true, null, ct).ConfigureAwait(false)).Items;
         } catch (Exception ex) when (ex is not OperationCanceledException) {
             return null;
         }

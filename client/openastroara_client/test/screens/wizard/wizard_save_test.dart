@@ -272,6 +272,21 @@ void main() {
       expect(kept.guidePixelSize, 3.8);
     });
 
+    test('#1715 applyDraftToPhd2 leaving an OAG for a guide scope drops the derived focal length', () {
+      final d = ProfileDraft();
+      d.guider.setupType = 'guide_scope';
+      final out = applyDraftToPhd2(
+        const Phd2Settings(guiderSetupType: 'oag', guideFocalLength: 375),
+        d,
+      );
+      expect(out.guiderSetupType, 'guide_scope');
+      expect(out.guideFocalLength, 0);
+
+      d.guider.guideFocalLengthMm = 128;
+      expect(applyDraftToPhd2(
+        const Phd2Settings(guiderSetupType: 'oag', guideFocalLength: 375), d).guideFocalLength, 128);
+    });
+
     test('applyDraftToPhd2 §63.19 OAG derives FL × the base optics reducer', () {
       final d = ProfileDraft();
       d.telescope.focalLengthMm = 1480;
@@ -627,10 +642,10 @@ void main() {
       final out = applyDraftToSafety(const SafetyPolicies(), d);
       expect(out.unattendedShutdownEnabled, isFalse);
       expect(out.unattendedShutdownWaitMinutes, 25);
-      // Untouched draft keeps the base (the section defaults: on / 10 min).
+      // Untouched draft keeps the base (the section defaults: on / 30 min).
       final kept = applyDraftToSafety(const SafetyPolicies(), ProfileDraft());
       expect(kept.unattendedShutdownEnabled, isTrue);
-      expect(kept.unattendedShutdownWaitMinutes, 10);
+      expect(kept.unattendedShutdownWaitMinutes, 30);
     });
 
     test('applyDraftToSafety maps the §35.1 weather thresholds', () {
