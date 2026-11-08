@@ -48,6 +48,7 @@ namespace OpenAstroAra.Test {
         private FileProfileStore store = null!;
         private FileProfileRepository repo = null!;
         private Mock<IGuiderService> guider = null!;
+        private EquipmentSelectionStore selections = null!;
 
         [OneTimeSetUp]
         public async Task StartKestrel() {
@@ -69,8 +70,8 @@ namespace OpenAstroAra.Test {
             builder.Services.AddSingleton<IProfileRepository>(repo);
             builder.Services.AddSingleton(guider.Object);
             builder.Services.AddSingleton<ActiveRunSessionRegistry>();
-            builder.Services.AddSingleton(new ProfileDeviceSwitch(new ServiceCollection().BuildServiceProvider(),
-                new EquipmentSelectionStore(dir, Microsoft.Extensions.Logging.Abstractions.NullLogger<EquipmentSelectionStore>.Instance), new Mock<IEquipmentReconnector>().Object, store,
+            selections = new EquipmentSelectionStore(dir, Microsoft.Extensions.Logging.Abstractions.NullLogger<EquipmentSelectionStore>.Instance);
+            builder.Services.AddSingleton(sp => new ProfileDeviceSwitch(sp, selections, new Mock<IEquipmentReconnector>().Object, store,
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<ProfileDeviceSwitch>.Instance));
             builder.Services.AddProblemDetails();
             builder.Services.ConfigureHttpJsonOptions(opts => {
@@ -88,6 +89,7 @@ namespace OpenAstroAra.Test {
             http.Dispose();
             await app.StopAsync();
             await app.DisposeAsync();
+            selections.Dispose();
             repo.Dispose();
             try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
         }

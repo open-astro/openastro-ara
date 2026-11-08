@@ -53,6 +53,10 @@ namespace OpenAstroAra.Test {
         private Guid sim;
         private Guid real;
 
+        private static readonly string[] SafetyThenMountThenConnect = ["disconnect:safety", "disconnect:mount", "connect:real-mount"];
+        private static readonly string[] SwitchReleased = ["disconnect:sim-switch", "forget:sim-switch"];
+        private static readonly string[] OnlySimSafety = ["sim-safety"];
+        private static readonly string[] ThreeFailed = ["real-mount", "shared-camera", "dead-focuser"];
         private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 
         private static DiscoveredDeviceDto Device(DeviceType type, string id, int number = 0) =>
@@ -84,7 +88,7 @@ namespace OpenAstroAra.Test {
             public Task<EquipmentConnectionState?> GetConnectionStateAsync(DeviceType type, CancellationToken ct) =>
                 Task.FromResult<EquipmentConnectionState?>(States.TryGetValue(type.Canonical(), out var s) ? s : null);
 
-            public void Retain<T>(Mock<T> mock, DiscoveredDeviceDto? device) where T : class =>
+            public static void Retain<T>(Mock<T> mock, DiscoveredDeviceDto? device) where T : class =>
                 mock.As<IRetainedDeviceSource>().SetupGet(s => s.RetainedDevice).Returns(device);
         }
 
@@ -160,9 +164,9 @@ namespace OpenAstroAra.Test {
                 }).ReturnsAsync(Accepted());
             switches.Setup(s => s.RemoveAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .Callback<string, CancellationToken>((id, _) => rig.Log.Add("forget:" + id)).ReturnsAsync(true);
-            rig.Retain(camera, null);
-            rig.Retain(mount, null);
-            rig.Retain(safety, null);
+            FakeRig.Retain(camera, null);
+            FakeRig.Retain(mount, null);
+            FakeRig.Retain(safety, null);
             services.AddSingleton(camera.Object);
             services.AddSingleton(mount.Object);
             services.AddSingleton(safety.Object);
@@ -182,8 +186,8 @@ namespace OpenAstroAra.Test {
         private async Task SimRigConnectedAsync() {
             await selections.RememberAsync(SimSafety, CancellationToken.None);
             await selections.RememberAsync(SimMount, CancellationToken.None);
-            rig.Retain(safety, SimSafety);
-            rig.Retain(mount, SimMount);
+            FakeRig.Retain(safety, SimSafety);
+            FakeRig.Retain(mount, SimMount);
             rig.States[DeviceType.SafetyMonitor] = EquipmentConnectionState.Connected;
             rig.States[DeviceType.Telescope] = EquipmentConnectionState.Connected;
         }
@@ -213,7 +217,7 @@ namespace OpenAstroAra.Test {
             Assert.That(body!.ActiveId, Is.EqualTo(real));
             Assert.That(body.DeviceMessages, Is.Empty);
             Assert.That(rig.Log.Where(l => !l.StartsWith("forget:", StringComparison.Ordinal)),
-                Is.EqualTo(new[] { "disconnect:safety", "disconnect:mount", "connect:real-mount" }));
+                Is.EqualTo(SafetyThenMountThenConnect));
         }
 
         [Test]
@@ -230,7 +234,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_device_both_profiles_remember_stays_connected_untouched() {
             await selections.RememberAsync(SharedCamera, CancellationToken.None);
-            rig.Retain(camera, SharedCamera);
+            FakeRig.Retain(camera, SharedCamera);
             rig.States[DeviceType.Camera] = EquipmentConnectionState.Connected;
             await RememberForAsync(real, SharedCamera);
 
@@ -248,7 +252,7 @@ namespace OpenAstroAra.Test {
 
             await SelectAsync(real);
 
-            Assert.That(rig.Log, Is.EqualTo(new[] { "disconnect:sim-switch", "forget:sim-switch" }));
+            Assert.That(rig.Log, Is.EqualTo(SwitchReleased));
         }
 
         [Test]
@@ -274,7 +278,7 @@ namespace OpenAstroAra.Test {
 
             var (_, body) = await SelectAsync(real);
 
-            Assert.That(body!.DeviceMessages.Select(m => m.DeviceName), Is.EqualTo(new[] { "sim-safety" }));
+            Assert.That(body!.DeviceMessages.Select(m => m.DeviceName), Is.EqualTo(OnlySimSafety));
             Assert.That(rig.Log, Does.Not.Contain("forget:safety"), "the profile still remembers it");
         }
 
@@ -324,7 +328,7 @@ namespace OpenAstroAra.Test {
             Assert.That(repo.ActiveId, Is.EqualTo(real));
             Assert.That(rig.Log, Does.Contain("connect:real-mount").And.Contain("connect:shared-camera").And.Contain("connect:dead-focuser"));
             var messages = body!.DeviceMessages.ToDictionary(m => m.DeviceName, m => m.Message);
-            Assert.That(messages.Keys, Is.EquivalentTo(new[] { "real-mount", "shared-camera", "dead-focuser" }));
+            Assert.That(messages.Keys, Is.EquivalentTo(ThreeFailed));
             Assert.That(messages["real-mount"], Does.Contain("bridge refused"));
             Assert.That(messages["dead-focuser"], Does.Contain("still connecting"));
         }
@@ -337,7 +341,7 @@ namespace OpenAstroAra.Test {
             var services = new ServiceCollection();
             services.AddSingleton(safety.Object);
             services.AddSingleton(mount.Object);
-            var device = new ProfileDeviceSwitch(services.BuildServiceProvider(), broken.Object, rig, store, NullLogger<ProfileDeviceSwitch>.Instance);
+            using var device = new ProfileDeviceSwitch(services.BuildServiceProvider(), broken.Object, rig, store, NullLogger<ProfileDeviceSwitch>.Instance);
 
             var messages = await device.ApplyAsync(CancellationToken.None);
 

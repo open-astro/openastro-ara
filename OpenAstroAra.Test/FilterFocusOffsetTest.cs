@@ -36,6 +36,7 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     [Category("IO")]
     public class FilterFocusOffsetTest {
+        private static readonly int[] MinusOneTwenty = [-120];
         private InMemoryProfileStore _store = null!;
         private Mock<IFocuserMediator> _focuser = null!;
         private ConcurrentQueue<int> _moves = null!;
@@ -135,7 +136,7 @@ namespace OpenAstroAra.Test {
             await WaitForAsync(() => !_moves.IsEmpty, "no focuser move");
             await Task.Delay(300);
 
-            Assert.That(_moves, Is.EqualTo(new[] { -120 }));
+            Assert.That(_moves, Is.EqualTo(MinusOneTwenty));
         }
 
         [Test]
@@ -148,7 +149,7 @@ namespace OpenAstroAra.Test {
             var done = await change;
 
             Assert.That(done.Position, Is.EqualTo(2));
-            Assert.That(_moves, Is.EqualTo(new[] { -120 }));
+            Assert.That(_moves, Is.EqualTo(MinusOneTwenty));
             Assert.That(wheel.Service.GetInfo().SelectedFilter?.Position, Is.EqualTo(2), "what autofocus records its result against");
         }
 
@@ -160,7 +161,7 @@ namespace OpenAstroAra.Test {
 
             await wheel.Service.ChangeFilterAsync(new FilterChangeRequestDto(2), null, CancellationToken.None);
             wheel.Position = "2";
-            await wheel.Service.ChangeFilter(new FilterInfo("R", 0, 1), token: CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5)).ContinueWith(_ => { });
+            await wheel.Service.ChangeFilter(new FilterInfo("R", 0, 1), token: CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5)).ContinueWith(_ => { }, TaskScheduler.Default);
             await Task.Delay(300);
 
             Assert.That(_moves, Is.Empty);
@@ -203,7 +204,7 @@ namespace OpenAstroAra.Test {
             wheel.Service.FilterChangeSettleMaxPolls = 150;
             await wheel.Service.ChangeFilter(new FilterInfo("Ha", 0, 2), token: CancellationToken.None);
 
-            Assert.That(_moves, Is.EqualTo(new[] { -120 }));
+            Assert.That(_moves, Is.EqualTo(MinusOneTwenty));
         }
 
         [Test]
@@ -235,18 +236,13 @@ namespace OpenAstroAra.Test {
 
         // ── Manual wheel ─────────────────────────────────────────────────────────────────
 
-        private ManualFilterWheelService Manual() {
-            var svc = new ManualFilterWheelService(profileStore: _store, focusOffset: Offsets(), profileDir: _dir);
-            return svc;
-        }
-
         private static async Task<ManualFilterWheelService> OnFilterAsync(ManualFilterWheelService wheel, int position) {
             await wheel.ConnectAsync(new ConnectRequestDto(ManualFilterWheelService.Descriptor), null, CancellationToken.None);
             await wheel.ReportInstalledAsync(position, CancellationToken.None);
             return wheel;
         }
 
-        private void ProfileOffsets(HeadlessProfileService profile) {
+        private static void ProfileOffsets(HeadlessProfileService profile) {
             var filters = profile.ActiveProfile.FilterWheelSettings.FilterWheelFilters;
             filters.Clear();
             filters.Add(new FilterInfo("L", 100, 0));
@@ -270,7 +266,7 @@ namespace OpenAstroAra.Test {
             Assert.That(_moves, Is.Empty, "not until the user confirms");
             await wheel.ReportInstalledAsync(2, CancellationToken.None);
 
-            Assert.That(_moves, Is.EqualTo(new[] { -120 }));
+            Assert.That(_moves, Is.EqualTo(MinusOneTwenty));
         }
 
         [Test]
@@ -295,7 +291,7 @@ namespace OpenAstroAra.Test {
             await report;
             await change;
 
-            Assert.That(_moves, Is.EqualTo(new[] { -120 }));
+            Assert.That(_moves, Is.EqualTo(MinusOneTwenty));
         }
 
         [Test]

@@ -64,6 +64,8 @@ namespace OpenAstroAra.Test {
 
         // ── #1710 — a profile owns its devices ──────────────────────────────────────────────────
 
+        private static readonly string[] CamAndMount = ["rig-cam", "rig-mount"];
+        private static readonly string[] CamSafetyMount = ["rig-cam", "rig-safety", "rig-mount"];
         private static readonly Guid ProfileA = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000000");
         private static readonly Guid ProfileB = Guid.Parse("bbbbbbbb-0000-0000-0000-000000000000");
 
@@ -102,7 +104,7 @@ namespace OpenAstroAra.Test {
 
             var migrated = await store.GetAllAsync(CancellationToken.None);
 
-            Assert.That(migrated.Select(d => d.UniqueId), Is.EquivalentTo(new[] { "rig-cam", "rig-mount" }));
+            Assert.That(migrated.Select(d => d.UniqueId), Is.EquivalentTo(CamAndMount));
             Assert.That(File.Exists(LegacyFile), Is.False, "migrated once");
             Assert.That(File.Exists(LegacyFile + ".migrated"), Is.True, "the old list is kept beside it, for a rollback");
             active = ProfileB;
@@ -143,7 +145,7 @@ namespace OpenAstroAra.Test {
             await store.RememberAsync(Device(DeviceType.Telescope, "rig-mount", "Mount"), CancellationToken.None);
 
             Assert.That((await store.GetAllAsync(CancellationToken.None)).Select(d => d.UniqueId),
-                Is.EquivalentTo(new[] { "rig-cam", "rig-safety", "rig-mount" }));
+                Is.EquivalentTo(CamSafetyMount));
         }
 
         [Test]

@@ -722,8 +722,8 @@ public partial class Program {
         builder.Services.AddSingleton<IClientSettingsService>(sp =>
             new ClientSettingsService(profileDir, sp.GetRequiredService<ILogger<ClientSettingsService>>()));
 
-        // §52.1 — remembers the last device connected per type under
-        // {profileDir}/equipment-selection.json so EquipmentAutoConnectService can
+        // §52.1 — remembers the last device connected per type, one file per profile
+        // (#1710, {profileDir}/profiles/{id}.equipment.json), so EquipmentAutoConnectService can
         // re-establish it on boot. Written at the connect chokepoint (ConnectGatedAsync).
         builder.Services.AddSingleton<IEquipmentSelectionStore>(sp =>
             new EquipmentSelectionStore(profileDir, sp.GetRequiredService<ILogger<EquipmentSelectionStore>>(),
