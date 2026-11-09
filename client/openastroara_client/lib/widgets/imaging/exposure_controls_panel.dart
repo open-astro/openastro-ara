@@ -8,6 +8,7 @@ import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/filter_choices_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/imaging/exposure_state.dart';
+import '../../state/simple_messages_state.dart';
 import '../../state/settings/filter_wheel_labels_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
@@ -391,10 +392,20 @@ enum _FilterPhase { idle, changing, updated }
 class FilterDropdown extends ConsumerStatefulWidget {
   final String value;
   final ValueChanged<String> onChanged;
+
+  /// Draws the picker in place of the dropdown (Simple Mode has no popups):
+  /// the names, the one showing, and the pick (null while the wheel moves).
+  final Widget Function(
+    List<String> names,
+    String value,
+    ValueChanged<String>? pick,
+  )? inline;
+
   const FilterDropdown({
     super.key,
     required this.value,
     required this.onChanged,
+    this.inline,
   });
 
   @override
@@ -432,6 +443,9 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
 
   /// Drives the red busy pulse (repeat/reverse) and the green confirm flash.
   late final AnimationController _flash;
+
+  /// The name being moved to: what an inline picker shows meanwhile.
+  String? _picked;
 
   @override
   void initState() {
@@ -541,10 +555,7 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
       _sawMove = false;
       _resetToken++;
     });
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(context.l10n.filterDropdownDidntMove),
-      backgroundColor: AraColors.accentError,
-    ));
+    userNotifier(context)(context.l10n.filterDropdownDidntMove, error: true);
   }
 
   /// The underline color while busy: a red pulse during the move, a green
@@ -645,17 +656,11 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
               borderSide: BorderSide(color: blink, width: 2)),
     );
 
-    return DropdownButtonFormField<String>(
-      key: ValueKey(_resetToken),
-      initialValue: widget.value,
-      decoration: decoration,
-      items: [
-        for (final n in names) DropdownMenuItem(value: n, child: Text(n)),
-      ],
-      onChanged: busy
+    final ValueChanged<String?>? pick = busy
           ? null // keep it disabled (showing the picked slot) until it lands
           : (n) async {
               if (n == null) return;
+              _picked = n;
               final wheelNow = ref
                   .read(filterWheelProvider)
                   .maybeWhen(data: (s) => s, orElse: () => null);
@@ -670,12 +675,10 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
                 // Connected, but the picked name maps to no physical slot
                 // (local labels and the driver's names can diverge).
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(
-                    context.l10n.filterDropdownNotASlot(n),
-                  ),
-                  backgroundColor: AraColors.accentError,
-                ));
+                userNotifier(context)(
+                  context.l10n.filterDropdownNotASlot(n),
+                  error: true,
+                );
                 return;
               }
               // currentSlot may be null (unknown/not yet reported) — treat
@@ -713,9 +716,7 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
                     });
                   }
                   if (!context.mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(context.l10n.filterDropdownBusy),
-                  ));
+                  userNotifier(context)(context.l10n.filterDropdownBusy);
                   return;
                 }
                 // No onChanged(n) here for NAMED target slots — the
@@ -739,12 +740,28 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
                   });
                 }
                 if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(friendlyError(context.l10n, e, action: context.l10n.filterDropdownActionChange)),
-                  backgroundColor: AraColors.accentError,
-                ));
+                userNotifier(context)(
+                  friendlyError(context.l10n, e, action: context.l10n.filterDropdownActionChange),
+                  error: true,
+                );
               }
-            },
+            };
+    final inline = widget.inline;
+    if (inline != null) {
+      return inline(
+        names,
+        busy ? (_picked ?? widget.value) : widget.value,
+        pick,
+      );
+    }
+    return DropdownButtonFormField<String>(
+      key: ValueKey(_resetToken),
+      initialValue: widget.value,
+      decoration: decoration,
+      items: [
+        for (final n in names) DropdownMenuItem(value: n, child: Text(n)),
+      ],
+      onChanged: pick,
     );
   }
 

@@ -8,6 +8,7 @@ import '../../state/equipment/switch_state.dart';
 import '../../state/settings/cooling_fan_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_metrics.dart';
+import '../inline_choices.dart';
 
 /// The Cooling fan choice (#1700): None, then each writable port of the
 /// connected switches as "Device › Port", with what the choice does under it.
@@ -17,7 +18,11 @@ class CoolingFanPicker extends ConsumerWidget {
     required this.value,
     required this.onChanged,
     this.style,
+    this.inline = false,
   });
+
+  /// Rows in place of the dropdown: Simple Mode has no popups.
+  final bool inline;
 
   final CoolingFan value;
   final ValueChanged<CoolingFan> onChanged;
@@ -51,24 +56,34 @@ class CoolingFanPicker extends ConsumerWidget {
             fontWeight: FontWeight.w600,
           ),
         ),
-        DropdownButton<CoolingFan>(
-          key: const Key('cooling-fan-picker'),
-          isExpanded: true,
-          value: value,
-          // 48 is Flutter's own floor for this control: over Simple Mode's 44.
-          itemHeight: kMinInteractiveDimension,
-          style: style,
-          onChanged: (v) {
-            if (v != null && v != value) onChanged(v);
-          },
-          items: [
-            for (final o in options.entries)
-              DropdownMenuItem(
-                value: o.key,
-                child: Text(o.value, overflow: TextOverflow.ellipsis),
-              ),
-          ],
-        ),
+        if (inline)
+          InlineChoices<CoolingFan>(
+            key: const Key('cooling-fan-picker'),
+            id: 'cooling-fan-picker',
+            value: value,
+            options: [for (final o in options.entries) (o.key, o.value)],
+            style: style,
+            onChanged: onChanged,
+          )
+        else
+          DropdownButton<CoolingFan>(
+            key: const Key('cooling-fan-picker'),
+            isExpanded: true,
+            value: value,
+            // 48 is Flutter's own floor for this control: over Simple Mode's 44.
+            itemHeight: kMinInteractiveDimension,
+            style: style,
+            onChanged: (v) {
+              if (v != null && v != value) onChanged(v);
+            },
+            items: [
+              for (final o in options.entries)
+                DropdownMenuItem(
+                  value: o.key,
+                  child: Text(o.value, overflow: TextOverflow.ellipsis),
+                ),
+            ],
+          ),
         Text(
           value.isNone ? l10n.coolingFanNoneNote : l10n.coolingFanChosenNote,
           style: AraText.caption,
@@ -81,9 +96,14 @@ class CoolingFanPicker extends ConsumerWidget {
 /// The picker on the active profile's fan: Simple Mode's Camera window and the
 /// full UI's camera panel. Nothing until the daemon's answer is in.
 class ProfileCoolingFanPicker extends ConsumerWidget {
-  const ProfileCoolingFanPicker({super.key, this.style});
+  const ProfileCoolingFanPicker({
+    super.key,
+    this.style,
+    this.inline = false,
+  });
 
   final TextStyle? style;
+  final bool inline;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -92,6 +112,7 @@ class ProfileCoolingFanPicker extends ConsumerWidget {
     return CoolingFanPicker(
       value: fan,
       style: style,
+      inline: inline,
       onChanged: (v) => _choose(context, ref, v),
     );
   }

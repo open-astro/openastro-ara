@@ -2142,6 +2142,8 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
           ),
         for (var i = 0; i < steps.length; i++)
           Row(
+            // A tile's list folds out below it: its neighbours stay at the top.
+            crossAxisAlignment: CrossAxisAlignment.start,
             spacing: AraSpace.s8,
             children: [
               SizedBox(

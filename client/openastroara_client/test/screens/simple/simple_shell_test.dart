@@ -1426,6 +1426,8 @@ void main() {
 
     await tester.tap(find.byKey(const Key('simple-exposure')));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('10 s').last);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('10 s').last);
     await tester.pumpAndSettle();
     expect(container.read(exposureControllerProvider).exposure, const Duration(seconds: 10));

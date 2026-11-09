@@ -233,4 +233,13 @@ void main() {
     await _pump(tester, const SimpleSettingsPopover());
     expect(find.byType(FilterDropdown), findsOneWidget);
   });
+
+  testWidgets('Filter picks in place: no dropdown route', (tester) async {
+    await _pump(tester, const SimpleSettingsPopover());
+    expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+    await tester.tap(find.byKey(const Key('simple-filter')));
+    await tester.pumpAndSettle();
+    expect(tester.state<NavigatorState>(find.byType(Navigator)).canPop(), isFalse);
+    expect(find.byKey(const Key('simple-preset-0')), findsOneWidget, reason: 'the choices are on screen');
+  });
 }
