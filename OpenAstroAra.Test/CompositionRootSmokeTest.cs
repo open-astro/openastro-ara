@@ -131,6 +131,19 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        [Test]
+        public void Emergency_Stop_resolves_with_all_four_routine_services_registered() {
+            // #1738 — Program.cs resolves these with GetService, so a missing registration would silently
+            // drop that step from the stop.
+            Assert.Multiple(() => {
+                Assert.That(app.Services.GetRequiredService<EmergencyStopService>(), Is.Not.Null);
+                Assert.That(app.Services.GetService<IGuideFocusService>(), Is.Not.Null);
+                Assert.That(app.Services.GetService<IBahtinovFocusService>(), Is.Not.Null);
+                Assert.That(app.Services.GetService<AutofocusRunTracker>(), Is.Not.Null);
+                Assert.That(app.Services.GetService<IPolarAlignService>(), Is.Not.Null);
+            });
+        }
+
         private void AssertLive<TMediator, TService>() where TMediator : class where TService : class {
             object mediator = app.Services.GetRequiredService<TMediator>();
             object service = app.Services.GetRequiredService<TService>();

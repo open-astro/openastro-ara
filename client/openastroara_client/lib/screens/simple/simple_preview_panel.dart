@@ -110,10 +110,10 @@ class _PreviewCamera extends Notifier<PreviewCamera> {
 /// and not holding it (guiding takes it back, and Preview is on Main again).
 bool simplePreviewGuide(WidgetRef ref) {
   if (ref.watch(previewCameraProvider) != PreviewCamera.guide) return false;
+  // A running loop keeps its Stop even while the guider status is briefly gone.
+  if (ref.watch(guideFocusProvider.select((g) => g.status.active))) return true;
   final guider = ref.watch(guiderStatusProvider).value;
-  if (guider == null || !guider.isConnected) return false;
-  return ref.watch(guideFocusProvider.select((g) => g.status.active)) ||
-      !guideFocusBusy(guider);
+  return guider != null && guider.isConnected && !guideFocusBusy(guider);
 }
 
 /// Preview is the screen on show and it is on the guide camera, so what is
