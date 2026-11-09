@@ -286,6 +286,12 @@ public static class SequenceEndpoints {
            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
            .WithName("StopSequence");
 
+        seq.MapPost("/{id:guid}/stop-after-frame",
+                async (Guid id, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.StopAfterFrameAsync(id, key, ct)))
+           .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+           .WithName("StopSequenceAfterFrame");
+
 
         // Phase 13.15 — Templates (§38.6, §38.7) wired to ISequenceTemplateService.
         seq.MapGet("/templates",

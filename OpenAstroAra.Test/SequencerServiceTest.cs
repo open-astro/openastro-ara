@@ -815,6 +815,55 @@ namespace OpenAstroAra.Test {
             await svc.AbortAsync(id, null, CancellationToken.None);
         }
 
+        private static (SequencerService Service, Guid Id, Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator> Imaging, TaskCompletionSource<OpenAstroAra.Image.Interfaces.IExposureData> Frame) ExposingRun() {
+            var camera = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ICameraMediator>();
+            camera.Setup(c => c.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyCamera.CameraInfo { Connected = true });
+            var frame = new TaskCompletionSource<OpenAstroAra.Image.Interfaces.IExposureData>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var imaging = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator>();
+            imaging.Setup(m => m.CaptureImage(It.IsAny<OpenAstroAra.Equipment.Model.CaptureSequence>(), It.IsAny<CancellationToken>(),
+                    It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>>(), It.IsAny<string>())).Returns(frame.Task);
+            var factory = HeadlessSequencerFactory.WithDefaults(cameraMediator: camera.Object, imagingMediator: imaging.Object);
+            var id = Guid.NewGuid();
+            var exposure = (OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure)factory.Items
+                .OfType<OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure>().First().Clone();
+            exposure.ExposureTime = 1;
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(exposure);
+                c.Items.Add(new Annotation { Name = "never reached" });
+            }, factory), factory: factory);
+            return (svc, id, imaging, frame);
+        }
+
+        [Test]
+        public async Task Stop_after_frame_files_the_exposure_then_ends_stopped() {
+            var (svc, id, _, frame) = ExposingRun();
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+
+            await svc.StopAfterFrameAsync(id, null, CancellationToken.None);
+            await Task.Delay(200);
+            var during = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(during!.State, Is.EqualTo(SequenceRunState.Running), "the exposure in progress is not lost");
+            Assert.That(during.StopAfterFrame, Is.True);
+
+            frame.SetResult(new Mock<OpenAstroAra.Image.Interfaces.IExposureData>().Object);
+            var done = await WaitForTerminalAsync(svc, id);
+            Assert.That(done!.State, Is.EqualTo(SequenceRunState.Stopped));
+            Assert.That(done.InstructionsCompleted, Is.EqualTo(1), "the frame finished and the next instruction never ran");
+        }
+
+        [Test]
+        public async Task Stop_after_frame_with_no_exposure_in_progress_stops_now() {
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 60 })));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+
+            await svc.StopAfterFrameAsync(id, null, CancellationToken.None);
+
+            Assert.That((await WaitForTerminalAsync(svc, id))!.State, Is.EqualTo(SequenceRunState.Stopped));
+        }
+
         [Test]
         public async Task Pause_suspends_at_the_instruction_boundary_and_resume_completes() {
             // §38 pause: the current instruction (a 2s wait) always finishes; the

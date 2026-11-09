@@ -388,6 +388,9 @@ class SequenceRunStateInfo {
   /// #1597 — the next flip; null when no run is active.
   final MeridianFlipInfo? meridianFlip;
 
+  /// #1557 — the run ends once the exposure in progress is filed.
+  final bool stopAfterFrame;
+
   const SequenceRunStateInfo({
     this.sequenceId = '',
     this.runId = '',
@@ -406,6 +409,7 @@ class SequenceRunStateInfo {
     this.reasonCode,
     this.reasonText,
     this.meridianFlip,
+    this.stopAfterFrame = false,
   });
 
   factory SequenceRunStateInfo.fromJson(Map<String, dynamic> json) {
@@ -429,6 +433,7 @@ class SequenceRunStateInfo {
       reasonCode: _str(json['reason_code']),
       reasonText: _str(json['reason_text']),
       meridianFlip: MeridianFlipInfo.tryParse(json['meridian_flip']),
+      stopAfterFrame: json['stop_after_frame'] == true,
     );
   }
 
@@ -487,6 +492,9 @@ class SequenceRunStateInfo {
       meridianFlip: payload.containsKey('meridian_flip')
           ? MeridianFlipInfo.tryParse(payload['meridian_flip'])
           : meridianFlip,
+      stopAfterFrame: payload.containsKey('stop_after_frame')
+          ? payload['stop_after_frame'] == true
+          : stopAfterFrame,
     );
   }
 

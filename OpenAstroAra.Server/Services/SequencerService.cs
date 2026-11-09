@@ -363,6 +363,10 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     // failing while the user has the run paused): the next branch to reach its
     // boundary re-fires this callback and upgrades the state.
     private void OnPauseEntered(Guid sequenceId, RunState run) {
+        if (run.StopAfterFrame) {
+            _ = RequestCancelAsync(sequenceId, SequenceRunState.Stopped);
+            return;
+        }
         var kind = run.Gate.PendingKind;
         var target = kind >= OpenAstroAra.Sequencer.Utility.PauseKind.Prompt
             ? SequenceRunState.PausedAwaitingUser
@@ -412,6 +416,18 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         _unattendedShutdown?.NotifyUserActivity("sequencer.stop");
         await RequestCancelAsync(id, SequenceRunState.Stopped);
         return PlaceholderEquipmentHelpers.Accepted("sequencer.stop", idempotencyKey);
+    }
+
+    public async Task<OperationAcceptedDto> StopAfterFrameAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
+        _unattendedShutdown?.NotifyUserActivity("sequencer.stop_after_frame");
+        if (_runs.TryGetValue(id, out var run) && run.State == SequenceRunState.Running && HasFrameInProgress(run)) {
+            // The pause gate waits for the running exposure; OnPauseEntered turns its landing into the stop.
+            run.StopAfterFrame = true;
+            await PauseAsync(id, idempotencyKey, ct);
+        } else {
+            await RequestCancelAsync(id, SequenceRunState.Stopped);
+        }
+        return PlaceholderEquipmentHelpers.Accepted("sequencer.stop_after_frame", idempotencyKey);
     }
 
     public Task<IReadOnlyList<Guid>> ActiveRunIdsAsync(CancellationToken ct) {
@@ -1259,6 +1275,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 ["current_target_name"] = run.CurrentTargetName,
                 ["current_instruction_progress"] = run.CurrentInstructionProgress,
                 ["frames_captured"] = run.FramesCaptured,
+                ["stop_after_frame"] = run.StopAfterFrame,
             };
             var (estimatedTotal, estimatedRemaining) = run.EstimatedSeconds();
             payload["estimated_total_seconds"] = estimatedTotal;
@@ -1595,6 +1612,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         /// <summary>Frames filed under <see cref="CaptureSessionId"/> so far; polled by the live status.</summary>
         public int FramesCaptured { get; private set; }
 
+        /// <summary>#1557 — end as Stopped when the run reaches the boundary after this exposure.</summary>
+        public volatile bool StopAfterFrame;
+
         public bool SetFramesCaptured(int count) {
             lock (_gate) {
                 if (count == FramesCaptured) return false;
@@ -1740,6 +1760,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     CurrentInstructionIndex: CurrentInstructionIndex,
                     CurrentTargetName: CurrentTargetName,
                     FramesCaptured: FramesCaptured,
+                    StopAfterFrame: StopAfterFrame,
                     StartedUtc: StartedUtc,
                     CompletedUtc: CompletedUtc,
                     InstructionsCompleted: InstructionsCompleted,

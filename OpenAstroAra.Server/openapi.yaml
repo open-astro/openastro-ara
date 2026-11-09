@@ -2816,6 +2816,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationAcceptedDto'
+  '/api/v1/sequences/{id}/stop-after-frame':
+    post:
+      tags:
+        - Sequences
+      operationId: StopSequenceAfterFrame
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAcceptedDto'
   /api/v1/sequences/templates:
     get:
       tags:
@@ -14384,6 +14407,9 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/MeridianFlipStatusDto'
+        stop_after_frame:
+          type: boolean
+          default: false
     SequenceShareDto:
       required:
         - sequence_id

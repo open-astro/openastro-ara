@@ -124,7 +124,9 @@ public sealed record SequenceRunStateDto(
     string? ReasonCode = null,
     string? ReasonText = null,
     // #1597 — the next meridian flip as the run's trigger sees it; null when no run is active.
-    MeridianFlipStatusDto? MeridianFlip = null);
+    MeridianFlipStatusDto? MeridianFlip = null,
+    // #1557 — the run ends as Stopped once the exposure in progress is filed.
+    bool StopAfterFrame = false);
 
 /// <summary>#1597 — the run's next flip. State: due_at, waiting_for_exposure, flipping, auto_flip_off or none_tonight.</summary>
 public sealed record MeridianFlipStatusDto(DateTimeOffset? ExpectedUtc, string State, string? Target);

@@ -75,6 +75,11 @@ public sealed partial class SequencerService {
         }
     }
 
+    private static bool HasFrameInProgress(RunState run) {
+        var leaves = run.Leaves;
+        return RunningLeafIndex(leaves) is int i && leaves[i] is TakeExposure;
+    }
+
     /// <summary>A human label for a leaf instruction, e.g. "Exposure 300 s LIGHT — 4/60".</summary>
     internal static string DescribeLeaf(ISequenceItem leaf) {
         if (leaf is TakeExposure exposure) {

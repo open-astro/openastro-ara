@@ -40,6 +40,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-09 — #1557 stop after the current frame
+
+**Endpoint(s) or area:** `POST /api/v1/sequences/{id}/stop-after-frame` (202); `stop_after_frame` on `GET …/state` and WS `sequence.progress`.
+
+**Decision:** a new lifecycle op, not a body on `/stop`: an older daemon answers 404 instead of ignoring the body and stopping at once, which would lose the frame. With an exposure running, the run arms the pause gate and ends as Stopped when the gate lands, at the boundary after that exposure. With no exposure running (a slew, a cool-down, a wait, an already-paused run) it stops at once, since no frame would be saved by waiting.
+
+**Reasoning:** the state lives on the daemon, so a sleeping iPad or a dropped link can't lose the request.
+
+**Spec ref:** `SequencerService.StopAfterFrameAsync`, `OnPauseEntered`.
+
+**Related:** #1557.
+
+---
+
 ### Template for future entries
 
 ```

@@ -95,6 +95,10 @@ abstract interface class SequenceClient {
   Future<String> abort(String id);
   Future<String> stop(String id);
 
+  /// #1557 — file the exposure in progress, then end the run as Stopped. Held
+  /// by the daemon, so it survives this client going away.
+  Future<String> stopAfterFrame(String id);
+
   /// §48 auto-flats decision: answer the daemon's "capture calibration
   /// tonight?" prompt for a running sequence. [choice] is a wire token
   /// (`panel_at_end` | `sky_at_twilight` | `later`); [remember] persists it
@@ -417,6 +421,9 @@ class SequenceApi implements SequenceClient {
 
   @override
   Future<String> stop(String id) => _lifecycle(id, 'stop');
+
+  @override
+  Future<String> stopAfterFrame(String id) => _lifecycle(id, 'stop-after-frame');
 
   @override
   Future<SequenceDetail> addRunItem(
