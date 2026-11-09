@@ -36,6 +36,7 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     [Category("IO")]
     public class FilterFocusOffsetTest {
+        private static readonly int[] PlusSixty = [60];
         private static readonly int[] MinusOneTwenty = [-120];
         private InMemoryProfileStore _store = null!;
         private Mock<IFocuserMediator> _focuser = null!;
@@ -169,6 +170,24 @@ namespace OpenAstroAra.Test {
             await Task.Delay(300);
 
             Assert.That(_moves, Is.Empty);
+        }
+
+        [Test]
+        public async Task A_change_made_with_offsets_off_is_the_baseline_when_offsets_are_turned_on() {
+            OffsetsOff();
+            await using var wheel = new Wheel("0", "[100,40,-20]", Offsets());
+            await ConnectedAsync(wheel);
+            await wheel.Service.ChangeFilterAsync(new FilterChangeRequestDto(2), null, CancellationToken.None);
+            wheel.Position = "2";
+            await Task.Delay(300);
+            Assert.That(_moves, Is.Empty);
+
+            _store.PutFilterWheelPolicy(new FilterWheelPolicyDto(UseFilterWheelOffsets: true));
+            await wheel.Service.ChangeFilterAsync(new FilterChangeRequestDto(1), null, CancellationToken.None);
+            wheel.Position = "1";
+            await WaitForAsync(() => !_moves.IsEmpty, "no focuser move");
+
+            Assert.That(_moves, Is.EqualTo(PlusSixty), "R minus Ha, not R minus the L it left before offsets were on");
         }
 
         [Test]

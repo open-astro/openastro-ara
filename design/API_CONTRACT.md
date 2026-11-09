@@ -1292,3 +1292,27 @@ its start and the client has nothing to do with it.
 **Spec ref:** `Services/CoolingFanInterlock.cs`, `Services/SwitchService.cs` (`SyncFanToCoolingCameraAsync`)
 
 **Related:** #1065, #1076, #1695
+
+## 2026-11-09 — A profile switch changes the connected devices: select response, 409s (#1710)
+
+**Endpoint(s) or area:** `POST /api/v1/profiles/{id}/select` (now `ProfileSelectResultDto`), `POST /api/v1/profiles` with `activate` true or absent, `DELETE /api/v1/profiles/{id}` of the active profile, `IEquipmentSelectionStore` (one remembered-device list per profile)
+
+**Decision:** The select response is `ProfileSelectResultDto`: the former `active_id` and `profiles` plus `device_messages`, a list of `{device_name, message}` for each device with a problem. A device that fails does not fail the switch. Select, create-and-activate and delete-of-the-active-profile return 409 problem+json while a sequence run is active, and leave the active profile and the rig as they were. On success each runs the same device switch: Safety Monitor off first, then every device the new profile does not remember, then its remembered devices under their connect-on-boot toggles. Create and delete keep their response bodies, so a device problem on those paths is logged only.
+
+**Reasoning:** A profile owns its devices. A simulated Safety Monitor left connected after a switch could park a real mount, and a device change under a run would pull equipment from it.
+
+**Spec ref:** `Endpoints/ProfilesEndpoints.cs`, `Services/ProfileDeviceSwitch.cs`
+
+**Related:** #1710
+
+## 2026-11-09 — Filter focus offsets switch and the unattended shutdown default (#1667, #1712)
+
+**Endpoint(s) or area:** `FilterWheelPolicyDto.use_filter_wheel_offsets` on the filter wheel policy; `unattended_shutdown_wait_minutes` in the safety policies
+
+**Decision:** `use_filter_wheel_offsets` is a new boolean, default false. When true, a filter change moves the focuser once by `offset(new) - offset(old)` after the wheel lands, on REST and sequencer changes and on Alpaca and manual wheels. The default of `unattended_shutdown_wait_minutes` changes from 10 to 30 for a profile that does not store a value. A stored value is kept.
+
+**Reasoning:** The offsets were read and shown but never applied, and the switch was not exposed. Ten minutes was too short for a user who has stepped outside.
+
+**Spec ref:** `Services/FilterFocusOffset.cs`, `Services/UnattendedShutdownService.cs`
+
+**Related:** #1667, #1712

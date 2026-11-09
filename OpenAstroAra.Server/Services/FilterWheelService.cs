@@ -261,8 +261,15 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
         try {
             client.Position = (short)position; // triggers the wheel to rotate; Position reads -1 while moving
             RefreshCacheOnce();
-            if (_focusOffset is { Enabled: true } && await WaitForPositionAsync(client, (short)position, CancellationToken.None).ConfigureAwait(false)) {
-                await ApplyFocusOffsetAsync(position, CancellationToken.None).ConfigureAwait(false);
+            if (_focusOffset is { Enabled: true }) {
+                if (await WaitForPositionAsync(client, (short)position, CancellationToken.None).ConfigureAwait(false)) {
+                    await ApplyFocusOffsetAsync(position, CancellationToken.None).ConfigureAwait(false);
+                }
+            } else {
+                // Offsets off: no move, but the first change after they are turned on must start from this filter.
+                lock (_gate) {
+                    _focusBaseline = position;
+                }
             }
         } catch (Exception ex) {
             LogChangeFailed(ex, position);
