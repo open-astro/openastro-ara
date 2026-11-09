@@ -135,16 +135,16 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         private static int CameraGainPercent(IGuiderSettings guider) => Math.Clamp(guider.GuideCameraGain, 0, 100);
 
+        /// <summary>A camera with no gain (a simulator, some guide cameras) refuses the push by design.</summary>
+        public static bool CameraHasNoGainControl(string? message) =>
+            message?.Contains("no gain control", StringComparison.OrdinalIgnoreCase) == true;
+
         /// <summary>Best-effort push of the profile's guide camera gain to a connected camera. A camera with
         /// no gain control (or none connected) refuses it; that is logged, never raised to the inbox, and
         /// never fails the caller. Without this the guider runs its stock 95% gain, which buried every star
         /// on an ASI290MM (gain 570 of 600, 2026-10-17).</summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Best-effort push boundary: a socket drop or daemon refusal is logged and skipped so the gain can never fail a connect or a profile push.")]
-        /// <summary>A camera with no gain (a simulator, some guide cameras) refuses the push by design.</summary>
-        public static bool CameraHasNoGainControl(string? message) =>
-            message?.Contains("no gain control", StringComparison.OrdinalIgnoreCase) == true;
-
         private async Task PushCameraGainAsync(CancellationToken ct) {
             var guider = profileService.ActiveProfile.GuiderSettings;
             var msg = BuildCameraGainMessage(guider);
