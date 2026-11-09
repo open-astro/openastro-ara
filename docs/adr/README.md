@@ -65,7 +65,9 @@ editing a rule to fit its diff.
 
 Status is one of:
 
-- `proposed`: written so a pilot change can be reviewed against it; not yet a rule.
+- `proposed`: written so a pilot change can be reviewed against it; not yet a
+  rule. Its rules reach the review checklist only on a PR whose `## Decision
+  records` section names it, which makes that PR a pilot change.
 - `accepted`: the rule.
 - `superseded by NNNN`: kept for history; the named record is the rule.
 - `retired (#NNNN)`: kept for history; the choice stopped being true with no
