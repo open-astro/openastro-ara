@@ -1396,6 +1396,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Flip_status_reads_the_running_loops_trigger() {
+            var finished = new SequentialContainer();
+            finished.Triggers.Add(DueFlipTrigger(2));
+            var running = new SequentialContainer();
+            running.Triggers.Add(DueFlipTrigger(double.NaN));
+            var top = new SequentialContainer();
+            top.Items.Add(finished);
+            top.Items.Add(running);
+            running.Status = SequenceEntityStatus.RUNNING;
+            Assert.That(SequencerService.FlipStatus(top, null, null, FlipStatusNow).State, Is.EqualTo(MeridianFlipStates.NoneTonight));
+        }
+
+        [Test]
         public void Flip_status_finds_a_trigger_inside_a_target_block() {
             var block = new SequentialContainer();
             block.Triggers.Add(DueFlipTrigger(2));
