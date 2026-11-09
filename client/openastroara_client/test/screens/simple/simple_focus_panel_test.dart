@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
-import 'package:openastroara/screens/simple/simple_night_setup.dart';
+import 'package:openastroara/screens/simple/simple_preflight.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
@@ -76,10 +76,10 @@ class _Live extends AutofocusLiveNotifier {
 
 late ProviderContainer _c;
 
-class _Pilot extends NightSetupNotifier {
+class _Pilot extends SimplePreflightNotifier {
   int nexts = 0;
   @override
-  NightSetupStep? build() => NightSetupStep.focus;
+  SimplePreflightStep? build() => SimplePreflightStep.focus;
   @override
   void next() => nexts++;
 }
@@ -200,6 +200,28 @@ void main() {
     expect(find.textContaining('Details'), findsNothing, reason: 'nothing folded away');
   });
 
+  testWidgets('Auto keeps one height from start to finish, a weak fit included (#1717)', (tester) async {
+    final (_, live) = await _pump(tester, focuser: _focuser(), run: const AutofocusRun());
+    double height() => tester.getSize(find.byType(SimpleFocusPanel)).height;
+    final start = height();
+    for (final run in [
+      AutofocusRun(state: AutofocusRunStates.running, phase: 'sweep', totalSteps: 7, stepSize: 80),
+      AutofocusRun(
+        state: AutofocusRunStates.running,
+        phase: 'sweep',
+        totalSteps: 7,
+        completedSteps: 2,
+        stepSize: 80,
+        probes: [_probe(0, 3.1), _probe(1, 2.4)],
+      ),
+      weak,
+    ]) {
+      live.state = AutofocusLive(run: run);
+      await tester.pump();
+      expect(height(), start, reason: '${run.state} ${run.probes.length} probes');
+    }
+  });
+
   testWidgets('a weak fit says so in the panel, in words', (tester) async {
     await _pump(tester, focuser: _focuser(), run: weak);
     expect(find.textContaining('Weak curve fit (R² 0.55)'), findsOneWidget);
@@ -251,7 +273,7 @@ void main() {
     expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-focus-method-manual'))).onTap, isNull);
   });
 
-  testWidgets("Night Setup on a permanent pier: focus is the last step, so its Done starts imaging", (tester) async {
+  testWidgets("Preflight on a permanent pier: focus is the last step, so its Done starts imaging", (tester) async {
     final f = _Focuser(_focuser());
     final pilot = _Pilot();
     _c = ProviderContainer(overrides: [
@@ -260,7 +282,7 @@ void main() {
       setupFocusStateProvider.overrideWithValue(SetupStepState.done),
       setupPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
       simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
-      nightSetupProvider.overrideWith(() => pilot),
+      simplePreflightProvider.overrideWith(() => pilot),
     ]);
     addTearDown(_c.dispose);
     await _c.read(simplePermanentPierProvider.future);
@@ -273,7 +295,7 @@ void main() {
     expect(pilot.nexts, 1);
   });
 
-  testWidgets('Guided Run on a permanent pier, focused by hand: Manual has the Done too (ALP-4982)', (tester) async {
+  testWidgets('Preflight on a permanent pier, focused by hand: Manual has the Done too', (tester) async {
     // #1486 review: the Done only showed in Auto, so a Bahtinov focus could only Skip.
     final pilot = _Pilot();
     _c = ProviderContainer(overrides: [
@@ -282,7 +304,7 @@ void main() {
       setupFocusStateProvider.overrideWithValue(SetupStepState.done),
       setupPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
       simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
-      nightSetupProvider.overrideWith(() => pilot),
+      simplePreflightProvider.overrideWith(() => pilot),
     ]);
     addTearDown(_c.dispose);
     await _c.read(simplePermanentPierProvider.future);

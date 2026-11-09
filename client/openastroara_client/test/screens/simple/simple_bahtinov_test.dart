@@ -75,6 +75,15 @@ void main() {
     expect(find.byKey(const Key('simple-bahtinov-exposure-2')), findsOneWidget);
   });
 
+  testWidgets('Manual keeps one height from before a start through a reading (#1717)', (tester) async {
+    await _pump(tester, BahtinovFocusLive.idle);
+    double height() => tester.getSize(find.byType(SimpleFocusPanel)).height;
+    final start = height();
+    _b.state = BahtinovFocusLive(status: _running([3.0, 3.0, 3.0, 2.0, 2.0, 2.0]));
+    await tester.pump();
+    expect(height(), start);
+  });
+
   testWidgets('while it reads: the offset big, in px from focus, and which way to turn', (tester) async {
     await _pump(tester, BahtinovFocusLive(status: _running([3.0, 3.0, 3.0, 2.0, 2.0, 2.0])));
     expect(find.text('2.00'), findsOneWidget);

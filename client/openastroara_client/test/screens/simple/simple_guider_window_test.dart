@@ -68,7 +68,7 @@ Future<ProviderContainer> _pump(WidgetTester tester, Map<String, dynamic> wire,
 void main() {
   testWidgets('the Guide Camera window: its title, Gain; no State, RMS or dither (user, 2026-11-04)', (tester) async {
     await _pump(tester, _wire());
-    expect(find.text('Guide Camera'), findsOneWidget, reason: 'no guide camera known: just Guide Camera');
+    expect(find.text('Camera (Guide)'), findsOneWidget, reason: 'no guide camera known: just Camera (Guide)');
     for (final gone in ['State', 'RMS', 'Dither', 'Dither by']) {
       expect(find.byKey(Key('simple-window-row-$gone')), findsNothing, reason: '$gone moved to Guide mode');
     }
@@ -87,7 +87,7 @@ void main() {
     await _pump(tester, _wire(),
         camera: const DeviceDriver(name: 'ZWO ASI120MM Mini', driverVersion: '6.0.0', sdkVersion: '1.41'), inSettings: true);
     await tester.pump();
-    expect(find.text('Guide Camera · ZWO ASI120MM Mini'), findsOneWidget);
+    expect(find.text('Camera (Guide) · ZWO ASI120MM Mini'), findsOneWidget);
     expect(find.text('Versions'), findsOneWidget);
     expect(find.text('1.41'), findsOneWidget);
   });

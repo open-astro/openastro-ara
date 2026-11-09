@@ -1068,7 +1068,7 @@ void main() {
         expect(dawns(body), isEmpty);
       });
 
-      testWidgets('Add to queue before dark: the queue stops at dawn (Night Setup starts it at dark)',
+      testWidgets('Add to queue before dark: the queue stops at dawn (Preflight starts it at dark)',
           (tester) async {
         final seq = _Seq();
         await _pump(tester, seq,
@@ -1094,7 +1094,7 @@ void main() {
             overrides: overrides);
         await tester.tap(find.byKey(const Key('simple-run-queue')));
         await tester.pumpAndSettle();
-        expect(dawns(seq.bodies['seq-1']!), isNotEmpty, reason: 'queued for Night Setup, which starts at dark');
+        expect(dawns(seq.bodies['seq-1']!), isNotEmpty, reason: 'queued for Preflight, which starts at dark');
         await tester.tap(find.byKey(const Key('simple-run-start-now')));
         await tester.pump();
         expect(find.textContaining('Stops at dawn'), findsNothing);
@@ -1288,7 +1288,7 @@ void main() {
         [(SimpleMessageKind.error, 'The run is between targets.')]);
   });
 
-  testWidgets("a scheduled start the rig refuses says so in a pill too (Night Setup's last Done has no sheet open)",
+  testWidgets("a scheduled start the rig refuses says so in a pill too (Preflight's last Done has no sheet open)",
       (tester) async {
     final (c, seq) = await run(tester);
     await create(tester);
@@ -1299,7 +1299,7 @@ void main() {
     expect(seq.calls.where((call) => call.startsWith('start ')), isEmpty);
   });
 
-  testWidgets("Night Setup's last Done while the queue is still updating says so instead of doing nothing",
+  testWidgets("Preflight's last Done while the queue is still updating says so instead of doing nothing",
       (tester) async {
     // Review of #1486: _op returned quietly while busy, so startQueue reported true and nothing started.
     final (c, seq) = await run(tester);
@@ -1730,6 +1730,45 @@ void main() {
       // A plain pause says nothing.
       await imaging(tester, c, seq, _imaging(25, state: SequenceRunState.paused));
       expect(find.text('Mount stopped'), findsNothing);
+    });
+
+    group('each fact once (#1719)', () {
+      Future<void> running(WidgetTester tester, List<SimpleTarget> targets) async {
+        final seq = _Seq();
+        final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () {}, onEdit: (_) {}));
+        c.read(selectedSequenceIdProvider.notifier).select('seq-1');
+        c.read(simpleRunProvider.notifier).state = SimpleRun(sequenceId: 'seq-1', started: true, targets: targets);
+        await imaging(tester, c, seq, _imaging(4));
+      }
+
+      const single = [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)];
+
+      testWidgets('one target, one filter: the headline only, in the plan square\'s spelling', (tester) async {
+        await running(tester, const [SimpleTarget(name: 'NGC0246', tag: 'NGC 246', steps: single)]);
+        expect(find.textContaining('NGC 246'), findsOneWidget);
+        expect(find.textContaining('NGC0246'), findsNothing);
+        expect(find.textContaining('/ 30'), findsOneWidget, reason: 'the frame count shows once');
+        expect(find.byType(LinearProgressIndicator), findsNothing, reason: 'one filter: no per-filter rows');
+      });
+
+      testWidgets('several filters get their rows, a long filter name on one line', (tester) async {
+        await running(tester, const [
+          SimpleTarget(name: 'M 31', steps: [
+            FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30),
+            FilterPlanStep(filterName: 'UV/IR', exposureSeconds: 120, frameCount: 30),
+          ]),
+        ]);
+        expect(find.byType(LinearProgressIndicator), findsNWidgets(2));
+        expect(tester.renderObject<RenderParagraph>(find.descendant(of: find.text('UV/IR'), matching: find.byType(RichText))).didExceedMaxLines, isFalse);
+      });
+
+      testWidgets('several targets get the queue; one target does not', (tester) async {
+        await running(tester, const [
+          SimpleTarget(name: 'M 31', steps: single),
+          SimpleTarget(name: 'M 33', steps: single),
+        ]);
+        expect(find.byKey(const ValueKey('simple-run-row-M 33')), findsOneWidget);
+      });
     });
 
     testWidgets('paused: resume without re-centering, or re-center and refocus; imaging: neither', (tester) async {

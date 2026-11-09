@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rail and Polar Arrows</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: two working mocks on one page: the left-rail placement (#1674) and the polar arrows (#1721).
+     Single dark look on purpose: DESIGN.md tokens, as the other design/preview mocks. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --hair: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+    --ok: #4CAF50; --info: #42A5F5; --sel: #1976D2; --tile: rgba(56,56,56,.55);
+    --scrim: rgba(26,26,26,.9);
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys); padding-block: 20px 40px;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; }
+  h2 { font-size: 17px; font-weight: 600; margin: 18px 0 0; }
+  p.note { color: var(--text2); margin: 0; max-width: 80ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
+  .group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--hair); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; min-height: 40px; }
+  .seg button + button { border-left: 1px solid var(--hair); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+  .wrap { overflow-x: auto; }
+  .ipad { height: 640px; position: relative; overflow: hidden; border-radius: 18px; border: 1px solid #333;
+          background: radial-gradient(ellipse at 55% 50%, #2b2e38 0, #14151b 45%, #08080b 100%); }
+  .s { position: absolute; border-radius: 50%; background: #fff; }
+  .sf { position: absolute; background: var(--scrim); border-radius: 10px; }
+  .strip { left: 16px; right: 16px; top: 16px; height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 14px; font-size: 13px; white-space: nowrap; overflow: hidden; }
+  .strip i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); margin-right: 6px; }
+  .rail { width: 72px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0; font-size: 12px; }
+  .rail span { height: 56px; display: flex; align-items: center; justify-content: center; }
+  .rail.l { left: 16px; top: 200px; }
+  .rail.r { right: 16px; top: 200px; }
+  .win { top: 88px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .win h3 { margin: 0; font-size: 15px; font-weight: 600; }
+  .win .row { display: flex; justify-content: space-between; gap: 12px; color: var(--text2); font-size: 13px; }
+  .win .row b { color: var(--text); font-weight: 500; }
+  .knob { height: 150px; border-radius: 10px; background: var(--tile); display: flex; align-items: center; justify-content: center; color: var(--text2); font-size: 13px; }
+  .edge { position: absolute; top: 72px; bottom: 16px; border-left: 1px dashed var(--info); opacity: .7; }
+  .edge em { position: absolute; left: 6px; top: 0; font: 11px var(--sys); color: var(--info); white-space: nowrap; }
+
+  .polar { width: min(452px, 100%); background: var(--scrim); border: 1px solid #2a2a2a; border-radius: 10px; padding: 16px; display: flex; gap: 8px; }
+  .bull { flex: 0 0 180px; height: 180px; display: flex; align-items: center; justify-content: center; }
+  .tiles { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+  .t { height: 86px; padding: 8px; background: var(--tile); border-radius: 10px; display: flex; align-items: center; gap: 8px; }
+  .t svg { flex: none; }
+  .t div { min-width: 0; }
+  .t small { display: block; font-size: 11.5px; color: var(--text2); }
+  .t b { font-weight: 500; font-size: 14px; }
+  .stage { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+  table.sum { border-collapse: collapse; font-size: 13px; }
+  table.sum td, table.sum th { padding: 4px 16px 4px 0; text-align: left; font-variant-numeric: tabular-nums; color: var(--text2); font-weight: 400; }
+  table.sum th { color: var(--text); }
+</style>
+
+<div class="page">
+  <h1>Left rail placement and polar arrows</h1>
+  <p class="note">Two mocks to approve before the Flutter work in Slice 3. Sizes come from the code: inset 16, rail 72, device window 360, polar tile 86 tall with 8 padding. All figures are made-up examples.</p>
+
+  <h2>#1674: device window and Ara sheet beside the left rail</h2>
+  <div class="controls">
+    <div class="group"><span class="lbl">Placement</span><div class="seg" data-k="place"><button data-v="today">Today</button><button data-v="beside">Beside the rail (proposed)</button></div></div>
+    <div class="group"><span class="lbl">Panel</span><div class="seg" data-k="panel"><button data-v="device">Device window</button><button data-v="ara">Ara sheet</button></div></div>
+    <div class="group"><span class="lbl">Window</span><div class="seg" data-k="width"><button data-v="1024">iPad 1024</button><button data-v="900">900 (new side-by-side limit)</button><button data-v="470">Phone 470 (falls back)</button></div></div>
+  </div>
+  <p class="note" id="placeNote"></p>
+  <div class="wrap"><div class="ipad" id="stage">
+    <div class="s" style="left:42%;top:40%;width:3px;height:3px"></div><div class="s" style="left:58%;top:62%;width:2px;height:2px"></div><div class="s" style="left:70%;top:30%;width:3px;height:3px"></div><div class="s" style="left:33%;top:72%;width:2px;height:2px"></div>
+    <div class="sf strip"><b>Ara</b><span><i></i>Camera</span><span><i></i>Mount</span><span><i></i>Focuser</span><span><i></i>Rotator</span></div>
+    <div class="sf rail l"><span>Info</span><span>Sky</span><span>Album</span></div>
+    <div class="sf rail r"><span>Mode</span><span>Shutter</span></div>
+    <div class="edge" id="edge"><em>left edge of the panel</em></div>
+    <div class="sf win" id="win"></div>
+  </div></div>
+
+  <h2>#1721: bigger arrows on the polar align tiles</h2>
+  <div class="controls">
+    <div class="group"><span class="lbl">Arrow</span><div class="seg" data-k="arrow"><button data-v="44">44 (today)</button><button data-v="60">60</button><button data-v="70">70, fills the tile (proposed)</button></div></div>
+  </div>
+  <p class="note">The tile and panel keep their size. At 70 the arrow fills the tile's 70 px inner height, and the numbers keep the room that is left. The bullseye's outer ring spans the two tiles: 180 px, top of the first tile to the bottom of the second.</p>
+  <div class="stage">
+    <div class="polar">
+      <div class="bull"><svg width="180" height="180" viewBox="0 0 180 180" role="img" aria-label="Bullseye"><circle cx="90" cy="90" r="89" fill="none" stroke="#404040"/><circle cx="90" cy="90" r="50" fill="none" stroke="#404040"/><circle cx="90" cy="90" r="18" fill="none" stroke="#4CAF50"/><circle cx="118" cy="68" r="10" fill="#FFB300"/></svg></div>
+      <div class="tiles" id="tiles"></div>
+    </div>
+    <table class="sum"><tr><th>Size</th><th>Share of tile height</th></tr><tr><td>44</td><td>51 %</td></tr><tr><td>60</td><td>70 %</td></tr><tr><td>70</td><td>81 %, the padding is the rest</td></tr></table>
+  </div>
+</div>
+
+<script>
+  const st = { place: 'beside', panel: 'device', width: '1024', arrow: '70' };
+  const arrowSvg = (size, rotate) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true" style="transform:rotate(${rotate}deg)"><path fill="#E0E0E0" d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>`;
+  const device = `<h3>Rotator &middot; Example 3&Prime;</h3><div class="knob">Sky-angle dial</div><div class="row"><span>Sky angle</span><b>124.3&deg;</b></div>`;
+  const ara = `<h3>OpenAstro Ara</h3><div class="row"><span>This app</span><b>0.0.1-ara.42</b></div><div class="row"><span>Ara server</span><b>0.0.1-ara.42</b></div><div class="row"><span>Guider</span><b>2.6.14</b></div><div class="row"><span>Rig</span><b>Backyard rig</b></div><div class="row"><span>Profile</span><b>Example refractor</b></div>`;
+  function draw() {
+    document.querySelectorAll('.seg').forEach(s => s.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(st[s.dataset.k] === b.dataset.v))));
+    const w = Number(st.width), stage = document.getElementById('stage'), win = document.getElementById('win'), edge = document.getElementById('edge');
+    stage.style.width = w + 'px';
+    const panelW = st.panel === 'device' ? 360 : 340;
+    const fits = w >= 480;
+    const left = st.place === 'beside' && fits ? 16 * 2 + 72 : 16;
+    win.style.left = left + 'px'; win.style.width = Math.min(panelW, w - left - 16) + 'px';
+    win.innerHTML = st.panel === 'device' ? device : ara;
+    edge.style.left = left + 'px';
+    document.getElementById('placeNote').textContent = st.place === 'today'
+      ? 'Today: the panel covers the left rail, and the two read as one dark shape.'
+      : fits ? 'Proposed: the panel opens one inset right of the rail, at x = 104, and the rail stays usable. No border is added.'
+             : 'Fallback: below 480 pt the panel cannot fit beside the rail, so it stays at the left inset as it does today.';
+    const a = Number(st.arrow);
+    document.getElementById('tiles').innerHTML = [['Altitude', 'Up 12.4′', -90], ['Azimuth', 'Right 3.1′', 0]]
+      .map(([ax, mv, r]) => `<div class="t">${arrowSvg(a, r)}<div><small>${ax}</small><b>${mv}</b></div></div>`).join('');
+  }
+  document.querySelectorAll('.seg').forEach(s => s.addEventListener('click', e => { const b = e.target.closest('button'); if (b) { st[s.dataset.k] = b.dataset.v; draw(); } }));
+  draw();
+</script>

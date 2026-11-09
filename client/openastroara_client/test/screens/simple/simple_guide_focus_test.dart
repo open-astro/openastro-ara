@@ -97,6 +97,15 @@ void main() {
     expect(_af.marked, 1);
   });
 
+  testWidgets('Guide keeps one height from ready through a reading (#1717)', (tester) async {
+    await _pump(tester);
+    double height() => tester.getSize(find.byType(SimpleFocusPanel)).height;
+    final start = height();
+    _g.state = GuideFocusLive(status: _live([2.0, 4.0, 3.8, 3.6, 3.2, 3.0, 2.8, 2.6]));
+    await tester.pump();
+    expect(height(), start);
+  });
+
   testWidgets('live: the HFR, stars and frames, and which way to turn', (tester) async {
     await _pump(tester, live: GuideFocusLive(status: _live([2.0, 4.0, 3.8, 3.6, 3.2, 3.0, 2.8, 2.6])));
     expect(find.textContaining('HFR 2.60'), findsOneWidget);

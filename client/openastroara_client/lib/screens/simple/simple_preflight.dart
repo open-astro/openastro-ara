@@ -6,33 +6,33 @@ import '../../l10n/l10n.dart';
 import '../../state/setup/setup_readiness.dart';
 import '../../state/simple_mode_state.dart';
 import '../../state/guider/guider_state.dart';
-import '../../state/simple_night_setup_state.dart';
+import '../../state/simple_preflight_state.dart';
 import 'simple_guide_panel.dart' show simpleGuiding;
 import 'simple_plan_panel.dart' show simpleRunProvider;
-export '../../state/simple_night_setup_state.dart'
+export '../../state/simple_preflight_state.dart'
     show
-        NightSetupStep,
-        NightSetupStepLabel,
-        nightSetupNext,
-        simpleNightSetupNext,
-        NightSetupNotifier,
-        nightSetupProvider;
+        SimplePreflightStep,
+        SimplePreflightStepLabel,
+        preflightNextStep,
+        simplePreflightNext,
+        SimplePreflightNotifier,
+        simplePreflightProvider;
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import 'simple_shell.dart' show SimplePanel;
 
 
-/// Night Setup's step strip, centred under the status strip: the steps behind
+/// Preflight's step strip, centred under the status strip: the steps behind
 /// ticked green when done tonight and amber when skipped, the current one
 /// lit, then Back and Skip.
-class NightSetupStrip extends ConsumerWidget {
-  const NightSetupStrip({super.key});
+class SimplePreflightStrip extends ConsumerWidget {
+  const SimplePreflightStrip({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final step = ref.watch(nightSetupProvider);
+    final step = ref.watch(simplePreflightProvider);
     if (step == null) return const SizedBox.shrink();
-    final pilot = ref.read(nightSetupProvider.notifier);
+    final pilot = ref.read(simplePreflightProvider.notifier);
     final focused = ref.watch(setupFocusStateProvider) == SetupStepState.done;
     final aligned =
         ref.watch(setupPolarAlignStateProvider) == SetupStepState.done ||
@@ -43,14 +43,14 @@ class NightSetupStrip extends ConsumerWidget {
     return FittedBox(
       fit: BoxFit.scaleDown,
       child: SimplePanel(
-        key: const Key('night-setup-strip'),
+        key: const Key('preflight-strip'),
         padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
         child: SizedBox(
           height: 48,
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              for (final s in NightSetupStep.values) ...[
+              for (final s in SimplePreflightStep.values) ...[
                 if (s.index > 0)
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 2),
@@ -64,11 +64,11 @@ class NightSetupStrip extends ConsumerWidget {
                   step: s,
                   current: step,
                   done: switch (s) {
-                    NightSetupStep.focus => focused,
-                    NightSetupStep.polarAlign => aligned,
-                    NightSetupStep.plan =>
+                    SimplePreflightStep.focus => focused,
+                    SimplePreflightStep.polarAlign => aligned,
+                    SimplePreflightStep.plan =>
                       ref.watch(simpleRunProvider).sequenceId != null,
-                    NightSetupStep.guide => simpleGuiding(
+                    SimplePreflightStep.guide => simpleGuiding(
                       ref.watch(guiderStatusProvider).value,
                     ),
                   },
@@ -76,14 +76,14 @@ class NightSetupStrip extends ConsumerWidget {
               ],
               const SizedBox(width: AraSpace.s8),
               TextButton(
-                key: const Key('night-setup-back'),
+                key: const Key('preflight-back'),
                 onPressed: step.index > 0 ? pilot.back : null,
-                child: Text(context.l10n.nightSetupBack),
+                child: Text(context.l10n.simplePreflightBack),
               ),
               TextButton(
-                key: const Key('night-setup-skip'),
+                key: const Key('preflight-skip'),
                 onPressed: pilot.next,
-                child: Text(context.l10n.nightSetupSkip),
+                child: Text(context.l10n.simplePreflightSkip),
               ),
             ],
           ),
@@ -96,8 +96,8 @@ class NightSetupStrip extends ConsumerWidget {
 class _Step extends StatelessWidget {
   const _Step({required this.step, required this.current, required this.done});
 
-  final NightSetupStep step;
-  final NightSetupStep current;
+  final SimplePreflightStep step;
+  final SimplePreflightStep current;
 
   /// Done tonight; a step behind the current one that isn't was skipped.
   final bool done;
@@ -111,12 +111,12 @@ class _Step extends StatelessWidget {
     // The tick and skip mark are icons: screen readers get the state in words.
     return Semantics(
       label: behind && done
-          ? l10n.nightSetupStepDone(label)
+          ? l10n.simplePreflightStepDone(label)
           : behind
-          ? l10n.nightSetupStepSkipped(label)
+          ? l10n.simplePreflightStepSkipped(label)
           : on
-          ? l10n.nightSetupStepCurrent(label)
-          : l10n.nightSetupStepNext(label),
+          ? l10n.simplePreflightStepCurrent(label)
+          : l10n.simplePreflightStepNext(label),
       excludeSemantics: true,
       child: Container(
         height: 36,

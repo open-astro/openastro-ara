@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
@@ -18,6 +19,8 @@ import 'package:openastroara/models/plate_solve_result.dart';
 import 'package:openastroara/state/plate_solve/plate_solve_api_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/stop_mount_overlay.dart';
@@ -161,7 +164,7 @@ void main() {
   late _FakeSolveApi solveApi;
   late ProviderContainer container;
 
-  Future<void> pump(WidgetTester tester, {Widget child = const Text('tab content'), bool quiet = false}) async {
+  Future<void> pump(WidgetTester tester, {Widget child = const Text('tab content'), bool quiet = false, List<Override> extra = const []}) async {
     ws = StreamController<WsEvent>.broadcast();
     addTearDown(ws.close);
     mountApi = _FakeMountApi();
@@ -177,6 +180,7 @@ void main() {
           mountApiFactoryProvider.overrideWithValue((_) => mountApi),
           sequenceApiFactoryProvider.overrideWithValue((_) => seqApi),
           plateSolveApiFactoryProvider.overrideWithValue((_) => solveApi),
+          ...extra,
         ],
         child: MaterialApp(
           home: Scaffold(
@@ -266,6 +270,22 @@ void main() {
     await fire(tester, _event(SlewWsEvents.aborted, {'reason': 'user_request'}));
     expect(find.text('Mount stopped at user request'), findsNothing);
     expect(find.byType(AlertDialog), findsNothing);
+  });
+
+  testWidgets('quiet: Space during a slew with the server unreachable says so in a pill, no snackbar (#1556)', (tester) async {
+    await pump(
+      tester,
+      quiet: true,
+      child: const Focus(autofocus: true, child: Text('tab content')),
+      extra: [simpleModeActiveProvider.overrideWithValue(true)],
+    );
+    await fire(tester, _event(SlewWsEvents.started));
+    mountApi.failCommands = true;
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    await tester.pump();
+    expect(container.read(simpleMessagesProvider).map((m) => m.title), contains(contains('Stop Mount')));
+    expect(find.byType(SnackBar), findsNothing);
   });
 
   testWidgets('resume acts on the run the daemon paused for this stop', (

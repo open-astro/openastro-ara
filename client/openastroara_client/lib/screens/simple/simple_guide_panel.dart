@@ -15,8 +15,8 @@ import '../../widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import '../../widgets/status_indicator.dart'
     show StatusBlink, StatusDot, StatusLevel;
 import '../../util/friendly_error.dart';
-import 'simple_night_setup.dart'
-    show NightSetupStep, nightSetupProvider, simpleNightSetupNext;
+import 'simple_preflight.dart'
+    show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
 import 'simple_device_windows.dart'
     show
         SimpleGuideGainSlider,
@@ -46,8 +46,8 @@ bool simpleGuideActive(GuiderStatus? g) =>
       GuiderRuntimeState.unknown,
     }.contains(g.runtimeState);
 
-/// Guiding, or about to be back at it (a dither's settle): what Guided
-/// Run's Guide step waits for. Pure — unit-tested.
+/// Guiding, or about to be back at it (a dither's settle): what Preflight
+///'s Guide step waits for. Pure — unit-tested.
 bool simpleGuiding(GuiderStatus? g) =>
     g != null &&
     g.isConnected &&
@@ -195,11 +195,11 @@ class SimpleGuidePanel extends ConsumerWidget {
     final total = guiding ? g!.rmsTotalArcsec : null;
     final ra = guiding ? g!.rmsRaArcsec : null;
     final dec = guiding ? g!.rmsDecArcsec : null;
-    // Guided Run's Guide step, the last before imaging: its Done starts it.
+    // Preflight's Guide step, the last before imaging: its Done starts it.
     final guidedDone =
         guiding &&
-        ref.watch(nightSetupProvider) == NightSetupStep.guide &&
-        simpleNightSetupNext(ref, after: NightSetupStep.guide) == null;
+        ref.watch(simplePreflightProvider) == SimplePreflightStep.guide &&
+        simplePreflightNext(ref, after: SimplePreflightStep.guide) == null;
     return SimplePanel(
       key: const Key('simple-guide-panel'),
       padding: const EdgeInsets.symmetric(
@@ -269,7 +269,7 @@ class SimpleGuidePanel extends ConsumerWidget {
               FilledButton(
                 key: const Key('simple-guide-guided-done'),
                 style: kSimpleGoStyle,
-                onPressed: ref.read(nightSetupProvider.notifier).next,
+                onPressed: ref.read(simplePreflightProvider.notifier).next,
                 child: Text(l10n.guidedDoneStartImaging),
               ),
             const Divider(height: AraSpace.s8),

@@ -41,8 +41,9 @@ import '../../state/settings/cooling_fan_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
-import '../../state/simple_night_setup_state.dart';
-export '../../state/simple_night_setup_state.dart' show SimpleModeScreen, SimpleModeScreenLabels;
+import '../../util/app_licenses.dart';
+import '../../state/simple_preflight_state.dart';
+export '../../state/simple_preflight_state.dart' show SimpleModeScreen, SimpleModeScreenLabels;
 
 import 'dart:ui' show ImageFilter;
 
@@ -91,7 +92,7 @@ import '../../widgets/sky_atlas/stellarium_view.dart';
 import '../library/image_library_screen.dart';
 import '../settings/settings_shell.dart';
 import '../shell_listeners.dart';
-import 'simple_night_setup.dart';
+import 'simple_preflight.dart';
 import 'simple_device_windows.dart';
 import 'simple_rig_storage.dart';
 import 'simple_focus_panel.dart';
@@ -136,8 +137,8 @@ const double kSimpleStatusMaxWidth = 300;
 /// The message pills' widest (they share the top row with the status pill).
 const double kSimpleMessagesMaxWidth = 420;
 
-/// The Night Setup strip's or offer's row before it is measured.
-const double kSimpleNightSetupRowHeight = 56;
+/// The Preflight strip's or offer's row before it is measured.
+const double kSimplePreflightRowHeight = 56;
 
 /// Side of the compact Stop at the bottom right.
 const double kSimpleStopSize = 60;
@@ -225,36 +226,36 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
   }
 
-  /// The rails' and the Night Setup row's heights, measured after each frame:
-  /// the message pills start under the Night Setup row (its words wrap on a
+  /// The rails' and the Preflight row's heights, measured after each frame:
+  /// the message pills start under the Preflight row (its words wrap on a
   /// narrow window) and stop above the left rail; the right rail's panels
   /// hang from its top and stop above the plan squares.
   double _leftRailHeight = 0;
   double _rightRailHeight = 0;
-  double _nightSetupRowHeight = kSimpleNightSetupRowHeight;
+  double _simplePreflightRowHeight = kSimplePreflightRowHeight;
   final _leftRailKey = GlobalKey();
   final _rightRailKey = GlobalKey();
-  final _nightSetupRowKey = GlobalKey();
+  final _simplePreflightRowKey = GlobalKey();
 
   void _measure() => WidgetsBinding.instance.addPostFrameCallback((_) {
     final rail = _leftRailKey.currentContext?.size?.height;
     final right = _rightRailKey.currentContext?.size?.height;
-    final row = _nightSetupRowKey.currentContext?.size?.height;
+    final row = _simplePreflightRowKey.currentContext?.size?.height;
     if (!mounted) return;
     if ((rail != null && rail != _leftRailHeight) ||
         (right != null && right != _rightRailHeight) ||
-        (row != null && row != _nightSetupRowHeight)) {
+        (row != null && row != _simplePreflightRowHeight)) {
       setState(() {
         _leftRailHeight = rail ?? _leftRailHeight;
         _rightRailHeight = right ?? _rightRailHeight;
-        _nightSetupRowHeight = row ?? _nightSetupRowHeight;
+        _simplePreflightRowHeight = row ?? _simplePreflightRowHeight;
       });
     }
   });
 
-  void _startNightSetup() {
+  void _startSimplePreflight() {
     setState(() => _popover = _Popover.settings);
-    ref.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.nightSetup);
+    ref.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preflight);
   }
 
   /// Ties the popovers to the right rail's top-left corner.
@@ -383,8 +384,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     return MediaQuery.sizeOf(context).width >=
         kSimpleDeviceWindowWidth * scale +
             kSimpleWidestPopover * scale +
-            kSimpleRailWidth * scale +
-            kSimpleInset * 4;
+            kSimpleRailWidth * scale * 2 +
+            kSimpleInset * 5;
   }
 
   /// Set while a jump to the Settings tab is turned back (see build).
@@ -523,7 +524,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       SimpleStatusOrigin.polar => SimpleModeScreen.polarAlign,
       _ => SimpleModeScreen.preview,
     };
-    // A Night Setup on that step keeps going; anything else switches mode.
+    // A Preflight on that step keeps going; anything else switches mode.
     if (ref.read(simpleShowingProvider) != mode) _pickMode(mode);
     setState(() {
       _clean = false;
@@ -532,9 +533,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   }
 
   void _pickMode(SimpleModeScreen m) {
-    if (m == SimpleModeScreen.nightSetup) return _startNightSetup();
+    if (m == SimpleModeScreen.preflight) return _startSimplePreflight();
     setState(() => _popover = _Popover.none);
-    // Picking a mode leaves Night Setup.
+    // Picking a mode leaves Preflight.
     ref.read(simpleShowingProvider.notifier).pick(m);
   }
 
@@ -606,8 +607,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final runActive =
         shown == SimpleModeScreen.plan &&
         (ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false);
-    // Plan shows already in Night Setup's plan step; from any other screen the
-    // pick goes to Plan and leaves Night Setup.
+    // Plan shows already in Preflight's plan step; from any other screen the
+    // pick goes to Plan and leaves Preflight.
     if (shown != SimpleModeScreen.plan) {
       ref.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.plan);
     }
@@ -657,6 +658,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       ],
     );
     return true;
+  }
+
+  void _leaveForFullUi({bool discarded = false}) {
+    if (!discarded && _askDiscard(() => _leaveForFullUi(discarded: true))) {
+      return;
+    }
+    ref.read(simpleModeProvider.notifier).set(false);
   }
 
   void _toggle(_Popover p, {bool discarded = false}) {
@@ -755,8 +763,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       }
       ref.read(simpleModeProvider.notifier).set(false);
     });
-    // Night Setup opens each step on its panel, and ends on the plan.
-    ref.listen(nightSetupProvider, (previous, next) {
+    // Fetched once per rig, so the Ara sheet has its versions on its first frame.
+    ref.listen(daemonVersionsProvider, (_, _) {});
+    // Preflight opens each step on its panel, and ends on the plan.
+    ref.listen(simplePreflightProvider, (previous, next) {
       if (previous == null && next == null) return;
       setState(() {
         _popover = next == null ? _Popover.none : _Popover.settings;
@@ -794,7 +804,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
             origin: SimpleStatusOrigin.focus,
           );
     });
-    final pilot = ref.watch(nightSetupProvider);
+    final pilot = ref.watch(simplePreflightProvider);
     final shown = ref.watch(simpleShowingProvider);
     _syncGuiderPoll(
       ref.watch(
@@ -875,11 +885,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // everything (iPad, 2026-11-04: Settings ran under it).
     final aboveStop = math.max(aboveRow, kSimpleInset * 2 + stopSize);
     final width = MediaQuery.sizeOf(context).width;
-    // Night Setup's step strip, under the status strip; its offer sits at the
+    // Preflight's step strip, under the status strip; its offer sits at the
     // bottom (user, 2026-11-03).
-    final nightSetupRow = pilot != null;
+    final simplePreflightRow = pilot != null;
     // Messages share the top row with the status pill, which keeps at most
-    // half of it; they start under the Night Setup strip when it shows.
+    // half of it; they start under the Preflight strip when it shows.
     final statusRoom = math.min(
       kSimpleStatusMaxWidth,
       (width - kSimpleInset * 3) / 2,
@@ -888,8 +898,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       kSimpleMessagesMaxWidth,
       width - kSimpleInset * 3 - statusRoom,
     );
-    final messagesTop = nightSetupRow
-        ? railTop + _nightSetupRowHeight + AraSpace.s12
+    final messagesTop = simplePreflightRow
+        ? railTop + _simplePreflightRowHeight + AraSpace.s12
         : railTop;
     _measure();
     final height =
@@ -904,12 +914,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // The rail's popovers (a mode's panel, the modes, the queue) take the room
     // from under the status pill down to the screen's inset, over the bottom
     // row while open (they sit left of the rail, clear of Stop), above the
-    // plan squares. Plan's sheet and Guided Run's step panels start at its
+    // plan squares. Plan's sheet and Preflight's step panels start at its
     // top, 8 pt under the status pill; the rest sit level with the rail and
     // move up only when they don't fit (user, 2026-11-04).
     final popoverTop = railTop + kSimpleStatusHeight + AraSpace.s8;
     final guidedStep = pilot != null && _popover == _Popover.settings;
-    // Plan's sheet and Guided Run's step panels: centred, content-high, in the
+    // Plan's sheet and Preflight's step panels: centred, content-high, in the
     // space between the status pill and the bottom row's top (the screen's
     // inset without it), at least 8 pt from each (user, 2026-11-04).
     final betweenBottom =
@@ -1064,7 +1074,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             ),
                           ),
                         // The message pills, top-left under the strip (under the
-                        // Night Setup strip when it shows), down to the left rail;
+                        // Preflight strip when it shows), down to the left rail;
                         // they stay in the immersive view.
                         AnimatedPositioned(
                           left: kSimpleInset,
@@ -1109,6 +1119,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   onSettings: () => _openMenu(),
                                   onDevices: () =>
                                       _openMenu(section: 'Devices'),
+                                  onFullUi: _leaveForFullUi,
                                 ),
                               ),
                               // Info: fact tiles hugging the bottom-left corner,
@@ -1170,7 +1181,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       key: _rightRailKey,
                                       mode: shown,
                                       named: pilot != null
-                                          ? SimpleModeScreen.nightSetup
+                                          ? SimpleModeScreen.preflight
                                           : null,
                                       popover: _popover,
                                       onModes: () => _toggle(_Popover.modes),
@@ -1235,7 +1246,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                             : _popover == _Popover.modes
                                             ? _ModeGrid(
                                                 current: pilot != null
-                                                    ? SimpleModeScreen.nightSetup
+                                                    ? SimpleModeScreen.preflight
                                                     : shown,
                                                 // Picking a mode only switches it; the
                                                 // chip opens its panel (user, 2026-11-02).
@@ -1259,17 +1270,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     ),
                                   ),
                                 ),
-                              // Night Setup's steps, or the offer to start it, centred
+                              // Preflight's steps, or the offer to start it, centred
                               // under the strip.
-                              if (nightSetupRow)
+                              if (simplePreflightRow)
                                 Positioned(
                                   left: 0,
                                   right: 0,
                                   top: railTop,
                                   child: Center(
                                     child: KeyedSubtree(
-                                      key: _nightSetupRowKey,
-                                      child: const NightSetupStrip(),
+                                      key: _simplePreflightRowKey,
+                                      child: const SimplePreflightStrip(),
                                     ),
                                   ),
                                 ),
@@ -1310,7 +1321,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // A device's window, under the strip's dots.
                               if (_device != null)
                                 Positioned(
-                                  left: kSimpleInset,
+                                  left: _topLeftOverlayLeft(context),
                                   top: railTop,
                                   // Never past the bottom row: a tall window
                                   // (a many-slot filter wheel) scrolls.
@@ -1349,10 +1360,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               if (_popover == _Popover.ara)
-                                const Positioned(
+                                Positioned(
                                   top: kSimpleInset * 2 + kSimpleBarHeight,
-                                  left: kSimpleInset,
-                                  child: _AraSheet(),
+                                  left: _topLeftOverlayLeft(context),
+                                  child: _AraSheet(
+                                    onClose: () => setState(
+                                      () => _popover = _Popover.none,
+                                    ),
+                                  ),
                                 ),
                               if (_popover == _Popover.menu) ...[
                                 // Under the strip, which stays live (its
@@ -1552,7 +1567,7 @@ Widget simpleFrost(Widget child) => ClipRRect(
 /// Device dots (connected gear only), then Night mode and the Settings menu.
 /// A rail popover in its room: right-aligned, at [preferredTop] (level with
 /// the rail) when it fits below, moved up as much as it needs when it doesn't;
-/// or, with [centre], centred in the room (Guided Run's step panels).
+/// or, with [centre], centred in the room (Preflight's step panels).
 class _BesideRail extends SingleChildLayoutDelegate {
   const _BesideRail({required this.preferredTop, this.centre = false});
 
@@ -1608,6 +1623,7 @@ class _StatusStrip extends ConsumerWidget {
     required this.onSearch,
     required this.onSettings,
     required this.onDevices,
+    required this.onFullUi,
   });
 
   /// Opens Settings › Devices (the no-devices note).
@@ -1618,6 +1634,9 @@ class _StatusStrip extends ConsumerWidget {
 
   final VoidCallback onSearch;
   final VoidCallback onSettings;
+
+  /// Leaves Simple Mode, the way the Full UI's button enters it.
+  final VoidCallback onFullUi;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1696,6 +1715,16 @@ class _StatusStrip extends ConsumerWidget {
                 ? context.l10n.shellNightModeOn
                 : context.l10n.shellNightMode,
             onPressed: () => ref.read(nightModeProvider.notifier).set(!night),
+          ),
+          IconButton(
+            key: const Key('simple-full-ui-button'),
+            icon: const Icon(
+              Icons.fit_screen,
+              size: 22,
+              color: AraColors.accentInfo,
+            ),
+            tooltip: context.l10n.shellFullUi,
+            onPressed: onFullUi,
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined, size: 22),
@@ -1872,7 +1901,7 @@ class _RightRail extends ConsumerWidget {
 
   final SimpleModeScreen mode;
 
-  /// Overrides the mode named on the rail (Night Setup shows its own).
+  /// Overrides the mode named on the rail (Preflight shows its own).
   final SimpleModeScreen? named;
   final _Popover popover;
   final VoidCallback onModes;
@@ -1944,7 +1973,7 @@ class _RightRail extends ConsumerWidget {
     );
   }
 
-  // In Night Setup the chip names the step whose settings it shows ("Focus"
+  // In Preflight the chip names the step whose settings it shows ("Focus"
   // over "Auto"), so they don't read as random.
   String _chipLabel(BuildContext context, WidgetRef ref) {
     final label = switch (mode) {
@@ -2422,7 +2451,7 @@ class SimpleSegments<T> extends StatelessWidget {
 /// Simple Mode's density (DESIGN.md "Two Densities"): 10 px corners on
 /// buttons and fields instead of Material's pills, 44 px minimum targets,
 /// fields as borderless tiles.
-/// Simple Mode's green go buttons (Start Night Setup, Done, Create and start):
+/// Simple Mode's green go buttons (Start Preflight, Done, Create and start):
 /// dark text on the green, 6.3:1 (white is 2.8:1).
 final kSimpleGoStyle = FilledButton.styleFrom(
   backgroundColor: AraColors.accentConnected,
@@ -2725,76 +2754,80 @@ class _Gear extends ConsumerWidget {
       );
     }
     final l10n = context.l10n;
-    return Column(
-      key: const Key('simple-gear'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      spacing: AraSpace.s8,
-      children: [
-        _GearRow(
+    // Each row with its shown type, so the list sorts itself in any locale.
+    final rows = <(String, Widget)>[
+      (l10n.shellSectionCamera, _GearRow(
           id: 'camera',
           deviceType: EquipmentDeviceType.camera,
           type: l10n.shellSectionCamera,
           provider: cameraStatusProvider,
           onOpen: () => onOpen('Camera'),
-        ),
-        _GearRow(
+        )),
+      (l10n.shellSectionMount, _GearRow(
           id: 'mount',
           deviceType: EquipmentDeviceType.mount,
           type: l10n.shellSectionMount,
           provider: mountProvider,
           onOpen: () => onOpen('Mount'),
-        ),
-        _GearRow(
+        )),
+      (l10n.shellSectionFocuser, _GearRow(
           id: 'focuser',
           deviceType: EquipmentDeviceType.focuser,
           type: l10n.shellSectionFocuser,
           provider: focuserProvider,
           onOpen: () => onOpen('Focuser'),
-        ),
-        _GuiderGearRow(onOpen: () => onOpen('Guider')),
-        _GearRow(
+        )),
+      (l10n.shellSectionGuider, _GuiderGearRow(onOpen: () => onOpen('Guider'))),
+      (l10n.shellFilterWheel, _GearRow(
           id: 'filterwheel',
           deviceType: EquipmentDeviceType.filterWheel,
           type: l10n.shellFilterWheel,
           provider: filterWheelProvider,
           onOpen: () => onOpen('Filter wheel'),
-        ),
-        _GearRow(
+        )),
+      (l10n.shellRotator, _GearRow(
           id: 'rotator',
           deviceType: EquipmentDeviceType.rotator,
           type: l10n.shellRotator,
           provider: rotatorProvider,
           onOpen: () => onOpen('Rotator'),
-        ),
-        _GearRow(
+        )),
+      (l10n.shellFlatPanel, _GearRow(
           id: 'flat',
           deviceType: EquipmentDeviceType.flatPanel,
           type: l10n.shellFlatPanel,
           provider: flatPanelProvider,
           onOpen: () => onOpen('Flat panel'),
-        ),
-        _SwitchGearRows(onOpen: () => onOpen('Switches')),
-        _GearRow(
+        )),
+      (l10n.shellSwitches, _SwitchGearRows(onOpen: () => onOpen('Switches'))),
+      (l10n.shellDome, _GearRow(
           id: 'dome',
           deviceType: EquipmentDeviceType.dome,
           type: l10n.shellDome,
           provider: domeProvider,
           onOpen: () => onOpen('Dome'),
-        ),
-        _GearRow(
+        )),
+      (l10n.shellWeather, _GearRow(
           id: 'weather',
           deviceType: EquipmentDeviceType.weather,
           type: l10n.shellWeather,
           provider: weatherProvider,
           onOpen: () => onOpen('Weather'),
-        ),
-        _GearRow(
+        )),
+      (l10n.shellSafetyMonitor, _GearRow(
           id: 'safety',
           deviceType: EquipmentDeviceType.safetyMonitor,
           type: l10n.shellSafetyMonitor,
           provider: safetyMonitorProvider,
           onOpen: () => onOpen('Safety monitor'),
-        ),
+        )),
+    ]..sort((a, b) => a.$1.toLowerCase().compareTo(b.$1.toLowerCase()));
+    return Column(
+      key: const Key('simple-gear'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
+      children: [
+        for (final row in rows) row.$2,
         const _AddGearRow(),
       ],
     );
@@ -3422,44 +3455,6 @@ class _ThisRig extends ConsumerWidget {
     // Name and Profile, each with its change button on the same line; set
     // close together (two facts, not two settings).
     final l10n = context.l10n;
-    Widget fact(
-      String id,
-      String label,
-      String value,
-      String change,
-      VoidCallback onTap,
-    ) => Row(
-      spacing: AraSpace.s12,
-      children: [
-        Text(label, style: kSimpleText),
-        Expanded(
-          child: Text(
-            value,
-            style: kSimpleText,
-            textAlign: TextAlign.right,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        // A plain blue "Change"; a screen reader hears what it changes.
-        Semantics(
-          label: change,
-          button: true,
-          excludeSemantics: true,
-          child: TextButton(
-            key: Key('simple-rig-change-$id'),
-            style: TextButton.styleFrom(
-              // Simple Mode's 44 pt target (user, 2026-11-03), over keeping
-              // the two lines close.
-              minimumSize: const Size(0, 44),
-              padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            onPressed: onTap,
-            child: Text(l10n.shellChange, style: const TextStyle(fontSize: 14)),
-          ),
-        ),
-      ],
-    );
     // A list-style setting: the platform's switch (DESIGN.md: segments stay
     // for the panels over the image).
     Widget toggle(
@@ -3490,15 +3485,6 @@ class _ThisRig extends ConsumerWidget {
         ],
       ),
     );
-    void relaunch({required bool rig}) {
-      onClose();
-      ref.read(offlineModeProvider.notifier).exit();
-      ref.read(profileGatePassedProvider.notifier).reset();
-      // Changing rig starts at the rig list; changing profile stays on this
-      // rig and opens its profile box.
-      if (rig) ref.read(serverChooserRequestedProvider.notifier).request();
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
@@ -3506,19 +3492,19 @@ class _ThisRig extends ConsumerWidget {
         const SimpleSystemPanel(expand: true),
         Column(
           children: [
-            fact(
-              'rig',
-              l10n.shellName,
-              server == null ? '—' : server.mdnsName ?? server.hostname,
-              l10n.shellChangeRig,
-              () => relaunch(rig: true),
+            _ChangeRow(
+              buttonKey: const Key('simple-rig-change-rig'),
+              label: l10n.shellName,
+              value: server == null ? '—' : server.mdnsName ?? server.hostname,
+              change: l10n.shellChangeRig,
+              onTap: () => _changeRigOrProfile(ref, onClose, rig: true),
             ),
-            fact(
-              'profile',
-              l10n.shellProfile,
-              profile ?? '—',
-              l10n.shellChangeProfile,
-              () => relaunch(rig: false),
+            _ChangeRow(
+              buttonKey: const Key('simple-rig-change-profile'),
+              label: l10n.shellProfile,
+              value: profile ?? '—',
+              change: l10n.shellChangeProfile,
+              onTap: () => _changeRigOrProfile(ref, onClose, rig: false),
             ),
           ],
         ),
@@ -3684,9 +3670,6 @@ class _ThisRig extends ConsumerWidget {
           ref.watch(simplePermanentPierProvider).value ?? false,
           (v) => ref.read(simplePermanentPierProvider.notifier).set(v),
         ),
-        toggle('simple-mode', l10n.shellSimpleMode, null, true, (v) {
-          if (!v) ref.read(simpleModeProvider.notifier).set(false);
-        }),
         // Each language in its own words; System follows the device.
         Wrap(
           spacing: AraSpace.s12,
@@ -4196,8 +4179,96 @@ class _RigStepperState extends State<_RigStepper> {
 /// The OpenAstro Ara sheet under the mark (#1602): the versions a support
 /// question starts with, then which rig and profile this is. Settings stays
 /// on the gear.
+/// Where a device window and the Ara sheet start: one inset right of the left
+/// rail, or at the left inset when the window can't fit beside it.
+double _topLeftOverlayLeft(BuildContext context) {
+  final scale = simpleRailScale(context);
+  final rail = kSimpleRailWidth * scale;
+  final fits =
+      MediaQuery.sizeOf(context).width >=
+      kSimpleDeviceWindowWidth * scale + rail + kSimpleInset * 3;
+  return fits ? kSimpleInset * 2 + rail : kSimpleInset;
+}
+
+/// Back to the launch screens for another rig or profile: Settings › Rig and
+/// the Ara sheet do the same thing.
+void _changeRigOrProfile(
+  WidgetRef ref,
+  VoidCallback onClose, {
+  required bool rig,
+}) {
+  onClose();
+  ref.read(offlineModeProvider.notifier).exit();
+  ref.read(profileGatePassedProvider.notifier).reset();
+  // Changing rig starts at the rig list; changing profile stays on this
+  // rig and opens its profile box.
+  if (rig) ref.read(serverChooserRequestedProvider.notifier).request();
+}
+
+/// A fact with its change button on the same line: Rig and Profile.
+class _ChangeRow extends StatelessWidget {
+  const _ChangeRow({
+    required this.buttonKey,
+    required this.label,
+    required this.value,
+    required this.change,
+    required this.onTap,
+    this.wrapValue = false,
+  });
+
+  final Key buttonKey;
+  final String label;
+  final String value;
+
+  /// What a screen reader hears for the button.
+  final String change;
+  final VoidCallback onTap;
+
+  /// The Ara sheet wraps a long name; Settings cuts it to one line.
+  final bool wrapValue;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    spacing: AraSpace.s12,
+    children: [
+      Text(label, style: kSimpleText),
+      Expanded(
+        child: Text(
+          value,
+          style: kSimpleText,
+          textAlign: TextAlign.right,
+          overflow: wrapValue ? null : TextOverflow.ellipsis,
+        ),
+      ),
+      // A plain blue "Change"; a screen reader hears what it changes.
+      Semantics(
+        label: change,
+        button: true,
+        excludeSemantics: true,
+        child: TextButton(
+          key: buttonKey,
+          style: TextButton.styleFrom(
+            // Simple Mode's 44 pt target (user, 2026-11-03), over keeping
+            // the two lines close.
+            minimumSize: const Size(0, 44),
+            padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          onPressed: onTap,
+          child: Text(
+            context.l10n.shellChange,
+            style: const TextStyle(fontSize: 14),
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
 class _AraSheet extends ConsumerWidget {
-  const _AraSheet();
+  const _AraSheet({required this.onClose});
+
+  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -4213,8 +4284,14 @@ class _AraSheet extends ConsumerWidget {
     // value column to its longest word and the text wraps.
     final maxWidth = math.min(
       420.0,
-      MediaQuery.sizeOf(context).width - kSimpleInset * 2,
+      MediaQuery.sizeOf(context).width -
+          _topLeftOverlayLeft(context) -
+          kSimpleInset,
     );
+    final running = ref.watch(
+      sequenceRunStateProvider.select((s) => s.value?.state?.isActive ?? false),
+    );
+    final version = ref.watch(appDisplayVersionProvider).value;
     return ConstrainedBox(
       key: const Key('simple-ara-sheet'),
       // minWidth stays <= maxWidth in a window narrower than 312 px.
@@ -4225,21 +4302,60 @@ class _AraSheet extends ConsumerWidget {
       child: IntrinsicWidth(
         child: SimplePanel(
         padding: const EdgeInsets.all(AraSpace.s16),
-        child: SimpleVersions(
-          title: kAppName,
-          rows: [
-            (
-              l10n.shellThisApp,
-              ref.watch(appDisplayVersionProvider).value ?? '—',
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: AraSpace.s8,
+          children: [
+            SimpleVersions(
+              title: kAppName,
+              rows: [
+                (l10n.shellThisApp, version ?? '—'),
+                (l10n.shellAraServer, rig?.daemonVersion ?? '—'),
+                if (rig?.guiderVersion != null)
+                  (l10n.deviceGuider, rig!.guiderVersion!),
+              ],
             ),
-            (l10n.shellAraServer, rig?.daemonVersion ?? '—'),
-            if (rig?.guiderVersion != null)
-              (l10n.deviceGuider, rig!.guiderVersion!),
-            (
-              l10n.shellSectionRig,
-              server == null ? '—' : server.mdnsName ?? server.hostname,
+            _ChangeRow(
+              buttonKey: const Key('simple-ara-change-rig'),
+              label: l10n.shellSectionRig,
+              value: server == null ? '—' : server.mdnsName ?? server.hostname,
+              change: l10n.shellChangeRig,
+              wrapValue: true,
+              onTap: () => _changeRigOrProfile(ref, onClose, rig: true),
             ),
-            (l10n.shellProfile, profile ?? '—'),
+            _ChangeRow(
+              buttonKey: const Key('simple-ara-change-profile'),
+              label: l10n.shellProfile,
+              value: profile ?? '—',
+              change: l10n.shellChangeProfile,
+              wrapValue: true,
+              onTap: () => _changeRigOrProfile(ref, onClose, rig: false),
+            ),
+            if (running)
+              Text(
+                l10n.shellPlanRunning,
+                style: AraText.caption.copyWith(color: AraColors.accentBusy),
+              ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                key: const Key('simple-ara-licenses'),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, 44),
+                  padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                onPressed: () {
+                  showAppLicenses(context, version);
+                  onClose();
+                },
+                child: Text(
+                  l10n.shellOpenSourceLicenses,
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+            ),
           ],
         ),
       ),

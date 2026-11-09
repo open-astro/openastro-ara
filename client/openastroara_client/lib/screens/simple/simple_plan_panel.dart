@@ -50,8 +50,8 @@ import '../../widgets/emergency_stop_button.dart' show kEmergencyStopHold;
 import '../../widgets/stop_mount_overlay.dart' show SlewWsEvents;
 import '../../widgets/sequencer/run_completion_sheet.dart'
     show runFramesPerFilter;
-import 'simple_night_setup.dart'
-    show NightSetupStep, nightSetupProvider, simpleNightSetupNext;
+import 'simple_preflight.dart'
+    show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
 import 'simple_device_windows.dart' show SimpleGainSlider;
 import 'simple_preview_panel.dart'
     show
@@ -667,7 +667,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   /// Add to queue: the picked target joins the end of the queue (the one
   /// sequence; live when it is imaging), or makes it. [first] puts it at the
   /// front instead (Start now). A new queue stops at dawn when it starts in
-  /// the dark: at [startsAt], else when Night Setup starts it (at dark before
+  /// the dark: at [startsAt], else when Preflight starts it (at dark before
   /// dark, else now). True once on the rig.
   Future<bool> create({bool first = false, DateTime? startsAt}) async {
     final sel = ref.read(planetariumSelectionProvider);
@@ -1003,7 +1003,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     return startQueue(startAt: startAt);
   }
 
-  /// Starts the queue as it stands (Night Setup's last Done). With [startAt]
+  /// Starts the queue as it stands (Preflight's last Done). With [startAt]
   /// the run starts at once but waits on the rig until then.
   Future<bool> startQueue({DateTime? startAt}) async {
     // An edit or reorder still on its way: _op would skip the start quietly
@@ -1129,7 +1129,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   }
 
   /// A failure after a rig round-trip: one pill, and the inline error stays
-  /// clear. The sheet that would show it may be closed (Night Setup's last
+  /// clear. The sheet that would show it may be closed (Preflight's last
   /// Done, a Stop from the shutter); pre-flight refusals a sheet can show
   /// (already queued, run ending) set [SimpleRun.error] instead.
   void _fail(String why, {SimpleRun? undo, bool noStorage = false}) {
@@ -1926,11 +1926,11 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final imaging =
         ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
     final off = sel == null || sel.belowHorizon || run.busy || imaging;
-    // Night Setup's plan step only queues; its green button moves on (or, with
+    // Preflight's plan step only queues; its green button moves on (or, with
     // focus and polar alignment done, starts imaging).
-    final guided = ref.watch(nightSetupProvider) == NightSetupStep.plan;
+    final guided = ref.watch(simplePreflightProvider) == SimplePreflightStep.plan;
     final guidedNext = guided
-        ? simpleNightSetupNext(ref, after: NightSetupStep.plan)
+        ? simplePreflightNext(ref, after: SimplePreflightStep.plan)
         : null;
     final now = ref.watch(clockProvider)();
     final dark = ref.watch(simpleDarkStartProvider);
@@ -2023,7 +2023,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        // No title: the chip (or Night Setup's step strip) already says Plan
+        // No title: the chip (or Preflight's step strip) already says Plan
         // (user, 2026-11-04); editing names the target.
         if (editing != null)
           Text(
@@ -2379,7 +2379,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                   onPressed: guided
                       ? (run.sequenceId == null || run.busy
                             ? null
-                            : ref.read(nightSetupProvider.notifier).next)
+                            : ref.read(simplePreflightProvider.notifier).next)
                       : off
                       ? null
                       : () async {
@@ -2393,10 +2393,10 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                   child: Text(
                     guided
                         ? switch (guidedNext) {
-                            NightSetupStep.focus => context.l10n.guidedNextFocus,
-                            NightSetupStep.polarAlign =>
+                            SimplePreflightStep.focus => context.l10n.guidedNextFocus,
+                            SimplePreflightStep.polarAlign =>
                               context.l10n.guidedNextPolarAlign,
-                            NightSetupStep.guide => context.l10n.guidedNextGuide,
+                            SimplePreflightStep.guide => context.l10n.guidedNextGuide,
                             _ => context.l10n.guidedStartImaging,
                           }
                         : run.busy
@@ -2843,7 +2843,7 @@ class SimpleRunPanel extends ConsumerWidget {
             if (imaging) ...[
               Text(
                 context.l10n.planImagingTarget(
-                  (target?.name ?? info?.currentTargetName ?? '').toUpperCase(),
+                  target?.tag ?? target?.name ?? info?.currentTargetName ?? '',
                 ),
                 style: AraText.caption,
               ),
@@ -2873,45 +2873,60 @@ class SimpleRunPanel extends ConsumerWidget {
                   ),
                   style: _dim,
                 ),
-              for (var i = 0; i < steps.length; i++)
-                Row(
-                  spacing: AraSpace.s8,
+              // One filter's progress is the headline already.
+              if (steps.length > 1)
+                Table(
+                  columnWidths: const {
+                    // As wide as the longest filter name.
+                    0: IntrinsicColumnWidth(),
+                    1: FlexColumnWidth(),
+                    2: FixedColumnWidth(64),
+                  },
+                  defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                   children: [
-                    SizedBox(
-                      width: 24,
-                      child: Text(
-                        steps[i].filterName.isEmpty ? '—' : steps[i].filterName,
-                        style: kSimpleText.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                        overflow: TextOverflow.clip,
+                    for (var i = 0; i < steps.length; i++)
+                      TableRow(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              right: AraSpace.s8,
+                              top: 2,
+                              bottom: 2,
+                            ),
+                            child: Text(
+                              steps[i].filterName.isEmpty
+                                  ? '—'
+                                  : steps[i].filterName,
+                              style: kSimpleText.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 1,
+                            ),
+                          ),
+                          LinearProgressIndicator(
+                            value: done[i] / steps[i].frameCount,
+                            minHeight: 6,
+                            borderRadius: BorderRadius.circular(3),
+                            color: done[i] == steps[i].frameCount
+                                ? AraColors.accentConnected
+                                : AraColors.selectionBg,
+                            backgroundColor: AraColors.border.withValues(
+                              alpha: 0.8,
+                            ),
+                          ),
+                          Text(
+                            '${done[i]} / ${steps[i].frameCount}',
+                            style: _dim,
+                            textAlign: TextAlign.right,
+                          ),
+                        ],
                       ),
-                    ),
-                    Expanded(
-                      child: LinearProgressIndicator(
-                        value: done[i] / steps[i].frameCount,
-                        minHeight: 6,
-                        borderRadius: BorderRadius.circular(3),
-                        color: done[i] == steps[i].frameCount
-                            ? AraColors.accentConnected
-                            : AraColors.selectionBg,
-                        backgroundColor: AraColors.border.withValues(
-                          alpha: 0.8,
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 64,
-                      child: Text(
-                        '${done[i]} / ${steps[i].frameCount}',
-                        style: _dim,
-                        textAlign: TextAlign.right,
-                      ),
-                    ),
                   ],
                 ),
             ],
-            if (run.targets.isNotEmpty) _QueueList(run: run, onEdit: onEdit),
+            // One target imaging is the headline; before that it's the way to edit it.
+            if (run.targets.length > 1 || (run.targets.isNotEmpty && !imaging))
+              _QueueList(run: run, onEdit: onEdit),
             if (run.error != null || run.noStorage) _RunError(run),
             if (imaging && paused) ...[
               Text(

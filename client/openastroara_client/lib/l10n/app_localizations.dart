@@ -174,7 +174,7 @@ abstract class AppLocalizations {
   /// Camera window title, before the camera's name
   ///
   /// In en, this message translates to:
-  /// **'Main Camera'**
+  /// **'Camera (Main)'**
   String get deviceCamera;
 
   /// Mount window title, before the mount's name
@@ -1758,7 +1758,7 @@ abstract class AppLocalizations {
   /// Simple Mode search panel: name of the Settings sheet's Camera section, shown beside a setting result (and the result for the section itself)
   ///
   /// In en, this message translates to:
-  /// **'Main Camera'**
+  /// **'Camera (Main)'**
   String get searchSectionCamera;
 
   /// Simple Mode search panel: name of the Settings sheet's Mount section, shown beside a setting result (and the result for the section itself)
@@ -1776,7 +1776,7 @@ abstract class AppLocalizations {
   /// Simple Mode search panel: name of the Settings sheet's Guide Camera section, shown beside a setting result (and the result for the section itself)
   ///
   /// In en, this message translates to:
-  /// **'Guide Camera'**
+  /// **'Camera (Guide)'**
   String get searchSectionGuider;
 
   /// Simple Mode search panel: a setting's name as a result; should match its name in Settings
@@ -2049,71 +2049,71 @@ abstract class AppLocalizations {
   /// **'guiding dithering'**
   String get searchWordsDither;
 
-  /// Simple Mode Night Setup strip: step name: autofocus
+  /// Simple Mode Preflight strip: step name: autofocus
   ///
   /// In en, this message translates to:
   /// **'Focus'**
-  String get nightSetupStepFocus;
+  String get simplePreflightStepFocus;
 
-  /// Simple Mode Night Setup strip: step name: polar alignment
+  /// Simple Mode Preflight strip: step name: polar alignment
   ///
   /// In en, this message translates to:
   /// **'Polar align'**
-  String get nightSetupStepPolarAlign;
+  String get simplePreflightStepPolarAlign;
 
-  /// Simple Mode Night Setup strip: step name: the imaging plan
+  /// Simple Mode Preflight strip: step name: the imaging plan
   ///
   /// In en, this message translates to:
   /// **'Plan'**
-  String get nightSetupStepPlan;
+  String get simplePreflightStepPlan;
 
-  /// Night Setup's step that starts guiding
+  /// Preflight's step that starts guiding
   ///
   /// In en, this message translates to:
   /// **'Guide'**
-  String get nightSetupStepGuide;
+  String get simplePreflightStepGuide;
 
-  /// Simple Mode Night Setup strip: screen-reader label of a step done tonight
+  /// Simple Mode Preflight strip: screen-reader label of a step done tonight
   ///
   /// In en, this message translates to:
   /// **'{step}, done'**
-  String nightSetupStepDone(String step);
+  String simplePreflightStepDone(String step);
 
-  /// Simple Mode Night Setup strip: screen-reader label of a skipped step
+  /// Simple Mode Preflight strip: screen-reader label of a skipped step
   ///
   /// In en, this message translates to:
   /// **'{step}, skipped'**
-  String nightSetupStepSkipped(String step);
+  String simplePreflightStepSkipped(String step);
 
-  /// Simple Mode Night Setup strip: screen-reader label of the current step
+  /// Simple Mode Preflight strip: screen-reader label of the current step
   ///
   /// In en, this message translates to:
   /// **'{step}, current step'**
-  String nightSetupStepCurrent(String step);
+  String simplePreflightStepCurrent(String step);
 
-  /// Simple Mode Night Setup strip: screen-reader label of a step still ahead
+  /// Simple Mode Preflight strip: screen-reader label of a step still ahead
   ///
   /// In en, this message translates to:
   /// **'{step}, next'**
-  String nightSetupStepNext(String step);
+  String simplePreflightStepNext(String step);
 
-  /// Simple Mode Night Setup strip: button that goes back one step
+  /// Simple Mode Preflight strip: button that goes back one step
   ///
   /// In en, this message translates to:
   /// **'Back'**
-  String get nightSetupBack;
+  String get simplePreflightBack;
 
-  /// Simple Mode Night Setup strip: button that skips the current step
+  /// Simple Mode Preflight strip: button that skips the current step
   ///
   /// In en, this message translates to:
   /// **'Skip'**
-  String get nightSetupSkip;
+  String get simplePreflightSkip;
 
   /// Simple Mode mode name (mode grid, Mode: label for screen readers)
   ///
   /// In en, this message translates to:
-  /// **'Night Setup'**
-  String get shellModeNightSetup;
+  /// **'Preflight'**
+  String get shellModePreflight;
 
   /// Simple Mode mode name
   ///
@@ -2145,11 +2145,11 @@ abstract class AppLocalizations {
   /// **'P.A.'**
   String get shellRailPolarAlign;
 
-  /// Simple Mode right rail: short name of Night Setup (60 px wide rail, keep very short)
+  /// Simple Mode right rail: the full name of Preflight
   ///
   /// In en, this message translates to:
-  /// **'Setup'**
-  String get shellRailNightSetup;
+  /// **'Preflight'**
+  String get shellRailPreflight;
 
   /// Simple Mode message after the stop keyboard shortcut once; shortcut is the key combo (⌘. or Ctrl+.)
   ///
@@ -2298,7 +2298,7 @@ abstract class AppLocalizations {
   /// Simple Mode Settings section and device row: the camera
   ///
   /// In en, this message translates to:
-  /// **'Main Camera'**
+  /// **'Camera (Main)'**
   String get shellSectionCamera;
 
   /// Simple Mode Settings section and device row: the mount
@@ -2316,7 +2316,7 @@ abstract class AppLocalizations {
   /// Simple Mode Settings section and device row: the guide camera
   ///
   /// In en, this message translates to:
-  /// **'Guide Camera'**
+  /// **'Camera (Guide)'**
   String get shellSectionGuider;
 
   /// Simple Mode Settings › Devices when the app has no link to the rig
@@ -2564,6 +2564,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Skips polar alignment'**
   String get shellPermanentPierHint;
+
+  /// Simple Mode status pill: a Preflight step with nothing running
+  ///
+  /// In en, this message translates to:
+  /// **'{step}: waiting for you'**
+  String previewPreflightWaiting(Object step);
+
+  /// Simple Mode status strip: tooltip of the button back to the Full UI
+  ///
+  /// In en, this message translates to:
+  /// **'Full UI'**
+  String get shellFullUi;
+
+  /// OpenAstro Ara sheet: link to the licenses page
+  ///
+  /// In en, this message translates to:
+  /// **'Open-source licenses'**
+  String get shellOpenSourceLicenses;
 
   /// Simple Mode Settings › Rig switch: turn Simple Mode off to go to the full app
   ///
@@ -3093,7 +3111,7 @@ abstract class AppLocalizations {
   /// **'{name} is already in the queue.'**
   String planAlreadyQueued(String name);
 
-  /// Plan sheet / Night Setup: Add to queue got no answer from the rig (saved nothing); shown as a pill
+  /// Plan sheet / Preflight: Add to queue got no answer from the rig (saved nothing); shown as a pill
   ///
   /// In en, this message translates to:
   /// **'Couldn\'t reach the rig. Check the connection and try again.'**
@@ -3165,7 +3183,7 @@ abstract class AppLocalizations {
   /// **'The run is ending; this target can\'t join it.'**
   String get planRunEnding;
 
-  /// Message pill: Start (Night Setup's last Done) while an edit or reorder of the queue is still on its way
+  /// Message pill: Start (Preflight's last Done) while an edit or reorder of the queue is still on its way
   ///
   /// In en, this message translates to:
   /// **'The queue is still updating on the rig. Try again in a moment.'**
@@ -4323,31 +4341,31 @@ abstract class AppLocalizations {
   /// **'Guide'**
   String get focusScopeGuide;
 
-  /// Night Setup plan step: green button, on to focusing
+  /// Preflight plan step: green button, on to focusing
   ///
   /// In en, this message translates to:
   /// **'Next: Focus'**
   String get guidedNextFocus;
 
-  /// Night Setup plan step: green button, on to polar alignment
+  /// Preflight plan step: green button, on to polar alignment
   ///
   /// In en, this message translates to:
   /// **'Next: Polar align'**
   String get guidedNextPolarAlign;
 
-  /// Night Setup plan step: green button when focus and polar alignment are done already
+  /// Preflight plan step: green button when focus and polar alignment are done already
   ///
   /// In en, this message translates to:
   /// **'Start imaging'**
   String get guidedStartImaging;
 
-  /// Night Setup plan step: line above the buttons
+  /// Preflight plan step: line above the buttons
   ///
   /// In en, this message translates to:
   /// **'Imaging starts after focus and polar alignment.'**
   String get guidedImagingStartsAfter;
 
-  /// Night Setup: the last setup step's green Done, which starts imaging
+  /// Preflight: the last setup step's green Done, which starts imaging
   ///
   /// In en, this message translates to:
   /// **'Done · Start imaging'**
@@ -4377,7 +4395,7 @@ abstract class AppLocalizations {
   /// **'Guider'**
   String get shellModeGuide;
 
-  /// Guided Run button moving on to the Guide step
+  /// Preflight button moving on to the Guide step
   ///
   /// In en, this message translates to:
   /// **'Next: Guide'**
@@ -4434,7 +4452,7 @@ abstract class AppLocalizations {
   /// The guide camera's device window title
   ///
   /// In en, this message translates to:
-  /// **'Guide Camera'**
+  /// **'Camera (Guide)'**
   String get deviceGuiderCamera;
 
   /// Top bar note when no device is connected; opens Settings › Devices

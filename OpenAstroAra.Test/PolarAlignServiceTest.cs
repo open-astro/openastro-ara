@@ -2004,7 +2004,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_start_that_names_no_stage_begins_at_the_fine_stage_when_the_main_camera_cannot_shoot() {
-            // Simple Mode and the Night Setup pilot start without a stage: a guide-camera-only session (main
+            // Simple Mode and the Preflight pilot start without a stage: a guide-camera-only session (main
             // camera off) must still polar-align, not be told to use a button it does not have.
             var paCalls = new ConcurrentQueue<bool>();
             await using var fake = StartFake(paCalls);

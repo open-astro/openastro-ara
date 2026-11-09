@@ -55,6 +55,11 @@ at the top. This happens in the same commit that pushes the release tag.
 - The cooling fan is chosen in the profile, by switch and port, on any driver, not found by the device name "Thermal Switch". **Every existing profile has no fan following the cooler until you choose one**; a pill asks once (#1700).
 - The rig list shows one row for a rig that announces several addresses, on the address this device can reach (#1741).
 - Simple Mode: a running guide loop keeps its Stop while the guider status is briefly gone (#1738).
+- Simple Mode: Night Setup is now Preflight (Pré-voo in Portuguese), and the cameras are Camera (Main) and Camera (Guide) (#1709, #1669). Settings › Devices is alphabetical (#1669).
+- Simple Mode: a Full UI button in the status strip replaces the Simple Mode switch in Settings › Rig (#1677). The OpenAstro Ara sheet can change rig and profile, shows its versions at once and links to the open-source licenses (#1655, #1645).
+- Simple Mode: device windows and the Ara sheet sit beside the left rail (#1674). Polar align's arrows and bullseye are bigger (#1721).
+- Simple Mode: status pills stay at least 1 s and fade out, show whole messages on two lines, and name a waiting Preflight step (#1679, #1718, #1482).
+- Simple Mode: the Focus window keeps one height during a run (#1717), the running plan panel shows each fact once (#1719), and a failed Space stop says so in a pill (#1556).
 
 ### Removed (bug sweep)
 

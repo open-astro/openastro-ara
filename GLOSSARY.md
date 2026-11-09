@@ -54,9 +54,9 @@ _Avoid_: Easy Mode, Beginner Mode
 The phone presentation of the app, built on Simple Mode, with no Full UI behind it.
 _Avoid_: Mobile Mode
 
-**Night Setup**:
-Simple Mode's ordered walk through the steps before imaging (plan, focus, polar alignment), whose last step starts the Session.
-_Avoid_: Guided Run, Autopilot
+**Preflight**:
+Simple Mode's ordered walk through the steps before imaging (plan, focus, polar alignment, guide), whose last step starts the Session. Not the Full UI's Checklist.
+_Avoid_: Night Setup, Guided Run, Autopilot
 
 ### Sky Album
 

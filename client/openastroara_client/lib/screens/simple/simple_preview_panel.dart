@@ -20,8 +20,8 @@ import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/simple_messages_state.dart';
-import '../../state/simple_night_setup_state.dart'
-    show SimpleModeScreen, simpleShowingProvider;
+import '../../state/simple_preflight_state.dart'
+    show SimpleModeScreen, SimplePreflightStep, SimplePreflightStepLabel, simplePreflightProvider, simpleShowingProvider;
 import '../../models/sequence/sequence_summary.dart';
 import '../../state/stats/server_internal_state_state.dart';
 import '../../theme/ara_colors.dart';
@@ -82,6 +82,7 @@ import 'simple_shell.dart'
         SimplePanel,
         SimpleSegment,
         kSimpleRailWidth,
+        simpleRailScale,
         kSimpleStatusMaxWidth,
         simpleFrost;
 
@@ -1130,7 +1131,11 @@ class _PillData {
     this.shotProgress,
     this.footProgress,
     this.spoken,
+    this.holds = true,
   });
+
+  /// Stays its minimum after its state ends (#1679).
+  final bool holds;
 
   final SimpleStatusOrigin origin;
   final String label;
@@ -1157,7 +1162,7 @@ class _PillData {
 /// it keeps the widest it has been, so a countdown or a falling temperature
 /// doesn't make it jitter (ALP-4937).
 class _StatusPill extends StatefulWidget {
-  const _StatusPill({super.key, required this.data, this.onOpen});
+  const _StatusPill({required this.data, this.onOpen});
 
   final _PillData data;
   final ValueChanged<SimpleStatusOrigin>? onOpen;
@@ -1186,6 +1191,7 @@ class _StatusPillState extends State<_StatusPill> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) => _keepWidth());
     final open = widget.onOpen == null ? null : () => widget.onOpen!(d.origin);
+    final maxWidth = kSimpleStatusMaxWidth * simpleRailScale(context);
     return Semantics(
       container: true,
       liveRegion: true,
@@ -1202,8 +1208,8 @@ class _StatusPillState extends State<_StatusPill> {
         onTap: open,
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            minWidth: math.min(_width, kSimpleStatusMaxWidth),
-            maxWidth: kSimpleStatusMaxWidth,
+            minWidth: math.min(_width, maxWidth),
+            maxWidth: maxWidth,
           ),
           child: SimplePanel(
             key: _panelKey,
@@ -1211,10 +1217,13 @@ class _StatusPillState extends State<_StatusPill> {
             child: Stack(
               children: [
                 Container(
-                  height: kSimpleStatusHeight,
+                  constraints: const BoxConstraints(
+                    minHeight: kSimpleStatusHeight,
+                  ),
                   // With the bar, the words move up so the two sit together.
                   padding: EdgeInsets.only(
-                    bottom: d.footProgress == null ? 0 : 9,
+                    top: 4,
+                    bottom: d.footProgress == null ? 4 : 13,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1224,8 +1233,7 @@ class _StatusPillState extends State<_StatusPill> {
                         child: StatusDot(color: d.dot, ring: d.ring),
                       ),
                       const SizedBox(width: AraSpace.s8),
-                      // One text, so the label keeps its room and only the
-                      // detail's tail is cut (two Flexibles halved the space).
+                      // One text: the label and detail wrap as one sentence.
                       Flexible(
                         child: Text.rich(
                           TextSpan(
@@ -1245,7 +1253,7 @@ class _StatusPillState extends State<_StatusPill> {
                             ],
                           ),
                           style: kSimpleText,
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -1676,6 +1684,9 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           AraColors.accentInfo,
           ring: true,
           spoken: l10n.shellModeFocus,
+          footProgress: af.totalSteps > 0
+              ? af.completedSteps / af.totalSteps
+              : null,
         )
       else if (bahtinov)
         _PillData(
@@ -1734,6 +1745,134 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           ),
         ),
     ];
+    // A Preflight step with nothing of its own running says it waits for the
+    // person; once its routine starts, that routine's pill speaks for it.
+    final preflight = ref.watch(simplePreflightProvider);
+    if (preflight != null) {
+      final origin = switch (preflight) {
+        SimplePreflightStep.plan => SimpleStatusOrigin.plan,
+        SimplePreflightStep.focus => SimpleStatusOrigin.focus,
+        SimplePreflightStep.polarAlign => SimpleStatusOrigin.polar,
+        SimplePreflightStep.guide => SimpleStatusOrigin.guide,
+      };
+      if (!pills.any((d) => d.origin == origin)) {
+        pills.add(
+          _PillData(
+            origin,
+            l10n.shellModePreflight,
+            l10n.previewPreflightWaiting(preflight.label(l10n)),
+            AraColors.accentBusy,
+            // The next step's pill takes over; two steps never show at once.
+            holds: false,
+          ),
+        );
+      }
+    }
+    return _StatusPillStack(pills: pills, onOpen: widget.onOpen);
+  }
+}
+
+/// How long a status pill stays at the least (#1679), and its way out.
+const _kPillMinimum = Duration(seconds: 1);
+const _kPillFade = Duration(milliseconds: 200);
+
+/// One kind of pill the stack shows: its origin's latest words, kept up after
+/// its state ends until the minimum is over.
+class _KeptPill {
+  _KeptPill(this.data, this.minimum);
+
+  _PillData data;
+  Timer minimum;
+  bool live = true;
+  bool fading = false;
+}
+
+/// The status pills, one per kind. A pill stays at least [_kPillMinimum], in
+/// its slot, then fades; a new pill of its kind takes over at once.
+class _StatusPillStack extends StatefulWidget {
+  const _StatusPillStack({required this.pills, this.onOpen});
+
+  final List<_PillData> pills;
+  final ValueChanged<SimpleStatusOrigin>? onOpen;
+
+  @override
+  State<_StatusPillStack> createState() => _StatusPillStackState();
+}
+
+class _StatusPillStackState extends State<_StatusPillStack> {
+  final _kept = <SimpleStatusOrigin, _KeptPill>{};
+  var _order = <SimpleStatusOrigin>[];
+
+  Timer _minimum(SimpleStatusOrigin origin) => Timer(_kPillMinimum, () {
+    final kept = _kept[origin];
+    if (!mounted || kept == null || kept.live) return;
+    setState(() => _leave(origin, kept));
+  });
+
+  void _leave(SimpleStatusOrigin origin, _KeptPill kept) {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _kept.remove(origin);
+    } else {
+      kept.fading = true;
+    }
+  }
+
+  void _sync() {
+    for (final d in widget.pills) {
+      final kept = _kept[d.origin];
+      if (kept == null) {
+        _kept[d.origin] = _KeptPill(d, _minimum(d.origin));
+        continue;
+      }
+      kept
+        ..data = d
+        ..live = true;
+      if (kept.fading) {
+        kept
+          ..fading = false
+          ..minimum = _minimum(d.origin);
+      }
+    }
+    final live = {for (final d in widget.pills) d.origin};
+    for (final origin in _kept.keys.toList()) {
+      final kept = _kept[origin]!;
+      if (live.contains(origin) || !kept.live) continue;
+      kept.live = false;
+      if (!kept.data.holds || !kept.minimum.isActive) _leave(origin, kept);
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _sync();
+  }
+
+  @override
+  void didUpdateWidget(_StatusPillStack oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _sync();
+  }
+
+  @override
+  void dispose() {
+    for (final kept in _kept.values) {
+      kept.minimum.cancel();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final pills = [for (final d in widget.pills) _kept[d.origin]!];
+    for (final (i, origin) in _order.indexed) {
+      final kept = _kept[origin];
+      if (kept != null && !kept.live) {
+        pills.insert(math.min(i, pills.length), kept);
+      }
+    }
+    _order = [for (final k in pills) k.data.origin];
     if (pills.isEmpty) return const SizedBox.shrink();
     // Three at most; the rest fold into "+n", which opens the first one left.
     final shown = pills.take(3).toList();
@@ -1743,15 +1882,24 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
       crossAxisAlignment: CrossAxisAlignment.end,
       spacing: AraSpace.s8,
       children: [
-        for (final d in shown)
-          _StatusPill(key: ValueKey(d.origin), data: d, onOpen: widget.onOpen),
+        for (final k in shown)
+          AnimatedOpacity(
+            key: ValueKey(k.data.origin),
+            opacity: k.fading ? 0 : 1,
+            duration: _kPillFade,
+            curve: Curves.easeOut,
+            onEnd: () {
+              if (k.fading) setState(() => _kept.remove(k.data.origin));
+            },
+            child: _StatusPill(data: k.data, onOpen: widget.onOpen),
+          ),
         if (more > 0)
           Semantics(
             button: widget.onOpen != null,
             child: SimpleTapTarget(
               onTap: widget.onOpen == null
                   ? null
-                  : () => widget.onOpen!(pills[3].origin),
+                  : () => widget.onOpen!(pills[3].data.origin),
               child: SimplePanel(
                 padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12),
                 child: ConstrainedBox(

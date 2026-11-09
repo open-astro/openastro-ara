@@ -81,7 +81,7 @@ class _SimpleMessagePillsState extends ConsumerState<SimpleMessagePills> {
     final folded = !_all && fit < messages.length;
     final shown = folded ? messages.take(fit).toList() : messages;
     // No room under the newest pill for the fold (a short window, or under
-    // the Night Setup row): the count rides at the end of that pill instead.
+    // the Preflight row): the count rides at the end of that pill instead.
     final inline = folded && widget.maxHeight < step + 44;
     final more = messages.length - fit;
     void toggle() => setState(() => _all = !_all);
