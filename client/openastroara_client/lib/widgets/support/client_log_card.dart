@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/client_error_log.dart';
+import '../../state/simple_messages_state.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
 import '../../util/stream_save_location.dart';
@@ -41,13 +42,13 @@ class _ClientLogCardState extends ConsumerState<ClientLogCard> {
       if (!mounted || savePath == null) return;
       await log.exportTo(savePath);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Saved $savePath')));
+      userNotifier(context)('Saved $savePath');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(context.l10n, e, action: 'save the log'))),
+      userNotifier(context)(
+        friendlyError(context.l10n, e, action: 'save the log'),
+        error: true,
+        snackBarRed: false,
       );
     } finally {
       if (mounted) setState(() => _busy = false);

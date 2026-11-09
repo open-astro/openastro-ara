@@ -6,6 +6,8 @@ import 'dart:io';
 import 'package:openastroara/models/bug_report_preparation.dart';
 import 'package:openastroara/services/bug_report_api.dart';
 import 'package:openastroara/services/client_error_log.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/support/bug_report_state.dart';
 import 'package:openastroara/widgets/support/bug_report_card.dart';
 
@@ -89,9 +91,10 @@ Directory _freshDir() {
 }
 
 Widget _host(_FakeBugReportClient api,
-        {ClientErrorLog? log, Directory? dir, Duration packingTimeout = const Duration(minutes: 15)}) =>
+        {ClientErrorLog? log, Directory? dir, Duration packingTimeout = const Duration(minutes: 15), bool simple = false}) =>
     ProviderScope(
       overrides: [
+        if (simple) simpleModeActiveProvider.overrideWithValue(true),
         bugReportApiProvider.overrideWith((ref) {
           ref.onDispose(api.close);
           return api;
@@ -102,11 +105,11 @@ Widget _host(_FakeBugReportClient api,
         home: Scaffold(
           // A canned Save-As path stands in for the OS dialog (no platform
           // channel under widget tests); the streaming download receives it.
-          body: BugReportCard(
+          body: SingleChildScrollView(child: BugReportCard(
             savePathPicker: (_, name) async => '${(dir ?? _freshDir()).path}/$name',
             pollInterval: const Duration(milliseconds: 10),
             packingTimeout: packingTimeout,
-          ),
+          )),
         ),
       ),
     );
@@ -387,5 +390,97 @@ void main() {
     expect(find.text('Before you share this bug report'), findsNothing);
     expect(find.textContaining('the rig is still packing the logs'), findsOneWidget);
     expect(api.downloadCalls, 0);
+  });
+
+  group('Simple Mode', () {
+    void expectNoPopup(WidgetTester tester) {
+      expect(tester.state<NavigatorState>(find.byType(Navigator)).canPop(), isFalse, reason: 'no dialog or dropdown route');
+      expect(find.byType(SnackBar), findsNothing);
+    }
+
+    List<SimpleMessage> pills(WidgetTester tester) =>
+        ProviderScope.containerOf(tester.element(find.byType(BugReportCard))).read(simpleMessagesProvider);
+
+    Future<void> settle(WidgetTester tester) async {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    Future<void> tapPrepare(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.tap(find.widgetWithText(FilledButton, 'Prepare & download'));
+      await settle(tester);
+    }
+
+    testWidgets('the review is inline and Download anyway downloads, ending in a pill', (tester) async {
+      final api = _FakeBugReportClient();
+      await tester.pumpWidget(_host(api, simple: true));
+      await tapPrepare(tester);
+      expectNoPopup(tester);
+      expect(find.text('Before you share this bug report'), findsOneWidget);
+      expect(api.downloadCalls, 0, reason: 'nothing before the review is answered');
+      await tester.ensureVisible(find.byKey(const Key('bug-report-review-confirm')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('bug-report-review-confirm')));
+      await settle(tester);
+      expectNoPopup(tester);
+      expect(api.downloadCalls, 1);
+      expect(find.text('Before you share this bug report'), findsNothing);
+      expect(pills(tester).single.title, startsWith('Saved bugreport-x.zip'));
+      await tester.pump(kSimpleResultLife); // the pill's timer
+    });
+
+    testWidgets('Cancel on the inline review downloads nothing', (tester) async {
+      final api = _FakeBugReportClient();
+      await tester.pumpWidget(_host(api, simple: true));
+      await tapPrepare(tester);
+      await tester.ensureVisible(find.byKey(const Key('bug-report-review-cancel')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('bug-report-review-cancel')));
+      await settle(tester);
+      expect(api.downloadCalls, 0);
+      expect(find.text('Before you share this bug report'), findsNothing);
+    });
+
+    testWidgets('Covers and Sharing are radio rows at least 44 px, and the pick is sent', (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final api = _FakeBugReportClient();
+      await tester.pumpWidget(_host(api, simple: true));
+      expect(find.byType(DropdownButton<String>), findsNothing);
+      expect(find.byType(DropdownButton<int>), findsNothing);
+      expect(tester.getSize(find.byKey(const Key('bug-report-sharing-2'))).height, greaterThanOrEqualTo(44));
+      expect(tester.getSize(find.byKey(const Key('bug-report-range-1'))).height, greaterThanOrEqualTo(44));
+      await tester.tap(find.byKey(const Key('bug-report-sharing-2')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('bug-report-range-3')));
+      await tester.pump();
+      expectNoPopup(tester);
+      await tester.tap(find.widgetWithText(FilledButton, 'Prepare & download'));
+      await settle(tester);
+      expect(api.lastMode, 'redacted');
+      expect(api.sinceSent, isFalse, reason: 'Ara logs only has no range');
+    });
+
+    testWidgets('a failure is an error pill', (tester) async {
+      await tester.pumpWidget(_host(_FakeBugReportClient(throwOnPrepare: true), simple: true));
+      await tapPrepare(tester);
+      expectNoPopup(tester);
+      final pill = pills(tester).single;
+      expect(pill.kind, SimpleMessageKind.error);
+      expect(pill.title, startsWith('Bug report failed'));
+    });
+  });
+
+  testWidgets('the Full UI still reviews in a dialog', (tester) async {
+    await tester.pumpWidget(_host(_FakeBugReportClient()));
+    await tester.tap(find.widgetWithText(FilledButton, 'Prepare & download'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.byType(DropdownButton<String>), findsOneWidget);
   });
 }
