@@ -161,7 +161,11 @@ namespace OpenAstroAra.Test {
 
             await wheel.Service.ChangeFilterAsync(new FilterChangeRequestDto(2), null, CancellationToken.None);
             wheel.Position = "2";
-            await wheel.Service.ChangeFilter(new FilterInfo("R", 0, 1), token: CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5)).ContinueWith(_ => { }, TaskScheduler.Default);
+            await Task.Delay(300);
+
+            var change = wheel.Service.ChangeFilter(new FilterInfo("R", 0, 1), token: CancellationToken.None);
+            wheel.Position = "1";
+            await change.WaitAsync(TimeSpan.FromSeconds(5));
             await Task.Delay(300);
 
             Assert.That(_moves, Is.Empty);
