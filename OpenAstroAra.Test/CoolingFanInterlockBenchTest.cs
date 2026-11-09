@@ -366,7 +366,7 @@ namespace OpenAstroAra.Test {
                 : path.EndsWith("/canwrite", StringComparison.Ordinal) ? "true"
                 : null);
             box.RespondWithQuery((path, query) =>
-                !fanReadable && path.EndsWith("/getswitchvalue", StringComparison.Ordinal) && query.Contains("id=1", StringComparison.Ordinal)
+                !fanReadable && path.EndsWith("/getswitchvalue", StringComparison.Ordinal) && System.Text.RegularExpressions.Regex.IsMatch(query, "(^|[?&])id=1(&|$)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
                     ? ScriptedAlpacaDevice.Error("port busy") : null);
             var camera = new Mock<ICameraService>();
             camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Camera(coolerOn: true));
