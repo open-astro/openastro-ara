@@ -11,7 +11,6 @@ import '../../theme/ara_metrics.dart';
 import '../../widgets/inline_choices.dart';
 import '../../widgets/storage/storage_drive_dialog.dart';
 import '../../widgets/support/bug_report_card.dart';
-import '../../widgets/support/client_log_card.dart';
 import '../settings/panels/storage_panel.dart';
 
 /// Settings › Rig › Logs & bug report: the Full UI's two save actions, hosted
@@ -28,7 +27,7 @@ class SimpleLogsBlock extends StatelessWidget {
         context.l10n.shellLogs,
         style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
       ),
-      const Column(children: [BugReportCard(), ClientLogCard()]),
+      const BugReportCard(),
     ],
   );
 }

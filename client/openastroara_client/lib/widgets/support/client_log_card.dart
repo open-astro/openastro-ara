@@ -31,28 +31,9 @@ class _ClientLogCardState extends ConsumerState<ClientLogCard> {
   bool _busy = false;
 
   Future<void> _save() async {
-    final log = ref.read(clientErrorLogProvider);
     setState(() => _busy = true);
-    try {
-      final pick = widget.savePathPicker ?? pickStreamSavePath;
-      final savePath = await pick(
-        'Choose where to save the client log',
-        ClientLogCard.suggestedFileName,
-      );
-      if (!mounted || savePath == null) return;
-      await log.exportTo(savePath);
-      if (!mounted) return;
-      userNotifier(context)('Saved $savePath');
-    } catch (e) {
-      if (!mounted) return;
-      userNotifier(context)(
-        friendlyError(context.l10n, e, action: 'save the log'),
-        error: true,
-        snackBarRed: false,
-      );
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    await saveClientLog(context, ref, widget.savePathPicker);
+    if (mounted) setState(() => _busy = false);
   }
 
   @override
@@ -107,5 +88,32 @@ class _ClientLogCardState extends ConsumerState<ClientLogCard> {
             '${s.suppressedRepeats > 0 ? ', ${s.suppressedRepeats} suppressed' : ''})'
         : '';
     return '${s.entries} $noun recorded$session. $tail';
+  }
+}
+
+/// Asks where, then saves this device's error log; says how it went.
+Future<void> saveClientLog(
+  BuildContext context,
+  WidgetRef ref,
+  Future<String?> Function(String title, String fileName)? picker,
+) async {
+  final log = ref.read(clientErrorLogProvider);
+  try {
+    final pick = picker ?? pickStreamSavePath;
+    final savePath = await pick(
+      'Choose where to save the client log',
+      ClientLogCard.suggestedFileName,
+    );
+    if (!context.mounted || savePath == null) return;
+    await log.exportTo(savePath);
+    if (!context.mounted) return;
+    userNotifier(context)('Saved $savePath');
+  } catch (e) {
+    if (!context.mounted) return;
+    userNotifier(context)(
+      friendlyError(context.l10n, e, action: 'save the log'),
+      error: true,
+      snackBarRed: false,
+    );
   }
 }

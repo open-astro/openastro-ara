@@ -2750,7 +2750,12 @@ void main() {
     await _openSection(tester, 'Rig');
     await tester.ensureVisible(find.text('Send me a bug report')); // Rig scrolls
     expect(find.text('Send me a bug report'), findsOneWidget);
-    expect(find.text('Save client log'), findsOneWidget, reason: 'savable with no rig');
+    await tester.tap(find.byType(DropdownButton<String>).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text("This app's error log").last);
+    await tester.pumpAndSettle();
+    final save = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Save client log'));
+    expect(save.onPressed, isNotNull, reason: 'savable with no rig');
     expect(find.byType(SettingsShell), findsNothing);
     expect(c.read(simpleModeProvider).value, isTrue);
   });

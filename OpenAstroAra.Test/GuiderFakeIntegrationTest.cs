@@ -2516,6 +2516,14 @@ namespace OpenAstroAra.Test {
             Assert.That(op.GetProperty("ok").GetBoolean(), Is.True, "guiding began; the settle timeout does not fail the start");
         }
 
+        [TestCase("camera has no gain control", true)]
+        [TestCase("Camera has no gain control.", true)]
+        [TestCase("camera not connected", false)]
+        [TestCase(null, false)]
+        public void A_camera_with_no_gain_control_is_routine_and_any_other_refusal_is_not(string? message, bool routine) {
+            Assert.That(OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PHD2Guider.CameraHasNoGainControl(message), Is.EqualTo(routine));
+        }
+
         [Test]
         public async Task A_rest_start_retries_after_its_own_stop_capture_answers_with_a_settle_error() {
             // #1664 review — the retry stops the guider; PHD2 answers stop_capture with a SettleDone

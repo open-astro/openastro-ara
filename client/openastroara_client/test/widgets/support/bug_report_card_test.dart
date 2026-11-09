@@ -132,6 +132,13 @@ void main() {
         reason: 'the action sits under the text');
   });
 
+  testWidgets("the full UI's Sharing does not offer the app's error log", (tester) async {
+    await tester.pumpWidget(_host(_FakeBugReportClient()));
+    await tester.tap(find.byType(DropdownButton<String>));
+    await tester.pumpAndSettle();
+    expect(find.text("This app's error log"), findsNothing);
+  });
+
   testWidgets('renders the prepare action', (tester) async {
     await tester.pumpWidget(_host(_FakeBugReportClient()));
     expect(find.text('Send me a bug report'), findsOneWidget);
@@ -457,6 +464,23 @@ void main() {
       expect(find.byType(DropdownButton<int>), findsOneWidget);
       expect(find.byKey(const Key('bug-report-sharing-0')), findsNothing);
       expect(find.byKey(const Key('bug-report-range-0')), findsNothing);
+    });
+
+    testWidgets("Sharing offers this app's error log, and picking it saves that log", (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final log = _MemLog();
+      await tester.pumpWidget(_host(_FakeBugReportClient(), simple: true, log: log));
+      await tester.tap(find.byType(DropdownButton<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("This app's error log").last);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DropdownButton<int>), findsNothing, reason: 'Covers is about the rig logs');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save client log'));
+      await settle(tester);
+      expect(log.exports, hasLength(1));
     });
 
     testWidgets('a failure is an error pill', (tester) async {

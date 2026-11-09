@@ -141,6 +141,10 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// on an ASI290MM (gain 570 of 600, 2026-10-17).</summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Best-effort push boundary: a socket drop or daemon refusal is logged and skipped so the gain can never fail a connect or a profile push.")]
+        /// <summary>A camera with no gain (a simulator, some guide cameras) refuses the push by design.</summary>
+        public static bool CameraHasNoGainControl(string? message) =>
+            message?.Contains("no gain control", StringComparison.OrdinalIgnoreCase) == true;
+
         private async Task PushCameraGainAsync(CancellationToken ct) {
             var guider = profileService.ActiveProfile.GuiderSettings;
             var msg = BuildCameraGainMessage(guider);
@@ -148,7 +152,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             try {
                 var resp = await SendMessage<GenericPhdMethodResponse>(msg, EquipmentRpcTimeoutMs, notifyOnError: false);
                 if (resp?.error != null) {
-                    Logger.Warning($"PHD2 - {CameraGainSetter} {gain}% not applied: {resp.error}");
+                    if (CameraHasNoGainControl(resp.error.message)) {
+                        Logger.Info($"PHD2 - guide camera has no gain control; {gain}% not applied.");
+                    } else {
+                        Logger.Warning($"PHD2 - {CameraGainSetter} {gain}% not applied: {resp.error.message}");
+                    }
                 } else {
                     Logger.Info($"PHD2 - guide camera gain set to {gain}%.");
                 }

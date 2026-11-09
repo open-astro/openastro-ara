@@ -432,11 +432,11 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         await showCustomTargetDialog(context, initialText: q);
       case SearchRouteKind.catalog:
       case SearchRouteKind.engine:
-        _pushCmd(route.command!);
+        _pushCmd(searchCommandFor(route.command!, bare: widget.bare));
       case SearchRouteKind.resolve:
         final api = ref.read(targetResolveApiProvider);
         if (api == null) {
-          _pushCmd(route.command!);
+          _pushCmd(searchCommandFor(route.command!, bare: widget.bare));
           return;
         }
         final notify = userNotifier(context);
@@ -445,20 +445,20 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         // A resolved object the bundle already lists is that row (#1267
         // item 4), not a second nameless position beside it.
         if (routeResolved(applyImagingRegions(catalog), r) case final goto?) {
-          _pushCmd(goto);
+          _pushCmd(searchCommandFor(goto, bare: widget.bare));
           return;
         }
         if (r.resolved) {
           // Simple Mode: centre the sky on it, no dialog.
           final goto = widget.bare ? resolvedGoto(r) : null;
           if (goto != null) {
-            _pushCmd(goto);
+            _pushCmd(searchCommandFor(goto, bare: widget.bare));
             return;
           }
           await showCustomTargetDialog(context, resolved: r);
           return;
         }
-        _pushCmd(route.command!);
+        _pushCmd(searchCommandFor(route.command!, bare: widget.bare));
         final m = searchFallbackMessage(r);
         if (m != null) notify(m, error: true, snackBarRed: false);
     }

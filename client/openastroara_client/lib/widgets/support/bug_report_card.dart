@@ -78,6 +78,15 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
   bool _busy = false;
   // §54.3 — the spec's default is "Include everything"; the user picks before preparing.
   String _mode = 'full';
+
+  /// Simple Mode's extra Sharing choice: only this device's log, no rig needed.
+  static const _clientLogOnly = 'client_log';
+
+  Future<void> _saveClientLog() async {
+    setState(() => _busy = true);
+    await saveClientLog(context, ref, widget.savePathPicker);
+    if (mounted) setState(() => _busy = false);
+  }
   int _rangeIndex = 0;
   // Bytes read so far while a whole-rig bundle packs; null when not packing.
   int? _packed;
@@ -254,6 +263,8 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
     // download. Also gates the button when no server is connected.
     final api = ref.watch(bugReportApiProvider);
     final review = _review;
+    final simple = ref.watch(simpleModeActiveProvider);
+    final logOnly = _mode == _clientLogOnly;
     return Card(
       margin: const EdgeInsets.all(8),
       child: Padding(
@@ -279,6 +290,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                   if (_packed != null)
                     Text('Packing the logs on the rig… ${_humanSize(_packed!)} read',
                         style: theme.textTheme.bodySmall),
+                  if (!logOnly) ...[
                   const SizedBox(height: 4),
                   Row(
                     children: [
@@ -301,6 +313,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                       ),
                     ],
                   ),
+                  ],
                   const SizedBox(height: 4),
                   // §54.3 sharing mode: chosen before the bundle is built, so the
                   // ZIP the user downloads never held what the mode scrubs.
@@ -320,6 +333,11 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                                 value: m.$1,
                                 child: Tooltip(message: m.$3, child: Text(m.$2, overflow: TextOverflow.ellipsis)),
                               ),
+                            if (simple)
+                              const DropdownMenuItem(
+                                value: _clientLogOnly,
+                                child: Text("This app's error log", overflow: TextOverflow.ellipsis),
+                              ),
                           ],
                         ),
                       ),
@@ -328,15 +346,15 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                 ],
               ),
             action: FilledButton.icon(
-              onPressed: (_busy || api == null) ? null : _run,
+              onPressed: _busy ? null : logOnly ? _saveClientLog : (api == null ? null : _run),
               icon: _busy
                   ? const SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.bug_report, size: 18),
-              label: const Text('Prepare & download'),
+                  : Icon(logOnly ? Icons.save_alt : Icons.bug_report, size: 18),
+              label: Text(logOnly ? 'Save client log' : 'Prepare & download'),
             ),
             ),
             if (review != null)
