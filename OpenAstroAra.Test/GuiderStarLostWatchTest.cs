@@ -524,12 +524,12 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_stop_by_the_user_during_the_wait_ends_the_probing() {
-            using var rig = new Rig(runActive: true);
+            using var rig = new Rig(runActive: true, recoverAfter: RoomyWindow);
             await using var fake = await LostStarPastTheGraceAsync(rig).ConfigureAwait(false);
             fake.OnRpc("get_star_centroids", _ => Stars());
 
             await fake.BroadcastAsync(PhdEvents.GuidingStopped()).ConfigureAwait(false);
-            await Task.Delay(Grace * 4).ConfigureAwait(false);
+            await Task.Delay(RoomyWindow + Grace).ConfigureAwait(false);
 
             Assert.That(fake.ReceivedMethods, Does.Not.Contain("get_star_centroids"), "the user stopped guiding: the pause is theirs");
             Assert.That(rig.Centered(), Is.Zero);
