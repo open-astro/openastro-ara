@@ -26,7 +26,6 @@ We decided during the port ([`design/PORT_PLAYBOOK.md`](../../design/PORT_PLAYBO
 
 - One solver to tune, document and bundle; the setup wizard recommends databases from the rig's field of view.
 - The databases share the rig's storage policy with the frames and profiles.
-- NINA's other solver classes are still in `OpenAstroAra.PlateSolving/Solvers`, reachable only from a legacy profile value the daemon never writes. [#1701](https://github.com/open-astro/openastro-ara/issues/1701) tracks removing them.
 
 ## How to reverse
 

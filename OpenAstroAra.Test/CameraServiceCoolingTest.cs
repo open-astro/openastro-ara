@@ -147,7 +147,9 @@ namespace OpenAstroAra.Test {
         private static async Task<(CameraService Svc, ConcurrentQueue<TimeSpan> Delays)> ConnectedAsync(
                 SimCamera cam, Func<ICoolingFanActuator?>? fan = null, Action<int>? onDelay = null,
                 Func<int, Task>? delayGate = null, TimeSpan? refreshPeriod = null) {
-            var svc = refreshPeriod is TimeSpan period ? new CameraService(fan: fan) { RefreshPeriod = period } : new CameraService(fan: fan);
+            var store = new InMemoryProfileStore();
+            store.PutCoolingFan(new CoolingFanDto("sw-5", 1));
+            var svc = refreshPeriod is TimeSpan period ? new CameraService(fan: fan, profileStore: store) { RefreshPeriod = period } : new CameraService(fan: fan, profileStore: store);
             var delays = new ConcurrentQueue<TimeSpan>();
             svc.CoolingDelay = (d, ct) => {
                 delays.Enqueue(d);

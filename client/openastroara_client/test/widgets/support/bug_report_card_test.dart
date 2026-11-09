@@ -3,11 +3,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'dart:io';
 
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/bug_report_preparation.dart';
 import 'package:openastroara/services/bug_report_api.dart';
 import 'package:openastroara/services/client_error_log.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/support/bug_report_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/support/bug_report_card.dart';
+import 'package:openastroara/widgets/support/support_card_row.dart';
 
 /// In-memory client log: exportTo records the path instead of touching disk
 /// (real file IO never completes inside a widget test's fake-async zone).
@@ -89,9 +94,10 @@ Directory _freshDir() {
 }
 
 Widget _host(_FakeBugReportClient api,
-        {ClientErrorLog? log, Directory? dir, Duration packingTimeout = const Duration(minutes: 15)}) =>
+        {ClientErrorLog? log, Directory? dir, Duration packingTimeout = const Duration(minutes: 15), bool simple = false, Locale? locale}) =>
     ProviderScope(
       overrides: [
+        if (simple) simpleModeActiveProvider.overrideWithValue(true),
         bugReportApiProvider.overrideWith((ref) {
           ref.onDispose(api.close);
           return api;
@@ -99,19 +105,67 @@ Widget _host(_FakeBugReportClient api,
         clientErrorLogProvider.overrideWithValue(log ?? _MemLog()),
       ],
       child: MaterialApp(
+        locale: locale,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           // A canned Save-As path stands in for the OS dialog (no platform
           // channel under widget tests); the streaming download receives it.
-          body: BugReportCard(
+          body: SingleChildScrollView(child: BugReportCard(
             savePathPicker: (_, name) async => '${(dir ?? _freshDir()).path}/$name',
             pollInterval: const Duration(milliseconds: 10),
             packingTimeout: packingTimeout,
-          ),
+          )),
         ),
       ),
     );
 
 void main() {
+  testWidgets('large text moves the action under the text in a column that fits it at 1x', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(size: Size(800, 600), textScaler: TextScaler.linear(2)),
+          child: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 640,
+                child: SupportCardRow(
+                  icon: const Icon(Icons.bug_report),
+                  body: (_) => const Text('Body', key: Key('body')),
+                  action: FilledButton(onPressed: () {}, child: const Text('Act', key: Key('act'))),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.getTopLeft(find.byKey(const Key('act'))).dy, greaterThan(tester.getBottomLeft(find.byKey(const Key('body'))).dy));
+  });
+
+  testWidgets('the prepare action moves under the text in a phone-width column', (tester) async {
+    // Inline in Simple Mode's Settings on a phone, the column is this narrow.
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(_host(_FakeBugReportClient()));
+
+    expect(tester.takeException(), isNull, reason: 'nothing overflows');
+    final action = find.widgetWithText(FilledButton, 'Prepare & download');
+    expect(tester.getTopLeft(action).dy, greaterThan(tester.getBottomLeft(find.text('Send me a bug report')).dy),
+        reason: 'the action sits under the text');
+  });
+
+  testWidgets("the full UI's Sharing does not offer the app's error log", (tester) async {
+    await tester.pumpWidget(_host(_FakeBugReportClient()));
+    await tester.tap(find.byType(DropdownButton<String>));
+    await tester.pumpAndSettle();
+    expect(find.text("This app's error log"), findsNothing);
+  });
+
   testWidgets('renders the prepare action', (tester) async {
     await tester.pumpWidget(_host(_FakeBugReportClient()));
     expect(find.text('Send me a bug report'), findsOneWidget);
@@ -373,5 +427,150 @@ void main() {
     expect(find.text('Before you share this bug report'), findsNothing);
     expect(find.textContaining('the rig is still packing the logs'), findsOneWidget);
     expect(api.downloadCalls, 0);
+  });
+
+  group('Simple Mode', () {
+    void expectNoPopup(WidgetTester tester) {
+      expect(tester.state<NavigatorState>(find.byType(Navigator)).canPop(), isFalse, reason: 'no dialog or dropdown route');
+      expect(find.byType(SnackBar), findsNothing);
+    }
+
+    List<SimpleMessage> pills(WidgetTester tester) =>
+        ProviderScope.containerOf(tester.element(find.byType(BugReportCard))).read(simpleMessagesProvider);
+
+    Future<void> settle(WidgetTester tester) async {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    Future<void> tapPrepare(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.tap(find.widgetWithText(FilledButton, 'Prepare & download'));
+      await settle(tester);
+    }
+
+    testWidgets('the review opens scrolled in, focused and announced, in Brazilian Portuguese', (tester) async {
+      tester.view.physicalSize = const Size(800, 300);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_host(_FakeBugReportClient(), simple: true, locale: const Locale('pt', 'BR')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Preparar e baixar'));
+      await settle(tester);
+      const title = 'Antes de compartilhar este relatório de erro';
+      expect(find.text(title), findsOneWidget);
+      expect(find.text('Baixar mesmo assim'), findsOneWidget);
+      expect(tester.takeAnnouncements().map((a) => a.message), contains(title));
+      final top = tester.getRect(find.text(title)).top;
+      expect(top, inInclusiveRange(0, 300), reason: 'taller than the view, it keeps its title in sight');
+      await tester.tap(find.byKey(const Key('bug-report-review-cancel')));
+      await settle(tester);
+    });
+
+    testWidgets('the review is inline and Download anyway downloads, ending in a pill', (tester) async {
+      final api = _FakeBugReportClient();
+      await tester.pumpWidget(_host(api, simple: true));
+      await tapPrepare(tester);
+      expectNoPopup(tester);
+      expect(find.text('Before you share this bug report'), findsOneWidget);
+      expect(api.downloadCalls, 0, reason: 'nothing before the review is answered');
+      await tester.ensureVisible(find.byKey(const Key('bug-report-review-confirm')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('bug-report-review-confirm')));
+      await settle(tester);
+      expectNoPopup(tester);
+      expect(api.downloadCalls, 1);
+      expect(find.text('Before you share this bug report'), findsNothing);
+      expect(pills(tester).single.title, startsWith('Saved bugreport-x.zip'));
+      await tester.pump(kSimpleResultLife); // the pill's timer
+    });
+
+    testWidgets('Cancel on the inline review downloads nothing', (tester) async {
+      final api = _FakeBugReportClient();
+      await tester.pumpWidget(_host(api, simple: true));
+      await tapPrepare(tester);
+      await tester.ensureVisible(find.byKey(const Key('bug-report-review-cancel')));
+      await settle(tester);
+      await tester.tap(find.byKey(const Key('bug-report-review-cancel')));
+      await settle(tester);
+      expect(api.downloadCalls, 0);
+      expect(find.text('Before you share this bug report'), findsNothing);
+    });
+
+    testWidgets('In Simple Mode Covers and Sharing are combo boxes, and no radio rows', (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final api = _FakeBugReportClient();
+      await tester.pumpWidget(_host(api, simple: true));
+      expect(find.byType(DropdownButton<String>), findsOneWidget);
+      expect(find.byType(DropdownButton<int>), findsOneWidget);
+      expect(find.byKey(const Key('bug-report-sharing-0')), findsNothing);
+      expect(find.byKey(const Key('bug-report-range-0')), findsNothing);
+    });
+
+    testWidgets("Sharing offers this app's error log, and picking it saves that log", (tester) async {
+      tester.view.physicalSize = const Size(800, 1600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final log = _MemLog();
+      await tester.pumpWidget(_host(_FakeBugReportClient(), simple: true, log: log));
+      await tester.tap(find.byType(DropdownButton<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text("This app's error log").last);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DropdownButton<int>), findsNothing, reason: 'Covers is about the rig logs');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save client log'));
+      await settle(tester);
+      expect(log.exports, hasLength(1));
+    });
+
+    testWidgets('a failure is an error pill', (tester) async {
+      await tester.pumpWidget(_host(_FakeBugReportClient(throwOnPrepare: true), simple: true));
+      await tapPrepare(tester);
+      expectNoPopup(tester);
+      final pill = pills(tester).single;
+      expect(pill.kind, SimpleMessageKind.error);
+      expect(pill.title, startsWith('Bug report failed'));
+    });
+  });
+
+  testWidgets('the Full UI still reviews in a dialog', (tester) async {
+    await tester.pumpWidget(_host(_FakeBugReportClient()));
+    await tester.tap(find.widgetWithText(FilledButton, 'Prepare & download'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.byType(DropdownButton<String>), findsOneWidget);
+  });
+
+  testWidgets("the card's own words are in Brazilian Portuguese", (tester) async {
+    await tester.pumpWidget(_host(_FakeBugReportClient(), simple: true, locale: const Locale('pt', 'BR')));
+    await tester.pumpAndSettle();
+    for (final words in ['Enviar um relatório de erro', 'Abrange: ', 'Compartilhar: ', 'Última noite (setup inteiro)', 'Incluir tudo', 'Preparar e baixar']) {
+      expect(find.text(words), findsOneWidget, reason: words);
+    }
+    expect(find.text('Send me a bug report'), findsNothing);
+  });
+
+  for (final (simple, looks) in const [(true, 'grey in Simple Mode'), (false, 'theme blue in the full UI')]) {
+    testWidgets('the card icon is $looks', (tester) async {
+      await tester.pumpWidget(_host(_FakeBugReportClient(), simple: simple));
+      await tester.pumpAndSettle();
+      final icon = tester.widget<Icon>(find.byIcon(Icons.bug_report_outlined));
+      final primary = Theme.of(tester.element(find.byIcon(Icons.bug_report_outlined))).colorScheme.primary;
+      expect(icon.color, simple ? AraColors.textSecondary : primary);
+    });
+  }
+
+  testWidgets("Simple Mode's Covers and Sharing are at least 44 px tall", (tester) async {
+    await tester.pumpWidget(_host(_FakeBugReportClient(), simple: true));
+    await tester.pumpAndSettle();
+    for (final d in [find.byType(DropdownButton<int>), find.byType(DropdownButton<String>)]) {
+      expect(tester.getSize(d).height, greaterThanOrEqualTo(44));
+    }
   });
 }

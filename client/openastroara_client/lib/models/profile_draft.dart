@@ -1,3 +1,5 @@
+import 'switch_device.dart' show CoolingFan;
+
 /// Mutable working copy of a profile being built by the §37 wizard.
 /// Every field is nullable / has a default — the wizard can be exited at any
 /// stage and ARA fills missing fields with the defaults documented in §37.8.
@@ -47,6 +49,10 @@ class ProfileDraft {
   // please review in Settings" markers per §37.8.
   final Set<int> skippedScreens = <int>{};
 
+  // #1700 — the camera's cooling fan. Null = not touched: Save keeps the base
+  // profile's choice (the wizard's new profile clones it).
+  CoolingFan? coolingFan;
+
   /// §37 clear-field affordance — [ClearableField] keys the user explicitly
   /// reset. The wizard's new profile CLONES the active one, and the mappers
   /// treat a blank field as "keep the cloned value" — so without this, an old
@@ -66,6 +72,11 @@ class ProfileDraft {
   // shows "Pegasus UPB" rather than the raw id (review r2): the screen widget
   // is recreated on every visit, the draft persists for the session.
   final Map<String, String> deviceNames = <String, String>{};
+
+  // The Alpaca endpoints ("host:port/N", one per host spelling the daemon
+  // reported) behind an assigned device, keyed by uniqueId. The Guiding step
+  // compares them with the Guide Camera pick: one camera cannot do both jobs.
+  final Map<String, List<String>> deviceEndpoints = <String, List<String>>{};
 
   // Server id of the profile this draft was persisted as, set on the first
   // successful create during Save. A retry after a mid-save failure re-uses it
@@ -310,8 +321,6 @@ class SafetyPolicies {
 /// Mirrors the safety section's `UnsafeAction` (mapped in wizard_save) — what to
 /// do when the safety monitor reports conditions are unsafe.
 enum UnsafeConditionAction { pauseAndPark, parkOnly, abortAndPark, ignore }
-
-
 
 class SitePreferences {
   // Wizard subset that maps onto the profile's site section. Nullable (null keeps

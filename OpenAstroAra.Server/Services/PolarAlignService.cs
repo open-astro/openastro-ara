@@ -374,6 +374,11 @@ namespace OpenAstroAra.Server.Services {
                     PolarAlignStages.Coarse => settings.UseHome ? "homing" : "seeding",
                     _ => FineStartHomesFirst(settings) ? "homing" : "seeding",
                 };
+                // #1711: a capture the previous run abandoned may still be exposing; the guider refuses a new one until it ends.
+                await guiderClient.WaitForCaptureIdleAsync(ct).ConfigureAwait(false);
+                lock (_gate) {
+                    _abandonedCaptureDebts.Clear(); // idle: that capture's event has been delivered, nothing is owed
+                }
                 await guiderClient.SetPaSessionAsync(active: true, timeoutS: LeaseTimeoutSeconds, ct).ConfigureAwait(false);
                 int gen;
                 int startSeq;
@@ -400,8 +405,8 @@ namespace OpenAstroAra.Server.Services {
                     _runFrameSize = null; // read afresh per run — the guide camera may have changed since the last one
                     gen = ++_generation;
                     _lastCaptureFault = null; // fresh run — stale capture faults must not color its failures
-                    // _abandonedCaptureDebts is deliberately NOT reset: a capture abandoned by the
-                    // JUST-STOPPED run may still deliver its event into this run (review r2).
+                    // _abandonedCaptureDebts was cleared above, after the guider reported idle: a capture
+                    // abandoned by the just-stopped run has delivered its event by now.
                     startSeq = ++_startSeq;
                 }
                 _runCts = new CancellationTokenSource();
@@ -910,6 +915,10 @@ namespace OpenAstroAra.Server.Services {
             public double ExposureSeconds { get; set; }
             public TimeSpan Capture { get; set; }
             public TimeSpan? Solve { get; set; }
+            /// <summary>Ask CaptureAndSolveAsync to keep the frame when it fails to solve (the seed's last attempt).</summary>
+            public bool KeepUnsolvedFrame { get; set; }
+            /// <summary>The unsolved frame kept for the focal-length measurement; the caller deletes it.</summary>
+            public string? KeptFramePath { get; set; }
         }
 
         // ── capture + solve plumbing ─────────────────────────────────────────────────────────
@@ -920,12 +929,14 @@ namespace OpenAstroAra.Server.Services {
                 LiveCapture capture, string frameId,
                 (double RaDeg, double DecDeg)? hint, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
             var anyFrameReachedSolver = false;
+            string? keptFrame = null;
             for (var attempt = 1; attempt <= SeedSolveAttempts; attempt++) {
-                var timing = new FrameTiming();
+                var timing = new FrameTiming { KeepUnsolvedFrame = attempt == SeedSolveAttempts };
                 // One id per attempt, on frame_started and frame_complete alike.
                 var attemptId = frameId + "-" + attempt.ToString(CultureInfo.InvariantCulture);
                 var s = await capture(attemptId, hint, settings, timing, ct).ConfigureAwait(false);
                 await CompleteFrameAsync(gen, attemptId, s, timing, s.Success ? 0 : attempt).ConfigureAwait(false);
+                keptFrame = timing.KeptFramePath;
                 if (s.Success) {
                     return s;
                 }
@@ -951,8 +962,28 @@ namespace OpenAstroAra.Server.Services {
                 throw new RoutineFailedException("capture_rejected",
                     $"the {frameId} seed frame could not be captured after {SeedSolveAttempts} attempts: {captureFault}");
             }
+            var measured = keptFrame is null ? null : await MeasureAndDiscardAsync(keptFrame, settings, hint, ct).ConfigureAwait(false);
             throw new RoutineFailedException("seed_solve_failed",
-                $"the {frameId} seed frame failed to solve after {SeedSolveAttempts} attempts — check focus, sky conditions, and the optics configuration of the camera in use");
+                $"the {frameId} seed frame failed to solve after {SeedSolveAttempts} attempts — check focus, sky conditions, and the optics configuration of the camera in use"
+                + (measured is { } mm ? $". With no scale hint the frame solves at a scale that implies a guide focal length of about {mm:0} mm: set it in Settings → Guiding if that is your guide scope" : ""));
+        }
+
+        /// <summary>#1715 — one solve with no scale hint on the last unsolved seed frame; null when it does not solve
+        /// or when the scale it found matches the profile's focal length (the optics are not the problem).</summary>
+        [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "A best-effort diagnostic on a failing routine: its own fault must not hide the seed failure it explains.")]
+        private async Task<double?> MeasureAndDiscardAsync(
+                string framePath, PolarAlignSettingsDto settings, (double RaDeg, double DecDeg)? hint, CancellationToken ct) {
+            try {
+                var binning = PolarAlignBinning.Resolve(settings.Binning, _runFrameSize);
+                var measured = await _solver.MeasureFocalLengthAsync(framePath, binning, hint?.RaDeg, hint?.DecDeg, ct).ConfigureAwait(false);
+                var configured = _profileStore.GetPhd2Settings().GuideFocalLength;
+                return measured is { } mm && !(configured > 0 && Math.Abs(mm - configured) / configured <= 0.1) ? mm : null;
+            } catch (Exception ex) when (ex is not OperationCanceledException) {
+                return null;
+            } finally {
+                TryDeleteFile(framePath);
+            }
         }
 
         /// <summary>One loop body: ask the guider for a saved solver frame, await its
@@ -1070,7 +1101,11 @@ namespace OpenAstroAra.Server.Services {
                 timing.Capture = Stopwatch.GetElapsedTime(captureStart);
                 var solveStart = Stopwatch.GetTimestamp();
                 try {
-                    return await _solver.SolveAsync(localPath, binning, hint?.RaDeg, hint?.DecDeg, ct).ConfigureAwait(false);
+                    var outcome = await _solver.SolveAsync(localPath, binning, hint?.RaDeg, hint?.DecDeg, ct).ConfigureAwait(false);
+                    if (!outcome.Success && timing.KeepUnsolvedFrame) {
+                        timing.KeptFramePath = localPath;
+                    }
+                    return outcome;
                 } catch (OperationCanceledException) {
                     throw;
                 } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException) {
@@ -1096,7 +1131,9 @@ namespace OpenAstroAra.Server.Services {
                 return new PolarAlignSolveOutcome(false, 0, 0);
             } finally {
                 guiderClient.SingleFrameComplete -= OnComplete;
-                TryDeleteFile(localPath);
+                if (timing.KeptFramePath != localPath) {
+                    TryDeleteFile(localPath);
+                }
                 if (timing.Capture == TimeSpan.Zero) {
                     timing.Capture = Stopwatch.GetElapsedTime(captureStart); // never reached the solver
                 }

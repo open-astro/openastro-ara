@@ -9,6 +9,7 @@ import 'package:openastroara/models/switch_device.dart';
 import 'package:openastroara/services/switch_api.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/equipment/switch_state.dart';
+import 'package:openastroara/state/settings/cooling_fan_state.dart';
 import 'package:openastroara/widgets/equipment/fan_switch_row.dart';
 
 class _FakeSwitchClient implements SwitchClient {
@@ -46,7 +47,7 @@ class _FakeSwitchClient implements SwitchClient {
 SwitchDevice _fanDevice({double value = 1.0}) => SwitchDevice(
       deviceId: 'switch-5',
       alpacaDeviceNumber: 5,
-      name: 'ToupTek Thermal Switch',
+      name: 'Any Box',
       connectionState: SwitchConnectionState.connected,
       ports: [
         SwitchPort(
@@ -73,11 +74,13 @@ Future<_FakeSwitchClient> _pump(
   List<SwitchDevice>? switches,
   CameraStatus? camera,
   _FakeSwitchClient? switchClient,
+  CoolingFan fan = const CoolingFan(deviceId: 'switch-5', portId: 1),
 }) async {
   final fake = switchClient ?? _FakeSwitchClient(switches ?? const []);
   await tester.pumpWidget(ProviderScope(
     overrides: [
       switchApiProvider.overrideWithValue(fake),
+      coolingFanProvider.overrideWith(() => _FixedFan(fan)),
       switchListProvider.overrideWith(
           () => _SwitchListNotifierForTest(fake)),
       cameraStatusProvider.overrideWith(() => _FixedCameraNotifier(camera)),
@@ -98,12 +101,12 @@ void main() {
   });
 
   testWidgets(
-      'ignores a Fan port on a non-Thermal-Switch device (same scoping as '
+      'ignores a Fan port that is not the designated one (same scoping as '
       'the cooler auto-sync)', (tester) async {
     final relayBox = SwitchDevice(
       deviceId: 'switch-9',
       alpacaDeviceNumber: 9,
-      name: 'Generic Relay Box',
+      name: 'ToupTek Thermal Switch',
       connectionState: SwitchConnectionState.connected,
       ports: [
         SwitchPort(id: 0, name: 'Fan', value: 1, min: 0, max: 1, canWrite: true),
@@ -114,12 +117,18 @@ void main() {
     expect(find.text('Cooling fan'), findsNothing);
   });
 
-  testWidgets('shows the fan switch from the thermal-switch Fan port',
-      (tester) async {
+  testWidgets('shows the fan switch from the designated port', (tester) async {
     await _pump(tester, switches: [_fanDevice(value: 1.0)]);
     expect(find.text('Cooling fan'), findsOneWidget);
     final sw = tester.widget<Switch>(find.byType(Switch));
     expect(sw.value, isTrue);
+  });
+
+  testWidgets('a Thermal Switch with a Fan port shows nothing when none is designated',
+      (tester) async {
+    await _pump(tester, switches: [_fanDevice()], fan: CoolingFan.none);
+    expect(find.byType(Switch), findsNothing);
+    expect(find.text('Cooling fan'), findsNothing);
   });
 
   testWidgets('turning the fan off sends setValue 0', (tester) async {
@@ -196,6 +205,13 @@ class _FixedCameraNotifier extends CameraStatusNotifier {
   final CameraStatus? _status;
   @override
   Future<CameraStatus?> build() async => _status;
+}
+
+class _FixedFan extends CoolingFanNotifier {
+  _FixedFan(this.fan);
+  final CoolingFan fan;
+  @override
+  Future<CoolingFan> build() async => fan;
 }
 
 class _SwitchListNotifierForTest extends SwitchListNotifier {

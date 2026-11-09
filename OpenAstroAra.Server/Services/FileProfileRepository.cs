@@ -358,6 +358,7 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
         try {
             var path = FilePath(id);
             if (File.Exists(path)) File.Delete(path);
+            File.Delete(EquipmentSelectionStore.ProfileFile(_dir, id)); // #1710: its remembered devices go with it
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             LogPersistFailed(ex, FilePath(id));
         }

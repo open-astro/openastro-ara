@@ -69,8 +69,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     private readonly ActiveSequenceCheckpoint? _checkpoint;
     private readonly IFrameRepository? _frames;
     private readonly SequenceBodyDeserializer _deserializer;
-    // §58.12 — the unattended-shutdown countdown. Notified when a run enters
-    // PausedAwaitingUser (starts the clock) and on every explicit lifecycle
+    // §58.12 — the unattended-shutdown countdown. Notified when a failure
+    // (PauseKind.AwaitingUser, not a plan's own Prompt) suspends a run
+    // (starts the clock) and on every explicit lifecycle
     // command (the user is back — cancels it). AbortActiveRunsAsync and the
     // hosted-service shutdown path deliberately do NOT notify: those are the
     // daemon's own automated actions, not user attention.
@@ -360,7 +361,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     // failing while the user has the run paused): the next branch to reach its
     // boundary re-fires this callback and upgrades the state.
     private void OnPauseEntered(Guid sequenceId, RunState run) {
-        var target = run.Gate.PendingKind == OpenAstroAra.Sequencer.Utility.PauseKind.AwaitingUser
+        var kind = run.Gate.PendingKind;
+        var target = kind >= OpenAstroAra.Sequencer.Utility.PauseKind.Prompt
             ? SequenceRunState.PausedAwaitingUser
             : SequenceRunState.Paused;
         if (run.TryTransition(SequenceRunState.Running, target)
@@ -376,11 +378,14 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             if (run.Root is ISequenceContainer pausedRoot) {
                 run.PausedTarget = FindActiveDeepSkyTarget(pausedRoot);
             }
-            if (target == SequenceRunState.PausedAwaitingUser) {
-                // §58.12 — the rig needs a human; start the unattended-shutdown
+            if (kind == OpenAstroAra.Sequencer.Utility.PauseKind.AwaitingUser) {
+                // §58.12 — a failure left the rig needing a human; start the unattended-shutdown
                 // clock. Runs on the engine thread: the call only arms a timer.
                 _unattendedShutdown?.NotifyRunPausedAwaitingUser(sequenceId, run.RunId);
             }
+        } else if (kind == OpenAstroAra.Sequencer.Utility.PauseKind.AwaitingUser && run.State == SequenceRunState.PausedAwaitingUser) {
+            // #1712 — a plan's prompt already holds the run there with no clock; a failure still starts it (repeats join).
+            _unattendedShutdown?.NotifyRunPausedAwaitingUser(sequenceId, run.RunId);
         }
     }
 

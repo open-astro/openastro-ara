@@ -62,6 +62,92 @@ namespace OpenAstroAra.Test {
 
         private static bool LocalBox(string? host) => host is "192.168.8.118" or "172.24.1.1" or "localhost" or "127.0.0.1";
 
+        // ── #1710 — a profile owns its devices ──────────────────────────────────────────────────
+
+        private static readonly string[] CamAndMount = ["rig-cam", "rig-mount"];
+        private static readonly string[] CamSafetyMount = ["rig-cam", "rig-safety", "rig-mount"];
+        private static readonly Guid ProfileA = Guid.Parse("aaaaaaaa-0000-0000-0000-000000000000");
+        private static readonly Guid ProfileB = Guid.Parse("bbbbbbbb-0000-0000-0000-000000000000");
+
+        private EquipmentSelectionStore ProfileStore(Func<Guid?> active) {
+            Directory.CreateDirectory(Path.Combine(_dir, "profiles"));
+            return new EquipmentSelectionStore(_dir, NullLogger<EquipmentSelectionStore>.Instance, _ => false, active);
+        }
+
+        private string LegacyFile => Path.Combine(_dir, EquipmentSelectionStore.FileName);
+
+        private async Task WriteLegacyAsync(params DiscoveredDeviceDto[] devices) {
+            await _store.RememberAsync(devices[0], CancellationToken.None);
+            foreach (var d in devices.Skip(1)) {
+                await _store.RememberAsync(d, CancellationToken.None);
+            }
+        }
+
+        [Test]
+        public async Task Each_profile_remembers_its_own_devices() {
+            Guid active = ProfileA;
+            using var store = ProfileStore(() => active);
+            await store.RememberAsync(Device(DeviceType.Camera, "sim-cam", "Sim"), CancellationToken.None);
+            active = ProfileB;
+            await store.RememberAsync(Device(DeviceType.Camera, "real-cam", "Real"), CancellationToken.None);
+
+            Assert.That((await store.GetAllAsync(CancellationToken.None)).Single().UniqueId, Is.EqualTo("real-cam"));
+            active = ProfileA;
+            Assert.That((await store.GetAllAsync(CancellationToken.None)).Single().UniqueId, Is.EqualTo("sim-cam"));
+        }
+
+        [Test]
+        public async Task The_server_wide_list_becomes_the_active_profiles_list_only() {
+            await WriteLegacyAsync(Device(DeviceType.Camera, "rig-cam", "Cam"), Device(DeviceType.Telescope, "rig-mount", "Mount"));
+            Guid active = ProfileA;
+            using var store = ProfileStore(() => active);
+
+            var migrated = await store.GetAllAsync(CancellationToken.None);
+
+            Assert.That(migrated.Select(d => d.UniqueId), Is.EquivalentTo(CamAndMount));
+            Assert.That(File.Exists(LegacyFile), Is.False, "migrated once");
+            Assert.That(File.Exists(LegacyFile + ".migrated"), Is.True, "the old list is kept beside it, for a rollback");
+            active = ProfileB;
+            Assert.That(await store.GetAllAsync(CancellationToken.None), Is.Empty, "other profiles start with none");
+        }
+
+        [Test]
+        public async Task Migration_waits_for_a_profile_and_goes_to_the_first_active_one() {
+            await WriteLegacyAsync(Device(DeviceType.Camera, "rig-cam", "Cam"));
+            Guid? active = null;
+            using var store = ProfileStore(() => active);
+
+            Assert.That((await store.GetAllAsync(CancellationToken.None)).Single().UniqueId, Is.EqualTo("rig-cam"), "no profile yet: the list still serves");
+            Assert.That(File.Exists(LegacyFile), Is.True, "and stays until a profile can take it");
+
+            active = ProfileA;
+            Assert.That((await store.GetAllAsync(CancellationToken.None)).Single().UniqueId, Is.EqualTo("rig-cam"));
+            Assert.That(File.Exists(LegacyFile), Is.False);
+        }
+
+        [Test]
+        public async Task Migration_never_overwrites_a_list_the_profile_already_has() {
+            using (var first = ProfileStore(() => ProfileA)) {
+                await first.RememberAsync(Device(DeviceType.Camera, "own-cam", "Own"), CancellationToken.None);
+            }
+            await WriteLegacyAsync(Device(DeviceType.Camera, "old-cam", "Old"));
+            using var store = ProfileStore(() => ProfileA);
+
+            Assert.That((await store.GetAllAsync(CancellationToken.None)).Single().UniqueId, Is.EqualTo("own-cam"));
+            Assert.That(File.Exists(LegacyFile + ".migrated"), Is.True, "the old list is still kept");
+        }
+
+        [Test]
+        public async Task A_migrated_list_loses_nothing_across_a_later_write() {
+            await WriteLegacyAsync(Device(DeviceType.Camera, "rig-cam", "Cam"), Device(DeviceType.SafetyMonitor, "rig-safety", "Safety"));
+            using var store = ProfileStore(() => ProfileA);
+
+            await store.RememberAsync(Device(DeviceType.Telescope, "rig-mount", "Mount"), CancellationToken.None);
+
+            Assert.That((await store.GetAllAsync(CancellationToken.None)).Select(d => d.UniqueId),
+                Is.EquivalentTo(CamSafetyMount));
+        }
+
         [Test]
         public async Task A_device_on_this_machines_address_is_remembered_as_localhost() {
             // 2026-10-16: the CM4 remembered its devices under three of its own addresses, one per

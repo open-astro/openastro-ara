@@ -936,14 +936,6 @@
   "@previewGuideEmpty": {
     "description": "Empty screen in Preview with the guide camera picked and no guide frame yet"
   },
-  "simpleNoFlatsThisRun": "No flats this run",
-  "@simpleNoFlatsThisRun": {
-    "description": "Simple Mode pill when a run starts on a profile set to ask about flats"
-  },
-  "simpleNoFlatsThisRunDetail": "Your profile asks before each run, and Simple Mode doesn't ask. Turn off Simple Mode in Settings → Rig, then set Capture calibration after a sequence under Settings → Session → Calibration.",
-  "@simpleNoFlatsThisRunDetail": {
-    "description": "Why the run takes no flats and where to change it; the setting names match the English-only Settings panel"
-  },
   "previewCamera": "Camera",
   "@previewCamera": {
     "description": "Simple Mode: label above the list of connected cameras in Preview's settings."
@@ -1897,6 +1889,14 @@
   "@shellReconnect": {
     "description": "Simple Mode Settings › Devices row button after a failure"
   },
+  "shellAddDevice": "Add a device",
+  "@shellAddDevice": {
+    "description": "Simple Mode Settings › Devices row and dialog title: pick a device this rig has none of yet"
+  },
+  "shellChooseDevice": "Choose…",
+  "@shellChooseDevice": {
+    "description": "Simple Mode Settings › Devices row button: open the device chooser"
+  },
   "shellConnect": "Connect",
   "@shellConnect": {
     "description": "Simple Mode Settings › Devices row button"
@@ -2425,10 +2425,6 @@
       }
     }
   },
-  "planImageLibrary": "Image Library",
-  "@planImageLibrary": {
-    "description": "Night done button: open the image library"
-  },
   "planNewPlan": "New plan",
   "@planNewPlan": {
     "description": "Night done button: start a new plan"
@@ -2592,7 +2588,7 @@
   "@estopConfirmTitle": {
     "description": "Emergency Stop confirm dialog (keyboard/screen reader, full UI): title"
   },
-  "estopConfirmBody": "This aborts the running sequence and the in-flight exposure, stops guiding, halts the rotator, parks the mount, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.",
+  "estopConfirmBody": "This aborts the running sequence, halts the rotator where it is, aborts the in-flight exposure, stops the guide-camera focus loop, the Bahtinov readout, autofocus and polar alignment, stops guiding, stops the mount where it is with tracking off, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.",
   "@estopConfirmBody": {
     "description": "Emergency Stop confirm dialog: what the stop does"
   },
@@ -3913,5 +3909,647 @@
   "@albumSinceLastVisit": {
     "description": "Sky Album header after a sync brought cards; {changes} is albumNewCards and/or albumTiersUp joined by ' · '",
     "placeholders": {"changes": {"type": "String"}}
+  },
+  "wizardGuideCameraIsMainCamera": "The Main Camera can't also be the Guide Camera. Guiding needs a separate Guide Camera, because two programs on one sensor break guiding. Pick another camera, or choose None.",
+  "@wizardGuideCameraIsMainCamera": {
+    "description": "Setup wizard, Guiding step: shown under the Guide Camera picker (and holds Next) when it resolves to the same Alpaca device as the Main Camera"
+  },
+  "wizardDarksSkippedPushFailed": "Dark-library build skipped: the guider didn't take the new profile. Build it from the Guider panel once the profile push succeeds.",
+  "@wizardDarksSkippedPushFailed": {
+    "description": "Setup wizard finish note: the guider profile push failed, so the dark-library build was not started"
+  },
+  "shellStorageSavedTo": "Frames are saved to",
+  "@shellStorageSavedTo": {
+    "description": "Simple Mode Settings › Rig › Storage block: label above the disk's name"
+  },
+  "shellStorageInternal": "Internal storage",
+  "@shellStorageInternal": {
+    "description": "Simple Mode Settings › Rig › Storage block: name when no external disk is the store"
+  },
+  "shellStorageFreeOf": "{free} free of {total}",
+  "@shellStorageFreeOf": {
+    "description": "Simple Mode Settings › Rig › Storage block: free and total space",
+    "placeholders": {
+      "free": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "shellStorageNotPlugged": "No disk is plugged in. Frames can't be saved.",
+  "@shellStorageNotPlugged": {
+    "description": "Simple Mode Settings › Rig › Storage block: red line, no space figures"
+  },
+  "shellStorageUnreadable": "Couldn't read the rig's storage. Frames can't be saved.",
+  "@shellStorageUnreadable": {
+    "description": "Simple Mode Settings › Rig › Storage block: red line, the read failed"
+  },
+  "shellStorageFull": "The disk is full. Frames can't be saved.",
+  "@shellStorageFull": {
+    "description": "Simple Mode Settings › Rig › Storage block: red line, no free space"
+  },
+  "shellStorageChoose": "Choose disk",
+  "@shellStorageChoose": {
+    "description": "Simple Mode Settings › Rig › Storage block: button, pick the disk frames are saved to"
+  },
+  "shellStorageEject": "Eject",
+  "@shellStorageEject": {
+    "description": "Simple Mode Settings › Rig › Storage block: button, safely remove the disk"
+  },
+  "shellStorageCheck": "Check disk",
+  "@shellStorageCheck": {
+    "description": "Simple Mode Settings › Rig › Storage block: button, check the disk's filesystem"
+  },
+  "searchSettingStorage": "Storage",
+  "@searchSettingStorage": {
+    "description": "Simple Mode search panel: a setting's name as a result; should match its name in Settings"
+  },
+  "searchWordsStorage": "disk drive frames save space eject usb",
+  "@searchWordsStorage": {
+    "description": "Simple Mode search panel: other words for Storage"
+  },
+  "coolingFan": "Cooling fan",
+  "@coolingFan": {
+    "description": "Camera window: the heading of the cooling fan choice (#1700)"
+  },
+  "coolingFanNone": "None",
+  "@coolingFanNone": {
+    "description": "Cooling fan choice: no fan is chosen"
+  },
+  "coolingFanNotConnected": "Chosen fan (not connected)",
+  "@coolingFanNotConnected": {
+    "description": "Cooling fan choice: the chosen switch isn't connected right now"
+  },
+  "coolingFanChosenNote": "This fan starts with the cooler and cannot be turned off while the camera is cooling.",
+  "@coolingFanChosenNote": {
+    "description": "Cooling fan caption when a fan is chosen"
+  },
+  "coolingFanNoneNote": "No fan is chosen, so Ara does not run a fan with the cooler.",
+  "@coolingFanNoneNote": {
+    "description": "Cooling fan caption when no fan is chosen"
+  },
+  "coolingFanCouldntSave": "Couldn't save the cooling fan",
+  "@coolingFanCouldntSave": {
+    "description": "Error when the daemon didn't store the cooling fan choice"
+  },
+  "coolingFanAsk": "Choose your camera's cooling fan so it runs with the cooler.",
+  "@coolingFanAsk": {
+    "description": "Simple Mode pill asking once for the cooling fan"
+  },
+  "coolingFanAskFullUi": "Choose your camera's cooling fan in Settings › Camera so it runs with the cooler.",
+  "@coolingFanAskFullUi": {
+    "description": "Full UI one-time prompt for the cooling fan"
+  },
+  "coolingFanChoose": "Choose",
+  "@coolingFanChoose": {
+    "description": "Cooling fan pill's action: opens the Camera window"
+  },
+  "coolingFanNotNow": "Not now",
+  "@coolingFanNotNow": {
+    "description": "Cooling fan pill's dismiss action"
+  },
+  "planFlats": "Flats",
+  "@planFlats": {
+    "description": "Plan sheet: the flats choice for a profile set to ask"
+  },
+  "planFlatsNone": "None",
+  "@planFlatsNone": {
+    "description": "Plan sheet flats choice: no flats this run"
+  },
+  "planFlatsSky": "Sky",
+  "@planFlatsSky": {
+    "description": "Plan sheet flats choice"
+  },
+  "planFlatsPanel": "Panel",
+  "@planFlatsPanel": {
+    "description": "Plan sheet flats choice"
+  },
+  "shellStorageReading": "Checking the disk…",
+  "@shellStorageReading": {
+    "description": "Simple Mode Storage block: heading while the first read is out"
+  },
+  "shellStorageUnknownDisk": "Unknown disk",
+  "@shellStorageUnknownDisk": {
+    "description": "Simple Mode Storage block: heading when the read failed and no store is known"
+  },
+  "storageDiskChooseTitle": "Choose a disk for your frames",
+  "@storageDiskChooseTitle": {
+    "description": "Disk chooser title"
+  },
+  "storageDiskRescan": "Rescan",
+  "@storageDiskRescan": {
+    "description": "Disk chooser: look for disks again"
+  },
+  "storageDiskUse": "Use Disk",
+  "@storageDiskUse": {
+    "description": "Disk chooser: confirm the selected disk"
+  },
+  "storageDiskEraseUse": "Erase and Use Disk",
+  "@storageDiskEraseUse": {
+    "description": "Disk chooser: confirm, erasing the disk"
+  },
+  "storageDiskNoneFound": "No external disks found.\n\nConnect a USB drive or SSD to the server, then Rescan.",
+  "@storageDiskNoneFound": {
+    "description": "Disk chooser with no disks"
+  },
+  "storageDiskInUse": "In use",
+  "@storageDiskInUse": {
+    "description": "Disk chooser: the disk frames go to now"
+  },
+  "storageDiskEraseChange": "Erase and change format",
+  "@storageDiskEraseChange": {
+    "description": "Disk chooser: switch to reformat a working disk"
+  },
+  "storageDiskEraseChangeNote": "This disk already works as a store ({fileSystem}). Turn this on only to reformat it — everything on it will be lost.",
+  "@storageDiskEraseChangeNote": {
+    "description": "Disk chooser: under the reformat switch",
+    "placeholders": {"fileSystem": {"type": "String"}}
+  },
+  "storageDiskMustErase": "This disk must be erased",
+  "@storageDiskMustErase": {
+    "description": "Disk chooser: warning heading"
+  },
+  "storageDiskMustEraseNote": "ARA saves frames in a format this disk doesn't use, so it has to be erased first. Everything on it will be lost.",
+  "@storageDiskMustEraseNote": {
+    "description": "Disk chooser: why the disk must be erased"
+  },
+  "storageDiskExfat": "exFAT — take the drive with you",
+  "@storageDiskExfat": {
+    "description": "Disk chooser: format option"
+  },
+  "storageDiskExfatNote": "Plugs straight into Windows and Mac at home. After a power cut, run Check disk.",
+  "@storageDiskExfatNote": {
+    "description": "Disk chooser: exFAT detail"
+  },
+  "storageDiskExt4": "ext4 — drive lives on the rig",
+  "@storageDiskExt4": {
+    "description": "Disk chooser: format option"
+  },
+  "storageDiskExt4Note": "Journaled (self-healing after power cuts). Readable on Linux computers; Windows and Mac can't read it — frames arrive there via the backup mirror.",
+  "@storageDiskExt4Note": {
+    "description": "Disk chooser: ext4 detail"
+  },
+  "storageDiskTypeLabel": "Type “{label}” to confirm:",
+  "@storageDiskTypeLabel": {
+    "description": "Disk chooser: type the disk name before erasing",
+    "placeholders": {"label": {"type": "String"}}
+  },
+  "storageDiskTypeErase": "This disk has no label — type ERASE to confirm:",
+  "@storageDiskTypeErase": {
+    "description": "Disk chooser: the word ERASE is typed literally, keep it in English"
+  },
+  "storageDiskErasing": "Erasing and connecting the disk…",
+  "@storageDiskErasing": {
+    "description": "Disk chooser: in progress"
+  },
+  "storageDiskConnecting": "Connecting the disk…",
+  "@storageDiskConnecting": {
+    "description": "Disk chooser: in progress"
+  },
+  "storageDiskNowUsed": "{name} is now used for frames.",
+  "@storageDiskNowUsed": {
+    "description": "Disk chooser: done",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "storageDiskReadAction": "read the server's disks",
+  "@storageDiskReadAction": {
+    "description": "Disk chooser: after Couldn't"
+  },
+  "storageConfigureNotExt4": "This disk needs to be erased before ARA can use it.",
+  "@storageConfigureNotExt4": {
+    "description": "Use Disk failed"
+  },
+  "storageConfigureLabelMismatch": "The disk changed since the list was loaded. Rescan and try again.",
+  "@storageConfigureLabelMismatch": {
+    "description": "Use Disk failed"
+  },
+  "storageConfigurePreviousBusy": "The disk frames are saved to now is in use, so ARA can't switch away from it. Close anything reading it, then try again.",
+  "@storageConfigurePreviousBusy": {
+    "description": "Use Disk failed"
+  },
+  "storageConfigureBusy": "The disk is in use. Close anything reading it, then try again.",
+  "@storageConfigureBusy": {
+    "description": "Use Disk failed"
+  },
+  "storageConfigureSystemDisk": "That disk holds the server's operating system and can't be used.",
+  "@storageConfigureSystemDisk": {
+    "description": "Use Disk failed"
+  },
+  "storageConfigureDisconnected": "The disk disconnected. Reconnect it and rescan.",
+  "@storageConfigureDisconnected": {
+    "description": "Use Disk failed"
+  },
+  "storageConfigureHelperMissing": "The server is missing part of its installation. Reinstall openastroara-server.",
+  "@storageConfigureHelperMissing": {
+    "description": "Use Disk failed"
+  },
+  "storageConfigureMkfsFailed": "Erasing the disk failed. See the server log for details.",
+  "@storageConfigureMkfsFailed": {
+    "description": "Use Disk failed"
+  },
+  "storageConfigureMountFailed": "The disk was prepared but could not be connected.",
+  "@storageConfigureMountFailed": {
+    "description": "Use Disk failed"
+  },
+  "storageConfigureFailed": "Could not use {name}.",
+  "@storageConfigureFailed": {
+    "description": "Use Disk failed",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "storageCheckTitle": "Check the store drive?",
+  "@storageCheckTitle": {
+    "description": "Check disk question"
+  },
+  "storageCheckBody": "The drive is briefly taken offline while its filesystem is verified and repaired if needed. Takes seconds to a couple of minutes; capture must be idle.",
+  "@storageCheckBody": {
+    "description": "Check disk question"
+  },
+  "storageNoDriveEject": "No store drive to eject.",
+  "@storageNoDriveEject": {
+    "description": "Eject refused"
+  },
+  "storageNoDriveCheck": "No store drive to check — connect one first.",
+  "@storageNoDriveCheck": {
+    "description": "Check disk refused"
+  },
+  "deviceChooserTitle": "Choose {type}",
+  "@deviceChooserTitle": {
+    "description": "Device chooser title",
+    "placeholders": {"type": {"type": "String"}}
+  },
+  "deviceChooserRescan": "Re-scan",
+  "@deviceChooserRescan": {
+    "description": "Device chooser: tooltip"
+  },
+  "deviceChooserManualWheel": "No driver: you swap filters by hand and Ara asks for each one",
+  "@deviceChooserManualWheel": {
+    "description": "Device chooser: the manual filter wheel row"
+  },
+  "deviceChooserNoneTitle": "No devices found",
+  "@deviceChooserNoneTitle": {
+    "description": "Device chooser: empty"
+  },
+  "deviceChooserNoneBody": "No Alpaca responder answered on Ara's subnet — most often AlpacaBridge (ARA's equipment hub) is not installed or its service is stopped. On Ara host, check:",
+  "@deviceChooserNoneBody": {
+    "description": "Device chooser: empty"
+  },
+  "deviceChooserOtherHost": "A driver on another host must be reachable from Ara's subnet (UDP 32227).",
+  "@deviceChooserOtherHost": {
+    "description": "Device chooser: empty"
+  },
+  "deviceChooserFailed": "Discovery failed",
+  "@deviceChooserFailed": {
+    "description": "Device chooser: error"
+  },
+  "deviceChooserRetry": "Retry",
+  "@deviceChooserRetry": {
+    "description": "Device chooser: error"
+  },
+  "deviceChooserNotConnected": "Not connected — connect to your rig to save this.",
+  "@deviceChooserNotConnected": {
+    "description": "Device chooser: no rig"
+  },
+  "bugReviewTitle": "Before you share this bug report",
+  "@bugReviewTitle": {
+    "description": "Bug report review title"
+  },
+  "bugReviewDownload": "Download anyway",
+  "@bugReviewDownload": {
+    "description": "Bug report review confirm"
+  },
+  "bugReviewContains": "The bundle contains:",
+  "@bugReviewContains": {
+    "description": "Bug report review"
+  },
+  "bugReviewNoSources": "• Ara's recent log files",
+  "@bugReviewNoSources": {
+    "description": "Bug report review"
+  },
+  "bugReviewProfileRedacted": "• your profile with coordinates, serial numbers, hostnames, usernames in paths, private network addresses and tokens scrubbed",
+  "@bugReviewProfileRedacted": {
+    "description": "Bug report review"
+  },
+  "bugReviewProfileCoarse": "• your profile with the site rounded to ~111 km — it may still include equipment credentials, API / notification tokens and network addresses",
+  "@bugReviewProfileCoarse": {
+    "description": "Bug report review"
+  },
+  "bugReviewProfileFull": "• your full profile — which may include equipment credentials, API / notification tokens, precise observatory coordinates, and network addresses",
+  "@bugReviewProfileFull": {
+    "description": "Bug report review"
+  },
+  "bugReviewSystemRedacted": "• system info, with this device's username scrubbed from its path",
+  "@bugReviewSystemRedacted": {
+    "description": "Bug report review"
+  },
+  "bugReviewSystemFull": "• system info, including this device's filesystem path",
+  "@bugReviewSystemFull": {
+    "description": "Bug report review"
+  },
+  "bugReviewClientLog": "• this app's own error log, saved as a separate file beside the ZIP",
+  "@bugReviewClientLog": {
+    "description": "Bug report review"
+  },
+  "bugReviewSize": "Approximate size: {size}.",
+  "@bugReviewSize": {
+    "description": "Bug report review",
+    "placeholders": {"size": {"type": "String"}}
+  },
+  "bugReviewTrust": "Only share it with people you trust (e.g. the developers) — treat it like a password.",
+  "@bugReviewTrust": {
+    "description": "Bug report review"
+  },
+  "bugReviewNone": "none",
+  "@bugReviewNone": {
+    "description": "Bug report review: a source with no files"
+  },
+  "bugReviewOneFile": "1 file",
+  "@bugReviewOneFile": {
+    "description": "Bug report review"
+  },
+  "bugReviewFiles": "{count} files",
+  "@bugReviewFiles": {
+    "description": "Bug report review",
+    "placeholders": {"count": {"type": "String"}}
+  },
+  "bugReviewCut": ", the largest cut to their newest part",
+  "@bugReviewCut": {
+    "description": "Bug report review"
+  },
+  "bugSourceAra": "Ara's own logs",
+  "@bugSourceAra": {
+    "description": "Bug report source"
+  },
+  "bugSourceAraNina": "Ara's NINA-layer logs",
+  "@bugSourceAraNina": {
+    "description": "Bug report source"
+  },
+  "bugSourceAlpacaBridge": "AlpacaBridge logs (camera, mount, focuser, wheel)",
+  "@bugSourceAlpacaBridge": {
+    "description": "Bug report source"
+  },
+  "bugSourceGuider": "guider (PHD2) debug and guide logs",
+  "@bugSourceGuider": {
+    "description": "Bug report source"
+  },
+  "bugSourceSystem": "package install history",
+  "@bugSourceSystem": {
+    "description": "Bug report source"
+  },
+  "bugSourceJournal": "system journal (Ara, AlpacaBridge, the guider, the kernel)",
+  "@bugSourceJournal": {
+    "description": "Bug report source"
+  },
+  "takeoverWants": "{name} wants to connect",
+  "@takeoverWants": {
+    "description": "Takeover request title",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "takeoverDetail": "Only one client can control the observatory at a time. Allowing hands control to the other client and disconnects this one; the running sequence continues either way.",
+  "@takeoverDetail": {
+    "description": "Takeover request"
+  },
+  "takeoverKeep": "Keep me connected",
+  "@takeoverKeep": {
+    "description": "Takeover request answer"
+  },
+  "takeoverAllow": "Allow",
+  "@takeoverAllow": {
+    "description": "Takeover request answer"
+  },
+  "filterSwapInstall": "Install the {target} filter",
+  "@filterSwapInstall": {
+    "description": "Manual filter swap title",
+    "placeholders": {"target": {"type": "String"}}
+  },
+  "filterSwapDetail": "Swap in {target}, then confirm. A run waiting on it continues when you do.",
+  "@filterSwapDetail": {
+    "description": "Manual filter swap",
+    "placeholders": {"target": {"type": "String"}}
+  },
+  "filterSwapDetailFrom": "Take out {current} and swap in {target}, then confirm. A run waiting on it continues when you do.",
+  "@filterSwapDetailFrom": {
+    "description": "Manual filter swap",
+    "placeholders": {"current": {"type": "String"}, "target": {"type": "String"}}
+  },
+  "filterSwapCancel": "Cancel swap",
+  "@filterSwapCancel": {
+    "description": "Manual filter swap answer"
+  },
+  "filterSwapLater": "Later",
+  "@filterSwapLater": {
+    "description": "Manual filter swap answer"
+  },
+  "filterSwapIsIn": "{target} is in",
+  "@filterSwapIsIn": {
+    "description": "Manual filter swap answer",
+    "placeholders": {"target": {"type": "String"}}
+  },
+  "filterSwapCouldntConfirm": "Couldn't confirm the filter",
+  "@filterSwapCouldntConfirm": {
+    "description": "Manual filter swap failure"
+  },
+  "filterSwapCouldntCancel": "Couldn't cancel the swap",
+  "@filterSwapCouldntCancel": {
+    "description": "Manual filter swap failure"
+  },
+  "bugCardTitle": "Send me a bug report",
+  "@bugCardTitle": {
+    "description": "Bug report card title"
+  },
+  "bugCardBody": "Bundles the rig's logs (Ara, AlpacaBridge, the guider, the system journal) + your profile + system info into a ZIP you can attach to a report.",
+  "@bugCardBody": {
+    "description": "Bug report card"
+  },
+  "bugCardPacking": "Packing the logs on the rig… {size} read",
+  "@bugCardPacking": {
+    "description": "Bug report card: progress",
+    "placeholders": {"size": {"type": "String"}}
+  },
+  "bugCardCovers": "Covers: ",
+  "@bugCardCovers": {
+    "description": "Bug report card: label before the range"
+  },
+  "bugCardSharing": "Sharing: ",
+  "@bugCardSharing": {
+    "description": "Bug report card: label before the sharing mode"
+  },
+  "bugCardAppLog": "This app's error log",
+  "@bugCardAppLog": {
+    "description": "Bug report card: sharing option"
+  },
+  "bugCardPrepare": "Prepare & download",
+  "@bugCardPrepare": {
+    "description": "Bug report card: action"
+  },
+  "bugCardSaveLog": "Save client log",
+  "@bugCardSaveLog": {
+    "description": "Bug report card: action"
+  },
+  "bugRangeNight": "Last night (whole rig)",
+  "@bugRangeNight": {
+    "description": "Bug report range"
+  },
+  "bugRange3Days": "Last 3 days (whole rig)",
+  "@bugRange3Days": {
+    "description": "Bug report range"
+  },
+  "bugRange7Days": "Last 7 days (whole rig)",
+  "@bugRange7Days": {
+    "description": "Bug report range"
+  },
+  "bugRangeAraOnly": "Ara logs only",
+  "@bugRangeAraOnly": {
+    "description": "Bug report range"
+  },
+  "bugModeFull": "Include everything",
+  "@bugModeFull": {
+    "description": "Bug report sharing mode"
+  },
+  "bugModeFullNote": "best for debugging",
+  "@bugModeFullNote": {
+    "description": "Bug report sharing mode"
+  },
+  "bugModeCoarse": "Coarse GPS only",
+  "@bugModeCoarse": {
+    "description": "Bug report sharing mode"
+  },
+  "bugModeCoarseNote": "site rounded to ~111 km",
+  "@bugModeCoarseNote": {
+    "description": "Bug report sharing mode"
+  },
+  "bugModeRedacted": "Redact all sensitive items",
+  "@bugModeRedacted": {
+    "description": "Bug report sharing mode"
+  },
+  "bugModeRedactedNote": "coordinates, serials, hostnames, usernames in paths, private IPs, tokens",
+  "@bugModeRedactedNote": {
+    "description": "Bug report sharing mode"
+  },
+  "bugPickTitle": "Choose where to save the bug report",
+  "@bugPickTitle": {
+    "description": "Bug report: file dialog title"
+  },
+  "bugSaved": "Saved {name}",
+  "@bugSaved": {
+    "description": "Bug report saved",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "bugSavedBoth": "Saved {name} and {log}",
+  "@bugSavedBoth": {
+    "description": "Bug report and client log saved",
+    "placeholders": {"name": {"type": "String"}, "log": {"type": "String"}}
+  },
+  "bugFailed": "Bug report failed: {reason}",
+  "@bugFailed": {
+    "description": "Bug report failed",
+    "placeholders": {"reason": {"type": "String"}}
+  },
+  "bugFailStillPacking": "the rig is still packing the logs; try again in a moment",
+  "@bugFailStillPacking": {
+    "description": "Bug report failure reason"
+  },
+  "bugFailCouldNotPack": "the rig could not pack the logs",
+  "@bugFailCouldNotPack": {
+    "description": "Bug report failure reason"
+  },
+  "bugFailTimeout": "Ara took too long to respond.",
+  "@bugFailTimeout": {
+    "description": "Bug report failure reason"
+  },
+  "bugFailUnreachable": "could not reach Ara.",
+  "@bugFailUnreachable": {
+    "description": "Bug report failure reason"
+  },
+  "bugFailStatus": "Ara returned an error ({status}).",
+  "@bugFailStatus": {
+    "description": "Bug report failure reason",
+    "placeholders": {"status": {"type": "String"}}
+  },
+  "bugFailTalking": "something went wrong talking to Ara.",
+  "@bugFailTalking": {
+    "description": "Bug report failure reason"
+  },
+  "bugFailUnexpected": "an unexpected error occurred.",
+  "@bugFailUnexpected": {
+    "description": "Bug report failure reason"
+  },
+  "clientLogPickTitle": "Choose where to save the client log",
+  "@clientLogPickTitle": {
+    "description": "Client log: file dialog title"
+  },
+  "clientLogSaved": "Saved {path}",
+  "@clientLogSaved": {
+    "description": "Client log saved",
+    "placeholders": {"path": {"type": "String"}}
+  },
+  "clientLogSaveAction": "save the log",
+  "@clientLogSaveAction": {
+    "description": "After Couldn't"
+  },
+  "storageEjected": "Ejected — safe to unplug the drive.",
+  "@storageEjected": {
+    "description": "Eject result"
+  },
+  "storageEjectBusy": "The drive is busy — wait for writes to finish and try again.",
+  "@storageEjectBusy": {
+    "description": "Eject result"
+  },
+  "storageEjectFailed": "Eject failed: {reason}",
+  "@storageEjectFailed": {
+    "description": "Eject result",
+    "placeholders": {"reason": {"type": "String"}}
+  },
+  "storageEjectAction": "eject the drive",
+  "@storageEjectAction": {
+    "description": "After Couldn't"
+  },
+  "storageCheckRepaired": "Disk checked — repairs were made. Worth re-running \"Find frames on disk\".",
+  "@storageCheckRepaired": {
+    "description": "Check disk result; the quoted name is a full UI button"
+  },
+  "storageCheckClean": "Disk checked — clean.",
+  "@storageCheckClean": {
+    "description": "Check disk result"
+  },
+  "storageCheckFailed": "Check failed: {reason}",
+  "@storageCheckFailed": {
+    "description": "Check disk result",
+    "placeholders": {"reason": {"type": "String"}}
+  },
+  "storageCheckAction": "check the disk",
+  "@storageCheckAction": {
+    "description": "After Couldn't"
+  },
+  "sessionTransferredTitle": "Session transferred",
+  "@sessionTransferredTitle": {
+    "description": "Another client took control"
+  },
+  "sessionTransferredDetail": "Another client took control of the observatory, so this client was disconnected. The running sequence is unaffected — it continues on Ara.",
+  "@sessionTransferredDetail": {
+    "description": "Another client took control"
+  },
+  "storageCheckRepairedSimple": "Disk checked — repairs were made.",
+  "@storageCheckRepairedSimple": {
+    "description": "Check disk result in Simple Mode, which has no Find frames on disk button"
+  },
+  "storageDiskNotFormatted": "not formatted",
+  "@storageDiskNotFormatted": {
+    "description": "Disk detail line"
+  },
+  "storageDiskNeedsErasing": "needs erasing ({fileSystem})",
+  "@storageDiskNeedsErasing": {
+    "description": "Disk detail line",
+    "placeholders": {"fileSystem": {"type": "String"}}
+  },
+  "storageDiskInUseAt": "in use at {path}",
+  "@storageDiskInUseAt": {
+    "description": "Disk detail line",
+    "placeholders": {"path": {"type": "String"}}
+  },
+  "deviceChooserFindAction": "find devices",
+  "@deviceChooserFindAction": {
+    "description": "After Couldn't"
   }
 }

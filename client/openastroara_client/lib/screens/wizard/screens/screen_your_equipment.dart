@@ -7,12 +7,16 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../models/equipment_readiness.dart';
 import '../../../models/profile_draft.dart';
 import '../../../models/solver_recommendation.dart';
+import '../../../models/switch_device.dart' show CoolingFan, SwitchDevice;
+import '../../../state/equipment/switch_state.dart';
 import '../../../services/equipment_discovery_api.dart';
 import '../../../state/saved_server_state.dart';
+import '../../../state/settings/cooling_fan_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/wizard_state.dart';
 import '../../../state/wizard/equipment_readiness_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/equipment/cooling_fan_picker.dart';
 import '../wizard_facts_apply.dart';
 import '../wizard_form_kit.dart';
 import '../wizard_save.dart' show seedReducerFromBaseProfile;
@@ -211,6 +215,8 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
       if (devices.length == 1) {
         _slotSet(_draft.equipment, type, devices.single.uniqueId);
         _draft.deviceNames[devices.single.uniqueId] = devices.single.name;
+        _draft.deviceEndpoints[devices.single.uniqueId] =
+            devices.single.alpacaEndpoints;
       }
       // Deliberately broad: this screen's contract is never-crash — any
       // throwable (incl. an Error from a malformed response) leaves the slot
@@ -255,6 +261,8 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
       _slotSet(_draft.equipment, type, picked.device?.uniqueId);
       if (picked.device != null) {
         _draft.deviceNames[picked.device!.uniqueId] = picked.device!.name;
+        _draft.deviceEndpoints[picked.device!.uniqueId] =
+            picked.device!.alpacaEndpoints;
       }
     });
     // Re-verify the changed slot (fact types only — slot-only types carry no
@@ -306,6 +314,8 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
 
   @override
   Widget build(BuildContext context) {
+    final fan = _draft.coolingFan ?? ref.watch(coolingFanProvider).value ?? CoolingFan.none;
+    final switches = ref.watch(switchListProvider).value ?? const <SwitchDevice>[];
     // Every landed read writes its facts into the draft — the save mappers
     // consume the draft, and inline fallback fields must not fight fresh
     // device truth.
@@ -360,6 +370,12 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
             onChoose: () => unawaited(_choose(type)),
           ),
         _switchSection(context),
+        // A switch's ports are only known once it connects; a first run has none to offer yet.
+        if (fan != CoolingFan.none || switches.isNotEmpty)
+          CoolingFanPicker(
+            value: fan,
+            onChanged: (v) => setState(() => _draft.coolingFan = v),
+          ),
       ],
     );
   }

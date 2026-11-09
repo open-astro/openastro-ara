@@ -26,10 +26,18 @@ class _FakeProfileApi extends ProfileApi {
   final created = <String>[];
   bool failSite = false; // in transit: no response at all
   bool rejectSite = false; // the daemon answers 422
+  bool busy = false; // a run is active: create answers 409
   int n = 0;
 
   @override
   Future<ProfileMeta> createProfile(String name) async {
+    if (busy) {
+      throw DioException(
+        requestOptions: RequestOptions(path: '/profiles'),
+        type: DioExceptionType.badResponse,
+        response: Response(requestOptions: RequestOptions(path: '/profiles'), statusCode: 409),
+      );
+    }
     created.add(name);
     activeId = 'profile-${++n}';
     known.add(activeId!);
@@ -46,9 +54,10 @@ class _FakeProfileApi extends ProfileApi {
     profiles: [for (final id in known) ProfileMeta(id: id, name: id)],
   );
   @override
-  Future<void> selectProfile(String id) async {
+  Future<List<ProfileDeviceMessage>> selectProfile(String id) async {
     selected.add(id);
     activeId = id;
+    return const [];
   }
 
   @override
@@ -257,6 +266,21 @@ void main() {
     expect(result, (1, 0, 0, 0));
     expect(api.created, ['Vanished']);
     expect(api.selected, isEmpty);
+  });
+
+  test('a draft that reaches the rig during a run stays pending and lands afterwards', () async {
+    await pend('Dark site');
+    final api = _FakeProfileApi()..busy = true;
+
+    final first = await replayPendingProfileDrafts(store, api, serverKey: 'rig-a:5555');
+
+    expect(first, (0, 1, 0, 0));
+    expect((await store.loadAll()).single.name, 'Dark site');
+
+    api.busy = false;
+    final second = await replayPendingProfileDrafts(store, api, serverKey: 'rig-a:5555');
+    expect(second, (1, 0, 0, 0));
+    expect(await store.loadAll(), isEmpty);
   });
 
   test('#1327: a draft the daemon rejects is dropped, not retried on every reconnect', () async {

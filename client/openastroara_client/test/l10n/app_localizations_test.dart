@@ -30,6 +30,20 @@ void main() {
     },
   );
 
+  test('pt-BR has one word for the rig: setup', () {
+    Map<String, dynamic> arb(String f) =>
+        jsonDecode(File('lib/l10n/$f').readAsStringSync()) as Map<String, dynamic>;
+    final br = arb('app_pt_BR.arb');
+    final other = [
+      for (final e in arb('app_en.arb').entries)
+        if (!e.key.startsWith('@') &&
+            RegExp(r'\brigs?\b', caseSensitive: false).hasMatch(e.value as String) &&
+            (br[e.key] as String).contains('equipamento'))
+          e.key,
+    ];
+    expect(other, isEmpty);
+  });
+
   test('Portuguese from Portugal reads English: only pt-BR is translated', () {
     final ptPt = lookupAppLocalizations(const Locale('pt', 'PT'));
     expect(ptPt.pillsMoreSemantics(1), en.pillsMoreSemantics(1));

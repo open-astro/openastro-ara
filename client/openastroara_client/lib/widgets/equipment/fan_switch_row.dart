@@ -6,11 +6,12 @@ import '../../services/equipment_device_api.dart';
 import '../../theme/ara_colors.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/switch_state.dart';
+import '../../state/settings/cooling_fan_state.dart';
 
-/// Cooling-fan control for cameras whose fan is exposed by the bridge as a
-/// ToupTek Thermal Switch element (the ATR2600M's `TOUPCAM_OPTION_FAN` port).
+/// Cooling-fan control for the switch port the profile designates as the
+/// camera's cooling fan (#1700).
 ///
-/// Hidden entirely when no connected switch has a "Fan" port. Safety: turning
+/// Hidden entirely when none is designated and connected. Safety: turning
 /// the fan off while the TEC is cooling is refused by the DAEMON (#1065 — the
 /// fan vents the TEC's heat sink, and cooling with the fan off can damage the
 /// camera); the 409's reason is what this row shows. The row itself is UX only.
@@ -19,23 +20,24 @@ class FanSwitchRow extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final switches = ref.watch(switchListProvider).maybeWhen(
-        data: (v) => v,
-        orElse: () => const <SwitchDevice>[],
-      );
+    final switches = ref
+        .watch(switchListProvider)
+        .maybeWhen(data: (v) => v, orElse: () => const <SwitchDevice>[]);
     // The same device/port rule the daemon's CoolingFanInterlock applies, so
     // this row shows exactly the port the server syncs and guards.
-    final fan = findThermalSwitchFanPort(switches);
+    final fan = findCoolingFanPort(
+      switches,
+      ref.watch(coolingFanProvider).value ?? CoolingFan.none,
+    );
     // Only a boolean (on/off, range [0,1]) Fan port renders as a toggle — a
     // PWM/value fan port would be silently forced to full on/off otherwise.
     if (fan == null || !fan.port.isBoolean) return const SizedBox.shrink();
 
     // Label only — the fan-off refusal lives in the daemon (409 shown by
     // _toggle); here an unknown cooler state just drops the hint.
-    final cooling = ref.watch(cameraStatusProvider).maybeWhen(
-          data: (v) => v?.coolerOn ?? false,
-          orElse: () => false,
-        );
+    final cooling = ref
+        .watch(cameraStatusProvider)
+        .maybeWhen(data: (v) => v?.coolerOn ?? false, orElse: () => false);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -43,9 +45,7 @@ class FanSwitchRow extends ConsumerWidget {
         children: [
           Expanded(
             child: Text(
-              cooling
-                  ? 'Cooling fan (needed while cooling)'
-                  : 'Cooling fan',
+              cooling ? 'Cooling fan (needed while cooling)' : 'Cooling fan',
             ),
           ),
           Switch(
@@ -77,7 +77,8 @@ class FanSwitchRow extends ConsumerWidget {
       if (!ok && context.mounted) {
         messenger.showSnackBar(
           const SnackBar(
-              content: Text('Another switch action is in progress.')),
+            content: Text('Another switch action is in progress.'),
+          ),
         );
       }
     } catch (e) {

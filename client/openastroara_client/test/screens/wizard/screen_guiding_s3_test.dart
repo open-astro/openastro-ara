@@ -262,4 +262,59 @@ void main() {
     expect(container.read(wizardControllerProvider).draft.guider.guidePixelSizeUm,
         isNull);
   });
+
+  group('Guide Camera must not be the Main Camera', () {
+    void seed(ProviderContainer c, String mainEndpoint, {String? guide}) {
+      final d = c.read(wizardControllerProvider).draft;
+      d.equipment.cameraDeviceId = 'cam-1';
+      d.deviceEndpoints['cam-1'] = [mainEndpoint];
+      if (guide != null) d.guider.guiderCamera = guide;
+    }
+
+    testWidgets('the same device holds Next and says why', (tester) async {
+      final container = await _pump(tester, seedDraft: (c) {
+        seed(c, '127.0.0.1:32323/0',
+            guide: 'Alpaca Camera [127.0.0.1:32323/0]');
+      });
+      await tester.pumpAndSettle();
+      expect(container.read(wizardStepValidProvider), isFalse);
+      expect(find.textContaining('separate Guide Camera'), findsOneWidget);
+    });
+
+    testWidgets('localhost and 127.0.0.1 are the same host', (tester) async {
+      final container = await _pump(tester, seedDraft: (c) {
+        seed(c, '127.0.0.1:32323/0',
+            guide: 'Alpaca Camera [localhost:32323/0]');
+      });
+      await tester.pumpAndSettle();
+      expect(container.read(wizardStepValidProvider), isFalse);
+      expect(find.textContaining('separate Guide Camera'), findsOneWidget);
+    });
+
+    for (final guide in [
+      'Alpaca Camera [127.0.0.1:6800/0]',
+      'Alpaca Camera [10.0.0.9:32323/0]',
+    ]) {
+      testWidgets('the same device number elsewhere is allowed: $guide',
+          (tester) async {
+        final container = await _pump(tester, seedDraft: (c) {
+          seed(c, '127.0.0.1:32323/0', guide: guide);
+        });
+        await tester.pumpAndSettle();
+        expect(container.read(wizardStepValidProvider), isTrue);
+        expect(find.textContaining('separate Guide Camera'), findsNothing);
+      });
+    }
+
+    testWidgets('a base-profile Guide Camera that clashes with the new Main '
+        'Camera holds Next without touching the picker', (tester) async {
+      final container = await _pump(tester,
+          equipment: _FreshGuiderEquipment(),
+          profile: _BaseProfileApi('Alpaca Camera [127.0.0.1:32323/0]'),
+          seedDraft: (c) => seed(c, '127.0.0.1:32323/0'));
+      await tester.pumpAndSettle();
+      expect(container.read(wizardStepValidProvider), isFalse);
+      expect(find.textContaining('separate Guide Camera'), findsOneWidget);
+    });
+  });
 }

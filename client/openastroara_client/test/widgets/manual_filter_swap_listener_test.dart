@@ -3,12 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/models/ws_event.dart';
 import 'package:openastroara/services/equipment_device_api.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/manual_filter_swap_listener.dart';
 
 /// The wheel as the listener sees it: one read at launch, the two actions,
@@ -69,6 +72,8 @@ Future<(List<String>, StreamController<WsEvent>)> _pump(
   WidgetTester tester,
   FilterWheelStatus? initial, {
   bool performs = true,
+  bool simple = false,
+  Locale? locale,
 }) async {
   final calls = <String>[];
   final ws = StreamController<WsEvent>.broadcast();
@@ -76,13 +81,17 @@ Future<(List<String>, StreamController<WsEvent>)> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        if (simple) simpleModeActiveProvider.overrideWithValue(true),
         filterWheelProvider.overrideWith(
           () => _FakeWheel(initial, calls, performs: performs),
         ),
         wsEventsProvider.overrideWith((ref) => ws.stream),
       ],
-      child: const MaterialApp(
-        home: ManualFilterSwapListener(child: Scaffold(body: Text('shell'))),
+      child: MaterialApp(
+        locale: locale,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const ManualFilterSwapListener(child: Scaffold(body: Text('shell'))),
       ),
     ),
   );
@@ -193,5 +202,41 @@ void main() {
       ),
     );
     expect(find.byType(AlertDialog), findsNothing);
+  });
+
+  group('Simple Mode', () {
+    List<SimpleMessage> pills(WidgetTester tester) =>
+        ProviderScope.containerOf(tester.element(find.text('shell'))).read(simpleMessagesProvider);
+
+    testWidgets('the prompt is a question pill, no dialog; its answer reports the filter', (tester) async {
+      final (calls, _) = await _pump(tester, _manual(currentSlot: 0, pendingSlot: 1), simple: true);
+      expect(find.byType(AlertDialog), findsNothing);
+      final pill = pills(tester).single;
+      expect(pill.kind, SimpleMessageKind.question);
+      expect(pill.title, 'Install the Ha filter');
+      expect(pill.detail, contains('Take out L'));
+      expect(pill.actions.map((a) => a.label), ['Cancel swap', 'Later', 'Ha is in']);
+      pill.actions.last.onPressed();
+      await tester.pumpAndSettle();
+      expect(calls, contains('installed:1'));
+    });
+
+    testWidgets('a swap resolved elsewhere takes its pill away', (tester) async {
+      final (_, ws) = await _pump(tester, _manual(currentSlot: 0), simple: true);
+      ws.add(_swap(pending: 1, pendingName: 'Ha', current: 'L'));
+      await tester.pumpAndSettle();
+      expect(pills(tester), hasLength(1));
+      ws.add(_swap(pending: null));
+      await tester.pumpAndSettle();
+      expect(pills(tester), isEmpty);
+    });
+  });
+
+  testWidgets('the filter swap pill is in Brazilian Portuguese', (tester) async {
+    await _pump(tester, _manual(currentSlot: 0, pendingSlot: 1), simple: true, locale: const Locale('pt', 'BR'));
+    final c = ProviderScope.containerOf(tester.element(find.byType(ManualFilterSwapListener)));
+    final pill = c.read(simpleMessagesProvider).single;
+    expect(pill.title, 'Coloque o filtro Ha');
+    expect(pill.actions.map((a) => a.label), ['Cancelar troca', 'Depois', 'Ha colocado']);
   });
 }

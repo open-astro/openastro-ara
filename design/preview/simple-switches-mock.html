@@ -165,7 +165,7 @@
     <div><h2>Port rows</h2><p>On/off ports are On / Off segments. A port with a range is a slider, and its level sits after the name as a percent of the port's range ("Dew 1 · 60 %"); the rig is still sent its own value, since ASCOM ports report no unit. (The level in this mock still shows the raw value.) A read-only port shows its value on the right. The level is sent when you let go: whole numbers when the range spans 10 or more, else 0.01 steps (the Thermal Switch's heater, 0–5).</p></div>
     <div><h2>While a write is on its way</h2><p>The port being set gets a blue ring before its name, and its slider stays where you let go. Every other control in the window is locked (read as disabled) until the rig answers, because the switch notifier drops a second write. The window then re-reads the ports.</p></div>
     <div><h2>Refused</h2><p>The rig's reason shows as an error pill on the left (red outline, fades after 20 s or on ×). The port goes back to the value the rig reports.</p></div>
-    <div><h2>Several devices</h2><p>Each connected device gets a titled section with the number of ports it shows, in the switch list's order. The Thermal Switch's cooling fan is left out (the rig runs it with the cooler), so that device shows 1 port.</p></div>
+    <div><h2>Several devices</h2><p>Each connected device gets a titled section with the number of ports it shows, in the switch list's order. The port the profile designates as the Cooling fan (here the Thermal Switch's) is left out (the rig runs it with the cooler), so that device shows 1 port.</p></div>
     <div><h2>Narrow</h2><p>Under 312 pt the label goes over its control, as in every device window. The window stops above the bottom row and scrolls when it's taller.</p></div>
     <div><h2>Readings hidden (chosen)</h2><p>A port the rig can't set is a reading, not a switch, so the window leaves it out; the readings show in Settings › Switches, one Sensors table per device. The count is of the ports listed, and in the Simple Mode window a device with nothing to switch isn't listed (Settings lists it). Try <b>The rig's simulator</b>: four of its ten ports remain.</p></div>
     <div><h2>Not in this window</h2><p>Connect / Disconnect (Settings › Devices has them), renaming or grouping ports, automatic dew control, live updates. The dew warning pill's Switches button opens this window.</p></div>
@@ -211,7 +211,9 @@
   let msgTimer;
 
   const isBool = p => Math.abs(p.min) < 1e-6 && Math.abs(p.max - 1) < 1e-6;
-  const isFan = (d, p) => d.name.includes('Thermal Switch') && p.name === 'Fan';
+  // The profile's Cooling fan; the app matches it by device and port id, never by name.
+  const fan = { device: 'Thermal Switch', port: 'Fan' };
+  const isFan = (d, p) => d.name.includes(fan.device) && p.name === fan.port;
   const round = (p, v) => p.max - p.min >= 10 ? Math.round(v) : Math.round(v * 100) / 100;
   const fmt = (p, v) => p.max - p.min >= 10 ? String(Math.round(v)) : String(Math.round(v * 100) / 100);
   const show = () => S.devs === 'sim' ? [devices[2]] : devices.slice(0, S.devs === 'one' ? 1 : 2);

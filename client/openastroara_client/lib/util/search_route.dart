@@ -139,6 +139,13 @@ Map<String, Object?>? routeResolved(
 /// A resolved name the bundle doesn't list, as a goto to its position:
 /// Simple Mode centres the sky on it instead of opening the target dialog.
 /// Null without a position.
+/// Simple Mode's sky view has no panel of its own: a search's goto asks the
+/// page to select the object too, so its card opens (#1713). Pure.
+Map<String, Object?> searchCommandFor(
+  Map<String, Object?> command, {
+  required bool bare,
+}) => bare && command['type'] == 'goto' ? {...command, 'select': true} : command;
+
 Map<String, Object?>? resolvedGoto(TargetResolution r) =>
     r.resolved && r.raDeg != null && r.decDeg != null
     ? {

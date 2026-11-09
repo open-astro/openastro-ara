@@ -1,13 +1,19 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../state/alarm/safety_alarm_state.dart';
+import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../widgets/emergency_stop_button.dart'
     show localEmergencyStopProvider;
 import '../../theme/ara_metrics.dart';
+import 'simple_message_pills.dart';
+import 'simple_shell.dart'
+    show kSimpleInset, kSimpleMessagesMaxWidth, simpleTheme;
 
 /// Simple Mode's safety alarm over every screen: MaterialApp's builder puts
 /// it above the Navigator, so the Image Library or the full Settings page
@@ -18,12 +24,57 @@ class SimpleSafetyAlarmLayer extends ConsumerWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Stack(
-    fit: StackFit.expand,
-    children: [
-      child,
-      if (ref.watch(simpleModeActiveProvider)) const SimpleSafetyAlarm(),
-    ],
+  Widget build(BuildContext context, WidgetRef ref) {
+    final simple = ref.watch(simpleModeActiveProvider);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        child,
+        // With the shell on top its own pills show; over a pushed page these do.
+        if (simple && !ref.watch(simpleShellOnTopProvider))
+          const _MessagesOverRoutes(),
+        if (simple) const SimpleSafetyAlarm(),
+      ],
+    );
+  }
+}
+
+/// The message pills over a page pushed on the shell: top left as ever, under
+/// its app bar and clear of Back. An Overlay of its own, for the × tooltip.
+class _MessagesOverRoutes extends StatelessWidget {
+  const _MessagesOverRoutes();
+
+  @override
+  // Above the shell, so without its theme unless this layer brings it.
+  Widget build(BuildContext context) => Theme(
+    data: simpleTheme(Theme.of(context)),
+    child: BackdropGroup(
+      child: Overlay(
+        initialEntries: [
+          OverlayEntry(
+            builder: (context) {
+              final media = MediaQuery.of(context);
+              return Stack(
+                children: [
+                  Positioned(
+                    left: kSimpleInset,
+                    top: media.padding.top + kToolbarHeight + kSimpleInset,
+                    width: math.min(
+                      kSimpleMessagesMaxWidth,
+                      media.size.width - kSimpleInset * 2,
+                    ),
+                    child: const Material(
+                      type: MaterialType.transparency,
+                      child: SimpleMessagePills(maxHeight: double.infinity),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    ),
   );
 }
 

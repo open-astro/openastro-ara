@@ -324,11 +324,11 @@ Ara assumes you're asleep while it works:
   flip announces itself and waits briefly for a confirmation.
 - A failed flip **pauses the run resumably** ("needs your attention") instead of killing it —
   Resume re-attempts the flip after you sort the rig out.
-- **Unattended shutdown**: if a run sits paused-awaiting-you and nobody responds within the
-  configured window (default 10 min), the daemon puts the rig to bed — guider stopped, mount
+- **Unattended shutdown**: if a failure pauses a run and nobody responds within the
+  configured window (30 min on a new profile), the daemon puts the rig to bed — guider stopped, mount
   parked, accessories disconnected, cooler warmed gently at your ramp rate, camera last — and
   leaves a morning summary. Any sign of you (opening the app, dismissing the alert, any command)
-  cancels the countdown. Configurable under Settings → Safety → Policies.
+  cancels the countdown. A plan's own wait-for-user step doesn't start it. Configurable under Settings → Safety → Policies.
 - **Notifications** escalate in severity during astronomical darkness so the alarm-worthy ones
   reach you; the §35 alarm loops on Critical until acknowledged.
 

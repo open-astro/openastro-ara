@@ -48,35 +48,69 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void Equipment_needs_the_mount_and_camera_connected() {
-            Assert.That(PreflightChecklistService.EquipmentItem(null, null, null, null, null, false, null).Status, Is.EqualTo("fail"));
-            var noCam = PreflightChecklistService.EquipmentItem(null, Mount(), null, null, null, false, null);
+            Assert.That(PreflightChecklistService.EquipmentItem(null, null, null, null, null, false, null, Tonight).Status, Is.EqualTo("fail"));
+            var noCam = PreflightChecklistService.EquipmentItem(null, Mount(), null, null, null, false, null, Tonight);
             Assert.That(noCam.Status, Is.EqualTo("fail"));
             Assert.That(noCam.Detail, Does.Contain("No camera selected"));
-            var dropped = PreflightChecklistService.EquipmentItem(Camera(), Mount(EquipmentConnectionState.Disconnected), null, null, null, false, null);
+            var dropped = PreflightChecklistService.EquipmentItem(Camera(), Mount(EquipmentConnectionState.Disconnected), null, null, null, false, null, Tonight);
             Assert.That(dropped.Status, Is.EqualTo("fail"));
             Assert.That(dropped.Detail, Does.Contain("Mount disconnected"));
-            Assert.That(PreflightChecklistService.EquipmentItem(Camera(), Mount(), null, null, null, false, 0).Status, Is.EqualTo("ok"));
+            Assert.That(PreflightChecklistService.EquipmentItem(Camera(), Mount(), null, null, null, false, Array.Empty<FaultDto>(), Tonight).Status, Is.EqualTo("ok"));
         }
 
         [Test]
-        public void Equipment_warns_on_an_unconnected_optional_device_or_an_unresolved_fault() {
+        public void Equipment_warns_on_an_unconnected_optional_device_() {
             var focuser = new FocuserDto("f", "Focuser", EquipmentConnectionState.Error, null, new FocuserStateDto("error", null, null, false));
-            var item = PreflightChecklistService.EquipmentItem(Camera(), Mount(), focuser, null, null, false, 0);
+            var item = PreflightChecklistService.EquipmentItem(Camera(), Mount(), focuser, null, null, false, Array.Empty<FaultDto>(), Tonight);
             Assert.That(item.Status, Is.EqualTo("warn"));
             Assert.That(item.Detail, Does.Contain("Focuser in error"));
 
-            var faults = PreflightChecklistService.EquipmentItem(Camera(), Mount(), null, null, null, false, 2);
-            Assert.That(faults.Status, Is.EqualTo("warn"));
-            Assert.That(faults.Detail, Does.Contain("2 unresolved faults"));
-
             // A manual filter wheel is never "connected" to anything: not a warning.
             var manual = new FilterWheelDto("w", "Manual", EquipmentConnectionState.Disconnected, new FilterWheelStateDto("idle", 1), Array.Empty<FilterSlotDto>(), Manual: true);
-            Assert.That(PreflightChecklistService.EquipmentItem(Camera(), Mount(), null, manual, null, false, 0).Status, Is.EqualTo("ok"));
+            Assert.That(PreflightChecklistService.EquipmentItem(Camera(), Mount(), null, manual, null, false, Array.Empty<FaultDto>(), Tonight).Status, Is.EqualTo("ok"));
+        }
+
+        // 06:00 on the night of 8 to 9 November 2026 (UTC); the night began at noon the day before.
+        private static readonly DateTimeOffset Tonight = new(2026, 11, 8, 12, 0, 0, TimeSpan.Zero);
+
+        private static FaultDto Fault(TimeSpan afterNightStart, string device = "ASI2600MM", string type = "disconnected") =>
+            new(Guid.NewGuid(), null, Tonight + afterNightStart, "camera", "c", device, type, null, null, null, Array.Empty<Guid>());
+
+        [Test]
+        public void Equipment_ignores_an_unresolved_fault_from_before_tonight() {
+            var old = Fault(TimeSpan.FromDays(-29));
+            var item = PreflightChecklistService.EquipmentItem(Camera(), Mount(), null, null, null, false, new[] { old }, Tonight);
+            Assert.That(item.Status, Is.EqualTo("ok"));
+        }
+
+        [Test]
+        public void Equipment_names_the_device_and_fault_type_of_a_fault_from_tonight() {
+            var item = PreflightChecklistService.EquipmentItem(Camera(), Mount(), null, null, null, false,
+                new[] { Fault(TimeSpan.FromHours(9), type: "stall_timeout"), Fault(TimeSpan.FromDays(-3)) }, Tonight);
+            Assert.That(item.Status, Is.EqualTo("warn"));
+            Assert.That(item.Detail, Is.EqualTo("ASI2600MM: stall timeout tonight."));
+        }
+
+        [Test]
+        public void Equipment_counts_the_faults_from_tonight_and_names_the_first_device() {
+            var item = PreflightChecklistService.EquipmentItem(Camera(), Mount(), null, null, null, false,
+                new[] { Fault(TimeSpan.FromHours(11), "Mount"), Fault(TimeSpan.FromHours(2), "ASI2600MM"), Fault(TimeSpan.FromDays(-1)) }, Tonight);
+            Assert.That(item.Detail, Is.EqualTo("2 faults tonight, the first on ASI2600MM."));
+        }
+
+        [TestCase(2026, 11, 9, 6, 0, 2026, 11, 8, 12, 0)]
+        [TestCase(2026, 11, 9, 12, 0, 2026, 11, 9, 12, 0)]
+        [TestCase(2026, 11, 9, 23, 30, 2026, 11, 9, 12, 0)]
+        public void The_night_starts_at_the_last_local_noon(int y, int mo, int d, int h, int mi, int ey, int emo, int ed, int eh, int emi) {
+            var local = TimeZoneInfo.Local.GetUtcOffset(new DateTime(y, mo, d, h, mi, 0));
+            var now = new DateTimeOffset(y, mo, d, h, mi, 0, local);
+            var expected = new DateTimeOffset(ey, emo, ed, eh, emi, 0, TimeZoneInfo.Local.GetUtcOffset(new DateTime(ey, emo, ed, eh, emi, 0)));
+            Assert.That(PreflightChecklistService.NightStart(now), Is.EqualTo(expected));
         }
 
         [Test]
         public void Equipment_read_failure_is_unknown_not_ok() {
-            Assert.That(PreflightChecklistService.EquipmentItem(Camera(), Mount(), null, null, null, readFailed: true, null).Status, Is.EqualTo("unknown"));
+            Assert.That(PreflightChecklistService.EquipmentItem(Camera(), Mount(), null, null, null, readFailed: true, null, Tonight).Status, Is.EqualTo("unknown"));
         }
 
         [Test]

@@ -9,11 +9,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/settings/safety_policies_state.dart';
+import '../../state/simple_flats_choice_state.dart';
 import '../../models/sequence/imaging_run_body.dart';
 import '../../models/sequence/nina_dom.dart' show childrenOf, withChildren;
 import '../../models/sequence/sequence_summary.dart';
 import '../../services/sequence_api.dart' show SequenceClient;
 import '../../state/equipment/camera_state.dart';
+import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/planning/sky_model_calibration_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sequencer/sequence_list_state.dart';
@@ -61,6 +64,7 @@ import 'simple_preview_panel.dart'
 import 'simple_shell.dart'
     show
         SimplePanel,
+        SimpleSegments,
         simpleFrost,
         kSimpleGoStyle,
         kSimpleInset,
@@ -69,7 +73,8 @@ import 'simple_shell.dart'
 
 /// The first plan for a filter set: LRGB when the set has any of it, else the
 /// narrowband filters, else every filter; one row with no filter name when
-/// there is no choice to make (OSC). The rows split [remainingDarkHours]
+/// there is no choice to make (OSC) or the rig cannot change filters
+/// ([canChangeFilters] false: every row would shoot through the same glass). The rows split [remainingDarkHours]
 /// (60 frames without a window) evenly. Pure — unit-tested.
 // Subs start at the profile's default exposure; the sheet offers the
 // suggested ones (simpleRunSuggestion).
@@ -77,8 +82,9 @@ List<FilterPlanStep> simpleRunDefaultPlan(
   List<PlanningFilter> filters,
   double exposureSeconds, {
   double? remainingDarkHours,
+  bool canChangeFilters = true,
 }) {
-  if (!planOptionsAvailable(filters)) {
+  if (!canChangeFilters || !planOptionsAvailable(filters)) {
     return [
       FilterPlanStep(
         filterName: '',
@@ -231,6 +237,7 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
       imagingDefaultsProvider.select((d) => d.defaultExposure),
       (_, _) => _reseed(),
     );
+    ref.listen(filterWheelProvider.select((w) => w.value != null), (_, _) => _reseed());
     _darkHours = ref.read(simpleDarkHoursProvider);
     return _defaults();
   }
@@ -239,6 +246,8 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
     ref.read(filterSetProvider).filters,
     ref.read(imagingDefaultsProvider).defaultExposure.inMilliseconds / 1000,
     remainingDarkHours: _darkHours,
+    // A wheel the daemon retains, connected or not (readRigCapabilities' rule).
+    canChangeFilters: ref.read(filterWheelProvider).value != null,
   );
 
   void _reseed() {
@@ -395,7 +404,8 @@ PlanetariumSelection simplePickDso(WidgetRef ref, PlanningDso d) {
     d,
     ref.read(tonightSkyProvider).value ?? const [],
     latitudeDeg: site.latitudeDeg,
-    longitudeDeg: site.longitudeDeg,
+    // 0, 0 is the unset site (as tonight_sky_state reads it): no altitude from a made-up position.
+    longitudeDeg: site.latitudeDeg == 0 && site.longitudeDeg == 0 ? null : site.longitudeDeg,
     utc: ref.read(clockProvider)().toUtc(),
   );
 }
@@ -1725,7 +1735,6 @@ class SimpleRunSheet extends ConsumerStatefulWidget {
     required this.onShowSky,
     required this.onPickInSky,
     required this.onCreated,
-    required this.onLibrary,
     this.editing,
   });
 
@@ -1739,7 +1748,6 @@ class SimpleRunSheet extends ConsumerStatefulWidget {
   /// Closes the sheet for the sky; Sky's card brings it back.
   final VoidCallback onPickInSky;
   final VoidCallback onCreated;
-  final VoidCallback onLibrary;
 
   @override
   ConsumerState<SimpleRunSheet> createState() => _SimpleRunSheetState();
@@ -1846,7 +1854,6 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 child: _NightDone(
                   run: run,
                   info: info!,
-                  onLibrary: widget.onLibrary,
                 ),
               )
             : _plan(run),
@@ -2135,6 +2142,8 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
           ),
         for (var i = 0; i < steps.length; i++)
           Row(
+            // A tile's list folds out below it: its neighbours stay at the top.
+            crossAxisAlignment: CrossAxisAlignment.start,
             spacing: AraSpace.s8,
             children: [
               SizedBox(
@@ -2228,6 +2237,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             style: kSimpleText.copyWith(color: AraColors.accentConnected),
           ),
         if (run.error != null || run.noStorage) _RunError(run),
+        if (editing == null && !imaging) const _FlatsChoice(),
         if (guided && editing == null)
           Text(context.l10n.guidedImagingStartsAfter, style: _dim)
         else if (editing == null && !imaging) ...[
@@ -2641,12 +2651,10 @@ class _NightDone extends ConsumerWidget {
   const _NightDone({
     required this.run,
     required this.info,
-    required this.onLibrary,
   });
 
   final SimpleRun run;
   final SequenceRunStateInfo info;
-  final VoidCallback onLibrary;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -2745,23 +2753,49 @@ class _NightDone extends ConsumerWidget {
               ],
             ),
         ],
-        Row(
-          spacing: AraSpace.s8,
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: onLibrary,
-                child: Text(context.l10n.planImageLibrary),
-              ),
-            ),
-            Expanded(
-              child: FilledButton(
-                key: const Key('simple-run-new-plan'),
-                onPressed: ref.read(simpleRunProvider.notifier).newPlan,
-                child: Text(context.l10n.planNewPlan),
-              ),
-            ),
-          ],
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            key: const Key('simple-run-new-plan'),
+            onPressed: ref.read(simpleRunProvider.notifier).newPlan,
+            child: Text(context.l10n.planNewPlan),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// A profile set to ask about flats answers here, before the run starts: Simple
+/// Mode has no popups. A profile with its own setting needs no answer.
+class _FlatsChoice extends ConsumerWidget {
+  const _FlatsChoice();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ask = ref.watch(
+      safetyPoliciesProvider.select(
+        (s) => s.calibrationCaptureDefault == CalibrationCaptureDefault.ask,
+      ),
+    );
+    if (!ask) return const SizedBox.shrink();
+    final l10n = context.l10n;
+    return Row(
+      spacing: AraSpace.s12,
+      children: [
+        Text(l10n.planFlats, style: _dim),
+        Expanded(
+          child: SimpleSegments<String>(
+            keyPrefix: 'simple-run-flats',
+            group: l10n.planFlats,
+            options: [
+              ('later', l10n.planFlatsNone, 'none'),
+              ('sky_at_twilight', l10n.planFlatsSky, 'sky'),
+              ('panel_at_end', l10n.planFlatsPanel, 'panel'),
+            ],
+            selected: ref.watch(simpleFlatsChoiceProvider),
+            onPick: ref.read(simpleFlatsChoiceProvider.notifier).set,
+          ),
         ),
       ],
     );

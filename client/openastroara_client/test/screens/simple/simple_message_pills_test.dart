@@ -65,6 +65,25 @@ void main() {
     expect(find.byType(SnackBar), findsOneWidget);
   });
 
+  testWidgets('a refused pill is amber, has no ×, and fades like a result', (tester) async {
+    final c = await _pump(tester);
+    c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.refused, 'No disk to eject');
+    await tester.pump();
+    expect(tester.widget<Icon>(find.byIcon(Icons.circle)).color, AraColors.accentWarning);
+    expect(find.byIcon(Icons.close), findsNothing);
+    await tester.pump(kSimpleResultLife);
+    expect(c.read(simpleMessagesProvider), isEmpty);
+  });
+
+  testWidgets("a refused pill's time-left line is amber, like its dot", (tester) async {
+    final c = await _pump(tester);
+    c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.refused, 'No disk to eject');
+    await tester.pump();
+    final amber = AraColors.accentWarning.withValues(alpha: 0.6);
+    expect(find.byWidgetPredicate((w) => w is Container && w.color == amber), findsOneWidget);
+    await tester.pump(kSimpleResultLife);
+  });
+
   testWidgets('a result fades after 10 s; an error stays longer, then fades too (user, 2026-11-04); × closes it',
       (tester) async {
     final c = await _pump(tester);

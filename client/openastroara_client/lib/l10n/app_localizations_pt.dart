@@ -702,13 +702,6 @@ class AppLocalizationsPt extends AppLocalizations {
       'Tap the shutter for the guide camera\'s frames';
 
   @override
-  String get simpleNoFlatsThisRun => 'No flats this run';
-
-  @override
-  String get simpleNoFlatsThisRunDetail =>
-      'Your profile asks before each run, and Simple Mode doesn\'t ask. Turn off Simple Mode in Settings → Rig, then set Capture calibration after a sequence under Settings → Session → Calibration.';
-
-  @override
   String get previewCamera => 'Camera';
 
   @override
@@ -1374,6 +1367,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellReconnect => 'Reconnect';
 
   @override
+  String get shellAddDevice => 'Add a device';
+
+  @override
+  String get shellChooseDevice => 'Choose…';
+
+  @override
   String get shellConnect => 'Connect';
 
   @override
@@ -1732,9 +1731,6 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get planImageLibrary => 'Image Library';
-
-  @override
   String get planNewPlan => 'New plan';
 
   @override
@@ -1854,7 +1850,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get estopConfirmBody =>
-      'This aborts the running sequence and the in-flight exposure, stops guiding, halts the rotator, parks the mount, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.';
+      'This aborts the running sequence, halts the rotator where it is, aborts the in-flight exposure, stops the guide-camera focus loop, the Bahtinov readout, autofocus and polar alignment, stops guiding, stops the mount where it is with tracking off, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.';
 
   @override
   String get estopCancel => 'Cancel';
@@ -2827,6 +2823,555 @@ class AppLocalizationsPt extends AppLocalizations {
   String albumSinceLastVisit(String changes) {
     return '$changes since your last visit';
   }
+
+  @override
+  String get wizardGuideCameraIsMainCamera =>
+      'The Main Camera can\'t also be the Guide Camera. Guiding needs a separate Guide Camera, because two programs on one sensor break guiding. Pick another camera, or choose None.';
+
+  @override
+  String get wizardDarksSkippedPushFailed =>
+      'Dark-library build skipped: the guider didn\'t take the new profile. Build it from the Guider panel once the profile push succeeds.';
+
+  @override
+  String get shellStorageSavedTo => 'Frames are saved to';
+
+  @override
+  String get shellStorageInternal => 'Internal storage';
+
+  @override
+  String shellStorageFreeOf(String free, String total) {
+    return '$free free of $total';
+  }
+
+  @override
+  String get shellStorageNotPlugged =>
+      'No disk is plugged in. Frames can\'t be saved.';
+
+  @override
+  String get shellStorageUnreadable =>
+      'Couldn\'t read the rig\'s storage. Frames can\'t be saved.';
+
+  @override
+  String get shellStorageFull => 'The disk is full. Frames can\'t be saved.';
+
+  @override
+  String get shellStorageChoose => 'Choose disk';
+
+  @override
+  String get shellStorageEject => 'Eject';
+
+  @override
+  String get shellStorageCheck => 'Check disk';
+
+  @override
+  String get searchSettingStorage => 'Storage';
+
+  @override
+  String get searchWordsStorage => 'disk drive frames save space eject usb';
+
+  @override
+  String get coolingFan => 'Cooling fan';
+
+  @override
+  String get coolingFanNone => 'None';
+
+  @override
+  String get coolingFanNotConnected => 'Chosen fan (not connected)';
+
+  @override
+  String get coolingFanChosenNote =>
+      'This fan starts with the cooler and cannot be turned off while the camera is cooling.';
+
+  @override
+  String get coolingFanNoneNote =>
+      'No fan is chosen, so Ara does not run a fan with the cooler.';
+
+  @override
+  String get coolingFanCouldntSave => 'Couldn\'t save the cooling fan';
+
+  @override
+  String get coolingFanAsk =>
+      'Choose your camera\'s cooling fan so it runs with the cooler.';
+
+  @override
+  String get coolingFanAskFullUi =>
+      'Choose your camera\'s cooling fan in Settings › Camera so it runs with the cooler.';
+
+  @override
+  String get coolingFanChoose => 'Choose';
+
+  @override
+  String get coolingFanNotNow => 'Not now';
+
+  @override
+  String get planFlats => 'Flats';
+
+  @override
+  String get planFlatsNone => 'None';
+
+  @override
+  String get planFlatsSky => 'Sky';
+
+  @override
+  String get planFlatsPanel => 'Panel';
+
+  @override
+  String get shellStorageReading => 'Checking the disk…';
+
+  @override
+  String get shellStorageUnknownDisk => 'Unknown disk';
+
+  @override
+  String get storageDiskChooseTitle => 'Choose a disk for your frames';
+
+  @override
+  String get storageDiskRescan => 'Rescan';
+
+  @override
+  String get storageDiskUse => 'Use Disk';
+
+  @override
+  String get storageDiskEraseUse => 'Erase and Use Disk';
+
+  @override
+  String get storageDiskNoneFound =>
+      'No external disks found.\n\nConnect a USB drive or SSD to the server, then Rescan.';
+
+  @override
+  String get storageDiskInUse => 'In use';
+
+  @override
+  String get storageDiskEraseChange => 'Erase and change format';
+
+  @override
+  String storageDiskEraseChangeNote(String fileSystem) {
+    return 'This disk already works as a store ($fileSystem). Turn this on only to reformat it — everything on it will be lost.';
+  }
+
+  @override
+  String get storageDiskMustErase => 'This disk must be erased';
+
+  @override
+  String get storageDiskMustEraseNote =>
+      'ARA saves frames in a format this disk doesn\'t use, so it has to be erased first. Everything on it will be lost.';
+
+  @override
+  String get storageDiskExfat => 'exFAT — take the drive with you';
+
+  @override
+  String get storageDiskExfatNote =>
+      'Plugs straight into Windows and Mac at home. After a power cut, run Check disk.';
+
+  @override
+  String get storageDiskExt4 => 'ext4 — drive lives on the rig';
+
+  @override
+  String get storageDiskExt4Note =>
+      'Journaled (self-healing after power cuts). Readable on Linux computers; Windows and Mac can\'t read it — frames arrive there via the backup mirror.';
+
+  @override
+  String storageDiskTypeLabel(String label) {
+    return 'Type “$label” to confirm:';
+  }
+
+  @override
+  String get storageDiskTypeErase =>
+      'This disk has no label — type ERASE to confirm:';
+
+  @override
+  String get storageDiskErasing => 'Erasing and connecting the disk…';
+
+  @override
+  String get storageDiskConnecting => 'Connecting the disk…';
+
+  @override
+  String storageDiskNowUsed(String name) {
+    return '$name is now used for frames.';
+  }
+
+  @override
+  String get storageDiskReadAction => 'read the server\'s disks';
+
+  @override
+  String get storageConfigureNotExt4 =>
+      'This disk needs to be erased before ARA can use it.';
+
+  @override
+  String get storageConfigureLabelMismatch =>
+      'The disk changed since the list was loaded. Rescan and try again.';
+
+  @override
+  String get storageConfigurePreviousBusy =>
+      'The disk frames are saved to now is in use, so ARA can\'t switch away from it. Close anything reading it, then try again.';
+
+  @override
+  String get storageConfigureBusy =>
+      'The disk is in use. Close anything reading it, then try again.';
+
+  @override
+  String get storageConfigureSystemDisk =>
+      'That disk holds the server\'s operating system and can\'t be used.';
+
+  @override
+  String get storageConfigureDisconnected =>
+      'The disk disconnected. Reconnect it and rescan.';
+
+  @override
+  String get storageConfigureHelperMissing =>
+      'The server is missing part of its installation. Reinstall openastroara-server.';
+
+  @override
+  String get storageConfigureMkfsFailed =>
+      'Erasing the disk failed. See the server log for details.';
+
+  @override
+  String get storageConfigureMountFailed =>
+      'The disk was prepared but could not be connected.';
+
+  @override
+  String storageConfigureFailed(String name) {
+    return 'Could not use $name.';
+  }
+
+  @override
+  String get storageCheckTitle => 'Check the store drive?';
+
+  @override
+  String get storageCheckBody =>
+      'The drive is briefly taken offline while its filesystem is verified and repaired if needed. Takes seconds to a couple of minutes; capture must be idle.';
+
+  @override
+  String get storageNoDriveEject => 'No store drive to eject.';
+
+  @override
+  String get storageNoDriveCheck =>
+      'No store drive to check — connect one first.';
+
+  @override
+  String deviceChooserTitle(String type) {
+    return 'Choose $type';
+  }
+
+  @override
+  String get deviceChooserRescan => 'Re-scan';
+
+  @override
+  String get deviceChooserManualWheel =>
+      'No driver: you swap filters by hand and Ara asks for each one';
+
+  @override
+  String get deviceChooserNoneTitle => 'No devices found';
+
+  @override
+  String get deviceChooserNoneBody =>
+      'No Alpaca responder answered on Ara\'s subnet — most often AlpacaBridge (ARA\'s equipment hub) is not installed or its service is stopped. On Ara host, check:';
+
+  @override
+  String get deviceChooserOtherHost =>
+      'A driver on another host must be reachable from Ara\'s subnet (UDP 32227).';
+
+  @override
+  String get deviceChooserFailed => 'Discovery failed';
+
+  @override
+  String get deviceChooserRetry => 'Retry';
+
+  @override
+  String get deviceChooserNotConnected =>
+      'Not connected — connect to your rig to save this.';
+
+  @override
+  String get bugReviewTitle => 'Before you share this bug report';
+
+  @override
+  String get bugReviewDownload => 'Download anyway';
+
+  @override
+  String get bugReviewContains => 'The bundle contains:';
+
+  @override
+  String get bugReviewNoSources => '• Ara\'s recent log files';
+
+  @override
+  String get bugReviewProfileRedacted =>
+      '• your profile with coordinates, serial numbers, hostnames, usernames in paths, private network addresses and tokens scrubbed';
+
+  @override
+  String get bugReviewProfileCoarse =>
+      '• your profile with the site rounded to ~111 km — it may still include equipment credentials, API / notification tokens and network addresses';
+
+  @override
+  String get bugReviewProfileFull =>
+      '• your full profile — which may include equipment credentials, API / notification tokens, precise observatory coordinates, and network addresses';
+
+  @override
+  String get bugReviewSystemRedacted =>
+      '• system info, with this device\'s username scrubbed from its path';
+
+  @override
+  String get bugReviewSystemFull =>
+      '• system info, including this device\'s filesystem path';
+
+  @override
+  String get bugReviewClientLog =>
+      '• this app\'s own error log, saved as a separate file beside the ZIP';
+
+  @override
+  String bugReviewSize(String size) {
+    return 'Approximate size: $size.';
+  }
+
+  @override
+  String get bugReviewTrust =>
+      'Only share it with people you trust (e.g. the developers) — treat it like a password.';
+
+  @override
+  String get bugReviewNone => 'none';
+
+  @override
+  String get bugReviewOneFile => '1 file';
+
+  @override
+  String bugReviewFiles(String count) {
+    return '$count files';
+  }
+
+  @override
+  String get bugReviewCut => ', the largest cut to their newest part';
+
+  @override
+  String get bugSourceAra => 'Ara\'s own logs';
+
+  @override
+  String get bugSourceAraNina => 'Ara\'s NINA-layer logs';
+
+  @override
+  String get bugSourceAlpacaBridge =>
+      'AlpacaBridge logs (camera, mount, focuser, wheel)';
+
+  @override
+  String get bugSourceGuider => 'guider (PHD2) debug and guide logs';
+
+  @override
+  String get bugSourceSystem => 'package install history';
+
+  @override
+  String get bugSourceJournal =>
+      'system journal (Ara, AlpacaBridge, the guider, the kernel)';
+
+  @override
+  String takeoverWants(String name) {
+    return '$name wants to connect';
+  }
+
+  @override
+  String get takeoverDetail =>
+      'Only one client can control the observatory at a time. Allowing hands control to the other client and disconnects this one; the running sequence continues either way.';
+
+  @override
+  String get takeoverKeep => 'Keep me connected';
+
+  @override
+  String get takeoverAllow => 'Allow';
+
+  @override
+  String filterSwapInstall(String target) {
+    return 'Install the $target filter';
+  }
+
+  @override
+  String filterSwapDetail(String target) {
+    return 'Swap in $target, then confirm. A run waiting on it continues when you do.';
+  }
+
+  @override
+  String filterSwapDetailFrom(String current, String target) {
+    return 'Take out $current and swap in $target, then confirm. A run waiting on it continues when you do.';
+  }
+
+  @override
+  String get filterSwapCancel => 'Cancel swap';
+
+  @override
+  String get filterSwapLater => 'Later';
+
+  @override
+  String filterSwapIsIn(String target) {
+    return '$target is in';
+  }
+
+  @override
+  String get filterSwapCouldntConfirm => 'Couldn\'t confirm the filter';
+
+  @override
+  String get filterSwapCouldntCancel => 'Couldn\'t cancel the swap';
+
+  @override
+  String get bugCardTitle => 'Send me a bug report';
+
+  @override
+  String get bugCardBody =>
+      'Bundles the rig\'s logs (Ara, AlpacaBridge, the guider, the system journal) + your profile + system info into a ZIP you can attach to a report.';
+
+  @override
+  String bugCardPacking(String size) {
+    return 'Packing the logs on the rig… $size read';
+  }
+
+  @override
+  String get bugCardCovers => 'Covers: ';
+
+  @override
+  String get bugCardSharing => 'Sharing: ';
+
+  @override
+  String get bugCardAppLog => 'This app\'s error log';
+
+  @override
+  String get bugCardPrepare => 'Prepare & download';
+
+  @override
+  String get bugCardSaveLog => 'Save client log';
+
+  @override
+  String get bugRangeNight => 'Last night (whole rig)';
+
+  @override
+  String get bugRange3Days => 'Last 3 days (whole rig)';
+
+  @override
+  String get bugRange7Days => 'Last 7 days (whole rig)';
+
+  @override
+  String get bugRangeAraOnly => 'Ara logs only';
+
+  @override
+  String get bugModeFull => 'Include everything';
+
+  @override
+  String get bugModeFullNote => 'best for debugging';
+
+  @override
+  String get bugModeCoarse => 'Coarse GPS only';
+
+  @override
+  String get bugModeCoarseNote => 'site rounded to ~111 km';
+
+  @override
+  String get bugModeRedacted => 'Redact all sensitive items';
+
+  @override
+  String get bugModeRedactedNote =>
+      'coordinates, serials, hostnames, usernames in paths, private IPs, tokens';
+
+  @override
+  String get bugPickTitle => 'Choose where to save the bug report';
+
+  @override
+  String bugSaved(String name) {
+    return 'Saved $name';
+  }
+
+  @override
+  String bugSavedBoth(String name, String log) {
+    return 'Saved $name and $log';
+  }
+
+  @override
+  String bugFailed(String reason) {
+    return 'Bug report failed: $reason';
+  }
+
+  @override
+  String get bugFailStillPacking =>
+      'the rig is still packing the logs; try again in a moment';
+
+  @override
+  String get bugFailCouldNotPack => 'the rig could not pack the logs';
+
+  @override
+  String get bugFailTimeout => 'Ara took too long to respond.';
+
+  @override
+  String get bugFailUnreachable => 'could not reach Ara.';
+
+  @override
+  String bugFailStatus(String status) {
+    return 'Ara returned an error ($status).';
+  }
+
+  @override
+  String get bugFailTalking => 'something went wrong talking to Ara.';
+
+  @override
+  String get bugFailUnexpected => 'an unexpected error occurred.';
+
+  @override
+  String get clientLogPickTitle => 'Choose where to save the client log';
+
+  @override
+  String clientLogSaved(String path) {
+    return 'Saved $path';
+  }
+
+  @override
+  String get clientLogSaveAction => 'save the log';
+
+  @override
+  String get storageEjected => 'Ejected — safe to unplug the drive.';
+
+  @override
+  String get storageEjectBusy =>
+      'The drive is busy — wait for writes to finish and try again.';
+
+  @override
+  String storageEjectFailed(String reason) {
+    return 'Eject failed: $reason';
+  }
+
+  @override
+  String get storageEjectAction => 'eject the drive';
+
+  @override
+  String get storageCheckRepaired =>
+      'Disk checked — repairs were made. Worth re-running \"Find frames on disk\".';
+
+  @override
+  String get storageCheckClean => 'Disk checked — clean.';
+
+  @override
+  String storageCheckFailed(String reason) {
+    return 'Check failed: $reason';
+  }
+
+  @override
+  String get storageCheckAction => 'check the disk';
+
+  @override
+  String get sessionTransferredTitle => 'Session transferred';
+
+  @override
+  String get sessionTransferredDetail =>
+      'Another client took control of the observatory, so this client was disconnected. The running sequence is unaffected — it continues on Ara.';
+
+  @override
+  String get storageCheckRepairedSimple => 'Disk checked — repairs were made.';
+
+  @override
+  String get storageDiskNotFormatted => 'not formatted';
+
+  @override
+  String storageDiskNeedsErasing(String fileSystem) {
+    return 'needs erasing ($fileSystem)';
+  }
+
+  @override
+  String storageDiskInUseAt(String path) {
+    return 'in use at $path';
+  }
+
+  @override
+  String get deviceChooserFindAction => 'find devices';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -3540,13 +4085,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Toque no obturador para ver os quadros da câmera guia';
 
   @override
-  String get simpleNoFlatsThisRun => 'Sem flats nesta sessão';
-
-  @override
-  String get simpleNoFlatsThisRunDetail =>
-      'Seu perfil pergunta antes de cada sessão, e o Modo Simples não pergunta. Desligue o Modo Simples em Ajustes → Setup e ajuste Capture calibration after a sequence em Ajustes → Session → Calibration.';
-
-  @override
   String get previewCamera => 'Câmera';
 
   @override
@@ -4214,6 +4752,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get shellReconnect => 'Reconectar';
 
   @override
+  String get shellAddDevice => 'Adicionar um dispositivo';
+
+  @override
+  String get shellChooseDevice => 'Escolher…';
+
+  @override
   String get shellConnect => 'Conectar';
 
   @override
@@ -4575,9 +5119,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String get planImageLibrary => 'Biblioteca de imagens';
-
-  @override
   String get planNewPlan => 'Novo plano';
 
   @override
@@ -4698,7 +5239,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get estopConfirmBody =>
-      'Isto aborta a sequência em andamento e a exposição atual, para a guiagem, para o rotador, estaciona a montagem e desliga a luz do painel de flat e a refrigeração da câmera. Não pode ser desfeito — a sequência não é retomada.';
+      'Isto aborta a sequência em andamento, para o rotador onde ele está, aborta a exposição atual, para o foco da câmera de guiagem, a leitura de Bahtinov, o autofoco e o alinhamento polar, para a guiagem, para a montagem onde ela está, com o rastreamento desligado, e desliga a luz do painel de flat e a refrigeração da câmera. Não pode ser desfeito — a sequência não é retomada.';
 
   @override
   String get estopCancel => 'Cancelar';
@@ -5628,8 +6169,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String get albumNoServer =>
-      'Conecte-se a um equipamento para preencher o álbum';
+  String get albumNoServer => 'Conecte-se a um setup para preencher o álbum';
 
   @override
   String albumCardSemantics(String label, String name, String state) {
@@ -5677,4 +6217,557 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String albumSinceLastVisit(String changes) {
     return '$changes desde a última visita';
   }
+
+  @override
+  String get wizardGuideCameraIsMainCamera =>
+      'A câmera principal não pode ser também a câmera de guiagem. A guiagem precisa de uma câmera de guiagem separada, porque dois programas no mesmo sensor quebram a guiagem. Escolha outra câmera ou selecione Nenhuma.';
+
+  @override
+  String get wizardDarksSkippedPushFailed =>
+      'Biblioteca de darks não iniciada: o guiador não aceitou o novo perfil. Crie-a no painel do Guiador depois que o envio do perfil funcionar.';
+
+  @override
+  String get shellStorageSavedTo => 'Os quadros são salvos em';
+
+  @override
+  String get shellStorageInternal => 'Armazenamento interno';
+
+  @override
+  String shellStorageFreeOf(String free, String total) {
+    return '$free livres de $total';
+  }
+
+  @override
+  String get shellStorageNotPlugged =>
+      'Nenhum disco conectado. Não é possível salvar os quadros.';
+
+  @override
+  String get shellStorageUnreadable =>
+      'Não foi possível ler o armazenamento do setup. Não é possível salvar os quadros.';
+
+  @override
+  String get shellStorageFull =>
+      'O disco está cheio. Não é possível salvar os quadros.';
+
+  @override
+  String get shellStorageChoose => 'Escolher disco';
+
+  @override
+  String get shellStorageEject => 'Ejetar';
+
+  @override
+  String get shellStorageCheck => 'Verificar disco';
+
+  @override
+  String get searchSettingStorage => 'Armazenamento';
+
+  @override
+  String get searchWordsStorage =>
+      'disco hd ssd quadros salvar espaço ejetar usb';
+
+  @override
+  String get coolingFan => 'Ventoinha de refrigeração';
+
+  @override
+  String get coolingFanNone => 'Nenhuma';
+
+  @override
+  String get coolingFanNotConnected => 'Ventoinha escolhida (não conectada)';
+
+  @override
+  String get coolingFanChosenNote =>
+      'Esta ventoinha liga com a refrigeração e não pode ser desligada enquanto a câmera estiver refrigerando.';
+
+  @override
+  String get coolingFanNoneNote =>
+      'Nenhuma ventoinha foi escolhida, então o Ara não aciona uma ventoinha com a refrigeração.';
+
+  @override
+  String get coolingFanCouldntSave =>
+      'Não foi possível salvar a ventoinha de refrigeração';
+
+  @override
+  String get coolingFanAsk =>
+      'Escolha a ventoinha de refrigeração da sua câmera para que ela funcione com a refrigeração.';
+
+  @override
+  String get coolingFanAskFullUi =>
+      'Escolha a ventoinha de refrigeração da sua câmera em Ajustes › Câmera para que ela funcione com a refrigeração.';
+
+  @override
+  String get coolingFanChoose => 'Escolher';
+
+  @override
+  String get coolingFanNotNow => 'Agora não';
+
+  @override
+  String get planFlats => 'Flats';
+
+  @override
+  String get planFlatsNone => 'Nenhum';
+
+  @override
+  String get planFlatsSky => 'Céu';
+
+  @override
+  String get planFlatsPanel => 'Painel';
+
+  @override
+  String get shellStorageReading => 'Verificando o disco…';
+
+  @override
+  String get shellStorageUnknownDisk => 'Disco desconhecido';
+
+  @override
+  String get storageDiskChooseTitle => 'Escolha um disco para os seus quadros';
+
+  @override
+  String get storageDiskRescan => 'Procurar de novo';
+
+  @override
+  String get storageDiskUse => 'Usar disco';
+
+  @override
+  String get storageDiskEraseUse => 'Apagar e usar disco';
+
+  @override
+  String get storageDiskNoneFound =>
+      'Nenhum disco externo encontrado.\n\nConecte um pen drive ou SSD ao servidor e toque em Procurar de novo.';
+
+  @override
+  String get storageDiskInUse => 'Em uso';
+
+  @override
+  String get storageDiskEraseChange => 'Apagar e mudar o formato';
+
+  @override
+  String storageDiskEraseChangeNote(String fileSystem) {
+    return 'Este disco já funciona para salvar quadros ($fileSystem). Ative somente para reformatá-lo: tudo o que estiver nele será perdido.';
+  }
+
+  @override
+  String get storageDiskMustErase => 'Este disco precisa ser apagado';
+
+  @override
+  String get storageDiskMustEraseNote =>
+      'O ARA salva quadros em um formato que este disco não usa, então ele precisa ser apagado primeiro. Tudo o que estiver nele será perdido.';
+
+  @override
+  String get storageDiskExfat => 'exFAT — leve o disco com você';
+
+  @override
+  String get storageDiskExfatNote =>
+      'Conecta direto no Windows e no Mac em casa. Depois de uma queda de energia, use Verificar disco.';
+
+  @override
+  String get storageDiskExt4 => 'ext4 — o disco fica no setup';
+
+  @override
+  String get storageDiskExt4Note =>
+      'Com journaling (se recupera sozinho após quedas de energia). Legível em computadores Linux; Windows e Mac não leem este formato, e os quadros chegam a eles pelo espelho de backup.';
+
+  @override
+  String storageDiskTypeLabel(String label) {
+    return 'Digite “$label” para confirmar:';
+  }
+
+  @override
+  String get storageDiskTypeErase =>
+      'Este disco não tem rótulo. Digite ERASE para confirmar:';
+
+  @override
+  String get storageDiskErasing => 'Apagando e conectando o disco…';
+
+  @override
+  String get storageDiskConnecting => 'Conectando o disco…';
+
+  @override
+  String storageDiskNowUsed(String name) {
+    return '$name agora é usado para os quadros.';
+  }
+
+  @override
+  String get storageDiskReadAction => 'ler os discos do servidor';
+
+  @override
+  String get storageConfigureNotExt4 =>
+      'Este disco precisa ser apagado antes que o ARA possa usá-lo.';
+
+  @override
+  String get storageConfigureLabelMismatch =>
+      'O disco mudou desde que a lista foi carregada. Procure de novo e tente outra vez.';
+
+  @override
+  String get storageConfigurePreviousBusy =>
+      'O disco onde os quadros são salvos agora está em uso, então o ARA não consegue trocá-lo. Feche o que estiver lendo esse disco e tente de novo.';
+
+  @override
+  String get storageConfigureBusy =>
+      'O disco está em uso. Feche o que estiver lendo esse disco e tente de novo.';
+
+  @override
+  String get storageConfigureSystemDisk =>
+      'Esse disco contém o sistema operacional do servidor e não pode ser usado.';
+
+  @override
+  String get storageConfigureDisconnected =>
+      'O disco foi desconectado. Conecte-o de novo e procure outra vez.';
+
+  @override
+  String get storageConfigureHelperMissing =>
+      'Falta parte da instalação do servidor. Reinstale o openastroara-server.';
+
+  @override
+  String get storageConfigureMkfsFailed =>
+      'Não foi possível apagar o disco. Veja o log do servidor para mais detalhes.';
+
+  @override
+  String get storageConfigureMountFailed =>
+      'O disco foi preparado, mas não pôde ser conectado.';
+
+  @override
+  String storageConfigureFailed(String name) {
+    return 'Não foi possível usar $name.';
+  }
+
+  @override
+  String get storageCheckTitle => 'Verificar o disco de armazenamento?';
+
+  @override
+  String get storageCheckBody =>
+      'O disco fica offline por um momento enquanto o sistema de arquivos é verificado e, se preciso, reparado. Leva de alguns segundos a uns dois minutos; a captura precisa estar parada.';
+
+  @override
+  String get storageNoDriveEject =>
+      'Não há disco de armazenamento para ejetar.';
+
+  @override
+  String get storageNoDriveCheck =>
+      'Não há disco de armazenamento para verificar. Conecte um primeiro.';
+
+  @override
+  String deviceChooserTitle(String type) {
+    return 'Escolher $type';
+  }
+
+  @override
+  String get deviceChooserRescan => 'Procurar de novo';
+
+  @override
+  String get deviceChooserManualWheel =>
+      'Sem driver: você troca os filtros à mão e o Ara pede cada um';
+
+  @override
+  String get deviceChooserNoneTitle => 'Nenhum dispositivo encontrado';
+
+  @override
+  String get deviceChooserNoneBody =>
+      'Nenhum dispositivo Alpaca respondeu na sub-rede do Ara. Na maioria das vezes, o AlpacaBridge (o hub de equipamentos do ARA) não está instalado ou o serviço está parado. No host do Ara, verifique:';
+
+  @override
+  String get deviceChooserOtherHost =>
+      'Um driver em outro host precisa estar acessível a partir da sub-rede do Ara (UDP 32227).';
+
+  @override
+  String get deviceChooserFailed => 'Falha na busca';
+
+  @override
+  String get deviceChooserRetry => 'Tentar de novo';
+
+  @override
+  String get deviceChooserNotConnected =>
+      'Não conectado — conecte-se ao seu setup para salvar.';
+
+  @override
+  String get bugReviewTitle => 'Antes de compartilhar este relatório de erro';
+
+  @override
+  String get bugReviewDownload => 'Baixar mesmo assim';
+
+  @override
+  String get bugReviewContains => 'O pacote contém:';
+
+  @override
+  String get bugReviewNoSources => '• os arquivos de log recentes do Ara';
+
+  @override
+  String get bugReviewProfileRedacted =>
+      '• seu perfil com coordenadas, números de série, nomes de host, nomes de usuário em caminhos, endereços de rede privada e tokens removidos';
+
+  @override
+  String get bugReviewProfileCoarse =>
+      '• seu perfil com o local arredondado para ~111 km; ainda pode incluir credenciais de equipamentos, tokens de API / notificação e endereços de rede';
+
+  @override
+  String get bugReviewProfileFull =>
+      '• seu perfil completo, que pode incluir credenciais de equipamentos, tokens de API / notificação, coordenadas precisas do observatório e endereços de rede';
+
+  @override
+  String get bugReviewSystemRedacted =>
+      '• informações do sistema, sem o nome de usuário deste dispositivo no caminho';
+
+  @override
+  String get bugReviewSystemFull =>
+      '• informações do sistema, incluindo o caminho deste dispositivo no sistema de arquivos';
+
+  @override
+  String get bugReviewClientLog =>
+      '• o log de erros deste aplicativo, salvo em um arquivo separado ao lado do ZIP';
+
+  @override
+  String bugReviewSize(String size) {
+    return 'Tamanho aproximado: $size.';
+  }
+
+  @override
+  String get bugReviewTrust =>
+      'Compartilhe somente com pessoas de confiança (por exemplo, os desenvolvedores) e trate-o como uma senha.';
+
+  @override
+  String get bugReviewNone => 'nenhum';
+
+  @override
+  String get bugReviewOneFile => '1 arquivo';
+
+  @override
+  String bugReviewFiles(String count) {
+    return '$count arquivos';
+  }
+
+  @override
+  String get bugReviewCut => ', os maiores cortados na parte mais recente';
+
+  @override
+  String get bugSourceAra => 'logs do próprio Ara';
+
+  @override
+  String get bugSourceAraNina => 'logs da camada NINA do Ara';
+
+  @override
+  String get bugSourceAlpacaBridge =>
+      'logs do AlpacaBridge (câmera, montagem, focalizador, roda de filtros)';
+
+  @override
+  String get bugSourceGuider => 'logs de depuração e de guiagem do guia (PHD2)';
+
+  @override
+  String get bugSourceSystem => 'histórico de instalação de pacotes';
+
+  @override
+  String get bugSourceJournal =>
+      'journal do sistema (Ara, AlpacaBridge, guia, kernel)';
+
+  @override
+  String takeoverWants(String name) {
+    return '$name quer se conectar';
+  }
+
+  @override
+  String get takeoverDetail =>
+      'Apenas um cliente pode controlar o observatório por vez. Permitir passa o controle para o outro cliente e desconecta este; a sequência em andamento continua de qualquer forma.';
+
+  @override
+  String get takeoverKeep => 'Manter conectado';
+
+  @override
+  String get takeoverAllow => 'Permitir';
+
+  @override
+  String filterSwapInstall(String target) {
+    return 'Coloque o filtro $target';
+  }
+
+  @override
+  String filterSwapDetail(String target) {
+    return 'Coloque $target e confirme. Uma sequência à espera continua quando você confirmar.';
+  }
+
+  @override
+  String filterSwapDetailFrom(String current, String target) {
+    return 'Retire $current, coloque $target e confirme. Uma sequência à espera continua quando você confirmar.';
+  }
+
+  @override
+  String get filterSwapCancel => 'Cancelar troca';
+
+  @override
+  String get filterSwapLater => 'Depois';
+
+  @override
+  String filterSwapIsIn(String target) {
+    return '$target colocado';
+  }
+
+  @override
+  String get filterSwapCouldntConfirm => 'Não foi possível confirmar o filtro';
+
+  @override
+  String get filterSwapCouldntCancel => 'Não foi possível cancelar a troca';
+
+  @override
+  String get bugCardTitle => 'Enviar um relatório de erro';
+
+  @override
+  String get bugCardBody =>
+      'Reúne os logs do setup (Ara, AlpacaBridge, guia, journal do sistema), seu perfil e informações do sistema em um ZIP que você pode anexar a um relatório.';
+
+  @override
+  String bugCardPacking(String size) {
+    return 'Empacotando os logs no setup… $size lidos';
+  }
+
+  @override
+  String get bugCardCovers => 'Abrange: ';
+
+  @override
+  String get bugCardSharing => 'Compartilhar: ';
+
+  @override
+  String get bugCardAppLog => 'Log de erros deste aplicativo';
+
+  @override
+  String get bugCardPrepare => 'Preparar e baixar';
+
+  @override
+  String get bugCardSaveLog => 'Salvar log do cliente';
+
+  @override
+  String get bugRangeNight => 'Última noite (setup inteiro)';
+
+  @override
+  String get bugRange3Days => 'Últimos 3 dias (setup inteiro)';
+
+  @override
+  String get bugRange7Days => 'Últimos 7 dias (setup inteiro)';
+
+  @override
+  String get bugRangeAraOnly => 'Somente logs do Ara';
+
+  @override
+  String get bugModeFull => 'Incluir tudo';
+
+  @override
+  String get bugModeFullNote => 'melhor para depuração';
+
+  @override
+  String get bugModeCoarse => 'Somente GPS aproximado';
+
+  @override
+  String get bugModeCoarseNote => 'local arredondado para ~111 km';
+
+  @override
+  String get bugModeRedacted => 'Remover todos os itens sensíveis';
+
+  @override
+  String get bugModeRedactedNote =>
+      'coordenadas, números de série, nomes de host, nomes de usuário em caminhos, IPs privados, tokens';
+
+  @override
+  String get bugPickTitle => 'Escolha onde salvar o relatório de erro';
+
+  @override
+  String bugSaved(String name) {
+    return '$name salvo';
+  }
+
+  @override
+  String bugSavedBoth(String name, String log) {
+    return '$name e $log salvos';
+  }
+
+  @override
+  String bugFailed(String reason) {
+    return 'Falha no relatório de erro: $reason';
+  }
+
+  @override
+  String get bugFailStillPacking =>
+      'o setup ainda está empacotando os logs; tente de novo em instantes';
+
+  @override
+  String get bugFailCouldNotPack => 'o setup não conseguiu empacotar os logs';
+
+  @override
+  String get bugFailTimeout => 'o Ara demorou demais para responder.';
+
+  @override
+  String get bugFailUnreachable => 'não foi possível acessar o Ara.';
+
+  @override
+  String bugFailStatus(String status) {
+    return 'o Ara retornou um erro ($status).';
+  }
+
+  @override
+  String get bugFailTalking => 'algo deu errado na comunicação com o Ara.';
+
+  @override
+  String get bugFailUnexpected => 'ocorreu um erro inesperado.';
+
+  @override
+  String get clientLogPickTitle => 'Escolha onde salvar o log do cliente';
+
+  @override
+  String clientLogSaved(String path) {
+    return '$path salvo';
+  }
+
+  @override
+  String get clientLogSaveAction => 'salvar o log';
+
+  @override
+  String get storageEjected => 'Ejetado. Já pode desconectar o disco.';
+
+  @override
+  String get storageEjectBusy =>
+      'O disco está ocupado. Aguarde o fim das gravações e tente de novo.';
+
+  @override
+  String storageEjectFailed(String reason) {
+    return 'Falha ao ejetar: $reason';
+  }
+
+  @override
+  String get storageEjectAction => 'ejetar o disco';
+
+  @override
+  String get storageCheckRepaired =>
+      'Disco verificado, com reparos. Vale a pena executar \"Find frames on disk\" de novo.';
+
+  @override
+  String get storageCheckClean => 'Disco verificado: sem problemas.';
+
+  @override
+  String storageCheckFailed(String reason) {
+    return 'Falha na verificação: $reason';
+  }
+
+  @override
+  String get storageCheckAction => 'verificar o disco';
+
+  @override
+  String get sessionTransferredTitle => 'Sessão transferida';
+
+  @override
+  String get sessionTransferredDetail =>
+      'Outro cliente assumiu o controle do observatório, então este cliente foi desconectado. A sequência em andamento não é afetada e continua no Ara.';
+
+  @override
+  String get storageCheckRepairedSimple => 'Disco verificado, com reparos.';
+
+  @override
+  String get storageDiskNotFormatted => 'não formatado';
+
+  @override
+  String storageDiskNeedsErasing(String fileSystem) {
+    return 'precisa ser apagado ($fileSystem)';
+  }
+
+  @override
+  String storageDiskInUseAt(String path) {
+    return 'em uso em $path';
+  }
+
+  @override
+  String get deviceChooserFindAction => 'buscar dispositivos';
 }

@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simple Logs, Storage, Fan</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: one iPad-sized stage with the window in the Simple Mode device-window slot (top left, under the strip).
+     Single dark look on purpose: DESIGN.md tokens (lib/theme/ara_colors.dart), as the other design/preview mocks. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0; --text3: #606060;
+    --ok: #4CAF50; --info: #42A5F5; --sel: #1976D2; --tile: rgba(56,56,56,.55); --warn: #FFB300; --err: #E53935; --errtext: #FF8A80;
+    --link: #64B5F6; --btn: #1565C0; --btn2: #424242; --scrim: rgba(26,26,26,.9);
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys); margin: 0;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+  .page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 80ch; min-width: 0; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  .group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; min-height: 36px; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  .seg button .rec { color: var(--warn); font-size: 11px; margin-left: 5px; }
+  .seg button[aria-pressed="true"] .rec { color: #fff; }
+  button:focus-visible, select:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+  .stage-wrap { overflow-x: auto; }
+  .ipad { width: 1024px; height: 720px; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 60% 45%, #3a3f4c 0, #12141a 55%, #08090c 100%); }
+  .strip { position: absolute; left: 16px; right: 16px; top: 16px; height: 56px; background: var(--scrim); border-radius: 10px;
+           display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 13px; color: var(--text2); }
+  .dot { display: inline-flex; align-items: center; gap: 6px; } .dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .strip .gear { margin-left: auto; background: transparent; border: 1px solid var(--border); color: var(--text); border-radius: 8px; min-height: 40px; padding: 0 12px; font: 13px var(--sys); cursor: pointer; }
+
+  .win { position: absolute; left: 16px; top: 88px; width: 430px; max-height: 616px; overflow-y: auto; background: var(--scrim);
+         backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .head { display: flex; align-items: center; gap: 8px; font-weight: 600; min-height: 32px; }
+  .head .x { margin-left: auto; width: 44px; height: 44px; margin-block: -6px; margin-right: -8px; background: transparent; color: var(--text2); border: 0; font-size: 20px; cursor: pointer; }
+  .sd { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--ok); }
+  .sd.off { background: var(--text3); } .sd.err { background: var(--err); } .sd.warn { background: var(--warn); }
+  .sect { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .sect h3 { font-size: 14px; font-weight: 600; margin: 0; }
+  .cap { color: var(--text2); font-size: 13px; margin: 0; }
+  .act { min-height: 44px; border: 0; border-radius: 8px; background: var(--btn); color: #fff; font: 600 14px var(--sys); padding: 0 16px; cursor: pointer; }
+  .act.sec { background: var(--btn2); font-weight: 500; }
+  .act:disabled { background: #333; color: var(--text3); cursor: not-allowed; }
+  .why { color: var(--text2); font-size: 13px; margin: 0; }
+  .radio { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+  .radio input { width: 18px; height: 18px; accent-color: var(--sel); }
+  .radio small { display: block; color: var(--text2); font-size: 12px; }
+  .row { display: flex; align-items: center; gap: 10px; min-height: 44px; width: 100%; background: transparent; border: 0; border-bottom: 1px solid rgba(64,64,64,.6); color: var(--text); font: 14px var(--sys); text-align: left; cursor: pointer; padding: 0; }
+  .row:last-child { border-bottom: 0; }
+  .row b { font-weight: 500; flex: 1; min-width: 0; }
+  .row span { color: var(--text2); font-size: 13px; }
+  .row .chev { color: var(--text3); }
+  .row:disabled { color: var(--text3); cursor: not-allowed; }
+  .btnrow { display: flex; gap: 8px; flex-wrap: wrap; } .btnrow .act { flex: 1; }
+  .big { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .bar { height: 8px; border-radius: 4px; background: var(--tile); overflow: hidden; } .bar i { display: block; height: 100%; background: var(--info); }
+  .bar i.full { background: var(--err); }
+  .kv { display: flex; justify-content: space-between; gap: 12px; color: var(--text2); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .warn-line { color: var(--errtext); margin: 0; }
+  select { min-height: 44px; width: 100%; background: var(--tile); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font: 14px var(--sys); }
+
+  .sheet { position: absolute; right: 16px; top: 88px; width: 360px; background: var(--scrim); border-radius: 10px; padding: 16px; }
+  .sheet h2 { font-size: 14px; font-weight: 600; margin: 0 0 6px; }
+  .pill { position: absolute; left: 50%; transform: translateX(-50%); bottom: 24px; max-width: 560px; background: var(--scrim); border: 1px solid var(--warn); border-radius: 10px; padding: 8px 8px 8px 16px; display: flex; align-items: center; gap: 12px; }
+  .pill button { min-height: 44px; border: 0; border-radius: 8px; background: var(--btn); color: #fff; font: 600 14px var(--sys); padding: 0 14px; cursor: pointer; }
+  .modal { position: absolute; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; }
+  .modal > div { width: 460px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+  .modal h2 { font-size: 16px; font-weight: 600; margin: 0; }
+  .modal ul { margin: 0; padding-left: 18px; color: var(--text2); }
+  .why-note { min-width: 0; }
+  .plansheet { position: absolute; left: 280px; top: 88px; width: 460px; background: var(--scrim); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .plansheet h2 { font-size: 16px; font-weight: 600; margin: 0; }
+  .pl { color: var(--text); font-size: 14px; min-height: 28px; align-items: center; }
+  .startline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; }
+  .startline .grow { flex: 1; }
+  .lnk { background: transparent; border: 0; color: var(--link); font: 14px var(--sys); min-height: 44px; cursor: pointer; padding: 0 4px; }
+  .fl { display: flex; align-items: center; gap: 12px; min-height: 44px; } .fl select, .fl .segs { flex: 1; min-width: 0; }
+  select.small { width: 190px; flex: none; }
+  .segs { display: flex; background: var(--tile); border-radius: 8px; overflow: hidden; }
+  .segs button { flex: 1; border: 0; background: transparent; color: var(--text); min-height: 44px; font: 14px var(--sys); cursor: pointer; }
+  .segs button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  .set { position: absolute; left: 16px; right: 16px; top: 88px; bottom: 16px; overflow-y: auto; background: var(--scrim); border-radius: 10px; padding: 16px 24px; display: flex; flex-direction: column; gap: 8px; }
+  .set h2 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+  .blk { display: flex; flex-direction: column; gap: 10px; padding-block: 14px; border-top: 1px solid var(--border); max-width: 520px; width: 100%; }
+  @media (prefers-reduced-motion: no-preference) { .act, .row { transition: background .12s; } }
+</style>
+
+<div class="page">
+  <h1>Simple Logs, Storage and Fan windows</h1>
+  <p class="note">Mock for #1659, #1660 and #1700. Storage and Logs now sit inline in Settings › Rig, with no separate window. The cooling fan stays a row in the Camera window. The chosen layout for each is marked "pick".</p>
+  <div class="controls" id="controls"></div>
+  <div class="stage-wrap"><div class="ipad" id="ipad"></div></div>
+  <p class="note why-note" id="why"></p>
+</div>
+
+<script>
+const S = { tab: 'flats', logs: 'A', storage: 'A', fan: 'A', flats: 'B', flatsPick: 'later', flatsOpen: false, rig: 'on', disk: 'ready', fanSet: false, share: 'full', sheet: false, modal: null, open: true };
+const OPTS = {
+  flats: { name: 'Plan Flats', layouts: [['B', 'Segments', true], ['D', 'On the start line'], ['A', 'Combo row'], ['C', 'Fold-out row']], why: {
+    D: 'D adds no height: Flats shares the line that already says when the plan starts, as a small combo box. On a narrow window it wraps under that line.',
+    A: 'A is one full-width combo row, about 48 px taller. It is what the PR has now.',
+    B: 'B shows all three at once without opening anything, about 44 px taller. The labels have to be short to fit.',
+    C: 'C is one 44 px row that says the current answer and folds open in place, adding about 132 px only while it is open.' } },
+  logs: { name: 'Logs (#1659)', layouts: [['A', 'Cards as they are', true], ['B', 'Two rows']], why: {
+    A: 'A hosts the existing bug-report and client-log actions as they are, as the issue decides. Everything is on one screen, at the cost of a longer window.',
+    B: 'B is calmer: two rows, and the sharing choice opens only when asked. It adds a step, and restyles the actions, which the issue put out of scope.' } },
+  storage: { name: 'Storage (#1660)', layouts: [['A', 'Status over buttons', true], ['B', 'Status over rows']], why: {
+    A: 'A leads with free space, then three equal buttons. Why saving cannot work reads as one red line above the buttons.',
+    B: 'B matches the Settings rows, one action per 44 px row with a caption. It is taller, and an irreversible Eject looks the same as Check disk.' } },
+  fan: { name: 'Cooling fan (#1700)', layouts: [['A', 'Row in Camera window', true], ['B', 'Mark a port in Switches']], why: {
+    A: 'A adds one Cooling fan picker to the Camera window, which is where the cooler already is. The same picker goes in the wizard and the full UI camera panel. A pill asks once when a cooling camera and a switch are connected and no fan is chosen.',
+    B: 'B puts the choice on the port itself in the Switches window. It is direct, but it hides a camera safety setting in another device’s window.' } },
+};
+const esc = s => String(s);
+function seg(group, items, cur, set) {
+  return `<div class="group"><span class="lbl">${group}</span><div class="seg">` + items.map(([v, l, rec]) =>
+    `<button aria-pressed="${v === cur}" data-set="${set}" data-v="${v}">${l}${rec ? '<span class="rec">pick</span>' : ''}</button>`).join('') + `</div></div>`;
+}
+function controls() {
+  const o = OPTS[S.tab];
+  let h = seg('Surface', Object.keys(OPTS).map(k => [k, OPTS[k].name]), S.tab, 'tab');
+  h += seg('Layout', o.layouts, S[S.tab], S.tab);
+  if (S.tab === 'logs') h += seg('Rig', [['on', 'Connected'], ['off', 'No rig']], S.rig, 'rig');
+  if (S.tab === 'storage') h += seg('State', [['ready', 'Ready'], ['none', 'Not plugged in'], ['full', 'Full'], ['off', 'No rig']], S.disk, 'disk');
+  if (S.tab === 'fan') h += seg('Fan', [['false', 'None chosen'], ['true', 'Chosen']], String(S.fanSet), 'fanSet');
+  document.getElementById('controls').innerHTML = h;
+  document.getElementById('why').textContent = o.why[S[S.tab]];
+}
+const head = (dot, title) => S.tab !== 'fan' ? `<div class="head"><i class="sd ${dot}"></i><span>${title}</span></div>` : `<div class="head"><i class="sd ${dot}"></i><span>${title}</span><button class="x" aria-label="Close" data-do="close">×</button></div>`;
+const MODES = [['full', 'Include everything', 'best for debugging'], ['coarse_gps', 'Coarse GPS only', 'site rounded to ~111 km'], ['redacted', 'Redact all sensitive items', 'coordinates, serials, hostnames, usernames in paths, private IPs, tokens']];
+function radios() {
+  return MODES.map(([v, l, d]) => `<label class="radio"><input type="radio" name="share" data-share="${v}" ${S.share === v ? 'checked' : ''}><span>${l}<small>${d}</small></span></label>`).join('');
+}
+function logsWin() {
+  const on = S.rig === 'on';
+  const why = on ? '' : '<p class="why">Connect to a rig to make a bug report.</p>';
+  if (S.logs === 'A') return head(on ? '' : 'off', 'Logs &amp; bug report') + `
+    <div class="sect"><h3>Send me a bug report</h3>
+      <p class="cap">Bundles the rig’s logs (Ara, AlpacaBridge, the guider) into one ZIP you can attach to a report.</p>
+      ${radios()}${why}
+      <button class="act" ${on ? '' : 'disabled'} data-do="review">Make bug report</button></div>
+    <div class="sect"><h3>This app’s error log</h3>
+      <p class="cap">No errors recorded. Errors this app hits on this computer.</p>
+      <button class="act sec" data-do="savelog">Save client log</button></div>`;
+  return head(on ? '' : 'off', 'Logs &amp; bug report') + `
+    <div><button class="row" ${on ? '' : 'disabled'} data-do="review"><b>Send me a bug report</b><span>${MODES.find(m => m[0] === S.share)[1]}</span><span class="chev">›</span></button>
+    <button class="row" data-do="savelog"><b>Save client log</b><span>No errors recorded</span><span class="chev">›</span></button></div>${why}`;
+}
+function storageWin() {
+  const D = { ready: { dot: '', name: 'Samsung T7', free: '612 GB free', of: 'of 931 GB', pct: 34 },
+    full: { dot: 'err', name: 'Samsung T7', free: '1.8 GB free', of: 'of 931 GB', pct: 99, why: 'The disk is full. Free some space or choose another disk.' },
+    none: { dot: 'err', name: 'No disk', free: '', of: '', pct: 0, why: 'The store drive is not plugged in. Plug it in, or choose another disk.' },
+    off: { dot: 'off', name: 'No rig', free: '', of: '', pct: 0, why: 'Connect to a rig to see its storage.' } }[S.disk];
+  const off = S.disk === 'off', noEject = off || S.disk === 'none';
+  const status = `<div class="sect" style="border-top:0;padding-top:0">
+    <span class="cap">Frames are saved to</span>
+    <div class="big">${D.name}</div>
+    ${D.free ? `<div class="bar"><i class="${S.disk === 'full' ? 'full' : ''}" style="width:${D.pct}%"></i></div><div class="kv"><span>${D.free}</span><span>${D.of}</span></div>` : ''}
+    ${D.why ? `<p class="${off ? 'why' : 'warn-line'}">${D.why}</p>` : ''}</div>`;
+  if (S.storage === 'A') return head(D.dot, 'Storage') + status + `
+    <div class="btnrow"><button class="act" ${off ? 'disabled' : ''} data-do="disk">Choose disk…</button></div>
+    <div class="btnrow"><button class="act sec" ${noEject ? 'disabled' : ''} data-do="eject">Eject</button><button class="act sec" ${noEject ? 'disabled' : ''}>Check disk</button></div>`;
+  return head(D.dot, 'Storage') + status + `<div>
+    <button class="row" ${off ? 'disabled' : ''} data-do="disk"><b>Choose disk</b><span>Save frames to another disk</span><span class="chev">›</span></button>
+    <button class="row" ${noEject ? 'disabled' : ''}><b>Check disk</b><span>Look for errors</span><span class="chev">›</span></button>
+    <button class="row" ${noEject ? 'disabled' : ''} data-do="eject"><b>Eject</b><span>Safe to unplug after</span><span class="chev">›</span></button></div>`;
+}
+function fanWin() {
+  const pick = `<select data-fan aria-label="Cooling fan"><option value="">None</option><option value="1" ${S.fanSet ? 'selected' : ''}>Pegasus Powerbox › Fan 1</option><option value="2">Pegasus Powerbox › Dew B</option></select>`;
+  const note = S.fanSet ? 'This fan starts with the cooler and cannot be turned off while the camera is cooling.' : 'No fan is chosen, so Ara does not run a fan with the cooler.';
+  if (S.fan === 'A') return head('', 'Camera · ATR2600M') + `
+    <div class="kv"><span>Cooler</span><span>−10 °C · 42 %</span></div>
+    <div class="sect"><h3>Cooling fan</h3>${pick}<p class="cap">${note}</p></div>`;
+  return head('', 'Switches · Pegasus Powerbox') + `<div>
+    <div class="row" style="cursor:default"><b>Fan 1</b><span>${S.fanSet ? 'Camera’s cooling fan' : ''}</span></div>
+    <button class="act sec" data-do="togglefan" style="width:100%;margin-block:6px">${S.fanSet ? 'Not the camera’s fan' : 'This is the camera’s fan'}</button>
+    <div class="row" style="cursor:default"><b>Dew B</b><span>40 %</span></div></div><p class="cap">${note}</p>`;
+}
+const FLATS = [['later', 'Not tonight', 'None'], ['sky_at_twilight', 'Sky flats at twilight', 'Sky'], ['panel_at_end', 'Panel flats at end', 'Panel']];
+function flatsWin() {
+  const label = FLATS.find(f => f[0] === S.flatsPick)[1];
+  const combo = (cls = '') => `<select data-flats class="${cls}" aria-label="Flats">${FLATS.map(f => `<option value="${f[0]}" ${S.flatsPick === f[0] ? 'selected' : ''}>${f[1]}</option>`).join('')}</select>`;
+  const filters = [['L', 20], ['R', 10], ['G', 10], ['B', 10]].map(([f, n]) => `<div class="kv pl"><span>${f}</span><span>${n} × 120 s</span></div>`).join('');
+  const start = `<span class="cap">Starts at dark, 21:28</span><button class="lnk">Start now</button>`;
+  let row = '', line = `<div class="startline">${start}</div>`;
+  if (S.flats === 'D') line = `<div class="startline">${start}<span class="grow"></span><span class="cap">Flats</span>${combo('small')}</div>`;
+  if (S.flats === 'A') row = `<div class="fl"><span class="cap">Flats</span>${combo()}</div>`;
+  if (S.flats === 'B') row = `<div class="fl"><span class="cap">Flats</span><div class="segs">${FLATS.map(f => `<button aria-pressed="${S.flatsPick === f[0]}" data-set="flatsPick" data-v="${f[0]}">${f[2]}</button>`).join('')}</div></div>`;
+  if (S.flats === 'C') row = `<button class="row" data-do="flatsopen"><b>Flats</b><span>${label}</span><span class="chev">${S.flatsOpen ? '⌄' : '›'}</span></button>` + (S.flatsOpen ? FLATS.map(f => `<label class="radio"><input type="radio" name="fl" data-flatsr="${f[0]}" ${S.flatsPick === f[0] ? 'checked' : ''}><span>${f[1]}</span></label>`).join('') : '');
+  return `<div class="plansheet"><h2>M 31 · Andromeda Galaxy</h2><span class="cap">Galaxy · up 62° at dark</span>${filters}${line}${row}
+    <div class="btnrow"><button class="act sec">Add to queue</button><button class="act">Start</button></div></div>`;
+}
+function render() {
+  controls();
+  let h = `<div class="strip"><span class="dot"><i></i>Camera</span><span class="dot"><i></i>Mount</span><span class="dot"><i></i>Guider</span><button class="gear" data-do="sheet">Settings</button></div>`;
+  if (S.tab === 'flats') h += flatsWin();
+  else if (S.tab === 'fan') { if (S.open) h += `<div class="win">${fanWin()}</div>`; }
+  else h += `<div class="set"><h2>Settings › Rig</h2>
+    <div class="kv"><span>This app</span><span>0.0.0-dev</span></div><div class="kv"><span>Ara server</span><span>0.0.0-dev</span></div>
+    <section class="blk${S.tab === 'storage' ? ' on' : ''}">${storageWin()}</section>
+    <section class="blk${S.tab === 'logs' ? ' on' : ''}">${logsWin()}</section></div>`;
+  if (S.tab === 'fan' && !S.fanSet) h += `<div class="pill"><span>Choose your camera’s cooling fan so it runs with the cooler.</span><button data-do="openfan">Choose</button></div>`;
+  if (S.modal === 'review') h += `<div class="modal"><div><h2>Before you share this bug report</h2><p class="cap">The bundle contains:</p>
+    <ul><li>Ara’s own logs</li><li>AlpacaBridge logs (camera, mount, focuser, wheel)</li><li>Guider logs</li></ul><p class="cap">Approximate size: 18 MB. Only share it with people you trust.</p>
+    <div class="btnrow"><button class="act sec" data-do="nomodal">Cancel</button><button class="act" data-do="nomodal">Download anyway</button></div></div></div>`;
+  document.getElementById('ipad').innerHTML = h;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.set) {
+    const k = b.dataset.set, v = b.dataset.v;
+    S[k] = k === 'fanSet' ? v === 'true' : v;
+    if (k === 'tab') { S.open = true; S.sheet = false; S.modal = null; }
+    return render();
+  }
+  if (b.dataset.open) { S.tab = b.dataset.open; S.open = true; S.sheet = false; return render(); }
+  const d = b.dataset.do;
+  if (d === 'close') S.open = false;
+  if (d === 'sheet') { S.sheet = !S.sheet; if (S.sheet) S.open = false; }
+  if (d === 'review') S.modal = 'review';
+  if (d === 'nomodal') S.modal = null;
+  if (d === 'eject') S.disk = 'none';
+  if (d === 'disk') S.disk = 'ready';
+  if (d === 'flatsopen') S.flatsOpen = !S.flatsOpen;
+  if (d === 'togglefan') S.fanSet = !S.fanSet;
+  if (d === 'openfan') { S.fan = 'A'; S.open = true; }
+  render();
+});
+document.addEventListener('change', e => {
+  if (e.target.dataset.share) { S.share = e.target.dataset.share; render(); }
+  if (e.target.matches('[data-flats]')) { S.flatsPick = e.target.value; render(); }
+  if (e.target.dataset.flatsr) { S.flatsPick = e.target.dataset.flatsr; render(); }
+  if (e.target.matches('[data-fan]')) { S.fanSet = !!e.target.value; render(); }
+});
+render();
+</script>
+</html>

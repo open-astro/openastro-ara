@@ -206,7 +206,9 @@ Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d,
         derivedOagGuideFocalLength(d.telescope.focalLengthMm ?? 0, reducer);
     focalLength = derived == 0 ? null : derived;
   } else {
-    focalLength = g.guideFocalLengthMm;
+    // Leaving an OAG: its derived value is the main scope's, not this guide scope's (#1715).
+    focalLength =
+        g.guideFocalLengthMm ?? (base.guiderSetupType == 'oag' ? 0 : null);
   }
   // parseHostPort handles IPv6 literals/bare hosts/`:port`; null parts keep the
   // base (profile) values so a blank field never clobbers a configured target.
@@ -431,6 +433,7 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
         applyDraftToStorage(await api.getStorageSettings(), d))),
     _trySave(() async => api.putSafetyPolicies(
         applyDraftToSafety(await api.getSafetyPolicies(), d))),
+    if (d.coolingFan case final fan?) _trySave(() async => api.putCoolingFan(fan)),
   ]))
       .whereType<Object>()
       .toList();

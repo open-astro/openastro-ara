@@ -1,3 +1,4 @@
+import '../l10n/app_localizations.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -52,12 +53,15 @@ class StorageDevice {
 
   /// Secondary line: capacity first (what people compare), then the technical
   /// detail that only matters when something is wrong.
-  String get detailLine {
+  String detailLine(AppLocalizations l) {
     final bits = <String>[
       if (sizeText.isNotEmpty) sizeText,
       if ((model ?? '').isNotEmpty && (label ?? '').isNotEmpty) model!,
-      if (isBlank) 'not formatted' else if (!isMountable) 'needs erasing ($fileSystem)',
-      if (mountPoint != null && !isAraStore) 'in use at $mountPoint',
+      if (isBlank)
+        l.storageDiskNotFormatted
+      else if (!isMountable)
+        l.storageDiskNeedsErasing('$fileSystem'),
+      if (mountPoint != null && !isAraStore) l.storageDiskInUseAt(mountPoint!),
     ];
     return bits.join(' · ');
   }
@@ -288,6 +292,12 @@ class StorageDevicesApi {
 
   void close() => _dio.close(force: true);
 }
+
+/// Builds the storage client; tests fake the rig through this.
+final storageDevicesApiFactoryProvider =
+    Provider<StorageDevicesApi Function(AraServer)>(
+  (ref) => StorageDevicesApi.new,
+);
 
 final storageDevicesProvider =
     FutureProvider.autoDispose<List<StorageDevice>>((ref) async {

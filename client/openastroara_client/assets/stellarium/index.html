@@ -826,6 +826,16 @@ function pointRaDec(raDeg, decDeg, name) {
   setFrameTarget(raDeg, decDeg, name || '');
 }
 
+// A search in Simple Mode: select the object so its card opens; a goto alone
+// only centres it. An object the engine doesn't know stays a plain goto.
+function selectForGoto(c) {
+  if (!c.select) return false;
+  var o = (c.id && resolveQuery(c.id)) || (c.name && resolveQuery(c.name));
+  if (!o) return false;
+  selectObject(o);
+  return true;
+}
+
 function selectObject(o) {
   stel.core.selection = o;
   // While framing we centre WITHOUT locking, so the sky stays pannable and the
@@ -1745,6 +1755,7 @@ function pollCmd() {
         updateScopeBox();
       }
       else if (c.type === 'goto' && c.ra != null) {
+        if (selectForGoto(c)) return;
         stel.core.selection = 0;
         // A framing goto (Tonight's Sky row tap) opens the framing overlay so
         // the box lands ON the object (setFrameTarget inside pointRaDec

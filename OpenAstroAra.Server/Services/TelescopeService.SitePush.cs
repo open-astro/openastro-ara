@@ -55,6 +55,7 @@ public sealed partial class TelescopeService {
         Justification = "Only WaitAsync/Release are used, never AvailableWaitHandle, so it holds no OS handle; disposing it under a push still in flight would throw from that push's Release.")]
     private readonly SemaphoreSlim _sitePushGate = new(1, 1);
     private volatile SiteValue? _sitePushed;
+    private int _siteFollowHolds;
 
     private sealed record SiteValue(double Lat, double Lng, double Elev);
 
@@ -117,7 +118,7 @@ public sealed partial class TelescopeService {
     /// <paramref name="force"/> (a fresh connect: the mount may hold anything).</summary>
     internal void PushProfileSite(bool force = false) {
         var store = _siteStore;
-        if (store is null) {
+        if (store is null || (!force && Volatile.Read(ref _siteFollowHolds) > 0)) {
             return;
         }
         var mount = MountSiteSource is { } source ? source() : ConnectedAlpacaSite();
@@ -148,6 +149,25 @@ public sealed partial class TelescopeService {
                 _sitePushGate.Release();
             }
         });
+    }
+
+    /// <summary>#1710 — a switch changes the profile before it swaps the devices, so until it is done a
+    /// followed change would write the new profile's site into the mount being dropped. A connect's forced
+    /// push still goes. The release pushes, for a mount both profiles share.</summary>
+    public IDisposable HoldSiteFollow() {
+        Interlocked.Increment(ref _siteFollowHolds);
+        return new SiteFollowHold(this);
+    }
+
+    private sealed class SiteFollowHold(TelescopeService service) : IDisposable {
+        private int _released;
+
+        public void Dispose() {
+            if (Interlocked.Exchange(ref _released, 1) == 0) {
+                Interlocked.Decrement(ref service._siteFollowHolds);
+                service.PushProfileSite();
+            }
+        }
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",

@@ -16,6 +16,7 @@ class _RecordingAdapter implements HttpClientAdapter {
   String? method;
   String? path;
   Object? requestData;
+  Duration? receiveTimeout;
 
   @override
   void close({bool force = false}) {}
@@ -29,6 +30,7 @@ class _RecordingAdapter implements HttpClientAdapter {
     method = options.method;
     path = options.path;
     requestData = options.data;
+    receiveTimeout = options.receiveTimeout;
     return ResponseBody.fromString(
       jsonEncode(body),
       200,
@@ -94,6 +96,12 @@ void main() {
   });
 
   group('ProfileApi multi-profile CRUD', () {
+    test('createProfile waits as long as the rig needs to change its devices', () async {
+      final a = _RecordingAdapter(body: {'id': 'p1', 'name': 'New'});
+      await _api(a).createProfile('New');
+      expect(a.receiveTimeout, const Duration(seconds: 60));
+    });
+
     test('listProfiles GETs /api/v1/profiles and parses the list', () async {
       final a = _RecordingAdapter(body: {
         'active_id': 'id-1',
@@ -121,6 +129,24 @@ void main() {
       expect(a.method, 'POST');
       expect(a.path, '/api/v1/profiles/id-9/select');
     });
+
+    test(
+      'selectProfile returns the devices the daemon could not bring up',
+      () async {
+        final a = _RecordingAdapter(
+          body: {
+            'active_id': 'id-9',
+            'profiles': <Object>[],
+            'device_messages': [
+              {'device_name': 'AM5', 'message': 'Could not connect.'},
+            ],
+          },
+        );
+        final messages = await _api(a).selectProfile('id-9');
+        expect(messages.single.deviceName, 'AM5');
+        expect(messages.single.message, 'Could not connect.');
+      },
+    );
 
     test('deleteProfile DELETEs /api/v1/profiles/{id}', () async {
       final a = _RecordingAdapter();

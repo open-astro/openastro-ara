@@ -35,8 +35,32 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Fixed (bug sweep)
+
+- Switching, creating or deleting the active profile now changes the connected devices. Each profile remembers its own devices, the Safety Monitor drops first, and a running plan refuses the switch (#1710).
+- A filter change moves the focuser by the offset difference when "Move the focuser by each filter's offset" is on (#1667).
+- Unattended shutdown no longer starts for a plan's own wait-for-user step, runs once per failure period, tells you the shutdown time, and waits 30 minutes by default for new profiles (#1712).
+- A polar align or guide-camera focus start waits for the guider's earlier capture (#1711). A seed that fails to solve reports the guide focal length the frame implies (#1715).
+- Leaving an off-axis guider no longer keeps the main scope's focal length as the guide focal length, and guider settings warn when the two match (#1715).
+- Emergency Stop's confirmation no longer says it parks the mount, and lists every step (#1737).
+- Simple Mode: Storage and Logs & bug report are inline in Settings › Rig (#1659, #1660); a paused Queue no longer locks the Guide shutter (#1725); the sky map runs a search sent before it was ready (#1713); a rig that can't change filters plans one row, and an unset site gets no altitude (#1737).
+- The setup wizard refuses one camera as both Main and Guide, shows the server's reason at Save, and skips darks when the guider push failed (#1661).
+- Sky Album cards write the Tier, format numbers for the locale, draw the back's action at 44 px, and decode the Art once during a flip (#1637, #1638, #1640, #1641).
+- The bedtime check counts only tonight's unresolved faults and names the device (#1714).
+- A Plan waiting for its start time can now be paused at once, and goes back to waiting on Resume.
+- Night done has one action, New plan; the left rail already opens the Library.
+- Simple Mode has no popups: confirmations and choices are inline, and every notification is a message pill.
+- A profile set to ask about flats now answers on Simple Mode's Plan sheet, in place of the "No flats this run" pill.
+- On a Mac in full screen, changing profile no longer shrinks the app to the profile window's size.
+- The cooling fan is chosen in the profile, by switch and port, on any driver, not found by the device name "Thermal Switch". **Every existing profile has no fan following the cooler until you choose one**; a pill asks once (#1700).
+
+### Removed (bug sweep)
+
+- The six NINA plate solvers. A profile that names one uses ASTAP and logs a warning once (#1701).
+
 ### Changed
 
+- The cooling fan interlock now follows a fan you choose instead of a device called "Thermal Switch": pick the fan's switch and port under **Cooling fan** in the Camera window, the setup wizard or the camera settings. It works on any driver and survives renaming the device. Existing profiles have no fan chosen, so no fan runs with the cooler until you choose one: Ara asks once and logs it when cooling starts (#1700).
 - Emergency Stop now stops the mount where it is: it aborts any slew or manual move and switches tracking off. It no longer parks, because a park is a slew that can repeat the fault you pressed Stop for. The API field `park_requested` is now `mount_stopped` on this path, and the failed step `park` is now `stop_mount` (#1672).
 - The architecture decisions now live in `docs/adr/`: nine accepted records cover the daemon and client split, Alpaca-only equipment, client-side planning, the trusted-LAN single-client model, the Wayland-only Linux client, ASTAP, GPS on the client and Simple Mode, and three proposed records (0011 to 0013) from an architecture review describe code that does not exist yet. `design/PORT_PLAYBOOK.md`, `design/README.md`, the Simple Mode brief and the Sky Album spec point at the records instead of repeating them.
 

@@ -5,7 +5,10 @@ import '../../services/storage_devices_api.dart';
 import '../../services/storage_space_api.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/settings/storage_settings_state.dart';
+import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../theme/ara_metrics.dart';
+import '../inline_choices.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
 
@@ -20,7 +23,7 @@ Future<void> showStorageDriveDialog(BuildContext context, WidgetRef ref) async {
   }
   await showDialog<void>(
     context: context,
-    builder: (_) => const _DiskChooser(),
+    builder: (_) => const StorageDriveChooser(),
   );
   // The caller's element can be gone by the time the dialog closes —
   // touching its ref then throws (the classic Riverpod after-await footgun).
@@ -30,35 +33,45 @@ Future<void> showStorageDriveDialog(BuildContext context, WidgetRef ref) async {
 }
 
 /// What the disk chooser says when Use Disk fails, keyed on the helper's code.
-String storageConfigureMessage(
+String storageConfigureMessage(AppLocalizations l,
         StorageConfigureOutcome outcome, StorageDevice device) =>
     switch (outcome.code) {
-      'not_ext4' => 'This disk needs to be erased before ARA can use it.',
-      'label_mismatch' =>
-        'The disk changed since the list was loaded. Rescan and try again.',
+      'not_ext4' => l.storageConfigureNotExt4,
+      'label_mismatch' => l.storageConfigureLabelMismatch,
       'device_busy' when outcome.detail == 'previous_store' =>
-        'The disk frames are saved to now is in use, so ARA can\'t switch '
-            'away from it. Close anything reading it, then try again.',
-      'device_busy' =>
-        'The disk is in use. Close anything reading it, then try again.',
-      'system_disk' || 'refused' =>
-        'That disk holds the server\'s operating system and can\'t be used.',
-      'uuid_not_found' => 'The disk disconnected. Reconnect it and rescan.',
-      'helper_missing' =>
-        'The server is missing part of its installation. Reinstall openastroara-server.',
-      'mkfs_failed' => 'Erasing the disk failed. See the server log for details.',
-      'mount_failed' => 'The disk was prepared but could not be connected.',
-      _ => outcome.detail ?? 'Could not use ${device.friendlyName}.',
+        l.storageConfigurePreviousBusy,
+      'device_busy' => l.storageConfigureBusy,
+      'system_disk' || 'refused' => l.storageConfigureSystemDisk,
+      'uuid_not_found' => l.storageConfigureDisconnected,
+      'helper_missing' => l.storageConfigureHelperMissing,
+      'mkfs_failed' => l.storageConfigureMkfsFailed,
+      'mount_failed' => l.storageConfigureMountFailed,
+      _ => outcome.detail ?? l.storageConfigureFailed(device.friendlyName),
     };
 
-class _DiskChooser extends ConsumerStatefulWidget {
-  const _DiskChooser();
+/// The list and its erase step: a dialog's content on its own, or laid out in
+/// place when the host passes [onClose] (Simple Mode has no popups).
+class StorageDriveChooser extends ConsumerStatefulWidget {
+  const StorageDriveChooser({super.key, this.onClose});
+
+  /// Inline: closes it, on Cancel or after Use Disk worked.
+  final VoidCallback? onClose;
 
   @override
-  ConsumerState<_DiskChooser> createState() => _DiskChooserState();
+  ConsumerState<StorageDriveChooser> createState() =>
+      _StorageDriveChooserState();
 }
 
-class _DiskChooserState extends ConsumerState<_DiskChooser> {
+class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
+  bool get _inline => widget.onClose != null;
+
+  /// Simple Mode's 44 px floor; a dialog keeps its theme's size.
+  Size? get _minSize => _inline ? const Size(0, 44) : null;
+
+  void _close() =>
+      _inline ? widget.onClose!() : Navigator.of(context).pop();
+
+
   StorageDevice? _selected;
   final TextEditingController _confirm = TextEditingController();
   bool _busy = false;
@@ -103,7 +116,7 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
       _busy = true;
       _error = null;
     });
-    final api = StorageDevicesApi(server);
+    final api = ref.read(storageDevicesApiFactoryProvider)(server);
     try {
       final outcome = await api.configure(
         // A brand-new blank disk has no filesystem yet, hence no UUID — the
@@ -127,13 +140,18 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
         if (dir != null && dir.isNotEmpty) {
           ref.read(storageSettingsProvider.notifier).setSaveDirectory(dir);
         }
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${device.friendlyName} is now used for frames.'),
-        ));
+        final notify = userNotifier(context);
+        final done = context.l10n.storageDiskNowUsed(device.friendlyName);
+        _close();
+        notify(done);
         return;
       }
-      setState(() => _error = storageConfigureMessage(outcome, device));
+      final problem = storageConfigureMessage(context.l10n, outcome, device);
+      if (_inline) {
+        userNotifier(context)(problem, error: true);
+      } else {
+        setState(() => _error = problem);
+      }
     } finally {
       api.close();
       if (mounted) {
@@ -145,18 +163,15 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final async = ref.watch(storageDevicesProvider);
-    return AlertDialog(
-      title: const Text('Choose a disk for your frames'),
-      content: SizedBox(
-        width: 520,
-        child: async.when(
+    final body = async.when(
           loading: () => const SizedBox(
               height: 140, child: Center(child: CircularProgressIndicator())),
           error: (e, _) => SizedBox(
             height: 140,
             child: Center(
-                child: Text(friendlyError(context.l10n, e, action: "read the server's disks"),
+                child: Text(friendlyError(l10n, e, action: l10n.storageDiskReadAction),
                     textAlign: TextAlign.center)),
           ),
           data: (all) {
@@ -175,12 +190,11 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
               }
             }
             if (disks.isEmpty) {
-              return const SizedBox(
+              return SizedBox(
                 height: 140,
                 child: Center(
                   child: Text(
-                    'No external disks found.\n\n'
-                    'Connect a USB drive or SSD to the server, then Rescan.',
+                    l10n.storageDiskNoneFound,
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -193,6 +207,9 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
                 Flexible(
                   child: ListView.builder(
                     shrinkWrap: true,
+                    // Inline, the Settings page does the scrolling.
+                    physics:
+                        _inline ? const NeverScrollableScrollPhysics() : null,
                     itemCount: disks.length,
                     itemBuilder: (_, i) {
                       final d = disks[i];
@@ -200,14 +217,23 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
                           (_selected != null && d.path == _selected!.path);
                       return ListTile(
                         selected: selected,
-                        selectedTileColor:
-                            AraColors.textSecondary.withValues(alpha: 0.12),
-                        leading: Icon(d.removable ? Icons.usb : Icons.storage,
+                        // Inline it sits on Simple Mode's tiles: the theme blue reads at 2:1.
+                        selectedColor: _inline ? AraColors.linkText : null,
+                        selectedTileColor: _inline
+                            ? AraColors.selectionTint
+                            : AraColors.textSecondary.withValues(alpha: 0.12),
+                        // A check too: the tint alone barely shows in Night mode.
+                        leading: Icon(
+                            selected
+                                ? Icons.check_circle
+                                : d.removable
+                                ? Icons.usb
+                                : Icons.storage,
                             size: 28),
                         title: Text(d.friendlyName),
-                        subtitle: Text(d.detailLine),
+                        subtitle: Text(d.detailLine(l10n)),
                         trailing: d.isAraStore
-                            ? Text('In use', style: theme.textTheme.bodySmall)
+                            ? Text(l10n.storageDiskInUse, style: theme.textTheme.bodySmall)
                             : null,
                         onTap: _busy
                             ? null
@@ -226,13 +252,12 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
                 if (_selected != null && !_mustErase) ...[
                   const Divider(height: 24),
                   SwitchListTile(
-                    dense: true,
+                    dense: !_inline,
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Erase and change format'),
+                    title: Text(l10n.storageDiskEraseChange),
                     subtitle: Text(
-                        'This disk already works as a store '
-                        '(${_selected!.fileSystem}). Turn this on only to '
-                        'reformat it — everything on it will be lost.',
+                        l10n.storageDiskEraseChangeNote(
+                            '${_selected!.fileSystem}'),
                         style: theme.textTheme.bodySmall),
                     value: _eraseAnyway,
                     onChanged: _busy
@@ -246,14 +271,12 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
                 if (_needsErase) ...[
                   if (_mustErase) ...[
                     const Divider(height: 24),
-                    Text('This disk must be erased',
+                    Text(l10n.storageDiskMustErase,
                         style: theme.textTheme.titleSmall
                             ?.copyWith(color: AraColors.accentBusy)),
                     const SizedBox(height: 6),
                     Text(
-                      'ARA saves frames in a format this disk doesn\'t use, so '
-                      'it has to be erased first. Everything on it will be '
-                      'lost.',
+                      l10n.storageDiskMustEraseNote,
                       style: theme.textTheme.bodySmall,
                     ),
                   ],
@@ -266,24 +289,20 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
                       children: [
                         RadioListTile<String>(
                           value: 'exfat',
-                          dense: true,
+                          dense: !_inline,
                           contentPadding: EdgeInsets.zero,
-                          title: const Text('exFAT — take the drive with you'),
+                          title: Text(l10n.storageDiskExfat),
                           subtitle: Text(
-                              'Plugs straight into Windows and Mac at home. '
-                              'After a power cut, run Check disk.',
+                              l10n.storageDiskExfatNote,
                               style: theme.textTheme.bodySmall),
                         ),
                         RadioListTile<String>(
                           value: 'ext4',
-                          dense: true,
+                          dense: !_inline,
                           contentPadding: EdgeInsets.zero,
-                          title: const Text('ext4 — drive lives on the rig'),
+                          title: Text(l10n.storageDiskExt4),
                           subtitle: Text(
-                              'Journaled (self-healing after power cuts). '
-                              'Readable on Linux computers; Windows and Mac '
-                              'can\'t read it — frames arrive there via the '
-                              'backup mirror.',
+                              l10n.storageDiskExt4Note,
                               style: theme.textTheme.bodySmall),
                         ),
                       ],
@@ -292,8 +311,8 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
                   const SizedBox(height: 10),
                   Text(
                       (_selected!.label ?? '').isNotEmpty
-                          ? 'Type “${_selected!.label}” to confirm:'
-                          : 'This disk has no label — type ERASE to confirm:',
+                          ? l10n.storageDiskTypeLabel(_selected!.label!)
+                          : l10n.storageDiskTypeErase,
                       style: theme.textTheme.bodySmall),
                   const SizedBox(height: 4),
                   TextField(
@@ -301,7 +320,7 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
                     autofocus: true,
                     enabled: !_busy,
                     onChanged: (_) => setState(() {}),
-                    decoration: const InputDecoration(isDense: true),
+                    decoration: InputDecoration(isDense: !_inline),
                   ),
                 ],
                 if (_error != null) ...[
@@ -320,38 +339,74 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
                     const SizedBox(width: 10),
                     Text(
                         _needsErase
-                            ? 'Erasing and connecting the disk…'
-                            : 'Connecting the disk…',
+                            ? l10n.storageDiskErasing
+                            : l10n.storageDiskConnecting,
                         style: theme.textTheme.bodySmall),
                   ]),
                 ],
               ],
             );
-          },
+          },);
+    final actions = [
+      TextButton(
+        style: TextButton.styleFrom(minimumSize: _minSize),
+        onPressed: _busy ? null : () => ref.invalidate(storageDevicesProvider),
+        child: Text(l10n.storageDiskRescan),
+      ),
+      TextButton(
+        style: TextButton.styleFrom(minimumSize: _minSize),
+        onPressed: _busy ? null : _close,
+        child: Text(l10n.planCancel),
+      ),
+      FilledButton(
+        style: _needsErase
+            ? FilledButton.styleFrom(
+                backgroundColor: AraColors.emergencyStop,
+                foregroundColor: AraColors.onEmergencyStop,
+                minimumSize: _minSize,
+              )
+            : _inline
+            ? FilledButton.styleFrom(minimumSize: _minSize)
+            : null,
+        // A failed list can't vouch for the disk the confirmation named.
+        onPressed: _busy ||
+                async.hasError ||
+                _selected == null ||
+                !_selected!.selectable ||
+                !_confirmSatisfied
+            ? null
+            : _useDisk,
+        child: Text(
+            _needsErase ? l10n.storageDiskEraseUse : l10n.storageDiskUse),
+      ),
+    ];
+    final title = l10n.storageDiskChooseTitle;
+    if (!_inline) {
+      return AlertDialog(
+        title: Text(title),
+        content: SizedBox(width: 520, child: body),
+        actions: actions,
+      );
+    }
+    return InlineAttention(
+      title: title,
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: AraSpace.s8,
+          children: [
+            Text(title, style: theme.textTheme.titleSmall),
+            body,
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: AraSpace.s8,
+              children: actions,
+            ),
+          ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _busy ? null : () => ref.invalidate(storageDevicesProvider),
-          child: const Text('Rescan'),
-        ),
-        TextButton(
-          onPressed: _busy ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          style: _needsErase
-              ? FilledButton.styleFrom(backgroundColor: AraColors.accentBusy)
-              : null,
-          onPressed: _busy ||
-                  _selected == null ||
-                  !_selected!.selectable ||
-                  !_confirmSatisfied
-              ? null
-              : _useDisk,
-          child: Text(_needsErase ? 'Erase and Use Disk' : 'Use Disk'),
-        ),
-      ],
     );
   }
 }

@@ -31,20 +31,40 @@ namespace OpenAstroAra.Test {
         private static SwitchDto Thermal(SwitchPortDto port, EquipmentConnectionState state = EquipmentConnectionState.Connected, string name = "ToupTek Thermal Switch") =>
             new(DeviceId: "sw-5", AlpacaDeviceNumber: 0, Name: name, State: state, Ports: [new SwitchPortDto(0, "Heater", 0, 0, 1, true), port]);
 
+        // The designation the rewritten cases use: "sw-5" (Thermal's id), port 1 (Fan()'s id).
+        private static readonly CoolingFanDto Designated = new("sw-5", 1);
+
         [Test]
-        public void Fan_port_is_scoped_to_the_thermal_switch() {
-            Assert.That(CoolingFanInterlock.IsThermalSwitchFanPort(Thermal(Fan()), Fan()), Is.True);
-            // An unrelated switch with a port literally named "Fan" is never the cooling fan.
-            Assert.That(CoolingFanInterlock.IsThermalSwitchFanPort(Thermal(Fan(), name: "Pegasus UPBv2"), Fan()), Is.False);
-            Assert.That(CoolingFanInterlock.IsThermalSwitchFanPort(Thermal(Fan()), Fan() with { Name = "Heater" }), Is.False);
+        public void A_designated_port_is_the_fan_on_any_device_and_only_that_port() {
+            Assert.That(CoolingFanInterlock.IsDesignatedFanPort(Thermal(Fan(), name: "Pegasus UPBv2"), Fan(), Designated), Is.True, "any driver, whatever the device is called");
+            Assert.That(CoolingFanInterlock.IsDesignatedFanPort(Thermal(Fan(), name: "Pegasus UPBv2"), Fan() with { Name = "Output 3" }, Designated), Is.True, "the port's name doesn't matter either");
+            Assert.That(CoolingFanInterlock.IsDesignatedFanPort(Thermal(Fan()), new SwitchPortDto(0, "Heater", 0, 0, 1, true), Designated), Is.False, "another port of the same switch");
+            Assert.That(CoolingFanInterlock.IsDesignatedFanPort(Thermal(Fan()) with { DeviceId = "sw-6" }, Fan(), Designated), Is.False, "the same port id on another switch");
+        }
+
+        [Test]
+        public void A_Thermal_Switch_with_a_Fan_port_is_not_the_fan_unless_designated() {
+            Assert.That(CoolingFanInterlock.IsDesignatedFanPort(Thermal(Fan()), Fan(), CoolingFanDto.None), Is.False);
+            Assert.That(CoolingFanInterlock.FindFanPort([Thermal(Fan())], CoolingFanDto.None), Is.Null);
+            Assert.That(CoolingFanInterlock.FanSyncRequest([Thermal(Fan())], CoolingFanDto.None, cooling: true), Is.Null, "never actuated");
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(Thermal(Fan()), CoolingFanDto.None, new SwitchValueRequestDto(1, 0)), Is.False, "never blocked");
+            var unread = Thermal(Fan()) with { Ports = [] };
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(unread, CoolingFanDto.None, new SwitchValueRequestDto(1, 0)), Is.False, "never blocked while unread either");
+        }
+
+        [Test]
+        public void Renaming_a_designated_device_does_not_change_the_interlock() {
+            var renamed = Thermal(Fan(), name: "Scope fan box");
+            Assert.That(CoolingFanInterlock.FindFanPort([renamed], Designated), Is.Not.Null);
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(renamed, Designated, new SwitchValueRequestDto(1, 0)), Is.True);
         }
 
         [Test]
         public void Find_skips_disconnected_and_read_only_fans() {
-            Assert.That(CoolingFanInterlock.FindThermalSwitchFanPort(new List<SwitchDto>()), Is.Null);
-            Assert.That(CoolingFanInterlock.FindThermalSwitchFanPort([Thermal(Fan(), EquipmentConnectionState.Error)]), Is.Null);
-            Assert.That(CoolingFanInterlock.FindThermalSwitchFanPort([Thermal(Fan(canWrite: false))]), Is.Null);
-            var found = CoolingFanInterlock.FindThermalSwitchFanPort([Thermal(Fan())]);
+            Assert.That(CoolingFanInterlock.FindFanPort(new List<SwitchDto>(), Designated), Is.Null);
+            Assert.That(CoolingFanInterlock.FindFanPort([Thermal(Fan(), EquipmentConnectionState.Error)], Designated), Is.Null);
+            Assert.That(CoolingFanInterlock.FindFanPort([Thermal(Fan(canWrite: false))], Designated), Is.Null);
+            var found = CoolingFanInterlock.FindFanPort([Thermal(Fan())], Designated);
             Assert.That(found, Is.Not.Null);
             Assert.That(found!.Value.Port.Id, Is.EqualTo(1));
         }
@@ -53,24 +73,18 @@ namespace OpenAstroAra.Test {
         public void Sync_writes_the_ports_own_bounds_not_a_literal_1_0() {
             // PWM fan (0–100): cooler-on must be FULL fan, not ~1%.
             var pwm = Thermal(Fan(value: 50, min: 10, max: 100));
-            var on = CoolingFanInterlock.FanSyncRequest([pwm], cooling: true);
-            var off = CoolingFanInterlock.FanSyncRequest([pwm], cooling: false);
+            var on = CoolingFanInterlock.FanSyncRequest([pwm], Designated, cooling: true);
+            var off = CoolingFanInterlock.FanSyncRequest([pwm], Designated, cooling: false);
             Assert.That(on!.Value.DeviceId, Is.EqualTo("sw-5"));
             Assert.That(on.Value.Request, Is.EqualTo(new SwitchValueRequestDto(1, 100)));
             Assert.That(off!.Value.Request, Is.EqualTo(new SwitchValueRequestDto(1, 10)));
             // No fan-capable switch (most rigs) → nothing to write.
-            Assert.That(CoolingFanInterlock.FanSyncRequest([], cooling: true), Is.Null);
+            Assert.That(CoolingFanInterlock.FanSyncRequest([], Designated, cooling: true), Is.Null);
             // #1076 — cooler-ON always writes (a stale cached value must never skip the fan-on);
             // cooler-OFF skips when the cached port already holds the floor (the warm ramp's
             // minute-by-minute cooler calls).
-            Assert.That(CoolingFanInterlock.FanSyncRequest([Thermal(Fan(value: 100, min: 10, max: 100))], cooling: true), Is.Not.Null);
-            Assert.That(CoolingFanInterlock.FanSyncRequest([Thermal(Fan(value: 0))], cooling: false), Is.Null);
-        }
-
-        [Test]
-        public void Thermal_switch_device_rule_matches_the_port_rule() {
-            Assert.That(CoolingFanInterlock.IsThermalSwitchDevice(Thermal(Fan())), Is.True);
-            Assert.That(CoolingFanInterlock.IsThermalSwitchDevice(Thermal(Fan(), name: "Pegasus UPBv2")), Is.False);
+            Assert.That(CoolingFanInterlock.FanSyncRequest([Thermal(Fan(value: 100, min: 10, max: 100))], Designated, cooling: true), Is.Not.Null);
+            Assert.That(CoolingFanInterlock.FanSyncRequest([Thermal(Fan(value: 0))], Designated, cooling: false), Is.Null);
         }
 
         [Test]
@@ -83,25 +97,48 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void Plausible_fan_off_covers_the_unread_snapshot_window_but_only_for_a_connected_thermal_switch() {
-            var unread = new SwitchDto("sw-5", 0, "ToupTek Thermal Switch", EquipmentConnectionState.Connected, Ports: []);
-            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(unread, new SwitchValueRequestDto(0, 0)), Is.True, "unread snapshot + value 0: could be the fan");
-            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(unread, new SwitchValueRequestDto(1, 1)), Is.False, "a fan ON / mid-range value is never held");
+        public void Plausible_fan_off_covers_the_unread_snapshot_window_but_only_for_the_designated_connected_port() {
+            var unread = new SwitchDto("sw-5", 0, "Any Box", EquipmentConnectionState.Connected, Ports: []);
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(unread, Designated, new SwitchValueRequestDto(1, 0)), Is.True, "unread snapshot + value 0 on the fan port");
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(unread, Designated, new SwitchValueRequestDto(0, 0)), Is.False, "another port is never held, even unread");
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(unread, Designated, new SwitchValueRequestDto(1, 1)), Is.False, "a fan ON / mid-range value is never held");
             // Error / Disconnected project empty ports too — the write path's "not connected" applies, never the fan refusal.
             var down = unread with { State = EquipmentConnectionState.Error };
-            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(down, new SwitchValueRequestDto(0, 0)), Is.False);
-            var other = unread with { Name = "Pegasus UPBv2" };
-            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(other, new SwitchValueRequestDto(0, 0)), Is.False);
-            // Snapshot read: only the identified Fan port at its floor.
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(down, Designated, new SwitchValueRequestDto(1, 0)), Is.False);
+            var other = unread with { DeviceId = "sw-6" };
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(other, Designated, new SwitchValueRequestDto(1, 0)), Is.False);
+            // Snapshot read: only the designated port at its floor.
             var known = Thermal(Fan(value: 1));
-            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(known, new SwitchValueRequestDto(1, 0)), Is.True);
-            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(known, new SwitchValueRequestDto(0, 0)), Is.False, "the heater port is not the fan");
-            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(known, new SwitchValueRequestDto(1, 1)), Is.False);
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(known, Designated, new SwitchValueRequestDto(1, 0)), Is.True);
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(known, Designated, new SwitchValueRequestDto(0, 0)), Is.False, "the heater port is not the fan");
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(known, Designated, new SwitchValueRequestDto(1, 1)), Is.False);
         }
 
         [Test]
-        public async System.Threading.Tasks.Task A_thermal_switch_in_Error_gets_the_not_connected_refusal_not_the_fan_one() {
-            using var svc = new SwitchService();
+        public void A_snapshot_that_skipped_the_fan_port_still_holds_a_fan_off_to_it() {
+            // ReadPorts drops a port whose read threw and keeps the rest, so "ports read" doesn't mean "fan read".
+            var partial = new SwitchDto("sw-5", 0, "Any Box", EquipmentConnectionState.Connected, Ports: [new SwitchPortDto(0, "Heater", 0, 0, 1, true)]);
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(partial, Designated, new SwitchValueRequestDto(1, 0)), Is.True);
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(partial, Designated, new SwitchValueRequestDto(1, 1)), Is.False);
+            Assert.That(CoolingFanInterlock.IsPlausibleFanOff(partial, Designated, new SwitchValueRequestDto(0, 0)), Is.False);
+        }
+
+        [Test]
+        public void A_designation_is_both_fields_or_neither() {
+            Assert.That(CoolingFanInterlock.DesignationError(CoolingFanDto.None), Is.Null);
+            Assert.That(CoolingFanInterlock.DesignationError(Designated), Is.Null);
+            Assert.That(CoolingFanInterlock.DesignationError(new CoolingFanDto("sw-5", null)), Is.Not.Null);
+            Assert.That(CoolingFanInterlock.DesignationError(new CoolingFanDto(null, 1)), Is.Not.Null);
+            Assert.That(CoolingFanInterlock.DesignationError(new CoolingFanDto("", 1)), Is.Not.Null);
+            Assert.That(CoolingFanInterlock.DesignationError(new CoolingFanDto("sw-5", -1)), Is.Not.Null);
+            Assert.That(CoolingFanInterlock.DesignationError(new CoolingFanDto("sw-5", 40000)), Is.Not.Null);
+        }
+
+        [Test]
+        public async System.Threading.Tasks.Task A_designated_switch_in_Error_gets_the_not_connected_refusal_not_the_fan_one() {
+            var store = new InMemoryProfileStore();
+            store.PutCoolingFan(new CoolingFanDto("dead-thermal", 0));
+            using var svc = new SwitchService(profileStore: store);
             var dead = new DiscoveredDeviceDto(UniqueId: "dead-thermal", Name: "ToupTek Thermal Switch", Type: DeviceType.Switch,
                 HostName: "127.0.0.1", IpAddress: "127.0.0.1", IpPort: 1, AlpacaDeviceNumber: 0, UseHttps: false);
             await svc.ConnectAsync(new ConnectRequestDto(dead), null, System.Threading.CancellationToken.None);

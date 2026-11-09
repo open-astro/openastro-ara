@@ -84,6 +84,12 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
             value: policy.homeOnFirstConnect,
             onChanged: policyN.setHomeOnFirstConnect,
           ),
+        SettingsSwitchRow(
+          label: 'Move the focuser by each filter\'s offset',
+          helpKey: 'eq.filterwheel.use_focus_offsets',
+          value: policy.useFilterWheelOffsets,
+          onChanged: policyN.setUseFilterWheelOffsets,
+        ),
         // Local slot labels — the user's filter names used when authoring
         // sequences offline (the §38 editor reads `filterWheelLabelsProvider`),
         // independent of the connected wheel's own names shown live above. Hidden

@@ -2516,6 +2516,14 @@ namespace OpenAstroAra.Test {
             Assert.That(op.GetProperty("ok").GetBoolean(), Is.True, "guiding began; the settle timeout does not fail the start");
         }
 
+        [TestCase("camera has no gain control", true)]
+        [TestCase("Camera has no gain control.", true)]
+        [TestCase("camera not connected", false)]
+        [TestCase(null, false)]
+        public void A_camera_with_no_gain_control_is_routine_and_any_other_refusal_is_not(string? message, bool routine) {
+            Assert.That(OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PHD2Guider.CameraHasNoGainControl(message), Is.EqualTo(routine));
+        }
+
         [Test]
         public async Task A_rest_start_retries_after_its_own_stop_capture_answers_with_a_settle_error() {
             // #1664 review — the retry stops the guider; PHD2 answers stop_capture with a SettleDone
@@ -2523,11 +2531,14 @@ namespace OpenAstroAra.Test {
             await using var fake = FakeGuider.Start();
             _ = new ProfileDaemon(fake);
             var guides = 0;
-            fake.OnRpc("get_app_state", _ => JsonValue.Create(Volatile.Read(ref guides) == 0 ? "Stopped" : "LostLock"));
+            var stopped = 0;
+            // Like a real guider: LostLock after the first guide, Stopped once stop_capture has been received.
+            fake.OnRpc("get_app_state", _ => JsonValue.Create(Volatile.Read(ref guides) == 0 || Volatile.Read(ref stopped) == 1 ? "Stopped" : "LostLock"));
             fake.OnRpc("get_calibrated", JsonValue.Create(true));
             fake.OnRpc("get_lock_position", new JsonArray(100.0, 100.0));
             fake.OnRpc("guide", _ => { Interlocked.Increment(ref guides); return JsonValue.Create(0); });
             fake.OnRpc("stop_capture", req => {
+                Volatile.Write(ref stopped, 1);
                 _ = fake.BroadcastAsync(PhdEvents.SettleDone(status: 1, error: "Stopped capturing"));
                 return JsonValue.Create(0);
             });
@@ -2747,6 +2758,42 @@ namespace OpenAstroAra.Test {
                 await Assert.ThatAsync(() => focus.StartAsync(new GuideFocusStartRequestDto(), CancellationToken.None),
                     Throws.InstanceOf<InvalidOperationException>().With.Message.Contain(RefusedSlot)).ConfigureAwait(false);
             }
+        }
+
+        [Test]
+        public async Task A_guide_camera_focus_start_waits_for_an_earlier_capture_before_its_first_one() {
+            // #1711: the same lease and capture call as polar align — a focus start while the guider is still
+            // exposing an earlier frame must not send its own capture_single_frame into the guider's refusal.
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            fake.OnRpc("get_app_state", JsonValue.Create("Stopped"));
+            fake.OnRpc("set_pa_session", _ => new JsonObject { ["active"] = true, ["expires_in_s"] = 600 });
+            var active = 0;
+            var refused = 0;
+            fake.OnRpc("capture_single_frame", req => {
+                if (Interlocked.Exchange(ref active, 1) == 1) {
+                    Interlocked.Increment(ref refused);
+                    throw new InvalidOperationException("cannot capture single frame when capture is currently active");
+                }
+                _ = Task.Run(async () => {
+                    await Task.Delay(800).ConfigureAwait(false);
+                    Volatile.Write(ref active, 0);
+                    await fake.BroadcastAsync(new JsonObject {
+                        ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
+                        ["Inst"] = 1, ["Success"] = false, ["Error"] = "no camera",
+                    }).ConfigureAwait(false);
+                });
+                return JsonValue.Create(0);
+            });
+            using var svc = await ConnectedAgainstAsync(fake, "Rig A").ConfigureAwait(false);
+            await svc.RequireConnectedGuider().CaptureSolverFrameAsync(100, null, null, null, null, true, CancellationToken.None).ConfigureAwait(false);
+            using var focus = new GuideFocusService(svc, Mock.Of<IPolarAlignFrameFetcher>(), decoder: Mock.Of<IGuideFrameDecoder>());
+
+            await focus.StartAsync(new GuideFocusStartRequestDto(0.1), CancellationToken.None).ConfigureAwait(false);
+            await Task.Delay(300).ConfigureAwait(false);
+            await focus.StopAsync().ConfigureAwait(false);
+
+            Assert.That(Volatile.Read(ref refused), Is.Zero, "the loop's first capture went out while the guider was still exposing");
         }
 
         [Test]

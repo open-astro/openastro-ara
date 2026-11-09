@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/screens/simple/simple_guide_panel.dart';
 import 'package:openastroara/services/guider_api.dart' show GuiderClient, GuideStartFailed;
 import 'package:openastroara/state/guider/guider_state.dart';
@@ -20,6 +22,14 @@ import 'package:openastroara/state/simple_mode_state.dart' show simpleModeActive
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusLevel;
+
+/// The Queue's run state, as the rig last said it.
+class _Run extends SequenceRunStateNotifier {
+  _Run(this.run);
+  final SequenceRunState run;
+  @override
+  Future<SequenceRunStateInfo?> build() async => SequenceRunStateInfo(sequenceId: 's', runId: 'r', state: run);
+}
 
 class _Guider extends GuiderStatusNotifier {
   _Guider(this.json, {this.lag = false});
@@ -242,7 +252,7 @@ void main() {
     final eq = _GuiderEquipment();
     final rig = [profileApiProvider.overrideWithValue(_Profile()), guiderEquipmentApiProvider.overrideWithValue(eq)];
     await _pump(tester, _wire(), rig: rig);
-    tester.widget<SimplePresetTile<int>>(find.byKey(const Key('simple-guide-exposure'))).onSelected(2000);
+    tester.widget<SimplePresetTile<int>>(find.byKey(const Key('simple-guide-exposure'))).onSelected!(2000);
     await tester.pump();
     await tester.pump();
     expect(eq.pushes, [true], reason: 'the exposure, tuning only');
@@ -304,6 +314,38 @@ void main() {
     await tester.pump(const Duration(seconds: 11));
   });
 
+  for (final (run, locked) in [
+    (SequenceRunState.paused, false),
+    (SequenceRunState.pausedAwaitingUser, false),
+    (SequenceRunState.running, true),
+    (SequenceRunState.aborting, true),
+  ]) {
+    testWidgets('a $run Queue ${locked ? 'locks' : 'does not lock'} Start (#1725)', (tester) async {
+      final c = await _pump(tester, _wire(runtime: 'stopped'),
+          child: const SimpleGuideShutter(), rig: [sequenceRunStateProvider.overrideWith(() => _Run(run))]);
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pump();
+      expect(_g.calls, locked ? isEmpty : ['start']);
+      expect(c.read(simpleMessagesProvider).map((m) => m.title),
+          locked ? ['The main camera is busy: wait for its frame, or stop it.'] : isEmpty);
+      await tester.pump(const Duration(seconds: 11));
+    });
+  }
+
+  testWidgets('a paused Queue with a frame in progress still locks Start (#1725)', (tester) async {
+    final c = await _pump(tester, _wire(runtime: 'stopped'),
+        child: const SimpleGuideShutter(),
+        rig: [sequenceRunStateProvider.overrideWith(() => _Run(SequenceRunState.paused))]);
+    c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-shutter')));
+    await tester.pump();
+    expect(_g.calls, isEmpty);
+    c.read(captureProgressProvider.notifier).reset();
+    await tester.pump(const Duration(seconds: 11));
+  });
+
   testWidgets('the main camera busy: Stop still works', (tester) async {
     final c = await _pump(tester, _wire(runtime: 'guiding'), child: const SimpleGuideShutter());
     c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
@@ -343,7 +385,7 @@ void main() {
     final c = await _pump(tester, _wire(), rig: rig);
     final tile = tester.widget<SimplePresetTile<String>>(find.byKey(const Key('simple-guide-dec-mode')));
     expect(tile.options, ['auto', 'north', 'south', 'off']);
-    tile.onSelected('north');
+    tile.onSelected!('north');
     await tester.pump();
     await tester.pump();
     expect(c.read(phd2SettingsProvider).decGuideMode, 'north');

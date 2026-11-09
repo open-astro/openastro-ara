@@ -149,7 +149,7 @@ public sealed partial class EquipmentAutoConnectService : BackgroundService {
     /// <summary>The profile auto-connect bool for a device type. Guider is handled
     /// separately (PHD2 connects over JSON-RPC using the profile's host/port, not via
     /// the remembered-Alpaca-device loop) — see the tail of ExecuteAsync.</summary>
-    private static bool AutoConnectEnabled(EquipmentConnectionDto conn, DeviceType type) => type switch {
+    internal static bool AutoConnectEnabled(EquipmentConnectionDto conn, DeviceType type) => type switch {
         DeviceType.Camera => conn.Camera,
         DeviceType.Telescope => conn.Mount,
         DeviceType.Focuser => conn.Focuser,

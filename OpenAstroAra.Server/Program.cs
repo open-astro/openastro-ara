@@ -348,6 +348,10 @@ public partial class Program {
         // IFilterWheelMediator (§8.1), so SwitchFilter drives the live device (mediator wiring is
         // below; this replaces the HeadlessFilterWheelMediator stub). On connect the wheel's filter
         // list imports into the active profile so SwitchFilter resolves filters by name/position.
+        builder.Services.AddSingleton(sp => new FilterFocusOffset(
+            () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IFocuserMediator>(),
+            sp.GetRequiredService<IProfileStore>(),
+            sp.GetRequiredService<ILogger<FilterFocusOffset>>()));
         builder.Services.AddSingleton<FilterWheelService>();
         // #1298 — the router fronts the Alpaca wheel and the driverless manual wheel (registered
         // below, once the profile dir is known); it is THE IFilterWheelService and mediator.
@@ -586,7 +590,8 @@ public partial class Program {
             sp.GetService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
             sp.GetService<EquipmentEventPublisher>(),
             sp.GetService<INotificationService>(),
-            profileDir));
+            profileDir,
+            sp.GetService<FilterFocusOffset>()));
 
         // §29.9.2 — wire the rolling CLEF (Compact-JSON) file sink now that the
         // profile dir is known. The §29.9 log endpoints (LogService) tail +
@@ -723,15 +728,17 @@ public partial class Program {
         builder.Services.AddSingleton<IClientSettingsService>(sp =>
             new ClientSettingsService(profileDir, sp.GetRequiredService<ILogger<ClientSettingsService>>()));
 
-        // §52.1 — remembers the last device connected per type under
-        // {profileDir}/equipment-selection.json so EquipmentAutoConnectService can
+        // §52.1 — remembers the last device connected per type, one file per profile
+        // (#1710, {profileDir}/profiles/{id}.equipment.json), so EquipmentAutoConnectService can
         // re-establish it on boot. Written at the connect chokepoint (ConnectGatedAsync).
         builder.Services.AddSingleton<IEquipmentSelectionStore>(sp =>
-            new EquipmentSelectionStore(profileDir, sp.GetRequiredService<ILogger<EquipmentSelectionStore>>()));
+            new EquipmentSelectionStore(profileDir, sp.GetRequiredService<ILogger<EquipmentSelectionStore>>(),
+                activeProfile: () => sp.GetService<IProfileRepository>()?.ActiveId));
 
         // §52.1 — connects remembered devices without re-discovery; shared by auto-connect-on-boot
         // (EquipmentAutoConnectService) and the manual POST /equipment/{type}/reconnect endpoints.
         builder.Services.AddSingleton<IEquipmentReconnector, EquipmentReconnector>();
+        builder.Services.AddSingleton<ProfileDeviceSwitch>();
 
         // §14e — tenth real device service and the head of the capture path: live Alpaca camera
         // (caps + cooler/state runtime) whose StartExposure runs a REAL capture — exposure →
@@ -1021,8 +1028,9 @@ public partial class Program {
         // any in-flight reconnect ladder.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<FaultReactionService>());
 
-        // §35.3 — emergency stop (abort runs → abort exposure → stop guiding →
-        // park → flat light off), behind POST /api/v1/server/emergency-stop.
+        // §35.3 — emergency stop (abort runs → halt rotator → abort exposure →
+        // stop focus/Bahtinov/autofocus/polar → stop guiding → stop mount where it is → flat light
+        // off → cooler off), behind POST /api/v1/server/emergency-stop.
         // Same optional-dep + sequencer-resolver pattern as the reaction engine.
         builder.Services.AddSingleton<EmergencyStopService>(sp =>
             new EmergencyStopService(

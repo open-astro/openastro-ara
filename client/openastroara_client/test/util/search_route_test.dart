@@ -4,6 +4,14 @@ import 'package:openastroara/services/target_resolve_api.dart';
 import 'package:openastroara/util/search_route.dart';
 
 void main() {
+  test('Simple Mode asks the page to select a search goto, and only then', () {
+    const goto = <String, Object?>{'type': 'goto', 'ra': 1.0, 'dec': 2.0, 'name': 'M31'};
+    expect(searchCommandFor(goto, bare: true)['select'], isTrue);
+    expect(searchCommandFor(goto, bare: false), goto);
+    const engine = <String, Object?>{'type': 'search', 'q': 'M31'};
+    expect(searchCommandFor(engine, bare: true), engine);
+  });
+
   final catalog = [
     const PlanningDso(
       id: 'NGC7000',

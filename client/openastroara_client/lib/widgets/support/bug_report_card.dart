@@ -1,15 +1,22 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../util/stream_save_location.dart';
 
 import '../../models/bug_report_preparation.dart';
 import '../../services/client_error_log.dart';
+import '../../state/simple_messages_state.dart';
+import '../../state/simple_mode_state.dart';
 import '../../state/support/bug_report_state.dart';
+import '../../theme/ara_colors.dart';
 import 'client_log_card.dart';
+import '../inline_choices.dart';
+import 'support_card_row.dart';
 
 /// §54 "Send me a bug report" action — prepares a diagnostic bundle on the
 /// daemon, shows the user exactly what it contains (a PII disclosure, required
@@ -42,47 +49,75 @@ class BugReportCard extends ConsumerStatefulWidget {
 }
 
 /// §54.3 sharing modes, in the order the review modal lists them.
-const bugReportSharingModes = <(String wire, String label, String detail)>[
-  ('full', 'Include everything', 'best for debugging'),
-  ('coarse_gps', 'Coarse GPS only', 'site rounded to ~111 km'),
-  ('redacted', 'Redact all sensitive items', 'coordinates, serials, hostnames, usernames in paths, private IPs, tokens'),
+List<(String wire, String label, String detail)> _sharingModes(AppLocalizations l) => [
+  ('full', l.bugModeFull, l.bugModeFullNote),
+  ('coarse_gps', l.bugModeCoarse, l.bugModeCoarseNote),
+  ('redacted', l.bugModeRedacted, l.bugModeRedactedNote),
 ];
 
 /// What the bundle covers: Ara's newest logs only, or the whole rig's logs
 /// (Ara, its NINA layer, AlpacaBridge, the guider, package history and the
 /// journal) written in the range. "Last night" is the default: it is what a
 /// report about a night at the rig needs.
-const bugReportRanges = <(Duration? range, String label)>[
-  (Duration(hours: 24), 'Last night (whole rig)'),
-  (Duration(days: 3), 'Last 3 days (whole rig)'),
-  (Duration(days: 7), 'Last 7 days (whole rig)'),
-  (null, 'Ara logs only'),
+List<(Duration? range, String label)> _ranges(AppLocalizations l) => [
+  (const Duration(hours: 24), l.bugRangeNight),
+  (const Duration(days: 3), l.bugRange3Days),
+  (const Duration(days: 7), l.bugRange7Days),
+  (null, l.bugRangeAraOnly),
 ];
 
 /// The disclosure's name for each source the daemon's manifest reports.
-const bugReportSourceLabels = <String, String>{
-  'ara': 'Ara\'s own logs',
-  'ara-nina': 'Ara\'s NINA-layer logs',
-  'alpacabridge': 'AlpacaBridge logs (camera, mount, focuser, wheel)',
-  'guider': 'guider (PHD2) debug and guide logs',
-  'system': 'package install history',
-  'journal': 'system journal (Ara, AlpacaBridge, the guider, the kernel)',
+String _sourceLabel(AppLocalizations l, String source) => switch (source) {
+  'ara' => l.bugSourceAra,
+  'ara-nina' => l.bugSourceAraNina,
+  'alpacabridge' => l.bugSourceAlpacaBridge,
+  'guider' => l.bugSourceGuider,
+  'system' => l.bugSourceSystem,
+  'journal' => l.bugSourceJournal,
+  _ => source,
 };
 
 class _BugReportCardState extends ConsumerState<BugReportCard> {
   bool _busy = false;
   // §54.3 — the spec's default is "Include everything"; the user picks before preparing.
   String _mode = 'full';
+
+  /// Simple Mode's extra Sharing choice: only this device's log, no rig needed.
+  static const _clientLogOnly = 'client_log';
+
+  Future<void> _saveClientLog() async {
+    setState(() => _busy = true);
+    await saveClientLog(context, ref, widget.savePathPicker);
+    if (mounted) setState(() => _busy = false);
+  }
   int _rangeIndex = 0;
   // Bytes read so far while a whole-rig bundle packs; null when not packing.
   int? _packed;
+  // Simple Mode's review, answered in the card.
+  BugReportPreparation? _review;
+  Completer<bool>? _reviewAnswer;
+
+  @override
+  void dispose() {
+    _reviewAnswer?.complete(false);
+    super.dispose();
+  }
+
+  void _answerReview(bool go) {
+    _reviewAnswer?.complete(go);
+    setState(() {
+      _review = null;
+      _reviewAnswer = null;
+    });
+  }
 
   Future<void> _run() async {
     final api = ref.read(bugReportApiProvider);
     if (api == null) return;
+    final l = context.l10n;
     setState(() => _busy = true);
     try {
-      final range = bugReportRanges[_rangeIndex].$1;
+      final range = _ranges(l)[_rangeIndex].$1;
       var prep = await api.prepare(
           mode: _mode,
           since: range == null ? null : DateTime.now().toUtc().subtract(range));
@@ -92,7 +127,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
         if (!mounted) return;
         setState(() => _packed = prep.estimatedSizeBytes);
         if (DateTime.now().isAfter(deadline)) {
-          throw const _PackingFailed('the rig is still packing the logs; try again in a moment');
+          throw _PackingFailed(l.bugFailStillPacking);
         }
         await Future<void>.delayed(widget.pollInterval);
         prep = await api.status(prep.preparationId);
@@ -100,7 +135,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
       if (!mounted) return;
       setState(() => _packed = null);
       if (prep.isFailed) {
-        throw _PackingFailed(prep.error ?? 'the rig could not pack the logs');
+        throw _PackingFailed(prep.error ?? l.bugFailCouldNotPack);
       }
 
       // PII gate: the user must see what's in the bundle before it's downloaded.
@@ -111,26 +146,22 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
       // chunk instead of being buffered whole in memory (§54 follow-up).
       final pick = widget.savePathPicker ?? pickStreamSavePath;
       final savePath = await pick(
-          'Choose where to save the bug report', 'openastroara-bug-report.zip');
+          l.bugPickTitle, 'openastroara-bug-report.zip');
       if (!mounted || savePath == null) return;
       final name = await api.downloadTo(savePath, prep.preparationId);
       // #1111 — the client's own error log goes beside the ZIP. The bundle
       // is built on the daemon, which has never seen this app's failures.
       final clientLogName = await _saveClientLogBeside(savePath);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            clientLogName == null
-                ? 'Saved $name'
-                : 'Saved $name and $clientLogName',
-          ),
-        ),
+      userNotifier(context)(
+        clientLogName == null ? l.bugSaved(name) : l.bugSavedBoth(name, clientLogName),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Bug report failed: ${_friendly(e)}')),
+      userNotifier(context)(
+        l.bugFailed(_friendly(l, e)),
+        error: true,
+        snackBarRed: false,
       );
     } finally {
       if (mounted) {
@@ -158,62 +189,60 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
   }
 
   Future<bool?> _showDisclosure(BugReportPreparation prep) {
+    if (ref.read(simpleModeActiveProvider)) {
+      final answer = Completer<bool>();
+      setState(() {
+        _review = prep;
+        _reviewAnswer = answer;
+      });
+      return answer.future;
+    }
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Before you share this bug report'),
+        title: Text(context.l10n.bugReviewTitle),
         // Scrollable so the disclosure can't overflow on a small viewport or a
         // large accessibility font scale.
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-            const Text('The bundle contains:'),
-            const SizedBox(height: 8),
-            if (prep.sources.isEmpty) const Text('• Ara\'s recent log files'),
-            for (final s in prep.sources) Text(_sourceLine(s)),
-            Text(switch (prep.sharingMode) {
-              'redacted' =>
-                '• your profile with coordinates, serial numbers, hostnames, '
-                    'usernames in paths, private network addresses and tokens '
-                    'scrubbed',
-              'coarse_gps' =>
-                '• your profile with the site rounded to ~111 km — it may still '
-                    'include equipment credentials, API / notification tokens '
-                    'and network addresses',
-              _ =>
-                '• your full profile — which may include equipment credentials, '
-                    'API / notification tokens, precise observatory coordinates, and '
-                    'network addresses',
-            }),
-            Text(prep.sharingMode == 'redacted'
-                ? '• system info, with this device\'s username scrubbed from its path'
-                : '• system info, including this device\'s filesystem path'),
-            const Text(
-                '• this app\'s own error log, saved as a separate file beside '
-                'the ZIP'),
-            const SizedBox(height: 12),
-            Text('Approximate size: ${_humanSize(prep.estimatedSizeBytes)}.'),
-            const SizedBox(height: 8),
-            const Text(
-              'Only share it with people you trust (e.g. the developers) — '
-              'treat it like a password.',
-            ),
-            ],
-          ),
-        ),
+        content: SingleChildScrollView(child: _disclosure(prep)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.planCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Download anyway'),
+            child: Text(context.l10n.bugReviewDownload),
           ),
         ],
       ),
+    );
+  }
+
+  /// What the bundle holds: the review's words, dialog or inline.
+  Widget _disclosure(BugReportPreparation prep) {
+    final l = context.l10n;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l.bugReviewContains),
+        const SizedBox(height: 8),
+        if (prep.sources.isEmpty) Text(l.bugReviewNoSources),
+        for (final s in prep.sources) Text(_sourceLine(l, s)),
+        Text(switch (prep.sharingMode) {
+          'redacted' => l.bugReviewProfileRedacted,
+          'coarse_gps' => l.bugReviewProfileCoarse,
+          _ => l.bugReviewProfileFull,
+        }),
+        Text(prep.sharingMode == 'redacted'
+            ? l.bugReviewSystemRedacted
+            : l.bugReviewSystemFull),
+        Text(l.bugReviewClientLog),
+        const SizedBox(height: 12),
+        Text(l.bugReviewSize(_humanSize(prep.estimatedSizeBytes))),
+        const SizedBox(height: 8),
+        Text(l.bugReviewTrust),
+      ],
     );
   }
 
@@ -224,91 +253,122 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
     // stays alive for the card's lifetime and can't be torn down mid prepare/
     // download. Also gates the button when no server is connected.
     final api = ref.watch(bugReportApiProvider);
+    final review = _review;
+    final simple = ref.watch(simpleModeActiveProvider);
+    final logOnly = _mode == _clientLogOnly;
+    final l = context.l10n;
+    final ranges = _ranges(l);
     return Card(
       margin: const EdgeInsets.all(8),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 12,
           children: [
-            Icon(Icons.bug_report_outlined, color: theme.colorScheme.primary),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
+            SupportCardRow(
+            icon: Icon(
+              Icons.bug_report_outlined,
+              // State-only colour in Simple Mode: this blue means nothing.
+              color: simple ? AraColors.textSecondary : theme.colorScheme.primary,
+            ),
+            body: (stacked) {
+              // Stacked, the label goes above: the value gets the whole row.
+              Widget option(String label, Widget dropdown) => stacked
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [Text(label, style: theme.textTheme.bodySmall), dropdown],
+                    )
+                  : Row(
+                      children: [
+                        Text(label, style: theme.textTheme.bodySmall),
+                        Flexible(child: dropdown),
+                      ],
+                    );
+              return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Send me a bug report',
+                  Text(l.bugCardTitle,
                       style: theme.textTheme.titleSmall),
                   const SizedBox(height: 2),
                   Text(
-                    'Bundles the rig\'s logs (Ara, AlpacaBridge, the guider, '
-                    'the system journal) + your profile + system info into a '
-                    'ZIP you can attach to a report.',
+                    l.bugCardBody,
                     style: theme.textTheme.bodySmall,
                   ),
                   if (_packed != null)
-                    Text('Packing the logs on the rig… ${_humanSize(_packed!)} read',
+                    Text(l.bugCardPacking(_humanSize(_packed!)),
                         style: theme.textTheme.bodySmall),
+                  if (!logOnly) ...[
                   const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text('Covers: ', style: theme.textTheme.bodySmall),
-                      Flexible(
-                        child: DropdownButton<int>(
-                          value: _rangeIndex,
-                          isDense: true,
-                          isExpanded: true,
-                          style: theme.textTheme.bodySmall,
-                          onChanged: _busy ? null : (v) => setState(() => _rangeIndex = v ?? 0),
-                          items: [
-                            for (var i = 0; i < bugReportRanges.length; i++)
-                              DropdownMenuItem(
-                                value: i,
-                                child: Text(bugReportRanges[i].$2, overflow: TextOverflow.ellipsis),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
+                  option(
+                    l.bugCardCovers,
+                    DropdownButton<int>(
+                      value: _rangeIndex,
+                      // Simple Mode's 44 px; the full UI stays compact.
+                      isDense: !simple,
+                      isExpanded: true,
+                      style: theme.textTheme.bodySmall,
+                      onChanged: _busy ? null : (v) => setState(() => _rangeIndex = v ?? 0),
+                      items: [
+                        for (var i = 0; i < ranges.length; i++)
+                          DropdownMenuItem(
+                            value: i,
+                            child: Text(ranges[i].$2, overflow: TextOverflow.ellipsis),
+                          ),
+                      ],
+                    ),
                   ),
+                  ],
                   const SizedBox(height: 4),
                   // §54.3 sharing mode: chosen before the bundle is built, so the
                   // ZIP the user downloads never held what the mode scrubs.
-                  Row(
-                    children: [
-                      Text('Sharing: ', style: theme.textTheme.bodySmall),
-                      Flexible(
-                        child: DropdownButton<String>(
-                          value: _mode,
-                          isDense: true,
-                          isExpanded: true,
-                          style: theme.textTheme.bodySmall,
-                          onChanged: _busy ? null : (v) => setState(() => _mode = v ?? 'full'),
-                          items: [
-                            for (final m in bugReportSharingModes)
-                              DropdownMenuItem(
-                                value: m.$1,
-                                child: Tooltip(message: m.$3, child: Text(m.$2, overflow: TextOverflow.ellipsis)),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
+                  option(
+                    l.bugCardSharing,
+                    DropdownButton<String>(
+                      value: _mode,
+                      isDense: !simple,
+                      isExpanded: true,
+                      style: theme.textTheme.bodySmall,
+                      onChanged: _busy ? null : (v) => setState(() => _mode = v ?? 'full'),
+                      items: [
+                        for (final m in _sharingModes(l))
+                          DropdownMenuItem(
+                            value: m.$1,
+                            child: Tooltip(message: m.$3, child: Text(m.$2, overflow: TextOverflow.ellipsis)),
+                          ),
+                        if (simple)
+                          DropdownMenuItem(
+                            value: _clientLogOnly,
+                            child: Text(l.bugCardAppLog, overflow: TextOverflow.ellipsis),
+                          ),
+                      ],
+                    ),
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            FilledButton.icon(
-              onPressed: (_busy || api == null) ? null : _run,
+              );
+            },
+            action: FilledButton.icon(
+              onPressed: _busy ? null : logOnly ? _saveClientLog : (api == null ? null : _run),
               icon: _busy
                   ? const SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.bug_report, size: 18),
-              label: const Text('Prepare & download'),
+                  : Icon(logOnly ? Icons.save_alt : Icons.bug_report, size: 18),
+              label: Text(logOnly ? l.bugCardSaveLog : l.bugCardPrepare),
             ),
+            ),
+            if (review != null)
+              InlineConfirm(
+                id: 'bug-report-review',
+                title: context.l10n.bugReviewTitle,
+                body: _disclosure(review),
+                confirmLabel: context.l10n.bugReviewDownload,
+                cancelLabel: context.l10n.planCancel,
+                onConfirm: () => _answerReview(true),
+                onCancel: () => _answerReview(false),
+              ),
           ],
         ),
       ),
@@ -316,7 +376,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
   }
 
   // Short, user-facing message — don't leak Dio's verbose toString (URLs etc.).
-  static String _friendly(Object e) {
+  static String _friendly(AppLocalizations l, Object e) {
     // The card's own failures (packing failed or timed out) already read as a sentence for the user.
     if (e is _PackingFailed) return e.message;
     if (e is DioException) {
@@ -324,26 +384,26 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
         DioExceptionType.connectionTimeout ||
         DioExceptionType.sendTimeout ||
         DioExceptionType.receiveTimeout =>
-          'Ara took too long to respond.',
+          l.bugFailTimeout,
         DioExceptionType.connectionError =>
-          'could not reach Ara.',
+          l.bugFailUnreachable,
         DioExceptionType.badResponse =>
-          'Ara returned an error (${e.response?.statusCode}).',
-        _ => 'something went wrong talking to Ara.',
+          l.bugFailStatus('${e.response?.statusCode}'),
+        _ => l.bugFailTalking,
       };
     }
-    return 'an unexpected error occurred.';
+    return l.bugFailUnexpected;
   }
 
   // "• AlpacaBridge logs (camera, mount, focuser, wheel): 2 files, 31.2 MB, cut to
   // the newest part" — or why a source is not there.
-  static String _sourceLine(BugReportSourceSummary s) {
-    final label = bugReportSourceLabels[s.source] ?? s.source;
+  static String _sourceLine(AppLocalizations l, BugReportSourceSummary s) {
+    final label = _sourceLabel(l, s.source);
     if (s.files == 0) {
-      return '• $label: none${s.note == null ? '' : ' (${s.note})'}';
+      return '• $label: ${l.bugReviewNone}${s.note == null ? '' : ' (${s.note})'}';
     }
-    final files = s.files == 1 ? '1 file' : '${s.files} files';
-    final cut = s.truncated ? ', the largest cut to their newest part' : '';
+    final files = s.files == 1 ? l.bugReviewOneFile : l.bugReviewFiles('${s.files}');
+    final cut = s.truncated ? l.bugReviewCut : '';
     final note = s.note == null ? '' : ' (${s.note})';
     return '• $label: $files, ${_humanSize(s.bytes)}$cut$note';
   }

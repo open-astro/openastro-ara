@@ -418,6 +418,33 @@ void main() {
     expect(h.profile.lastPut?.guiderRotator, '');
   });
 
+  testWidgets('#1715 switching from an off-axis guider to a guide scope drops the derived focal length',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final h = await _pump(tester,
+        stored: const Phd2Settings(
+          host: 'rc91.lan',
+          port: 4400,
+          guiderCamera: 'Old Camera',
+          guiderSetupType: 'oag',
+          guideFocalLength: 375,
+        ));
+    await _next(tester); // camera
+    await _next(tester); // optics
+    await tester.tap(find.byKey(const ValueKey('wiz-Setup type')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Guide scope').last);
+    await tester.pumpAndSettle();
+    await _next(tester); // mount
+    await _next(tester); // apply
+    await tester.tap(find.text('Apply to guider'));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastPut?.guiderSetupType, 'guide_scope');
+    expect(h.profile.lastPut?.guideFocalLength, 0);
+  });
+
   testWidgets('entering a picker step re-fetches the device lists',
       (tester) async {
     final h = await _pump(tester);

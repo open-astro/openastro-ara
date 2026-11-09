@@ -251,9 +251,9 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
             // Drives formatted by ARA all carry the label ARA-DISK: the size and
             // model are what tell the source from the target.
             Text(
-                store.detailLine.isEmpty
+                store.detailLine(context.l10n).isEmpty
                     ? 'From ${store.friendlyName} to:'
-                    : 'From ${store.friendlyName} (${store.detailLine}) to:',
+                    : 'From ${store.friendlyName} (${store.detailLine(context.l10n)}) to:',
                 style: theme.textTheme.bodySmall),
             const SizedBox(height: 4),
             for (final d in targets)
@@ -265,7 +265,7 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
                     AraColors.textSecondary.withValues(alpha: 0.12),
                 leading: Icon(d.removable ? Icons.usb : Icons.storage),
                 title: Text(d.friendlyName),
-                subtitle: Text(d.detailLine),
+                subtitle: Text(d.detailLine(context.l10n)),
                 onTap: _busy ? null : () => setState(() => _targetUuid = d.uuid),
               ),
             const Divider(height: 20),

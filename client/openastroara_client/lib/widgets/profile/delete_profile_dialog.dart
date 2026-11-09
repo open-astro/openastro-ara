@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../models/guider_twin.dart';
+import '../../models/profile_list.dart';
 import '../../theme/ara_colors.dart';
 
 /// What the user chose in [showDeleteProfileDialog].
@@ -168,6 +169,23 @@ class _DeleteProfileDialogState extends State<DeleteProfileDialog> {
     }
     return lines.join(' ');
   }
+}
+
+/// Names each device a profile switch could not bring up (#1710).
+void showProfileDeviceMessages(
+  ScaffoldMessengerState messenger,
+  List<ProfileDeviceMessage> messages,
+) {
+  if (messages.isEmpty) return;
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(
+        [for (final m in messages) '${m.deviceName}: ${m.message}'].join('\n'),
+      ),
+      backgroundColor: AraColors.accentError,
+      duration: const Duration(seconds: 10),
+    ),
+  );
 }
 
 /// Show the outcome line for a delete (nothing when the guider was not

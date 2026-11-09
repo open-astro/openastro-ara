@@ -1679,7 +1679,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
   - **Explicitly NOT doing — search-radius escalation.** The binary hinted (`-r 30`) → blind (`-r 180`) path already covers the bad-hint case. A larger *hinted* radius only slows ASTAP and raises false-match risk; multi-tier escalation adds complexity for no gain over the blind retry.
   - **Dependency on the FOV-aware `-d` work above:** blind failover only *succeeds* if the Pi-side database has adequate sky coverage at the rig's FOV. Wiring `-d <database_dir>` (the Phase 8 code gap) is therefore also failover insurance, not just a wide-field nicety.
 - **Astrometry.net**: **deferred — see the `P1`–`P5` issue backlog.** ASTAP covers 99% of astrophotography solving needs and is well-maintained, ARM64-native, cross-platform. Adding astrometry.net means another binary management workflow, another index-file download manager (4100 / 4200 / 5000-series catalogs, ~1-30 GB each), and another solver-tuning surface — not worth the complexity for the initial release. Phase 8 strips astrometry.net call sites from inherited NINA code; a future release may add it back if there's user demand.
-- **PlateSolve2**: deleted entirely (Windows-only legacy).
+- **PlateSolve2** and the other NINA solvers (local astrometry.net, PlateSolve3, All Sky Plate Solver, TheSkyX ImageLink, PinPoint): deleted entirely (#1701). A persisted profile that still names one deserializes and resolves to ASTAP, with one warning per run.
 
 ---
 
@@ -8628,11 +8628,11 @@ docs/DEPLOY.md adds explicit guidance: *"For unattended overnight sessions, keep
 
 True push notifications (FCM/APNs to phone lock screen even with WILMA closed) are committed on the `P1`–`P5` issue backlog per §46.9.
 
-### 58.12 Unattended-failure graceful shutdown (10-minute countdown)
+### 58.12 Unattended-failure graceful shutdown (30-minute countdown)
 
 Triggers from **any** urgent-severity equipment-impacting failure where the sequence has paused awaiting user input. The flip failure case is one instance; mid-sequence equipment fault is another; storage unmount mid-night is another. Same pattern handles them all.
 
-**The countdown:** when an urgent failure fires and the sequence enters `paused_awaiting_user` state, server starts a 10-minute countdown.
+**The countdown:** when an urgent failure fires and the sequence enters `paused_awaiting_user` state, server starts a 30-minute countdown (profile `unattended_shutdown_wait_minutes`; new profiles default to 30, stored ones keep their value), and posts a notice with the time the rig shuts down. A step the plan asked for (`WaitForUser`) does not start it, and further failures before the user shows up join the same countdown (or the ladder that already ran) instead of starting another.
 
 What resets the countdown (= "user has come back"):
 - User acknowledges the urgent notification via WILMA (tap [Acknowledge])
@@ -8644,7 +8644,7 @@ What does NOT count as user attention:
 - Pre-existing WebSocket connections that have been quiet (heartbeat pings only)
 - Background automated processes
 
-If 10 consecutive unattended minutes elapse, **graceful shutdown executes**.
+If the whole wait elapses unattended, **graceful shutdown executes**.
 
 **Shutdown sequence (in strict order, with timeouts):**
 
@@ -8661,7 +8661,7 @@ What stays running:
 - mDNS announce (so WILMA can still find the Pi)
 - Notification system (both the failure event and the shutdown event remain in the feed)
 
-**Why 10 minutes specifically** — Goldilocks zone. Long enough for an alarmed user to grab their phone, fumble to WILMA, and tap acknowledge. Short enough that a sleeping user who genuinely doesn't wake up doesn't burn 6 hours of battery. NINA has no equivalent (it just keeps running); ASIAir powers things off harder on some failures but the threshold isn't user-configurable. ARA splits the difference and gives the user the dial.
+**Why 30 minutes for new profiles** — 10 was too short (#1712). Long enough for a user who stepped outside to come back, grab their phone and tap acknowledge. Short enough that a sleeping user who genuinely doesn't wake up doesn't burn 6 hours of battery. NINA has no equivalent (it just keeps running); ASIAir powers things off harder on some failures but the threshold isn't user-configurable. ARA splits the difference and gives the user the dial.
 
 **Configuration in profile:**
 
@@ -8669,7 +8669,7 @@ What stays running:
 {
   "unattended_failure_shutdown": {
     "enabled": true,
-    "wait_minutes": 10,
+    "wait_minutes": 30,
     "actions": ["stop_guider", "warm_cooler", "park_mount", "disconnect_equipment"],
     "keep_server_running": true,
     "stop_alarm_after_shutdown": true
@@ -8677,7 +8677,7 @@ What stays running:
 }
 ```
 
-The 10-min wait is configurable per profile (5 for battery-limited field rigs, 30 for wall-powered observatories). Disabling shutdown entirely is allowed but not recommended; wizard flags it as such.
+The wait is configurable per profile (default 30 min; 5 for battery-limited field rigs). Disabling shutdown entirely is allowed but not recommended; wizard flags it as such.
 
 ### 58.13 What the user sees when they come back
 

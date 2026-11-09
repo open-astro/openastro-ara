@@ -17,7 +17,11 @@ import '../../state/sky_atlas/tonight_sky_state.dart'
     show planningSettingsBootstrapProvider;
 import '../../models/frame_histogram.dart';
 import '../../models/guider_status.dart';
+import '../../models/discovered_device.dart';
 import '../../services/equipment_device_api.dart' show describeEquipmentError;
+import '../../state/settings/equipment_connection_state.dart'
+    show EquipmentDeviceType;
+import '../../widgets/equipment/alpaca_chooser_dialog.dart';
 import '../../services/equipment_driver_api.dart';
 import '../../models/polar_align.dart';
 import '../../state/app_shell_state.dart';
@@ -33,6 +37,7 @@ import '../../state/night_mode_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/sky_atlas/planetarium_selection_state.dart';
+import '../../state/settings/cooling_fan_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
@@ -88,6 +93,7 @@ import '../settings/settings_shell.dart';
 import '../shell_listeners.dart';
 import 'simple_night_setup.dart';
 import 'simple_device_windows.dart';
+import 'simple_rig_storage.dart';
 import 'simple_focus_panel.dart';
 import '../../state/focus/autofocus_live_state.dart' show autofocusLiveProvider;
 import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
@@ -272,6 +278,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focus.requestFocus();
     });
+    ref.listenManual(coolingFanAskDueProvider, (_, due) {
+      if (due) unawaited(_askCoolingFan());
+    }, fireImmediately: true);
     ref.listenManual(mountProvider, (previous, next) {
       final caps = next.value?.capabilities;
       final was = previous?.value?.capabilities;
@@ -309,8 +318,26 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
   }
 
+  late final _onTop = ref.read(simpleShellOnTopProvider.notifier);
+  late SimpleMessagesNotifier _messages;
+
+  // A frame late: providers can't change while the tree builds or unmounts.
+  void _publishOnTop(bool onTop) => WidgetsBinding.instance
+      .addPostFrameCallback((_) => _onTop.set(onTop));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _publishOnTop(ModalRoute.isCurrentOf(context) ?? true);
+    _messages = ref.read(simpleMessagesProvider.notifier);
+  }
+
   @override
   void dispose() {
+    _publishOnTop(false);
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _messages.dismissQuestions(),
+    );
     _stopDisarm?.cancel();
     _focus.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -319,8 +346,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   }
 
   /// The full Settings page over Simple Mode, on whatever panel was picked
-  /// last. Every device dot opens its own window now (#1662); only Logs and
-  /// Open Storage still land here, until #1659 and #1660.
+  /// last. Devices open their windows (#1662), Logs and Storage sit in Rig
+  /// (#1659, #1660); any other panel still lands here.
   void _openSettings() {
     setState(() => _popover = _Popover.none);
     unawaited(
@@ -444,6 +471,26 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         );
   }
 
+  /// #1700 — a cooling camera and a switch, no fan chosen: a pill asks once.
+  Future<void> _askCoolingFan() async {
+    if (!await claimCoolingFanAsk(ref.read) || !mounted) return;
+    final l10n = context.l10n;
+    ref
+        .read(simpleMessagesProvider.notifier)
+        .show(
+          SimpleMessageKind.question,
+          l10n.coolingFanAsk,
+          origin: SimpleStatusOrigin.camera,
+          actions: [
+            SimpleMessageAction(l10n.coolingFanNotNow, () {}),
+            SimpleMessageAction(
+              l10n.coolingFanChoose,
+              () => _openFromPill(SimpleStatusOrigin.camera),
+            ),
+          ],
+        );
+  }
+
   /// A tap on the status pill: what it is about, open (user, 2026-11-04).
   void _openFromPill(SimpleStatusOrigin origin) {
     final window = switch (origin) {
@@ -493,6 +540,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   /// The Settings sheet's section to open on (a search hit names one).
   String _menuSection = 'Rig';
+
+  /// Counts Open Storage jumps: the Rig page scrolls to Storage and the new
+  /// key rebuilds the sheet when it is already open.
+  int _revealStorage = 0;
+
+  /// Open Storage's one scroll: only the sheet it opens jumps to Storage.
+  bool _revealStoragePending = false;
 
   void _openMenu({String section = 'Rig'}) {
     _menuSection = section;
@@ -667,8 +721,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
             .read(selectedTabIndexProvider.notifier)
             .select(previous ?? kLiveTabIndex);
         _restoringTab = false;
-        // A device opens its own window; the other panels (Logs, Storage)
-        // still get the full Settings page over Simple Mode.
+        // A device opens its own window and Storage opens Rig with its block
+        // in view; the other panels get the full Settings page over Simple
+        // Mode.
         final panel = ref.read(selectedSettingsPanelProvider);
         if (_deviceWindows.containsKey(panel)) {
           // The dot again closes it; another device's dot swaps it.
@@ -682,6 +737,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
               _popover = _Popover.none;
             }
           });
+        } else if (panel == 'session.storage') {
+          setState(() {
+            _device = null;
+            _menuSection = 'Rig';
+            _revealStorage++;
+            _revealStoragePending = true;
+            _popover = _Popover.menu;
+          });
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => _revealStoragePending = false,
+          );
         } else {
           _openSettings();
         }
@@ -872,9 +938,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         _popover = _Popover.none;
         _closeSheet();
       }),
-      onLibrary: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
-      ),
     );
     final sel = ref.watch(planetariumSelectionProvider);
     final motion = reduceMotionOf(context)
@@ -1328,20 +1391,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                             simpleRailScale(context),
                                       ),
                                       child: _SettingsSheet(
-                                        key: ValueKey(_menuSection),
+                                        key: ValueKey((
+                                          _menuSection,
+                                          _revealStorage,
+                                        )),
                                         section: _menuSection,
+                                        revealStorage: _revealStoragePending,
                                         onClose: () => setState(
                                           () => _popover = _Popover.none,
                                         ),
-                                        onLogs: () {
-                                          ref
-                                              .read(
-                                                selectedSettingsPanelProvider
-                                                    .notifier,
-                                              )
-                                              .select('support.logs');
-                                          _openSettings();
-                                        },
                                       ),
                                     ),
                                   ),
@@ -2257,6 +2315,7 @@ class SimpleSegment extends StatelessWidget {
   const SimpleSegment({
     super.key,
     required this.label,
+    this.group,
     required this.selected,
     required this.radius,
     this.onTap,
@@ -2265,6 +2324,9 @@ class SimpleSegment extends StatelessWidget {
   });
 
   final String label;
+
+  /// What the row of segments chooses, for screen readers.
+  final String? group;
   final Alignment alignment;
 
   /// Around the label; a list sets it to line its labels up.
@@ -2276,6 +2338,7 @@ class SimpleSegment extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
+    label: group,
     // A segment that takes no tap is read as disabled, not as a button; the
     // selected one stays enabled, read as selected (a native segmented control).
     enabled: onTap != null || selected,
@@ -2316,6 +2379,7 @@ class SimpleSegments<T> extends StatelessWidget {
     required this.onPick,
     this.keyPrefix,
     this.expand = true,
+    this.group,
   });
 
   final List<(T, String, String)> options;
@@ -2323,6 +2387,9 @@ class SimpleSegments<T> extends StatelessWidget {
   final ValueChanged<T>? onPick;
   final String? keyPrefix;
   final bool expand;
+
+  /// Read with each segment: what the row chooses.
+  final String? group;
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
@@ -2338,6 +2405,7 @@ class SimpleSegments<T> extends StatelessWidget {
             final segment = SimpleSegment(
               key: keyPrefix == null ? null : Key('$keyPrefix-$id'),
               label: label,
+              group: group,
               selected: value == selected,
               radius: 8,
               onTap: onPick == null || value == selected
@@ -2381,6 +2449,11 @@ ThemeData simpleTheme(ThemeData base) {
     filledButtonTheme: FilledButtonThemeData(
       style: buttons.merge(base.filledButtonTheme.style),
     ),
+    iconButtonTheme: IconButtonThemeData(
+      style: const ButtonStyle(
+        minimumSize: WidgetStatePropertyAll(Size(44, 44)),
+      ).merge(base.iconButtonTheme.style),
+    ),
     // The theme's primary (#1565C0) reads at 3:1 on a panel and 2:1 on a
     // tile; labels need 4.5:1 (WCAG 2.2 AA): text buttons in linkText,
     // outlined ones in white.
@@ -2419,13 +2492,15 @@ class _SettingsSheet extends ConsumerStatefulWidget {
     super.key,
     this.section = 'Rig',
     required this.onClose,
-    required this.onLogs,
+    this.revealStorage = false,
   });
 
   /// The section it opens on.
   final String section;
   final VoidCallback onClose;
-  final VoidCallback onLogs;
+
+  /// Rig opens scrolled to its Storage block (Plan's Open Storage).
+  final bool revealStorage;
 
   @override
   ConsumerState<_SettingsSheet> createState() => _SettingsSheetState();
@@ -2600,7 +2675,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
               child: switch (_section) {
                 'Rig' => _ThisRig(
                   onClose: widget.onClose,
-                  onLogs: widget.onLogs,
+                  revealStorage: widget.revealStorage,
                 ),
                 'Camera' => const SimpleCameraWindow(inSettings: true),
                 'Mount' => const SimpleMountWindow(inSettings: true),
@@ -2657,18 +2732,21 @@ class _Gear extends ConsumerWidget {
       children: [
         _GearRow(
           id: 'camera',
+          deviceType: EquipmentDeviceType.camera,
           type: l10n.shellSectionCamera,
           provider: cameraStatusProvider,
           onOpen: () => onOpen('Camera'),
         ),
         _GearRow(
           id: 'mount',
+          deviceType: EquipmentDeviceType.mount,
           type: l10n.shellSectionMount,
           provider: mountProvider,
           onOpen: () => onOpen('Mount'),
         ),
         _GearRow(
           id: 'focuser',
+          deviceType: EquipmentDeviceType.focuser,
           type: l10n.shellSectionFocuser,
           provider: focuserProvider,
           onOpen: () => onOpen('Focuser'),
@@ -2676,18 +2754,21 @@ class _Gear extends ConsumerWidget {
         _GuiderGearRow(onOpen: () => onOpen('Guider')),
         _GearRow(
           id: 'filterwheel',
+          deviceType: EquipmentDeviceType.filterWheel,
           type: l10n.shellFilterWheel,
           provider: filterWheelProvider,
           onOpen: () => onOpen('Filter wheel'),
         ),
         _GearRow(
           id: 'rotator',
+          deviceType: EquipmentDeviceType.rotator,
           type: l10n.shellRotator,
           provider: rotatorProvider,
           onOpen: () => onOpen('Rotator'),
         ),
         _GearRow(
           id: 'flat',
+          deviceType: EquipmentDeviceType.flatPanel,
           type: l10n.shellFlatPanel,
           provider: flatPanelProvider,
           onOpen: () => onOpen('Flat panel'),
@@ -2695,23 +2776,81 @@ class _Gear extends ConsumerWidget {
         _SwitchGearRows(onOpen: () => onOpen('Switches')),
         _GearRow(
           id: 'dome',
+          deviceType: EquipmentDeviceType.dome,
           type: l10n.shellDome,
           provider: domeProvider,
           onOpen: () => onOpen('Dome'),
         ),
         _GearRow(
           id: 'weather',
+          deviceType: EquipmentDeviceType.weather,
           type: l10n.shellWeather,
           provider: weatherProvider,
           onOpen: () => onOpen('Weather'),
         ),
         _GearRow(
           id: 'safety',
+          deviceType: EquipmentDeviceType.safetyMonitor,
           type: l10n.shellSafetyMonitor,
           provider: safetyMonitorProvider,
           onOpen: () => onOpen('Safety monitor'),
         ),
+        const _AddGearRow(),
       ],
+    );
+  }
+}
+
+/// Devices this rig has none of yet: pick one through the Full UI's chooser.
+class _AddGearRow extends ConsumerWidget {
+  const _AddGearRow();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    (EquipmentDeviceType, String, Future<bool> Function(DiscoveredDevice))
+    entry<T extends EquipmentDeviceStatus>(
+      EquipmentDeviceType type,
+      String label,
+      AsyncNotifierProvider<EquipmentDeviceNotifier<T>, T?> provider,
+    ) => (type, label, ref.read(provider.notifier).connect);
+    final missing = [
+      if (ref.watch(cameraStatusProvider).value == null)
+        entry(EquipmentDeviceType.camera, l10n.shellSectionCamera, cameraStatusProvider),
+      if (ref.watch(mountProvider).value == null)
+        entry(EquipmentDeviceType.mount, l10n.shellSectionMount, mountProvider),
+      if (ref.watch(focuserProvider).value == null)
+        entry(EquipmentDeviceType.focuser, l10n.shellSectionFocuser, focuserProvider),
+      if (ref.watch(filterWheelProvider).value == null)
+        entry(EquipmentDeviceType.filterWheel, l10n.shellFilterWheel, filterWheelProvider),
+      if (ref.watch(rotatorProvider).value == null)
+        entry(EquipmentDeviceType.rotator, l10n.shellRotator, rotatorProvider),
+      if (ref.watch(flatPanelProvider).value == null)
+        entry(EquipmentDeviceType.flatPanel, l10n.shellFlatPanel, flatPanelProvider),
+      if (ref.watch(domeProvider).value == null)
+        entry(EquipmentDeviceType.dome, l10n.shellDome, domeProvider),
+      if (ref.watch(weatherProvider).value == null)
+        entry(EquipmentDeviceType.weather, l10n.shellWeather, weatherProvider),
+      if (ref.watch(safetyMonitorProvider).value == null)
+        entry(EquipmentDeviceType.safetyMonitor, l10n.shellSafetyMonitor, safetyMonitorProvider),
+      if ((ref.watch(switchListProvider).value ?? const []).isEmpty)
+        (
+          EquipmentDeviceType.switchDevice,
+          l10n.shellSwitches,
+          ref.read(switchListProvider.notifier).connect,
+        ),
+    ];
+    if (missing.isEmpty) return const SizedBox.shrink();
+    return _gearTile(
+      id: 'add',
+      title: l10n.shellAddDevice,
+      dot: StatusLevel.disconnected,
+      word: missing.map((m) => m.$2).join(', '),
+      verb: null,
+      label: null,
+      action: null,
+      choose: (context, close) => _AddGearPanel(missing: missing, close: close),
+      onOpen: null,
     );
   }
 }
@@ -2721,6 +2860,7 @@ class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
     required this.id,
     required this.type,
     required this.provider,
+    required this.deviceType,
     this.onOpen,
   });
 
@@ -2729,15 +2869,19 @@ class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
 
   final String id;
   final String type;
+  final EquipmentDeviceType deviceType;
   final AsyncNotifierProvider<EquipmentDeviceNotifier<T>, T?> provider;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(provider).value;
-    // Never set up on this rig: nothing to show (the Advanced UI picks gear).
-    if (status == null) return const SizedBox.shrink();
     final notifier = ref.read(provider.notifier);
     final l10n = context.l10n;
+    // Connect only reconnects what the rig remembers (#1710): Choose picks a
+    // device, through the Full UI's chooser, in place.
+    final choose = _deviceChooser(deviceType, type, notifier.connect);
+    // Never set up on this rig: the Add a device row picks it.
+    if (status == null) return const SizedBox.shrink();
     // The dot is the top bar chip's, so the two always agree.
     final dot = equipmentStatusLevel(status);
     final word = switch (status.connectionState) {
@@ -2770,6 +2914,7 @@ class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
       verb: verb,
       label: label,
       action: action,
+      choose: status.isConnected || status.isConnecting ? null : choose,
       onOpen: onOpen,
     );
   }
@@ -2791,6 +2936,12 @@ class _SwitchGearRows extends ConsumerWidget {
       children: [for (final d in devices) _row(context, ref, d)],
     );
   }
+
+  _GearChooser _choose(BuildContext context, WidgetRef ref) => _deviceChooser(
+    EquipmentDeviceType.switchDevice,
+    context.l10n.shellSwitches,
+    ref.read(switchListProvider.notifier).connect,
+  );
 
   Widget _row(BuildContext context, WidgetRef ref, SwitchDevice d) {
     final notifier = ref.read(switchListProvider.notifier);
@@ -2837,6 +2988,11 @@ class _SwitchGearRows extends ConsumerWidget {
       verb: verb,
       label: label,
       action: action,
+      choose:
+          d.connectionState == SwitchConnectionState.connected ||
+              d.connectionState == SwitchConnectionState.connecting
+          ? null
+          : _choose(context, ref),
       onOpen: onOpen,
     );
   }
@@ -2902,6 +3058,118 @@ class _GuiderGearRow extends ConsumerWidget {
   }
 }
 
+/// What a device row's Choose opens under the row; [close] folds it again.
+typedef _GearChooser = Widget Function(BuildContext context, VoidCallback close);
+
+/// The Full UI's device chooser, in place; [connect] takes the picked device.
+_GearChooser _deviceChooser(
+  EquipmentDeviceType type,
+  String typeLabel,
+  Future<bool> Function(DiscoveredDevice device) connect,
+) => (context, close) => SimpleHostedText(
+  child: AlpacaDeviceChooser(
+  type: type,
+  deviceTypeLabel: typeLabel,
+  onClose: close,
+  onPick: (device) async {
+    final notify = userNotifier(context);
+    final l10n = context.l10n;
+    try {
+      await connect(device);
+    } catch (e) {
+      notify(
+        l10n.shellGearActionFailed(l10n.shellConnect, device.name),
+        detail: describeEquipmentError(e),
+        error: true,
+      );
+    }
+  },
+),
+);
+
+/// Add a device, in place: the types the rig has none of, then the chooser
+/// for the one tapped.
+class _AddGearPanel extends StatefulWidget {
+  const _AddGearPanel({required this.missing, required this.close});
+
+  final List<
+    (EquipmentDeviceType, String, Future<bool> Function(DiscoveredDevice))
+  >
+  missing;
+  final VoidCallback close;
+
+  @override
+  State<_AddGearPanel> createState() => _AddGearPanelState();
+}
+
+class _AddGearPanelState extends State<_AddGearPanel> {
+  EquipmentDeviceType? _type;
+
+  @override
+  Widget build(BuildContext context) {
+    final picked = widget.missing.where((m) => m.$1 == _type).firstOrNull;
+    if (picked != null) {
+      return _deviceChooser(
+        picked.$1,
+        picked.$2,
+        picked.$3,
+      )(context, widget.close);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final m in widget.missing)
+          TextButton(
+            key: Key('simple-gear-add-${m.$1.name}'),
+            style: TextButton.styleFrom(
+              minimumSize: const Size(0, 44),
+              alignment: Alignment.centerLeft,
+            ),
+            onPressed: () => setState(() => _type = m.$1),
+            child: Text(m.$2, style: kSimpleText),
+          ),
+      ],
+    );
+  }
+}
+
+/// A device's row, with what its Choose opens folded out under it.
+class _GearTile extends StatefulWidget {
+  const _GearTile({required this.chooser, required this.row});
+
+  final _GearChooser? chooser;
+
+  /// The row; given what its Choose should call.
+  final Widget Function(VoidCallback? toggle) row;
+
+  @override
+  State<_GearTile> createState() => _GearTileState();
+}
+
+class _GearTileState extends State<_GearTile> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final chooser = widget.chooser;
+    final row = widget.row(
+      chooser == null ? null : () => setState(() => _open = !_open),
+    );
+    if (!_open || chooser == null) return row;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
+      children: [
+        row,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12),
+          child: chooser(context, () => setState(() => _open = false)),
+        ),
+      ],
+    );
+  }
+}
+
 Widget _gearTile({
   required String id,
   required String title,
@@ -2912,6 +3180,32 @@ Widget _gearTile({
   required String? label,
   required Future<void> Function()? action,
   required VoidCallback? onOpen,
+  _GearChooser? choose,
+}) => _GearTile(
+  chooser: choose,
+  row: (toggle) => _gearRow(
+    id: id,
+    title: title,
+    dot: dot,
+    word: word,
+    verb: verb,
+    label: label,
+    action: action,
+    onOpen: onOpen,
+    toggle: toggle,
+  ),
+);
+
+Widget _gearRow({
+  required String id,
+  required String title,
+  required StatusLevel dot,
+  required String word,
+  required String? verb,
+  required String? label,
+  required Future<void> Function()? action,
+  required VoidCallback? onOpen,
+  required VoidCallback? toggle,
 }) {
   // Ink, so the focus and press highlight paints over the fill, not under.
   final row = Ink(
@@ -2959,6 +3253,15 @@ Widget _gearTile({
               child: Text(label),
             ),
           ),
+        if (toggle != null)
+          Builder(
+            builder: (context) => TextButton(
+              key: Key('simple-gear-$id-choose'),
+              style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+              onPressed: toggle,
+              child: Text(context.l10n.shellChooseDevice),
+            ),
+          ),
         if (onOpen != null)
           const Icon(Icons.chevron_right, color: AraColors.textSecondary),
       ],
@@ -2988,10 +3291,10 @@ Widget _gearTile({
 /// (a permanent pier, asked once), the way out of Simple Mode, the version
 /// and the logs.
 class _ThisRig extends ConsumerWidget {
-  const _ThisRig({required this.onClose, required this.onLogs});
+  const _ThisRig({required this.onClose, this.revealStorage = false});
 
   final VoidCallback onClose;
-  final VoidCallback onLogs;
+  final bool revealStorage;
 
   /// Apply a value and keep it in the profile; a failed save says so.
   static Future<void> _save(
@@ -3454,10 +3757,10 @@ class _ThisRig extends ConsumerWidget {
               (name, v ?? '—'),
           ],
         ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(onPressed: onLogs, child: Text(l10n.shellLogs)),
-        ),
+        const Divider(height: AraSpace.s16),
+        SimpleStorageBlock(reveal: revealStorage),
+        const Divider(height: AraSpace.s16),
+        const SimpleLogsBlock(),
       ],
     );
   }

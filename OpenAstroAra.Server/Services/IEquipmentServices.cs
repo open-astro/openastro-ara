@@ -83,6 +83,9 @@ public interface ICameraService {
 }
 
 public interface ITelescopeService {
+    /// <summary>#1710 — keep the profile's site out of the mount while a profile switch swaps the devices; dispose when they are done.</summary>
+    IDisposable? HoldSiteFollow() => null;
+
     Task<TelescopeDto?> GetAsync(CancellationToken ct);
     Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct);

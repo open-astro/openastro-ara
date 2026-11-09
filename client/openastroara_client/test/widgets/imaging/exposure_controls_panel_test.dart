@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/filter_wheel_status.dart';
@@ -23,6 +25,7 @@ class _FakeWheelNotifier extends FilterWheelNotifier {
   // slots). Set to an unnamed-slot list to simulate a driver that never names
   // a position.
   List<FilterSlot>? slotsOverride;
+  bool refuseMoves = false;
   @override
   Future<FilterWheelStatus?> build() async => null;
   @override
@@ -36,6 +39,7 @@ class _FakeWheelNotifier extends FilterWheelNotifier {
   @override
   Future<bool> changeFilter(int position) async {
     changeCalls.add(position); // the driver was asked
+    if (refuseMoves) return false;
     if (failMoves) throw StateError('driver rejected the move');
     if (failInFlight) {
       // Accepted (returns true) but the wheel never reaches the target: it
@@ -294,6 +298,31 @@ void main() {
     // Let the fake's delayed move complete so no timers outlive the test.
     await tester.pump(const Duration(seconds: 10));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('a filter pick refused for another action is a refused pill', (tester) async {
+    final container = ProviderContainer(overrides: [
+      simpleModeActiveProvider.overrideWithValue(true),
+      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+    ]);
+    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+    ));
+    await tester.pumpAndSettle();
+    final wheel = container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
+    wheel.park(_wheelAt(0));
+    wheel.refuseMoves = true;
+    await tester.pump();
+    final field = tester.widget<DropdownButtonFormField<String>>(find.byType(DropdownButtonFormField<String>));
+    field.onChanged!('Ha');
+    await tester.pump();
+    await tester.pump();
+    expect(container.read(simpleMessagesProvider).single.kind, SimpleMessageKind.refused);
+    await tester.pump(kSimpleResultLife);
   });
 
   testWidgets('the picker disables + pulses while the wheel is moving',

@@ -271,12 +271,16 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
   /// PHD2 turns its calibration by every move of the rotator it is given,
   /// which is right when the guide camera rides behind it (OAG) and wrong
   /// for a separate guide scope. Leaving the OAG train drops the rotator
-  /// (the daemon clears it at the write boundary as well).
+  /// (the daemon clears it at the write boundary as well). It also drops the
+  /// guide focal length: under an OAG that value is derived from the main
+  /// scope, and a guide scope would keep it as if it were its own (#1715).
   void setGuiderSetupType(String v) {
     final norm = normalizeGuiderSetupType(v);
+    final leavingOag = state.guiderSetupType == 'oag' && norm != 'oag';
     state = state.copyWith(
       guiderSetupType: norm,
       guiderRotator: norm == 'oag' ? state.guiderRotator : '',
+      guideFocalLength: leavingOag ? 0 : null,
     );
   }
 

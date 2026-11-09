@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
 import '../../../state/saved_server_state.dart';
+import '../../../state/simple_messages_state.dart';
+import '../../../state/simple_mode_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/storage_settings_state.dart';
 import '../../../services/storage_space_api.dart';
@@ -467,9 +469,9 @@ class _DestinationCard extends ConsumerWidget {
               // plugs in a drive that already holds a season of frames.
               _RescanButton(),
               const SizedBox(width: 8),
-              _CheckDiskButton(),
+              StorageCheckDiskButton(),
               const SizedBox(width: 8),
-              _EjectButton(),
+              StorageEjectButton(),
               const SizedBox(width: 8),
               FilledButton(
                 onPressed: () => showStorageDriveDialog(context, ref),
@@ -574,12 +576,24 @@ class _CopyRow extends ConsumerWidget {
 /// §29 safe removal — flush + unmount before pulling the take-home drive.
 /// Linux caches writes; yanking a mounted drive can lose the last seconds
 /// of the night and leaves the exFAT dirty bit set.
-class _EjectButton extends ConsumerStatefulWidget {
+class StorageEjectButton extends ConsumerStatefulWidget {
+  const StorageEjectButton({
+    super.key,
+    this.label = 'Eject',
+    this.enabled = true,
+    this.minHeight,
+  });
+
+  /// Simple Mode hosts this with its own words, no-rig state and 44 pt height.
+  final String label;
+  final bool enabled;
+  final double? minHeight;
+
   @override
-  ConsumerState<_EjectButton> createState() => _EjectButtonState();
+  ConsumerState<StorageEjectButton> createState() => _EjectButtonState();
 }
 
-class _EjectButtonState extends ConsumerState<_EjectButton> {
+class _EjectButtonState extends ConsumerState<StorageEjectButton> {
   bool _busy = false;
 
   Future<void> _run() async {
@@ -589,34 +603,33 @@ class _EjectButtonState extends ConsumerState<_EjectButton> {
     final store = devices
         ?.where((d) => d.isAraStore && d.uuid != null)
         .toList();
-    final messenger = ScaffoldMessenger.of(context);
+    final notify = userNotifier(context);
+    final l10n = context.l10n;
     if (store == null || store.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('No store drive to eject.')),
-      );
+      notify(l10n.storageNoDriveEject, refused: true);
       return;
     }
     setState(() => _busy = true);
-    final api = StorageDevicesApi(server);
+    final api = ref.read(storageDevicesApiFactoryProvider)(server);
     try {
       final outcome = await api.eject(uuid: store.first.uuid!);
       if (!mounted) return;
       ref.invalidate(storageSpaceProvider);
       ref.invalidate(storageDevicesProvider);
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            outcome.success
-                ? 'Ejected — safe to unplug the drive.'
-                : outcome.code == 'device_busy'
-                ? 'The drive is busy — wait for writes to finish and try again.'
-                : 'Eject failed: ${outcome.detail ?? outcome.code}',
-          ),
-        ),
+      notify(
+        outcome.success
+            ? l10n.storageEjected
+            : outcome.code == 'device_busy'
+            ? l10n.storageEjectBusy
+            : l10n.storageEjectFailed(outcome.detail ?? outcome.code),
+        error: !outcome.success,
+        snackBarRed: false,
       );
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(friendlyError(context.l10n, e, action: 'eject the drive'))),
+      notify(
+        friendlyError(l10n, e, action: l10n.storageEjectAction),
+        error: true,
+        snackBarRed: false,
       );
     } finally {
       api.close();
@@ -627,7 +640,10 @@ class _EjectButtonState extends ConsumerState<_EjectButton> {
   @override
   Widget build(BuildContext context) {
     return OutlinedButton.icon(
-      onPressed: _busy ? null : _run,
+      onPressed: _busy || !widget.enabled ? null : _run,
+      style: widget.minHeight == null
+          ? null
+          : OutlinedButton.styleFrom(minimumSize: Size(0, widget.minHeight!)),
       icon: _busy
           ? const SizedBox(
               width: 14,
@@ -635,7 +651,7 @@ class _EjectButtonState extends ConsumerState<_EjectButton> {
               child: CircularProgressIndicator(strokeWidth: 2),
             )
           : const Icon(Icons.eject, size: 16),
-      label: const Text('Eject'),
+      label: Text(widget.label),
     );
   }
 }
@@ -643,13 +659,47 @@ class _EjectButtonState extends ConsumerState<_EjectButton> {
 /// §29 user-triggered filesystem check. exFAT (the take-home format) has no
 /// journal, so after a field power cut this is how the drive gets healthy —
 /// deliberately a button, never an automatic scan.
-class _CheckDiskButton extends ConsumerStatefulWidget {
+class StorageCheckDiskButton extends ConsumerStatefulWidget {
+  const StorageCheckDiskButton({
+    super.key,
+    this.label = 'Check disk',
+    this.enabled = true,
+    this.minHeight,
+    this.confirm,
+  });
+
+  final String label;
+  final bool enabled;
+  final double? minHeight;
+
+  /// Asks before the check; the dialog when null. Simple Mode asks inline.
+  final Future<bool> Function()? confirm;
+
   @override
-  ConsumerState<_CheckDiskButton> createState() => _CheckDiskButtonState();
+  ConsumerState<StorageCheckDiskButton> createState() =>
+      _CheckDiskButtonState();
 }
 
-class _CheckDiskButtonState extends ConsumerState<_CheckDiskButton> {
+class _CheckDiskButtonState extends ConsumerState<StorageCheckDiskButton> {
   bool _busy = false;
+
+  Future<bool?> _askInDialog() => showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(context.l10n.storageCheckTitle),
+      content: Text(context.l10n.storageCheckBody),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Check disk'),
+        ),
+      ],
+    ),
+  );
 
   Future<void> _run() async {
     final server = ref.read(activeServerProvider);
@@ -658,58 +708,37 @@ class _CheckDiskButtonState extends ConsumerState<_CheckDiskButton> {
     final store = devices
         ?.where((d) => d.isAraStore && d.uuid != null)
         .toList();
-    final messenger = ScaffoldMessenger.of(context);
+    final notify = userNotifier(context);
+    final l10n = context.l10n;
     if (store == null || store.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('No store drive to check — connect one first.'),
-        ),
-      );
+      notify(l10n.storageNoDriveCheck, refused: true);
       return;
     }
-    final proceed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Check the store drive?'),
-        content: const Text(
-          'The drive is briefly taken offline while its filesystem is '
-          'verified and repaired if needed. Takes seconds to a couple of '
-          'minutes; capture must be idle.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Check disk'),
-          ),
-        ],
-      ),
-    );
+    final proceed = await (widget.confirm?.call() ?? _askInDialog());
     if (proceed != true || !mounted) return;
     setState(() => _busy = true);
-    final api = StorageDevicesApi(server);
+    final api = ref.read(storageDevicesApiFactoryProvider)(server);
     try {
       final outcome = await api.check(uuid: store.first.uuid!);
       if (!mounted) return;
       ref.invalidate(storageSpaceProvider);
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            outcome.success
-                ? (outcome.code == 'repaired'
-                      ? 'Disk checked — repairs were made. Worth re-running '
-                            '"Find frames on disk".'
-                      : 'Disk checked — clean.')
-                : 'Check failed: ${outcome.detail ?? outcome.code}',
-          ),
-        ),
+      notify(
+        outcome.success
+            ? (outcome.code == 'repaired'
+                  // Simple Mode has no Find frames on disk to point at.
+                  ? ref.read(simpleModeActiveProvider)
+                        ? l10n.storageCheckRepairedSimple
+                        : l10n.storageCheckRepaired
+                  : l10n.storageCheckClean)
+            : l10n.storageCheckFailed(outcome.detail ?? outcome.code),
+        error: !outcome.success,
+        snackBarRed: false,
       );
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text(friendlyError(context.l10n, e, action: 'check the disk'))),
+      notify(
+        friendlyError(l10n, e, action: l10n.storageCheckAction),
+        error: true,
+        snackBarRed: false,
       );
     } finally {
       api.close();
@@ -720,14 +749,17 @@ class _CheckDiskButtonState extends ConsumerState<_CheckDiskButton> {
   @override
   Widget build(BuildContext context) {
     return OutlinedButton(
-      onPressed: _busy ? null : _run,
+      onPressed: _busy || !widget.enabled ? null : _run,
+      style: widget.minHeight == null
+          ? null
+          : OutlinedButton.styleFrom(minimumSize: Size(0, widget.minHeight!)),
       child: _busy
           ? const SizedBox(
               width: 14,
               height: 14,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
-          : const Text('Check disk'),
+          : Text(widget.label),
     );
   }
 }

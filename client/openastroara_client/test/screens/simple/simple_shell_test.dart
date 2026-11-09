@@ -2,12 +2,17 @@ import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart';
+import 'package:openastroara/models/discovered_device.dart';
+import 'package:openastroara/services/equipment_discovery_api.dart';
+import 'package:openastroara/state/equipment/equipment_discovery_provider.dart';
+import 'package:openastroara/state/settings/equipment_connection_state.dart' show EquipmentDeviceType;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/screens/simple/simple_rig_storage.dart';
 import 'package:openastroara/screens/album/sky_album_screen.dart';
 import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
@@ -27,6 +32,7 @@ import 'package:openastroara/screens/simple/simple_search.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart' show simpleMountMotionProvider, simpleSwitchSettingProvider;
 import 'package:openastroara/models/switch_device.dart';
 import 'package:openastroara/state/equipment/switch_state.dart';
+import 'package:openastroara/state/settings/cooling_fan_state.dart';
 import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
@@ -49,6 +55,7 @@ import 'package:openastroara/state/client_gps_state.dart' show clientGpsPrefsSer
 import 'package:openastroara/state/time_sync_state.dart';
 import 'package:openastroara/models/stats/server_internal_state.dart';
 import 'package:openastroara/services/storage_space_api.dart';
+import 'package:openastroara/services/storage_devices_api.dart';
 import 'package:openastroara/state/stats/server_internal_state_state.dart';
 import 'package:openastroara/screens/app_shell.dart';
 import 'package:openastroara/models/polar_align.dart';
@@ -113,6 +120,7 @@ import 'package:openastroara/widgets/imaging/histogram_strip.dart' show frameHis
 import 'package:openastroara/widgets/night_hotkey.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart' show planningSettingsBootstrapProvider;
+import 'package:openastroara/widgets/support/bug_report_card.dart';
 
 class _MemPrefs extends SimpleModePrefsService {
   bool value = true;
@@ -406,6 +414,23 @@ class _Mount extends MountNotifier with _Calls<MountStatus> {
   final EquipmentConnectionState state0;
   @override
   Future<MountStatus?> build() async => MountStatus.fromJson(_wire('AM5', state0));
+}
+
+class _ChoosingMount extends _Mount {
+  _ChoosingMount() : super(EquipmentConnectionState.disconnected);
+  final picked = <String>[];
+  @override
+  Future<bool> connect(DiscoveredDevice device) async {
+    picked.add(device.name);
+    return true;
+  }
+}
+
+class _Discovery extends EquipmentDiscoveryApi {
+  _Discovery(super.server, this.devices);
+  final List<DiscoveredDevice> devices;
+  @override
+  Future<List<DiscoveredDevice>> discover(EquipmentDeviceType type, {bool forceRefresh = false}) async => devices;
 }
 
 /// A mount whose connect the rig refuses (the device notifiers throw why).
@@ -1403,6 +1428,8 @@ void main() {
 
     await tester.tap(find.byKey(const Key('simple-exposure')));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('10 s').last);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('10 s').last);
     await tester.pumpAndSettle();
     expect(container.read(exposureControllerProvider).exposure, const Duration(seconds: 10));
@@ -2330,6 +2357,20 @@ void main() {
     expect(find.byKey(const Key('sky')), findsOneWidget, reason: 'Sky still opens it over a frame');
   });
 
+  testWidgets('Search for storage lands on Rig, where the Storage block is', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-search-button')));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('simple-search-field')), 'storage');
+    await tester.pump();
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-search-setting-0')));
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const Key('simple-storage')), findsOneWidget);
+    expect(find.byType(SettingsShell), findsNothing);
+  });
+
   testWidgets('Search finds the Guide Camera section, and Dither in Guide mode where it lives (#1586)',
       (tester) async {
     await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => _GuiderUp())]);
@@ -2489,6 +2530,7 @@ void main() {
     await tester.tap(pt);
     await tester.pump();
     expect(c.read(appLocaleProvider), const Locale('pt', 'BR'));
+    await tester.ensureVisible(find.byKey(const Key('simple-menu-language-system'))); // Rig is longer now
     await tester.tap(find.byKey(const Key('simple-menu-language-system')));
     await tester.pump();
     expect(c.read(appLocaleProvider), isNull);
@@ -2705,18 +2747,22 @@ void main() {
     expect((m.kind, m.title, m.detail), (SimpleMessageKind.error, "Couldn't save that", 'Rig not connected'));
   });
 
-  testWidgets('Logs & bug report opens over Simple Mode; Back comes back', (tester) async {
-    final c = await _pump(tester, const Size(1024, 768));
+  testWidgets('Rig holds the bug report and client log actions inline: no Full UI Settings, Simple Mode stays on', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), feature: true);
     await _openSection(tester, 'Rig');
-    await tester.ensureVisible(find.text('Logs & bug report')); // Rig scrolls
-    await tester.tap(find.text('Logs & bug report'));
+    await tester.ensureVisible(find.text('Send me a bug report')); // Rig scrolls
+    expect(find.text('Send me a bug report'), findsOneWidget);
+    final sharing = find.descendant(of: find.byType(BugReportCard), matching: find.byType(DropdownButton<String>));
+    await tester.ensureVisible(sharing);
     await tester.pumpAndSettle();
-    expect(find.byType(SettingsShell), findsOneWidget);
-    expect(c.read(selectedSettingsPanelProvider), 'support.logs');
-    expect(c.read(simpleModeProvider).value, isTrue);
-    await tester.tap(find.byTooltip('Back'));
+    await tester.tap(sharing);
     await tester.pumpAndSettle();
+    await tester.tap(find.text("This app's error log").last);
+    await tester.pumpAndSettle();
+    final save = tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Save client log'));
+    expect(save.onPressed, isNotNull, reason: 'savable with no rig');
     expect(find.byType(SettingsShell), findsNothing);
+    expect(c.read(simpleModeProvider).value, isTrue);
   });
 
   testWidgets('Devices lists the profile\'s devices with their state: Disconnect, Connect, Reconnect after a failure; '
@@ -2733,7 +2779,7 @@ void main() {
     final page = find.byKey(const Key('simple-gear'));
     expect(find.text('Devices'), findsOneWidget, reason: 'only in the section list, no page title');
     expect(find.descendant(of: page, matching: find.textContaining('ASI2600MM')), findsOneWidget);
-    expect(find.descendant(of: page, matching: find.textContaining('Filter wheel')), findsNothing, reason: 'never set up');
+    expect(find.byKey(const Key('simple-gear-filterwheel')), findsNothing, reason: 'never set up: no row of its own');
     await tester.tap(find.byKey(const Key('simple-gear-camera-disconnect')));
     await tester.tap(find.byKey(const Key('simple-gear-focuser-reconnect')));
     await tester.tap(find.byKey(const Key('simple-gear-mount-connect')));
@@ -2741,6 +2787,83 @@ void main() {
     expect(camera.calls, ['disconnect']);
     expect(focuser.calls, ['reconnect']);
     expect(mount.calls, ['reconnect'], reason: 'Connect: the device the rig remembers, no chooser');
+  });
+
+  testWidgets('the hosted device chooser reads its small text at 14 px', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      mountProvider.overrideWith(() => _Mount(EquipmentConnectionState.disconnected)),
+    ]);
+    await _openSection(tester, 'Devices');
+    await tester.ensureVisible(find.byKey(const Key('simple-gear-add-choose')));
+    await tester.tap(find.byKey(const Key('simple-gear-add-choose')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('simple-gear-add-camera')));
+    await tester.tap(find.byKey(const Key('simple-gear-add-camera')));
+    await tester.pumpAndSettle();
+    final cancel = tester.element(find.byKey(const Key('alpaca-chooser-cancel')));
+    expect(Theme.of(cancel).textTheme.bodySmall!.fontSize, 14);
+  });
+
+  testWidgets('Add a device and Choose pick in place, with no popup', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      mountProvider.overrideWith(() => _Mount(EquipmentConnectionState.disconnected)),
+    ]);
+    bool popup() => tester.state<NavigatorState>(find.byType(Navigator)).canPop();
+    await _openSection(tester, 'Devices');
+    expect(find.byKey(const Key('simple-gear-camera-connect')), findsNothing, reason: 'nothing remembered to reconnect');
+    await tester.ensureVisible(find.byKey(const Key('simple-gear-add-choose')));
+    await tester.tap(find.byKey(const Key('simple-gear-add-choose')));
+    await tester.pumpAndSettle();
+    expect(popup(), isFalse);
+    expect(find.byType(Dialog), findsNothing);
+    await tester.ensureVisible(find.byKey(const Key('simple-gear-add-camera')));
+    expect(tester.getSize(find.byKey(const Key('simple-gear-add-camera'))).height, greaterThanOrEqualTo(44));
+    await tester.tap(find.byKey(const Key('simple-gear-add-camera')));
+    await tester.pumpAndSettle();
+    expect(popup(), isFalse, reason: 'the discovered list is inline too');
+    expect(find.byType(Dialog), findsNothing);
+    expect(find.text('Choose Main Camera'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('alpaca-chooser-cancel')));
+    await tester.tap(find.byKey(const Key('alpaca-chooser-cancel')));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose Main Camera'), findsNothing);
+    await tester.ensureVisible(find.byKey(const Key('simple-gear-mount-choose')));
+    await tester.tap(find.byKey(const Key('simple-gear-mount-choose')));
+    await tester.pumpAndSettle();
+    expect(popup(), isFalse);
+    expect(find.text('Choose Mount'), findsOneWidget);
+  });
+
+  testWidgets('a device picked in place connects through the same notifier and closes the list', (tester) async {
+    const device = DiscoveredDevice(
+      deviceType: EquipmentDeviceType.mount, name: 'AM5 Bridge', uniqueId: 'am5', alpacaDeviceNumber: 0,
+      hostName: 'rig', ipAddress: '10.0.0.2', ipPort: 32323, useHttps: false,
+    );
+    final mount = _ChoosingMount();
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, server: const AraServer(hostname: 'test', port: 1), gear: [
+      mountProvider.overrideWith(() => mount),
+      equipmentDiscoveryApiFactoryProvider.overrideWithValue((server) => _Discovery(server, const [device])),
+    ]);
+    await _openSection(tester, 'Devices');
+    await tester.ensureVisible(find.byKey(const Key('simple-gear-mount-choose')));
+    await tester.tap(find.byKey(const Key('simple-gear-mount-choose')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('AM5 Bridge'));
+    await tester.tap(find.text('AM5 Bridge'));
+    await tester.pumpAndSettle();
+    expect(mount.picked, ['AM5 Bridge']);
+    expect(find.text('Choose Mount'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a connected device offers no Choose', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      mountProvider.overrideWith(() => _Mount(EquipmentConnectionState.connected)),
+    ]);
+    await _openSection(tester, 'Devices');
+    expect(find.byKey(const Key('simple-gear-mount-choose')), findsNothing);
   });
 
   testWidgets('a Connect the rig refuses says why in a pill instead of looking like a dead button', (tester) async {
@@ -3308,20 +3431,84 @@ void main() {
     expect(find.byKey(const Key('simple-gear-camera-disconnect')), findsNothing);
   });
 
-  testWidgets('a jump to a settings panel (gear chips, Open Storage) opens it over Simple Mode', (tester) async {
-    // The test font is wider than the real one and overflows the Storage panel.
-    tester.platformDispatcher.textScaleFactorTestValue = 0.5;
-    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+  testWidgets('Settings › Rig shows the store drive: its name, free space and the three actions', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), storage: const StorageSpace(saveDirectory: '/mnt/sky', isFallback: false, freeBytes: 412 * 1000000000, totalBytes: 900 * 1000000000),
+        gear: [storageDevicesProvider.overrideWith((ref) async => [const StorageDevice(path: '/dev/sda1', label: 'SkyDrive', removable: true, isSystemDisk: false, isAraStore: true, uuid: 'u')])]);
+    await _openSection(tester, 'Rig');
+    await tester.ensureVisible(find.byKey(const Key('simple-storage')));
+    await tester.pump();
+    expect(find.text('Frames are saved to'), findsOneWidget);
+    expect(find.text('SkyDrive'), findsOneWidget);
+    expect(find.text('412 GB free of 900 GB'), findsOneWidget);
+    expect(find.byKey(const Key('simple-storage-problem')), findsNothing);
+    for (final k in ['choose', 'eject', 'check']) {
+      expect(tester.getSize(find.byKey(Key('simple-storage-$k'))).height, greaterThanOrEqualTo(44));
+    }
+    expect(tester.widget<FilledButton>(find.byKey(const Key('simple-storage-choose'))).onPressed, isNotNull);
+    expect(c.read(simpleModeProvider).value, isTrue);
+  });
+
+  testWidgets('Settings › Rig Storage: no disk plugged in says so in red', (tester) async {
+    await _pump(tester, const Size(1024, 768), storage: const StorageSpace(saveDirectory: '/mnt/sky', isFallback: false));
+    await _openSection(tester, 'Rig');
+    await tester.ensureVisible(find.byKey(const Key('simple-storage')));
+    expect(find.text("No disk is plugged in. Frames can't be saved."), findsOneWidget);
+  });
+
+  testWidgets('Settings › Rig Storage with no rig: the status says so and every action is disabled', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await _openSection(tester, 'Rig');
+    await tester.ensureVisible(find.byKey(const Key('simple-storage')));
+    expect(find.descendant(of: find.byKey(const Key('simple-storage')), matching: find.text('Rig not connected')), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.byKey(const Key('simple-storage-choose'))).onPressed, isNull);
+    expect(tester.widget<OutlinedButton>(find.descendant(of: find.byKey(const Key('simple-storage-eject')), matching: find.byWidgetPredicate((w) => w is OutlinedButton))).onPressed, isNull);
+    expect(tester.widget<OutlinedButton>(find.descendant(of: find.byKey(const Key('simple-storage-check')), matching: find.byWidgetPredicate((w) => w is OutlinedButton))).onPressed, isNull);
+  });
+
+  testWidgets('Open Storage opens Settings on Rig with Storage in view, over Simple Mode', (tester) async {
     final c = await _pump(tester, const Size(1024, 768));
     c.read(selectedSettingsPanelProvider.notifier).select('session.storage');
     c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
     await tester.pumpAndSettle();
+    expect(find.byType(SettingsShell), findsNothing);
+    expect(find.byKey(const Key('simple-menu')), findsOneWidget);
+    expect(find.byKey(const Key('simple-storage')), findsOneWidget);
+    expect(tester.getRect(find.byKey(const Key('simple-storage'))).bottom, lessThanOrEqualTo(768));
+    expect(c.read(simpleModeProvider).value, isTrue);
+  });
+
+  testWidgets('leaving Simple Mode clears its question pills, whose buttons died with it', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    final messages = c.read(simpleMessagesProvider.notifier);
+    messages.show(SimpleMessageKind.question, 'Which fan?');
+    messages.show(SimpleMessageKind.error, 'Failed');
+    await tester.pumpWidget(UncontrolledProviderScope(container: c, child: const SizedBox()));
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider).map((m) => m.title), ['Failed']);
+  });
+
+  testWidgets('Open Storage reveals once: Settings › Rig opened later does not jump', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    c.read(selectedSettingsPanelProvider.notifier).select('session.storage');
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-storage')), findsOneWidget);
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-menu')), findsNothing, reason: 'closed');
+    await _openSection(tester, 'Rig');
+    expect(tester.widget<SimpleStorageBlock>(find.byType(SimpleStorageBlock)).reveal, isFalse);
+  });
+
+  testWidgets('a jump to another settings panel opens it over Simple Mode', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    c.read(selectedSettingsPanelProvider.notifier).select('session.storage_other');
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    await tester.pumpAndSettle();
     expect(find.byType(SettingsShell), findsOneWidget);
-    expect(c.read(selectedSettingsPanelProvider), 'session.storage');
     expect(c.read(simpleModeProvider).value, isTrue);
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
-    // A second jump opens it again.
     c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
     await tester.pumpAndSettle();
     expect(find.byType(SettingsShell), findsOneWidget);
@@ -3510,6 +3697,23 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     c.dispose();
     await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a message shows once with the shell on top, and still on a page pushed over it', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), manualAlarm: true);
+    await tester.pump();
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, 'Something to see');
+    await tester.pump();
+    expect(find.text('Something to see'), findsOneWidget, reason: 'the shell, and no second pill over it');
+    navigator.push(MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Text('page'))));
+    await tester.pumpAndSettle();
+    expect(find.text('page'), findsOneWidget);
+    expect(find.text('Something to see'), findsOneWidget, reason: 'the page on top shows it');
+    navigator.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('Something to see'), findsOneWidget, reason: 'and back on the shell, still one');
+    await tester.pump(kSimpleErrorLife + const Duration(seconds: 1));
   });
 
   testWidgets('a tap on a message opens what it came from, as the status pills do (user, 2026-11-04)', (tester) async {
@@ -4481,4 +4685,51 @@ void main() {
     await tester.pumpAndSettle();
     expect(c.read(siteSettingsProvider).latitudeDeg, closeTo(before.abs() + 10, 0.001));
   });
+
+  testWidgets('#1700: a pill asks once for the cooling fan; Choose opens the Camera window', (tester) async {
+    final asked = _MemPrefs()..value = false;
+    await _pump(tester, const Size(1024, 768),
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      cameraStatusProvider.overrideWith(() => _CoolingCamera(-10)),
+      switchListProvider.overrideWith(() => _Switches([
+        SwitchDevice(deviceId: 'box', alpacaDeviceNumber: 0, name: 'Box', connectionState: SwitchConnectionState.connected,
+            ports: [SwitchPort(id: 0, name: 'Fan 1', value: 0, min: 0, max: 1, canWrite: true)]),
+      ])),
+      coolingFanProvider.overrideWith(_NoFan.new),
+      coolingFanAskedPrefsProvider.overrideWith((ref, id) => asked),
+    ]);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    const ask = "Choose your camera's cooling fan so it runs with the cooler.";
+    expect(find.text(ask), findsOneWidget);
+    expect(asked.value, isTrue, reason: 'remembered, so it asks once');
+    await tester.tap(find.widgetWithText(FilledButton, 'Choose'));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-device-camera')), findsOneWidget);
+    expect(find.text(ask), findsNothing);
+  });
+
+  testWidgets('#1700: an already-asked profile gets no pill', (tester) async {
+    final asked = _MemPrefs()..value = true;
+    await _pump(tester, const Size(1024, 768),
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      cameraStatusProvider.overrideWith(() => _CoolingCamera(-10)),
+      switchListProvider.overrideWith(() => _Switches([
+        SwitchDevice(deviceId: 'box', alpacaDeviceNumber: 0, name: 'Box', connectionState: SwitchConnectionState.connected,
+            ports: [SwitchPort(id: 0, name: 'Fan 1', value: 0, min: 0, max: 1, canWrite: true)]),
+      ])),
+      coolingFanProvider.overrideWith(_NoFan.new),
+      coolingFanAskedPrefsProvider.overrideWith((ref, id) => asked),
+    ]);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.textContaining('cooling fan'), findsNothing);
+  });
+}
+
+class _NoFan extends CoolingFanNotifier {
+  @override
+  Future<CoolingFan> build() async => CoolingFan.none;
 }

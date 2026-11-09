@@ -218,6 +218,7 @@ Map<String, Object?> planetariumSearchCommand(
       'type': 'goto',
       'ra': hit.raDeg,
       'dec': hit.decDeg,
+      'id': hit.id,
       'name': hit.name.trim().isEmpty ? hit.id : hit.name,
     };
   }

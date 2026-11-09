@@ -21,6 +21,10 @@ enum SimpleMessageKind {
 
   /// Amber outline with its buttons; stays until answered.
   question,
+
+  /// Amber dot and outline; fades after [kSimpleResultLife]: the action was
+  /// refused (no disk to eject), nothing went wrong.
+  refused,
 }
 
 /// How long a result pill stays.
@@ -83,6 +87,23 @@ class SimpleMessage {
   final bool sticky;
 }
 
+/// True while Simple Mode's shell is the screen on top, showing its own
+/// pills: the layer over every route draws them only when it is not.
+class SimpleShellOnTopNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set(bool onTop) {
+    // Called a frame late: the container may be gone (a closing test).
+    if (ref.mounted) state = onTop;
+  }
+}
+
+final simpleShellOnTopProvider =
+    NotifierProvider<SimpleShellOnTopNotifier, bool>(
+      SimpleShellOnTopNotifier.new,
+    );
+
 /// The pills showing, newest first.
 class SimpleMessagesNotifier extends Notifier<List<SimpleMessage>> {
   var _next = 0;
@@ -119,10 +140,20 @@ class SimpleMessagesNotifier extends Notifier<List<SimpleMessage>> {
       ),
       ...state,
     ];
-    if (kind == SimpleMessageKind.result) {
+    if (kind == SimpleMessageKind.result || kind == SimpleMessageKind.refused) {
       _timers[id] = Timer(kSimpleResultLife, () => dismiss(id));
     }
     return id;
+  }
+
+  /// Drops every question: their buttons belong to the shell that asked.
+  void dismissQuestions() {
+    // Called a frame late: the container may be gone (a closing test).
+    if (!ref.mounted) return;
+    state = [
+      for (final m in state)
+        if (m.kind != SimpleMessageKind.question) m,
+    ];
   }
 
   void dismiss(int id) {
@@ -149,6 +180,7 @@ typedef UserNotify = void Function(
   bool? snackBarRed,
   Duration? snackBarDuration,
   bool warning,
+  bool refused,
   bool sticky,
 });
 
@@ -164,6 +196,7 @@ UserNotify userNotifier(BuildContext context, {SimpleStatusOrigin? origin}) {
     bool? snackBarRed,
     Duration? snackBarDuration,
     bool warning = false,
+    bool refused = false,
     bool sticky = false,
   }) {
     // Active, not just chosen: with the Experimental switch off the full UI
@@ -176,6 +209,8 @@ UserNotify userNotifier(BuildContext context, {SimpleStatusOrigin? origin}) {
                 ? SimpleMessageKind.error
                 : warning
                 ? SimpleMessageKind.warning
+                : refused
+                ? SimpleMessageKind.refused
                 : SimpleMessageKind.result,
             title,
             detail: detail,

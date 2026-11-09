@@ -20,7 +20,16 @@ void main() {
     test('wire shape is home_on_first_connect, absent → default on', () {
       expect(FilterWheelPolicy.fromJson(const {'home_on_first_connect': false}).homeOnFirstConnect, isFalse);
       expect(FilterWheelPolicy.fromJson(const {}).homeOnFirstConnect, isTrue);
-      expect(const FilterWheelPolicy(homeOnFirstConnect: false).toJson(), {'home_on_first_connect': false});
+      expect(const FilterWheelPolicy(homeOnFirstConnect: false).toJson(), {
+        'home_on_first_connect': false,
+        'use_filter_wheel_offsets': false,
+      });
+    });
+
+    test('per-filter focus offsets default off, read and write through the policy', () {
+      expect(FilterWheelPolicy.fromJson(const {}).useFilterWheelOffsets, isFalse);
+      expect(FilterWheelPolicy.fromJson(const {'use_filter_wheel_offsets': true}).useFilterWheelOffsets, isTrue);
+      expect(const FilterWheelPolicy(useFilterWheelOffsets: true).toJson()['use_filter_wheel_offsets'], isTrue);
     });
   });
 }

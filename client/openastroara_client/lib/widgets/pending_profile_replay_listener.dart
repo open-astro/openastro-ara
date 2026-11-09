@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/pending_profile_drafts_state.dart';
+import '../state/simple_messages_state.dart';
 
 /// §2 / #1137 — tells the user, once, when profiles the wizard saved offline
 /// were applied to the rig (or could not be yet). The replay itself runs at
@@ -33,8 +34,9 @@ class _PendingProfileReplayListenerState
         .read(pendingProfileReplayNoticeProvider.notifier)
         .consume();
     if (message == null) return;
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      SnackBar(content: Text(message), duration: const Duration(seconds: 8)),
+    userNotifier(context)(
+      message,
+      snackBarDuration: const Duration(seconds: 8),
     );
   }
 

@@ -196,6 +196,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(FilterSetDto))]
 [JsonSerializable(typeof(FilterWheelLabelsDto))]
 [JsonSerializable(typeof(FilterWheelPolicyDto))]
+[JsonSerializable(typeof(CoolingFanDto))]
 [JsonSerializable(typeof(FilterKind))]
 // NEXTGEN §1 Tonight's Sky filter advice.
 [JsonSerializable(typeof(Phd2SettingsDto))]
@@ -218,6 +219,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(StoredProfileDto))]
 [JsonSerializable(typeof(ProfileMetaDto))]
 [JsonSerializable(typeof(ProfileListDto))]
+[JsonSerializable(typeof(ProfileSelectResultDto))]
 [JsonSerializable(typeof(CreateProfileRequestDto))]
 [JsonSerializable(typeof(RenameProfileRequestDto))]
 [JsonSerializable(typeof(GuiderTwinPreviewDto))]

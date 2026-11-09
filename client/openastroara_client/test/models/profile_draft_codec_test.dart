@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/profile_draft.dart';
 import 'package:openastroara/models/profile_draft_codec.dart';
+import 'package:openastroara/models/switch_device.dart' show CoolingFan;
 
 void main() {
   test('#1137: a fully populated draft round-trips through JSON', () {
@@ -18,6 +19,7 @@ void main() {
     d.skippedScreens.addAll([2, 4]);
     d.clearedFields.add(ClearableField.saveDirectory);
     d.deviceNames['cam-1'] = 'ZWO ASI2600MC';
+    d.deviceEndpoints['cam-1'] = ['localhost:32323/0', '127.0.0.1:32323/0'];
     d.equipment
       ..cameraDeviceId = 'cam-1'
       ..mountDeviceId = 'mnt-1'
@@ -99,6 +101,8 @@ void main() {
     expect(back.skippedScreens, {2, 4});
     expect(back.clearedFields, {ClearableField.saveDirectory});
     expect(back.deviceNames, {'cam-1': 'ZWO ASI2600MC'});
+    expect(back.deviceEndpoints,
+        {'cam-1': ['localhost:32323/0', '127.0.0.1:32323/0']});
     expect(back.equipment.switchDeviceIds, ['sw-1', 'sw-2']);
     expect(back.equipment.filterWheelDeviceId, isNull);
     expect(back.telescope.focalLengthMm, 250);
@@ -150,5 +154,18 @@ void main() {
     expect(bad.filterWheel.filters.single.name, 'L');
     expect(bad.filterWheel.filters.single.type, isNull);
     expect(bad.skippedScreens, {3});
+  });
+
+  test('#1700: a chosen cooling fan survives the draft codec; untouched stays null', () {
+    final chosen = ProfileDraft()
+      ..coolingFan = const CoolingFan(deviceId: 'box', portId: 3);
+    expect(
+      profileDraftFromJson(profileDraftToJson(chosen)).coolingFan,
+      const CoolingFan(deviceId: 'box', portId: 3),
+    );
+    expect(
+      profileDraftFromJson(profileDraftToJson(ProfileDraft())).coolingFan,
+      isNull,
+    );
   });
 }

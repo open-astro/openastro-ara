@@ -135,6 +135,10 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         private static int CameraGainPercent(IGuiderSettings guider) => Math.Clamp(guider.GuideCameraGain, 0, 100);
 
+        /// <summary>A camera with no gain (a simulator, some guide cameras) refuses the push by design.</summary>
+        public static bool CameraHasNoGainControl(string? message) =>
+            message?.Contains("no gain control", StringComparison.OrdinalIgnoreCase) == true;
+
         /// <summary>Best-effort push of the profile's guide camera gain to a connected camera. A camera with
         /// no gain control (or none connected) refuses it; that is logged, never raised to the inbox, and
         /// never fails the caller. Without this the guider runs its stock 95% gain, which buried every star
@@ -148,7 +152,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             try {
                 var resp = await SendMessage<GenericPhdMethodResponse>(msg, EquipmentRpcTimeoutMs, notifyOnError: false);
                 if (resp?.error != null) {
-                    Logger.Warning($"PHD2 - {CameraGainSetter} {gain}% not applied: {resp.error}");
+                    if (CameraHasNoGainControl(resp.error.message)) {
+                        Logger.Info($"PHD2 - guide camera has no gain control; {gain}% not applied.");
+                    } else {
+                        Logger.Warning($"PHD2 - {CameraGainSetter} {gain}% not applied: {resp.error.message}");
+                    }
                 } else {
                     Logger.Info($"PHD2 - guide camera gain set to {gain}%.");
                 }

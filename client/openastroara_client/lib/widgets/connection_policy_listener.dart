@@ -3,7 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/l10n.dart';
 import '../services/ws_event_stream.dart';
+import '../state/simple_messages_state.dart';
+import '../state/simple_mode_state.dart';
 import '../state/ws/ws_providers.dart';
 
 /// §27 single-client policy surfacing. Wraps the app shell's body and listens
@@ -33,6 +36,15 @@ class _ConnectionPolicyListenerState
   /// dance at a time), so a still-open first dialog is stale — close it.
   VoidCallback? _dismissTakeoverDialog;
 
+  /// Simple Mode's takeover pill, withdrawn just before the daemon times out.
+  Timer? _takeoverPillTimeout;
+
+  @override
+  void dispose() {
+    _takeoverPillTimeout?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.listen(wsTakeoverRequestsProvider, (previous, next) {
@@ -52,6 +64,10 @@ class _ConnectionPolicyListenerState
 
   void _showTakeoverRequestDialog(WsConnectionRequest request) {
     _dismissTakeoverDialog?.call();
+    if (ref.read(simpleModeActiveProvider)) {
+      _askTakeoverInPill(request);
+      return;
+    }
     var dismissed = false;
     _dismissTakeoverDialog = () {
       if (!dismissed && mounted) {
@@ -80,23 +96,61 @@ class _ConnectionPolicyListenerState
     );
   }
 
+  /// Simple Mode has no popups: the same question on a pill.
+  void _askTakeoverInPill(WsConnectionRequest request) {
+    final messages = ref.read(simpleMessagesProvider.notifier);
+    final l10n = context.l10n;
+    void answer(bool allow) => ref
+        .read(wsEventStreamProvider)
+        ?.sendConnectionResponse(request.requestId, allow: allow);
+    final id = messages.show(
+      SimpleMessageKind.question,
+      l10n.takeoverWants(request.from),
+      detail: l10n.takeoverDetail,
+      actions: [
+        SimpleMessageAction(l10n.takeoverKeep, () => answer(false)),
+        SimpleMessageAction(l10n.takeoverAllow, () => answer(true)),
+      ],
+    );
+    void withdraw() {
+      _takeoverPillTimeout?.cancel();
+      _dismissTakeoverDialog = null;
+      messages.dismiss(id);
+    }
+
+    _dismissTakeoverDialog = withdraw;
+    _takeoverPillTimeout = Timer(_TakeoverRequestDialog.timeout, withdraw);
+  }
+
   void _showSessionTransferredDialog() {
     // The takeover-request dialog (if the user never answered it) is moot now.
     _dismissTakeoverDialog?.call();
+    final l10n = context.l10n;
+    if (ref.read(simpleModeActiveProvider)) {
+      ref.read(simpleMessagesProvider.notifier).show(
+        SimpleMessageKind.question,
+        l10n.sessionTransferredTitle,
+        detail: l10n.sessionTransferredDetail,
+        actions: [
+          SimpleMessageAction(l10n.shellOk, () {}),
+          SimpleMessageAction(
+            l10n.shellReconnect,
+            () => ref.read(wsEventStreamProvider)?.connect(),
+          ),
+        ],
+      );
+      return;
+    }
     unawaited(
       showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Session transferred'),
-          content: const Text(
-            'Another client took control of the observatory, so this '
-            'client was disconnected. The running sequence is unaffected — it '
-            'continues on Ara.',
-          ),
+          title: Text(l10n.sessionTransferredTitle),
+          content: Text(l10n.sessionTransferredDetail),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('OK'),
+              child: Text(l10n.shellOk),
             ),
             FilledButton(
               onPressed: () {
@@ -105,7 +159,7 @@ class _ConnectionPolicyListenerState
                 // the Allow / Keep-me-connected modal in turn.
                 ref.read(wsEventStreamProvider)?.connect();
               },
-              child: const Text('Reconnect'),
+              child: Text(l10n.shellReconnect),
             ),
           ],
         ),
@@ -159,20 +213,16 @@ class _TakeoverRequestDialogState extends State<_TakeoverRequestDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('${widget.from} wants to connect'),
-      content: const Text(
-        'Only one client can control the observatory at a time. Allowing '
-        'hands control to the other client and disconnects this one; the '
-        'running sequence continues either way.',
-      ),
+      title: Text(context.l10n.takeoverWants(widget.from)),
+      content: Text(context.l10n.takeoverDetail),
       actions: [
         TextButton(
           onPressed: () => _answer(false),
-          child: const Text('Keep me connected'),
+          child: Text(context.l10n.takeoverKeep),
         ),
         FilledButton(
           onPressed: () => _answer(true),
-          child: const Text('Allow'),
+          child: Text(context.l10n.takeoverAllow),
         ),
       ],
     );

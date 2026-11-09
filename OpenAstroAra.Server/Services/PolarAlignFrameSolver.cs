@@ -42,6 +42,14 @@ public interface IPolarAlignFrameSolver {
     /// binned frame, so its pixel scale is the guide pixel size × this; the solver must be told, or a
     /// 2×2 frame is searched at half its true scale and never solves.</param>
     Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, CancellationToken ct);
+
+    /// <summary>
+    /// Solve a frame that would not solve at the configured scale once more with no scale hint, and report the
+    /// guide focal length (mm) its measured scale implies; null when it does not solve either (#1715). Run once,
+    /// after the seed frames fail, to tell a wrong guide focal length from a bad sky.
+    /// </summary>
+    Task<double?> MeasureFocalLengthAsync(string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, CancellationToken ct) =>
+        Task.FromResult<double?>(null);
 }
 
 /// <summary>One solved (or unsolved) §45 frame. Coordinates are apparent-of-date degrees, valid only
@@ -99,6 +107,24 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
 
     public async Task<PolarAlignSolveOutcome> SolveAsync(
             string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, CancellationToken ct) {
+        var (result, _) = await SolveCoreAsync(fitsPath, binning, hintRaDegJnow, hintDecDegJnow, searchScale: false, ct).ConfigureAwait(false);
+        if (result?.Success != true || result.Coordinates is null) {
+            return new PolarAlignSolveOutcome(false, 0, 0);
+        }
+        var apparent = result.Coordinates.Transform(Epoch.JNOW);
+        return new PolarAlignSolveOutcome(true, apparent.RADegrees, apparent.Dec);
+    }
+
+    public async Task<double?> MeasureFocalLengthAsync(
+            string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, CancellationToken ct) {
+        var (result, binnedPixelSizeUm) = await SolveCoreAsync(fitsPath, binning, hintRaDegJnow, hintDecDegJnow, searchScale: true, ct).ConfigureAwait(false);
+        var focalLength = result?.Success == true ? SolveTuning.FocalLengthFromScale(binnedPixelSizeUm, result.Pixscale) : double.NaN;
+        return double.IsFinite(focalLength) ? focalLength : null;
+    }
+
+    // searchScale: ask the solver to find the pixel scale itself (ASTAP -fov 0) instead of trusting the profile's.
+    private async Task<(PlateSolveResult? Result, double BinnedPixelSizeUm)> SolveCoreAsync(
+            string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, bool searchScale, CancellationToken ct) {
         ArgumentException.ThrowIfNullOrWhiteSpace(fitsPath);
         ArgumentOutOfRangeException.ThrowIfLessThan(binning, 1);
 
@@ -162,14 +188,11 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
             // duration. The §45 loop's contract is fail-fast-and-retry; a failed near solve is one
             // failed iteration, not a cue to search the entire sky near the sparse pole field.
             BlindFailoverEnabled = false,
+            SearchScale = searchScale,
         };
 
         var result = await imageSolver.Solve(image, parameter, progress: null, ct).ConfigureAwait(false);
-        if (result?.Success != true || result.Coordinates is null) {
-            return new PolarAlignSolveOutcome(false, 0, 0);
-        }
-        var apparent = result.Coordinates.Transform(Epoch.JNOW);
-        return new PolarAlignSolveOutcome(true, apparent.RADegrees, apparent.Dec);
+        return (result, pixelSize * binning);
     }
 
     // The guider writes 16-bit unsigned FITS (openastro-guider POLAR_ALIGNMENT_DESIGN.md §12.1 spike

@@ -547,6 +547,23 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
               if (v != null) phd2N.setGuideFocalLength(v);
             },
           ),
+        if (phd2.guiderSetupType != 'oag' &&
+            guideFocalLengthLooksCopiedFromMainScope(
+              phd2.guideFocalLength,
+              ref.watch(opticsSettingsProvider).focalLengthMm,
+              ref.watch(opticsSettingsProvider).reducerFactor,
+            ))
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 4),
+            child: Text(
+              'The guide focal length is the same as the main scope\'s. '
+              'If the guide camera has its own scope, enter that scope\'s '
+              'focal length: a wrong value stops polar alignment from solving.',
+              key: const ValueKey('guider_focal_length_copied'),
+              style: Theme.of(context).textTheme.bodySmall!
+                  .copyWith(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
         EditableNumberRow(
           label: 'Guide pixel size (µm)',
           helpKey: 'eq.guider.guide_pixel_size',

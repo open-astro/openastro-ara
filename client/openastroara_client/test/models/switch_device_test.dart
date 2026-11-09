@@ -109,4 +109,55 @@ void main() {
       expect(port(0, 30).isBoolean, isFalse);
     });
   });
+
+  group('CoolingFan (#1700)', () {
+    const designated = CoolingFan(deviceId: 'box', portId: 3);
+    SwitchDevice box({
+      String name = 'Pegasus UPB',
+      SwitchConnectionState state = SwitchConnectionState.connected,
+      bool canWrite = true,
+    }) =>
+        SwitchDevice(
+          deviceId: 'box',
+          alpacaDeviceNumber: 0,
+          name: name,
+          connectionState: state,
+          ports: [
+            SwitchPort(id: 3, name: 'Output', value: 0, min: 0, max: 1, canWrite: canWrite),
+          ],
+        );
+
+    test('a designated port is the fan whatever the device and port are called', () {
+      expect(isCoolingFanPort(box(), box().ports.first, designated), isTrue);
+      expect(isCoolingFanPort(box(name: 'Renamed'), box().ports.first, designated), isTrue);
+    });
+
+    test('a Thermal Switch Fan port is not the fan unless designated', () {
+      final thermal = box(name: 'ToupTek Thermal Switch');
+      final fan = SwitchPort(id: 3, name: 'Fan', value: 0, min: 0, max: 1, canWrite: true);
+      expect(isCoolingFanPort(thermal, fan, CoolingFan.none), isFalse);
+      expect(findCoolingFanPort([thermal], CoolingFan.none), isNull);
+    });
+
+    test('another port or another switch is not the fan', () {
+      final other = SwitchPort(id: 4, name: 'Output', value: 0, min: 0, max: 1, canWrite: true);
+      expect(isCoolingFanPort(box(), other, designated), isFalse);
+      expect(
+        isCoolingFanPort(box(), box().ports.first, const CoolingFan(deviceId: 'other', portId: 3)),
+        isFalse,
+      );
+    });
+
+    test('findCoolingFanPort skips a disconnected or read-only port', () {
+      expect(findCoolingFanPort([box()], designated), isNotNull);
+      expect(findCoolingFanPort([box(state: SwitchConnectionState.error)], designated), isNull);
+      expect(findCoolingFanPort([box(canWrite: false)], designated), isNull);
+    });
+
+    test('a designation goes over the wire and an absent one is none', () {
+      expect(CoolingFan.fromJson(designated.toJson()), designated);
+      expect(CoolingFan.fromJson(const {}), CoolingFan.none);
+      expect(CoolingFan.fromJson(const {'device_id': null, 'port_id': null}).isNone, isTrue);
+    });
+  });
 }

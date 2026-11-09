@@ -780,6 +780,40 @@ namespace OpenAstroAra.Test {
             Assert.That(ws.Events, Does.Not.Contain("sequence.stopped"));
         }
 
+        // A plan queued before dark starts with a wait that can be hours long.
+        private static WaitForTime WaitAnHour() {
+            var wait = (WaitForTime)HeadlessSequencerFactory.WithDefaults().Items.OfType<WaitForTime>().First().Clone();
+            var at = DateTime.Now.AddHours(1);
+            wait.Hours = at.Hour;
+            wait.Minutes = at.Minute;
+            return wait;
+        }
+
+        [Test]
+        public async Task Pause_lands_during_a_long_wait_for_a_time_and_resume_goes_back_to_waiting() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(WaitAnHour());
+                c.Items.Add(new Annotation { Name = "after-the-wait" });
+            }), ws);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+
+            await svc.PauseAsync(id, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Paused);
+            Assert.That(ws.Events, Does.Contain("sequence.paused"));
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+            await Task.Delay(300);
+            var state = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Running), "still waiting for its time");
+            Assert.That(state.InstructionsCompleted, Is.Zero, "the wait did not end because of the pause");
+
+            await svc.AbortAsync(id, null, CancellationToken.None);
+        }
+
         [Test]
         public async Task Pause_suspends_at_the_instruction_boundary_and_resume_completes() {
             // §38 pause: the current instruction (a 2s wait) always finishes; the
@@ -1475,6 +1509,52 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_wait_for_user_step_pauses_the_run_without_starting_the_unattended_shutdown_countdown() {
+            // #1712: a plan's own prompt (swap the filter, take off the lens cap) is not a failure.
+            using var shutdown = new UnattendedShutdownService();
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForUser { Text = "Switch to the Ha filter" });
+                c.Items.Add(new Annotation { Name = "after" });
+            }), unattendedShutdown: shutdown);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.PausedAwaitingUser);
+
+            Assert.That(shutdown.IsCountingDown, Is.False, "a prompt the plan asked for must not arm the shutdown");
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
+        public async Task A_failure_during_a_plans_own_prompt_starts_the_unattended_shutdown_countdown() {
+            // #1712 review: the prompt holds the run in PausedAwaitingUser with no clock, so a parallel
+            // branch failing then finds no state change left to make.
+            using var shutdown = new UnattendedShutdownService();
+            var id = Guid.NewGuid();
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            factory.Items.Add(new FailsDuringThePromptItem());
+            var svc = BuildService(id, BuildBody(c => {
+                var par = new ParallelContainer { Name = "parallel" };
+                var prompted = new SequentialContainer { Name = "prompted" };
+                prompted.Add(new WaitForUser { Text = "Switch to the Ha filter" });
+                prompted.Add(new Annotation { Name = "after the prompt" });
+                par.Add(prompted);
+                par.Add(new FailsDuringThePromptItem());
+                c.Items.Add(par);
+            }, factory), factory: factory, unattendedShutdown: shutdown);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.PausedAwaitingUser);
+            for (var i = 0; i < 100 && !shutdown.IsCountingDown; i++) {
+                await Task.Delay(20);
+            }
+
+            Assert.That(shutdown.IsCountingDown, Is.True, "a real failure needs the clock, prompt or no prompt");
+            await svc.AbortAsync(id, null, CancellationToken.None);
+        }
+
+        [Test]
         public async Task Abort_wins_over_a_pause_awaiting_user() {
             // §58.12: abort must win over an awaiting-user suspension exactly as it
             // does over an ordinary pause — the run ends Stopped, never wedged.
@@ -1685,6 +1765,22 @@ namespace OpenAstroAra.Test {
         /// whose failure path is validation, not execution).
         /// </summary>
         [Newtonsoft.Json.JsonObject(Newtonsoft.Json.MemberSerialization.OptIn)]
+        private sealed class FailsDuringThePromptItem : OpenAstroAra.Sequencer.SequenceItem.SequenceItem {
+
+            public FailsDuringThePromptItem() { }
+
+            private FailsDuringThePromptItem(FailsDuringThePromptItem cloneMe) : base(cloneMe) { }
+
+            public override async Task Execute(IProgress<OpenAstroAra.Core.Model.ApplicationStatus> progress, CancellationToken token) {
+                await Task.Delay(600, token); // the prompt's branch has suspended by now
+                var gate = OpenAstroAra.Sequencer.Utility.ItemUtility.GetPauseGate(Parent)!;
+                gate.RequestPause(OpenAstroAra.Sequencer.Utility.PauseKind.AwaitingUser);
+                await gate.WaitWhilePausedAsync(token);
+            }
+
+            public override object Clone() => new FailsDuringThePromptItem(this);
+        }
+
         private sealed class AlwaysThrowingItem : OpenAstroAra.Sequencer.SequenceItem.SequenceItem {
 
             public AlwaysThrowingItem() { }

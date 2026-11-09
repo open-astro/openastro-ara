@@ -4,8 +4,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/ws_event_stream.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/connection_policy_listener.dart';
 
@@ -39,14 +42,17 @@ void main() {
   /// Pumps the listener under a real MaterialApp with the WS stream provider
   /// overridden to a fake-socket-backed stream the test drives directly.
   Future<(_FakeConnector, WsEventStream)> pumpListener(
-    WidgetTester tester,
-  ) async {
+    WidgetTester tester, {
+    bool simple = false,
+    Locale? locale,
+  }) async {
     final conn = _FakeConnector();
     final stream = WsEventStream(server, connect: conn.connect);
     addTearDown(() => stream.dispose());
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          if (simple) simpleModeActiveProvider.overrideWithValue(true),
           wsEventStreamProvider.overrideWith((ref) {
             stream.connect();
             // Mirror the real provider: tearing the scope down disposes the
@@ -56,8 +62,11 @@ void main() {
             return stream;
           }),
         ],
-        child: const MaterialApp(
-          home: Scaffold(
+        child: MaterialApp(
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const Scaffold(
             body: ConnectionPolicyListener(child: SizedBox.shrink()),
           ),
         ),
@@ -242,6 +251,75 @@ void main() {
           }),
         ),
       );
+    });
+  });
+
+  group('Simple Mode', () {
+    List<SimpleMessage> pills(WidgetTester tester) =>
+        ProviderScope.containerOf(tester.element(find.byType(ConnectionPolicyListener))).read(simpleMessagesProvider);
+
+    testWidgets('the session-transferred pill is in Brazilian Portuguese', (tester) async {
+      final (conn, _) = await pumpListener(tester, simple: true, locale: const Locale('pt', 'BR'));
+      conn.legs.first.closeCode = 4004;
+      await conn.legs.first.incoming.close();
+      await tester.pump();
+      await tester.pump();
+      final pill = pills(tester).single;
+      expect(pill.title, 'Sessão transferida');
+      expect(pill.actions.map((a) => a.label), ['OK', 'Reconectar']);
+    });
+
+    testWidgets('a takeover pill is in Brazilian Portuguese', (tester) async {
+      final (conn, _) = await pumpListener(tester, simple: true, locale: const Locale('pt', 'BR'));
+      conn.legs.first.incoming.add(jsonEncode({'type': 'connection.request', 'from': 'ipad.local', 'request_id': 'req-9'}));
+      await tester.pump();
+      await tester.pump();
+      final pill = pills(tester).single;
+      expect(pill.title, 'ipad.local quer se conectar');
+      expect(pill.actions.map((a) => a.label), ['Manter conectado', 'Permitir']);
+      await tester.pump(const Duration(seconds: 30)); // the request's timer
+    });
+
+    testWidgets('a takeover request is a question pill and Allow answers allow', (tester) async {
+      final (conn, _) = await pumpListener(tester, simple: true);
+      conn.legs.first.incoming.add(jsonEncode({'type': 'connection.request', 'from': 'ipad.local', 'request_id': 'req-9'}));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(AlertDialog), findsNothing);
+      final pill = pills(tester).single;
+      expect(pill.kind, SimpleMessageKind.question);
+      expect(pill.title, 'ipad.local wants to connect');
+      expect(pill.actions.map((a) => a.label), ['Keep me connected', 'Allow']);
+      pill.actions.last.onPressed();
+      await tester.pump();
+      expect(conn.legs.first.sent.join(), contains('req-9'));
+      expect(conn.legs.first.sent.join(), contains('"action":"allow"'));
+      await tester.pump(const Duration(seconds: 30)); // the request's timer
+    });
+
+    testWidgets('an unanswered takeover pill goes when the rig stops asking', (tester) async {
+      final (conn, _) = await pumpListener(tester, simple: true);
+      conn.legs.first.incoming.add(jsonEncode({'type': 'connection.request', 'from': 'ipad.local', 'request_id': 'req-1'}));
+      await tester.pump();
+      await tester.pump();
+      expect(pills(tester), hasLength(1));
+      await tester.pump(const Duration(seconds: 26));
+      expect(pills(tester), isEmpty);
+    });
+
+    testWidgets('a lost session is a question pill and Reconnect dials again', (tester) async {
+      final (conn, _) = await pumpListener(tester, simple: true);
+      conn.legs.first.closeCode = 4004;
+      await conn.legs.first.incoming.close();
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(AlertDialog), findsNothing);
+      final pill = pills(tester).single;
+      expect(pill.title, 'Session transferred');
+      pill.actions.last.onPressed();
+      await tester.pump();
+      expect(conn.legs, hasLength(2));
+      await tester.pump(WsEventStream.defaultConnectGrace);
     });
   });
 }

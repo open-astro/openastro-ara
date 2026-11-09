@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../l10n/l10n.dart';
 import '../../../models/profile_draft.dart';
 import '../../../state/guider/guider_equipment_state.dart';
 import '../../../state/guider/guider_state.dart';
@@ -15,6 +16,7 @@ import '../../../widgets/guider/guider_setup_wizard.dart'
     show
         alpacaDeviceNamesApiProvider,
         friendlyAlpacaChoiceLabel,
+        guideCameraIsMainCamera,
         kNoGuideCameraWarning,
         mergedAlpacaOptions,
         parseAlpacaChoiceEndpoint;
@@ -226,11 +228,26 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
         cameraChoices: ref.read(guiderEquipmentProvider).value?.choices?.cameras,
       );
 
+  /// The effective Guide Camera (the pick, else the base profile's) is the
+  /// Main Camera the user assigned: the daemon refuses that at Save.
+  bool get _guideIsMainCamera {
+    final d = _draftOf(ref);
+    final id = d.equipment.cameraDeviceId;
+    if (id == null) return false;
+    final pick = (_g.guiderCamera?.isNotEmpty ?? false)
+        ? _g.guiderCamera
+        : _baseGuiderCamera;
+    return guideCameraIsMainCamera(pick, d.deviceEndpoints[id] ?? const []);
+  }
+
   /// Publish the step's validity to the shell's Next gate: an inverted
-  /// exposure range or a missing guide camera both hold Next.
+  /// exposure range, a missing guide camera or a Guide Camera that is the
+  /// Main Camera all hold Next.
   void _publishValid() {
     ref.read(wizardStepValidProvider.notifier).setValid(
-        _g.darkMinExposureMs <= _g.darkMaxExposureMs && !_cameraPickNeeded);
+        _g.darkMinExposureMs <= _g.darkMaxExposureMs &&
+            !_cameraPickNeeded &&
+            !_guideIsMainCamera);
   }
 
   /// Shared picker over daemon choice strings + synthesized Alpaca devices,
@@ -447,7 +464,11 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
                 blankLabel: base == null
                     ? 'Pick a guide camera'
                     : '(keep ${friendlyAlpacaChoiceLabel(base, 'camera', _alpacaNames)})',
-                helperText: _cameraPickNeeded ? kNoGuideCameraWarning : null,
+                helperText: _guideIsMainCamera
+                    ? context.l10n.wizardGuideCameraIsMainCamera
+                    : _cameraPickNeeded
+                        ? kNoGuideCameraWarning
+                        : null,
                 onPick: (v) {
                   // Camera has no ''-vs-null distinction: blank = untouched.
                   final sel = v.isEmpty ? null : v;

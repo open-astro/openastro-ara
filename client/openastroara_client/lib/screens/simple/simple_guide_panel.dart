@@ -95,7 +95,7 @@ class SimpleGuideShutter extends ConsumerWidget {
     final pending = ref.watch(simpleGuiderPendingProvider);
     // An ask in flight shows as done already, and takes no second tap.
     final active = pending ?? simpleGuideActive(g);
-    final cameraBusy = simpleMainCameraBusy(ref);
+    final cameraBusy = simpleMainCameraBusy(ref, pausedQueueBusy: false);
     final l10n = context.l10n;
     return SimpleShutterButton(
       start: true,

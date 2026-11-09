@@ -6585,6 +6585,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FilterWheelPolicyDto'
+  /api/v1/profile/cooling-fan:
+    get:
+      tags:
+        - Profile
+      summary: Get the switch port designated as the active profile's cooling fan.
+      operationId: GetCoolingFan
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoolingFanDto'
+    put:
+      tags:
+        - Profile
+      summary: 'Designate the active profile''s cooling fan: a switch''s device_id and port_id, or both null for none.'
+      operationId: PutCoolingFan
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoolingFanDto'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoolingFanDto'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/equipment-connection:
     get:
       tags:
@@ -6683,6 +6720,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProfileMetaDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   '/api/v1/profiles/{id}':
     get:
       tags:
@@ -6775,6 +6818,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   '/api/v1/profiles/{id}/guider-twin':
     get:
       tags:
@@ -6805,7 +6854,7 @@ paths:
     post:
       tags:
         - Profiles
-      summary: 'Make a profile active (loads its settings into the live store). A connected guider follows: its twin profile is selected/created to match.'
+      summary: 'Make a profile active (loads its settings into the live store). A connected guider follows: its twin profile is selected/created to match. The devices follow too: Safety Monitor off first, then every device the profile does not remember, then its remembered devices on. Refused (409) while a run is active.'
       operationId: SelectProfile
       parameters:
         - name: id
@@ -6820,9 +6869,15 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ProfileListDto'
+                $ref: '#/components/schemas/ProfileSelectResultDto'
         '404':
           description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
           content:
             application/problem+json:
               schema:
@@ -8565,6 +8620,20 @@ components:
       properties:
         device:
           $ref: '#/components/schemas/DiscoveredDeviceDto'
+    CoolingFanDto:
+      type: object
+      properties:
+        device_id:
+          type:
+            - 'null'
+            - string
+        port_id:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
     CreateProfileRequestDto:
       required:
         - name
@@ -9640,6 +9709,9 @@ components:
         home_on_first_connect:
           type: boolean
           default: true
+        use_filter_wheel_offsets:
+          type: boolean
+          default: false
     FlatPanelRequestDto:
       type: object
       properties:
@@ -13123,6 +13195,16 @@ components:
           type:
             - 'null'
             - string
+    ProfileDeviceMessageDto:
+      required:
+        - device_name
+        - message
+      type: object
+      properties:
+        device_name:
+          type: string
+        message:
+          type: string
     ProfileListDto:
       required:
         - active_id
@@ -13157,6 +13239,26 @@ components:
         updated_utc:
           type: string
           format: date-time
+    ProfileSelectResultDto:
+      required:
+        - active_id
+        - profiles
+        - device_messages
+      type: object
+      properties:
+        active_id:
+          type:
+            - 'null'
+            - string
+          format: uuid
+        profiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProfileMetaDto'
+        device_messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProfileDeviceMessageDto'
     ProfileShareDto:
       required:
         - profile_id
@@ -13313,6 +13415,10 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/SavedTargetsDto'
+        cooling_fan:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/CoolingFanDto'
     QualityScoreBreakdownDto:
       required:
         - composite
@@ -13795,7 +13901,7 @@ components:
             - integer
             - string
           format: int32
-          default: 10
+          default: 30
         weather_triggers_enabled:
           type: boolean
           default: false

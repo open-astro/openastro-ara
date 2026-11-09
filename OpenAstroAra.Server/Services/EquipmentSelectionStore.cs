@@ -61,8 +61,8 @@ public interface IEquipmentSelectionStore {
 }
 
 /// <summary>
-/// File-backed <see cref="IEquipmentSelectionStore"/>: one <c>equipment-selection.json</c> under the
-/// profile dir mapping a per-device key → the last <see cref="DiscoveredDeviceDto"/> connected for it
+/// File-backed <see cref="IEquipmentSelectionStore"/>: one file per profile (#1710) under
+/// <c>{profileDir}/profiles</c>, reading and writing the active profile's, mapping a per-device key → the last <see cref="DiscoveredDeviceDto"/> connected for it
 /// (device-type name for single-instance types, one entry per group; <c>Switch:{endpoint}</c> per switch).
 /// Writes are atomic (temp file + rename) and serialized by a semaphore so two concurrent connects
 /// can't tear the file. Mirrors the <see cref="ClientSettingsService"/> persistence pattern.
@@ -71,12 +71,18 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
 
     internal const string FileName = "equipment-selection.json";
 
+    /// <summary>The file holding one profile's remembered devices, beside that profile's own file.</summary>
+    internal static string ProfileFile(string profilesDir, Guid id) => Path.Combine(profilesDir, $"{id:N}.equipment.json");
+
     private static readonly JsonSerializerOptions JsonOptions = new() {
         WriteIndented = true,
         Converters = { new JsonStringEnumConverter() },
     };
 
-    private readonly string _path;
+    // The server-wide file: today's home only while no profile exists; otherwise migrated away.
+    private readonly string _legacyPath;
+    private readonly string _profilesDir;
+    private readonly Func<Guid?>? _activeProfile;
     private readonly ILogger<EquipmentSelectionStore> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -84,9 +90,11 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
     // Null: the real machine, its name and addresses read once per store operation.
     private readonly Func<string?, bool>? _isThisMachine;
 
-    public EquipmentSelectionStore(string profileDir, ILogger<EquipmentSelectionStore> logger, Func<string?, bool>? isThisMachine = null) {
+    public EquipmentSelectionStore(string profileDir, ILogger<EquipmentSelectionStore> logger, Func<string?, bool>? isThisMachine = null, Func<Guid?>? activeProfile = null) {
         ArgumentException.ThrowIfNullOrEmpty(profileDir);
-        _path = Path.Combine(profileDir, FileName);
+        _legacyPath = Path.Combine(profileDir, FileName);
+        _profilesDir = Path.Combine(profileDir, "profiles");
+        _activeProfile = activeProfile;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _isThisMachine = isThisMachine;
     }
@@ -99,9 +107,10 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         // Atomic replace: write a temp sibling then move over the target so a
         // crash mid-write can never leave a half-written selection file.
-        var tmp = _path + ".tmp";
+        var path = PathLocked();
+        var tmp = path + ".tmp";
         try {
-            var map = await ReadLocked(ct).ConfigureAwait(false);
+            var map = await ReadLocked(path, ct).ConfigureAwait(false);
             if (device.Type == DeviceType.Switch) {
                 // Switch is multi-instance: drop any legacy single-switch entry (keyed by the
                 // bare type name from before multi-switch) so it doesn't double up with the
@@ -114,7 +123,7 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
             map[KeyFor(device)] = device;
             var json = JsonSerializer.Serialize(map, JsonOptions);
             await File.WriteAllTextAsync(tmp, json, Encoding.UTF8, ct).ConfigureAwait(false);
-            File.Move(tmp, _path, overwrite: true);
+            File.Move(tmp, path, overwrite: true);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             SafeDeleteTmp(tmp);
@@ -136,9 +145,10 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
         ArgumentNullException.ThrowIfNull(moved);
         var to = HostLocality.LocalizeDevice(moved, _isThisMachine ?? HostLocality.ThisMachineSnapshot());
         await _gate.WaitAsync(ct).ConfigureAwait(false);
-        var tmp = _path + ".tmp";
+        var path = PathLocked();
+        var tmp = path + ".tmp";
         try {
-            var map = await ReadLocked(ct).ConfigureAwait(false);
+            var map = await ReadLocked(path, ct).ConfigureAwait(false);
             var oldEndpoint = DiscoveredDeviceEndpoint.KeyOf(from);
             if (from.Type == DeviceType.Switch) {
                 // Only the old address's entry: another server's switch with the same UniqueId stays.
@@ -153,7 +163,7 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
             map[KeyFor(to)] = to;
             var json = JsonSerializer.Serialize(map, JsonOptions);
             await File.WriteAllTextAsync(tmp, json, Encoding.UTF8, ct).ConfigureAwait(false);
-            File.Move(tmp, _path, overwrite: true);
+            File.Move(tmp, path, overwrite: true);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             SafeDeleteTmp(tmp);
@@ -173,9 +183,10 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
     public async Task<int> ForgetSwitchAsync(string uniqueId, CancellationToken ct) {
         ArgumentException.ThrowIfNullOrEmpty(uniqueId);
         await _gate.WaitAsync(ct).ConfigureAwait(false);
-        var tmp = _path + ".tmp";
+        var path = PathLocked();
+        var tmp = path + ".tmp";
         try {
-            var map = await ReadLocked(ct).ConfigureAwait(false);
+            var map = await ReadLocked(path, ct).ConfigureAwait(false);
             // Match by the entry's UniqueId (the /switch/{id} address), not the storage key —
             // legacy files keyed switches differently and ReadLocked re-keys on load.
             var doomed = map.Where(kv => Canonical(kv.Value.Type) == Canonical(DeviceType.Switch)
@@ -190,7 +201,7 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
             }
             var json = JsonSerializer.Serialize(map, JsonOptions);
             await File.WriteAllTextAsync(tmp, json, Encoding.UTF8, ct).ConfigureAwait(false);
-            File.Move(tmp, _path, overwrite: true);
+            File.Move(tmp, path, overwrite: true);
             return doomed.Count;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) {
@@ -208,9 +219,10 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
 
     public async Task<int> ForgetAsync(DeviceType type, CancellationToken ct) {
         await _gate.WaitAsync(ct).ConfigureAwait(false);
-        var tmp = _path + ".tmp";
+        var path = PathLocked();
+        var tmp = path + ".tmp";
         try {
-            var map = await ReadLocked(ct).ConfigureAwait(false);
+            var map = await ReadLocked(path, ct).ConfigureAwait(false);
             // Match by the ENTRY's device type (not the raw key) so legacy/alias keys and
             // every Switch:{number} entry are all caught; FlatDevice and CoverCalibrator
             // are the same physical device under two tokens, so they forget together.
@@ -225,7 +237,7 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
             }
             var json = JsonSerializer.Serialize(map, JsonOptions);
             await File.WriteAllTextAsync(tmp, json, Encoding.UTF8, ct).ConfigureAwait(false);
-            File.Move(tmp, _path, overwrite: true);
+            File.Move(tmp, path, overwrite: true);
             return doomed.Count;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) {
@@ -269,7 +281,7 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         Dictionary<string, DiscoveredDeviceDto> raw;
         try {
-            raw = await ReadLocked(ct).ConfigureAwait(false);
+            raw = await ReadLocked(PathLocked(), ct).ConfigureAwait(false);
         } finally {
             _gate.Release();
         }
@@ -313,10 +325,40 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
             ? $"{DeviceType.Switch}:{DiscoveredDeviceEndpoint.KeyOf(device)}"
             : device.Type.ToString();
 
-    // Caller holds _gate.
-    private async Task<Dictionary<string, DiscoveredDeviceDto>> ReadLocked(CancellationToken ct) {
+    // Caller holds _gate. The active profile's file; the server-wide file only while no profile exists.
+    private string PathLocked() {
+        if (_activeProfile?.Invoke() is not Guid id) {
+            return _legacyPath;
+        }
+        var path = ProfileFile(_profilesDir, id);
+        MigrateLegacyLocked(path);
+        return path;
+    }
+
+    // #1710 — the first profile to be active once a server-wide list exists takes that list; a list the
+    // profile already has wins. The old file is renamed, not deleted, so a rollback can put it back.
+    private void MigrateLegacyLocked(string path) {
+        if (!File.Exists(_legacyPath)) {
+            return;
+        }
+        var tmp = path + ".tmp";
         try {
-            var text = await File.ReadAllTextAsync(_path, ct).ConfigureAwait(false);
+            Directory.CreateDirectory(_profilesDir);
+            if (!File.Exists(path)) {
+                File.Copy(_legacyPath, tmp, overwrite: true);
+                File.Move(tmp, path);
+            }
+            File.Move(_legacyPath, _legacyPath + ".migrated", overwrite: true);
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            SafeDeleteTmp(tmp);
+            LogMigrationFailed(ex);
+        }
+    }
+
+    // Caller holds _gate.
+    private async Task<Dictionary<string, DiscoveredDeviceDto>> ReadLocked(string path, CancellationToken ct) {
+        try {
+            var text = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
             var map = JsonSerializer.Deserialize<Dictionary<string, DiscoveredDeviceDto>>(text, JsonOptions)
                 ?? new Dictionary<string, DiscoveredDeviceDto>();
             // A file written before the localhost rule (or on another network) migrates on read: every
@@ -349,6 +391,10 @@ public sealed partial class EquipmentSelectionStore : IEquipmentSelectionStore, 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Failed to persist the connected {DeviceType} device for auto-connect-on-boot.")]
     private partial void LogWriteFailed(Exception ex, DeviceType deviceType);
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Could not move equipment-selection.json to the active profile; it stays in place and is retried.")]
+    private partial void LogMigrationFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "equipment-selection.json was unreadable JSON; ignoring it (auto-connect starts fresh).")]

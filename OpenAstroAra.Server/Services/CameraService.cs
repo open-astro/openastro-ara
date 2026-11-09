@@ -547,6 +547,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                 // cooler-off (pinned by A_failing_ramp_step_still_ends_with_the_cooler_off).
                 alreadyCooling = _state == EquipmentConnectionState.Connected && _runtime.CoolerStateKnown && _runtime.CoolerOn;
             }
+            if (!alreadyCooling && _profileStore?.GetCoolingFan().DeviceId is null) {
+                LogNoCoolingFanDesignated(_logger);
+            }
             var fanFailure = await SyncCoolingFanAsync(cooling: true).ConfigureAwait(false);
             if (fanFailure is not null && !alreadyCooling) {
                 throw new InvalidOperationException(fanFailure);
@@ -599,8 +602,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         }
     }
 
-    /// <summary>Sync the Thermal-Switch fan to the cooler direction. Returns null on success (or when
-    /// the rig has no fan port), else the user-facing failure sentence — the caller decides whether
+    /// <summary>Sync the designated fan to the cooler direction. Returns null on success (or when
+    /// no fan is designated or connected), else the user-facing failure sentence — the caller decides whether
     /// that fails the call (cooler-ON: yes, nothing committed yet) or is only a fault (cooler-OFF).
     /// A failed write is always published as an OpError equipment fault and logged.</summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -615,7 +618,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             if (actuator is null) {
                 return null;
             }
-            sync = CoolingFanInterlock.FanSyncRequest(await actuator.GetAllAsync(CancellationToken.None).ConfigureAwait(false), cooling);
+            var fan = _profileStore?.GetCoolingFan() ?? CoolingFanDto.None;
+            sync = CoolingFanInterlock.FanSyncRequest(await actuator.GetAllAsync(CancellationToken.None).ConfigureAwait(false), fan, cooling);
         } catch (Exception ex) {
             // Whether a fan-capable switch even exists is unknown here — most rigs have none, and
             // the switch list is a separate subsystem. A list-read failure is a no-op, not an alarm
@@ -639,6 +643,10 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             return sentence;
         }
     }
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning,
+        Message = "Cooling started with no cooling fan designated in this profile: no fan follows the cooler and no fan-off is refused.")]
+    private static partial void LogNoCoolingFanDesignated(ILogger logger);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Debug,
         Message = "Cooling-fan sync skipped: switch list unreadable.")]

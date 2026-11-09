@@ -24,3 +24,17 @@ double effectiveOagReducerFactor(double? baseReducerFactor) =>
     (baseReducerFactor != null && baseReducerFactor > 0)
         ? baseReducerFactor
         : 1.0;
+
+/// True when a guide scope's focal length equals the main scope's (with or without the reducer): the
+/// signature of a value copied from the main optics, not measured. Off-axis guiders share the train on
+/// purpose, so callers ask only for a separate guide scope. 0 means unset on either side.
+bool guideFocalLengthLooksCopiedFromMainScope(
+  int guideFocalLengthMm,
+  double mainFocalLengthMm,
+  double reducerFactor,
+) {
+  if (guideFocalLengthMm <= 0 || mainFocalLengthMm <= 0) return false;
+  return guideFocalLengthMm == mainFocalLengthMm.round() ||
+      guideFocalLengthMm ==
+          derivedOagGuideFocalLength(mainFocalLengthMm, reducerFactor);
+}

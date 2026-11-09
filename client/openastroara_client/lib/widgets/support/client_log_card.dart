@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/client_error_log.dart';
+import '../../state/simple_messages_state.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
 import '../../util/stream_save_location.dart';
+import 'support_card_row.dart';
 
 /// §54 "Save client log" — exports this app's own error log (#1111). Sits
 /// above the Support tab's connect gate on purpose: a client-side crash is
@@ -29,28 +31,9 @@ class _ClientLogCardState extends ConsumerState<ClientLogCard> {
   bool _busy = false;
 
   Future<void> _save() async {
-    final log = ref.read(clientErrorLogProvider);
     setState(() => _busy = true);
-    try {
-      final pick = widget.savePathPicker ?? pickStreamSavePath;
-      final savePath = await pick(
-        'Choose where to save the client log',
-        ClientLogCard.suggestedFileName,
-      );
-      if (!mounted || savePath == null) return;
-      await log.exportTo(savePath);
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Saved $savePath')));
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(context.l10n, e, action: 'save the log'))),
-      );
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    await saveClientLog(context, ref, widget.savePathPicker);
+    if (mounted) setState(() => _busy = false);
   }
 
   @override
@@ -61,12 +44,9 @@ class _ClientLogCardState extends ConsumerState<ClientLogCard> {
       margin: const EdgeInsets.all(8),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            Icon(Icons.laptop_outlined, color: theme.colorScheme.primary),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
+        child: SupportCardRow(
+            icon: Icon(Icons.laptop_outlined, color: theme.colorScheme.primary),
+            body: (_) => Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('This app\'s error log', style: theme.textTheme.titleSmall),
@@ -80,9 +60,7 @@ class _ClientLogCardState extends ConsumerState<ClientLogCard> {
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 12),
-            FilledButton.icon(
+            action: FilledButton.icon(
               onPressed: _busy ? null : _save,
               icon: _busy
                   ? const SizedBox(
@@ -93,7 +71,6 @@ class _ClientLogCardState extends ConsumerState<ClientLogCard> {
                   : const Icon(Icons.save_alt, size: 18),
               label: const Text('Save client log'),
             ),
-          ],
         ),
       ),
     );
@@ -111,5 +88,32 @@ class _ClientLogCardState extends ConsumerState<ClientLogCard> {
             '${s.suppressedRepeats > 0 ? ', ${s.suppressedRepeats} suppressed' : ''})'
         : '';
     return '${s.entries} $noun recorded$session. $tail';
+  }
+}
+
+/// Asks where, then saves this device's error log; says how it went.
+Future<void> saveClientLog(
+  BuildContext context,
+  WidgetRef ref,
+  Future<String?> Function(String title, String fileName)? picker,
+) async {
+  final log = ref.read(clientErrorLogProvider);
+  try {
+    final pick = picker ?? pickStreamSavePath;
+    final savePath = await pick(
+      context.l10n.clientLogPickTitle,
+      ClientLogCard.suggestedFileName,
+    );
+    if (!context.mounted || savePath == null) return;
+    await log.exportTo(savePath);
+    if (!context.mounted) return;
+    userNotifier(context)(context.l10n.clientLogSaved(savePath));
+  } catch (e) {
+    if (!context.mounted) return;
+    userNotifier(context)(
+      friendlyError(context.l10n, e, action: context.l10n.clientLogSaveAction),
+      error: true,
+      snackBarRed: false,
+    );
   }
 }

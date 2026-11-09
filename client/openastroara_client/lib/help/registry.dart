@@ -1055,6 +1055,14 @@ const Map<String, Help> helpRegistry = {
         'Turn this off if you want the wheel left exactly where the driver reports it, for example a mono rig that lives on Hα. Turning it back on takes effect the next time Ara starts on the rig: a wheel that already connected this session is not parked by the change.',
   ),
 
+  'eq.filterwheel.use_focus_offsets': Help(
+    key: 'eq.filterwheel.use_focus_offsets',
+    title: 'Move the focuser by each filter\'s offset',
+    body:
+        'After a filter change, Ara moves the focuser by the difference between the two filters\' focus offsets, once the wheel has landed (or, on a manual wheel, when you confirm the swap).\n\n'
+        'Off, the focuser stays where it is. A filter change still succeeds when no focuser is connected or the move fails; Ara logs a warning.',
+  ),
+
   'eq.switch.readings': Help(
     key: 'eq.switch.readings',
     title: 'Switch readings',
@@ -2404,7 +2412,7 @@ const Map<String, Help> helpRegistry = {
     title: 'Before you sleep',
     body:
         'A one-shot self-test of the rig as it stands, read fresh from Ara each time: the mount and '
-        'camera connected (other selected devices and unresolved faults are warnings), free space against your '
+        'camera connected (other selected devices and unresolved faults from tonight are warnings), free space against your '
         'storage thresholds, the plate solver binary and star database present (a presence check, not a test '
         'solve), the cooler within a degree of its setpoint, the mount tracking and unparked, and the running '
         'sequence. Below that: when the active target crosses the flip point tonight and how high it will be, '

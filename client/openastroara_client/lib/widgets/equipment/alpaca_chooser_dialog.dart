@@ -1,7 +1,7 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../models/discovered_device.dart';
 import '../../screens/wizard/screens/screen_equipment_discovery.dart'
     show equipmentDiscoveryApiFactoryProvider;
@@ -9,6 +9,8 @@ import '../../state/equipment/alpaca_selection_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/settings/equipment_connection_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/friendly_error.dart';
+import '../inline_choices.dart';
 
 /// §52.2 Alpaca device chooser. Calls `/api/v1/equipment/discover/{type}`
 /// against the active server, shows the discovered devices, lets the user
@@ -26,7 +28,7 @@ Future<void> showAlpacaChooserDialog(
 }) {
   return showDialog<void>(
     context: context,
-    builder: (_) => _AlpacaChooserDialog(
+    builder: (_) => AlpacaDeviceChooser(
       type: type,
       deviceTypeLabel: deviceTypeLabel,
       onPick: onPick,
@@ -34,23 +36,35 @@ Future<void> showAlpacaChooserDialog(
   );
 }
 
-class _AlpacaChooserDialog extends ConsumerStatefulWidget {
+/// The discovery list: a dialog's body, or laid out in place when the host
+/// passes [onClose] (Simple Mode has no popups).
+class AlpacaDeviceChooser extends ConsumerStatefulWidget {
   final EquipmentDeviceType type;
   final String deviceTypeLabel;
   final void Function(DiscoveredDevice device)? onPick;
 
-  const _AlpacaChooserDialog({
+  /// Inline: closes it, on Cancel or after a pick.
+  final VoidCallback? onClose;
+
+  const AlpacaDeviceChooser({
+    super.key,
     required this.type,
     required this.deviceTypeLabel,
     this.onPick,
+    this.onClose,
   });
 
   @override
-  ConsumerState<_AlpacaChooserDialog> createState() =>
-      _AlpacaChooserDialogState();
+  ConsumerState<AlpacaDeviceChooser> createState() =>
+      _AlpacaDeviceChooserState();
 }
 
-class _AlpacaChooserDialogState extends ConsumerState<_AlpacaChooserDialog> {
+class _AlpacaDeviceChooserState extends ConsumerState<AlpacaDeviceChooser> {
+  bool get _inline => widget.onClose != null;
+
+  void _close() =>
+      _inline ? widget.onClose!() : Navigator.of(context).pop();
+
   late Future<List<DiscoveredDevice>> _future;
 
   @override
@@ -62,7 +76,7 @@ class _AlpacaChooserDialogState extends ConsumerState<_AlpacaChooserDialog> {
   Future<List<DiscoveredDevice>> _runDiscovery({required bool forceRefresh}) {
     final server = ref.read(activeServerProvider);
     if (server == null) {
-      return Future.error('Not connected — connect to your rig to save this.');
+      return Future.error(const _NotConnected());
     }
     // Built through the shared factory seam so tests can fake discovery.
     final api = ref.read(equipmentDiscoveryApiFactoryProvider)(server);
@@ -81,62 +95,84 @@ class _AlpacaChooserDialogState extends ConsumerState<_AlpacaChooserDialog> {
     } else {
       ref.read(alpacaSelectionProvider.notifier).select(widget.type, device);
     }
-    Navigator.of(context).pop();
+    _close();
   }
+
+  Widget _list() => FutureBuilder<List<DiscoveredDevice>>(
+    future: _future,
+    builder: (context, snap) {
+      if (snap.connectionState == ConnectionState.waiting) {
+        return const Center(heightFactor: 2, child: CircularProgressIndicator());
+      }
+      if (snap.hasError) {
+        return _ErrorState(error: snap.error, onRetry: _refresh);
+      }
+      final devices = snap.data ?? const <DiscoveredDevice>[];
+      if (devices.isEmpty) {
+        return const _EmptyState();
+      }
+      return ListView.separated(
+        shrinkWrap: _inline,
+        itemCount: devices.length,
+        separatorBuilder: (_, _) =>
+            const Divider(height: 1, color: AraColors.border),
+        itemBuilder: (_, i) => _DeviceTile(
+          device: devices[i],
+          onTap: () => _pick(devices[i]),
+        ),
+      );
+    },
+  );
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Row(
-        children: [
-          Text('Choose ${widget.deviceTypeLabel}'),
-          const Spacer(),
-          IconButton(
-            tooltip: 'Re-scan',
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
-      content: SizedBox(
-        width: 480,
-        height: 320,
-        child: FutureBuilder<List<DiscoveredDevice>>(
-          future: _future,
-          builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snap.hasError) {
-              return _ErrorState(
-                error: snap.error,
-                onRetry: _refresh,
-              );
-            }
-            final devices = snap.data ?? const <DiscoveredDevice>[];
-            if (devices.isEmpty) {
-              return const _EmptyState();
-            }
-            return ListView.separated(
-              itemCount: devices.length,
-              separatorBuilder: (_, _) =>
-                  const Divider(height: 1, color: AraColors.border),
-              itemBuilder: (_, i) => _DeviceTile(
-                device: devices[i],
-                onTap: () => _pick(devices[i]),
+    final l10n = context.l10n;
+    final words = l10n.deviceChooserTitle(widget.deviceTypeLabel);
+    final title = Text(words);
+    final rescan = IconButton(
+      tooltip: l10n.deviceChooserRescan,
+      onPressed: _refresh,
+      icon: const Icon(Icons.refresh),
+    );
+    if (_inline) {
+      return InlineAttention(
+        title: words,
+        child: Material(
+          type: MaterialType.transparency,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(children: [Expanded(child: title), rescan]),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 320),
+                child: _list(),
               ),
-            );
-          },
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  key: const Key('alpaca-chooser-cancel'),
+                  style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+                  onPressed: _close,
+                  child: Text(l10n.planCancel),
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-      ],
+      );
+    }
+    return AlertDialog(
+      title: Row(children: [title, const Spacer(), rescan]),
+      content: SizedBox(width: 480, height: 320, child: _list()),
+      actions: [TextButton(onPressed: _close, child: Text(l10n.planCancel))],
     );
   }
+}
+
+/// No rig to ask: said in the chooser's own language when it shows.
+class _NotConnected {
+  const _NotConnected();
 }
 
 class _DeviceTile extends StatelessWidget {
@@ -152,7 +188,7 @@ class _DeviceTile extends StatelessWidget {
       title: Text(device.name),
       subtitle: Text(
         device.isManualFilterWheel
-            ? 'No driver: you swap filters by hand and Ara asks for each one'
+            ? context.l10n.deviceChooserManualWheel
             : '$scheme://${device.hostName.isNotEmpty ? device.hostName : device.ipAddress}:${device.ipPort}'
                 ' ·  device #${device.alpacaDeviceNumber}',
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -183,12 +219,10 @@ class _EmptyState extends StatelessWidget {
           children: [
             const Icon(Icons.search_off, size: 48, color: AraColors.textDisabled),
             const SizedBox(height: 12),
-            Text('No devices found', style: theme.textTheme.titleMedium),
+            Text(context.l10n.deviceChooserNoneTitle, style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
-              'No Alpaca responder answered on Ara\'s subnet — most '
-              'often AlpacaBridge (ARA\'s equipment hub) is not installed or '
-              'its service is stopped. On Ara host, check:',
+              context.l10n.deviceChooserNoneBody,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                     color: AraColors.textSecondary,
@@ -210,8 +244,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'A driver on another host must be reachable from Ara\'s '
-              'subnet (UDP 32227).',
+              context.l10n.deviceChooserOtherHost,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                     color: AraColors.textSecondary,
@@ -233,20 +266,20 @@ class _ErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final message = switch (error) {
-      DioException e =>
-        '${e.message ?? 'Network error'} (${e.response?.statusCode ?? 'no response'})',
-      Object e => e.toString(),
+      _NotConnected() => context.l10n.deviceChooserNotConnected,
+      Object e => friendlyError(context.l10n, e, action: context.l10n.deviceChooserFindAction),
       _ => 'Unknown error',
     };
     return Center(
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Icon(Icons.error_outline,
-              size: 48, color: AraColors.accentBusy),
+              size: 48, color: AraColors.accentError),
           const SizedBox(height: 12),
           Text(
-            'Discovery failed',
+            context.l10n.deviceChooserFailed,
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 4),
@@ -264,9 +297,10 @@ class _ErrorState extends StatelessWidget {
           TextButton.icon(
             onPressed: onRetry,
             icon: const Icon(Icons.refresh, size: 16),
-            label: const Text('Retry'),
+            label: Text(context.l10n.deviceChooserRetry),
           ),
         ],
+        ),
       ),
     );
   }

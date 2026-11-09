@@ -104,6 +104,38 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void During_a_profile_switch_a_followed_change_writes_nothing_to_the_mount() {
+            var (svc, mount, store) = Following(Site(-36.85, 174.76, 120));
+            using (svc) {
+                var hold = svc.HoldSiteFollow();
+                store.Raise(s => s.Changed += null, EventArgs.Empty);
+                Assert.That(mount.Writes, Is.Empty);
+                hold.Dispose();
+            }
+        }
+
+        [Test]
+        public void Releasing_the_hold_gives_a_mount_both_profiles_share_the_new_site() {
+            var (svc, mount, store) = Following(Site(-36.85, 174.76, 120));
+            using (svc) {
+                var hold = svc.HoldSiteFollow();
+                store.Raise(s => s.Changed += null, EventArgs.Empty);
+                hold.Dispose();
+                Assert.That(mount.Writes, Is.EqualTo(AllThree));
+            }
+        }
+
+        [Test]
+        public void A_connect_during_a_profile_switch_still_gets_the_site() {
+            var (svc, mount, _) = Following(Site(-36.85, 174.76, 120));
+            using (svc) {
+                using var hold = svc.HoldSiteFollow();
+                svc.PushProfileSite(force: true);
+                Assert.That(mount.Writes, Is.EqualTo(AllThree));
+            }
+        }
+
+        [Test]
         public void A_profile_change_with_no_site_leaves_the_mounts_alone() {
             var (svc, mount, store) = Following(Site(0, 0, 0));
             using (svc) {

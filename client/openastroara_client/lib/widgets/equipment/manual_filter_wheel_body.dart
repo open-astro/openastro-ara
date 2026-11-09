@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../models/filter_wheel_status.dart';
 import '../../services/equipment_device_api.dart';
 import '../../state/equipment/filter_wheel_state.dart';
@@ -148,7 +149,7 @@ class ManualSwapCard extends StatelessWidget {
             style: Theme.of(context).textTheme.titleSmall,
           ),
           const SizedBox(height: 4),
-          Text(manualSwapDetail(target, current)),
+          Text(manualSwapDetail(context.l10n, target, current)),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -171,6 +172,7 @@ class ManualSwapCard extends StatelessWidget {
 }
 
 /// One sentence explaining a pending hand swap.
-String manualSwapDetail(String target, String? current) =>
-    '${current == null ? 'Swap' : 'Take out $current and swap'} in $target, '
-    'then confirm. A run waiting on it continues when you do.';
+String manualSwapDetail(AppLocalizations l, String target, String? current) =>
+    current == null
+    ? l.filterSwapDetail(target)
+    : l.filterSwapDetailFrom(current, target);

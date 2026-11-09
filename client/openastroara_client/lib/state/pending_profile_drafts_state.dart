@@ -155,12 +155,14 @@ Future<(int applied, int failed, int held, int rejected)>
   return (applied, failed, held, rejected);
 }
 
-/// True when the daemon never answered: every failed section had no response,
-/// or the single request that failed (create, list, select) got none. A reply
-/// with any status code is a rejection, not a transport failure.
+/// True when the draft should wait for a later reconnect: every failed section
+/// had no response, the single request that failed (create, list, select) got
+/// none, or the rig answered 409 because a run is active. Any other status code
+/// is a rejection.
 bool isProfileReplayTransportFailure(Object e) =>
     e is ProfileSaveTransportFailure ||
-    (e is DioException && e.response == null);
+    (e is DioException &&
+        (e.response == null || e.response?.statusCode == 409));
 
 /// Root-mounted: when the active server's WebSocket reaches `connected`, apply
 /// whatever drafts are waiting for THAT server. Listening on the link (not just

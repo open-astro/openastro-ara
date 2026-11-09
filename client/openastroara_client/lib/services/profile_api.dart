@@ -27,6 +27,7 @@ import '../state/settings/plate_solve_settings_state.dart';
 import '../state/settings/safety_policies_state.dart';
 import '../state/settings/site_settings_state.dart';
 import '../state/settings/storage_settings_state.dart';
+import '../models/switch_device.dart' show CoolingFan;
 
 /// Client-side wrapper around §37 profile endpoints. Phase 12h.6a landed the
 /// daemon side (`GET`/`PUT /api/v1/profile/imaging-defaults` backed by an
@@ -65,9 +66,20 @@ class ProfileApi {
   }
 
   /// §37 multi-profile — make a profile active (`POST /api/v1/profiles/{id}/select`),
-  /// loading its settings into the live store.
-  Future<void> selectProfile(String id) async {
-    await _dio.post<void>('/api/v1/profiles/${Uri.encodeComponent(id)}/select');
+  /// loading its settings into the live store. Returns one message per device
+  /// that did not come up (#1710); a failed device never fails the switch.
+  Future<List<ProfileDeviceMessage>> selectProfile(String id) async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/profiles/${Uri.encodeComponent(id)}/select',
+      // The daemon waits up to 30 s for the new profile's devices to settle.
+      options: Options(receiveTimeout: const Duration(seconds: 45)),
+    );
+    final raw = res.data?['device_messages'];
+    return [
+      if (raw is List)
+        for (final m in raw.whereType<Map<dynamic, dynamic>>())
+          ProfileDeviceMessage.fromJson(Map<String, dynamic>.from(m)),
+    ];
   }
 
   /// §63.4 — what the daemon knows about the profile's OpenAstro Guider profile
@@ -111,6 +123,8 @@ class ProfileApi {
     final res = await _dio.post<Map<String, dynamic>>(
       '/api/v1/profiles',
       data: {'name': name},
+      // The daemon changes the connected devices before it answers (#1710).
+      options: Options(receiveTimeout: const Duration(seconds: 60)),
     );
     final meta = ProfileMeta.fromJson(res.data ?? const <String, dynamic>{});
     if (meta.id.isEmpty) {
@@ -612,6 +626,23 @@ class ProfileApi {
     return FilterWheelPolicy.fromJson(res.data ?? const {});
   }
 
+  /// GET the switch port designated as the profile's cooling fan (#1700).
+  Future<CoolingFan> getCoolingFan() async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/profile/cooling-fan',
+    );
+    return CoolingFan.fromJson(res.data ?? const {});
+  }
+
+  /// PUT the cooling fan designation. Returns Ara's echo.
+  Future<CoolingFan> putCoolingFan(CoolingFan value) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/cooling-fan',
+      data: value.toJson(),
+    );
+    return CoolingFan.fromJson(res.data ?? const {});
+  }
+
   /// GET the active profile's equipment auto-connect bools.
   Future<EquipmentConnectionSettings> getEquipmentConnection() async {
     final res = await _dio.get<Map<String, dynamic>>(
@@ -1100,7 +1131,7 @@ class ProfileApi {
         unattendedShutdownEnabled:
             (j['unattended_shutdown_enabled'] as bool?) ?? true,
         unattendedShutdownWaitMinutes:
-            (j['unattended_shutdown_wait_minutes'] as num?)?.toInt() ?? 10,
+            (j['unattended_shutdown_wait_minutes'] as num?)?.toInt() ?? 30,
         calibrationCaptureDefault: _calibrationCaptureDefaultFromString(
           j['calibration_capture_default'] as String?,
         ),

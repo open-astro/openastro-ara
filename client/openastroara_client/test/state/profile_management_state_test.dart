@@ -19,6 +19,7 @@ class _FakeApi extends ProfileApi {
   String? activeId = 'id-1';
   final List<String> selectCalls = [];
   Object? selectError;
+  List<ProfileDeviceMessage> selectMessages = const [];
   Completer<void>? gate; // when set, selectProfile awaits it (held in-flight)
 
   @override
@@ -26,11 +27,12 @@ class _FakeApi extends ProfileApi {
       ProfileList(activeId: activeId, profiles: List.of(profiles));
 
   @override
-  Future<void> selectProfile(String id) async {
+  Future<List<ProfileDeviceMessage>> selectProfile(String id) async {
     selectCalls.add(id);
     if (gate != null) await gate!.future;
     if (selectError != null) throw selectError!;
     activeId = id;
+    return selectMessages;
   }
 
   @override
@@ -79,6 +81,23 @@ void main() {
     await c.read(profileManagementProvider.notifier).select('id-2');
     expect(api.selectCalls, ['id-2']);
     expect(c.read(profileManagementProvider).value?.activeId, 'id-2');
+  });
+
+  test('select hands back the devices the daemon could not bring up', () async {
+    final api = _FakeApi()
+      ..profiles = const [ProfileMeta(id: 'id-1', name: 'A')]
+      ..selectMessages = const [
+        ProfileDeviceMessage(deviceName: 'AM5', message: 'Could not connect.'),
+      ];
+    final c = _container(api);
+    addTearDown(c.dispose);
+    await c.read(profileManagementProvider.future);
+
+    final messages = await c
+        .read(profileManagementProvider.notifier)
+        .select('id-1');
+
+    expect(messages.single.deviceName, 'AM5');
   });
 
   test('busy guard rejects an overlapping mutation', () async {

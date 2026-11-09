@@ -33,6 +33,11 @@ namespace OpenAstroAra.Server.Endpoints;
 /// profile's settings.
 /// </summary>
 public static partial class ProfilesEndpoints {
+    // A run keeps imaging with no catalog session when the catalog fails, and a session outlives
+    // its run while it aborts: either one means the devices are in use.
+    private static async Task<bool> RunIsOnAsync(ActiveRunSessionRegistry runs, ISequencerService? sequencer, CancellationToken ct) =>
+        runs.HasAny || (sequencer is not null && (await sequencer.ActiveRunIdsAsync(ct).ConfigureAwait(false)).Count > 0);
+
     public static IEndpointRouteBuilder MapProfilesEndpoints(this IEndpointRouteBuilder app) {
         var profiles = app.MapGroup("/api/v1/profiles").WithTags("Profiles");
 
@@ -41,21 +46,32 @@ public static partial class ProfilesEndpoints {
             .WithName("ListProfiles")
             .WithSummary("List the known profiles and which one is active.");
 
-        profiles.MapPost("/", (CreateProfileRequestDto body, bool? activate, IProfileRepository repo, IGuiderService guider,
-                Microsoft.Extensions.Logging.ILoggerFactory loggerFactory) => {
+        profiles.MapPost("/", async (CreateProfileRequestDto body, bool? activate, IProfileRepository repo, IGuiderService guider,
+                ActiveRunSessionRegistry runs, [FromServices] ISequencerService? sequencer, ProfileDeviceSwitch devices,
+                Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, CancellationToken ct) => {
                 // Creating a profile activates it by default (the wizard's Save lands you in the new
                 // profile); pass ?activate=false to add one without switching (e.g. duplicate-current).
                 // With no settings in the body this is "duplicate the active profile" — snapshot the
                 // source name BEFORE the create, which may switch the active profile.
                 var source = body.Settings is null ? ActiveProfileName(repo) : null;
                 var activated = activate ?? true;
+                // #1710 — activating is a profile switch, whichever request does it.
+                if (activated && await RunIsOnAsync(runs, sequencer, ct).ConfigureAwait(false)) {
+                    return Results.Problem("a sequence run is active — stop it before switching profiles",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                using var siteHold = activated ? devices.HoldSiteFollow() : null;
                 var meta = repo.Create(body.Name, body.Settings, makeActive: activated);
                 // Fire-and-forget: the 201 must not wait on a guider RPC.
                 _ = GuiderFollowsCreatedProfileAsync(guider, loggerFactory.CreateLogger("ProfilesEndpoints"), source, meta.Name, activated);
+                if (activated) {
+                    await devices.ApplyAsync(CancellationToken.None).ConfigureAwait(false);
+                }
                 return Results.Created($"/api/v1/profiles/{meta.Id}", meta);
             })
             .Accepts<CreateProfileRequestDto>("application/json")
             .Produces<ProfileMetaDto>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("CreateProfile")
             .WithSummary("Create a profile (clones the active profile's settings when none are supplied).");
 
@@ -124,7 +140,9 @@ public static partial class ProfilesEndpoints {
         profiles.MapDelete("/{id:guid}", async (Guid id,
                 [FromQuery(Name = "guider_profile")] string? guiderProfile,
                 [FromQuery(Name = "dark_library")] string? darkLibrary,
-                IProfileRepository repo, IGuiderService guider) => {
+                IProfileRepository repo, IGuiderService guider, ActiveRunSessionRegistry runs,
+                [FromServices] ISequencerService? sequencer, ProfileDeviceSwitch devices,
+                Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, CancellationToken ct) => {
                 // §63.4 — the guider twin goes only on an explicit ask (default keep): an older client
                 // that sends no parameter never deletes guider data without the user being asked.
                 bool deleteTwin;
@@ -143,6 +161,13 @@ public static partial class ProfilesEndpoints {
                 // record is gone once Delete succeeds. Read-only, so the repository's atomic
                 // decide-under-lock (below) still owns TOCTOU.
                 var name = repo.GetProfile(id)?.Meta.Name;
+                // #1710 — deleting the active profile hands the rig to another one: a profile switch.
+                var wasActive = repo.ActiveId == id;
+                if (wasActive && await RunIsOnAsync(runs, sequencer, ct).ConfigureAwait(false)) {
+                    return Results.Problem("a sequence run is active — stop it before switching profiles",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                using var siteHold = wasActive ? devices.HoldSiteFollow() : null;
                 // The repository decides atomically under its lock, so a concurrent select can't
                 // slip between an existence pre-check and the delete (TOCTOU).
                 var result = repo.Delete(id);
@@ -151,6 +176,11 @@ public static partial class ProfilesEndpoints {
                 }
                 if (result != ProfileDeleteResult.Deleted) {
                     return Results.Problem(statusCode: StatusCodes.Status500InternalServerError);
+                }
+                if (wasActive) {
+                    // A connected guider follows, as on a select: left alone it stays on the deleted profile's twin.
+                    _ = PushGuiderAfterProfileSwitchAsync(guider, loggerFactory.CreateLogger("ProfilesEndpoints"), refuseUnservedSelection: false);
+                    await devices.ApplyAsync(CancellationToken.None).ConfigureAwait(false);
                 }
                 if (!deleteTwin) {
                     return Results.Ok(new ProfileDeleteResultDto("kept", null));
@@ -170,6 +200,7 @@ public static partial class ProfilesEndpoints {
             .Produces<ProfileDeleteResultDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("DeleteProfile")
             .WithSummary("Delete a profile. Deleting the active profile activates the newest " +
                 "remaining one; deleting the last profile returns to the zero-profile state. " +
@@ -177,8 +208,16 @@ public static partial class ProfilesEndpoints {
                 "until the guider is connected and idle); ?dark_library=keep spares the dark library. " +
                 "The body says what happened to the guider profile.");
 
-        profiles.MapPost("/{id:guid}/select", (Guid id, IProfileRepository repo, IGuiderService guider,
-                Microsoft.Extensions.Logging.ILoggerFactory loggerFactory) => {
+        profiles.MapPost("/{id:guid}/select", async (Guid id, IProfileRepository repo, IGuiderService guider,
+                ActiveRunSessionRegistry runs, [FromServices] ISequencerService? sequencer, ProfileDeviceSwitch devices,
+                Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, CancellationToken ct) => {
+                // #1710 — a switch changes which devices are connected, so never under a run.
+                if (await RunIsOnAsync(runs, sequencer, ct).ConfigureAwait(false)) {
+                    return Results.Problem("a sequence run is active — stop it before switching profiles",
+                        statusCode: StatusCodes.Status409Conflict);
+                }
+                var alreadyActive = repo.ActiveId == id;
+                using var siteHold = devices.HoldSiteFollow();
                 if (!repo.SelectProfile(id)) {
                     return Results.NotFound();
                 }
@@ -190,13 +229,21 @@ public static partial class ProfilesEndpoints {
                 // to flip — the next guider connect maps the twin anyway — and the select
                 // response must not wait on daemon RPCs.
                 _ = PushGuiderAfterProfileSwitchAsync(guider, loggerFactory.CreateLogger("ProfilesEndpoints"), refuseUnservedSelection: false);
-                return Results.Ok(repo.List());
+                // Not the request's token: a client that drops mid-way must not leave half a rig.
+                var messages = alreadyActive
+                    ? Array.Empty<ProfileDeviceMessageDto>()
+                    : await devices.ApplyAsync(CancellationToken.None).ConfigureAwait(false);
+                var list = repo.List();
+                return Results.Ok(new ProfileSelectResultDto(list.ActiveId, list.Profiles, messages));
             })
-            .Produces<ProfileListDto>(StatusCodes.Status200OK)
+            .Produces<ProfileSelectResultDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("SelectProfile")
             .WithSummary("Make a profile active (loads its settings into the live store). A " +
-                "connected guider follows: its twin profile is selected/created to match.");
+                "connected guider follows: its twin profile is selected/created to match. The " +
+                "devices follow too: Safety Monitor off first, then every device the profile does " +
+                "not remember, then its remembered devices on. Refused (409) while a run is active.");
 
         return app;
     }

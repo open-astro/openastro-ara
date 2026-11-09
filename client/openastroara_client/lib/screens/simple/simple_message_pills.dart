@@ -159,6 +159,10 @@ class _Pill extends ConsumerWidget {
     final notifier = ref.read(simpleMessagesProvider.notifier);
     final (dot, outline) = switch (m.kind) {
       SimpleMessageKind.result => (AraColors.accentConnected, null),
+      SimpleMessageKind.refused => (
+        AraColors.accentWarning,
+        AraColors.accentWarning,
+      ),
       SimpleMessageKind.error => (AraColors.accentError, AraColors.accentError),
       SimpleMessageKind.question => (
         AraColors.accentBusy,
@@ -263,19 +267,21 @@ class _Pill extends ConsumerWidget {
                       ],
                     ),
                   )
-                else if (m.kind == SimpleMessageKind.result &&
-                    m.actions.isNotEmpty)
-                  // A result's one action (Undo), there while the pill lasts.
+                else if (m.actions.isNotEmpty)
+                  // A message's one action (Undo), there while the pill lasts.
                   TextButton(
                     onPressed: () => _answer(notifier, 0),
                     child: Text(m.actions.first.label),
                   )
-                else if (m.kind == SimpleMessageKind.result)
+                else if (m.kind == SimpleMessageKind.result ||
+                    m.kind == SimpleMessageKind.refused)
                   const SizedBox(width: kSimpleInset - 4),
               ],
             ),
             // A result's time left, as a line along its foot.
-            if (m.kind == SimpleMessageKind.result && !reduced)
+            if ((m.kind == SimpleMessageKind.result ||
+                    m.kind == SimpleMessageKind.refused) &&
+                !reduced)
               Positioned(
                 left: 0,
                 right: 14,
@@ -289,7 +295,7 @@ class _Pill extends ConsumerWidget {
                       widthFactor: v,
                       child: Container(
                         height: 2,
-                        color: AraColors.accentConnected.withValues(alpha: 0.6),
+                        color: dot.withValues(alpha: 0.6),
                       ),
                     ),
                   ),
