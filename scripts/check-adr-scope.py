@@ -3,7 +3,9 @@
 
 Every decision record in docs/adr/ has a `## Rules` section whose numbered
 rules each name a `Scope:` of repository globs (docs/adr/README.md). A
-changed file is under a rule when one of the rule's globs matches it.
+changed file is under a rule when one of the rule's globs matches it. A
+`proposed` record binds only a PR whose `## Decision records` section names it
+(#1702): that PR is its pilot change, and every other PR skips its rules.
 
 Four modes:
 
@@ -11,7 +13,8 @@ Four modes:
            per record in scope, `<record file>: rules <n>, <n>`. The review
            bot runs the default branch's copy over the base branch's records
            and reads those rules against the diff
-           (.github/workflows/claude-review.yml).
+           (.github/workflows/claude-review.yml). The PR body comes from
+           PR_BODY or --body-file.
 
   default  the PR-body gate: the `## Decision records` section of the PR body
            (read from PR_BODY or --body-file, never the command line) must name,
@@ -51,6 +54,7 @@ from adr_grammar import (  # noqa: E402  (the one owner of the Rules grammar)
     DECISION_DIR, DECISION_FILE_RE, DECISION_RULE_RE, CODE_SPAN_ONLY_RE, ROOT,
     decision_sections as _decision_sections, glob_match as _glob_match, read_records)
 SECTION = "decision records"
+PROPOSED_RE = re.compile(r"^Status: proposed", re.M)
 # A record number, not an issue or PR number such as #1415 (#1416 review).
 RECORD_NUMBER_RE = re.compile(r"(?<![#\d])\b(\d{4})\b")
 HEADING_RE = re.compile(r"^##\s+(.+?)\s*$")
@@ -106,12 +110,23 @@ def body_section(body, title=SECTION):
     return lines
 
 
+def named_records(section):
+    return set(RECORD_NUMBER_RE.findall("\n".join(section or [])))
+
+
+def binding_rules(rules_by_record, records, body):
+    """The rules that bind this PR: a `proposed` record's only when the body's section names the record."""
+    named = named_records(body_section(body))
+    return {name: rules for name, rules in rules_by_record.items()
+            if name[:4] in named or not PROPOSED_RE.search(records[name])}
+
+
 def body_findings(body, changed):
     section = body_section(body)
     records = sorted({p for p in changed if p.startswith(DECISION_DIR + "/") and DECISION_FILE_RE.match(p.split("/")[-1])})
     if section is None:
         return ["the PR body has no '## Decision records' section"]
-    named = set(RECORD_NUMBER_RE.findall("\n".join(section)))
+    named = named_records(section)
     return ["the '## Decision records' section does not name %s, which this PR changes" % p
             for p in records if p.split("/")[-1][:4] not in named]
 
@@ -216,10 +231,13 @@ def main(argv):
             body_file = next(args, None)
         elif arg == "--base":
             base = next(args, None)
-    rules = record_rules(read_records(root))
+    records = read_records(root)
+    rules = record_rules(records)
     if not rules:
         print("check-adr-scope: no decision record found under %s" % (Path(root) / DECISION_DIR), file=sys.stderr)
         return 2
+    body = Path(body_file).read_text(encoding="utf-8") if body_file else os.environ.get("PR_BODY", "")
+    rules = binding_rules(rules, records, body)
     if "--list" in argv:
         changed = [line.strip() for line in sys.stdin if line.strip()]
         for record, hit in in_scope(changed, rules):
@@ -231,10 +249,6 @@ def main(argv):
     spec.loader.exec_module(falsified)
     resolve_base = falsified.resolve_base
     changed = changed_since(resolve_base(base or os.environ.get("FALSIFIED_BASE")))
-    if body_file:
-        body = Path(body_file).read_text(encoding="utf-8")
-    else:
-        body = os.environ.get("PR_BODY", "")
     for record, hit in in_scope(changed, rules):
         print("in scope: %s rules %s" % (record, ", ".join(str(n) for n in hit)))
     errors = body_findings(body, changed)

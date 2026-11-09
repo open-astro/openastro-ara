@@ -50,7 +50,8 @@
 <!--
   Required. Name, by number, every decision record in docs/adr/ this
   pull request implements, changes or adopts (for example "0001: touches the
-  album cache"), or write "None". A PR that edits a record must name it here
+  album cache"), or write "None". Naming a proposed record puts its rules on
+  this PR's review checklist. A PR that edits a record must name it here
   (decision-records job), and a collaborator must comment
   `ADR authorized <head sha>` before it can merge (it holds until a push
   changes one of the PR's record files again).

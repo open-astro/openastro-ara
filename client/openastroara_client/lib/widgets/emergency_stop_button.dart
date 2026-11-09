@@ -17,9 +17,9 @@ import '../state/ws/client_session_state.dart';
 /// §35.3 — the persistent big red button, always visible in the bottom
 /// status bar. Press and hold for 2 s ("Hold to confirm", a fill sweeping
 /// across) → the daemon aborts
-/// the running sequence, halts the rotator, aborts the in-flight exposure, stops the
-/// guide-camera focus loop, the Bahtinov readout, autofocus and polar alignment, stops
-/// guiding, stops the mount where it is with tracking off (never a park), switches the
+/// the running sequence, stops the mount where it is with tracking off (never a park),
+/// halts the rotator, aborts the in-flight exposure, stops the guide-camera focus loop,
+/// the Bahtinov readout, autofocus and polar alignment, stops guiding, switches the
 /// flat panel light off and the camera's cooler off. The snackbar
 /// reports honestly what each rung did (a dead mount says so instead of
 /// pretending it stopped). Letting go early sends nothing. Keyboard and

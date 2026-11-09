@@ -526,7 +526,7 @@
   "estopLabel": "Parada de emergência",
   "estopPressAgainAnnouncement": "Pressione de novo em até 3 segundos para parar tudo",
   "estopConfirmTitle": "Parar tudo agora?",
-  "estopConfirmBody": "Isto aborta a sequência em andamento, para o rotador onde ele está, aborta a exposição atual, para o foco da câmera de guiagem, a leitura de Bahtinov, o autofoco e o alinhamento polar, para a guiagem, para a montagem onde ela está, com o rastreamento desligado, e desliga a luz do painel de flat e a refrigeração da câmera. Não pode ser desfeito — a sequência não é retomada.",
+  "estopConfirmBody": "Isto aborta a sequência em andamento, para a montagem onde ela está, com o rastreamento desligado, para o rotador onde ele está, aborta a exposição atual, para o foco da câmera de guiagem, a leitura de Bahtinov, o autofoco e o alinhamento polar, para a guiagem, e desliga a luz do painel de flat e a refrigeração da câmera. Não pode ser desfeito — a sequência não é retomada.",
   "estopCancel": "Cancelar",
   "estopConfirm": "PARADA DE EMERGÊNCIA",
   "estopNoServer": "Nenhum servidor conectado — nada para parar.",

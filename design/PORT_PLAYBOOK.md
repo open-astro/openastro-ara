@@ -4459,12 +4459,13 @@ User can override every single default.
 
 Persistent **[Emergency Stop]** button in WILMA's main app shell (top-right of status bar). Press and hold for 2 s to abort ("Hold to confirm", a fill sweeping across; letting go early sends nothing). Keyboard and screen-reader activation can't hold, so it opens a "Stop everything now?" confirmation instead; Simple Mode's versions, which show no popups, ask for a second press within 3 s. Fires `POST /api/v1/server/emergency-stop`:
 
-Server shutdown sequence:
+Server shutdown sequence, numbered by device. It runs in this order, so a hung step can't hold up the mount: abort runs, step 3 (mount), the rotator in step 4, step 1, step 1a, step 2, step 3 again if a polar alignment was running (it can move the mount until it stops), step 5, step 6 (#1739).
+
 1. Camera: abort current exposure
 1a. Guide-camera focus loop, Bahtinov readout, autofocus, polar alignment: stop if running (failed rungs `stop_guide_focus`, `stop_bahtinov`, `cancel_autofocus`, `stop_polar_align`)
 2. Guider (PHD2): stop guiding
 3. Mount: abort any slew or manual move, then switch tracking off, so it stops where it is. Never a park, a home or a slew: if the slew or park code is at fault, parking would repeat the fault. A parked mount gets neither call. Reported as `mount_stopped`; a fault in either call is the failed rung `stop_mount`, and tracking off is still attempted when the abort faults
-4. Filter wheel / focuser / rotator: leave in place (no auto-move; user can intervene). A rotator that is turning is halted where it is (ASCOM `Halt`, no target; reported as the failed rung `halt_rotator` when the halt faults), run right after the sequence abort, since aborting a run only stops the sequencer waiting on its move (#1671)
+4. Filter wheel / focuser / rotator: leave in place (no auto-move; user can intervene). A rotator that is turning is halted where it is (ASCOM `Halt`, no target; reported as the failed rung `halt_rotator` when the halt faults), run right after the mount stop, since aborting a run only stops the sequencer waiting on its move (#1671)
 5. Flat panel: turn off (if connected, and configured to do so)
 6. Camera cooler: switch off (if the camera is connected and its cooler is on; reported as `cooler_off`, a refusal as the failed rung `cooler_off`)
 7. Sequence state → `aborted`

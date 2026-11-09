@@ -2603,7 +2603,7 @@
   "@estopConfirmTitle": {
     "description": "Emergency Stop confirm dialog (keyboard/screen reader, full UI): title"
   },
-  "estopConfirmBody": "This aborts the running sequence, halts the rotator where it is, aborts the in-flight exposure, stops the guide-camera focus loop, the Bahtinov readout, autofocus and polar alignment, stops guiding, stops the mount where it is with tracking off, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.",
+  "estopConfirmBody": "This aborts the running sequence, stops the mount where it is with tracking off, halts the rotator where it is, aborts the in-flight exposure, stops the guide-camera focus loop, the Bahtinov readout, autofocus and polar alignment, stops guiding, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.",
   "@estopConfirmBody": {
     "description": "Emergency Stop confirm dialog: what the stop does"
   },

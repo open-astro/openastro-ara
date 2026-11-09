@@ -26,7 +26,7 @@ namespace OpenAstroAra.Test {
 
     /// <summary>
     /// §35.3 — <see cref="EmergencyStopService"/>: the stop ladder (abort runs
-    /// → abort exposure → stop guiding → stop mount → flat light off), best-effort
+    /// → stop mount → abort exposure → stop guiding → flat light off), best-effort
     /// rung isolation (one dead device never blocks the rest), the honest
     /// result DTO, the event-before-action ordering, headless null-dep
     /// tolerance, and the single-flight double-press guard.
@@ -364,6 +364,77 @@ namespace OpenAstroAra.Test {
             telescope.Verify(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()), Times.Once);
             telescope.Verify(t => t.SetTrackingAsync(false, It.IsAny<CancellationToken>()), Times.Once);
             telescope.VerifyNoOtherCalls();
+        }
+
+        private static readonly string[] MountRightAfterRuns = { "runs", "abort", "tracking_off", "rotator", "exposure" };
+
+        [Test]
+        public async Task Execute_StopsTheMountRightAfterRuns_AheadOfRotatorAndExposure() {
+            var calls = new List<string>();
+            sequencer.Setup(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .Callback(() => calls.Add("runs")).ReturnsAsync(1);
+            telescope.Setup(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()))
+                .Callback(() => calls.Add("abort")).Returns(Task.CompletedTask);
+            telescope.Setup(t => t.SetTrackingAsync(false, It.IsAny<CancellationToken>()))
+                .Callback(() => calls.Add("tracking_off")).Returns(Task.CompletedTask);
+            var rotator = new Mock<IRotatorService>();
+            rotator.Setup(r => r.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new RotatorDto("r1", "Rot", EquipmentConnectionState.Connected, null, null!));
+            rotator.Setup(r => r.HaltAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .Callback(() => calls.Add("rotator")).ReturnsAsync(Accepted);
+            camera.Setup(c => c.AbortExposureAsync(It.IsAny<CancellationToken>()))
+                .Callback(() => calls.Add("exposure")).Returns(Task.CompletedTask);
+
+            await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                rotator: rotator.Object).ExecuteAsync();
+
+            Assert.That(calls, Is.EqualTo(MountRightAfterRuns));
+        }
+
+        private static readonly string[] StoppedAgainAfterPolar = { "abort", "tracking_off", "polar", "abort", "tracking_off" };
+
+        [Test]
+        public async Task Execute_StopsTheMountAgain_AfterARunningPolarAlignmentEnds() {
+            // Polar alignment can move the mount and turn tracking on until its Stop lands.
+            var calls = new List<string>();
+            telescope.Setup(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()))
+                .Callback(() => calls.Add("abort")).Returns(Task.CompletedTask);
+            telescope.Setup(t => t.SetTrackingAsync(false, It.IsAny<CancellationToken>()))
+                .Callback(() => calls.Add("tracking_off")).Returns(Task.CompletedTask);
+            var polar = new Mock<IPolarAlignService>();
+            polar.Setup(p => p.IsActive).Returns(true);
+            polar.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .Callback(() => calls.Add("polar")).ReturnsAsync(Accepted);
+
+            await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                polarAlign: polar.Object).ExecuteAsync();
+
+            Assert.That(calls, Is.EqualTo(StoppedAgainAfterPolar));
+        }
+
+        [Test]
+        public async Task Execute_ASecondMountStopThatFaults_ReportsTheMountOnce_AndNotStopped() {
+            var aborts = 0;
+            telescope.Setup(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()))
+                .Returns(() => ++aborts == 2 ? Task.FromException(new InvalidOperationException("second abort refused")) : Task.CompletedTask);
+            telescope.Setup(t => t.SetTrackingAsync(false, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            var polar = new Mock<IPolarAlignService>();
+            polar.Setup(p => p.IsActive).Returns(true);
+            polar.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Accepted);
+
+            var result = await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                polarAlign: polar.Object).ExecuteAsync();
+
+            Assert.Multiple(() => {
+                Assert.That(result.MountStopped, Is.False);
+                Assert.That(result.FailedRungs, Is.EqualTo(StopMountFailed));
+            });
         }
 
         [Test]

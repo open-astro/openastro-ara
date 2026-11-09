@@ -616,12 +616,29 @@ class SimpleSettingsPopover extends ConsumerWidget {
         ),
     ];
     if (rows.isEmpty) return const [];
+    // The Guide shutter waits on this; Focus has the same way out.
+    final waitsOnMainFocus =
+        guide &&
+        !guideActive &&
+        ref.watch(
+          phd2SettingsProvider.select((p) => p.guiderSetupType == 'oag'),
+        ) &&
+        !ref.watch(autofocusLiveProvider.select((s) => s.focusedThisSession));
     return [
       Text(
         l10n.previewCamera,
         style: kSimpleText.copyWith(color: AraColors.textSecondary),
       ),
       ...rows,
+      if (waitsOnMainFocus) ...[
+        Text(l10n.focusGuideMainFirst, style: AraText.caption),
+        OutlinedButton(
+          key: const Key('simple-preview-already-focused'),
+          onPressed: () =>
+              ref.read(autofocusLiveProvider.notifier).markFocusedManually(),
+          child: Text(l10n.focusAlreadyInFocus),
+        ),
+      ],
     ];
   }
 }

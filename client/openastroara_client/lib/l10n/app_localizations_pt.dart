@@ -1861,7 +1861,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get estopConfirmBody =>
-      'This aborts the running sequence, halts the rotator where it is, aborts the in-flight exposure, stops the guide-camera focus loop, the Bahtinov readout, autofocus and polar alignment, stops guiding, stops the mount where it is with tracking off, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.';
+      'This aborts the running sequence, stops the mount where it is with tracking off, halts the rotator where it is, aborts the in-flight exposure, stops the guide-camera focus loop, the Bahtinov readout, autofocus and polar alignment, stops guiding, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.';
 
   @override
   String get estopCancel => 'Cancel';
@@ -5297,7 +5297,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get estopConfirmBody =>
-      'Isto aborta a sequência em andamento, para o rotador onde ele está, aborta a exposição atual, para o foco da câmera de guiagem, a leitura de Bahtinov, o autofoco e o alinhamento polar, para a guiagem, para a montagem onde ela está, com o rastreamento desligado, e desliga a luz do painel de flat e a refrigeração da câmera. Não pode ser desfeito — a sequência não é retomada.';
+      'Isto aborta a sequência em andamento, para a montagem onde ela está, com o rastreamento desligado, para o rotador onde ele está, aborta a exposição atual, para o foco da câmera de guiagem, a leitura de Bahtinov, o autofoco e o alinhamento polar, para a guiagem, e desliga a luz do painel de flat e a refrigeração da câmera. Não pode ser desfeito — a sequência não é retomada.';
 
   @override
   String get estopCancel => 'Cancelar';

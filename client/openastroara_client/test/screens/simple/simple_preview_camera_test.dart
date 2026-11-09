@@ -17,6 +17,7 @@ import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 
@@ -83,7 +84,8 @@ Future<void> _pump(WidgetTester tester, Widget child,
     String wheel = 'connected',
     bool guideRunning = false,
     CapturePhase capture = CapturePhase.idle,
-    bool guideSample = false}) async {
+    bool guideSample = false,
+    bool oag = false}) async {
   _g = _GuideFocus(guideRunning
       ? GuideFocusLive(
           status: GuideFocusStatus(
@@ -105,6 +107,7 @@ Future<void> _pump(WidgetTester tester, Widget child,
         (ref, type) async => type == 'guidecamera' ? const DeviceDriver(name: 'ZWO ASI120MM Mini') : null),
   ]);
   addTearDown(_c.dispose);
+  if (oag) _c.read(phd2SettingsProvider.notifier).setGuiderSetupType('oag');
   // Keep the autoDispose driver alive, as the panel's listeners do on a running app.
   _c.listen(deviceDriverProvider('guidecamera'), (_, _) {});
   await tester.pumpWidget(UncontrolledProviderScope(
@@ -130,6 +133,35 @@ void main() {
     await _pump(tester, const SimpleSettingsPopover(), guider: 'disconnected');
     expect(_row('main'), findsOneWidget);
     expect(_row('guide'), findsNothing);
+  });
+
+  group('an off-axis guider waiting on main focus', () {
+    const key = Key('simple-preview-already-focused');
+    Future<void> oagOnGuide(WidgetTester tester) async {
+      await _pump(tester, const SimpleSettingsPopover(), oag: true);
+      _c.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
+      await tester.pump();
+    }
+
+    testWidgets('Preview offers Already in focus, which clears the wait', (tester) async {
+      await oagOnGuide(tester);
+      await tester.tap(find.byKey(key));
+      await tester.pump();
+      expect(_c.read(autofocusLiveProvider).focusedThisSession, isTrue);
+      expect(find.byKey(key), findsNothing, reason: 'nothing is waiting any more');
+    });
+
+    testWidgets('the button is not offered on the main camera', (tester) async {
+      await _pump(tester, const SimpleSettingsPopover(), oag: true);
+      expect(find.byKey(key), findsNothing);
+    });
+
+    testWidgets('a guide scope has nothing to wait for, so no button', (tester) async {
+      await _pump(tester, const SimpleSettingsPopover());
+      _c.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
+      await tester.pump();
+      expect(find.byKey(key), findsNothing);
+    });
   });
 
   testWidgets('a running guide loop keeps its Stop while the guider status is briefly gone', (tester) async {

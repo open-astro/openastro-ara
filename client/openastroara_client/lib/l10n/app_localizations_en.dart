@@ -1861,7 +1861,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get estopConfirmBody =>
-      'This aborts the running sequence, halts the rotator where it is, aborts the in-flight exposure, stops the guide-camera focus loop, the Bahtinov readout, autofocus and polar alignment, stops guiding, stops the mount where it is with tracking off, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.';
+      'This aborts the running sequence, stops the mount where it is with tracking off, halts the rotator where it is, aborts the in-flight exposure, stops the guide-camera focus loop, the Bahtinov readout, autofocus and polar alignment, stops guiding, and switches the flat panel light and the camera cooler off. It cannot be undone — the sequence does not resume.';
 
   @override
   String get estopCancel => 'Cancel';
