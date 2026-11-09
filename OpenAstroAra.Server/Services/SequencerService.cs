@@ -69,8 +69,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     private readonly ActiveSequenceCheckpoint? _checkpoint;
     private readonly IFrameRepository? _frames;
     private readonly SequenceBodyDeserializer _deserializer;
-    // §58.12 — the unattended-shutdown countdown. Notified when a run enters
-    // PausedAwaitingUser (starts the clock) and on every explicit lifecycle
+    // §58.12 — the unattended-shutdown countdown. Notified when a failure
+    // (PauseKind.AwaitingUser, not a plan's own Prompt) suspends a run
+    // (starts the clock) and on every explicit lifecycle
     // command (the user is back — cancels it). AbortActiveRunsAsync and the
     // hosted-service shutdown path deliberately do NOT notify: those are the
     // daemon's own automated actions, not user attention.
