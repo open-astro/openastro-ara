@@ -16,7 +16,7 @@ import '../settings/settings_row.dart';
 /// Layout follows the app's shared section pattern (a [SettingsSectionHeader]
 /// + the 8pt spacing grid) so the block reads identically wherever it's
 /// embedded. The cooling-fan coordination is DAEMON-side (#1065/#1076): the
-/// server starts the bridge's Thermal-Switch Fan port BEFORE a cooler-on and
+/// server starts the profile's designated cooling fan BEFORE a cooler-on and
 /// stops it after a cooler-off. A fan that cannot be started refuses to START
 /// cooling (409, surfaced through the command's error detail); with the cooler
 /// already on, or on a cooler-off, a failed fan write never fails the call —
