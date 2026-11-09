@@ -129,6 +129,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
     setState(() {
       _applying = true;
       _status = null;
+      _notApplied = const [];
     });
     try {
       // PUT the daemon's own copy + ONLY the eight runtime-safe tuning fields
@@ -171,7 +172,9 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
       }
       if (!mounted) return;
       setState(() {
-        _status = 'Applied — guiding continues uninterrupted.';
+        _status = notApplied.isEmpty
+            ? 'Applied — guiding continues uninterrupted.'
+            : 'Applied, except what is listed below. Guiding continues.';
         _notApplied = notApplied;
       });
     } catch (e) {

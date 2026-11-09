@@ -233,6 +233,15 @@ namespace OpenAstroAra.Test {
             Assert.That(PHD2Guider.ResolveAggressiveness(LowpassNames, 0.6), Is.Null);
         }
 
+
+        [Test]
+        public void A_left_out_value_names_the_setting_it_is_about_in_one_sentence() {
+            var floor = GuiderAdvancedLimits.Apply(new GuiderAdvancedSettings { BacklashFloorMs = 200, BacklashCeilingMs = 100 }).Violations.Single();
+            Assert.That((floor.Setting, floor.Reason), Is.EqualTo(("Backlash floor", "Must not exceed the ceiling. Not sent.")));
+            var pulse = GuiderAdvancedLimits.Apply(new GuiderAdvancedSettings { BacklashEnabled = true }).Violations.Single();
+            Assert.That(pulse.Reason, Does.StartWith("Is required (20–8000 ms)"));
+        }
+
         [Test]
         public void The_dto_and_engine_record_map_both_ways() {
             var dto = new GuiderAdvancedSettingsDto(MultiStarEnabled: true, MinStarSnr: 6, MaxDecDurationMs: 1200, RaAlgorithm: "Hysteresis", DitherRaOnly: true);

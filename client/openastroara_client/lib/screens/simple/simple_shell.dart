@@ -949,11 +949,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // bottom (user, 2026-11-03).
     final simplePreflightRow = pilot != null;
     // Messages share the top row with the status pill, which keeps at most
-    // half of it; they start under the Preflight strip when it shows.
-    final statusRoom = math.min(
-      kSimpleStatusMaxWidth,
-      (width - kSimpleInset * 3) / 2,
-    );
+    // half of it, and take the whole row when no status pill shows; they
+    // start under the Preflight strip when it shows.
+    final statusRoom = _statusHeight > 0
+        ? math.min(kSimpleStatusMaxWidth, (width - kSimpleInset * 3) / 2)
+        : -kSimpleInset;
     final messagesWidth = math.min(
       kSimpleMessagesMaxWidth,
       width - kSimpleInset * 3 - statusRoom,
@@ -1034,15 +1034,18 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         : const Duration(milliseconds: 220);
     // Both slots stay filled, and with one type, or the pills moving between
     // them would shift their siblings and rebuild them from scratch.
+    final pillsLeft = kSimpleInset + (pillsBesideRail ? railShift : 0);
+    final pillsTop = panels ? messagesTop : kSimpleInset;
+    // At the pills' own place: the slot they move into animates from here.
     final emptyPillSlot = AnimatedPositioned(
       duration: Duration.zero,
-      left: 0,
-      top: 0,
+      left: pillsLeft,
+      top: pillsTop,
       child: const SizedBox.shrink(),
     );
     final messagePills = AnimatedPositioned(
-      left: kSimpleInset + (pillsBesideRail ? railShift : 0),
-      top: panels ? messagesTop : kSimpleInset,
+      left: pillsLeft,
+      top: pillsTop,
       width:
           messagesWidth - (pillsBesideRail ? railShift : 0),
       duration: motion,
@@ -1052,11 +1055,19 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
           _measure();
           return true;
         },
-        child: SizeChangedLayoutNotifier(
-          child: SimpleMessagePills(
-            key: _messagesKey,
-            onOpen: _openFromPill,
-            maxHeight: messagesRoom,
+        // Large text can outgrow the screen: past its foot the pills scroll.
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: math.max(0, height - pillsTop - kSimpleInset),
+          ),
+          child: SingleChildScrollView(
+            child: SizeChangedLayoutNotifier(
+              child: SimpleMessagePills(
+                key: _messagesKey,
+                onOpen: _openFromPill,
+                maxHeight: messagesRoom,
+              ),
+            ),
           ),
         ),
       ),

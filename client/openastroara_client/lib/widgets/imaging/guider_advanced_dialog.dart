@@ -7,6 +7,7 @@ import '../../services/guider_advanced_api.dart';
 import '../../state/focus/autofocus_live_state.dart' show describeRequestError;
 import '../../state/saved_server_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../theme/ara_metrics.dart';
 
 /// Builds a [GuiderAdvancedClient] for a server. Overridable in tests.
 final guiderAdvancedApiFactoryProvider =
@@ -62,22 +63,39 @@ class GuiderNotAppliedList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = Theme.of(context).textTheme.bodySmall;
-    return Padding(
-      padding: const EdgeInsets.only(top: 6),
-      child: Column(
-        key: const Key('guider-not-applied'),
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Not applied by the Guider',
-            style: style?.copyWith(color: AraColors.accentWarning),
-          ),
-          for (final e in entries)
-            Text(
-              '${e.setting}: ${e.reason}',
-              style: style?.copyWith(color: AraColors.textSecondary),
+    return Semantics(
+      key: const Key('guider-not-applied'),
+      // It appears after Apply, away from the button: read it out.
+      liveRegion: true,
+      container: true,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: AraSpace.s12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              spacing: AraSpace.s4,
+              children: [
+                const Icon(
+                  Icons.warning_amber_rounded,
+                  size: 14,
+                  color: AraColors.accentWarning,
+                ),
+                Expanded(
+                  child: Text(
+                    'Not applied by the guider',
+                    style: style?.copyWith(color: AraColors.accentWarning),
+                  ),
+                ),
+              ],
             ),
-        ],
+            for (final e in entries)
+              Text(
+                '${e.setting}: ${e.reason}',
+                style: style?.copyWith(color: AraColors.textSecondary),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -169,10 +187,18 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
     if (t.isEmpty) return (null, null);
     final n = num.tryParse(t);
     if (n == null || !n.isFinite || n < 0 || (n == 0 && !f.allowZero)) {
-      return (null, f.allowZero ? 'Zero or a positive number' : 'A positive number');
+      return (null, f.allowZero ? '0 or more' : 'A positive number');
     }
     if ((f.min != null && n < f.min!) || (f.max != null && n > f.max!)) {
-      return (null, 'The guider takes ${f.min ?? (f.allowZero ? 0 : '>0')}–${f.max ?? '…'}');
+      final low = f.min ?? (f.allowZero ? 0 : null);
+      return (
+        null,
+        low == null
+            ? 'Up to ${f.max}'
+            : f.max == null
+            ? '$low or more'
+            : '$low–${f.max}',
+      );
     }
     if (f.kind == GuiderAdvancedKind.integer) {
       if (n != n.roundToDouble()) return (null, 'A whole number');
@@ -275,21 +301,24 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
           }
         }
       }
+      GuiderAdvancedView? fresh;
+      try {
+        fresh = await api.getGuider();
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _draft = saved;
         _applying = false;
+        _guider = fresh ?? _guider;
         _statusIsError = multiStarProblem != null;
         _status = multiStarProblem != null
             ? 'Saved, but multi-star was not applied: $multiStarProblem'
+            : pushed && fresh != null && fresh.notApplied.isNotEmpty
+            ? 'Saved. The guider did not apply everything: see the list at the top.'
             : pushed
             ? 'Saved and sent to the guider.'
             : 'Saved to the profile — sent to the guider when it connects.';
       });
-      try {
-        final guider = await api.getGuider();
-        if (mounted) setState(() => _guider = guider);
-      } catch (_) {}
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -356,6 +385,8 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
                 ? const Center(child: CircularProgressIndicator())
                 : ListView(
                     children: [
+                      if (_guider.notApplied.isNotEmpty)
+                        GuiderNotAppliedList(_guider.notApplied),
                       for (final group in GuiderAdvancedField.groups) ...[
                         Padding(
                           padding: const EdgeInsets.only(top: 12, bottom: 4),
@@ -369,8 +400,6 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
                     ],
                   ),
           ),
-          if (_guider.notApplied.isNotEmpty)
-            GuiderNotAppliedList(_guider.notApplied),
           if (_status != null)
             Padding(
               padding: const EdgeInsets.only(top: 6),
@@ -379,7 +408,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
                 key: const Key('guider-advanced-status'),
                 style: text.bodySmall?.copyWith(
                   color: _statusIsError
-                      ? AraColors.accentError
+                      ? AraColors.errorText
                       : AraColors.textSecondary,
                 ),
               ),
@@ -390,7 +419,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
               child: Text(
                 problem,
                 key: const Key('guider-advanced-cross-field'),
-                style: text.bodySmall?.copyWith(color: AraColors.accentError),
+                style: text.bodySmall?.copyWith(color: AraColors.errorText),
               ),
             ),
           const SizedBox(height: 8),
@@ -465,6 +494,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
                 : "guider's",
             suffixText: f.unit,
             errorText: _errors[f.key],
+            errorMaxLines: 2,
           ),
           onChanged: (raw) => _onText(f, raw),
         ),
@@ -520,7 +550,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
             child: Text(
               offered.isEmpty || offered.contains(o)
                   ? o
-                  : '$o (not offered by the Guider)',
+                  : '$o (not offered)',
             ),
           ),
       ],

@@ -86,9 +86,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             var applied = 0;
             var skipped = 0;
             var notApplied = GuiderAdvancedLimits.Apply(AdvancedSettingsQuietly()).Violations
-                .Select(v => new GuiderSettingNotApplied(v.Setting, $"Not sent: it {v.Limit}.")).ToList();
+                .Select(v => new GuiderSettingNotApplied(v.Setting, v.Reason)).ToList();
             foreach (var left in notApplied) {
-                Logger.Warning($"PHD2 §63.5 push - {left.Setting} left out. {left.Reason}");
+                Logger.Warning($"PHD2 §63.5 push - {left.Setting}: {left.Reason}");
             }
             var paramNames = new Dictionary<string, IReadOnlyList<string>?>();
             foreach (var queued in messages) {

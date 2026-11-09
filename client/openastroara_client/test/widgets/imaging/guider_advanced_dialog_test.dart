@@ -5,6 +5,7 @@ import 'package:openastroara/models/guider_advanced_settings.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/guider_advanced_api.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/imaging/guider_advanced_dialog.dart';
 
 class _Fake implements GuiderAdvancedClient {
@@ -137,15 +138,15 @@ void main() {
     final maxDec = GuiderAdvancedField.all.firstWhere((f) => f.key == 'max_dec_duration_ms');
     expect(GuiderAdvancedPanelTestHooks.parse(maxDec, '0'), (0, null), reason: '0 = no Dec correction');
     expect(GuiderAdvancedPanelTestHooks.parse(snr, '0').$2, 'A positive number');
-    expect(GuiderAdvancedPanelTestHooks.parse(maxDec, '-1').$2, 'Zero or a positive number');
+    expect(GuiderAdvancedPanelTestHooks.parse(maxDec, '-1').$2, '0 or more');
     expect(GuiderAdvancedField.editText(0.125), '0.125', reason: 'full precision in the editor');
     expect(GuiderAdvancedField.editText(6.0), '6');
     expect(GuiderAdvancedField.editText(1500), '1500');
     final pulse = GuiderAdvancedField.all.firstWhere((f) => f.key == 'backlash_pulse_ms');
-    expect(GuiderAdvancedPanelTestHooks.parse(pulse, '10').$2, 'The guider takes 20–8000', reason: 'below the guider\'s minimum');
-    expect(GuiderAdvancedPanelTestHooks.parse(pulse, '9000').$2, 'The guider takes 20–8000');
+    expect(GuiderAdvancedPanelTestHooks.parse(pulse, '10').$2, '20–8000', reason: 'below the guider\'s minimum');
+    expect(GuiderAdvancedPanelTestHooks.parse(pulse, '9000').$2, '20–8000');
     expect(GuiderAdvancedPanelTestHooks.parse(pulse, '450'), (450, null));
-    expect(GuiderAdvancedPanelTestHooks.parse(maxDec, '1000001').$2, 'The guider takes 0–1000000');
+    expect(GuiderAdvancedPanelTestHooks.parse(maxDec, '1000001').$2, '0–1000000');
     expect(ms.format(1500), '1500 ms');
   });
 
@@ -323,7 +324,7 @@ void main() {
     final fake = await _pump(t);
     await t.enterText(find.byKey(const Key('ga-max_dec_duration_ms')), '-3');
     await t.pump();
-    expect(find.text('Zero or a positive number'), findsOneWidget);
+    expect(find.text('0 or more'), findsOneWidget);
     expect(
       t
           .widget<FilledButton>(find.widgetWithText(FilledButton, 'Apply'))
@@ -386,6 +387,12 @@ void main() {
       );
       expect(find.byKey(const Key('guider-not-applied')), findsOneWidget);
       expect(find.textContaining('RA aggressiveness: The current'), findsOneWidget);
+      expect(
+        find.descendant(of: find.byType(ListView), matching: find.byKey(const Key('guider-not-applied'))),
+        findsOneWidget,
+        reason: 'a long list scrolls with the settings',
+      );
+      expect(find.descendant(of: find.byKey(const Key('guider-not-applied')), matching: find.byIcon(Icons.warning_amber_rounded)), findsOneWidget);
     });
 
     testWidgets('nothing to report shows no list', (t) async {
@@ -395,7 +402,37 @@ void main() {
 
     testWidgets('a saved algorithm the guider does not offer is marked', (t) async {
       await _pump(t, profile: const GuiderAdvancedSettings({'ra_algorithm': 'ZFilter'}));
-      expect(find.textContaining('ZFilter (not offered by the Guider)'), findsWidgets);
+      expect(find.textContaining('ZFilter (not offered)'), findsWidgets);
+    });
+
+    final notLanded = GuiderAdvancedView.fromJson({
+      'connected': true,
+      'not_applied': [
+        {'setting': 'Search region', 'reason': 'Must be a whole number from 7 to 50. Not sent.'},
+      ],
+    });
+
+    testWidgets('the list is announced when it appears', (t) async {
+      await _pump(t, guider: notLanded);
+      final node = t.getSemantics(find.byKey(const Key('guider-not-applied')));
+      expect(node.flagsCollection.isLiveRegion, isTrue);
+    });
+
+    testWidgets('Apply does not read as a clean success when a setting did not land', (t) async {
+      await _pump(t, guider: notLanded);
+      await t.tap(find.widgetWithText(FilledButton, 'Apply'));
+      await t.pumpAndSettle();
+      expect(t.widget<Text>(find.byKey(const Key('guider-advanced-status'))).data, contains('did not apply'));
+    });
+
+    testWidgets('a cross-field problem reads in the error text colour', (t) async {
+      await _pump(t, profile: const GuiderAdvancedSettings({'min_star_hfd': 3.0, 'max_star_hfd': 3.0}));
+      expect(t.widget<Text>(find.byKey(const Key('guider-advanced-cross-field'))).style?.color, AraColors.errorText);
+    });
+
+    test('a range error fits a narrow field', () {
+      expect(GuiderAdvancedPanelTestHooks.parse(field('dither_scale_factor'), '101').$2, 'Up to 100');
+      expect(GuiderAdvancedPanelTestHooks.parse(field('variable_delay_long_s'), '121').$2, '0–120');
     });
   });
 }

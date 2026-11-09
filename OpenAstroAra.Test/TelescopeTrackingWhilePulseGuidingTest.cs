@@ -131,5 +131,17 @@ namespace OpenAstroAra.Test {
             Assert.That(watch.Observe(false, false, false), Is.EqualTo(TrackingWatchVerdict.Degraded));
             Assert.That(watch.Observe(false, false, false), Is.EqualTo(TrackingWatchVerdict.Lost), "a real drop under pulsing still adds up");
         }
+
+        [Test]
+        public void A_pulse_flag_that_never_clears_cannot_hide_a_drop_for_good() {
+            var watch = new MountTrackingWatch(threshold: 3, graceTicks: 0);
+            watch.Observe(tracking: true, slewing: false, parked: false);
+
+            var verdicts = Enumerable.Range(0, MountTrackingWatch.MaxPulseHoldTicks + MountTrackingWatch.DefaultDropThreshold)
+                .Select(_ => watch.Observe(false, false, false, pulseGuiding: true)).ToList();
+
+            Assert.That(verdicts[^1], Is.EqualTo(TrackingWatchVerdict.Lost));
+            Assert.That(verdicts.Take(MountTrackingWatch.MaxPulseHoldTicks), Has.None.EqualTo(TrackingWatchVerdict.Lost));
+        }
     }
 }

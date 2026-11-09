@@ -20,8 +20,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
     public sealed record GuiderSettingNotApplied(string Setting, string Reason);
 
     /// <summary><paramref name="Field"/> is the wire name, <paramref name="Setting"/> the name the imager
-    /// sees and <paramref name="Limit"/> finishes the sentence "it ...".</summary>
-    public sealed record GuiderLimitViolation(string Field, string Setting, string Limit);
+    /// sees and <paramref name="Limit"/> the rule, without a subject.</summary>
+    public sealed record GuiderLimitViolation(string Field, string Setting, string Limit) {
+        /// <summary>What the imager reads beside <see cref="Setting"/>.</summary>
+        public string Reason => $"{char.ToUpperInvariant(Limit[0])}{Limit[1..]}. Not sent.";
+    }
 
     /// <summary>
     /// #1748 — the Guider's limits for the advanced settings, in one place: the write boundary refuses a value
@@ -58,35 +61,35 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 a => a.SearchRegionPx is < 7 or > 50, a => a with { SearchRegionPx = null }),
             new("mass_change_threshold", "Mass change threshold", "must be above 0 and at most 1 (100%)",
                 a => OutOfRange(a.MassChangeThreshold, 1), a => a with { MassChangeThreshold = null }),
-            new("min_star_hfd", "Min star HFD", "must be a positive number",
+            new("min_star_hfd", "Minimum star HFD", "must be a positive number",
                 a => OutOfRange(a.MinStarHfd, double.MaxValue), a => a with { MinStarHfd = null }),
-            new("max_star_hfd", "Max star HFD", "must be a positive number",
+            new("max_star_hfd", "Maximum star HFD", "must be a positive number",
                 a => OutOfRange(a.MaxStarHfd, double.MaxValue), a => a with { MaxStarHfd = null }),
-            new("min_star_hfd", "Star HFD", "must be below the maximum star HFD",
+            new("min_star_hfd", "Minimum star HFD", "must be below the maximum star HFD",
                 a => a.MinStarHfd is double min && a.MaxStarHfd is double max && min >= max,
                 a => a with { MinStarHfd = null, MaxStarHfd = null }),
-            new("tolerate_jumps_threshold_px", "Tolerate jumps threshold", "must be above 0 and at most 100",
+            new("tolerate_jumps_threshold_px", "Jump threshold", "must be above 0 and at most 100",
                 a => OutOfRange(a.TolerateJumpsThresholdPx, 100), a => a with { TolerateJumpsThresholdPx = null }),
             new("dither_scale_factor", "Dither scale", "must be above 0 and at most 100",
                 a => OutOfRange(a.DitherScaleFactor, 100), a => a with { DitherScaleFactor = null }),
-            new("backlash_pulse_ms", "Backlash compensation", $"must be {BacklashPulseMinMs}–{BacklashPulseMaxMs} ms",
+            new("backlash_pulse_ms", "Backlash pulse", $"must be {BacklashPulseMinMs}–{BacklashPulseMaxMs} ms",
                 a => a.BacklashPulseMs is < BacklashPulseMinMs or > BacklashPulseMaxMs, NoBacklash),
             // The guider takes the enable only with a pulse width: an enable alone made it range-check the
             // pulse it already held (0) against its floor (20) and refuse the whole group on every push
             // (2026-10-18, "Floor must be in [20, 0 (PulseWidth)]").
-            new("backlash_pulse_ms", "Backlash compensation", $"({BacklashPulseMinMs}–{BacklashPulseMaxMs} ms) is required to turn backlash compensation on",
+            new("backlash_pulse_ms", "Backlash pulse", $"is required ({BacklashPulseMinMs}–{BacklashPulseMaxMs} ms) to turn backlash compensation on",
                 a => a.BacklashEnabled == true && a.BacklashPulseMs is null, NoBacklash),
-            new("backlash_floor_ms", "Backlash compensation", $"must be at least {BacklashPulseMinMs} and at most the pulse width",
+            new("backlash_floor_ms", "Backlash floor", $"must be at least {BacklashPulseMinMs} and at most the pulse width",
                 a => a.BacklashFloorMs is int floor && (floor < BacklashPulseMinMs || (a.BacklashPulseMs is int pulse && floor > pulse)), NoBacklash),
-            new("backlash_ceiling_ms", "Backlash compensation", $"must be positive, at most {BacklashPulseMaxMs} and at least the pulse width",
+            new("backlash_ceiling_ms", "Backlash ceiling", $"must be positive, at most {BacklashPulseMaxMs} and at least the pulse width",
                 a => a.BacklashCeilingMs is int ceiling && (ceiling <= 0 || ceiling > BacklashPulseMaxMs || (a.BacklashPulseMs is int pulse && ceiling < pulse)), NoBacklash),
-            new("backlash_floor_ms", "Backlash compensation", "must not exceed the ceiling",
+            new("backlash_floor_ms", "Backlash floor", "must not exceed the ceiling",
                 a => a.BacklashFloorMs is int floor && a.BacklashCeilingMs is int ceiling && floor > ceiling, NoBacklash),
-            new("variable_delay_short_s", "Variable delay", "must be whole seconds from 0 to 10",
+            new("variable_delay_short_s", "Short delay", "must be whole seconds from 0 to 10",
                 a => BadDelay(a.VariableDelayShortS, 10), NoVariableDelay),
-            new("variable_delay_long_s", "Variable delay", "must be whole seconds from 0 to 120",
+            new("variable_delay_long_s", "Long delay", "must be whole seconds from 0 to 120",
                 a => BadDelay(a.VariableDelayLongS, 120), NoVariableDelay),
-            new("variable_delay_short_s", "Variable delay", "must not exceed the long delay",
+            new("variable_delay_short_s", "Short delay", "must not exceed the long delay",
                 a => a.VariableDelayShortS is double s && a.VariableDelayLongS is double l && s > l, NoVariableDelay),
             new("ra_algorithm", "RA algorithm", $"must be one of: {string.Join(", ", RaAlgorithms)}",
                 a => Unknown(a.RaAlgorithm, RaAlgorithms), a => a with { RaAlgorithm = null }),

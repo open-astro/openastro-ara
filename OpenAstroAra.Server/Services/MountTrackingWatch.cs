@@ -63,6 +63,9 @@ public sealed class MountTrackingWatch {
     /// (e.g. a slew commanded but <c>Slewing</c> not asserted).</summary>
     public const int DefaultCommandGraceTicks = 5;
 
+    /// <summary>Consecutive tracking-off ticks a guide pulse may explain (≈30 s at the 2 s tick).</summary>
+    public const int MaxPulseHoldTicks = 15;
+
     private readonly int _threshold;
     private readonly int _graceTicks;
     private bool _expectTracking;
@@ -74,6 +77,7 @@ public sealed class MountTrackingWatch {
     private bool? _commandedTracking;
     private int _dropStreak;
     private int _graceRemaining;
+    private int _pulseHeldTicks;
     private bool _episodeFired;
 
     public MountTrackingWatch(int threshold = DefaultDropThreshold, int graceTicks = DefaultCommandGraceTicks) {
@@ -113,6 +117,7 @@ public sealed class MountTrackingWatch {
 
     /// <summary>Fresh session — called at connect adoption and on connection-lost trip.</summary>
     public void Reset() {
+        _pulseHeldTicks = 0;
         _expectTracking = false;
         _commandedTracking = null;
         _dropStreak = 0;
@@ -151,6 +156,7 @@ public sealed class MountTrackingWatch {
             // Arms the watch even for handset/driver-initiated tracking the daemon never commanded.
             _expectTracking = true;
             _dropStreak = 0;
+            _pulseHeldTicks = 0;
             if (_episodeFired) {
                 _episodeFired = false;
                 return TrackingWatchVerdict.Recovered;
@@ -162,7 +168,9 @@ public sealed class MountTrackingWatch {
         }
         // #1732 — an iOptron reads Tracking false for the length of a guide pulse. Such a tick says nothing
         // either way: the streak is held, not cleared, so a real drop under constant pulsing still adds up.
-        if (pulseGuiding) {
+        // The hold is bounded, so a pulse flag that never clears cannot hide a drop for good.
+        if (pulseGuiding && _pulseHeldTicks < MaxPulseHoldTicks) {
+            _pulseHeldTicks++;
             return TrackingWatchVerdict.Degraded;
         }
         _dropStreak++;
