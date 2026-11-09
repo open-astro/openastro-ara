@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-09T18:40:00+13:00",
+  "generatedAt": "2026-11-09T20:34:13+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -749,7 +749,7 @@
       "name": "Status Pill (Simple Mode)",
       "kind": "custom",
       "refersTo": "status-pill-simple",
-      "description": "Top-right pill, one per thing happening: status dot (blinks green while working, a blue ring while changing), label, dim detail, an optional progress line along its foot; at most 300 px, one line, the detail ellipsised.",
+      "description": "Top-right pill, one per thing happening: status dot (blinks green while working, a blue ring while changing), label, dim detail, an optional progress line along its foot; at most 300 px scaled with the text, up to two lines; stays at least 1 s, then fades over 200 ms. A pill that ends past the third clears at once; the popovers below start 8 pt under the top pill, measured. A new state of the same kind gets its own 1 s minimum.",
       "html": "<div class=\"ds-spill-stack\"><div class=\"ds-spill\"><i class=\"ds-dot ds-dot-work\"></i><span>Plan <em>Cooling camera to -10 °C</em></span><b style=\"width:40%\"></b></div><div class=\"ds-spill\"><i class=\"ds-dot ds-dot-ring\"></i><span>Parking</span></div></div>",
       "css": ".ds-spill-stack{display:flex;flex-direction:column;gap:8px;align-items:flex-end;padding:24px;border-radius:10px;background:radial-gradient(ellipse at 50% 45%,#5a5a5a 0,#2a2a2a 45%,#0d0d0d 80%)} .ds-spill{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;position:relative;display:flex;align-items:center;gap:8px;height:48px;max-width:300px;box-sizing:border-box;padding:0 16px;background:rgba(26,26,26,.90);-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px);border-radius:10px;color:#E0E0E0;font-size:14px;cursor:pointer} .ds-spill span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .ds-spill em{font-style:normal;color:#A0A0A0;margin-left:8px} .ds-spill b{position:absolute;left:16px;bottom:10px;height:3px;border-radius:2px;background:#42A5F5} .ds-spill:focus-visible{outline:2px solid #42A5F5;outline-offset:2px} .ds-dot{flex:none;width:10px;height:10px;border-radius:50%;box-sizing:border-box} .ds-dot-work{background:#4CAF50;animation:ds-blink .7s ease-in-out infinite alternate} .ds-dot-ring{border:2px solid #42A5F5} @keyframes ds-blink{to{opacity:.35}} @media (prefers-reduced-motion:reduce){.ds-dot-work{animation:none}}"
     },
@@ -829,7 +829,7 @@
       "name": "Ara Sheet (Simple Mode)",
       "kind": "card",
       "refersTo": "ara-sheet-simple",
-      "description": "Opened from the mark: versions, rig and profile; as wide as its text from 280 to 420 px; no Settings row.",
+      "description": "Opened from the mark, beside the left rail: versions with a Licenses link at the title line's end, then rig and profile at the version lines' pitch, each with a Change button whose 44 pt target spends its height away from the other; a link's hover, focus and press tint fits its word, not the target; as wide as its text from 280 to 420 px; no Settings row. Each Change button is a real button to a screen reader, named for what it changes.",
       "html": "<div class=\"ds-ara-sheet\"><div class=\"ds-ara-sheet-title\">OpenAstro Ara</div><table><tr><td>This app</td><td>0.0.1</td></tr><tr><td>Ara server</td><td>1.0.0.0</td></tr><tr><td>Guider</td><td>2.1.0</td></tr><tr><td>Rig</td><td>astro</td></tr><tr><td>Profile</td><td>Backyard Rig</td></tr></table></div>",
       "css": ".ds-ara-sheet { display: inline-block; min-width: 280px; max-width: 420px; padding: 16px; background: rgba(26,26,26,.9); border-radius: 10px; color: #E0E0E0; font: 14px system-ui, sans-serif; } .ds-ara-sheet-title { font-weight: 600; margin-bottom: 8px; } .ds-ara-sheet table { border-collapse: collapse; } .ds-ara-sheet td { padding: 0 0 4px; vertical-align: baseline; } .ds-ara-sheet td:first-child { color: #A0A0A0; padding-right: 24px; }"
     },
@@ -900,7 +900,7 @@
       },
       {
         "name": "Simple Mode's rule: 4×90% and KISS",
-        "body": "Simple Mode covers the top 90 % most used features, for 90 % of the people, 90 % of the time, 90 % faster, with only the bare minimum for a successful imaging night: defaults and automation first, self-recovery doing the work, and a small set of controls where the user needs them (ASIAir as the reference); a value one Simple Mode control sets is not repeated elsewhere, and nothing links to the full UI. No redundant design: each thing lives in one place, and interactions are contextual (tap the thing to act on it). Its Settings (a sheet over the image with a few controls, ASIAir as the reference; one window per device, the same one its top-bar dot opens; Connect / Disconnect on Settings › Devices only) are shaped in `design/briefs/simple-mode-settings.md` (2026-11-03).",
+        "body": "Simple Mode covers the top 90 % most used features, for 90 % of the people, 90 % of the time, 90 % faster, with only the bare minimum for a successful imaging night: defaults and automation first, self-recovery doing the work, and a small set of controls where the user needs them (ASIAir as the reference); a value one Simple Mode control sets is not repeated elsewhere, and the strip's Full UI button is the one link to the full UI. No redundant design: each thing lives in one place, and interactions are contextual (tap the thing to act on it). Its Settings (a sheet over the image with a few controls, ASIAir as the reference; one window per device, the same one its top-bar dot opens; Connect / Disconnect on Settings › Devices only) are shaped in `design/briefs/simple-mode-settings.md` (2026-11-03).",
         "section": "components"
       },
       {

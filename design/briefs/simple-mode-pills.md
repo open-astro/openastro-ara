@@ -20,7 +20,7 @@ Shaped 2026-11-02 (`/impeccable shape`). Paperclip: ALP-4825 (part of ALP-4810).
 
 Decided on the mock (2026-11-02, option A, one line): the corners are re-dealt.
 
-- Message pills stack in the **top-left** corner, under the strip and under the Night Setup strip or offer when one shows.
+- Message pills stack in the **top-left** corner, under the strip and under the Preflight strip or offer when one shows.
 - The camera status pill moves to the **top-right** corner; the two share the row (status at most 300 px or half the row, messages the rest up to 420 px), so neither is ever under the other.
 - The plan squares move to the **bottom-right**, above the bottom row.
 - Newest on top; as many as fit above the left rail (two on a landscape iPad), the rest fold into "+N more", at the end of the newest pill when there is no room below.

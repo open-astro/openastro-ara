@@ -112,7 +112,7 @@ Future<ProviderContainer> _pump(WidgetTester tester, Map<String, dynamic> wire,
 }
 
 void main() {
-  group('what the guider is doing, for the shutter and Guided Run', () {
+  group('what the guider is doing, for the shutter and Preflight', () {
     GuiderStatus at(String state, String runtime) =>
         GuiderStatus.fromJson({'device_id': 'g', 'name': 'PHD2', 'state': state, 'runtime': {'state': runtime}});
     test('active: anything the red square stops', () {
@@ -241,7 +241,7 @@ void main() {
     final tile = find.byKey(const Key('simple-guide-exposure'));
     expect(find.descendant(of: tile, matching: find.text('2 s')), findsOneWidget);
     final slider = tester.widget<Slider>(find.byKey(const Key('simple-guider-gain')));
-    expect((slider.min, slider.max), (0.0, 100.0), reason: "the Guide Camera window's slider, one value");
+    expect((slider.min, slider.max), (0.0, 100.0), reason: "the Camera (Guide) window's slider, one value");
     slider.onChangeEnd!(70);
     await tester.pump();
     expect(c.read(phd2SettingsProvider).guideCameraGain, 70);

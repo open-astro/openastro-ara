@@ -12,8 +12,8 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../widgets/imaging/polar_align_panel.dart';
-import 'simple_night_setup.dart'
-    show NightSetupStep, nightSetupProvider, simpleNightSetupNext;
+import 'simple_preflight.dart'
+    show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
 import 'simple_preview_panel.dart'
     show
         SimplePresetTile,
@@ -237,7 +237,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final inNightSetup = ref.watch(nightSetupProvider) == NightSetupStep.polarAlign;
+    final inSimplePreflight = ref.watch(simplePreflightProvider) == SimplePreflightStep.polarAlign;
     final live = ref.watch(polarAlignLiveProvider);
     ref.listen(
       polarAlignLiveProvider,
@@ -273,7 +273,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
       child: Row(
         spacing: AraSpace.s8,
         children: [
-          Icon(hint.$1, size: 44, color: AraColors.textPrimary),
+          Icon(hint.$1, size: 70, color: AraColors.textPrimary),
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -303,6 +303,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
             dimension: 180,
             child: CustomPaint(
               painter: BullseyePainter(
+                edgeInset: 1,
                 dotFraction: bullseyeDotFraction(
                   live.azErrorArcmin,
                   live.altErrorArcmin,
@@ -495,20 +496,20 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 onPressed: _busy
                     ? null
                     : () async {
-                        final pilot = ref.read(nightSetupProvider.notifier);
+                        final pilot = ref.read(simplePreflightProvider.notifier);
                         final done = await _run(
                           l10n.polarActionComplete,
                           (api) => api.complete(),
                         );
-                        if (inNightSetup && done) pilot.polarDone();
+                        if (inSimplePreflight && done) pilot.polarDone();
                       },
                 child: Text(
-                  !inNightSetup
+                  !inSimplePreflight
                       ? l10n.polarDone
-                      : simpleNightSetupNext(ref, after: NightSetupStep.polarAlign) ==
-                              NightSetupStep.guide
-                          ? l10n.guidedNextGuide
-                          : l10n.guidedDoneStartImaging,
+                      : simplePreflightNext(ref, after: SimplePreflightStep.polarAlign) ==
+                              SimplePreflightStep.guide
+                          ? l10n.preflightNextGuide
+                          : l10n.preflightDoneStartImaging,
                 ),
               ),
             // A null stage is an older daemon's one-stage routine: the fine buttons.
@@ -557,27 +558,27 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                               // Read before the await: the panel may have
                               // closed by the time the rig answers.
                               final pilot = ref.read(
-                                nightSetupProvider.notifier,
+                                simplePreflightProvider.notifier,
                               );
                               final done = await _run(
                                 l10n.polarActionComplete,
                                 (api) => api.complete(),
                               );
-                              // In Night Setup, Done moves on (the routine
+                              // In Preflight, Done moves on (the routine
                               // is complete: nothing to stop).
-                              if (inNightSetup && done) pilot.polarDone();
+                              if (inSimplePreflight && done) pilot.polarDone();
                             }
                           : null,
                       child: Text(
-                        !inNightSetup
+                        !inSimplePreflight
                             ? l10n.polarDone
-                            : simpleNightSetupNext(
+                            : simplePreflightNext(
                                     ref,
-                                    after: NightSetupStep.polarAlign,
+                                    after: SimplePreflightStep.polarAlign,
                                   ) ==
-                                  NightSetupStep.guide
-                            ? l10n.guidedNextGuide
-                            : l10n.guidedDoneStartImaging,
+                                  SimplePreflightStep.guide
+                            ? l10n.preflightNextGuide
+                            : l10n.preflightDoneStartImaging,
                       ),
                     ),
                   ),

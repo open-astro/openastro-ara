@@ -68,7 +68,7 @@
   "@safetySilence": {
     "description": "Simple Mode safety alarm: the button that stops the sound and closes the warning"
   },
-  "deviceCamera": "Main Camera",
+  "deviceCamera": "Camera (Main)",
   "@deviceCamera": {
     "description": "Camera window title, before the camera's name"
   },
@@ -1372,7 +1372,7 @@
   "@searchSectionDevices": {
     "description": "Simple Mode search panel: name of the Settings sheet's Devices section, shown beside a setting result (and the result for the section itself)"
   },
-  "searchSectionCamera": "Main Camera",
+  "searchSectionCamera": "Camera (Main)",
   "@searchSectionCamera": {
     "description": "Simple Mode search panel: name of the Settings sheet's Camera section, shown beside a setting result (and the result for the section itself)"
   },
@@ -1384,7 +1384,7 @@
   "@searchSectionFocuser": {
     "description": "Simple Mode search panel: name of the Settings sheet's Focuser section, shown beside a setting result (and the result for the section itself)"
   },
-  "searchSectionGuider": "Guide Camera",
+  "searchSectionGuider": "Camera (Guide)",
   "@searchSectionGuider": {
     "description": "Simple Mode search panel: name of the Settings sheet's Guide Camera section, shown beside a setting result (and the result for the section itself)"
   },
@@ -1568,25 +1568,25 @@
   "@searchWordsDither": {
     "description": "Simple Mode search panel: never shown: space-separated lower-case words that also find this setting; translate as search words people might type"
   },
-  "nightSetupStepFocus": "Focus",
-  "@nightSetupStepFocus": {
-    "description": "Simple Mode Night Setup strip: step name: autofocus"
+  "simplePreflightStepFocus": "Focus",
+  "@simplePreflightStepFocus": {
+    "description": "Simple Mode Preflight strip: step name: autofocus"
   },
-  "nightSetupStepPolarAlign": "Polar align",
-  "@nightSetupStepPolarAlign": {
-    "description": "Simple Mode Night Setup strip: step name: polar alignment"
+  "simplePreflightStepPolarAlign": "Polar align",
+  "@simplePreflightStepPolarAlign": {
+    "description": "Simple Mode Preflight strip: step name: polar alignment"
   },
-  "nightSetupStepPlan": "Plan",
-  "@nightSetupStepPlan": {
-    "description": "Simple Mode Night Setup strip: step name: the imaging plan"
+  "simplePreflightStepPlan": "Plan",
+  "@simplePreflightStepPlan": {
+    "description": "Simple Mode Preflight strip: step name: the imaging plan"
   },
-  "nightSetupStepGuide": "Guide",
-  "@nightSetupStepGuide": {
-    "description": "Night Setup's step that starts guiding"
+  "simplePreflightStepGuide": "Guide",
+  "@simplePreflightStepGuide": {
+    "description": "Preflight's step that starts guiding"
   },
-  "nightSetupStepDone": "{step}, done",
-  "@nightSetupStepDone": {
-    "description": "Simple Mode Night Setup strip: screen-reader label of a step done tonight",
+  "simplePreflightStepDone": "{step}, done",
+  "@simplePreflightStepDone": {
+    "description": "Simple Mode Preflight strip: screen-reader label of a step done tonight",
     "placeholders": {
       "step": {
         "type": "String",
@@ -1594,9 +1594,9 @@
       }
     }
   },
-  "nightSetupStepSkipped": "{step}, skipped",
-  "@nightSetupStepSkipped": {
-    "description": "Simple Mode Night Setup strip: screen-reader label of a skipped step",
+  "simplePreflightStepSkipped": "{step}, skipped",
+  "@simplePreflightStepSkipped": {
+    "description": "Simple Mode Preflight strip: screen-reader label of a skipped step",
     "placeholders": {
       "step": {
         "type": "String",
@@ -1604,9 +1604,9 @@
       }
     }
   },
-  "nightSetupStepCurrent": "{step}, current step",
-  "@nightSetupStepCurrent": {
-    "description": "Simple Mode Night Setup strip: screen-reader label of the current step",
+  "simplePreflightStepCurrent": "{step}, current step",
+  "@simplePreflightStepCurrent": {
+    "description": "Simple Mode Preflight strip: screen-reader label of the current step",
     "placeholders": {
       "step": {
         "type": "String",
@@ -1614,9 +1614,9 @@
       }
     }
   },
-  "nightSetupStepNext": "{step}, next",
-  "@nightSetupStepNext": {
-    "description": "Simple Mode Night Setup strip: screen-reader label of a step still ahead",
+  "simplePreflightStepNext": "{step}, next",
+  "@simplePreflightStepNext": {
+    "description": "Simple Mode Preflight strip: screen-reader label of a step still ahead",
     "placeholders": {
       "step": {
         "type": "String",
@@ -1624,16 +1624,16 @@
       }
     }
   },
-  "nightSetupBack": "Back",
-  "@nightSetupBack": {
-    "description": "Simple Mode Night Setup strip: button that goes back one step"
+  "simplePreflightBack": "Back",
+  "@simplePreflightBack": {
+    "description": "Simple Mode Preflight strip: button that goes back one step"
   },
-  "nightSetupSkip": "Skip",
-  "@nightSetupSkip": {
-    "description": "Simple Mode Night Setup strip: button that skips the current step"
+  "simplePreflightSkip": "Skip",
+  "@simplePreflightSkip": {
+    "description": "Simple Mode Preflight strip: button that skips the current step"
   },
-  "shellModeNightSetup": "Night Setup",
-  "@shellModeNightSetup": {
+  "shellModePreflight": "Preflight",
+  "@shellModePreflight": {
     "description": "Simple Mode mode name (mode grid, Mode: label for screen readers)"
   },
   "shellModePreview": "Preview",
@@ -1656,9 +1656,9 @@
   "@shellRailPolarAlign": {
     "description": "Simple Mode right rail: short name of Polar align (60 px wide rail, keep very short)"
   },
-  "shellRailNightSetup": "Setup",
-  "@shellRailNightSetup": {
-    "description": "Simple Mode right rail: short name of Night Setup (60 px wide rail, keep very short)"
+  "shellRailPreflight": "Preflight",
+  "@shellRailPreflight": {
+    "description": "Simple Mode right rail: the full name of Preflight"
   },
   "shellStopAgain": "Press {shortcut} again to stop the run",
   "@shellStopAgain": {
@@ -1781,7 +1781,7 @@
   "@shellSectionDevices": {
     "description": "Simple Mode Settings section: the list of devices"
   },
-  "shellSectionCamera": "Main Camera",
+  "shellSectionCamera": "Camera (Main)",
   "@shellSectionCamera": {
     "description": "Simple Mode Settings section and device row: the camera"
   },
@@ -1793,7 +1793,7 @@
   "@shellSectionFocuser": {
     "description": "Simple Mode Settings section and device row: the focuser"
   },
-  "shellSectionGuider": "Guide Camera",
+  "shellSectionGuider": "Camera (Guide)",
   "@shellSectionGuider": {
     "description": "Simple Mode Settings section and device row: the guide camera"
   },
@@ -1986,6 +1986,25 @@
   "shellPermanentPierHint": "Skips polar alignment",
   "@shellPermanentPierHint": {
     "description": "Simple Mode Settings › Rig: hint under the Permanent pier switch"
+  },
+  "previewPreflightWaiting": "{step}: waiting for you",
+  "@previewPreflightWaiting": {
+    "description": "Simple Mode status pill: a Preflight step with nothing running",
+    "placeholders": {
+      "step": {}
+    }
+  },
+  "shellFullUi": "Full UI",
+  "@shellFullUi": {
+    "description": "Simple Mode status strip: tooltip of the button back to the Full UI"
+  },
+  "shellOpenSourceLicenses": "Open-source licenses",
+  "@shellOpenSourceLicenses": {
+    "description": "OpenAstro Ara sheet: screen-reader name of the link to the licenses page"
+  },
+  "shellLicenses": "Licenses",
+  "@shellLicenses": {
+    "description": "OpenAstro Ara sheet: short link to the licenses page on the title line"
   },
   "shellSimpleMode": "Simple Mode",
   "@shellSimpleMode": {
@@ -2494,7 +2513,7 @@
   },
   "planRigUnreachable": "Couldn't reach the rig. Check the connection and try again.",
   "@planRigUnreachable": {
-    "description": "Plan sheet / Night Setup: Add to queue got no answer from the rig (saved nothing); shown as a pill"
+    "description": "Plan sheet / Preflight: Add to queue got no answer from the rig (saved nothing); shown as a pill"
   },
   "planActionCreate": "create the plan",
   "@planActionCreate": {
@@ -2542,7 +2561,7 @@
   },
   "planQueueBusy": "The queue is still updating on the rig. Try again in a moment.",
   "@planQueueBusy": {
-    "description": "Message pill: Start (Night Setup's last Done) while an edit or reorder of the queue is still on its way"
+    "description": "Message pill: Start (Preflight's last Done) while an edit or reorder of the queue is still on its way"
   },
   "shellLanguage": "Language",
   "shellLanguageSystem": "System",
@@ -3519,25 +3538,25 @@
   "@focusScopeGuide": {
     "description": "Focus panel: focus the guide camera (short)"
   },
-  "guidedNextFocus": "Next: Focus",
-  "@guidedNextFocus": {
-    "description": "Night Setup plan step: green button, on to focusing"
+  "preflightNextFocus": "Next: Focus",
+  "@preflightNextFocus": {
+    "description": "Preflight plan step: green button, on to focusing"
   },
-  "guidedNextPolarAlign": "Next: Polar align",
-  "@guidedNextPolarAlign": {
-    "description": "Night Setup plan step: green button, on to polar alignment"
+  "preflightNextPolarAlign": "Next: Polar align",
+  "@preflightNextPolarAlign": {
+    "description": "Preflight plan step: green button, on to polar alignment"
   },
-  "guidedStartImaging": "Start imaging",
-  "@guidedStartImaging": {
-    "description": "Night Setup plan step: green button when focus and polar alignment are done already"
+  "preflightStartImaging": "Start imaging",
+  "@preflightStartImaging": {
+    "description": "Preflight plan step: green button when focus and polar alignment are done already"
   },
-  "guidedImagingStartsAfter": "Imaging starts after focus and polar alignment.",
-  "@guidedImagingStartsAfter": {
-    "description": "Night Setup plan step: line above the buttons"
+  "preflightImagingStartsAfter": "Imaging starts after focus and polar alignment.",
+  "@preflightImagingStartsAfter": {
+    "description": "Preflight plan step: line above the buttons"
   },
-  "guidedDoneStartImaging": "Done · Start imaging",
-  "@guidedDoneStartImaging": {
-    "description": "Night Setup: the last setup step's green Done, which starts imaging"
+  "preflightDoneStartImaging": "Done · Start imaging",
+  "@preflightDoneStartImaging": {
+    "description": "Preflight: the last setup step's green Done, which starts imaging"
   },
   "shellGuideFocalLength": "Guide scope focal length",
   "shellGuidePixelSize": "Guide camera pixel size",
@@ -3555,9 +3574,9 @@
   "@shellModeGuide": {
     "description": "Guider mode: the guider's settings and guiding with the guide camera, started by the shutter"
   },
-  "guidedNextGuide": "Next: Guide",
-  "@guidedNextGuide": {
-    "description": "Guided Run button moving on to the Guide step"
+  "preflightNextGuide": "Next: Guide",
+  "@preflightNextGuide": {
+    "description": "Preflight button moving on to the Guide step"
   },
   "guideStart": "Start guiding",
   "@guideStart": {
@@ -3591,7 +3610,7 @@
   "@guideConnectFirst": {
     "description": "Guide panel hint with no guider"
   },
-  "deviceGuiderCamera": "Guide Camera",
+  "deviceGuiderCamera": "Camera (Guide)",
   "@deviceGuiderCamera": {
     "description": "The guide camera's device window title"
   },
@@ -4551,5 +4570,61 @@
   "deviceChooserFindAction": "find devices",
   "@deviceChooserFindAction": {
     "description": "After Couldn't"
+  },
+  "stopMountAction": "stop the mount",
+  "@stopMountAction": {
+    "description": "After Couldn't: the Stop Mount request failed"
+  },
+  "stopMountNoServer": "Stop Mount was not issued — no server connection.",
+  "@stopMountNoServer": {
+    "description": "Message pill: Stop Mount could not be sent, no server"
+  },
+  "stopMountFailed": "{reason} Try Stop Mount again.",
+  "@stopMountFailed": {
+    "description": "Message pill: Stop Mount failed. reason is a whole sentence",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "focusChartFirstProbe": "Waiting for the first probe…",
+  "@focusChartFirstProbe": {
+    "description": "V-curve chart: autofocus is running, no probe yet"
+  },
+  "focusChartEmpty": "Run autofocus to see the V-curve.",
+  "@focusChartEmpty": {
+    "description": "V-curve chart: nothing measured yet"
+  },
+  "focusChartPosition": "Focuser position",
+  "@focusChartPosition": {
+    "description": "V-curve chart: bottom axis name"
+  },
+  "focusChartFit": "fit {position}",
+  "@focusChartFit": {
+    "description": "V-curve chart: marker at the fitted best position",
+    "placeholders": {
+      "position": {
+        "type": "int"
+      }
+    }
+  },
+  "focusChartCalibrated": "calibrated {position}",
+  "@focusChartCalibrated": {
+    "description": "V-curve chart: marker at the calibrated best position",
+    "placeholders": {
+      "position": {
+        "type": "int"
+      }
+    }
+  },
+  "focusChartFocus": "focus {position}",
+  "@focusChartFocus": {
+    "description": "V-curve chart: marker at the final focus position",
+    "placeholders": {
+      "position": {
+        "type": "int"
+      }
+    }
   }
 }

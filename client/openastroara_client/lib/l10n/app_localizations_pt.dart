@@ -66,7 +66,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get safetySilence => 'Silence alarm';
 
   @override
-  String get deviceCamera => 'Main Camera';
+  String get deviceCamera => 'Camera (Main)';
 
   @override
   String get deviceMount => 'Mount';
@@ -1006,7 +1006,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get searchSectionDevices => 'Devices';
 
   @override
-  String get searchSectionCamera => 'Main Camera';
+  String get searchSectionCamera => 'Camera (Main)';
 
   @override
   String get searchSectionMount => 'Mount';
@@ -1015,7 +1015,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get searchSectionFocuser => 'Focuser';
 
   @override
-  String get searchSectionGuider => 'Guide Camera';
+  String get searchSectionGuider => 'Camera (Guide)';
 
   @override
   String get searchSettingAperture => 'Main scope aperture';
@@ -1153,45 +1153,45 @@ class AppLocalizationsPt extends AppLocalizations {
   String get searchWordsDither => 'guiding dithering';
 
   @override
-  String get nightSetupStepFocus => 'Focus';
+  String get simplePreflightStepFocus => 'Focus';
 
   @override
-  String get nightSetupStepPolarAlign => 'Polar align';
+  String get simplePreflightStepPolarAlign => 'Polar align';
 
   @override
-  String get nightSetupStepPlan => 'Plan';
+  String get simplePreflightStepPlan => 'Plan';
 
   @override
-  String get nightSetupStepGuide => 'Guide';
+  String get simplePreflightStepGuide => 'Guide';
 
   @override
-  String nightSetupStepDone(String step) {
+  String simplePreflightStepDone(String step) {
     return '$step, done';
   }
 
   @override
-  String nightSetupStepSkipped(String step) {
+  String simplePreflightStepSkipped(String step) {
     return '$step, skipped';
   }
 
   @override
-  String nightSetupStepCurrent(String step) {
+  String simplePreflightStepCurrent(String step) {
     return '$step, current step';
   }
 
   @override
-  String nightSetupStepNext(String step) {
+  String simplePreflightStepNext(String step) {
     return '$step, next';
   }
 
   @override
-  String get nightSetupBack => 'Back';
+  String get simplePreflightBack => 'Back';
 
   @override
-  String get nightSetupSkip => 'Skip';
+  String get simplePreflightSkip => 'Skip';
 
   @override
-  String get shellModeNightSetup => 'Night Setup';
+  String get shellModePreflight => 'Preflight';
 
   @override
   String get shellModePreview => 'Preview';
@@ -1209,7 +1209,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellRailPolarAlign => 'P.A.';
 
   @override
-  String get shellRailNightSetup => 'Setup';
+  String get shellRailPreflight => 'Preflight';
 
   @override
   String shellStopAgain(String shortcut) {
@@ -1294,7 +1294,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellSectionDevices => 'Devices';
 
   @override
-  String get shellSectionCamera => 'Main Camera';
+  String get shellSectionCamera => 'Camera (Main)';
 
   @override
   String get shellSectionMount => 'Mount';
@@ -1303,7 +1303,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellSectionFocuser => 'Focuser';
 
   @override
-  String get shellSectionGuider => 'Guide Camera';
+  String get shellSectionGuider => 'Camera (Guide)';
 
   @override
   String get shellRigNotConnected => 'Rig not connected';
@@ -1436,6 +1436,20 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get shellPermanentPierHint => 'Skips polar alignment';
+
+  @override
+  String previewPreflightWaiting(Object step) {
+    return '$step: waiting for you';
+  }
+
+  @override
+  String get shellFullUi => 'Full UI';
+
+  @override
+  String get shellOpenSourceLicenses => 'Open-source licenses';
+
+  @override
+  String get shellLicenses => 'Licenses';
 
   @override
   String get shellSimpleMode => 'Simple Mode';
@@ -2509,20 +2523,20 @@ class AppLocalizationsPt extends AppLocalizations {
   String get focusScopeGuide => 'Guide';
 
   @override
-  String get guidedNextFocus => 'Next: Focus';
+  String get preflightNextFocus => 'Next: Focus';
 
   @override
-  String get guidedNextPolarAlign => 'Next: Polar align';
+  String get preflightNextPolarAlign => 'Next: Polar align';
 
   @override
-  String get guidedStartImaging => 'Start imaging';
+  String get preflightStartImaging => 'Start imaging';
 
   @override
-  String get guidedImagingStartsAfter =>
+  String get preflightImagingStartsAfter =>
       'Imaging starts after focus and polar alignment.';
 
   @override
-  String get guidedDoneStartImaging => 'Done · Start imaging';
+  String get preflightDoneStartImaging => 'Done · Start imaging';
 
   @override
   String get shellGuideFocalLength => 'Guide scope focal length';
@@ -2538,7 +2552,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellModeGuide => 'Guider';
 
   @override
-  String get guidedNextGuide => 'Next: Guide';
+  String get preflightNextGuide => 'Next: Guide';
 
   @override
   String get guideStart => 'Start guiding';
@@ -2566,7 +2580,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get guideConnectFirst => 'Connect the guider in Settings › Devices.';
 
   @override
-  String get deviceGuiderCamera => 'Guide Camera';
+  String get deviceGuiderCamera => 'Camera (Guide)';
 
   @override
   String get shellNoDevices => 'No devices connected';
@@ -3372,6 +3386,42 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get deviceChooserFindAction => 'find devices';
+
+  @override
+  String get stopMountAction => 'stop the mount';
+
+  @override
+  String get stopMountNoServer =>
+      'Stop Mount was not issued — no server connection.';
+
+  @override
+  String stopMountFailed(String reason) {
+    return '$reason Try Stop Mount again.';
+  }
+
+  @override
+  String get focusChartFirstProbe => 'Waiting for the first probe…';
+
+  @override
+  String get focusChartEmpty => 'Run autofocus to see the V-curve.';
+
+  @override
+  String get focusChartPosition => 'Focuser position';
+
+  @override
+  String focusChartFit(int position) {
+    return 'fit $position';
+  }
+
+  @override
+  String focusChartCalibrated(int position) {
+    return 'calibrated $position';
+  }
+
+  @override
+  String focusChartFocus(int position) {
+    return 'focus $position';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -3435,7 +3485,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get safetySilence => 'Silenciar alarme';
 
   @override
-  String get deviceCamera => 'Câmera principal';
+  String get deviceCamera => 'Câmera (principal)';
 
   @override
   String get deviceMount => 'Montagem';
@@ -4389,7 +4439,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get searchSectionDevices => 'Dispositivos';
 
   @override
-  String get searchSectionCamera => 'Câmera principal';
+  String get searchSectionCamera => 'Câmera (principal)';
 
   @override
   String get searchSectionMount => 'Montagem';
@@ -4398,7 +4448,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get searchSectionFocuser => 'Focalizador';
 
   @override
-  String get searchSectionGuider => 'Câmera de guiagem';
+  String get searchSectionGuider => 'Câmera (guiagem)';
 
   @override
   String get searchSettingAperture => 'Abertura do telescópio principal';
@@ -4538,45 +4588,45 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get searchWordsDither => 'guiagem dithering';
 
   @override
-  String get nightSetupStepFocus => 'Foco';
+  String get simplePreflightStepFocus => 'Foco';
 
   @override
-  String get nightSetupStepPolarAlign => 'Alinh. polar';
+  String get simplePreflightStepPolarAlign => 'Alinh. polar';
 
   @override
-  String get nightSetupStepPlan => 'Plano';
+  String get simplePreflightStepPlan => 'Plano';
 
   @override
-  String get nightSetupStepGuide => 'Guiagem';
+  String get simplePreflightStepGuide => 'Guiagem';
 
   @override
-  String nightSetupStepDone(String step) {
+  String simplePreflightStepDone(String step) {
     return '$step, concluído';
   }
 
   @override
-  String nightSetupStepSkipped(String step) {
+  String simplePreflightStepSkipped(String step) {
     return '$step, pulado';
   }
 
   @override
-  String nightSetupStepCurrent(String step) {
+  String simplePreflightStepCurrent(String step) {
     return '$step, etapa atual';
   }
 
   @override
-  String nightSetupStepNext(String step) {
+  String simplePreflightStepNext(String step) {
     return '$step, próximo';
   }
 
   @override
-  String get nightSetupBack => 'Voltar';
+  String get simplePreflightBack => 'Voltar';
 
   @override
-  String get nightSetupSkip => 'Pular';
+  String get simplePreflightSkip => 'Pular';
 
   @override
-  String get shellModeNightSetup => 'Preparar a noite';
+  String get shellModePreflight => 'Pré-voo';
 
   @override
   String get shellModePreview => 'Prévia';
@@ -4594,7 +4644,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get shellRailPolarAlign => 'A.P.';
 
   @override
-  String get shellRailNightSetup => 'Preparo';
+  String get shellRailPreflight => 'Pré-voo';
 
   @override
   String shellStopAgain(String shortcut) {
@@ -4679,7 +4729,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get shellSectionDevices => 'Dispositivos';
 
   @override
-  String get shellSectionCamera => 'Câmera principal';
+  String get shellSectionCamera => 'Câmera (principal)';
 
   @override
   String get shellSectionMount => 'Montagem';
@@ -4688,7 +4738,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get shellSectionFocuser => 'Focalizador';
 
   @override
-  String get shellSectionGuider => 'Câmera de guiagem';
+  String get shellSectionGuider => 'Câmera (guiagem)';
 
   @override
   String get shellRigNotConnected => 'Setup não conectado';
@@ -4822,6 +4872,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get shellPermanentPierHint => 'Pula o alinhamento polar';
+
+  @override
+  String previewPreflightWaiting(Object step) {
+    return '$step: aguardando você';
+  }
+
+  @override
+  String get shellFullUi => 'Interface completa';
+
+  @override
+  String get shellOpenSourceLicenses => 'Licenças de código aberto';
+
+  @override
+  String get shellLicenses => 'Licenças';
 
   @override
   String get shellSimpleMode => 'Modo Simples';
@@ -5902,20 +5966,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get focusScopeGuide => 'Guia';
 
   @override
-  String get guidedNextFocus => 'Próximo: Foco';
+  String get preflightNextFocus => 'Próximo: Foco';
 
   @override
-  String get guidedNextPolarAlign => 'Próximo: Alinhamento polar';
+  String get preflightNextPolarAlign => 'Próximo: Alinhamento polar';
 
   @override
-  String get guidedStartImaging => 'Iniciar a captura';
+  String get preflightStartImaging => 'Iniciar a captura';
 
   @override
-  String get guidedImagingStartsAfter =>
+  String get preflightImagingStartsAfter =>
       'A captura começa depois do foco e do alinhamento polar.';
 
   @override
-  String get guidedDoneStartImaging => 'Pronto · Iniciar a captura';
+  String get preflightDoneStartImaging => 'Pronto · Iniciar a captura';
 
   @override
   String get shellGuideFocalLength => 'Distância focal da luneta guia';
@@ -5931,7 +5995,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get shellModeGuide => 'Guia';
 
   @override
-  String get guidedNextGuide => 'Próximo: Guiagem';
+  String get preflightNextGuide => 'Próximo: Guiagem';
 
   @override
   String get guideStart => 'Iniciar guiagem';
@@ -5960,7 +6024,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Conecte o guia em Configurações › Dispositivos.';
 
   @override
-  String get deviceGuiderCamera => 'Câmera de guiagem';
+  String get deviceGuiderCamera => 'Câmera (guiagem)';
 
   @override
   String get shellNoDevices => 'Nenhum dispositivo conectado';
@@ -6770,4 +6834,40 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get deviceChooserFindAction => 'buscar dispositivos';
+
+  @override
+  String get stopMountAction => 'parar a montagem';
+
+  @override
+  String get stopMountNoServer =>
+      'A parada da montagem não foi enviada — sem conexão com o servidor.';
+
+  @override
+  String stopMountFailed(String reason) {
+    return '$reason Tente Parar montagem de novo.';
+  }
+
+  @override
+  String get focusChartFirstProbe => 'Aguardando a primeira medição…';
+
+  @override
+  String get focusChartEmpty => 'Execute o autofoco para ver a curva em V.';
+
+  @override
+  String get focusChartPosition => 'Posição do focalizador';
+
+  @override
+  String focusChartFit(int position) {
+    return 'ajuste $position';
+  }
+
+  @override
+  String focusChartCalibrated(int position) {
+    return 'calibrado $position';
+  }
+
+  @override
+  String focusChartFocus(int position) {
+    return 'foco $position';
+  }
 }

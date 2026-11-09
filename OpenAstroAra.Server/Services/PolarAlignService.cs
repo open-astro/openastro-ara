@@ -361,7 +361,7 @@ namespace OpenAstroAra.Server.Services {
                         if (explicitStage) {
                             throw new InvalidOperationException(coarseUnavailable);
                         }
-                        // A Start that named no stage (Simple Mode, the Night Setup pilot) wants the routine,
+                        // A Start that named no stage (Simple Mode, the Preflight pilot) wants the routine,
                         // not the rough step in particular: a guide-camera-only session still polar-aligns.
                         LogCoarseSkipped(coarseUnavailable);
                         stage = PolarAlignStages.Fine;

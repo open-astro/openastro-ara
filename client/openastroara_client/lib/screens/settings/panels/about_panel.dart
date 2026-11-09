@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../util/app_licenses.dart';
 
 import '../../../app_version.dart';
 import '../../../services/server_maintenance_api.dart';
@@ -82,7 +83,7 @@ class AboutPanel extends ConsumerWidget {
             OutlinedButton.icon(
               icon: const Icon(Icons.description_outlined, size: 16),
               label: const Text('Open-source licenses'),
-              onPressed: () => _showLicenses(context, version.value),
+              onPressed: () => showAppLicenses(context, version.value),
             ),
             OutlinedButton.icon(
               icon: const Icon(Icons.open_in_new, size: 16),
@@ -99,18 +100,6 @@ class AboutPanel extends ConsumerWidget {
           style: dim,
         ),
       ],
-    );
-  }
-
-  void _showLicenses(BuildContext context, String? version) {
-    // Flutter's built-in licenses page over LicenseRegistry — every bundled
-    // package's LICENSE is registered by the build tooling automatically.
-    showLicensePage(
-      context: context,
-      applicationName: 'OpenAstro Ara',
-      applicationVersion: version,
-      applicationLegalese:
-          'Client: AGPL-3.0 · Ara: MPL-2.0\nForked from N.I.N.A. (MPL-2.0)',
     );
   }
 

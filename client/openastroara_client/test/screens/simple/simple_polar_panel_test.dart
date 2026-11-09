@@ -3,7 +3,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/screens/simple/simple_night_setup.dart';
+import 'package:openastroara/widgets/imaging/polar_align_panel.dart' show BullseyePainter;
+import 'package:openastroara/screens/simple/simple_preflight.dart';
 import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
@@ -156,6 +157,21 @@ void main() {
     expect(tester.getSize(bullseye).width, greaterThanOrEqualTo(180));
   });
 
+  testWidgets('the arrows fill their tiles and the bullseye fills the two tiles\' height (#1721)', (tester) async {
+    await _pump(tester, _adjusting);
+    final alt = find.byKey(const Key('simple-polar-turn-alt'));
+    final az = find.byKey(const Key('simple-polar-turn-az'));
+    for (final tile in [alt, az]) {
+      expect(tester.getSize(find.descendant(of: tile, matching: find.byType(Icon))).height, 70);
+      expect(tester.getSize(tile).height, 86, reason: 'the tile keeps its size');
+    }
+    final bullseye = find.byKey(const Key('simple-polar-bullseye'));
+    final painter = tester.widget<CustomPaint>(find.descendant(of: bullseye, matching: find.byType(CustomPaint))).painter!
+        as BullseyePainter;
+    final tiles = tester.getBottomLeft(az).dy - tester.getTopLeft(alt).dy;
+    expect(painter.ringRadius(tester.getSize(bullseye)) * 2, closeTo(tiles, 2));
+  });
+
   testWidgets('while it runs, the whole panel fits the room beside the rail on an iPad (388 pt)', (tester) async {
     await _pump(tester, _adjusting, loopMode: PolarAlignLoopModes.single);
     expect(tester.getSize(find.byType(SimplePolarPanel)).height, lessThanOrEqualTo(388));
@@ -244,7 +260,7 @@ void main() {
     expect(api!.calls, ['complete']);
   });
 
-  testWidgets('in Night Setup, polar align is the last step: Done reads Done · Start imaging', (tester) async {
+  testWidgets('in Preflight, polar align is the last step: Done reads Done · Start imaging', (tester) async {
     final api = _Api()..settings = PolarAlignSettings();
     final c = ProviderContainer(overrides: [
       polarAlignApiProvider.overrideWithValue(api),
@@ -252,18 +268,18 @@ void main() {
           phase: PolarAlignStates.adjusting, altErrorArcmin: 0.3, azErrorArcmin: -0.5, totalErrorArcmin: 0.6))),
     ]);
     addTearDown(c.dispose);
-    c.read(nightSetupProvider.notifier).back(); // no-op outside Night Setup
+    c.read(simplePreflightProvider.notifier).back(); // no-op outside Preflight
     await tester.pumpWidget(UncontrolledProviderScope(
       container: c,
       child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarPanel()))),
     ));
     await tester.pumpAndSettle();
-    expect(find.text('Done'), findsOneWidget, reason: 'outside Night Setup');
-    c.read(nightSetupProvider.notifier).start();
-    c.read(nightSetupProvider.notifier).next(); // past the plan, to Focus
-    c.read(nightSetupProvider.notifier).next(); // past Focus, to polar align
+    expect(find.text('Done'), findsOneWidget, reason: 'outside Preflight');
+    c.read(simplePreflightProvider.notifier).start();
+    c.read(simplePreflightProvider.notifier).next(); // past the plan, to Focus
+    c.read(simplePreflightProvider.notifier).next(); // past Focus, to polar align
     await tester.pumpAndSettle();
-    expect(c.read(nightSetupProvider), NightSetupStep.polarAlign);
+    expect(c.read(simplePreflightProvider), SimplePreflightStep.polarAlign);
     expect(find.text('Done · Start imaging'), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-polar-done')));
     await tester.pumpAndSettle();

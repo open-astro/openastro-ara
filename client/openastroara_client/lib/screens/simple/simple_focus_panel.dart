@@ -20,8 +20,8 @@ import '../../widgets/focus/guide_focus_card.dart'
     show GuideFocusCard, TurnAdvice, guideFocusBlocker, guideFocusHint;
 import '../../widgets/focus/v_curve_chart.dart';
 import '../../state/setup/setup_readiness.dart';
-import 'simple_night_setup.dart'
-    show NightSetupStep, nightSetupProvider, simpleNightSetupNext;
+import 'simple_preflight.dart'
+    show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
 import 'simple_preview_panel.dart'
     show SimpleShutterButton, kSimpleText, simpleMainCameraBusy;
 import 'simple_device_windows.dart' show simpleCelsius;
@@ -299,18 +299,21 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
       selected: starsShown,
       onPick: (on) => ref.read(simpleFocusStarsShownProvider.notifier).set(on),
     );
-    // Guided Run with focus the last step (a permanent pier, or aligned
+    // Preflight with focus the last step (a permanent pier, or aligned
     // already): its Done starts imaging, never the run's end on its own.
     // Auto or Manual, whichever focused.
-    final guidedDone =
-        ref.watch(nightSetupProvider) == NightSetupStep.focus &&
-            ref.watch(setupFocusStateProvider) == SetupStepState.done &&
-            simpleNightSetupNext(ref, after: NightSetupStep.focus) == null
-        ? FilledButton(
-            key: const Key('simple-focus-guided-done'),
-            style: kSimpleGoStyle,
-            onPressed: ref.read(nightSetupProvider.notifier).next,
-            child: Text(l10n.guidedDoneStartImaging),
+    // Its room is kept until then, so the panel holds one height through the run.
+    final preflightDone =
+        ref.watch(simplePreflightProvider) == SimplePreflightStep.focus &&
+            simplePreflightNext(ref, after: SimplePreflightStep.focus) == null
+        ? _keepRoom(
+            visible: ref.watch(setupFocusStateProvider) == SetupStepState.done,
+            child: FilledButton(
+              key: const Key('simple-focus-preflight-done'),
+              style: kSimpleGoStyle,
+              onPressed: ref.read(simplePreflightProvider.notifier).next,
+              child: Text(l10n.preflightDoneStartImaging),
+            ),
           )
         : null;
     return SimplePanel(
@@ -381,7 +384,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
               ..._maskQuestion(l10n)
             else if (method == MainFocusMethod.bahtinov) ...[
               ..._bahtinov(l10n, bahtinov, connected ? focuser : null),
-              ?guidedDone,
+              ?preflightDone,
             ] else ...[
               // The headline shares its row with Measured stars when there is
               // room, so the panel still fits an iPad under its two choice rows.
@@ -390,10 +393,9 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   spacing: AraSpace.s8,
                   children: [
                     Expanded(
-                      child: Text(
+                      child: _twoLines(
                         headline,
-                        style: kSimpleText.copyWith(color: headlineColor),
-                        maxLines: 2,
+                        kSimpleText.copyWith(color: headlineColor),
                       ),
                     ),
                     Text(l10n.focusMeasuredStars, style: AraText.caption),
@@ -401,89 +403,120 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   ],
                 )
               else
-                Text(
+                _twoLines(
                   headline,
-                  style: kSimpleText.copyWith(color: headlineColor),
-                  maxLines: 2,
+                  kSimpleText.copyWith(color: headlineColor),
                 ),
-              // A finished run's Best position tile says where it is.
-              if (connected && focuser != null && !run.isComplete)
-                Text(
-                  [
-                    if (focuser.position != null)
-                      l10n.focusFocuserAt('${focuser.position}'),
-                    if (focuser.temperature != null)
-                      simpleCelsius(focuser.temperature!),
-                    if (focuser.name.isNotEmpty) focuser.name,
-                  ].join(' · '),
-                  style: AraText.caption,
-                ),
-              // A finished run's headline already says its HFR.
-              if (!run.isComplete)
-                Text(
-                  context.l10n.focusHfr(hfr?.toStringAsFixed(2) ?? '—'),
-                  style: kSimpleText.copyWith(
-                    fontSize: 30,
-                    fontWeight: FontWeight.w300,
+              // One slot, so the run's end swaps the HFR for its figures in place.
+              _slot(context, _kFocusReadoutHeight, [
+                // A finished run's Best position tile says where it is.
+                if (connected && focuser != null && !run.isComplete)
+                  Text(
+                    [
+                      if (focuser.position != null)
+                        l10n.focusFocuserAt('${focuser.position}'),
+                      if (focuser.temperature != null)
+                        simpleCelsius(focuser.temperature!),
+                      if (focuser.name.isNotEmpty) focuser.name,
+                    ].join(' · '),
+                    style: AraText.caption,
                   ),
-                ),
-              ?guidedDone,
-              // A finished run's figures, all on view (Simple Mode folds
-              // nothing away).
-              if (run.isComplete)
-                Row(
-                  spacing: AraSpace.s4,
-                  children: [
-                    _figure(
-                      l10n.focusBestPosition,
-                      best == null ? '—' : '$best',
+                // A finished run's headline already says its HFR.
+                if (!run.isComplete)
+                  Text(
+                    context.l10n.focusHfr(hfr?.toStringAsFixed(2) ?? '—'),
+                    style: kSimpleText.copyWith(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w300,
                     ),
-                    _figure(
-                      l10n.focusStars,
-                      run.finalStars == null ? '—' : '${run.finalStars}',
-                    ),
-                    _figure(
-                      l10n.focusFitR2,
-                      fit == null ? '—' : fit.rSquared.toStringAsFixed(2),
-                    ),
-                  ],
-                ),
-              if (run.probes.isNotEmpty)
-                SizedBox(height: 160, child: VCurveChart(run: run)),
-              // Icon + colour + text (DESIGN.md): the tint alone all but
-              // vanishes in night mode.
-              if (weak != null)
-                Container(
-                  key: const Key('simple-focus-weak-fit'),
-                  padding: const EdgeInsets.all(AraSpace.s8),
-                  decoration: BoxDecoration(
-                    color: AraColors.accentWarning.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    spacing: AraSpace.s8,
+                // A finished run's figures, all on view (Simple Mode folds
+                // nothing away).
+                if (run.isComplete)
+                  Row(
+                    spacing: AraSpace.s4,
                     children: [
-                      const Icon(
-                        Icons.warning_amber_rounded,
-                        size: 18,
-                        color: AraColors.accentWarning,
+                      _figure(
+                        l10n.focusBestPosition,
+                        best == null ? '—' : '$best',
                       ),
-                      Expanded(
-                        child: Text(
-                          weak,
-                          style: AraText.caption.copyWith(
-                            color: AraColors.accentWarning,
-                          ),
-                        ),
+                      _figure(
+                        l10n.focusStars,
+                        run.finalStars == null ? '—' : '${run.finalStars}',
+                      ),
+                      _figure(
+                        l10n.focusFitR2,
+                        fit == null ? '—' : fit.rSquared.toStringAsFixed(2),
                       ),
                     ],
                   ),
+              ]),
+              ?preflightDone,
+              // There from the start, with its waiting text; a warning or an
+              // error takes its room from the chart.
+              SizedBox(
+                height: _kFocusChartHeight,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  spacing: 4,
+                  children: [
+                    Expanded(child: VCurveChart(run: run)),
+                    // Icon + colour + text (DESIGN.md): the tint alone all but
+                    // vanishes in night mode.
+                    if (weak != null && error == null)
+                      Container(
+                        key: const Key('simple-focus-weak-fit'),
+                        padding: const EdgeInsets.all(AraSpace.s8),
+                        decoration: BoxDecoration(
+                          color: AraColors.accentWarning.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          spacing: AraSpace.s8,
+                          children: [
+                            const Icon(
+                              Icons.warning_amber_rounded,
+                              size: 18,
+                              color: AraColors.accentWarning,
+                            ),
+                            Expanded(
+                              child: Text(
+                                weak,
+                                style: AraText.caption.copyWith(
+                                  color: AraColors.accentWarning,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    // Whole, however long: up to half the slot, then it scrolls.
+                    if (error != null)
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxHeight: _kFocusChartHeight / 2,
+                        ),
+                        child: SingleChildScrollView(
+                          child: Text(
+                            error,
+                            style: kSimpleText.copyWith(
+                              color: AraColors.errorText,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
+              ),
               // The run's frame with its measured stars circled, full screen
               // behind the panels; off to start.
-              if (live.frame != null && simpleStackText(context))
-                Row(
+              if (simpleStackText(context))
+                _keepRoom(
+                  visible: live.frame != null,
+                  child: Row(
                   spacing: AraSpace.s12,
                   children: [
                     Expanded(
@@ -491,13 +524,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                     ),
                     stars,
                   ],
-                ),
-              if (error != null)
-                Text(
-                  error,
-                  style: kSimpleText.copyWith(color: AraColors.errorText),
-                  maxLines: 4,
-                  overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               // The Focuser window's dial moves it; nothing to nudge here.
               if (!connected)
@@ -561,7 +588,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     final exposure = ref.watch(simpleBahtinovExposureProvider);
     final measured = status.hasMeasurement && !live.finished;
     return [
-      Text(headline, style: kSimpleText.copyWith(color: colour), maxLines: 2),
+      _twoLines(headline, kSimpleText.copyWith(color: colour)),
       if (focuser != null)
         Text(
           [
@@ -571,6 +598,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
           ].join(' · '),
           style: AraText.caption,
         ),
+      _slot(context, _kFocusManualReadoutHeight, [
       if (!status.active && !status.hasMeasurement && !live.finished)
         Text(l10n.bahtinovFitMaskDetail, style: AraText.caption),
       if (reading) ...[
@@ -613,8 +641,10 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
           style: kSimpleText.copyWith(color: AraColors.errorText),
           maxLines: 3,
         ),
-      if (!live.finished)
-        Row(
+      ]),
+      _keepRoom(
+        visible: !live.finished,
+        child: Row(
           spacing: AraSpace.s12,
           children: [
             Expanded(child: Text(l10n.bahtinovExposure, style: kSimpleText)),
@@ -636,13 +666,16 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
             ),
           ],
         ),
-      if (measured)
-        FilledButton(
+      ),
+      _keepRoom(
+        visible: measured,
+        child: FilledButton(
           key: const Key('simple-bahtinov-finish'),
           style: steady?.withinZone == true ? kSimpleGoStyle : null,
           onPressed: live.busy ? null : () => setState(() => _askMask = true),
           child: Text(l10n.bahtinovFinish),
         ),
+      ),
     ];
   }
 
@@ -668,11 +701,12 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     final hint = status.active ? guideFocusHint(l10n, status) : null;
     final exposure = ref.watch(simpleGuideExposureProvider);
     return [
-      Text(headline, style: kSimpleText.copyWith(color: colour), maxLines: 2),
+      _twoLines(headline, kSimpleText.copyWith(color: colour)),
       Text(
         oag ? l10n.focusGuideOag : l10n.focusGuideScope,
         style: AraText.caption,
       ),
+      _slot(context, _kFocusGuideReadoutHeight, [
       if (gated && !status.active) ...[
         Text(l10n.focusGuideMainFirst, style: AraText.caption),
         OutlinedButton(
@@ -712,6 +746,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
           style: kSimpleText.copyWith(color: AraColors.errorText),
           maxLines: 3,
         ),
+      ]),
       Row(
         spacing: AraSpace.s12,
         children: [
@@ -733,6 +768,49 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     ];
   }
 }
+
+// One height from a run's start to its end (#1717): each view keeps a slot for
+// what changes. Heights at 1.0x text; the slot scales with it.
+const double _kFocusReadoutHeight = 72;
+const double _kFocusChartHeight = 160;
+const double _kFocusManualReadoutHeight = 124;
+const double _kFocusGuideReadoutHeight = 132;
+
+/// Holds [child]'s room while hidden; hidden, it takes no tap and is not read out.
+Widget _keepRoom({required bool visible, required Widget child}) => Visibility(
+  visible: visible,
+  maintainState: true,
+  maintainAnimation: true,
+  maintainSize: true,
+  child: child,
+);
+
+/// A status line with room for two lines, however short it is.
+Widget _twoLines(String text, TextStyle style) => Stack(
+  children: [
+    _keepRoom(
+      visible: false,
+      child: Text('\n', style: style),
+    ),
+    Text(text, style: style, maxLines: 2),
+  ],
+);
+
+/// A slot of one height: what fills it can change without moving the window.
+/// shortcut: grows past its height for text too long for it (large text in a
+/// long language), so nothing is cut; raise the heights if that shows.
+Widget _slot(BuildContext context, double height, List<Widget> children) =>
+    ConstrainedBox(
+      constraints: BoxConstraints(
+        minHeight: MediaQuery.textScalerOf(context).scale(height),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: 4,
+        children: children,
+      ),
+    );
 
 /// A figure tile: its label over its value, sharing a row with its siblings
 /// (a finished run's best position / stars / fit R², the guide camera's

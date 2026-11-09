@@ -1818,12 +1818,18 @@ class BullseyePainter extends CustomPainter {
   /// zoom rings.
   final bool reticle;
 
-  const BullseyePainter({required this.dotFraction, required this.zoneColor, this.reticle = false});
+  /// The room left outside the outer ring.
+  final double edgeInset;
+
+  const BullseyePainter({required this.dotFraction, required this.zoneColor, this.reticle = false, this.edgeInset = 4});
+
+  /// The outer ring's radius on a canvas of [size].
+  double ringRadius(Size size) => math.min(size.width, size.height) / 2 - edgeInset;
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2 - 4;
+    final radius = ringRadius(size);
     final ring = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
@@ -1858,5 +1864,5 @@ class BullseyePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant BullseyePainter old) =>
-      old.dotFraction != dotFraction || old.zoneColor != zoneColor || old.reticle != reticle;
+      old.dotFraction != dotFraction || old.zoneColor != zoneColor || old.reticle != reticle || old.edgeInset != edgeInset;
 }

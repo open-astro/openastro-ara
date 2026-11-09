@@ -1,12 +1,14 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
-import 'package:openastroara/screens/simple/simple_night_setup.dart';
+import 'package:openastroara/screens/simple/simple_preflight.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
@@ -76,10 +78,10 @@ class _Live extends AutofocusLiveNotifier {
 
 late ProviderContainer _c;
 
-class _Pilot extends NightSetupNotifier {
+class _Pilot extends SimplePreflightNotifier {
   int nexts = 0;
   @override
-  NightSetupStep? build() => NightSetupStep.focus;
+  SimplePreflightStep? build() => SimplePreflightStep.focus;
   @override
   void next() => nexts++;
 }
@@ -200,6 +202,80 @@ void main() {
     expect(find.textContaining('Details'), findsNothing, reason: 'nothing folded away');
   });
 
+  testWidgets('Auto keeps one height from start to finish, a weak fit included (#1717)', (tester) async {
+    final (_, live) = await _pump(tester, focuser: _focuser(), run: const AutofocusRun());
+    double height() => tester.getSize(find.byType(SimpleFocusPanel)).height;
+    final start = height();
+    for (final run in [
+      AutofocusRun(state: AutofocusRunStates.running, phase: 'sweep', totalSteps: 7, stepSize: 80),
+      AutofocusRun(
+        state: AutofocusRunStates.running,
+        phase: 'sweep',
+        totalSteps: 7,
+        completedSteps: 2,
+        stepSize: 80,
+        probes: [_probe(0, 3.1), _probe(1, 2.4)],
+      ),
+      weak,
+    ]) {
+      live.state = AutofocusLive(run: run);
+      await tester.pump();
+      expect(height(), start, reason: '${run.state} ${run.probes.length} probes');
+    }
+  });
+
+  testWidgets('Measured stars, hidden for its room at large text before a frame, is not read out', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final handle = tester.ensureSemantics();
+    await _pump(tester, focuser: _focuser());
+    expect(find.bySemanticsLabel('Measured stars'), findsNothing);
+    handle.dispose();
+  });
+
+  testWidgets('the V-curve chart speaks pt-BR, empty and with probes', (tester) async {
+    const locale = Locale('pt', 'BR');
+    final pt = lookupAppLocalizations(locale);
+    Future<void> show(AutofocusRun run) => tester.pumpWidget(MaterialApp(
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(body: SizedBox(width: 400, height: 200, child: VCurveChart(run: run))),
+        ));
+    await show(AutofocusRun.idle);
+    await tester.pump();
+    expect(find.text(pt.focusChartEmpty), findsOneWidget);
+    await show(AutofocusRun(state: AutofocusRunStates.running, phase: 'sweep', probes: [_probe(0, 3.1), _probe(1, 2.4)]));
+    await tester.pump();
+    expect(find.text(pt.focusChartPosition), findsOneWidget);
+  });
+
+  group('a long focus error', () {
+    final long = List.filled(60, 'the star field drifted').join(' ');
+
+    testWidgets('is never cut, and the panel keeps its height', (tester) async {
+      final (_, live) = await _pump(tester, focuser: _focuser());
+      final start = tester.getSize(find.byType(SimpleFocusPanel)).height;
+      live.state = AutofocusLive(run: AutofocusRun.idle, error: long);
+      await tester.pump();
+      expect(tester.renderObject<RenderParagraph>(find.text(long)).didExceedMaxLines, isFalse);
+      expect(tester.takeException(), isNull);
+      expect(tester.getSize(find.byType(SimpleFocusPanel)).height, start);
+      expect(find.byType(VCurveChart), findsOneWidget);
+    });
+
+    testWidgets('over a weak fit takes the warning\'s room, so nothing overflows', (tester) async {
+      final (_, live) = await _pump(tester, focuser: _focuser());
+      live.state = AutofocusLive(run: weak, error: long);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('simple-focus-weak-fit')), findsNothing);
+    });
+  });
+
   testWidgets('a weak fit says so in the panel, in words', (tester) async {
     await _pump(tester, focuser: _focuser(), run: weak);
     expect(find.textContaining('Weak curve fit (R² 0.55)'), findsOneWidget);
@@ -251,7 +327,7 @@ void main() {
     expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-focus-method-manual'))).onTap, isNull);
   });
 
-  testWidgets("Night Setup on a permanent pier: focus is the last step, so its Done starts imaging", (tester) async {
+  testWidgets("Preflight on a permanent pier: focus is the last step, so its Done starts imaging", (tester) async {
     final f = _Focuser(_focuser());
     final pilot = _Pilot();
     _c = ProviderContainer(overrides: [
@@ -260,7 +336,7 @@ void main() {
       setupFocusStateProvider.overrideWithValue(SetupStepState.done),
       setupPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
       simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
-      nightSetupProvider.overrideWith(() => pilot),
+      simplePreflightProvider.overrideWith(() => pilot),
     ]);
     addTearDown(_c.dispose);
     await _c.read(simplePermanentPierProvider.future);
@@ -273,7 +349,33 @@ void main() {
     expect(pilot.nexts, 1);
   });
 
-  testWidgets('Guided Run on a permanent pier, focused by hand: Manual has the Done too (ALP-4982)', (tester) async {
+  for (final method in MainFocusMethod.values) {
+    testWidgets('Preflight with focus last: ${method.name} keeps one height when focus finishes', (tester) async {
+      Future<double> height(SetupStepState focus) async {
+        final c = ProviderContainer(overrides: [
+          focuserProvider.overrideWith(() => _Focuser(_focuser())),
+          mainFocusMethodProvider.overrideWith(() => _Pick(method)),
+          setupFocusStateProvider.overrideWithValue(focus),
+          setupPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
+          simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
+          simplePreflightProvider.overrideWith(_Pilot.new),
+        ]);
+        addTearDown(c.dispose);
+        await c.read(simplePermanentPierProvider.future);
+        await tester.pumpWidget(UncontrolledProviderScope(
+          container: c,
+          child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
+        ));
+        await tester.pump();
+        return tester.getSize(find.byType(SimpleFocusPanel)).height;
+      }
+
+      final running = await height(SetupStepState.pending);
+      expect(await height(SetupStepState.done), running);
+    });
+  }
+
+  testWidgets('Preflight on a permanent pier, focused by hand: Manual has the Done too', (tester) async {
     // #1486 review: the Done only showed in Auto, so a Bahtinov focus could only Skip.
     final pilot = _Pilot();
     _c = ProviderContainer(overrides: [
@@ -282,7 +384,7 @@ void main() {
       setupFocusStateProvider.overrideWithValue(SetupStepState.done),
       setupPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
       simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
-      nightSetupProvider.overrideWith(() => pilot),
+      simplePreflightProvider.overrideWith(() => pilot),
     ]);
     addTearDown(_c.dispose);
     await _c.read(simplePermanentPierProvider.future);

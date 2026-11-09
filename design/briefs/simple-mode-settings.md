@@ -4,7 +4,7 @@ Shaped 2026-11-03 (`/impeccable shape`). Mock: [`design/preview/simple-settings-
 
 ## Rule: 4×90% and KISS
 
-Simple Mode covers the top 90 % most used features, for 90 % of the people, 90 % of the time, 90 % faster (the user's "4×90%"), and only the bare minimum for a successful imaging night (KISS). When in doubt, leave it out. A value another Simple Mode control already sets is not repeated (the guiding graph on the bottom row). Settings that only look alike are different settings and each has its own place: Preview's chip sets the gain for Preview's shots, the Camera window the profile's gain that plans shoot at (user, 2026-11-03). Everything else stays in the Advanced UI, and Simple Mode never links to it: Settings' Simple Mode switch is the way out.
+Simple Mode covers the top 90 % most used features, for 90 % of the people, 90 % of the time, 90 % faster (the user's "4×90%"), and only the bare minimum for a successful imaging night (KISS). When in doubt, leave it out. A value another Simple Mode control already sets is not repeated (the guiding graph on the bottom row). Settings that only look alike are different settings and each has its own place: Preview's chip sets the gain for Preview's shots, the Camera window the profile's gain that plans shoot at (user, 2026-11-03). Everything else stays in the Advanced UI, and the strip's Full UI button is Simple Mode's one link to it (#1677).
 
 ## Job and audience
 
@@ -39,7 +39,7 @@ Simple Mode covers the top 90 % most used features, for 90 % of the people, 90 %
 | Storage | Which drive, free space | Copy to another disk, file names |
 | End of night | Stop at dawn / at a time / never, park, warm the camera | Flats, safety policies |
 | Alerts | Safety alarm sound, silent delay | Where alerts go (in-app only today, §46) |
-| Rig | System figures, Change profile / Change rig, permanent pier, Simple Mode switch, version, logs & bug report | Profile editing, wizard, sky data |
+| Rig | System figures, Change profile / Change rig, permanent pier, version, logs & bug report | Profile editing, wizard, sky data |
 
 Devices lists only the devices the profile has, each with its state. Every Alpaca device the profile has gets a window of its own (#1662, 2026-11-07, reversing the 2026-11-03 decision that the flat panel, dome, weather and safety monitor have none); all ten are built (the dome and safety monitor windows last, 2026-11-08). ASIAir's settings stay the reference for how much control to give (user, 2026-11-03: "we need to give SOME control to the user").
 

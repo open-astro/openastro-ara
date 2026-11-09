@@ -22,11 +22,11 @@ import 'setup/setup_readiness.dart';
 import 'simple_messages_state.dart';
 import 'simple_mode_state.dart';
 
-enum SimpleModeScreen { nightSetup, preview, focus, polarAlign, guide, plan }
+enum SimpleModeScreen { preflight, preview, focus, polarAlign, guide, plan }
 
 extension SimpleModeScreenLabels on SimpleModeScreen {
   String labelOf(AppLocalizations l10n) => switch (this) {
-    SimpleModeScreen.nightSetup => l10n.shellModeNightSetup,
+    SimpleModeScreen.preflight => l10n.shellModePreflight,
     SimpleModeScreen.preview => l10n.shellModePreview,
     SimpleModeScreen.polarAlign => l10n.shellModePolarAlign,
     SimpleModeScreen.focus => l10n.shellModeFocus,
@@ -37,12 +37,12 @@ extension SimpleModeScreenLabels on SimpleModeScreen {
   /// The name on the 60 px rail, where "Polar align" doesn't fit.
   String railLabelOf(AppLocalizations l10n) => switch (this) {
     SimpleModeScreen.polarAlign => l10n.shellRailPolarAlign,
-    SimpleModeScreen.nightSetup => l10n.shellRailNightSetup,
+    SimpleModeScreen.preflight => l10n.shellRailPreflight,
     _ => labelOf(l10n),
   };
 
   IconData get icon => switch (this) {
-    SimpleModeScreen.nightSetup => Icons.rocket_launch_outlined,
+    SimpleModeScreen.preflight => Icons.rocket_launch_outlined,
     SimpleModeScreen.preview => Icons.visibility_outlined,
     SimpleModeScreen.focus => Icons.center_focus_strong,
     SimpleModeScreen.polarAlign => Icons.explore_outlined,
@@ -57,14 +57,14 @@ bool _simpleModeActive(Ref ref) =>
     (ref.read(simpleModeFeatureProvider).value ?? false) &&
     (ref.read(simpleModeProvider).value ?? false);
 
-/// What Simple Mode shows. Two writers: the person's pick, and Night Setup's
-/// steps. [SimpleModeScreen.nightSetup] is only ever picked: it starts Night
-/// Setup, whose first step is what shows.
+/// What Simple Mode shows. Two writers: the person's pick, and Preflight's
+/// steps. [SimpleModeScreen.preflight] is only ever picked: it starts
+/// Preflight, whose first step is what shows.
 class SimpleShowingNotifier extends Notifier<SimpleModeScreen> {
   @override
   SimpleModeScreen build() {
     // Simple Mode opens on Preview, as when the shell held what shows; the
-    // pick also ends a Night Setup left running (its strip was hidden before).
+    // pick also ends a Preflight left running (its strip was hidden before).
     // The shell mounts on the feature AND the mode (simpleModeActiveProvider),
     // so both toggles count; the two sources are listened to, as a derived
     // Provider with no reader is not recomputed.
@@ -80,10 +80,10 @@ class SimpleShowingNotifier extends Notifier<SimpleModeScreen> {
     return SimpleModeScreen.preview;
   }
 
-  /// The mode grid, the rail, a search hit: picking a mode leaves Night Setup.
+  /// The mode grid, the rail, a search hit: picking a mode leaves Preflight.
   void pick(SimpleModeScreen m) {
-    final setup = ref.read(nightSetupProvider.notifier);
-    if (m == SimpleModeScreen.nightSetup) {
+    final setup = ref.read(simplePreflightProvider.notifier);
+    if (m == SimpleModeScreen.preflight) {
       setup.start();
       return;
     }
@@ -99,26 +99,26 @@ final simpleShowingProvider =
       SimpleShowingNotifier.new,
     );
 
-/// Night Setup's steps, in the night's order: tonight's targets first, then
+/// Preflight's steps, in the night's order: tonight's targets first, then
 /// focus (polar alignment plate-solves and fails on a soft focus), then polar
 /// align, then guide (user, 2026-11-04); the last one's Done starts
 /// imaging.
-enum NightSetupStep { plan, focus, polarAlign, guide }
+enum SimplePreflightStep { plan, focus, polarAlign, guide }
 
-extension NightSetupStepLabel on NightSetupStep {
+extension SimplePreflightStepLabel on SimplePreflightStep {
   String label(AppLocalizations l10n) => switch (this) {
-    NightSetupStep.focus => l10n.nightSetupStepFocus,
-    NightSetupStep.polarAlign => l10n.nightSetupStepPolarAlign,
-    NightSetupStep.plan => l10n.nightSetupStepPlan,
-    NightSetupStep.guide => l10n.nightSetupStepGuide,
+    SimplePreflightStep.focus => l10n.simplePreflightStepFocus,
+    SimplePreflightStep.polarAlign => l10n.simplePreflightStepPolarAlign,
+    SimplePreflightStep.plan => l10n.simplePreflightStepPlan,
+    SimplePreflightStep.guide => l10n.simplePreflightStepGuide,
   };
 
   /// The mode each step runs on.
   SimpleModeScreen get screen => switch (this) {
-    NightSetupStep.plan => SimpleModeScreen.plan,
-    NightSetupStep.focus => SimpleModeScreen.focus,
-    NightSetupStep.polarAlign => SimpleModeScreen.polarAlign,
-    NightSetupStep.guide => SimpleModeScreen.guide,
+    SimplePreflightStep.plan => SimpleModeScreen.plan,
+    SimplePreflightStep.focus => SimpleModeScreen.focus,
+    SimplePreflightStep.polarAlign => SimpleModeScreen.polarAlign,
+    SimplePreflightStep.guide => SimpleModeScreen.guide,
   };
 }
 
@@ -126,18 +126,18 @@ extension NightSetupStepLabel on NightSetupStep {
 /// first setup step not done tonight, polar align skipped on a permanent
 /// pier, guide skipped when already guiding or with no guider ([guided]);
 /// null when none is left, which starts imaging. Pure — unit-tested.
-NightSetupStep? nightSetupNext({
-  NightSetupStep? after,
+SimplePreflightStep? preflightNextStep({
+  SimplePreflightStep? after,
   required bool focused,
   required bool aligned,
   required bool permanentPier,
   required bool guided,
 }) {
-  for (final s in NightSetupStep.values) {
+  for (final s in SimplePreflightStep.values) {
     if (after != null && s.index <= after.index) continue;
-    if (s == NightSetupStep.focus && focused) continue;
-    if (s == NightSetupStep.polarAlign && (aligned || permanentPier)) continue;
-    if (s == NightSetupStep.guide && guided) continue;
+    if (s == SimplePreflightStep.focus && focused) continue;
+    if (s == SimplePreflightStep.polarAlign && (aligned || permanentPier)) continue;
+    if (s == SimplePreflightStep.guide && guided) continue;
     return s;
   }
   return null;
@@ -159,13 +159,13 @@ bool _guided(Ref ref) {
   return g == null || !g.isConnected || simpleGuiding(g);
 }
 
-/// [nightSetupNext] from the rig's state now, watched: the step after [after].
-NightSetupStep? simpleNightSetupNext(
+/// [preflightNextStep] from the rig's state now, watched: the step after [after].
+SimplePreflightStep? simplePreflightNext(
   WidgetRef ref, {
-  required NightSetupStep after,
+  required SimplePreflightStep after,
 }) {
   final g = ref.watch(guiderStatusProvider).value;
-  return nightSetupNext(
+  return preflightNextStep(
     after: after,
     focused: ref.watch(setupFocusStateProvider) == SetupStepState.done,
     aligned: ref.watch(setupPolarAlignStateProvider) == SetupStepState.done,
@@ -174,23 +174,23 @@ NightSetupStep? simpleNightSetupNext(
   );
 }
 
-/// Simple Mode's Night Setup: the night's steps in order, each handing over to
+/// Simple Mode's Preflight: the night's steps in order, each handing over to
 /// the next. Null while it isn't running. The plan queues tonight's targets;
 /// a finished autofocus moves on to polar align, which starts its routine on
-/// entry; the last step's Done starts imaging, which ends Night Setup.
-class NightSetupNotifier extends Notifier<NightSetupStep?> {
+/// entry; the last step's Done starts imaging, which ends Preflight.
+class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
   @override
-  NightSetupStep? build() {
+  SimplePreflightStep? build() {
     ref.listen(setupFocusStateProvider, (prev, next) {
-      if (state == NightSetupStep.focus &&
+      if (state == SimplePreflightStep.focus &&
           prev != SetupStepState.done &&
           next == SetupStepState.done) {
         // The last step waits for its Done: imaging never starts on its own.
-        if (_next(NightSetupStep.focus) case final n?) _go(n);
+        if (_next(SimplePreflightStep.focus) case final n?) _go(n);
       }
     });
     ref.listen(simpleRunProvider, (prev, next) {
-      // Imaging started (the last Done, or by hand): Night Setup is done. The
+      // Imaging started (the last Done, or by hand): Preflight is done. The
       // last Done already ended its polar routine; this stops nothing again.
       // Not a run's updates while it images (ALP-4982).
       if (state != null && next.started && !(prev?.started ?? false)) {
@@ -212,7 +212,7 @@ class NightSetupNotifier extends Notifier<NightSetupStep?> {
     return null;
   }
 
-  NightSetupStep? _next(NightSetupStep? after) => nightSetupNext(
+  SimplePreflightStep? _next(SimplePreflightStep? after) => preflightNextStep(
     after: after,
     focused: ref.read(setupFocusStateProvider) == SetupStepState.done,
     aligned: ref.read(setupPolarAlignStateProvider) == SetupStepState.done,
@@ -223,19 +223,19 @@ class NightSetupNotifier extends Notifier<NightSetupStep?> {
   /// The polar step's Done completed its routine: leaving stops nothing.
   bool _polarFinished = false;
 
-  void _go(NightSetupStep step) {
-    if (state == NightSetupStep.polarAlign && step != NightSetupStep.polarAlign) {
+  void _go(SimplePreflightStep step) {
+    if (state == SimplePreflightStep.polarAlign && step != SimplePreflightStep.polarAlign) {
       _endPolar();
     }
-    if (step == NightSetupStep.polarAlign) _polarFinished = false;
+    if (step == SimplePreflightStep.polarAlign) _polarFinished = false;
     state = step;
     ref.read(simpleShowingProvider.notifier)._show(step.screen);
-    // Entering polar align starts the routine (an Night Setup-only exception
+    // Entering polar align starts the routine (a Preflight-only exception
     // to the shutter starting things; its red square still stops it).
     // Not over a finished check: coming back to the step must show the
     // verdict, not wipe it and send the mount Home again unasked.
     final polarLive = ref.read(polarAlignLiveProvider);
-    if (step == NightSetupStep.polarAlign &&
+    if (step == SimplePreflightStep.polarAlign &&
         !simplePolarActive(polarLive) &&
         polarLive.phase != PolarAlignStates.checked) {
       final api = ref.read(polarAlignApiProvider);
@@ -245,7 +245,7 @@ class NightSetupNotifier extends Notifier<NightSetupStep?> {
     // the step keeps it guiding (imaging wants it). Not while the main camera
     // is busy (a shot, a loop, a plan's exposure): calibration turns the
     // mount, the same gate as the Guide shutter, which then says why.
-    if (step == NightSetupStep.guide &&
+    if (step == SimplePreflightStep.guide &&
         !simpleGuideActive(ref.read(guiderStatusProvider).value) &&
         !_mainCameraBusy(ref)) {
       unawaited(
@@ -281,7 +281,7 @@ class NightSetupNotifier extends Notifier<NightSetupStep?> {
   }
 
   // The plan always comes first; the fallback keeps a reordered list safe.
-  void start() => _go(_next(null) ?? NightSetupStep.plan);
+  void start() => _go(_next(null) ?? SimplePreflightStep.plan);
 
   /// The plan's Next, a Done, or Skip: on to the next step; from the last one,
   /// imaging starts (at dark when it is before dark, as the plan sheet's
@@ -294,11 +294,11 @@ class NightSetupNotifier extends Notifier<NightSetupStep?> {
       return;
     }
     if (ref.read(simpleRunProvider).sequenceId == null) {
-      _go(NightSetupStep.plan); // the plan was skipped: nothing to start yet
+      _go(SimplePreflightStep.plan); // the plan was skipped: nothing to start yet
       return;
     }
-    if (s == NightSetupStep.polarAlign) _endPolar();
-    // Already imaging (Night Setup started over a running queue): done.
+    if (s == SimplePreflightStep.polarAlign) _endPolar();
+    // Already imaging (Preflight started over a running queue): done.
     if (ref.read(simpleRunProvider).started) {
       state = null;
       return;
@@ -319,7 +319,7 @@ class NightSetupNotifier extends Notifier<NightSetupStep?> {
 
   void back() {
     final s = state;
-    if (s != null && s.index > 0) _go(NightSetupStep.values[s.index - 1]);
+    if (s != null && s.index > 0) _go(SimplePreflightStep.values[s.index - 1]);
   }
 
   /// Ends on the plan, where imaging is watched.
@@ -330,7 +330,7 @@ class NightSetupNotifier extends Notifier<NightSetupStep?> {
 
   /// Ends without touching what shows: a pick of another mode shows that.
   void _end() {
-    if (state == NightSetupStep.polarAlign) _endPolar();
+    if (state == SimplePreflightStep.polarAlign) _endPolar();
     state = null;
   }
 
@@ -347,6 +347,6 @@ class NightSetupNotifier extends Notifier<NightSetupStep?> {
   }
 }
 
-final nightSetupProvider = NotifierProvider<NightSetupNotifier, NightSetupStep?>(
-  NightSetupNotifier.new,
+final simplePreflightProvider = NotifierProvider<SimplePreflightNotifier, SimplePreflightStep?>(
+  SimplePreflightNotifier.new,
 );

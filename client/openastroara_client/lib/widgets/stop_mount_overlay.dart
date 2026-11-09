@@ -9,6 +9,7 @@ import '../services/plate_solve_api.dart';
 import '../state/equipment/mount_state.dart';
 import '../state/plate_solve/plate_solve_api_state.dart';
 import '../state/sequencer/sequence_list_state.dart';
+import '../state/simple_messages_state.dart';
 import '../state/ws/ws_providers.dart';
 import '../util/friendly_error.dart';
 import '../l10n/l10n.dart';
@@ -241,14 +242,16 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
     if (!mounted) return;
     if (!ok) {
       setState(() => _stopRequested = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            failure == null
-                ? 'Stop Mount was not issued — no server connection.'
-                : 'Stop Mount failed to reach the server ($failure) — tap again.',
-          ),
-        ),
+      // A pill in Simple Mode, which has no popups (the Space key reaches here).
+      final l10n = context.l10n;
+      final why = failure == null
+          ? null
+          : friendlyError(l10n, failure, action: l10n.stopMountAction);
+      userNotifier(context)(
+        why == null
+            ? l10n.stopMountNoServer
+            : l10n.stopMountFailed(why.endsWith('.') ? why : '$why.'),
+        error: true,
       );
     }
     // On success the daemon's slew_aborted event closes the overlay and

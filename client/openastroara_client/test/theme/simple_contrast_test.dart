@@ -35,7 +35,7 @@ void main() {
     expect(_contrast(AraColors.selectionFg, AraColors.selectionBg), greaterThanOrEqualTo(4.5));
   });
 
-  test('the green go buttons (Start Night Setup, Done, Create and start) read at 4.5:1', () {
+  test('the green go buttons (Start Preflight, Done, Create and start) read at 4.5:1', () {
     final fg = kSimpleGoStyle.foregroundColor!.resolve({})!;
     final bg = kSimpleGoStyle.backgroundColor!.resolve({})!;
     expect(bg, AraColors.accentConnected);
