@@ -1738,9 +1738,6 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get planImageLibrary => 'Image Library';
-
-  @override
   String get planNewPlan => 'New plan';
 
   @override
@@ -4664,9 +4661,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String planStoppedAt(String step) {
     return 'Parou em: $step';
   }
-
-  @override
-  String get planImageLibrary => 'Biblioteca de imagens';
 
   @override
   String get planNewPlan => 'Novo plano';

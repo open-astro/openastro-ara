@@ -2433,10 +2433,6 @@
       }
     }
   },
-  "planImageLibrary": "Image Library",
-  "@planImageLibrary": {
-    "description": "Night done button: open the image library"
-  },
   "planNewPlan": "New plan",
   "@planNewPlan": {
     "description": "Night done button: start a new plan"

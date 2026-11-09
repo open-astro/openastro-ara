@@ -3039,12 +3039,6 @@ abstract class AppLocalizations {
   /// **'Stopped at: {step}'**
   String planStoppedAt(String step);
 
-  /// Night done button: open the image library
-  ///
-  /// In en, this message translates to:
-  /// **'Image Library'**
-  String get planImageLibrary;
-
   /// Night done button: start a new plan
   ///
   /// In en, this message translates to:

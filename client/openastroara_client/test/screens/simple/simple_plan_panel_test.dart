@@ -624,7 +624,7 @@ void main() {
         seq,
         SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
             SimpleRunTracker(onTap: onTracker ?? () {}),
             const SimpleRunShutter(),
           ]),
@@ -759,7 +759,7 @@ void main() {
       final c = await _pump(
           tester,
           _Seq(),
-          SimpleRunSheet(onShowSky: () => showSky++, onPickInSky: () => pick++, onCreated: () {}, onLibrary: () {}),
+          SimpleRunSheet(onShowSky: () => showSky++, onPickInSky: () => pick++, onCreated: () {}),
           sel: null);
       expect(find.text('Search, or pick in the sky.'), findsOneWidget);
       expect(tester.widget<ButtonStyleButton>(find.byKey(const Key('simple-run-queue'))).onPressed, isNull);
@@ -775,7 +775,7 @@ void main() {
 
     testWidgets('Add to queue is a solid button (button-primary, white words), not an outline', (tester) async {
       // User, 2026-11-04: the outline read too faintly beside the green Create and start.
-      await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
       final button = tester.widget<FilledButton>(find.byKey(const Key('simple-run-queue')));
       expect(button.style?.backgroundColor?.resolve({}), AraColors.buttonPrimary);
       expect(button.style?.foregroundColor?.resolve({}), AraColors.selectionFg);
@@ -789,7 +789,7 @@ void main() {
     });
 
     testWidgets('a picked filter chip reads white on the solid selection blue, not dark on a dim tint', (tester) async {
-      await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
       final chip = tester.widget<FilterChip>(find.byKey(const Key('simple-run-filter-L')));
       expect(chip.selected, isTrue, reason: 'precondition: L is in the plan');
       expect(chip.selectedColor, AraColors.selectionBg);
@@ -799,7 +799,7 @@ void main() {
     testWidgets('the filters are chips: a tap adds a row, another tap takes it out; the last one stays',
         (tester) async {
       final c = await _pump(tester, _Seq(),
-          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
       List<String> rows() => [for (final s in c.read(simpleRunPlanProvider)) s.filterName];
       final before = rows();
       final f = before.last;
@@ -819,7 +819,7 @@ void main() {
 
     testWidgets('Frames opens a wheel; spinning it and Done sets the count', (tester) async {
       final c = await _pump(tester, _Seq(),
-          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
       await tester.tap(find.byKey(const Key('simple-run-frames-0')));
       await tester.pumpAndSettle();
       final wheel = find.byType(CupertinoPicker);
@@ -833,7 +833,7 @@ void main() {
 
     testWidgets('a keyboard reaches Frames and Enter opens its wheel (WCAG 2.1.1)', (tester) async {
       await _pump(tester, _Seq(),
-          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
       expect(await _tabTo(tester, const Key('simple-run-frames-0')), isTrue, reason: 'Tab reaches it like the other tiles');
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pumpAndSettle();
@@ -842,7 +842,7 @@ void main() {
 
     testWidgets('the Frames wheel turns with the arrow keys: Enter opens it focused, Down is the next count', (tester) async {
       final c = await _pump(tester, _Seq(),
-          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
       final before = c.read(simpleRunPlanProvider).first.frameCount;
       expect(await _tabTo(tester, const Key('simple-run-frames-0')), isTrue);
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
@@ -858,7 +858,7 @@ void main() {
     testWidgets('a plan starts from the camera\'s gain and keeps its own; the run shoots at the plan\'s', (tester) async {
       final seq = _Seq();
       final c = await _pump(tester, seq,
-          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
           overrides: [exposureControllerProvider.overrideWith(_Gain150.new)]);
       final slider = find.byKey(const Key('simple-run-gain'));
       expect(tester.widget<Slider>(slider).value, 150, reason: 'seeded from the camera when the sheet opens');
@@ -878,7 +878,7 @@ void main() {
       final c = await _pump(
           tester,
           _Seq(),
-          SimpleRunSheet(onShowSky: () => showSky++, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+          SimpleRunSheet(onShowSky: () => showSky++, onPickInSky: () {}, onCreated: () {}),
           sel: null,
           overrides: [
             bundledCatalogProvider.overrideWith((ref) async => const [
@@ -913,7 +913,7 @@ void main() {
       final c = await _pump(
           tester,
           seq,
-          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () => created++, onLibrary: () {}));
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () => created++));
       expect(find.text('M31'), findsOneWidget);
       expect(find.text('Add to queue'), findsOneWidget);
       expect(find.text('Create and start'), findsOneWidget);
@@ -941,7 +941,7 @@ void main() {
       // The rig finds a target's block by its name: a second M31 made removing or editing either hit the first.
       final seq = _Seq();
       final c = await _pump(tester, seq,
-          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
       await create(tester);
       c.read(planetariumSelectionProvider.notifier).set(_m42);
       await tester.pumpAndSettle();
@@ -967,7 +967,7 @@ void main() {
       await _pump(
           tester,
           seq,
-          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () => created++, onLibrary: () {}));
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () => created++));
       await tester.tap(find.byKey(const Key('simple-run-start')));
       await tester.pumpAndSettle();
       expect(seq.calls, ['create M31', 'start seq-1']);
@@ -991,7 +991,7 @@ void main() {
           (tester) async {
         final seq = _Seq();
         await _pump(tester, seq,
-            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
             overrides: overrides);
         expect(go(tester), 'Start at ${hhmm(dark)}');
         expect(find.text('Starts at dark (${hhmm(dark)})'), findsOneWidget);
@@ -1008,7 +1008,7 @@ void main() {
           'the wheel', (tester) async {
         final seq = _Seq();
         await _pump(tester, seq,
-            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
             overrides: overrides);
         await tester.tap(find.byKey(const Key('simple-run-start-now')));
         await tester.pump();
@@ -1039,7 +1039,7 @@ void main() {
         final dawn = nightEnd(site, dark.toUtc())!.toLocal();
         final seq = _Seq();
         await _pump(tester, seq,
-            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
             overrides: overrides);
         expect(find.text('Stops at dawn · ${hhmm(dawn)}'), findsOneWidget);
         await tester.tap(find.byKey(const Key('simple-run-start')));
@@ -1054,7 +1054,7 @@ void main() {
           (tester) async {
         final seq = _Seq();
         await _pump(tester, seq,
-            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
             overrides: overrides);
         await tester.tap(find.byKey(const Key('simple-run-start-now')));
         await tester.pump();
@@ -1070,7 +1070,7 @@ void main() {
           (tester) async {
         final seq = _Seq();
         await _pump(tester, seq,
-            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
             overrides: overrides);
         await tester.tap(find.byKey(const Key('simple-run-queue')));
         await tester.pumpAndSettle();
@@ -1088,7 +1088,7 @@ void main() {
           (tester) async {
         final seq = _Seq();
         final c = await _pump(tester, seq,
-            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
             overrides: overrides);
         await tester.tap(find.byKey(const Key('simple-run-queue')));
         await tester.pumpAndSettle();
@@ -1108,7 +1108,7 @@ void main() {
         var at = DateTime.utc(2026, 1, 14, 18);
         final seq = _Seq();
         final c = await _pump(tester, seq,
-            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
             overrides: [siteSettingsProvider.overrideWith(() => _SiteAt(site)), clockProvider.overrideWithValue(() => at.toLocal())]);
         await tester.tap(find.byKey(const Key('simple-run-queue')));
         await tester.pumpAndSettle();
@@ -1125,7 +1125,7 @@ void main() {
 
       testWidgets('the start-time wheel takes the arrow keys: Down is 5 minutes later', (tester) async {
         await _pump(tester, _Seq(),
-            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
             overrides: overrides);
         await tester.tap(find.byKey(const Key('simple-run-pick-time')));
         await tester.pump();
@@ -1147,7 +1147,7 @@ void main() {
       final morning = DateTime.utc(2026, 1, 14, 18);
       final seq = _Seq();
       await _pump(tester, seq,
-          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
           overrides: [
             siteSettingsProvider.overrideWith(() => _SiteAt(
                 const SiteSettings(latitudeDeg: -33.856784, longitudeDeg: 151.215297, twilightDefinition: TwilightDefinition.astronomical))),
@@ -1165,7 +1165,7 @@ void main() {
           id: name, name: name, type: 'Galaxy', magnitude: 5, raDeg: 10, decDeg: 40, altitudeDeg: alt, maxAltitudeDeg: 70);
       final seq = _Seq();
       final c = await _pump(tester, seq,
-          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
           sel: null,
           tonight: [o('M31', 62), o('NGC 7000', 71), o('M33', 48), o('M45', 30), o('M42', 10)]);
       expect(find.text("TONIGHT'S BEST"), findsOneWidget);
@@ -1189,14 +1189,14 @@ void main() {
     });
 
     testWidgets('no ranking (no site yet): no suggestions, search stays', (tester) async {
-      await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+      await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
       expect(find.text("TONIGHT'S BEST"), findsNothing);
       expect(find.byKey(const Key('simple-run-search')), findsOneWidget);
     });
 
     testWidgets('a configured rig gets the suggested subs in one line; Use all takes them', (tester) async {
       final c = await _pump(tester, _Seq(),
-          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
           overrides: _rig);
       expect(find.textContaining('Suggested: '), findsOneWidget);
       final before = c.read(simpleRunPlanProvider).map((s) => s.exposureSeconds).toList();
@@ -1216,7 +1216,7 @@ void main() {
       testWidgets('polar align $aligned, permanent pier $permanent: amber line ${shown ? 'shows' : 'hidden'}',
           (tester) async {
         await _pump(tester, _Seq(),
-            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+            SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
             overrides: [
               setupPolarAlignStateProvider.overrideWithValue(aligned),
               simplePermanentPierPrefsProvider.overrideWithValue(_Prefs(permanent)),
@@ -1229,7 +1229,7 @@ void main() {
 
     testWidgets('an unconfigured rig has no hint; the last row stays', (tester) async {
       final c = await _pump(tester, _Seq(),
-          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
       expect(find.byKey(const Key('simple-run-use-suggested')), findsNothing);
       expect(find.text('60 frames'), findsOneWidget);
       final plan = c.read(simpleRunPlanProvider.notifier);
@@ -1242,7 +1242,7 @@ void main() {
 
   testWidgets('long filter names show whole in the sheet\'s rows', (tester) async {
     await _pump(tester, _Seq(),
-        SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+        SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
         filters: _duo);
     // .last: the row (the chips above name the filters too).
     _whole(tester, find.text('L-enhance').last);
@@ -1340,7 +1340,7 @@ void main() {
       );
     final prefs = _Prefs(true);
     final c = await _pump(tester, seq,
-        SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+        SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
         overrides: [simpleModePrefsProvider.overrideWithValue(prefs)]);
     await tester.tap(find.byKey(const Key('simple-run-start')));
     await tester.pumpAndSettle();
@@ -1392,6 +1392,7 @@ void main() {
     expect(find.text('6 × 5 s'), findsOneWidget);
     expect(find.text('2 × 5 s'), findsOneWidget);
     expect(find.text('0 × 5 s'), findsOneWidget);
+    expect(find.text('Image Library'), findsNothing, reason: 'the rail already has Library');
   });
 
   testWidgets('Night done: a plan that dawn ended says so (#1560)', (tester) async {
@@ -1503,7 +1504,7 @@ void main() {
           seq,
           SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+              SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
               SimpleRunPanel(onAdd: () {}, onEdit: (i) => edited = i),
             ]),
           ));
@@ -1530,7 +1531,7 @@ void main() {
           seq,
           SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}),
+              SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
               SimpleRunPanel(onAdd: () {}, onEdit: (_) {}),
             ]),
           ));
@@ -1606,7 +1607,7 @@ void main() {
       var closed = 0;
       final seq = _Seq();
       final c = await _pump(tester, seq,
-          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
       await create(tester);
       await pick(tester, c, _m42);
       await create(tester);
@@ -1618,7 +1619,7 @@ void main() {
             home: Scaffold(
                 body: Center(
                     child: SimpleRunSheet(
-                        editing: 1, onShowSky: () {}, onPickInSky: () {}, onCreated: () => closed++, onLibrary: () {})))),
+                        editing: 1, onShowSky: () {}, onPickInSky: () {}, onCreated: () => closed++)))),
       ));
       await tester.pumpAndSettle();
       expect(find.text('Edit M42'), findsOneWidget);
@@ -1639,7 +1640,7 @@ void main() {
       // target the rig no longer had, so it was never imaged.
       final seq = _Seq();
       final c = await _pump(tester, seq,
-          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {}));
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
       await create(tester);
       await pick(tester, c, _m42);
       await create(tester);
@@ -1650,7 +1651,7 @@ void main() {
             home: Scaffold(
                 body: Center(
                     child: SimpleRunSheet(
-                        editing: 1, onShowSky: () {}, onPickInSky: () {}, onCreated: () {}, onLibrary: () {})))),
+                        editing: 1, onShowSky: () {}, onPickInSky: () {}, onCreated: () {})))),
       ));
       await tester.pumpAndSettle();
       seq.updatesBeforeFail = 1; // the remove goes through; adding it back does not

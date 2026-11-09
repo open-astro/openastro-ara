@@ -1732,7 +1732,6 @@ class SimpleRunSheet extends ConsumerStatefulWidget {
     required this.onShowSky,
     required this.onPickInSky,
     required this.onCreated,
-    required this.onLibrary,
     this.editing,
   });
 
@@ -1746,7 +1745,6 @@ class SimpleRunSheet extends ConsumerStatefulWidget {
   /// Closes the sheet for the sky; Sky's card brings it back.
   final VoidCallback onPickInSky;
   final VoidCallback onCreated;
-  final VoidCallback onLibrary;
 
   @override
   ConsumerState<SimpleRunSheet> createState() => _SimpleRunSheetState();
@@ -1853,7 +1851,6 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 child: _NightDone(
                   run: run,
                   info: info!,
-                  onLibrary: widget.onLibrary,
                 ),
               )
             : _plan(run),
@@ -2648,12 +2645,10 @@ class _NightDone extends ConsumerWidget {
   const _NightDone({
     required this.run,
     required this.info,
-    required this.onLibrary,
   });
 
   final SimpleRun run;
   final SequenceRunStateInfo info;
-  final VoidCallback onLibrary;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -2752,23 +2747,13 @@ class _NightDone extends ConsumerWidget {
               ],
             ),
         ],
-        Row(
-          spacing: AraSpace.s8,
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: onLibrary,
-                child: Text(context.l10n.planImageLibrary),
-              ),
-            ),
-            Expanded(
-              child: FilledButton(
-                key: const Key('simple-run-new-plan'),
-                onPressed: ref.read(simpleRunProvider.notifier).newPlan,
-                child: Text(context.l10n.planNewPlan),
-              ),
-            ),
-          ],
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            key: const Key('simple-run-new-plan'),
+            onPressed: ref.read(simpleRunProvider.notifier).newPlan,
+            child: Text(context.l10n.planNewPlan),
+          ),
         ),
       ],
     );

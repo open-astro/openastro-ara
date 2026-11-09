@@ -490,7 +490,6 @@
   "planStopped": "parada",
   "planFailed": "falhou",
   "planStoppedAt": "Parou em: {step}",
-  "planImageLibrary": "Biblioteca de imagens",
   "planNewPlan": "Novo plano",
   "planImagingTarget": "FOTOGRAFANDO {name}",
   "planMountStopped": "Montagem parada",

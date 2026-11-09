@@ -1738,9 +1738,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get planImageLibrary => 'Image Library';
-
-  @override
   String get planNewPlan => 'New plan';
 
   @override

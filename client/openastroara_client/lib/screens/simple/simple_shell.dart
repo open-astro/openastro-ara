@@ -913,9 +913,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         _popover = _Popover.none;
         _closeSheet();
       }),
-      onLibrary: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
-      ),
     );
     final sel = ref.watch(planetariumSelectionProvider);
     final motion = reduceMotionOf(context)
