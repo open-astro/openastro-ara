@@ -17,6 +17,7 @@ import '../../models/filter_wheel_status.dart';
 import '../../models/focuser_status.dart';
 import '../../models/switch_device.dart';
 import '../../models/weather_status.dart';
+import '../../widgets/equipment/cooling_fan_picker.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../models/guider_status.dart';
 import '../../state/equipment/filter_wheel_state.dart';
@@ -30,6 +31,7 @@ import '../../state/equipment/switch_state.dart';
 import '../../state/equipment/weather_state.dart';
 import '../../state/guider/guider_equipment_state.dart';
 import '../../state/guider/guider_state.dart';
+import '../../state/settings/cooling_fan_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../state/focus/autofocus_live_state.dart';
 import '../../state/settings/autofocus_settings_state.dart';
@@ -214,6 +216,12 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
             ),
           );
         }
+      }
+      if (caps != null && caps.hasCooler) {
+        children.addAll([
+          const Divider(height: AraSpace.s16),
+          const ProfileCoolingFanPicker(style: kSimpleText),
+        ]);
       }
       // The camera's gain, shared with Preview's chip.
       children.add(
@@ -2932,6 +2940,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     final l10n = context.l10n;
     final async = ref.watch(switchListProvider);
     final acting = ref.watch(switchActingProvider);
+    final fan = ref.watch(coolingFanProvider).value ?? CoolingFan.none;
     final connected = [
       for (final d in async.value ?? const <SwitchDevice>[])
         if (d.isConnected) d,
@@ -2947,14 +2956,14 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
               // A range of one value has nothing to set. A dew output its
               // controller regulates shows, as a readout, even when the
               // driver reports it read-only meanwhile.
-              if (!isThermalSwitchFanPort(d, p) &&
+              if (!isCoolingFanPort(d, p, fan) &&
                   (p.canWrite && p.max > p.min || _autoRegulated(d, p)))
                 p,
           ],
           readings: [
             for (final p in d.ports)
               if (!p.canWrite &&
-                  !isThermalSwitchFanPort(d, p) &&
+                  !isCoolingFanPort(d, p, fan) &&
                   !_autoRegulated(d, p))
                 p,
           ],

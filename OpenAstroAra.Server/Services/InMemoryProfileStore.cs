@@ -458,6 +458,18 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    // #1700 — no cooling fan designated until the user chooses one.
+    private CoolingFanDto _coolingFan = CoolingFanDto.None;
+
+    public CoolingFanDto GetCoolingFan() {
+        lock (_lock) { return _coolingFan; }
+    }
+
+    public void PutCoolingFan(CoolingFanDto value) {
+        lock (_lock) { _coolingFan = value; }
+        RaiseChanged();
+    }
+
     // §36 custom terrain horizon — empty until entered.
     private CustomHorizonDto _customHorizon = new(Points: []);
 

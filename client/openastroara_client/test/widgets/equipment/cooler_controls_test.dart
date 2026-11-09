@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/switch_device.dart';
+import 'package:openastroara/state/settings/cooling_fan_state.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/equipment_device_api.dart';
@@ -160,6 +161,7 @@ Future<_FakeCameraApi> _pump(WidgetTester tester, CameraStatus status,
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
       cameraStatusApiFactoryProvider.overrideWithValue((_) => api),
       switchApiProvider.overrideWithValue(sw),
+      coolingFanProvider.overrideWith(() => _FixedFan()),
       switchListProvider.overrideWith(() => switchListFails
           ? _FailingSwitchListNotifier()
           : _FixedSwitchListNotifier(sw)),
@@ -172,6 +174,9 @@ Future<_FakeCameraApi> _pump(WidgetTester tester, CameraStatus status,
       ),
     ),
   ));
+  // The fan row that loads the designation isn't in this harness.
+  ProviderScope.containerOf(tester.element(find.byType(CoolerControls)))
+      .listen(coolingFanProvider, (_, _) {});
   await tester.pumpAndSettle();
   return api;
 }
@@ -282,4 +287,9 @@ void main() {
     expect(find.textContaining("Couldn't change that"), findsNothing);
     expect(find.textContaining('could not read the switch state'), findsNothing);
   });
+}
+
+class _FixedFan extends CoolingFanNotifier {
+  @override
+  Future<CoolingFan> build() async => const CoolingFan(deviceId: 'switch-5', portId: 1);
 }

@@ -54,6 +54,7 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ### Changed
 
+- The cooling fan interlock now follows a fan you choose instead of a device called "Thermal Switch": pick the fan's switch and port under **Cooling fan** in the Camera window, the setup wizard or the camera settings. It works on any driver and survives renaming the device. Existing profiles have no fan chosen, so no fan runs with the cooler until you choose one: Ara asks once and logs it when cooling starts (#1700).
 - Emergency Stop now stops the mount where it is: it aborts any slew or manual move and switches tracking off. It no longer parks, because a park is a slew that can repeat the fault you pressed Stop for. The API field `park_requested` is now `mount_stopped` on this path, and the failed step `park` is now `stop_mount` (#1672).
 - The architecture decisions now live in `docs/adr/`: nine accepted records cover the daemon and client split, Alpaca-only equipment, client-side planning, the trusted-LAN single-client model, the Wayland-only Linux client, ASTAP, GPS on the client and Simple Mode, and three proposed records (0011 to 0013) from an architecture review describe code that does not exist yet. `design/PORT_PLAYBOOK.md`, `design/README.md`, the Simple Mode brief and the Sky Album spec point at the records instead of repeating them.
 

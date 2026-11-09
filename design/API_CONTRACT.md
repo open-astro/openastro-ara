@@ -1280,3 +1280,15 @@ its start and the client has nothing to do with it.
 **Spec ref:** PORT_PLAYBOOK.md §63.4
 
 **Related:** #1661, #1664
+
+## 2026-11-09 — The cooling fan is designated in the profile: `GET`/`PUT /profile/cooling-fan` (#1700)
+
+**Endpoint(s) or area:** `GET`/`PUT /api/v1/profile/cooling-fan`, `CoolingFanDto`, `ProfileSnapshotDto.cooling_fan`
+
+**Decision:** The profile names the switch that runs the camera's cooling fan by its `device_id` (Alpaca `UniqueId`) and `port_id`. Both null, or the field absent from an older profile, means no fan is designated and there is no interlock. A half-set designation is a 422. Profile sharing strips the field, because a `UniqueId` names the donor's own switch. The daemon never infers a designation from a device name.
+
+**Reasoning:** Alpaca has no fan capability and ADR 0003 rule 2 forbids branching on a device name, so the choice has to come from the user. Two nullable fields keep one schema and one GET/PUT, like the other profile sections.
+
+**Spec ref:** `Services/CoolingFanInterlock.cs`, `Services/SwitchService.cs` (`SyncFanToCoolingCameraAsync`)
+
+**Related:** #1065, #1076, #1695

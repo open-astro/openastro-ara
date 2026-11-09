@@ -805,5 +805,15 @@
   "shellStorageEject": "Ejetar",
   "shellStorageCheck": "Verificar disco",
   "searchSettingStorage": "Armazenamento",
-  "searchWordsStorage": "disco hd ssd quadros salvar espaço ejetar usb"
+  "searchWordsStorage": "disco hd ssd quadros salvar espaço ejetar usb",
+  "coolingFan": "Ventoinha de refrigeração",
+  "coolingFanNone": "Nenhuma",
+  "coolingFanNotConnected": "Ventoinha escolhida (não conectada)",
+  "coolingFanChosenNote": "Esta ventoinha liga com a refrigeração e não pode ser desligada enquanto a câmera estiver refrigerando.",
+  "coolingFanNoneNote": "Nenhuma ventoinha foi escolhida, então o Ara não aciona uma ventoinha com a refrigeração.",
+  "coolingFanCouldntSave": "Não foi possível salvar a ventoinha de refrigeração",
+  "coolingFanAsk": "Escolha a ventoinha de refrigeração da sua câmera para que ela funcione com a refrigeração.",
+  "coolingFanAskFullUi": "Escolha a ventoinha de refrigeração da sua câmera em Ajustes › Câmera para que ela funcione com a refrigeração.",
+  "coolingFanChoose": "Escolher",
+  "coolingFanNotNow": "Agora não"
 }

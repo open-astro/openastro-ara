@@ -4,12 +4,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart';
+import 'package:openastroara/models/switch_device.dart' show CoolingFan;
 import 'package:openastroara/state/equipment/camera_state.dart';
+import 'package:openastroara/state/settings/cooling_fan_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 
 /// A camera with a cooler; records the cooler commands instead of sending them.
+class _FixedFan extends CoolingFanNotifier {
+  @override
+  Future<CoolingFan> build() async => CoolingFan.none;
+}
+
 class _Camera extends CameraStatusNotifier {
   _Camera(this.json);
   final Map<String, dynamic> json;
@@ -61,6 +68,7 @@ Future<(ProviderContainer, _Camera)> _pump(
       deviceDriverProvider.overrideWith(
         (ref, type) async => type == 'camera' ? driver : null,
       ),
+      coolingFanProvider.overrideWith(() => _FixedFan()),
     ],
   );
   addTearDown(c.dispose);
@@ -231,4 +239,18 @@ void main() {
       expect(find.byKey(const Key('simple-camera-cooler-on')), findsNothing);
     },
   );
+
+  testWidgets('the Cooling fan picker sits in the Camera window of a cooling camera', (tester) async {
+    await _pump(tester, _wire());
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('cooling-fan-picker')), findsOneWidget);
+    expect(find.text('Cooling fan'), findsOneWidget);
+    expect(find.text('No fan is chosen, so Ara does not run a fan with the cooler.'), findsOneWidget);
+  });
+
+  testWidgets('a camera with no cooler has no Cooling fan picker', (tester) async {
+    await _pump(tester, _wire(cooler: false));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('cooling-fan-picker')), findsNothing);
+  });
 }

@@ -433,6 +433,7 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
         applyDraftToStorage(await api.getStorageSettings(), d))),
     _trySave(() async => api.putSafetyPolicies(
         applyDraftToSafety(await api.getSafetyPolicies(), d))),
+    if (d.coolingFan case final fan?) _trySave(() async => api.putCoolingFan(fan)),
   ]))
       .whereType<Object>()
       .toList();

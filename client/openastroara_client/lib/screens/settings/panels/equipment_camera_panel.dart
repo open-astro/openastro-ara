@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../../../widgets/status_indicator.dart' show StatusBlink;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/camera_status.dart';
@@ -11,6 +13,7 @@ import '../../../theme/ara_colors.dart';
 import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/equipment/cooler_controls.dart';
+import '../../../widgets/equipment/cooling_fan_picker.dart';
 import '../../../widgets/equipment/fan_switch_row.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -106,16 +109,17 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
           ),
         // §25.5.5 — cooler on/off + target presets (−10/−5/0/+5 °C) + custom
         // target, shared with the Imaging tab. The cooling-fan sync is
-        // daemon-side (#1065/#1076): the server starts the Thermal-Switch Fan
+        // daemon-side (#1065/#1076): the server starts the designated fan
         // port before a cooler-on and stops it after a cooler-off.
         // Always built: CoolerControls itself renders the sensor-temperature
         // row + a "Does not support cooling" note for uncooled cameras.
         const CoolerControls(),
-        // Cooling fan — exposed via the bridge's ToupTek Thermal Switch
-        // device (a "Fan" port); hidden when none is connected. Turning the
+        // Cooling fan — the switch port the profile designates (#1700);
+        // hidden when none is designated and connected. Turning the
         // fan off while the TEC is cooling is refused (it vents the heat
         // sink), closing the manual fan-off gap left by #964.
         const FanSwitchRow(),
+        if (caps?.hasCooler ?? false) const ProfileCoolingFanPicker(),
 
         const Divider(height: 20, color: AraColors.border),
         if (caps != null) ...[
@@ -148,7 +152,9 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
                     children: [
                       const Text('Readout mode'),
                       HelpIcon(
-                          helpKey: 'eq.camera.readout_mode', device: s.name),
+                        helpKey: 'eq.camera.readout_mode',
+                        device: s.name,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 6),
@@ -161,12 +167,14 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
                           label: Text(caps.readoutModes[i]),
                           selected:
                               _readoutIndex(caps.readoutModes, s.readoutMode) ==
-                                  i,
+                              i,
                           onSelected: s.isBusy
                               ? null
-                              : (_) => _run(() => ref
-                                  .read(cameraStatusProvider.notifier)
-                                  .setReadoutMode(i)),
+                              : (_) => _run(
+                                  () => ref
+                                      .read(cameraStatusProvider.notifier)
+                                      .setReadoutMode(i),
+                                ),
                           visualDensity: VisualDensity.compact,
                           materialTapTargetSize:
                               MaterialTapTargetSize.shrinkWrap,

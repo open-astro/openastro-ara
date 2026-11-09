@@ -37,6 +37,7 @@ import '../../state/night_mode_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/sky_atlas/planetarium_selection_state.dart';
+import '../../state/settings/cooling_fan_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
@@ -277,6 +278,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focus.requestFocus();
     });
+    ref.listenManual(coolingFanAskDueProvider, (_, due) {
+      if (due) unawaited(_askCoolingFan());
+    }, fireImmediately: true);
     ref.listenManual(mountProvider, (previous, next) {
       final caps = next.value?.capabilities;
       final was = previous?.value?.capabilities;
@@ -444,6 +448,26 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
               l10n.bahtinovMaskRemoved,
               () =>
                   unawaited(ref.read(bahtinovFocusProvider.notifier).finish()),
+            ),
+          ],
+        );
+  }
+
+  /// #1700 — a cooling camera and a switch, no fan chosen: a pill asks once.
+  Future<void> _askCoolingFan() async {
+    if (!await claimCoolingFanAsk(ref.read) || !mounted) return;
+    final l10n = context.l10n;
+    ref
+        .read(simpleMessagesProvider.notifier)
+        .show(
+          SimpleMessageKind.question,
+          l10n.coolingFanAsk,
+          origin: SimpleStatusOrigin.camera,
+          actions: [
+            SimpleMessageAction(l10n.coolingFanNotNow, () {}),
+            SimpleMessageAction(
+              l10n.coolingFanChoose,
+              () => _openFromPill(SimpleStatusOrigin.camera),
             ),
           ],
         );

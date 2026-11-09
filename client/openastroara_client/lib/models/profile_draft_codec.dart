@@ -8,6 +8,7 @@
 library;
 
 import 'profile_draft.dart';
+import 'switch_device.dart' show CoolingFan;
 
 /// Wire version of the local file; bump when a field changes meaning.
 const int profileDraftCodecVersion = 1;
@@ -37,6 +38,7 @@ Map<String, dynamic> profileDraftToJson(ProfileDraft d) {
     'device_endpoints': {
       for (final e in d.deviceEndpoints.entries) e.key: [...e.value],
     },
+    if (d.coolingFan != null) 'cooling_fan': d.coolingFan!.toJson(),
     'equipment': strip({
       'camera': d.equipment.cameraDeviceId,
       'filter_wheel': d.equipment.filterWheelDeviceId,
@@ -223,6 +225,11 @@ ProfileDraft profileDraftFromJson(Map<String, dynamic> json) {
     }
   }
 
+  if (json['cooling_fan'] is Map<String, dynamic>) {
+    d.coolingFan = CoolingFan.fromJson(
+      json['cooling_fan'] as Map<String, dynamic>,
+    );
+  }
   final eq = section('equipment');
   d.equipment.cameraDeviceId = str(eq, 'camera');
   d.equipment.filterWheelDeviceId = str(eq, 'filter_wheel');

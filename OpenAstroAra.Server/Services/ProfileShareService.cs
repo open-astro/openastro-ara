@@ -143,6 +143,7 @@ public sealed class ProfileShareService : IProfileShareService {
     ///   <item>FilterSet — STRIP all (donor's physical filters; recipient declares their own)</item>
     ///   <item>Unguided — KEEP (guard thresholds and probe ladder: tuning judgement, no PII)</item>
     ///   <item>GuiderAdvanced — KEEP (guider tuning like aggressiveness: star detection, algorithms, limits; no path, network or identity)</item>
+    ///   <item>CoolingFan — STRIP (a UniqueId names the donor's own switch; the recipient designates theirs)</item>
     /// </list>
     /// </remarks>
     internal static ProfileSnapshotDto StripForShare(ProfileSnapshotDto s) => s with {
@@ -210,6 +211,8 @@ public sealed class ProfileShareService : IProfileShareService {
         // Strip the #1362 equipment identities — the donor's serial numbers; on the recipient's rig
         // every slot would otherwise read as a gear change on first connect.
         EquipmentIdentity = EquipmentIdentityDto.Empty,
+        // Strip the #1700 fan designation — it names the donor's switch; the recipient is asked for theirs.
+        CoolingFan = null,
     };
 
     private static ProfileShareRigDescriptionDto BuildRigDescription(ProfileSnapshotDto s) =>
@@ -261,6 +264,7 @@ public sealed class ProfileShareService : IProfileShareService {
         "Tracking calibration — measured on the donor's mount",
         "Sky-model calibration — fitted to the donor's optics, camera and sky",
         "Guider calibration state (dark library / defect map stamps) — rebuild on your rig",
+        "Cooling fan — choose your own in the camera settings",
     };
 
     // Returns Task.FromException (never throws synchronously) so every exit — including

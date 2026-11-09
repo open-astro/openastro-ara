@@ -48,6 +48,7 @@ public static class ProfileStoreSnapshot {
         Unguided: s.GetUnguidedSettings(),
         GuiderAdvanced: s.GetGuiderAdvancedSettings(),
         FilterWheelPolicy: s.GetFilterWheelPolicy(),
+        CoolingFan: s.GetCoolingFan(),
         TrackingCalibration: s.GetTrackingCalibration(),
         SkyModelCalibration: s.GetSkyModelCalibration(),
         EquipmentIdentity: s.GetEquipmentIdentity(),
@@ -103,5 +104,7 @@ public static class ProfileStoreSnapshot {
         // #1075 — a pre-policy snapshot back-fills the default (home on); a profile that never turned
         // the home off must turn it back on when selected, never inherit the previous rig's "off".
         s.PutFilterWheelPolicy(snap.FilterWheelPolicy ?? FilterWheelPolicyDto.Default);
+        // #1700 — selecting a profile with no designation must not inherit the previous rig's fan.
+        s.PutCoolingFan(snap.CoolingFan ?? CoolingFanDto.None);
     }
 }

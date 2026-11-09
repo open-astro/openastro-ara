@@ -501,6 +501,30 @@ public static class ProfileEndpoints {
             .WithName("PutFilterWheelPolicy")
             .WithSummary("Replace the active profile's filter-wheel policy.");
 
+        // #1700 — which switch port is the camera's cooling fan (both fields null = none).
+        profile.MapGet("/cooling-fan", (IProfileStore store) =>
+                Results.Ok(store.GetCoolingFan()))
+            .Produces<CoolingFanDto>(StatusCodes.Status200OK)
+            .WithName("GetCoolingFan")
+            .WithSummary("Get the switch port designated as the active profile's cooling fan.");
+
+        profile.MapPut("/cooling-fan", (CoolingFanDto body, IProfileStore store) => {
+            if (CoolingFanInterlock.DesignationError(body) is { } error) {
+                return Results.Problem(
+                    type: "https://openastro.net/errors/validation",
+                    title: "Invalid cooling fan",
+                    statusCode: StatusCodes.Status422UnprocessableEntity,
+                    detail: error);
+            }
+            store.PutCoolingFan(body);
+            return Results.Ok(body);
+        })
+            .Accepts<CoolingFanDto>("application/json")
+            .Produces<CoolingFanDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("PutCoolingFan")
+            .WithSummary("Designate the active profile's cooling fan: a switch's device_id and port_id, or both null for none.");
+
         profile.MapGet("/equipment-connection", (IProfileStore store) =>
                 Results.Ok(store.GetEquipmentConnection()))
             .Produces<EquipmentConnectionDto>(StatusCodes.Status200OK)

@@ -18,7 +18,10 @@ import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/equipment/switch_state.dart';
+import 'package:openastroara/state/settings/cooling_fan_state.dart';
 import 'package:openastroara/state/settings/equipment_connection_state.dart';
+import 'package:openastroara/models/switch_device.dart' show CoolingFan, SwitchDevice;
 import 'package:openastroara/state/wizard/equipment_readiness_state.dart';
 import 'package:openastroara/state/wizard_state.dart';
 
@@ -109,6 +112,8 @@ Future<ProviderContainer> _pump(
     if (baseOptics != null)
       profileApiProvider.overrideWithValue(_OpticsOnlyProfileApi(baseOptics)),
     savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
+    coolingFanProvider.overrideWith(_NoFan.new),
+    switchListProvider.overrideWith(_NoSwitches.new),
     equipmentDiscoveryApiFactoryProvider
         .overrideWithValue((_) => _FakeDiscoveryApi(byType)),
     deviceFactsSourceFactoryProvider.overrideWithValue(
@@ -126,6 +131,13 @@ Future<ProviderContainer> _pump(
 }
 
 void main() {
+  testWidgets('#1700: the wizard offers the Cooling fan choice and keeps it in the draft', (tester) async {
+    final container = await _pump(tester, byType: const {});
+    expect(find.byKey(const Key('cooling-fan-picker')), findsOneWidget);
+    expect(container.read(wizardControllerProvider).draft.coolingFan, isNull,
+        reason: 'untouched: Save keeps the base profile choice');
+  });
+
   testWidgets(
       'a single discovered device auto-assigns, verifies, and writes its '
       'facts into the draft', (tester) async {
@@ -326,4 +338,14 @@ class _OpticsOnlyProfileApi implements ProfileApi {
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnimplementedError('${invocation.memberName} is not used by the reducer field');
+}
+
+class _NoFan extends CoolingFanNotifier {
+  @override
+  Future<CoolingFan> build() async => CoolingFan.none;
+}
+
+class _NoSwitches extends SwitchListNotifier {
+  @override
+  Future<List<SwitchDevice>> build() async => const [];
 }

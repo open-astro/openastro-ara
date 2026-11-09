@@ -27,6 +27,7 @@ import '../state/settings/plate_solve_settings_state.dart';
 import '../state/settings/safety_policies_state.dart';
 import '../state/settings/site_settings_state.dart';
 import '../state/settings/storage_settings_state.dart';
+import '../models/switch_device.dart' show CoolingFan;
 
 /// Client-side wrapper around §37 profile endpoints. Phase 12h.6a landed the
 /// daemon side (`GET`/`PUT /api/v1/profile/imaging-defaults` backed by an
@@ -621,6 +622,23 @@ class ProfileApi {
       data: value.toJson(),
     );
     return FilterWheelPolicy.fromJson(res.data ?? const {});
+  }
+
+  /// GET the switch port designated as the profile's cooling fan (#1700).
+  Future<CoolingFan> getCoolingFan() async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/profile/cooling-fan',
+    );
+    return CoolingFan.fromJson(res.data ?? const {});
+  }
+
+  /// PUT the cooling fan designation. Returns Ara's echo.
+  Future<CoolingFan> putCoolingFan(CoolingFan value) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/cooling-fan',
+      data: value.toJson(),
+    );
+    return CoolingFan.fromJson(res.data ?? const {});
   }
 
   /// GET the active profile's equipment auto-connect bools.

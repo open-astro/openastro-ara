@@ -95,4 +95,6 @@ public sealed record ProfileSnapshotDto(
     EquipmentIdentityDto? EquipmentIdentity = null,
     // #1267 item 5 — the recent and saved targets. Client-authored; the normalizer back-fills null (a
     // pre-#1267 file) to the empty list and drops malformed entries.
-    SavedTargetsDto? SavedTargets = null);
+    SavedTargetsDto? SavedTargets = null,
+    // #1700 — the camera's cooling fan. Null (every pre-#1700 file) = no designation, no interlock.
+    CoolingFanDto? CoolingFan = null);

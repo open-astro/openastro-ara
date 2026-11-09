@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/camera_status.dart';
 import '../settings/equipment_connection_state.dart';
+import '../settings/cooling_fan_state.dart';
 import '../../models/server.dart';
 import '../../models/switch_device.dart';
 import '../../services/equipment_device_api.dart';
@@ -51,14 +52,16 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
   /// Turn the cooler on/off and, when on, set the target CCD temperature (°C).
   Future<bool> setCooler(bool enabled, {double? targetTemperatureC}) async {
     // §25.5.6 / #1065 / #1076 — the cooling fan follows the cooler DAEMON-side:
-    // the server starts the bridge's Thermal-Switch Fan port BEFORE a cooler-on
+    // the server starts the designated fan port BEFORE a cooler-on
     // (a fan that cannot be started refuses to start cooling, a 409 rendered
     // via the error detail) and stops it after a cooler-off (a failed fan-off
     // is an equipment fault in the notification center).
-    final performed = await performAction((api) => api.command('cooler', {
-          'enabled': enabled,
-          'target_temperature_c': targetTemperatureC,
-        }));
+    final performed = await performAction(
+      (api) => api.command('cooler', {
+        'enabled': enabled,
+        'target_temperature_c': targetTemperatureC,
+      }),
+    );
     if (performed && await _hasKnownFanPort()) {
       // The switch list is pull-on-demand (no value push from the daemon), so
       // re-read it once the cooler command landed: FanSwitchRow and the
@@ -86,7 +89,9 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
       final switches = await ref
           .read(switchListProvider.future)
           .timeout(const Duration(seconds: 2));
-      return findThermalSwitchFanPort(switches) != null;
+      // Only a loaded designation: without one no screen shows the fan to refresh.
+      final fan = ref.read(coolingFanProvider).value ?? CoolingFan.none;
+      return findCoolingFanPort(switches, fan) != null;
     } catch (_) {
       return false;
     }
@@ -96,7 +101,6 @@ class CameraStatusNotifier extends EquipmentDeviceNotifier<CameraStatus> {
   Future<bool> setReadoutMode(int modeIndex) => performAction(
     (api) => api.command('readoutmode', {'mode_index': modeIndex}),
   );
-
 }
 
 final cameraStatusProvider =

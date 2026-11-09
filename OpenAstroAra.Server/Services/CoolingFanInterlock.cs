@@ -22,9 +22,10 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
-/// §25.5.6 / #1065 — the camera-cooling fan interlock, daemon-side. The bridge exposes the
-/// ToupTek "Thermal Switch" whose "Fan" port vents the TEC's heat sink; two rules keep the
-/// camera safe and they now live HERE so every path to the cooler and the fan that goes through
+/// §25.5.6 / #1065 — the camera-cooling fan interlock, daemon-side. The profile designates the
+/// switch port that vents the TEC's heat sink (<see cref="CoolingFanDto"/>, #1700: Alpaca has no
+/// fan capability and ADR 0003 rule 2 forbids picking one by device name; no designation, no
+/// interlock); two rules keep the camera safe and they now live HERE so every path to the cooler and the fan that goes through
 /// these services (REST from any client, the §58 unattended shutdown's warm ramp, the sequencer's
 /// SetSwitchValue instruction via <see cref="SwitchService.SetSwitchValue"/>, #1076) gets them, not
 /// just the Flutter UI's own buttons.
@@ -40,30 +41,35 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public static class CoolingFanInterlock {
 
-    /// <summary>The device-name marker and port name that identify the cooling fan. Scoped to the
-    /// bridge's Thermal Switch so an unrelated switch with a port literally named "Fan" is never
-    /// actuated (or blocked) by camera cooling. Mirrors the client's
-    /// <c>isThermalSwitchFanPort</c>.</summary>
-    public static bool IsThermalSwitchFanPort(SwitchDto device, SwitchPortDto port) {
-        ArgumentNullException.ThrowIfNull(port);
-        return IsThermalSwitchDevice(device) && port.Name == "Fan";
-    }
-
-    /// <summary>The bridge's ToupTek Thermal Switch itself (the device that carries the fan port).</summary>
-    public static bool IsThermalSwitchDevice(SwitchDto device) {
+    /// <summary>Whether <paramref name="port"/> on <paramref name="device"/> is the designated fan.</summary>
+    public static bool IsDesignatedFanPort(SwitchDto device, SwitchPortDto port, CoolingFanDto fan) {
         ArgumentNullException.ThrowIfNull(device);
-        return device.Name.Contains("Thermal Switch", StringComparison.Ordinal);
+        ArgumentNullException.ThrowIfNull(port);
+        ArgumentNullException.ThrowIfNull(fan);
+        return device.DeviceId == fan.DeviceId && port.Id == fan.PortId;
     }
 
-    /// <summary>The first CONNECTED switch that carries a writable cooling-fan port, or null.</summary>
-    public static (SwitchDto Device, SwitchPortDto Port)? FindThermalSwitchFanPort(IEnumerable<SwitchDto> switches) {
+    /// <summary>Why a designation can't be stored, or null: device and port come as a pair, and the
+    /// port is an ASCOM short.</summary>
+    public static string? DesignationError(CoolingFanDto fan) {
+        ArgumentNullException.ThrowIfNull(fan);
+        if (fan.DeviceId is null && fan.PortId is null) {
+            return null;
+        }
+        return string.IsNullOrEmpty(fan.DeviceId) || fan.PortId is not (>= 0 and <= short.MaxValue)
+            ? "device_id and port_id go together: a switch's id and a port id from 0 to 32767, or both null for no fan."
+            : null;
+    }
+
+    /// <summary>The designated port, when its switch is CONNECTED and the port writable; else null.</summary>
+    public static (SwitchDto Device, SwitchPortDto Port)? FindFanPort(IEnumerable<SwitchDto> switches, CoolingFanDto fan) {
         ArgumentNullException.ThrowIfNull(switches);
         foreach (var device in switches) {
             if (device.State != EquipmentConnectionState.Connected) {
                 continue;
             }
             foreach (var port in device.Ports) {
-                if (port.CanWrite && IsThermalSwitchFanPort(device, port)) {
+                if (port.CanWrite && IsDesignatedFanPort(device, port, fan)) {
                     return (device, port);
                 }
             }
@@ -78,8 +84,8 @@ public static class CoolingFanInterlock {
     /// and a missed fan-on is the hazard); a cooler-OFF skips when the cached port already holds the
     /// floor — the §58 warm ramp calls the cooler once a minute and must not re-issue the same fan
     /// write each time (#1076).</summary>
-    public static (string DeviceId, SwitchValueRequestDto Request)? FanSyncRequest(IEnumerable<SwitchDto> switches, bool cooling) {
-        var fan = FindThermalSwitchFanPort(switches);
+    public static (string DeviceId, SwitchValueRequestDto Request)? FanSyncRequest(IEnumerable<SwitchDto> switches, CoolingFanDto designation, bool cooling) {
+        var fan = FindFanPort(switches, designation);
         if (fan is null) {
             return null;
         }
@@ -125,22 +131,20 @@ public static class CoolingFanInterlock {
     }
 
     /// <summary>Whether a write to a CONNECTED switch could be stopping the cooling fan, and so must
-    /// ask the camera before it goes through: the identified Fan port driven to its floor, or — while
-    /// the Thermal Switch's port snapshot is still unread (up to one refresh interval after connect)
-    /// and no port can be identified — any write of <c>value &lt;= 0</c>, the one way to drive an
-    /// unidentified port to its floor. A fan-on, a heater port or a mid-range PWM value is never held:
-    /// refusing a fan-on is the wrong direction for the hazard this interlock exists for.</summary>
-    public static bool IsPlausibleFanOff(SwitchDto device, SwitchValueRequestDto request) {
+    /// ask the camera before it goes through: the designated port driven to its floor, or — while
+    /// that port is not in the snapshot (unread for up to one refresh interval after connect, or
+    /// skipped by a pass whose read of it failed) — a write of <c>value &lt;= 0</c> to it, the one
+    /// way to drive an unread port to its floor. A fan-on, another port or a mid-range PWM value is
+    /// never held: refusing a fan-on is the wrong direction for the hazard this interlock exists for.</summary>
+    public static bool IsPlausibleFanOff(SwitchDto device, CoolingFanDto fan, SwitchValueRequestDto request) {
         ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(fan);
         ArgumentNullException.ThrowIfNull(request);
-        if (device.State != EquipmentConnectionState.Connected || !IsThermalSwitchDevice(device)) {
+        if (device.State != EquipmentConnectionState.Connected || device.DeviceId != fan.DeviceId || request.PortId != fan.PortId) {
             return false;
         }
-        if (device.Ports.Count == 0) {
-            return request.Value <= 0;
-        }
-        var port = device.Ports.FirstOrDefault(p => p.Id == request.PortId);
-        return port is not null && IsThermalSwitchFanPort(device, port) && IsFanOff(port, request.Value);
+        var port = device.Ports.FirstOrDefault(p => p.Id == fan.PortId);
+        return port is null ? request.Value <= 0 : IsFanOff(port, request.Value);
     }
 
     /// <summary>The refusal reason for a fan-off, or null when it is allowed. <paramref name="coolerOn"/>
