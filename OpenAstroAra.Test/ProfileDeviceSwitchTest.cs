@@ -302,6 +302,50 @@ namespace OpenAstroAra.Test {
         private async Task<HttpStatusCode> DeleteAsync(Guid id) =>
             (await http.DeleteAsync(new Uri($"/api/v1/profiles/{id}", UriKind.Relative))).StatusCode;
 
+        // Records whether the profile had already changed when the hold was taken, and when it ended.
+        private void WatchSiteHold(Action<Guid?> taken) {
+            var hold = new Mock<IDisposable>();
+            hold.Setup(h => h.Dispose()).Callback(() => rig.Log.Add("site-hold-released"));
+            mount.Setup(m => m.HoldSiteFollow()).Returns(() => { taken(repo.ActiveId); return hold.Object; });
+        }
+
+        [Test]
+        public async Task Selecting_a_profile_holds_the_mounts_site_until_the_devices_are_done() {
+            await SimRigConnectedAsync();
+            await RememberForAsync(real, RealMount);
+            Guid? activeAtHold = null;
+            WatchSiteHold(id => activeAtHold = id);
+
+            await SelectAsync(real);
+
+            Assert.That(activeAtHold, Is.EqualTo(sim), "held before the profile changes");
+            Assert.That(rig.Log[^1], Is.EqualTo("site-hold-released"), "released after every device");
+        }
+
+        [Test]
+        public async Task Creating_an_active_profile_holds_the_mounts_site() {
+            await SimRigConnectedAsync();
+            Guid? activeAtHold = null;
+            WatchSiteHold(id => activeAtHold = id);
+
+            await CreateAsync();
+
+            Assert.That(activeAtHold, Is.EqualTo(sim));
+            Assert.That(rig.Log[^1], Is.EqualTo("site-hold-released"));
+        }
+
+        [Test]
+        public async Task Deleting_the_active_profile_holds_the_mounts_site() {
+            await SimRigConnectedAsync();
+            Guid? activeAtHold = null;
+            WatchSiteHold(id => activeAtHold = id);
+
+            await DeleteAsync(sim);
+
+            Assert.That(activeAtHold, Is.EqualTo(sim));
+            Assert.That(rig.Log[^1], Is.EqualTo("site-hold-released"));
+        }
+
         [Test]
         public async Task Creating_an_active_profile_drops_the_devices_of_the_one_it_replaces() {
             await SimRigConnectedAsync();

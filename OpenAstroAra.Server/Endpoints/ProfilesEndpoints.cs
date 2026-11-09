@@ -55,6 +55,7 @@ public static partial class ProfilesEndpoints {
                     return Results.Problem("a sequence run is active — stop it before switching profiles",
                         statusCode: StatusCodes.Status409Conflict);
                 }
+                using var siteHold = activated ? devices.HoldSiteFollow() : null;
                 var meta = repo.Create(body.Name, body.Settings, makeActive: activated);
                 // Fire-and-forget: the 201 must not wait on a guider RPC.
                 _ = GuiderFollowsCreatedProfileAsync(guider, loggerFactory.CreateLogger("ProfilesEndpoints"), source, meta.Name, activated);
@@ -159,6 +160,7 @@ public static partial class ProfilesEndpoints {
                     return Results.Problem("a sequence run is active — stop it before switching profiles",
                         statusCode: StatusCodes.Status409Conflict);
                 }
+                using var siteHold = wasActive ? devices.HoldSiteFollow() : null;
                 // The repository decides atomically under its lock, so a concurrent select can't
                 // slip between an existence pre-check and the delete (TOCTOU).
                 var result = repo.Delete(id);
@@ -206,6 +208,7 @@ public static partial class ProfilesEndpoints {
                         statusCode: StatusCodes.Status409Conflict);
                 }
                 var alreadyActive = repo.ActiveId == id;
+                using var siteHold = devices.HoldSiteFollow();
                 if (!repo.SelectProfile(id)) {
                     return Results.NotFound();
                 }

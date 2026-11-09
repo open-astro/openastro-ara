@@ -50,6 +50,9 @@ public sealed partial class ProfileDeviceSwitch : IDisposable {
     // A device a service holds, with how to release it.
     private sealed record Slot(DeviceType Type, DiscoveredDeviceDto Device, bool Live, Func<Task> Disconnect, Func<Task> Forget);
 
+    /// <summary>Taken before the active profile changes and released once <see cref="ApplyAsync"/> is done.</summary>
+    public IDisposable? HoldSiteFollow() => _services.GetService<ITelescopeService>()?.HoldSiteFollow();
+
     /// <summary>Bring the connected devices in line with the now-active profile; returns one message per device with a problem.</summary>
     public async Task<IReadOnlyList<ProfileDeviceMessageDto>> ApplyAsync(CancellationToken ct) {
         await _gate.WaitAsync(ct).ConfigureAwait(false);
