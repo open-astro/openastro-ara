@@ -89,6 +89,21 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             }
         }
 
+        /// <summary>#1749 — stops a looping Guide Camera so a single frame can be taken. True when it is not
+        /// looping or has reached Stopped within <paramref name="timeout"/>; a guider that is guiding is left
+        /// for the Polar Align lease to refuse.</summary>
+        public async Task<bool> StopLoopForCaptureAsync(TimeSpan timeout, CancellationToken ct) {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var state = await GetAppState(LiveRpcTimeoutMs).ConfigureAwait(false);
+            if (state != PhdAppState.LOOPING && state != PhdAppState.SELECTED) {
+                return true;
+            }
+            var timeoutMs = (int)timeout.TotalMilliseconds;
+            var stop = await SendMessage<GenericPhdMethodResponse>(new Phd2StopCapture(), timeoutMs, notifyOnError: false).ConfigureAwait(false);
+            var leftMs = timeoutMs - (int)clock.ElapsedMilliseconds; // one limit across both steps
+            return stop.error == null && leftMs > 0 && await WaitForAppState(PhdAppState.STOPPED, ct, leftMs).ConfigureAwait(false);
+        }
+
         /// <summary>
         /// Validates the §45 solver-frame parameters at the send site and builds the wire request. A saved
         /// frame (<paramref name="save"/> true, or any <paramref name="path"/> given) requires a non-empty

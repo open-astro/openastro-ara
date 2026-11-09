@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-10T01:45:19+13:00",
+  "generatedAt": "2026-11-10T03:38:27+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -709,7 +709,7 @@
       "name": "Text Field",
       "kind": "input",
       "refersTo": "input",
-      "description": "Filled field on the input well with an outline border.",
+      "description": "Filled field on the input well with an outline border. A guider setting the latest push did not land is listed at the top of the settings in small text, under an amber warning icon and heading, with the Guider's own reason (#1748).",
       "html": "<input class=\"ds-input\" value=\"300 s\" aria-label=\"Exposure\">",
       "css": ".ds-input{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:#333333;color:#E0E0E0;border:1px solid #404040;border-radius:4px;padding:8px 10px;font-size:13px;font-variant-numeric:tabular-nums;width:140px} .ds-input:hover{border-color:#A0A0A0} .ds-input:focus-visible{outline:none;border-color:#1565C0;box-shadow:0 0 0 1px #1565C0}"
     },

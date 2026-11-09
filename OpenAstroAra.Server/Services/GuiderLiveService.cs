@@ -17,6 +17,7 @@ using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -276,7 +277,7 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
     public async Task<GuiderAdvancedViewDto> GetAdvancedAsync(CancellationToken ct) {
         var guider = _guider.ConnectedGuiderOrNull();
         if (guider is null) {
-            return new GuiderAdvancedViewDto(false, new GuiderAdvancedSettingsDto(), Array.Empty<string>(), Array.Empty<string>());
+            return new GuiderAdvancedViewDto(false, new GuiderAdvancedSettingsDto(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<GuiderNotAppliedDto>());
         }
         // All three at once: the read-back's thirteen getters already run in parallel, and the two
         // algorithm lists must not add two more timeouts after them on a slow guider.
@@ -291,7 +292,8 @@ public sealed partial class GuiderLiveService : IGuiderLiveService {
             true,
             current is null ? new GuiderAdvancedSettingsDto() : GuiderAdvancedSettingsMapping.ToDto(current),
             ra ?? Array.Empty<string>(),
-            dec ?? Array.Empty<string>());
+            dec ?? Array.Empty<string>(),
+            guider.LastPushNotApplied.Select(n => new GuiderNotAppliedDto(n.Setting, n.Reason)).ToList());
     }
 
     /// <summary>The stored calibration with its orthogonality error: how far the RA and Dec axes are

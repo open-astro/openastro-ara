@@ -245,9 +245,10 @@ public sealed partial class GuiderService {
             }
 
             var now = PaResidualClock();
-            var reason = rate is null ? "no_calibration" : !(pixelScale > 0) ? "no_pixel_scale" : fit is null ? "no_fit" : null;
+            var lowResponse = fit?.PulseResponse < PaResidualEstimator.MinPulseResponse;
+            var reason = rate is null ? "no_calibration" : !(pixelScale > 0) ? "no_pixel_scale" : fit is null ? "no_fit" : lowResponse ? "pulse_response_low" : null;
             PaResidualDto result;
-            if (fit is not PaResidualFit f) {
+            if (lowResponse || fit is not PaResidualFit f) {
                 result = started with { Status = "unavailable", CompletedUtc = now, Reason = reason };
             } else {
                 var pointing = MountPointing?.Invoke();

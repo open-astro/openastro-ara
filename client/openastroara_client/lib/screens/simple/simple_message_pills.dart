@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -178,6 +179,17 @@ class _Pill extends ConsumerWidget {
     // and its action goes under the words so they keep the width.
     final warning = m.kind == SimpleMessageKind.warning;
     final actionBelow = warning && m.actions.isNotEmpty;
+    // A warning's first line grows with the text size; its dot and × follow.
+    final line = TextPainter(
+      text: TextSpan(
+        text: 'Ag',
+        style: DefaultTextStyle.of(context).style.merge(kSimpleText),
+      ),
+      textScaler: MediaQuery.textScalerOf(context),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    final firstLineCentre = 14 + line.height / 2;
+    line.dispose();
     return Semantics(
       // Read out as it appears.
       liveRegion: true,
@@ -205,7 +217,7 @@ class _Pill extends ConsumerWidget {
                   : CrossAxisAlignment.center,
               children: [
                 Padding(
-                  padding: EdgeInsets.only(top: warning ? 19 : 0),
+                  padding: EdgeInsets.only(top: warning ? firstLineCentre - 5 : 0),
                   child: Icon(Icons.circle, size: 10, color: dot),
                 ),
                 Expanded(
@@ -244,7 +256,11 @@ class _Pill extends ConsumerWidget {
                       if (actionBelow)
                         TextButton(
                           onPressed: () => _answer(notifier, 0),
-                          child: Text(m.actions.first.label),
+                          // Shrinks in a narrow pill rather than breaking the word.
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(m.actions.first.label, softWrap: false),
+                          ),
                         ),
                     ],
                   ),
@@ -260,10 +276,15 @@ class _Pill extends ConsumerWidget {
                   ),
                 if (m.kind == SimpleMessageKind.error ||
                     m.kind == SimpleMessageKind.warning)
-                  IconButton(
-                    tooltip: context.l10n.pillsDismiss,
-                    icon: const Icon(Icons.close, size: 18),
-                    onPressed: () => notifier.dismiss(m.id),
+                  Padding(
+                    padding: EdgeInsets.only(
+                      top: warning ? math.max(0, firstLineCentre - 24) : 0,
+                    ),
+                    child: IconButton(
+                      tooltip: context.l10n.pillsDismiss,
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () => notifier.dismiss(m.id),
+                    ),
                   ),
                 if (m.kind == SimpleMessageKind.question)
                   Padding(

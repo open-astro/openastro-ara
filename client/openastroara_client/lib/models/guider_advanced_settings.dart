@@ -56,9 +56,14 @@ class GuiderAdvancedField {
   /// that axis); every other number must be positive.
   final bool allowZero;
 
-  /// The guider's own limits, when it has them (it refuses values outside).
+  /// The guider's own limits, when it has them (it refuses values outside),
+  /// in the units the field is shown in.
   final num? min;
   final num? max;
+
+  /// Shown value = stored value × this (#1748: mass change is entered as a
+  /// percentage and stored as the guider's fraction).
+  final double scale;
   const GuiderAdvancedField(
     this.key,
     this.label,
@@ -70,6 +75,7 @@ class GuiderAdvancedField {
     this.allowZero = false,
     this.min,
     this.max,
+    this.scale = 1,
   });
 
   Object? parse(Object? v) => switch (kind) {
@@ -85,11 +91,15 @@ class GuiderAdvancedField {
     return switch (kind) {
       GuiderAdvancedKind.toggle => v == true ? 'On' : 'Off',
       GuiderAdvancedKind.decimal =>
-        '${_trim((v as num).toDouble())}${unit == null ? '' : ' $unit'}',
+        '${_trim(shown(v as num))}${unit == null ? '' : ' $unit'}',
       GuiderAdvancedKind.integer => '$v${unit == null ? '' : ' $unit'}',
       GuiderAdvancedKind.choice => '$v',
     };
   }
+
+  /// The stored value in the units the field is shown in. Rounded so a
+  /// fraction like 0.35 does not come back as 35.00000000000001. Pure.
+  double shown(num v) => double.parse((v * scale).toStringAsFixed(6));
 
   /// The value as an editable number, at full precision (the display format
   /// rounds decimals; editing must not save the rounded value). Pure.
@@ -142,6 +152,7 @@ class GuiderAdvancedField {
       GuiderAdvancedKind.decimal,
       unit: 'px',
       help: 'A shift bigger than this counts as a jump.',
+      max: 100,
     ),
     GuiderAdvancedField(
       'search_region_px',
@@ -150,6 +161,8 @@ class GuiderAdvancedField {
       GuiderAdvancedKind.integer,
       unit: 'px',
       help: 'Half-size of the box the guider looks for its star in each frame.',
+      min: 7,
+      max: 50,
     ),
     GuiderAdvancedField(
       'min_star_snr',
@@ -186,7 +199,10 @@ class GuiderAdvancedField {
       'Mass change threshold',
       'Star detection',
       GuiderAdvancedKind.decimal,
-      help: 'How big a brightness change counts, in the guider\'s units.',
+      unit: '%',
+      help: 'How big a brightness change counts, as a percentage of the star\'s mass.',
+      max: 100,
+      scale: 100,
     ),
     GuiderAdvancedField(
       'auto_exposure_min_ms',
@@ -284,6 +300,7 @@ class GuiderAdvancedField {
       GuiderAdvancedKind.integer,
       unit: 'ms',
       help: 'The shortest the guider will adjust the pulse to.',
+      min: 20,
     ),
     GuiderAdvancedField(
       'backlash_ceiling_ms',
@@ -292,6 +309,7 @@ class GuiderAdvancedField {
       GuiderAdvancedKind.integer,
       unit: 'ms',
       help: 'The longest the guider will adjust the pulse to.',
+      max: 8000,
     ),
     GuiderAdvancedField(
       'assume_orthogonal',
@@ -320,6 +338,7 @@ class GuiderAdvancedField {
       'Dither & delay',
       GuiderAdvancedKind.decimal,
       help: 'Multiplies every dither the run asks for.',
+      max: 100,
     ),
     GuiderAdvancedField(
       'dither_ra_only',
@@ -339,17 +358,21 @@ class GuiderAdvancedField {
       'variable_delay_short_s',
       'Short delay',
       'Dither & delay',
-      GuiderAdvancedKind.decimal,
+      GuiderAdvancedKind.integer,
       unit: 's',
       help: 'Delay while the star is settling.',
+      allowZero: true,
+      max: 10,
     ),
     GuiderAdvancedField(
       'variable_delay_long_s',
       'Long delay',
       'Dither & delay',
-      GuiderAdvancedKind.decimal,
+      GuiderAdvancedKind.integer,
       unit: 's',
       help: 'Delay once guiding is calm.',
+      allowZero: true,
+      max: 120,
     ),
   ];
 }
@@ -360,11 +383,15 @@ class GuiderAdvancedView {
   final GuiderAdvancedSettings current;
   final List<String> raAlgorithms;
   final List<String> decAlgorithms;
+
+  /// What the latest settings push did not land (#1748).
+  final List<GuiderNotApplied> notApplied;
   const GuiderAdvancedView({
     this.connected = false,
     this.current = GuiderAdvancedSettings.empty,
     this.raAlgorithms = const [],
     this.decAlgorithms = const [],
+    this.notApplied = const [],
   });
 
   static const disconnected = GuiderAdvancedView();
@@ -383,6 +410,22 @@ class GuiderAdvancedView {
           : GuiderAdvancedSettings.empty,
       raAlgorithms: names(json['ra_algorithms']),
       decAlgorithms: names(json['dec_algorithms']),
+      notApplied: [
+        if (json['not_applied'] case final List<dynamic> entries)
+          for (final e in entries)
+            if (e case {
+              'setting': final String setting,
+              'reason': final String reason,
+            })
+              GuiderNotApplied(setting, reason),
+      ],
     );
   }
+}
+
+/// One setting the latest push did not land, and why.
+class GuiderNotApplied {
+  final String setting;
+  final String reason;
+  const GuiderNotApplied(this.setting, this.reason);
 }

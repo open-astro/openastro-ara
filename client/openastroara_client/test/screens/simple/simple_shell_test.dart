@@ -1763,7 +1763,8 @@ void main() {
         container.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, 'Message $i');
       }
       await tester.pump();
-      // The rail is measured after the first frame.
+      // The rail is measured after the first frame; the row narrows for the status pill after that.
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.pump(const Duration(milliseconds: 300));
       final pills = tester.getRect(find.byType(SimpleMessagePills));
       final status = _panelOf(tester, find.textContaining('Taking a frame'));
@@ -4495,7 +4496,8 @@ void main() {
 
     testWidgets('on a phone in portrait the words sit above the rail, and Switches still works', (tester) async {
       final d = _Diagnostics({'dew_formation'});
-      await _pump(tester, const Size(390, 844), gear: [
+      // Narrow enough that the pills cannot move beside the rail.
+      await _pump(tester, const Size(320, 844), gear: [
         diagnosticsStateProvider.overrideWith(() => d),
         switchListProvider.overrideWith(() => _Switches([_switch('box', 'Powerbox', SwitchConnectionState.connected)])),
       ]);
@@ -4576,6 +4578,124 @@ void main() {
       expect(pill, findsNothing);
       expect(identical(settings(), before), isTrue);
       expect(identical(strip(), stripBefore), isTrue);
+    });
+
+
+    testWidgets('with no status pill the warning takes the whole row', (tester) async {
+      await phone(tester, start: {'dew_formation'});
+      expect(find.byType(SimpleStatusPill), findsOneWidget);
+      expect(tester.getSize(find.byType(SimpleMessagePills)).width, greaterThan(171 + kSimpleInset));
+    });
+
+    testWidgets('at 2x text on a phone the warning scrolls to its Switches button', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await phone(tester, start: {'dew_formation'});
+      final button = find.widgetWithText(TextButton, 'Switches');
+      await tester.ensureVisible(button);
+      await tester.pump();
+      expect(tester.getRect(button).bottom, lessThanOrEqualTo(844));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('pills moving over the rail start from where they are', (tester) async {
+      final d = _Diagnostics({});
+      await _pump(tester, const Size(320, 844), gear: [
+        diagnosticsStateProvider.overrideWith(() => d),
+        switchListProvider.overrideWith(() => _Switches([_switch('box', 'Powerbox', SwitchConnectionState.connected)])),
+      ]);
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      d.open({'dew_formation'});
+      var least = double.infinity;
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 30));
+        if (pill.evaluate().isNotEmpty) least = math.min(least, tester.getTopLeft(find.byType(SimpleMessagePills)).dx);
+      }
+      expect(least, greaterThanOrEqualTo(kSimpleInset - 0.5));
+    });
+
+
+    Future<void> settle(WidgetTester tester) async {
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+    }
+
+    Rect pillsRect(WidgetTester tester) => tester.getRect(
+      find.ancestor(of: find.byType(SimpleMessagePills), matching: find.byType(SingleChildScrollView)).first,
+    );
+
+    testWidgets('on a phone at 2x text the warning stays clear of Stop', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _pump(tester, const Size(360, 640), gear: [
+        diagnosticsStateProvider.overrideWith(() => _Diagnostics({'dew_formation'})),
+        switchListProvider.overrideWith(() => _Switches([_switch('box', 'Powerbox', SwitchConnectionState.connected)])),
+      ]);
+      await settle(tester);
+      expect(pill, findsOneWidget);
+      expect(pillsRect(tester).overlaps(tester.getRect(find.byType(EmergencyStopButton))), isFalse);
+    });
+
+    testWidgets('with a status pill the warning keeps a readable width, under it', (tester) async {
+      final c = await _pump(tester, const Size(390, 844), gear: [
+        diagnosticsStateProvider.overrideWith(() => _Diagnostics({'dew_formation'})),
+      ]);
+      c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+      await settle(tester);
+      final status = _panelOf(tester, find.textContaining('Taking a frame'));
+      final pills = pillsRect(tester);
+      expect(pills.width, greaterThanOrEqualTo(240), reason: 'beside the rail at worst, never half the row');
+      expect(pills.top, greaterThanOrEqualTo(status.bottom));
+      c.read(captureProgressProvider.notifier).reset();
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('a status pill arriving leaves the warning where it is', (tester) async {
+      final c = await _pump(tester, const Size(390, 844), gear: [
+        diagnosticsStateProvider.overrideWith(() => _Diagnostics({'dew_formation'})),
+      ]);
+      await settle(tester);
+      final before = pillsRect(tester);
+      c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+      await settle(tester);
+      expect(find.textContaining('Taking a frame'), findsOneWidget);
+      expect(pillsRect(tester), before);
+      c.read(captureProgressProvider.notifier).reset();
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    double rightRailLeft(WidgetTester tester) => [
+      for (final k in ['simple-mode', 'simple-shutter', 'simple-settings'])
+        tester.getRect(find.byKey(Key(k))).left,
+    ].reduce(math.min);
+
+    Future<void> tallWarning(WidgetTester tester, double scale) async {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _pump(tester, const Size(390, 844), gear: [
+        diagnosticsStateProvider.overrideWith(() => _Diagnostics({'dew_formation'})),
+        switchListProvider.overrideWith(() => _Switches([_switch('box', 'Powerbox', SwitchConnectionState.connected)])),
+      ]);
+      await settle(tester);
+      expect(pill, findsOneWidget);
+    }
+
+    testWidgets('on a phone at 1.5x text no word runs under the right rail', (tester) async {
+      await tallWarning(tester, 1.5);
+      expect(pillsRect(tester).right, lessThanOrEqualTo(rightRailLeft(tester)));
+      expect(pillsRect(tester).left, kSimpleInset, reason: 'over the left rail, never beside it, on a phone');
+    });
+
+    testWidgets("on a phone at 2x text the warning leaves the right rail's controls to press", (tester) async {
+      await tallWarning(tester, 2);
+      final rail = rightRailLeft(tester);
+      expect(pillsRect(tester).right, lessThanOrEqualTo(rail));
+      final hit = HitTestResult();
+      tester.binding.hitTestInView(hit, tester.getCenter(find.byKey(const Key('simple-mode'))), tester.view.viewId);
+      expect(hit.path.map((e) => e.target), isNot(contains(tester.renderObject(find.byType(SimpleMessagePills)))));
     });
 
     testWidgets('no connected switch device: no button', (tester) async {

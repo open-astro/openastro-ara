@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using Newtonsoft.Json.Linq;
 using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Profile;
 using OpenAstroAra.Profile.Interfaces;
@@ -68,22 +69,51 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             await SendEngineConfigMessagesAsync(messages, setup, ct);
         }
 
-        /// <summary>Best-effort send of a built §63.5 message list: a rejected or failed RPC is logged and
-        /// skipped, then one summary line reports applied-vs-attempted (the per-message lines only appear on
-        /// failure, so without it a successful push is silent). Shared by the connect-time push and the
-        /// tuning-only repush.</summary>
+        /// <summary>What the latest push did not land (#1748): a skipped setting, a value left out, or a refused
+        /// message. Each push replaces it.</summary>
+        public IReadOnlyList<GuiderSettingNotApplied> LastPushNotApplied => _lastPushNotApplied;
+
+        private volatile IReadOnlyList<GuiderSettingNotApplied> _lastPushNotApplied = [];
+
+        /// <summary>Best-effort send of a built §63.5 message list: a rejected or failed RPC is logged with the
+        /// guider's reason, recorded in <see cref="LastPushNotApplied"/> and skipped, never raised as a
+        /// notification (#1748); then one summary line reports applied-vs-attempted (the per-message lines only
+        /// appear on failure, so without it a successful push is silent). Shared by the connect-time push and
+        /// the tuning-only repush.</summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Best-effort §63.5 push boundary: each setter RPC may throw (socket drop, a PHD2 build that doesn't expose a param) — it's logged and skipped so a config push can never fail or block the caller.")]
         private async Task SendEngineConfigMessagesAsync(IReadOnlyList<Phd2Method> messages, string summarySuffix, CancellationToken ct) {
             var applied = 0;
-            foreach (var msg in messages) {
+            var skipped = 0;
+            var notApplied = GuiderAdvancedLimits.Apply(AdvancedSettingsQuietly()).Violations
+                .Select(v => new GuiderSettingNotApplied(v.Setting, v.Reason)).ToList();
+            foreach (var left in notApplied) {
+                Logger.Warning($"PHD2 §63.5 push - {left.Setting}: {left.Reason}");
+            }
+            var paramNames = new Dictionary<string, IReadOnlyList<string>?>();
+            foreach (var queued in messages) {
                 ct.ThrowIfCancellationRequested();
+                var msg = queued;
                 try {
-                    var resp = await SendMessage(msg);
+                    if (msg is Phd2SetAlgoParam { Parameters: { Name: LogicalAggressiveness } p }) {
+                        // Asked here, not in the builder: an earlier set_algo in this push changes the answer.
+                        if (!paramNames.TryGetValue(p.Axis, out var names)) {
+                            paramNames[p.Axis] = names = await GetAlgoParamNamesAsync(p.Axis);
+                        }
+                        if (ResolveAggressiveness(names, p.Value) is not { } wire) {
+                            skipped++;
+                            notApplied.Add(new(DescribeSetting(msg), "The current guide algorithm has no aggressiveness setting."));
+                            Logger.Info($"PHD2 §63.5 push - {p.Axis} aggressiveness skipped: the algorithm has no such parameter.");
+                            continue;
+                        }
+                        msg = AlgoParam(p.Axis, wire.Name, wire.Value);
+                    }
+                    var resp = await SendMessage<GenericPhdMethodResponse>(msg, notifyOnError: false);
                     if (resp?.error != null) {
                         // SendMessage synthesizes an error on socket failure too (code -1), so this covers both
                         // a true PHD2 rejection and a transport failure — "not applied" reads correctly for both.
-                        Logger.Warning($"PHD2 §63.5 push - {msg.Method} not applied: {resp.error}");
+                        Logger.Warning($"PHD2 §63.5 push - {msg.Method} not applied: {resp.error.message}");
+                        notApplied.Add(new(DescribeSetting(msg), resp.error.message ?? "The Guider refused it."));
                     } else {
                         applied++;
                     }
@@ -91,16 +121,62 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     throw; // a cancelled Connect must stop the push, not swallow it as a per-message failure
                 } catch (Exception ex) {
                     Logger.Warning($"PHD2 §63.5 push - {msg.Method} failed: {ex.Message}");
+                    notApplied.Add(new(DescribeSetting(msg), ex.Message));
                 }
             }
+            _lastPushNotApplied = notApplied;
 
             // Report applied-vs-attempted (not just the count) so a partial failure is visible at Info level
             // without scanning for the Warning lines, and escalate to Warning when any message didn't land.
-            if (applied == messages.Count) {
-                Logger.Info($"PHD2 §63.5 push - applied all {messages.Count} guider-engine setting message(s){summarySuffix}.");
+            var attempted = messages.Count - skipped;
+            if (applied == attempted) {
+                Logger.Info($"PHD2 §63.5 push - applied all {attempted} guider-engine setting message(s){summarySuffix}.");
             } else {
-                Logger.Warning($"PHD2 §63.5 push - applied {applied} of {messages.Count} guider-engine setting message(s); {messages.Count - applied} did not land (see warnings above){summarySuffix}.");
+                Logger.Warning($"PHD2 §63.5 push - applied {applied} of {attempted} guider-engine setting message(s); {attempted - applied} did not land (see warnings above){summarySuffix}.");
             }
+        }
+
+        /// <summary>The builder's name for an axis's aggressiveness; the send step resolves it per algorithm.</summary>
+        internal const string LogicalAggressiveness = "aggression";
+
+        /// <summary>#1748 — the wire name and value of Ara's 0..1 aggressiveness for an axis, from the names the
+        /// guider reports for its current algorithm. Null when the algorithm has none. A question that failed,
+        /// or came back with only <c>algorithmName</c>, goes out as <c>aggression</c>. Pure.</summary>
+        public static (string Name, double Value)? ResolveAggressiveness(IReadOnlyList<string>? names, double fraction) {
+            if (names is null || names.All(n => n == "algorithmName") || names.Contains("aggression")) {
+                return ("aggression", fraction);
+            }
+            if (names.Contains("reactiveWeight")) {
+                return ("reactiveWeight", fraction);
+            }
+            // Lowpass2's parameter is a percentage: the guider divides it by 100 itself.
+            return names.Contains("aggressiveness") ? ("aggressiveness", fraction * 100) : null;
+        }
+
+        private async Task<IReadOnlyList<string>?> GetAlgoParamNamesAsync(string axis) {
+            var resp = await SendMessage<GenericPhdMethodResponse>(
+                new Phd2NamedGetter("get_algo_param_names", new() { ["axis"] = axis }), LiveRpcTimeoutMs, notifyOnError: false);
+            return resp.error == null && resp.result is not null && JToken.FromObject(resp.result) is JArray names
+                ? names.Values<string>().OfType<string>().ToList()
+                : null;
+        }
+
+        // The name the imager sees for what a message carries.
+        private static string DescribeSetting(Phd2Method msg) => msg switch {
+            Phd2SetAlgoParam { Parameters: { } p } => $"{AxisName(p.Axis)} {p.Name switch {
+                "minMove" => "minimum move",
+                LogicalAggressiveness or "reactiveWeight" or "aggressiveness" => "aggressiveness",
+                _ => p.Name,
+            }}",
+            Phd2NamedSetter { Method: "set_algo", Parameters: { } p } => $"{AxisName(p["axis"] as string)} algorithm",
+            _ => Humanize(msg.Method),
+        };
+
+        private static string AxisName(string? axis) => axis == "ra" ? "RA" : "Dec";
+
+        private static string Humanize(string method) {
+            var words = (method.StartsWith("set_", StringComparison.Ordinal) ? method[4..] : method).Replace('_', ' ').Replace(" comp", " compensation", StringComparison.Ordinal);
+            return char.ToUpperInvariant(words[0]) + words[1..];
         }
 
         /// <summary>
@@ -323,20 +399,20 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             // sensible value with a harmful one — aggressiveness 0 disables corrections, minMove 0 makes the
             // mount chase noise (PHD2 defaults ~0.2px). Profiles default to non-zero (0.7 / 0.15), so this only
             // skips an explicit/leaked 0, leaving PHD2's value in that edge case.
-            // PHD2's parameter is named "aggression" (get_algo_param_names → algorithmName, minMove,
-            // hysteresis|fastSwitch, aggression — verified against openastro-guider 2.1.0). ARA's
-            // profile calls it aggressiveness; the wire name must be the daemon's or set_algo_param
-            // answers "could not set param" and the value never lands (#1093).
+            // Hysteresis and Resist Switch name the parameter "aggression" (get_algo_param_names → algorithmName,
+            // minMove, hysteresis|fastSwitch, aggression — verified against openastro-guider 2.1.0); other
+            // algorithms differ or have none. This is the logical name: the send step resolves it per algorithm
+            // (#1748), or set_algo_param answers "could not set param" and the value never lands (#1093).
             // #1364 — an algorithm change goes BEFORE the aggression / minimum-move params: set_algo replaces
             // the axis's algorithm instance, so params sent first would land on the old one and the new
             // algorithm would run with the guider's stored values instead of Ara's.
             var advancedMessages = BuildAdvancedSettingsMessages(advanced);
             messages.AddRange(advancedMessages.Where(m => m.Method == AlgorithmSetter));
             if (guider.RAAggressiveness > 0) {
-                messages.Add(AlgoParam("ra", "aggression", guider.RAAggressiveness));
+                messages.Add(AlgoParam("ra", LogicalAggressiveness, guider.RAAggressiveness));
             }
             if (guider.DecAggressiveness > 0) {
-                messages.Add(AlgoParam("dec", "aggression", guider.DecAggressiveness));
+                messages.Add(AlgoParam("dec", LogicalAggressiveness, guider.DecAggressiveness));
             }
             // #1156 — per-axis minimum move; each is pushed only when set.
             if (guider.MinimumMove > 0) {

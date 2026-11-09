@@ -42,7 +42,7 @@ public enum TrackingWatchVerdict {
 /// unexpectedly" row): tracking was observed on, reads off for
 /// <see cref="DefaultDropThreshold"/> consecutive refresh ticks (≈6 s at the 2 s tick — the
 /// per-field read maps transient failures to <c>false</c>, so single-tick firing is unsafe),
-/// and no daemon-issued command explains it. Commands that legitimately change tracking
+/// and no daemon-issued command explains it. A tick inside a guide pulse is not counted (#1732). Commands that legitimately change tracking
 /// (SetTracking, Park, slews, axis moves) are noted BEFORE dispatch and arm a
 /// <see cref="DefaultCommandGraceTicks"/>-tick grace window during which observations update
 /// expectations instead of accusing; an observed slew or park is likewise never a drop.
@@ -63,6 +63,9 @@ public sealed class MountTrackingWatch {
     /// (e.g. a slew commanded but <c>Slewing</c> not asserted).</summary>
     public const int DefaultCommandGraceTicks = 5;
 
+    /// <summary>Consecutive tracking-off ticks a guide pulse may explain (≈30 s at the 2 s tick).</summary>
+    public const int MaxPulseHoldTicks = 15;
+
     private readonly int _threshold;
     private readonly int _graceTicks;
     private bool _expectTracking;
@@ -74,6 +77,7 @@ public sealed class MountTrackingWatch {
     private bool? _commandedTracking;
     private int _dropStreak;
     private int _graceRemaining;
+    private int _pulseHeldTicks;
     private bool _episodeFired;
 
     public MountTrackingWatch(int threshold = DefaultDropThreshold, int graceTicks = DefaultCommandGraceTicks) {
@@ -113,6 +117,7 @@ public sealed class MountTrackingWatch {
 
     /// <summary>Fresh session — called at connect adoption and on connection-lost trip.</summary>
     public void Reset() {
+        _pulseHeldTicks = 0;
         _expectTracking = false;
         _commandedTracking = null;
         _dropStreak = 0;
@@ -121,7 +126,7 @@ public sealed class MountTrackingWatch {
     }
 
     /// <summary>One call per refresh tick with the freshly-read runtime state.</summary>
-    public TrackingWatchVerdict Observe(bool tracking, bool slewing, bool parked) {
+    public TrackingWatchVerdict Observe(bool tracking, bool slewing, bool parked, bool pulseGuiding = false) {
         if (_graceRemaining > 0) {
             _graceRemaining--;
             _dropStreak = 0;
@@ -151,6 +156,7 @@ public sealed class MountTrackingWatch {
             // Arms the watch even for handset/driver-initiated tracking the daemon never commanded.
             _expectTracking = true;
             _dropStreak = 0;
+            _pulseHeldTicks = 0;
             if (_episodeFired) {
                 _episodeFired = false;
                 return TrackingWatchVerdict.Recovered;
@@ -159,6 +165,13 @@ public sealed class MountTrackingWatch {
         }
         if (!_expectTracking || _episodeFired) {
             return TrackingWatchVerdict.Idle;
+        }
+        // #1732 — an iOptron reads Tracking false for the length of a guide pulse. Such a tick says nothing
+        // either way: the streak is held, not cleared, so a real drop under constant pulsing still adds up.
+        // The hold is bounded, so a pulse flag that never clears cannot hide a drop for good.
+        if (pulseGuiding && _pulseHeldTicks < MaxPulseHoldTicks) {
+            _pulseHeldTicks++;
+            return TrackingWatchVerdict.Degraded;
         }
         _dropStreak++;
         if (_dropStreak >= _threshold) {

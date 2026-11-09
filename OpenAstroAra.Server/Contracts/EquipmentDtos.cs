@@ -574,13 +574,18 @@ public sealed record GuiderHistoryStepDto(
     double? StarMass);
 
 /// <summary>#1364 — what the guider has now (<c>GET /equipment/guider/advanced</c>), beside the profile's
-/// guider-advanced block: its current values (fields it did not answer are null) and the guide algorithms
-/// each axis offers. <c>Connected</c> false with nulls and empty lists when no guider is connected.</summary>
+/// guider-advanced block: its current values (fields it did not answer are null), the guide algorithms
+/// each axis offers, and what the latest settings push did not land (#1748). <c>Connected</c> false with
+/// nulls and empty lists when no guider is connected.</summary>
 public sealed record GuiderAdvancedViewDto(
     bool Connected,
     GuiderAdvancedSettingsDto Current,
     IReadOnlyList<string> RaAlgorithms,
-    IReadOnlyList<string> DecAlgorithms);
+    IReadOnlyList<string> DecAlgorithms,
+    IReadOnlyList<GuiderNotAppliedDto> NotApplied);
+
+/// <summary>#1748 — one setting the latest push did not land: the name the imager sees and why, in plain text.</summary>
+public sealed record GuiderNotAppliedDto(string Setting, string Reason);
 
 /// <summary>One calibration step: the leg (<c>West</c>, <c>East</c>, <c>North</c>, <c>South</c> or a
 /// backlash-clearing leg), its number and the star's displacement from the leg's start, guide px.</summary>
@@ -675,7 +680,7 @@ public sealed record GuidingAssistantApplyResultDto(IReadOnlyList<string> Applie
 /// corrects during the first minutes of each guided run (no extra setup step). Status is
 /// <c>measuring</c> (progress in <c>SampleSeconds</c> of <c>TargetSeconds</c>), <c>done</c> or
 /// <c>unavailable</c> (<c>Reason</c> says why: <c>lock_shift</c>, <c>ao</c>, <c>no_calibration</c>,
-/// <c>no_pixel_scale</c>, <c>no_fit</c>). <c>PaErrorMinArcmin</c> is a LOWER BOUND: Dec drift at one
+/// <c>no_pixel_scale</c>, <c>no_fit</c>, <c>pulse_response_low</c>). <c>PaErrorMinArcmin</c> is a LOWER BOUND: Dec drift at one
 /// hour angle sees one component of the error. <c>Reliable</c> is false when the 1σ
 /// <c>UncertaintyArcmin</c> exceeds max(1′, half the value). <c>AlignErrorArcmin</c> is the last
 /// Polar Align result in the 12 h before, for comparison. Hour angle / Dec are the mount's at the end.

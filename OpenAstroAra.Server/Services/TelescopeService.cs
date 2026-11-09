@@ -273,6 +273,16 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         var ra = request.RightAscensionHours;
         var dec = request.DeclinationDegrees;
         var sync = request.Sync ?? false;
+        // A sync moves nothing, so guiding carries on. The checks above still throw synchronously.
+        return sync ? Task.FromResult(DispatchSlew(client, ra, dec, sync: true, idempotencyKey)) : SlewAfterGuidingStoppedAsync(client, ra, dec, idempotencyKey);
+    }
+
+    private async Task<OperationAcceptedDto> SlewAfterGuidingStoppedAsync(AlpacaTelescope client, double ra, double dec, string? idempotencyKey) {
+        await StopGuidingBeforeMountMoveAsync("slew").ConfigureAwait(false);
+        return DispatchSlew(client, ra, dec, sync: false, idempotencyKey);
+    }
+
+    private OperationAcceptedDto DispatchSlew(AlpacaTelescope client, double ra, double dec, bool sync, string? idempotencyKey) {
         NoteMountCommand(w => w.NoteMotionCommanded());
         lock (_gate) {
             // §57.9 — a goto or sync re-arms the target display (a Home/Park may have cleared it).
@@ -284,17 +294,17 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             }
         }
         _ = Task.Run(() => SlewInBackground(client, ra, dec, sync), CancellationToken.None);
-        return Task.FromResult(Accepted(sync ? "telescope.sync" : "telescope.slew", idempotencyKey));
+        return Accepted(sync ? "telescope.sync" : "telescope.slew", idempotencyKey);
     }
 
     // The guider is resolved lazily (it is built after the mount in the composition root). A REST
-    // Park / Find Home stops guiding first, exactly as the sequencer's Park and Find Home instructions
+    // GoTo / Park / Find Home stops guiding first, exactly as the sequencer's Park and Find Home instructions
     // do: on 2026-10-16 the client's Home button moved the mount under a guiding PHD2, which chased a
     // lost star for nine minutes (313 dropped frames) until the daemon was restarted.
     private readonly Func<IGuiderMediator?>? _guiderResolver;
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort pre-step: a guider that will not stop must not block a park or home (the mount move is the safety action); logged and the move proceeds.")]
+        Justification = "Best-effort pre-step: a guider that will not stop must not block a goto, park or home (the mount move is the safety action); logged and the move proceeds.")]
     private async Task StopGuidingBeforeMountMoveAsync(string op) {
         var guider = _guiderResolver?.Invoke();
         if (guider is null || !guider.GetInfo().Connected) {
@@ -326,7 +336,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         }
     }
 
-    /// <summary>How long a REST park/home waits for the guider to stop before moving anyway. Short on
+    /// <summary>How long a REST goto/park/home waits for the guider to stop before moving anyway. Short on
     /// purpose: a healthy stop takes milliseconds, and the emergency stop's park rung allows 10 s.</summary>
     internal TimeSpan StopGuidingBeforeMoveTimeout { get; set; } = TimeSpan.FromSeconds(3);
 
@@ -696,6 +706,8 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             }
             ObserveProbeIfLive(client, probeSucceeded: true);
             var runtime = ReadRuntime(client, out var readError, out var slewingUnknown);
+            // #1732 — asked only while tracking reads off on an unparked mount; the watch ignores a parked one.
+            var pulseGuiding = !runtime.Tracking && !runtime.Parked && ReadPulseGuiding(client);
             bool readPierSide;
             lock (_gate) {
                 readPierSide = !_sideOfPierUnsupported;
@@ -793,7 +805,8 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                         runtime.Tracking,
                         // #1246 — a latched Slewing read is a fallback; a goto the daemon saw start still counts.
                         slewing: runtime.State == "slewing" || (slewingUnknown && SlewWatch.InSlew),
-                        parked: runtime.Parked);
+                        parked: runtime.Parked,
+                        pulseGuiding: pulseGuiding);
                     // §57.8 — slew lifecycle from the same observed snapshot.
                     // #1246 — a latched Slewing read is a fallback false, not an answer: feeding it would
                     // close the episode the guard above relies on. The watch waits for a real read. (A
@@ -910,6 +923,16 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     private partial void LogTrackingRecovered(string device);
 
     private static TelescopeStateDto ReadRuntime(AlpacaTelescope c) => ReadRuntime(c, out _, out _);
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: a mount that cannot report it counts as not pulsing, so the tracking watch keeps working.")]
+    private static bool ReadPulseGuiding(AlpacaTelescope c) {
+        try {
+            return c.IsPulseGuiding;
+        } catch (Exception) {
+            return false;
+        }
+    }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported/transiently-failing telescope property throws; that field falls back to its default rather than failing the whole runtime read (every exception is reported to the caller, aggregated when several, for #1193/#1246). CA1031's log-and-recover boundary applies.")]

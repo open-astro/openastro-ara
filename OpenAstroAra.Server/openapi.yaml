@@ -10865,6 +10865,7 @@ components:
         - current
         - ra_algorithms
         - dec_algorithms
+        - not_applied
       type: object
       properties:
         connected:
@@ -10879,6 +10880,10 @@ components:
           type: array
           items:
             type: string
+        not_applied:
+          type: array
+          items:
+            $ref: '#/components/schemas/GuiderNotAppliedDto'
     GuiderCalibrationDataDto:
       required:
         - calibrated
@@ -11289,6 +11294,16 @@ components:
             - number
             - string
           format: double
+    GuiderNotAppliedDto:
+      required:
+        - setting
+        - reason
+      type: object
+      properties:
+        setting:
+          type: string
+        reason:
+          type: string
     GuiderTwinPreviewDto:
       required:
         - twin_names

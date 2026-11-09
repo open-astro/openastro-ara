@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/theme/ara_colors.dart';
@@ -194,6 +195,29 @@ void main() {
       final close = tester.getCenter(find.byTooltip('Dismiss')).dy;
       expect(tester.getCenter(find.textContaining('Rig busy')).dy, closeTo(close, 2));
       expect(tester.getCenter(find.byIcon(Icons.circle)).dy, closeTo(close, 2));
+    });
+
+
+    testWidgets("at 2x text the dot and × stay on the warning's first line", (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final c = await _pump(tester);
+      c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.warning, 'Rig busy');
+      await tester.pump();
+      final line = tester.getCenter(find.textContaining('Rig busy')).dy;
+      expect(tester.getCenter(find.byIcon(Icons.circle)).dy, closeTo(line, 2));
+      expect(tester.getCenter(find.byTooltip('Dismiss')).dy, closeTo(line, 2));
+    });
+
+    testWidgets('in a narrow pill its action stays on one line', (tester) async {
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final c = await _pump(tester, width: 171);
+      c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.warning, words,
+          actions: [SimpleMessageAction('Switches', () {})]);
+      await tester.pump();
+      expect(tester.renderObject<RenderParagraph>(find.text('Switches')).size.height, lessThan(30));
     });
 
     testWidgets('its action leaves the warning up', (tester) async {

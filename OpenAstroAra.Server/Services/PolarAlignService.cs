@@ -81,6 +81,9 @@ namespace OpenAstroAra.Server.Services {
         // user-facing knobs (exposure, binning, seed Δ, cadence, settle) come from the profile's
         // PolarAlignSettingsDto, read once at Start.
         internal TimeSpan LeaseRenewInterval { get; set; } = TimeSpan.FromSeconds(240);
+
+        /// <summary>How long a start waits for a looping Guide Camera to stop (#1749).</summary>
+        internal TimeSpan LoopStopTimeout { get; set; } = TimeSpan.FromSeconds(10);
         internal TimeSpan PausedRetryDelay { get; set; } = TimeSpan.FromSeconds(5);
         internal TimeSpan CaptureCompleteTimeout { get; set; } = TimeSpan.FromSeconds(31);
         internal TimeSpan RunUnwindGrace { get; set; } = TimeSpan.FromSeconds(15);
@@ -378,6 +381,11 @@ namespace OpenAstroAra.Server.Services {
                 await guiderClient.WaitForCaptureIdleAsync(ct).ConfigureAwait(false);
                 lock (_gate) {
                     _abandonedCaptureDebts.Clear(); // idle: that capture's event has been delivered, nothing is owed
+                }
+                // #1749: the guider refuses a single frame while it loops. The lease below then stops a new loop starting.
+                if (!await guiderClient.StopLoopForCaptureAsync(LoopStopTimeout, ct).ConfigureAwait(false)) {
+                    ct.ThrowIfCancellationRequested();
+                    throw new InvalidOperationException("the Guide Camera loop did not stop — stop looping in the Guider, then start Polar Align again");
                 }
                 await guiderClient.SetPaSessionAsync(active: true, timeoutS: LeaseTimeoutSeconds, ct).ConfigureAwait(false);
                 int gen;

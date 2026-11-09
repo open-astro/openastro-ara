@@ -155,6 +155,93 @@ namespace OpenAstroAra.Test {
                 MinStarSnr: 6, NoiseReduction: "3x3 Median", VariableDelayEnabled: false, VariableDelayShortS: 1, VariableDelayLongS: 5)), Is.Null);
         }
 
+
+        // #1748 — the Guider's limits, both sides of each boundary.
+        private static string? Check(GuiderAdvancedSettingsDto d) => GuiderAdvancedSettingsMapping.Validate(d);
+
+        [TestCase(6, false)] [TestCase(7, true)] [TestCase(50, true)] [TestCase(51, false)]
+        public void Search_region_is_7_to_50(int px, bool ok) =>
+            Assert.That(Check(new GuiderAdvancedSettingsDto(SearchRegionPx: px)), ok ? Is.Null : Does.Contain("search_region_px"));
+
+        [TestCase(0.0, false)] [TestCase(0.01, true)] [TestCase(1.0, true)] [TestCase(1.01, false)]
+        public void Mass_change_is_a_fraction_up_to_1(double v, bool ok) =>
+            Assert.That(Check(new GuiderAdvancedSettingsDto(MassChangeThreshold: v)), ok ? Is.Null : Does.Contain("mass_change_threshold"));
+
+        [Test]
+        public void Star_hfd_needs_min_strictly_below_max() {
+            Assert.That(Check(new GuiderAdvancedSettingsDto(MinStarHfd: 3, MaxStarHfd: 3)), Does.Contain("min_star_hfd"));
+            Assert.That(Check(new GuiderAdvancedSettingsDto(MinStarHfd: 2.9, MaxStarHfd: 3)), Is.Null);
+            Assert.That(Check(new GuiderAdvancedSettingsDto(MaxStarHfd: 0)), Does.Contain("max_star_hfd"));
+        }
+
+        [TestCase(100.0, true)] [TestCase(100.5, false)] [TestCase(0.0, false)]
+        public void Tolerate_jumps_and_dither_scale_stop_at_100(double v, bool ok) {
+            Assert.That(Check(new GuiderAdvancedSettingsDto(TolerateJumpsThresholdPx: v)), ok ? Is.Null : Does.Contain("tolerate_jumps_threshold_px"));
+            Assert.That(Check(new GuiderAdvancedSettingsDto(DitherScaleFactor: v)), ok ? Is.Null : Does.Contain("dither_scale_factor"));
+        }
+
+        [Test]
+        public void Backlash_floor_pulse_and_ceiling_are_checked_together() {
+            Assert.That(Check(new GuiderAdvancedSettingsDto(BacklashFloorMs: 19)), Does.Contain("backlash_floor_ms"));
+            Assert.That(Check(new GuiderAdvancedSettingsDto(BacklashFloorMs: 20)), Is.Null);
+            Assert.That(Check(new GuiderAdvancedSettingsDto(BacklashCeilingMs: 8001)), Does.Contain("backlash_ceiling_ms"));
+            Assert.That(Check(new GuiderAdvancedSettingsDto(BacklashCeilingMs: 8000)), Is.Null);
+            Assert.That(Check(new GuiderAdvancedSettingsDto(BacklashPulseMs: 100, BacklashFloorMs: 101)), Does.Contain("backlash_floor_ms"));
+            Assert.That(Check(new GuiderAdvancedSettingsDto(BacklashPulseMs: 100, BacklashFloorMs: 100, BacklashCeilingMs: 100)), Is.Null);
+            Assert.That(Check(new GuiderAdvancedSettingsDto(BacklashPulseMs: 100, BacklashCeilingMs: 99)), Does.Contain("backlash_ceiling_ms"));
+        }
+
+        [TestCase(0.0, 0.0, true)] [TestCase(10.0, 120.0, true)] [TestCase(10.5, 120.0, false)]
+        [TestCase(11.0, 120.0, false)] [TestCase(1.0, 121.0, false)] [TestCase(5.0, 4.0, false)]
+        public void Variable_delay_is_whole_seconds_with_0_allowed(double shortS, double longS, bool ok) =>
+            Assert.That(Check(new GuiderAdvancedSettingsDto(VariableDelayEnabled: true, VariableDelayShortS: shortS, VariableDelayLongS: longS)),
+                ok ? Is.Null : Does.Contain("variable_delay"));
+
+        [TestCase("Hysteresis", true)] [TestCase(" Lowpass2 ", true)] [TestCase("ResistSwitch", false)] [TestCase("Predictive PEC", true)]
+        public void Ra_algorithm_must_be_one_the_guider_knows(string name, bool ok) =>
+            Assert.That(Check(new GuiderAdvancedSettingsDto(RaAlgorithm: name)), ok ? Is.Null : Does.Contain("ra_algorithm"));
+
+        [Test]
+        public void Predictive_pec_is_refused_on_dec() {
+            Assert.That(Check(new GuiderAdvancedSettingsDto(DecAlgorithm: "Predictive PEC")), Does.Contain("dec_algorithm"));
+            Assert.That(Check(new GuiderAdvancedSettingsDto(DecAlgorithm: "ZFilter")), Is.Null);
+        }
+
+        [Test]
+        public void One_bad_saved_value_leaves_the_rest_of_its_group_in_the_push() {
+            var msgs = PHD2Guider.BuildAdvancedSettingsMessages(new GuiderAdvancedSettings { SearchRegionPx = 60, MinStarSnr = 8 });
+            var detection = Params(msgs, "set_star_detection");
+            Assert.That(detection, Does.ContainKey("MinStarSNR"));
+            Assert.That(detection, Does.Not.ContainKey("SearchRegion"));
+        }
+
+        [Test]
+        public void An_inconsistent_backlash_group_is_left_out_whole() {
+            var msgs = PHD2Guider.BuildAdvancedSettingsMessages(new GuiderAdvancedSettings { BacklashEnabled = true, BacklashPulseMs = 100, BacklashFloorMs = 200 });
+            Assert.That(Params(msgs, "set_backlash_comp"), Is.Null);
+        }
+
+        private static readonly string[] Lowpass2Names = ["algorithmName", "minMove", "aggressiveness"];
+        private static readonly string[] OnlyName = ["algorithmName"];
+        private static readonly string[] LowpassNames = ["algorithmName", "minMove", "slopeWeight"];
+
+        [Test]
+        public void Aggressiveness_resolves_from_the_names_the_guider_reports() {
+            Assert.That(PHD2Guider.ResolveAggressiveness(null, 0.6), Is.EqualTo(("aggression", 0.6)), "question failed");
+            Assert.That(PHD2Guider.ResolveAggressiveness(OnlyName, 0.6), Is.EqualTo(("aggression", 0.6)));
+            Assert.That(PHD2Guider.ResolveAggressiveness(Lowpass2Names, 0.6)!.Value.Value, Is.EqualTo(60).Within(1e-9), "Lowpass2 is a percentage");
+            Assert.That(PHD2Guider.ResolveAggressiveness(LowpassNames, 0.6), Is.Null);
+        }
+
+
+        [Test]
+        public void A_left_out_value_names_the_setting_it_is_about_in_one_sentence() {
+            var floor = GuiderAdvancedLimits.Apply(new GuiderAdvancedSettings { BacklashFloorMs = 200, BacklashCeilingMs = 100 }).Violations.Single();
+            Assert.That((floor.Setting, floor.Reason), Is.EqualTo(("Backlash floor", "Must not exceed the ceiling. Not sent.")));
+            var pulse = GuiderAdvancedLimits.Apply(new GuiderAdvancedSettings { BacklashEnabled = true }).Violations.Single();
+            Assert.That(pulse.Reason, Does.StartWith("Is required (20–8000 ms)"));
+        }
+
         [Test]
         public void The_dto_and_engine_record_map_both_ways() {
             var dto = new GuiderAdvancedSettingsDto(MultiStarEnabled: true, MinStarSnr: 6, MaxDecDurationMs: 1200, RaAlgorithm: "Hysteresis", DitherRaOnly: true);

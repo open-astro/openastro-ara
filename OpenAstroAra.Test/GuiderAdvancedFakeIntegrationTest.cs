@@ -61,7 +61,7 @@ namespace OpenAstroAra.Test {
         ];
 
         private static async Task<(FakeGuider Fake, GuiderService Svc, ConcurrentQueue<(string Method, JsonNode? Params)> Sent)> ConnectedAsync(
-                Func<GuiderAdvancedSettings?>? advanced = null, Action<FakeGuider>? setup = null, ISequencerService? sequencer = null) {
+                Func<GuiderAdvancedSettings?>? advanced = null, Action<FakeGuider>? setup = null, ISequencerService? sequencer = null, HeadlessProfileService? profile = null) {
             var sent = new ConcurrentQueue<(string, JsonNode?)>();
             var fake = FakeGuider.Start();
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
@@ -75,7 +75,7 @@ namespace OpenAstroAra.Test {
                 fake.OnRpc(m, req => { sent.Enqueue((m, req["params"]?.DeepClone())); return JsonValue.Create(0); });
             }
             setup?.Invoke(fake);
-            var svc = new GuiderService(new HeadlessProfileService(),
+            var svc = new GuiderService(profile ?? new HeadlessProfileService(),
                 new GuiderRecoveryCoordinator(Mock.Of<IGuiderProcessSupervisor>(), Mock.Of<INotificationService>(),
                     Mock.Of<IDiagnosticsService>(), NullLogger<GuiderRecoveryCoordinator>.Instance),
                 NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), sequencerResolver: sequencer is null ? null : () => sequencer) {
@@ -263,7 +263,143 @@ namespace OpenAstroAra.Test {
             Assert.That(modes, Is.EqualTo(AutoOnly));
         }
 
+
+        // #1748 — each algorithm's real get_algo_param_names, and refusal of any other name, as the Guider does.
+        private static readonly Dictionary<string, string[]> AlgoParams = new() {
+            ["Hysteresis"] = ["algorithmName", "minMove", "hysteresis", "aggression"],
+            ["Resist Switch"] = ["algorithmName", "minMove", "fastSwitch", "aggression"],
+            ["Predictive PEC"] = ["algorithmName", "minMove", "reactiveWeight", "periodLength"],
+            ["Lowpass"] = ["algorithmName", "minMove", "slopeWeight"],
+            ["Lowpass2"] = ["algorithmName", "minMove", "aggressiveness"],
+            ["ZFilter"] = ["algorithmName", "minMove", "expFactor"],
+        };
+
+        private static void RunsAlgorithm(FakeGuider f, ConcurrentQueue<(string Axis, string Name, double Value)> sent, string algorithm) {
+            f.OnRpc("get_algo_param_names", _ => new JsonArray(AlgoParams[algorithm].Select(n => (JsonNode)JsonValue.Create(n)!).ToArray()));
+            f.OnRpc("set_algo_param", req => {
+                var p = req["params"]!;
+                var name = p["name"]!.GetValue<string>();
+                sent.Enqueue((p["axis"]!.GetValue<string>(), name, p["value"]!.GetValue<double>()));
+                return AlgoParams[algorithm].Contains(name) ? JsonValue.Create(0) : throw new InvalidOperationException("could not set param");
+            });
+        }
+
+        private static HeadlessProfileService TunedProfile() {
+            var profile = new HeadlessProfileService();
+            profile.ActiveProfile.GuiderSettings.RAAggressiveness = 0.6;
+            profile.ActiveProfile.GuiderSettings.DecAggressiveness = 0.6;
+            return profile;
+        }
+
+        private static async Task<List<(string Axis, string Name, double Value)>> TunedPushAsync(string algorithm) {
+            var sent = new ConcurrentQueue<(string Axis, string Name, double Value)>();
+            var (fake, svc, _) = await ConnectedAsync(setup: f => RunsAlgorithm(f, sent, algorithm), profile: TunedProfile()).ConfigureAwait(false);
+            await using var _f = fake;
+            using var _s = svc;
+            sent.Clear();
+            await svc.ConnectedGuiderOrNull()!.RepushGuiderTuningAsync(CancellationToken.None).ConfigureAwait(false);
+            return sent.Where(s => s.Name != "minMove").ToList();
+        }
+
+        [TestCase("Hysteresis", "aggression", 0.6)]
+        [TestCase("Resist Switch", "aggression", 0.6)]
+        [TestCase("Predictive PEC", "reactiveWeight", 0.6)]
+        [TestCase("Lowpass2", "aggressiveness", 60.0)]
+        public async Task Aggressiveness_goes_under_the_name_and_scale_the_algorithm_has(string algorithm, string name, double value) {
+            var sent = await TunedPushAsync(algorithm).ConfigureAwait(false);
+            Assert.That(sent, Has.Count.EqualTo(2), "one per axis");
+            Assert.That(sent.Select(s => s.Name), Is.All.EqualTo(name));
+            Assert.That(sent.Select(s => s.Value), Is.All.EqualTo(value).Within(1e-9));
+        }
+
+        [TestCase("Lowpass")]
+        [TestCase("ZFilter")]
+        public async Task An_algorithm_with_no_aggressiveness_is_not_sent_one(string algorithm) =>
+            Assert.That(await TunedPushAsync(algorithm).ConfigureAwait(false), Is.Empty);
+
+        [Test]
+        [NonParallelizable] // Notifier.Use is process-global
+        public async Task A_refused_setting_raises_no_notification() {
+            var (fake, svc, _) = await ConnectedAsync(advanced: () => new GuiderAdvancedSettings { MinStarSnr = 8 },
+                setup: f => f.OnRpc("set_star_detection", _ => throw new InvalidOperationException("the guider said no"))).ConfigureAwait(false);
+            await using var _f = fake;
+            using var _s = svc;
+            var sink = new RecordingSink();
+            var previous = OpenAstroAra.Core.Utility.Notification.Notifier.Current;
+            OpenAstroAra.Core.Utility.Notification.Notifier.Use(sink);
+            try {
+                await svc.ConnectedGuiderOrNull()!.RepushGuiderTuningAsync(CancellationToken.None).ConfigureAwait(false);
+                Assert.That(sink.Messages, Is.Empty, "a refused push is not an equipment error");
+            } finally {
+                OpenAstroAra.Core.Utility.Notification.Notifier.Use(previous);
+            }
+        }
+
+        private static async Task<GuiderAdvancedViewDto> ViewAsync(GuiderService svc) =>
+            await new GuiderLiveService(svc, new NoFrames()).GetAdvancedAsync(CancellationToken.None).ConfigureAwait(false);
+
+        [Test]
+        public async Task A_question_the_guider_cannot_answer_pushes_aggression_as_before() {
+            var sent = new ConcurrentQueue<(string Axis, string Name, double Value)>();
+            var (fake, svc, _) = await ConnectedAsync(profile: TunedProfile(), setup: f => {
+                RunsAlgorithm(f, sent, "Hysteresis");
+                f.OnRpc("get_algo_param_names", _ => throw new InvalidOperationException("no mount defined"));
+            }).ConfigureAwait(false);
+            await using var _f = fake;
+            using var _s = svc;
+            sent.Clear();
+
+            await svc.ConnectedGuiderOrNull()!.RepushGuiderTuningAsync(CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(sent.Where(s => s.Name != "minMove").Select(s => s.Name), Is.EqualTo(TwoAggression));
+        }
+
+        [Test]
+        public async Task The_settings_question_is_asked_after_the_algorithm_changes() {
+            var sent = new ConcurrentQueue<(string Axis, string Name, double Value)>();
+            var algorithm = "Hysteresis";
+            var (fake, svc, _) = await ConnectedAsync(profile: TunedProfile(), advanced: () => new GuiderAdvancedSettings { RaAlgorithm = "Lowpass2" }, setup: f => {
+                RunsAlgorithm(f, sent, "Lowpass2");
+                f.OnRpc("set_algo", _ => { Volatile.Write(ref algorithm, "Lowpass2"); return JsonValue.Create(0); });
+                f.OnRpc("get_algo_param_names", _ => new JsonArray(AlgoParams[Volatile.Read(ref algorithm)].Select(n => (JsonNode)JsonValue.Create(n)!).ToArray()));
+            }).ConfigureAwait(false);
+            await using var _f = fake;
+            using var _s = svc;
+            Assert.That(await WaitUntilAsync(() => sent.Any(s => s.Axis == "dec" && s.Name != "minMove")).ConfigureAwait(false), Is.True);
+
+            Assert.That(sent.First(s => s.Axis == "ra" && s.Name != "minMove").Name, Is.EqualTo("aggressiveness"), "the question follows set_algo");
+        }
+
+        [Test]
+        public async Task The_view_lists_what_the_latest_push_did_not_land_and_the_next_push_replaces_it() {
+            var sent = new ConcurrentQueue<(string Axis, string Name, double Value)>();
+            var saved = new GuiderAdvancedSettings { SearchRegionPx = 60, MinStarSnr = 8, MinStarHfd = 2 };
+            var (fake, svc, _) = await ConnectedAsync(profile: TunedProfile(), advanced: () => saved, setup: f => {
+                RunsAlgorithm(f, sent, "Lowpass");
+                f.OnRpc("set_star_detection", req => req["params"]?["MinStarHFD"] is null ? JsonValue.Create(0) : throw new InvalidOperationException("MinStarHFD must be below MaxStarHFD"));
+            }).ConfigureAwait(false);
+            await using var _f = fake;
+            using var _s = svc;
+            var guider = svc.ConnectedGuiderOrNull()!;
+
+            await guider.RepushGuiderTuningAsync(CancellationToken.None).ConfigureAwait(false);
+
+            var entries = (await ViewAsync(svc).ConfigureAwait(false)).NotApplied;
+            Assert.That(entries.Select(e => e.Setting), Is.SupersetOf(ExpectedNotApplied));
+            Assert.That(entries.Single(e => e.Setting == "Star detection").Reason, Does.Contain("MinStarHFD must be below"), "the Guider's own words");
+            Assert.That(entries.Single(e => e.Setting == "RA aggressiveness").Reason, Does.Contain("no aggressiveness"));
+            Assert.That(entries.Single(e => e.Setting == "Search region").Reason, Does.Contain("7 to 50"));
+
+            saved = new GuiderAdvancedSettings { MinStarSnr = 8 };
+            RunsAlgorithm(fake, sent, "Hysteresis");
+            await guider.RepushGuiderTuningAsync(CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That((await ViewAsync(svc).ConfigureAwait(false)).NotApplied, Is.Empty, "a problem that was fixed disappears");
+        }
+
         private static readonly string[] AutoOnly = ["Auto"];
+        private static readonly string[] TwoAggression = ["aggression", "aggression"];
+        private static readonly string[] ExpectedNotApplied = ["Search region", "RA aggressiveness", "Dec aggressiveness", "Star detection"];
 
         private static async Task<bool> WaitUntilAsync(Func<bool> condition) {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));

@@ -4,12 +4,14 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/guider_advanced_settings.dart';
 import 'package:openastroara/models/guider_equipment_choices.dart';
 import 'package:openastroara/models/guider_calibration_view.dart';
 import 'package:openastroara/models/guider_live.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/pa_residual.dart';
 import 'package:openastroara/models/server.dart';
+import 'package:openastroara/services/guider_advanced_api.dart';
 import 'package:openastroara/services/guider_api.dart';
 import 'package:openastroara/services/guider_equipment_api.dart';
 import 'package:openastroara/services/guider_live_api.dart';
@@ -27,6 +29,7 @@ import 'package:openastroara/state/guider/guide_graph_settings.dart';
 import 'package:openastroara/state/guider/guide_step_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/widgets/imaging/guider_advanced_dialog.dart';
 import 'package:openastroara/widgets/imaging/guiding_strip.dart';
 import 'package:openastroara/widgets/imaging/guiding_tune_dialog.dart';
 import 'package:openastroara/l10n/l10n.dart';
@@ -111,6 +114,33 @@ class _FakeProfileApi extends ProfileApi {
   }
 }
 
+/// A PUT that fails from the second call on: a re-Apply that does not land.
+class _FailsAfterFirstProfileApi extends _FakeProfileApi {
+  @override
+  Future<Phd2Settings> putPhd2Settings(Phd2Settings value) async {
+    if (puts.isNotEmpty) throw Exception('the daemon went away');
+    return super.putPhd2Settings(value);
+  }
+}
+
+/// What the Guider did not land, for Tune Guiding's list.
+class _FakeAdvanced implements GuiderAdvancedClient {
+  _FakeAdvanced(this.view);
+  final GuiderAdvancedView view;
+  @override
+  Future<GuiderAdvancedView> getGuider() async => view;
+  @override
+  Future<GuiderAdvancedSettings> getProfile() async => GuiderAdvancedSettings.empty;
+  @override
+  Future<GuiderAdvancedSettings> putProfile(GuiderAdvancedSettings settings) async => settings;
+  @override
+  Future<void> pushTuning() async {}
+  @override
+  Future<void> applyMultiStar() async {}
+  @override
+  void close() {}
+}
+
 /// Records each profile push's `tuningOnly` flag. Apply must ask for the
 /// tuning-only push: the full push re-sends equipment and stops guiding.
 class _RecordingEquipmentClient implements GuiderEquipmentClient {
@@ -140,6 +170,7 @@ Future<ProviderContainer> _pump(WidgetTester tester,
     Stream<WsEvent>? ws,
     GuiderEquipmentClient? equipment,
     _FakeGuiderApi? guider,
+    GuiderAdvancedView advanced = GuiderAdvancedView.disconnected,
     double graphHeight = GuidingStrip.defaultGraphHeight}) async {
   final api = (guider ?? _FakeGuiderApi())..status = status;
   final equipmentClient = equipment ?? _RecordingEquipmentClient();
@@ -153,6 +184,7 @@ Future<ProviderContainer> _pump(WidgetTester tester,
     // A deterministic hydrate by default — the real ProfileApi would hit the
     // test env's blocked HttpClient and leave the Apply gate in flux.
     profileApiProvider.overrideWithValue(profileApi ?? _FakeProfileApi()),
+    guiderAdvancedApiFactoryProvider.overrideWithValue((_) => _FakeAdvanced(advanced)),
     // Apply's push goes to a pure fake, never the real Dio client.
     guiderEquipmentApiFactoryProvider.overrideWithValue((_) => equipmentClient),
     // #1364 — the step buffer seeds from the guider's history on connect.
@@ -875,6 +907,45 @@ void main() {
         findsOneWidget);
 
     await _teardownPanel(tester, container);
+  });
+
+  group('what the guider did not apply (#1748)', () {
+    const guiding = GuiderStatus(
+      name: 'OpenAstro Guider',
+      connectionState: GuiderConnectionState.connected,
+      runtimeState: GuiderRuntimeState.guiding,
+      rmsTotal: 0.5,
+    );
+    const notLanded = GuiderAdvancedView(
+      connected: true,
+      notApplied: [GuiderNotApplied('RA aggressiveness', 'The current guide algorithm has no aggressiveness setting.')],
+    );
+    Future<void> apply(WidgetTester tester) async {
+      await tester.ensureVisible(find.text('Apply'));
+      await tester.tap(find.text('Apply'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Tune Guiding lists it and does not read as a clean success', (tester) async {
+      final container = await _pump(tester, status: guiding, advanced: notLanded);
+      await tester.tap(find.byTooltip('Tune guiding…'));
+      await tester.pumpAndSettle();
+      await apply(tester);
+      expect(find.byKey(const Key('guider-not-applied')), findsOneWidget);
+      expect(find.text('Applied — guiding continues uninterrupted.'), findsNothing);
+      await _teardownPanel(tester, container);
+    });
+
+    testWidgets('a re-Apply that fails does not leave the old list up', (tester) async {
+      final container = await _pump(tester, status: guiding, advanced: notLanded, profileApi: _FailsAfterFirstProfileApi());
+      await tester.tap(find.byTooltip('Tune guiding…'));
+      await tester.pumpAndSettle();
+      await apply(tester);
+      expect(find.byKey(const Key('guider-not-applied')), findsOneWidget);
+      await apply(tester);
+      expect(find.byKey(const Key('guider-not-applied')), findsNothing);
+      await _teardownPanel(tester, container);
+    });
   });
 
   testWidgets('hydrate failure: error surfaced and Apply stays disabled',

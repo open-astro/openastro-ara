@@ -236,6 +236,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   double _statusHeight = 0;
   double _messagesHeight = 0;
   final _messagesKey = GlobalKey();
+  double _statusStackHeight = 0;
+  final _statusKey = GlobalKey();
   final _leftRailKey = GlobalKey();
   final _rightRailKey = GlobalKey();
   final _simplePreflightRowKey = GlobalKey();
@@ -245,12 +247,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final right = _rightRailKey.currentContext?.size?.height;
     final row = _simplePreflightRowKey.currentContext?.size?.height;
     final messages = _messagesKey.currentContext?.size?.height ?? 0;
+    final status = _statusKey.currentContext?.size?.height ?? 0;
     if (!mounted) return;
     if ((rail != null && rail != _leftRailHeight) ||
         (right != null && right != _rightRailHeight) ||
         (row != null && row != _simplePreflightRowHeight) ||
-        messages != _messagesHeight) {
+        messages != _messagesHeight ||
+        status != _statusStackHeight) {
       setState(() {
+        _statusStackHeight = status;
         _leftRailHeight = rail ?? _leftRailHeight;
         _rightRailHeight = right ?? _rightRailHeight;
         _simplePreflightRowHeight = row ?? _simplePreflightRowHeight;
@@ -949,18 +954,25 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // bottom (user, 2026-11-03).
     final simplePreflightRow = pilot != null;
     // Messages share the top row with the status pill, which keeps at most
-    // half of it; they start under the Preflight strip when it shows.
-    final statusRoom = math.min(
-      kSimpleStatusMaxWidth,
-      (width - kSimpleInset * 3) / 2,
-    );
+    // half of it; they start under the Preflight strip when it shows. On a
+    // window too narrow to share (a phone) they take the whole row, under a
+    // room kept for the status pill, so neither moves when the other comes.
+    final sharedWidth =
+        width -
+        kSimpleInset * 3 -
+        math.min(kSimpleStatusMaxWidth, (width - kSimpleInset * 3) / 2);
+    final stacked = sharedWidth < 200;
     final messagesWidth = math.min(
       kSimpleMessagesMaxWidth,
-      width - kSimpleInset * 3 - statusRoom,
+      stacked ? width - kSimpleInset * 2 : sharedWidth,
     );
+    final statusRow = stacked
+        ? math.max(kSimpleStatusHeight, _statusStackHeight) + AraSpace.s8
+        : 0.0;
     final messagesTop = simplePreflightRow
-        ? railTop + _simplePreflightRowHeight + AraSpace.s12
-        : railTop;
+        ? railTop +
+              math.max(statusRow, _simplePreflightRowHeight + AraSpace.s12)
+        : railTop + statusRow;
     _measure();
     final height =
         MediaQuery.sizeOf(context).height -
@@ -975,10 +987,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         ? leftRailTop - messagesTop - kSimpleInset
         : double.infinity;
     // Pills too tall for the room above the left rail move beside it, when
-    // that leaves them a readable width; otherwise they paint over the rail.
+    // that leaves them a readable width; otherwise they paint over it. On a
+    // phone they would run under the right rail beside the left one, so they
+    // paint over the left rail and stop short of the right one.
     final railShift = railWidth + kSimpleInset;
     final pillsBesideRail =
-        _messagesHeight > messagesRoom && messagesWidth - railShift >= 240;
+        !stacked &&
+        _messagesHeight > messagesRoom &&
+        messagesWidth - railShift >= 240;
     final pillsOverRail =
         panels &&
         _messagesHeight > messagesRoom &&
@@ -1034,17 +1050,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         : const Duration(milliseconds: 220);
     // Both slots stay filled, and with one type, or the pills moving between
     // them would shift their siblings and rebuild them from scratch.
+    final pillsLeft = kSimpleInset + (pillsBesideRail ? railShift : 0);
+    final pillsTop = panels ? messagesTop : kSimpleInset + statusRow;
+    // At the pills' own place: the slot they move into animates from here.
     final emptyPillSlot = AnimatedPositioned(
       duration: Duration.zero,
-      left: 0,
-      top: 0,
+      left: pillsLeft,
+      top: pillsTop,
       child: const SizedBox.shrink(),
     );
     final messagePills = AnimatedPositioned(
-      left: kSimpleInset + (pillsBesideRail ? railShift : 0),
-      top: panels ? messagesTop : kSimpleInset,
+      left: pillsLeft,
+      top: pillsTop,
       width:
-          messagesWidth - (pillsBesideRail ? railShift : 0),
+          messagesWidth - (pillsBesideRail || pillsOverRail ? railShift : 0),
       duration: motion,
       curve: Curves.easeOut,
       child: NotificationListener<SizeChangedLayoutNotification>(
@@ -1052,11 +1071,22 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
           _measure();
           return true;
         },
-        child: SizeChangedLayoutNotifier(
-          child: SimpleMessagePills(
-            key: _messagesKey,
-            onOpen: _openFromPill,
-            maxHeight: messagesRoom,
+        // Large text can outgrow the screen: above Stop the pills scroll.
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: math.max(
+              kSimpleMessageHeight,
+              height - pillsTop - aboveStop,
+            ),
+          ),
+          child: SingleChildScrollView(
+            child: SizeChangedLayoutNotifier(
+              child: SimpleMessagePills(
+                key: _messagesKey,
+                onOpen: _openFromPill,
+                maxHeight: messagesRoom,
+              ),
+            ),
           ),
         ),
       ),
@@ -1197,9 +1227,18 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             constraints: BoxConstraints(
                               maxWidth: (width - kSimpleInset * 3) / 2,
                             ),
-                            child: SimpleStatusPill(
-                              onFirstHeight: _setStatusHeight,
-                              onOpen: _openFromPill,
+                            child: NotificationListener<SizeChangedLayoutNotification>(
+                              onNotification: (_) {
+                                _measure();
+                                return true;
+                              },
+                              child: SizeChangedLayoutNotifier(
+                                child: SimpleStatusPill(
+                                  key: _statusKey,
+                                  onFirstHeight: _setStatusHeight,
+                                  onOpen: _openFromPill,
+                                ),
+                              ),
                             ),
                           ),
                         ),

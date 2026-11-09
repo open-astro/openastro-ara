@@ -880,6 +880,106 @@ namespace OpenAstroAra.Test {
             });
         }
 
+
+        // #1749 — a guider that loops until stop_capture, and until then refuses a single frame as the real one does.
+        private static ConcurrentQueue<string> OnLoopingGuider(FakeGuider fake, bool stops = true, string state = "Looping") {
+            var calls = new ConcurrentQueue<string>();
+            var looping = 1;
+            fake.OnRpc("get_app_state", _ => JsonValue.Create(Volatile.Read(ref looping) == 1 ? state : "Stopped"));
+            fake.OnRpc("stop_capture", _ => {
+                calls.Enqueue("stop_capture");
+                if (stops) {
+                    Volatile.Write(ref looping, 0);
+                }
+                return JsonValue.Create(0);
+            });
+            var gate = new Func<JsonObject, JsonNode?>(req => {
+                if (Volatile.Read(ref looping) == 1) {
+                    throw new InvalidOperationException("cannot capture single frame when capture is currently active");
+                }
+                _ = Task.Run(async () => {
+                    await Task.Delay(20).ConfigureAwait(false);
+                    await fake.BroadcastAsync(new JsonObject {
+                        ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "g",
+                        ["Inst"] = 1, ["Success"] = true,
+                        ["Path"] = "/var/lib/openastro-guider/.openastro-guider/save_image_test",
+                        ["Filename"] = "save_image_test",
+                    }).ConfigureAwait(false);
+                });
+                return JsonValue.Create(0);
+            });
+            fake.OnRpc("capture_single_frame", gate);
+            return calls;
+        }
+
+        [TestCase("Looping")]
+        [TestCase("Selected")]
+        public async Task A_looping_guide_camera_is_stopped_and_the_routine_carries_on(string state) {
+            // #1749: the rough stage on the main camera worked, then the fine stage failed on the loop.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls, answerCaptures: false);
+            var stops = OnLoopingGuider(fake, state: state);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            using var svc = NewService(guider, solver);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            Assert.That(stops, Has.Count.EqualTo(1), "stop_capture was sent once");
+        }
+
+        [Test]
+        public async Task A_stopped_guide_camera_gets_no_stop_capture() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            using var svc = NewService(guider, solver);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+
+            Assert.That(fake.ReceivedMethods, Does.Not.Contain("stop_capture"));
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task A_loop_that_never_stops_fails_the_start_and_names_the_guide_camera_loop() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls, answerCaptures: false);
+            OnLoopingGuider(fake, stops: false);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            using var svc = NewService(guider, new ScriptedSolver());
+            svc.LoopStopTimeout = TimeSpan.FromMilliseconds(200);
+
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None));
+
+            Assert.That(ex!.Message, Does.Contain("Guide Camera loop"));
+            Assert.That(paCalls, Is.Empty, "no lease is taken for a start that failed");
+        }
+
+
+        [Test]
+        public async Task The_loop_stop_shares_one_time_limit_between_its_two_steps() {
+            // #1749 asks for at most 10 s; a slow stop_capture must not earn the state wait a fresh limit.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls, answerCaptures: false);
+            fake.OnRpc("get_app_state", _ => JsonValue.Create("Looping"));
+            fake.OnRpc("stop_capture", _ => { Thread.Sleep(800); return JsonValue.Create(0); });
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var stopped = await guider.RequireConnectedGuider().StopLoopForCaptureAsync(TimeSpan.FromSeconds(1), CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(stopped, Is.False);
+            Assert.That(clock.Elapsed, Is.LessThan(TimeSpan.FromMilliseconds(1600)));
+        }
+
         [Test]
         public async Task A_start_right_after_a_stop_waits_for_the_guiders_capture_to_finish() {
             // #1711: Stop abandons the capture the guider is still exposing; a Start within seconds sent a

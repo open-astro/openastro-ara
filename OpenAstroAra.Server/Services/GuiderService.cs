@@ -649,9 +649,12 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             if (!ReferenceEquals(sender, _guider)) {
                 return;
             }
-            _guideSteps.Enqueue((step.RADistanceRaw, step.DECDistanceRaw));
-            while (_guideSteps.Count > MaxGuideStepWindow) {
-                _guideSteps.Dequeue();
+            // #1749 — settling frames are the dither's own move, not guiding error (the Full UI strip leaves them out).
+            if (!_guider!.Settling) {
+                _guideSteps.Enqueue((step.RADistanceRaw, step.DECDistanceRaw));
+                while (_guideSteps.Count > MaxGuideStepWindow) {
+                    _guideSteps.Dequeue();
+                }
             }
             // #1364 — the live view shows the guide star's SNR and mass from the latest frame.
             if (step is PhdEventGuideStep phd) {
