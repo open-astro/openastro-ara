@@ -28,25 +28,7 @@ class MainFlutterWindow: NSWindow {
       }
       switch call.method {
       case "workstation":
-        // Floor stops resizes below what the shell can lay out. 600 tall
-        // so a 1080p laptop at 150 % scaling (≈ 670 px of work area) fits;
-        // the panes go compact below 820.
-        self.minSize = NSSize(width: 1100, height: 600)
-        // Normal-app behavior (not forced-maximized): restore the user's last
-        // workstation frame when one was saved; first run opens at a
-        // comfortable default clamped to the screen. The autosave name keeps
-        // macOS persisting subsequent moves/resizes automatically.
-        if !self.setFrameUsingName("AraWorkstationWindow") {
-          if let screen = self.screen ?? NSScreen.main {
-            let vis = screen.visibleFrame
-            let w = min(1440, vis.width)
-            let h = min(900, vis.height)
-            let frame = NSRect(
-              x: vis.midX - w / 2, y: vis.midY - h / 2, width: w, height: h)
-            self.setFrame(frame, display: true, animate: true)
-          }
-        }
-        self.setFrameAutosaveName("AraWorkstationWindow")
+        self.applyWorkstationFrame()
         result(nil)
       case "launchpad":
         // The compact launchpad frame must not overwrite the saved
@@ -71,8 +53,35 @@ class MainFlutterWindow: NSWindow {
     super.awakeFromNib()
   }
 
+  // A window in a macOS full-screen Space owns the screen: resizing it leaves
+  // the app drawn at the smaller size inside that Space.
+  private var isInFullScreenSpace: Bool { self.styleMask.contains(.fullScreen) }
+
+  private func applyWorkstationFrame() {
+    // Floor stops resizes below what the shell can lay out. 600 tall
+    // so a 1080p laptop at 150 % scaling (≈ 670 px of work area) fits;
+    // the panes go compact below 820.
+    self.minSize = NSSize(width: 1100, height: 600)
+    // Normal-app behavior (not forced-maximized): restore the user's last
+    // workstation frame when one was saved; first run opens at a
+    // comfortable default clamped to the screen. The autosave name keeps
+    // macOS persisting subsequent moves/resizes automatically.
+    if !self.isInFullScreenSpace && !self.setFrameUsingName("AraWorkstationWindow") {
+      if let screen = self.screen ?? NSScreen.main {
+        let vis = screen.visibleFrame
+        let w = min(1440, vis.width)
+        let h = min(900, vis.height)
+        let frame = NSRect(
+          x: vis.midX - w / 2, y: vis.midY - h / 2, width: w, height: h)
+        self.setFrame(frame, display: true, animate: true)
+      }
+    }
+    self.setFrameAutosaveName("AraWorkstationWindow")
+  }
+
   private func applyLaunchpadFrame() {
     self.minSize = NSSize(width: 760, height: 560)
+    guard !self.isInFullScreenSpace else { return }
     self.setContentSize(NSSize(width: 960, height: 680))
     self.center()
   }

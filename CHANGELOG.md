@@ -47,6 +47,7 @@ at the top. This happens in the same commit that pushes the release tag.
 - The setup wizard refuses one camera as both Main and Guide, shows the server's reason at Save, and skips darks when the guider push failed (#1661).
 - Sky Album cards write the Tier, format numbers for the locale, draw the back's action at 44 px, and decode the Art once during a flip (#1637, #1638, #1640, #1641).
 - The bedtime check counts only tonight's unresolved faults and names the device (#1714).
+- On a Mac in full screen, changing profile no longer shrinks the app to the profile window's size.
 - The cooling fan is chosen in the profile, by switch and port, on any driver, not found by the device name "Thermal Switch". **Every existing profile has no fan following the cooler until you choose one**; a pill asks once (#1700).
 
 ### Removed (bug sweep)
