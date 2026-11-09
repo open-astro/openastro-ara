@@ -252,7 +252,7 @@ void main() {
     final eq = _GuiderEquipment();
     final rig = [profileApiProvider.overrideWithValue(_Profile()), guiderEquipmentApiProvider.overrideWithValue(eq)];
     await _pump(tester, _wire(), rig: rig);
-    tester.widget<SimplePresetTile<int>>(find.byKey(const Key('simple-guide-exposure'))).onSelected(2000);
+    tester.widget<SimplePresetTile<int>>(find.byKey(const Key('simple-guide-exposure'))).onSelected!(2000);
     await tester.pump();
     await tester.pump();
     expect(eq.pushes, [true], reason: 'the exposure, tuning only');
@@ -385,7 +385,7 @@ void main() {
     final c = await _pump(tester, _wire(), rig: rig);
     final tile = tester.widget<SimplePresetTile<String>>(find.byKey(const Key('simple-guide-dec-mode')));
     expect(tile.options, ['auto', 'north', 'south', 'off']);
-    tile.onSelected('north');
+    tile.onSelected!('north');
     await tester.pump();
     await tester.pump();
     expect(c.read(phd2SettingsProvider).decGuideMode, 'north');

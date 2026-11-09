@@ -2,6 +2,10 @@ import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart';
+import 'package:openastroara/models/discovered_device.dart';
+import 'package:openastroara/services/equipment_discovery_api.dart';
+import 'package:openastroara/state/equipment/equipment_discovery_provider.dart';
+import 'package:openastroara/state/settings/equipment_connection_state.dart' show EquipmentDeviceType;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
@@ -408,6 +412,23 @@ class _Mount extends MountNotifier with _Calls<MountStatus> {
   final EquipmentConnectionState state0;
   @override
   Future<MountStatus?> build() async => MountStatus.fromJson(_wire('AM5', state0));
+}
+
+class _ChoosingMount extends _Mount {
+  _ChoosingMount() : super(EquipmentConnectionState.disconnected);
+  final picked = <String>[];
+  @override
+  Future<bool> connect(DiscoveredDevice device) async {
+    picked.add(device.name);
+    return true;
+  }
+}
+
+class _Discovery extends EquipmentDiscoveryApi {
+  _Discovery(super.server, this.devices);
+  final List<DiscoveredDevice> devices;
+  @override
+  Future<List<DiscoveredDevice>> discover(EquipmentDeviceType type, {bool forceRefresh = false}) async => devices;
 }
 
 /// A mount whose connect the rig refuses (the device notifiers throw why).
@@ -1404,6 +1425,8 @@ void main() {
     expect(find.text('Loop'), findsOneWidget);
 
     await tester.tap(find.byKey(const Key('simple-exposure')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('10 s').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('10 s').last);
     await tester.pumpAndSettle();
@@ -2756,24 +2779,58 @@ void main() {
     expect(mount.calls, ['reconnect'], reason: 'Connect: the device the rig remembers, no chooser');
   });
 
-  testWidgets('Devices picks a device through the full UI chooser, set up before or not', (tester) async {
+  testWidgets('Add a device and Choose pick in place, with no popup', (tester) async {
     await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
       mountProvider.overrideWith(() => _Mount(EquipmentConnectionState.disconnected)),
     ]);
+    bool popup() => tester.state<NavigatorState>(find.byType(Navigator)).canPop();
     await _openSection(tester, 'Devices');
     expect(find.byKey(const Key('simple-gear-camera-connect')), findsNothing, reason: 'nothing remembered to reconnect');
     await tester.ensureVisible(find.byKey(const Key('simple-gear-add-choose')));
     await tester.tap(find.byKey(const Key('simple-gear-add-choose')));
     await tester.pumpAndSettle();
+    expect(popup(), isFalse);
+    expect(find.byType(Dialog), findsNothing);
+    await tester.ensureVisible(find.byKey(const Key('simple-gear-add-camera')));
+    expect(tester.getSize(find.byKey(const Key('simple-gear-add-camera'))).height, greaterThanOrEqualTo(44));
     await tester.tap(find.byKey(const Key('simple-gear-add-camera')));
     await tester.pumpAndSettle();
-    expect(find.byType(AlertDialog), findsOneWidget, reason: 'the chooser the Full UI cards open');
-    expect(find.text('Cancel'), findsOneWidget);
-    await tester.tap(find.text('Cancel'));
+    expect(popup(), isFalse, reason: 'the discovered list is inline too');
+    expect(find.byType(Dialog), findsNothing);
+    expect(find.text('Choose Main Camera'), findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('alpaca-chooser-cancel')));
+    await tester.tap(find.byKey(const Key('alpaca-chooser-cancel')));
     await tester.pumpAndSettle();
+    expect(find.text('Choose Main Camera'), findsNothing);
+    await tester.ensureVisible(find.byKey(const Key('simple-gear-mount-choose')));
     await tester.tap(find.byKey(const Key('simple-gear-mount-choose')));
     await tester.pumpAndSettle();
-    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(popup(), isFalse);
+    expect(find.text('Choose Mount'), findsOneWidget);
+  });
+
+  testWidgets('a device picked in place connects through the same notifier and closes the list', (tester) async {
+    const device = DiscoveredDevice(
+      deviceType: EquipmentDeviceType.mount, name: 'AM5 Bridge', uniqueId: 'am5', alpacaDeviceNumber: 0,
+      hostName: 'rig', ipAddress: '10.0.0.2', ipPort: 32323, useHttps: false,
+    );
+    final mount = _ChoosingMount();
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, server: const AraServer(hostname: 'test', port: 1), gear: [
+      mountProvider.overrideWith(() => mount),
+      equipmentDiscoveryApiFactoryProvider.overrideWithValue((server) => _Discovery(server, const [device])),
+    ]);
+    await _openSection(tester, 'Devices');
+    await tester.ensureVisible(find.byKey(const Key('simple-gear-mount-choose')));
+    await tester.tap(find.byKey(const Key('simple-gear-mount-choose')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('AM5 Bridge'));
+    await tester.tap(find.text('AM5 Bridge'));
+    await tester.pumpAndSettle();
+    expect(mount.picked, ['AM5 Bridge']);
+    expect(find.text('Choose Mount'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('a connected device offers no Choose', (tester) async {
@@ -3592,6 +3649,23 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     c.dispose();
     await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a message shows once with the shell on top, and still on a page pushed over it', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), manualAlarm: true);
+    await tester.pump();
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, 'Something to see');
+    await tester.pump();
+    expect(find.text('Something to see'), findsOneWidget, reason: 'the shell, and no second pill over it');
+    navigator.push(MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Text('page'))));
+    await tester.pumpAndSettle();
+    expect(find.text('page'), findsOneWidget);
+    expect(find.text('Something to see'), findsOneWidget, reason: 'the page on top shows it');
+    navigator.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('Something to see'), findsOneWidget, reason: 'and back on the shell, still one');
+    await tester.pump(kSimpleErrorLife + const Duration(seconds: 1));
   });
 
   testWidgets('a tap on a message opens what it came from, as the status pills do (user, 2026-11-04)', (tester) async {

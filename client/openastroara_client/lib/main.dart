@@ -16,6 +16,7 @@ import 'screens/first_run_screen.dart';
 import 'screens/launch_profile_screen.dart';
 import 'screens/offline_launch_screen.dart';
 import 'util/reduce_motion.dart';
+import 'widgets/simple_snack_bar_messenger.dart';
 import 'widgets/plan_offline_button.dart';
 import 'services/client_error_handlers.dart';
 import 'services/client_error_log.dart';
@@ -109,8 +110,11 @@ class OpenAstroAraApp extends StatelessWidget {
             builder: (context, ref, _) => Localizations.override(
               context: context,
               locale: ref.watch(appLocaleProvider),
-              // Simple Mode's alarm, over every screen (the one popup kept).
-              child: SimpleSafetyAlarmLayer(child: child ?? const SizedBox.shrink()),
+              // Simple Mode's alarm (the one popup kept) and its message
+              // pills, over every screen; every snackbar there is a pill.
+              child: SimpleScaffoldMessenger(
+                child: SimpleSafetyAlarmLayer(child: child ?? const SizedBox.shrink()),
+              ),
             ),
           ),
         ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -6,9 +7,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../util/stream_save_location.dart';
 
+import '../../l10n/l10n.dart';
 import '../../models/bug_report_preparation.dart';
 import '../../services/client_error_log.dart';
+import '../../state/simple_messages_state.dart';
+import '../../state/simple_mode_state.dart';
 import '../../state/support/bug_report_state.dart';
+import '../inline_choices.dart';
 import 'client_log_card.dart';
 import 'support_card_row.dart';
 
@@ -77,6 +82,23 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
   int _rangeIndex = 0;
   // Bytes read so far while a whole-rig bundle packs; null when not packing.
   int? _packed;
+  // Simple Mode's review, answered in the card.
+  BugReportPreparation? _review;
+  Completer<bool>? _reviewAnswer;
+
+  @override
+  void dispose() {
+    _reviewAnswer?.complete(false);
+    super.dispose();
+  }
+
+  void _answerReview(bool go) {
+    _reviewAnswer?.complete(go);
+    setState(() {
+      _review = null;
+      _reviewAnswer = null;
+    });
+  }
 
   Future<void> _run() async {
     final api = ref.read(bugReportApiProvider);
@@ -119,19 +141,15 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
       // is built on the daemon, which has never seen this app's failures.
       final clientLogName = await _saveClientLogBeside(savePath);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            clientLogName == null
-                ? 'Saved $name'
-                : 'Saved $name and $clientLogName',
-          ),
-        ),
+      userNotifier(context)(
+        clientLogName == null ? 'Saved $name' : 'Saved $name and $clientLogName',
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Bug report failed: ${_friendly(e)}')),
+      userNotifier(context)(
+        'Bug report failed: ${_friendly(e)}',
+        error: true,
+        snackBarRed: false,
       );
     } finally {
       if (mounted) {
@@ -158,52 +176,24 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
     }
   }
 
+  static const _reviewTitle = 'Before you share this bug report';
+
   Future<bool?> _showDisclosure(BugReportPreparation prep) {
+    if (ref.read(simpleModeActiveProvider)) {
+      final answer = Completer<bool>();
+      setState(() {
+        _review = prep;
+        _reviewAnswer = answer;
+      });
+      return answer.future;
+    }
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Before you share this bug report'),
+        title: const Text(_reviewTitle),
         // Scrollable so the disclosure can't overflow on a small viewport or a
         // large accessibility font scale.
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-            const Text('The bundle contains:'),
-            const SizedBox(height: 8),
-            if (prep.sources.isEmpty) const Text('• Ara\'s recent log files'),
-            for (final s in prep.sources) Text(_sourceLine(s)),
-            Text(switch (prep.sharingMode) {
-              'redacted' =>
-                '• your profile with coordinates, serial numbers, hostnames, '
-                    'usernames in paths, private network addresses and tokens '
-                    'scrubbed',
-              'coarse_gps' =>
-                '• your profile with the site rounded to ~111 km — it may still '
-                    'include equipment credentials, API / notification tokens '
-                    'and network addresses',
-              _ =>
-                '• your full profile — which may include equipment credentials, '
-                    'API / notification tokens, precise observatory coordinates, and '
-                    'network addresses',
-            }),
-            Text(prep.sharingMode == 'redacted'
-                ? '• system info, with this device\'s username scrubbed from its path'
-                : '• system info, including this device\'s filesystem path'),
-            const Text(
-                '• this app\'s own error log, saved as a separate file beside '
-                'the ZIP'),
-            const SizedBox(height: 12),
-            Text('Approximate size: ${_humanSize(prep.estimatedSizeBytes)}.'),
-            const SizedBox(height: 8),
-            const Text(
-              'Only share it with people you trust (e.g. the developers) — '
-              'treat it like a password.',
-            ),
-            ],
-          ),
-        ),
+        content: SingleChildScrollView(child: _disclosure(prep)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -218,6 +208,45 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
     );
   }
 
+  /// What the bundle holds: the review's words, dialog or inline.
+  Widget _disclosure(BugReportPreparation prep) => Column(
+    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text('The bundle contains:'),
+      const SizedBox(height: 8),
+      if (prep.sources.isEmpty) const Text('• Ara\'s recent log files'),
+      for (final s in prep.sources) Text(_sourceLine(s)),
+      Text(switch (prep.sharingMode) {
+        'redacted' =>
+          '• your profile with coordinates, serial numbers, hostnames, '
+              'usernames in paths, private network addresses and tokens '
+              'scrubbed',
+        'coarse_gps' =>
+          '• your profile with the site rounded to ~111 km — it may still '
+              'include equipment credentials, API / notification tokens '
+              'and network addresses',
+        _ =>
+          '• your full profile — which may include equipment credentials, '
+              'API / notification tokens, precise observatory coordinates, and '
+              'network addresses',
+      }),
+      Text(prep.sharingMode == 'redacted'
+          ? '• system info, with this device\'s username scrubbed from its path'
+          : '• system info, including this device\'s filesystem path'),
+      const Text(
+          '• this app\'s own error log, saved as a separate file beside '
+          'the ZIP'),
+      const SizedBox(height: 12),
+      Text('Approximate size: ${_humanSize(prep.estimatedSizeBytes)}.'),
+      const SizedBox(height: 8),
+      const Text(
+        'Only share it with people you trust (e.g. the developers) — '
+        'treat it like a password.',
+      ),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -225,11 +254,17 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
     // stays alive for the card's lifetime and can't be torn down mid prepare/
     // download. Also gates the button when no server is connected.
     final api = ref.watch(bugReportApiProvider);
+    final simple = ref.watch(simpleModeActiveProvider);
+    final review = _review;
     return Card(
       margin: const EdgeInsets.all(8),
       child: Padding(
         padding: const EdgeInsets.all(12),
-        child: SupportCardRow(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: 12,
+          children: [
+            SupportCardRow(
             icon: Icon(Icons.bug_report_outlined, color: theme.colorScheme.primary),
             body: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -246,6 +281,27 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                   if (_packed != null)
                     Text('Packing the logs on the rig… ${_humanSize(_packed!)} read',
                         style: theme.textTheme.bodySmall),
+                  if (simple) ...[
+                    const SizedBox(height: 4),
+                    Text(context.l10n.bugReportCovers, style: theme.textTheme.bodySmall),
+                    InlineChoices<int>(
+                      id: 'bug-report-range',
+                      value: _rangeIndex,
+                      options: [
+                        for (var i = 0; i < bugReportRanges.length; i++)
+                          (i, bugReportRanges[i].$2),
+                      ],
+                      onChanged: _busy ? null : (v) => setState(() => _rangeIndex = v),
+                    ),
+                    Text(context.l10n.bugReportSharing, style: theme.textTheme.bodySmall),
+                    InlineChoices<String>(
+                      id: 'bug-report-sharing',
+                      value: _mode,
+                      options: [for (final m in bugReportSharingModes) (m.$1, m.$2)],
+                      detail: (v) => bugReportSharingModes.firstWhere((m) => m.$1 == v).$3,
+                      onChanged: _busy ? null : (v) => setState(() => _mode = v),
+                    ),
+                  ] else ...[
                   const SizedBox(height: 4),
                   Row(
                     children: [
@@ -292,6 +348,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                       ),
                     ],
                   ),
+                  ],
                 ],
               ),
             action: FilledButton.icon(
@@ -305,6 +362,18 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                   : const Icon(Icons.bug_report, size: 18),
               label: const Text('Prepare & download'),
             ),
+            ),
+            if (review != null)
+              InlineConfirm(
+                id: 'bug-report-review',
+                title: _reviewTitle,
+                body: _disclosure(review),
+                confirmLabel: 'Download anyway',
+                cancelLabel: 'Cancel',
+                onConfirm: () => _answerReview(true),
+                onCancel: () => _answerReview(false),
+              ),
+          ],
         ),
       ),
     );

@@ -50,6 +50,7 @@ import '../../state/profile_management_state.dart';
 import '../../state/settings/safety_policies_state.dart';
 import '../../state/equipment/switch_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
+import '../../widgets/inline_choices.dart';
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
 import 'simple_guide_panel.dart'
@@ -467,6 +468,14 @@ class SimpleSettingsPopover extends ConsumerWidget {
               FilterDropdown(
                 value: params.filterSlot,
                 onChanged: ctrl.setFilterSlot,
+                inline: (names, value, pick) => SimplePresetTile<String>(
+                  key: const Key('simple-filter'),
+                  label: context.l10n.filterDropdownLabel,
+                  value: value,
+                  options: names,
+                  format: (n) => n,
+                  onSelected: pick,
+                ),
               ),
             // Switching while a loop runs would strand it with no stop.
             Container(
@@ -713,6 +722,17 @@ class _SimpleWheelKeysState extends State<SimpleWheelKeys> {
   bool _ring = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Autofocus alone can't take the focus from the shell, which holds it.
+    if (widget.autofocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focus.requestFocus();
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _focus.dispose();
     super.dispose();
@@ -795,7 +815,9 @@ class _WheelStep extends Intent {
   final int dir;
 }
 
-class SimplePresetTile<T> extends StatelessWidget {
+/// A value picked from a list that folds out under the tile (Simple Mode has
+/// no popups).
+class SimplePresetTile<T> extends StatefulWidget {
   const SimplePresetTile({
     super.key,
     required this.label,
@@ -810,15 +832,53 @@ class SimplePresetTile<T> extends StatelessWidget {
   final T value;
   final List<T> options;
   final String Function(T) format;
-  final ValueChanged<T> onSelected;
+
+  /// Null greys the tile out.
+  final ValueChanged<T>? onSelected;
 
   /// Pick on an iOS-style wheel (spun with a thumb, the neighbours in view)
   /// instead of a list: for a long ordered set like a frame count.
   final bool wheel;
 
   @override
+  State<SimplePresetTile<T>> createState() => _SimplePresetTileState<T>();
+}
+
+class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
+  bool _open = false;
+  FixedExtentScrollController? _wheel;
+  late T _spun;
+
+  List<T> get _items => widget.options.contains(widget.value)
+      ? widget.options
+      : [widget.value, ...widget.options];
+
+  void _toggle() => setState(() {
+    _open = !_open;
+    _wheel?.dispose();
+    _wheel = null;
+    if (_open && widget.wheel) {
+      _spun = widget.value;
+      _wheel = FixedExtentScrollController(
+        initialItem: _items.indexOf(widget.value),
+      );
+    }
+  });
+
+  void _pick(T v) {
+    _toggle();
+    widget.onSelected?.call(v);
+  }
+
+  @override
+  void dispose() {
+    _wheel?.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final items = options.contains(value) ? options : [value, ...options];
+    final items = _items;
     // Ink, so the focus and press highlight paints over the fill, not under.
     final tile = ConstrainedBox(
       // At least 48 px; taller when the user's text is larger.
@@ -834,13 +894,13 @@ class SimplePresetTile<T> extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              label,
+              widget.label,
               style: AraText.caption,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
             Text(
-              format(value),
+              widget.format(widget.value),
               style: kSimpleText,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -849,98 +909,78 @@ class SimplePresetTile<T> extends StatelessWidget {
         ),
       ),
     );
+    final controller = _wheel;
     // Its own transparent Material: the fill and highlight paint here, over
     // the panel's scrim, not on a Material further down.
-    if (wheel) {
-      // An InkWell, not a bare tap: Tab reaches it and Enter opens the wheel.
-      return Material(
-        type: MaterialType.transparency,
-        child: Semantics(
-          button: true,
-          label: label,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(10),
-            onTap: () => _showWheel(context, items),
-            child: tile,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s4,
+      children: [
+        Material(
+          type: MaterialType.transparency,
+          child: Semantics(
+            button: true,
+            expanded: _open,
+            label: widget.label,
+            // An InkWell, not a bare tap: Tab reaches it and Enter opens it.
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: widget.onSelected == null ? null : _toggle,
+              child: tile,
+            ),
           ),
         ),
-      );
-    }
-    return Material(
-      type: MaterialType.transparency,
-      child: PopupMenuButton<T>(
-        tooltip: label,
-        initialValue: value,
-        onSelected: onSelected,
-        position: PopupMenuPosition.under,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(10)),
-        ),
-        constraints: const BoxConstraints(minWidth: 96, maxHeight: 360),
-        itemBuilder: (_) => [
-          for (final o in items)
-            PopupMenuItem<T>(
-              value: o,
-              height: 44,
-              child: Text(format(o), style: kSimpleText),
-            ),
-        ],
-        child: tile,
-      ),
-    );
-  }
-
-  Future<void> _showWheel(BuildContext context, List<T> items) async {
-    var picked = value;
-    final wheel = FixedExtentScrollController(
-      initialItem: items.indexOf(value),
-    );
-    final done = await showCupertinoModalPopup<bool>(
-      context: context,
-      builder: (popup) => Container(
-        height: 280,
-        color: AraColors.bgPanel,
-        child: SafeArea(
-          top: false,
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(left: 16),
-                    child: Text(label, style: kSimpleText),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () => Navigator.of(popup).pop(true),
+        if (_open && controller != null)
+          SizedBox(
+            height: 176,
+            child: Column(
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+                    onPressed: () => _pick(_spun),
                     child: Text(context.l10n.previewDone),
                   ),
-                ],
-              ),
-              Expanded(
-                // Focused on opening, so the arrows turn it at once.
-                child: SimpleWheelKeys(
-                  debugLabel: 'simple-wheel-$label',
-                  autofocus: true,
-                  onStep: SimpleWheelKeys.stepper(wheel, items.length),
-                  child: CupertinoPicker(
-                    itemExtent: 44,
-                    scrollController: wheel,
-                    onSelectedItemChanged: (i) => picked = items[i],
-                    children: [
-                      for (final o in items)
-                        Center(child: Text(format(o), style: kSimpleText)),
-                    ],
+                ),
+                Expanded(
+                  // Focused on opening, so the arrows turn it at once.
+                  child: SimpleWheelKeys(
+                    debugLabel: 'simple-wheel-${widget.label}',
+                    autofocus: true,
+                    onStep: SimpleWheelKeys.stepper(controller, items.length),
+                    child: CupertinoPicker(
+                      itemExtent: 44,
+                      scrollController: controller,
+                      onSelectedItemChanged: (i) => _spun = items[i],
+                      children: [
+                        for (final o in items)
+                          Center(
+                            child: Text(widget.format(o), style: kSimpleText),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
+              ],
+            ),
+          )
+        else if (_open)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 240),
+            child: SingleChildScrollView(
+              child: InlineChoices<T>(
+                id: 'simple-preset',
+                value: widget.value,
+                options: [for (final o in items) (o, widget.format(o))],
+                style: kSimpleText,
+                onChanged: _pick,
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+      ],
     );
-    wheel.dispose();
-    if (done ?? false) onSelected(picked);
   }
 }
 

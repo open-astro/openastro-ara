@@ -318,8 +318,21 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
   }
 
+  late final _onTop = ref.read(simpleShellOnTopProvider.notifier);
+
+  // A frame late: providers can't change while the tree builds or unmounts.
+  void _publishOnTop(bool onTop) => WidgetsBinding.instance
+      .addPostFrameCallback((_) => _onTop.set(onTop));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _publishOnTop(ModalRoute.isCurrentOf(context) ?? true);
+  }
+
   @override
   void dispose() {
+    _publishOnTop(false);
     _stopDisarm?.cancel();
     _focus.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -2809,25 +2822,7 @@ class _AddGearRow extends ConsumerWidget {
       verb: null,
       label: null,
       action: null,
-      choose: (context) async {
-        final pick = await showDialog<int>(
-          context: context,
-          builder: (context) => SimpleDialog(
-            title: Text(l10n.shellAddDevice),
-            children: [
-              for (final (i, m) in missing.indexed)
-                SimpleDialogOption(
-                  key: Key('simple-gear-add-${m.$1.name}'),
-                  onPressed: () => Navigator.of(context).pop(i),
-                  child: Text(m.$2),
-                ),
-            ],
-          ),
-        );
-        if (pick == null || !context.mounted) return;
-        final (type, label, connect) = missing[pick];
-        await _chooseDevice(context, type, label, connect);
-      },
+      choose: (context, close) => _AddGearPanel(missing: missing, close: close),
       onOpen: null,
     );
   }
@@ -2856,9 +2851,8 @@ class _GearRow<T extends EquipmentDeviceStatus> extends ConsumerWidget {
     final notifier = ref.read(provider.notifier);
     final l10n = context.l10n;
     // Connect only reconnects what the rig remembers (#1710): Choose picks a
-    // device, through the Full UI's chooser.
-    Future<void> choose(BuildContext context) =>
-        _chooseDevice(context, deviceType, type, notifier.connect);
+    // device, through the Full UI's chooser, in place.
+    final choose = _deviceChooser(deviceType, type, notifier.connect);
     // Never set up on this rig: the Add a device row picks it.
     if (status == null) return const SizedBox.shrink();
     // The dot is the top bar chip's, so the two always agree.
@@ -2916,13 +2910,11 @@ class _SwitchGearRows extends ConsumerWidget {
     );
   }
 
-  Future<void> Function(BuildContext) _choose(WidgetRef ref) =>
-      (context) => _chooseDevice(
-        context,
-        EquipmentDeviceType.switchDevice,
-        context.l10n.shellSwitches,
-        ref.read(switchListProvider.notifier).connect,
-      );
+  _GearChooser _choose(BuildContext context, WidgetRef ref) => _deviceChooser(
+    EquipmentDeviceType.switchDevice,
+    context.l10n.shellSwitches,
+    ref.read(switchListProvider.notifier).connect,
+  );
 
   Widget _row(BuildContext context, WidgetRef ref, SwitchDevice d) {
     final notifier = ref.read(switchListProvider.notifier);
@@ -2973,7 +2965,7 @@ class _SwitchGearRows extends ConsumerWidget {
           d.connectionState == SwitchConnectionState.connected ||
               d.connectionState == SwitchConnectionState.connecting
           ? null
-          : _choose(ref),
+          : _choose(context, ref),
       onOpen: onOpen,
     );
   }
@@ -3039,31 +3031,114 @@ class _GuiderGearRow extends ConsumerWidget {
   }
 }
 
-/// Opens the Full UI's device chooser; [connect] takes the picked device.
-Future<void> _chooseDevice(
-  BuildContext context,
+/// What a device row's Choose opens under the row; [close] folds it again.
+typedef _GearChooser = Widget Function(BuildContext context, VoidCallback close);
+
+/// The Full UI's device chooser, in place; [connect] takes the picked device.
+_GearChooser _deviceChooser(
   EquipmentDeviceType type,
   String typeLabel,
   Future<bool> Function(DiscoveredDevice device) connect,
-) {
-  final notify = userNotifier(context);
-  final l10n = context.l10n;
-  return showAlpacaChooserDialog(
-    context,
-    type,
-    deviceTypeLabel: typeLabel,
-    onPick: (device) async {
-      try {
-        await connect(device);
-      } catch (e) {
-        notify(
-          l10n.shellGearActionFailed(l10n.shellConnect, device.name),
-          detail: describeEquipmentError(e),
-          error: true,
-        );
-      }
-    },
-  );
+) => (context, close) => AlpacaDeviceChooser(
+  type: type,
+  deviceTypeLabel: typeLabel,
+  onClose: close,
+  onPick: (device) async {
+    final notify = userNotifier(context);
+    final l10n = context.l10n;
+    try {
+      await connect(device);
+    } catch (e) {
+      notify(
+        l10n.shellGearActionFailed(l10n.shellConnect, device.name),
+        detail: describeEquipmentError(e),
+        error: true,
+      );
+    }
+  },
+);
+
+/// Add a device, in place: the types the rig has none of, then the chooser
+/// for the one tapped.
+class _AddGearPanel extends StatefulWidget {
+  const _AddGearPanel({required this.missing, required this.close});
+
+  final List<
+    (EquipmentDeviceType, String, Future<bool> Function(DiscoveredDevice))
+  >
+  missing;
+  final VoidCallback close;
+
+  @override
+  State<_AddGearPanel> createState() => _AddGearPanelState();
+}
+
+class _AddGearPanelState extends State<_AddGearPanel> {
+  EquipmentDeviceType? _type;
+
+  @override
+  Widget build(BuildContext context) {
+    final picked = widget.missing.where((m) => m.$1 == _type).firstOrNull;
+    if (picked != null) {
+      return _deviceChooser(
+        picked.$1,
+        picked.$2,
+        picked.$3,
+      )(context, widget.close);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final m in widget.missing)
+          TextButton(
+            key: Key('simple-gear-add-${m.$1.name}'),
+            style: TextButton.styleFrom(
+              minimumSize: const Size(0, 44),
+              alignment: Alignment.centerLeft,
+            ),
+            onPressed: () => setState(() => _type = m.$1),
+            child: Text(m.$2, style: kSimpleText),
+          ),
+      ],
+    );
+  }
+}
+
+/// A device's row, with what its Choose opens folded out under it.
+class _GearTile extends StatefulWidget {
+  const _GearTile({required this.chooser, required this.row});
+
+  final _GearChooser? chooser;
+
+  /// The row; given what its Choose should call.
+  final Widget Function(VoidCallback? toggle) row;
+
+  @override
+  State<_GearTile> createState() => _GearTileState();
+}
+
+class _GearTileState extends State<_GearTile> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final chooser = widget.chooser;
+    final row = widget.row(
+      chooser == null ? null : () => setState(() => _open = !_open),
+    );
+    if (!_open || chooser == null) return row;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
+      children: [
+        row,
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12),
+          child: chooser(context, () => setState(() => _open = false)),
+        ),
+      ],
+    );
+  }
 }
 
 Widget _gearTile({
@@ -3076,7 +3151,32 @@ Widget _gearTile({
   required String? label,
   required Future<void> Function()? action,
   required VoidCallback? onOpen,
-  Future<void> Function(BuildContext context)? choose,
+  _GearChooser? choose,
+}) => _GearTile(
+  chooser: choose,
+  row: (toggle) => _gearRow(
+    id: id,
+    title: title,
+    dot: dot,
+    word: word,
+    verb: verb,
+    label: label,
+    action: action,
+    onOpen: onOpen,
+    toggle: toggle,
+  ),
+);
+
+Widget _gearRow({
+  required String id,
+  required String title,
+  required StatusLevel dot,
+  required String word,
+  required String? verb,
+  required String? label,
+  required Future<void> Function()? action,
+  required VoidCallback? onOpen,
+  required VoidCallback? toggle,
 }) {
   // Ink, so the focus and press highlight paints over the fill, not under.
   final row = Ink(
@@ -3124,12 +3224,12 @@ Widget _gearTile({
               child: Text(label),
             ),
           ),
-        if (choose != null)
+        if (toggle != null)
           Builder(
             builder: (context) => TextButton(
               key: Key('simple-gear-$id-choose'),
               style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
-              onPressed: () => choose(context),
+              onPressed: toggle,
               child: Text(context.l10n.shellChooseDevice),
             ),
           ),

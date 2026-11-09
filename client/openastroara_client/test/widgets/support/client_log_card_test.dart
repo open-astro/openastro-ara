@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/client_error_log.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/support/client_log_card.dart';
 
 /// In-memory stand-in: real file IO never completes inside a widget test's
@@ -30,9 +32,12 @@ class _MemLog extends ClientErrorLog {
   }
 }
 
-Widget _host(_MemLog log, {String? Function(String name)? picker}) =>
+Widget _host(_MemLog log, {String? Function(String name)? picker, bool simple = false}) =>
     ProviderScope(
-      overrides: [clientErrorLogProvider.overrideWithValue(log)],
+      overrides: [
+        clientErrorLogProvider.overrideWithValue(log),
+        if (simple) simpleModeActiveProvider.overrideWithValue(true),
+      ],
       child: MaterialApp(
         home: Scaffold(
           body: ClientLogCard(
@@ -115,5 +120,26 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byType(SnackBar), findsOneWidget);
     expect(find.textContaining('Saved'), findsNothing);
+  });
+
+  testWidgets('in Simple Mode a save and a failure are pills, not snackbars', (tester) async {
+    final log = _MemLog();
+    await tester.pumpWidget(_host(log, simple: true));
+    List<SimpleMessage> pills() =>
+        ProviderScope.containerOf(tester.element(find.byType(ClientLogCard))).read(simpleMessagesProvider);
+    await tester.tap(find.text('Save client log'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(SnackBar), findsNothing);
+    expect(pills().single.title, 'Saved /tmp/${ClientLogCard.suggestedFileName}');
+    expect(pills().single.kind, SimpleMessageKind.result);
+
+    log.failExport = true;
+    await tester.tap(find.text('Save client log'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(SnackBar), findsNothing);
+    expect(pills().first.kind, SimpleMessageKind.error);
+    await tester.pump(kSimpleResultLife); // the pill's timer
   });
 }

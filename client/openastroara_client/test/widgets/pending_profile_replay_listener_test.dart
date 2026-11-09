@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/pending_profile_drafts_state.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/pending_profile_replay_listener.dart';
 
 /// §2 / #1137 — the replay notice reaches the user as a snackbar, whether it
@@ -71,5 +73,21 @@ void main() {
 
     expect(find.textContaining('rejected by the rig'), findsOneWidget);
     expect(container.read(pendingProfileReplayNoticeProvider), isNull);
+  });
+
+  testWidgets('in Simple Mode the notice is a pill, not a snackbar', (tester) async {
+    final container = ProviderContainer(overrides: [simpleModeActiveProvider.overrideWithValue(true)]);
+    addTearDown(container.dispose);
+    container.read(pendingProfileReplayNoticeProvider.notifier).post('Applied.');
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: PendingProfileReplayListener(child: Text('shell')))),
+      ),
+    );
+    await tester.pump();
+    expect(find.byType(SnackBar), findsNothing);
+    expect(container.read(simpleMessagesProvider).single.title, 'Applied.');
+    await tester.pump(kSimpleResultLife); // the pill's timer
   });
 }
