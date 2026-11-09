@@ -64,6 +64,7 @@ import 'simple_preview_panel.dart'
 import 'simple_shell.dart'
     show
         SimplePanel,
+        SimpleSegments,
         simpleFrost,
         kSimpleGoStyle,
         kSimpleInset,

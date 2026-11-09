@@ -119,6 +119,7 @@ import 'package:openastroara/widgets/imaging/histogram_strip.dart' show frameHis
 import 'package:openastroara/widgets/night_hotkey.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart' show planningSettingsBootstrapProvider;
+import 'package:openastroara/widgets/support/bug_report_card.dart';
 
 class _MemPrefs extends SimpleModePrefsService {
   bool value = true;
@@ -2746,11 +2747,14 @@ void main() {
   });
 
   testWidgets('Rig holds the bug report and client log actions inline: no Full UI Settings, Simple Mode stays on', (tester) async {
-    final c = await _pump(tester, const Size(1024, 768));
+    final c = await _pump(tester, const Size(1024, 768), feature: true);
     await _openSection(tester, 'Rig');
     await tester.ensureVisible(find.text('Send me a bug report')); // Rig scrolls
     expect(find.text('Send me a bug report'), findsOneWidget);
-    await tester.tap(find.byType(DropdownButton<String>).first);
+    final sharing = find.descendant(of: find.byType(BugReportCard), matching: find.byType(DropdownButton<String>));
+    await tester.ensureVisible(sharing);
+    await tester.pumpAndSettle();
+    await tester.tap(sharing);
     await tester.pumpAndSettle();
     await tester.tap(find.text("This app's error log").last);
     await tester.pumpAndSettle();
