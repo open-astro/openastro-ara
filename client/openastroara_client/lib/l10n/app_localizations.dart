@@ -5732,6 +5732,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Disk checked — repairs were made.'**
   String get storageCheckRepairedSimple;
+
+  /// Disk detail line
+  ///
+  /// In en, this message translates to:
+  /// **'not formatted'**
+  String get storageDiskNotFormatted;
+
+  /// Disk detail line
+  ///
+  /// In en, this message translates to:
+  /// **'needs erasing ({fileSystem})'**
+  String storageDiskNeedsErasing(String fileSystem);
+
+  /// Disk detail line
+  ///
+  /// In en, this message translates to:
+  /// **'in use at {path}'**
+  String storageDiskInUseAt(String path);
+
+  /// After Couldn't
+  ///
+  /// In en, this message translates to:
+  /// **'find devices'**
+  String get deviceChooserFindAction;
 }
 
 class _AppLocalizationsDelegate

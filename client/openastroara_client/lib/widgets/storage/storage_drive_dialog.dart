@@ -217,12 +217,14 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                           (_selected != null && d.path == _selected!.path);
                       return ListTile(
                         selected: selected,
+                        // Inline it sits on Simple Mode's tiles: the theme blue reads at 2:1.
+                        selectedColor: _inline ? AraColors.linkText : null,
                         selectedTileColor:
                             AraColors.textSecondary.withValues(alpha: 0.12),
                         leading: Icon(d.removable ? Icons.usb : Icons.storage,
                             size: 28),
                         title: Text(d.friendlyName),
-                        subtitle: Text(d.detailLine),
+                        subtitle: Text(d.detailLine(l10n)),
                         trailing: d.isAraStore
                             ? Text(l10n.storageDiskInUse, style: theme.textTheme.bodySmall)
                             : null,
@@ -243,7 +245,7 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                 if (_selected != null && !_mustErase) ...[
                   const Divider(height: 24),
                   SwitchListTile(
-                    dense: true,
+                    dense: !_inline,
                     contentPadding: EdgeInsets.zero,
                     title: Text(l10n.storageDiskEraseChange),
                     subtitle: Text(
@@ -280,7 +282,7 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                       children: [
                         RadioListTile<String>(
                           value: 'exfat',
-                          dense: true,
+                          dense: !_inline,
                           contentPadding: EdgeInsets.zero,
                           title: Text(l10n.storageDiskExfat),
                           subtitle: Text(
@@ -289,7 +291,7 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                         ),
                         RadioListTile<String>(
                           value: 'ext4',
-                          dense: true,
+                          dense: !_inline,
                           contentPadding: EdgeInsets.zero,
                           title: Text(l10n.storageDiskExt4),
                           subtitle: Text(

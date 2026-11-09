@@ -286,6 +286,27 @@ void main() {
     expect(fontSize(tester, find.ancestor(of: find.text('Include everything'), matching: find.byType(DropdownButton<String>))), 14);
   });
 
+  testWidgets('the picked disk reads in the light link blue, not the theme blue', (tester) async {
+    await _pump(tester, theme: buildAraTheme());
+    await _tap(tester, find.byKey(const Key('simple-storage-choose')));
+    await _tap(tester, find.text('PHOTOS'));
+    expect(tester.widget<RichText>(find.descendant(of: find.text('PHOTOS'), matching: find.byType(RichText))).text.style!.color, AraColors.linkText);
+  });
+
+  testWidgets('a format option is named at least as large as its detail', (tester) async {
+    await _pump(tester);
+    await _tap(tester, find.byKey(const Key('simple-storage-choose')));
+    await _tap(tester, find.text('PHOTOS'));
+    double size(String words) => tester.widget<RichText>(find.byWidgetPredicate((w) => w is RichText && w.text.toPlainText().startsWith(words))).text.style!.fontSize!;
+    expect(size('exFAT'), greaterThanOrEqualTo(size('Plugs straight')));
+  });
+
+  testWidgets("a disk's detail line is in Brazilian Portuguese", (tester) async {
+    await _pump(tester, locale: const Locale('pt', 'BR'));
+    await _tap(tester, find.byKey(const Key('simple-storage-choose')));
+    expect(find.text('precisa ser apagado (ntfs)'), findsOneWidget);
+  });
+
   testWidgets('a refused Eject is an error pill', (tester) async {
     final (c, api) = await _pump(tester);
     api.eject_ = const StorageConfigureOutcome(

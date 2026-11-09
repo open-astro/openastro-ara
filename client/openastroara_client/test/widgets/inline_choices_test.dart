@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
+import 'package:openastroara/models/server.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/equipment_connection_state.dart';
 import 'package:openastroara/widgets/equipment/alpaca_chooser_dialog.dart';
@@ -78,10 +79,10 @@ void main() {
     expect(opener.hasFocus, isTrue);
   });
 
-  Future<void> pumpChooser(WidgetTester tester, {Locale? locale}) async {
+  Future<void> pumpChooser(WidgetTester tester, {Locale? locale, AraServer? server}) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [activeServerProvider.overrideWithValue(null)],
+        overrides: [activeServerProvider.overrideWithValue(server)],
         child: MaterialApp(
           locale: locale,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -103,6 +104,16 @@ void main() {
     await pumpChooser(tester);
     expect(tester.takeAnnouncements().map((a) => a.message), contains('Choose Camera'));
     expect(FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<AlpacaDeviceChooser>(), isNotNull);
+  });
+
+  testWidgets('a refused discovery says so in plain words and fits a phone', (tester) async {
+    tester.view.physicalSize = const Size(360, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await pumpChooser(tester, server: const AraServer(hostname: 'rig', port: 1));
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('validateStatus'), findsNothing);
+    expect(find.textContaining("Couldn't find devices"), findsOneWidget);
   });
 
   testWidgets('the device chooser is in Brazilian Portuguese', (tester) async {

@@ -4533,5 +4533,23 @@
   "storageCheckRepairedSimple": "Disk checked — repairs were made.",
   "@storageCheckRepairedSimple": {
     "description": "Check disk result in Simple Mode, which has no Find frames on disk button"
+  },
+  "storageDiskNotFormatted": "not formatted",
+  "@storageDiskNotFormatted": {
+    "description": "Disk detail line"
+  },
+  "storageDiskNeedsErasing": "needs erasing ({fileSystem})",
+  "@storageDiskNeedsErasing": {
+    "description": "Disk detail line",
+    "placeholders": {"fileSystem": {"type": "String"}}
+  },
+  "storageDiskInUseAt": "in use at {path}",
+  "@storageDiskInUseAt": {
+    "description": "Disk detail line",
+    "placeholders": {"path": {"type": "String"}}
+  },
+  "deviceChooserFindAction": "find devices",
+  "@deviceChooserFindAction": {
+    "description": "After Couldn't"
   }
 }

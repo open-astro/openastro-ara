@@ -297,21 +297,21 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                   const SizedBox(height: 4),
                   option(
                     l.bugCardCovers,
-                        DropdownButton<int>(
-                          value: _rangeIndex,
-                          // Simple Mode's 44 px; the full UI stays compact.
-                          isDense: !simple,
-                          isExpanded: true,
-                          style: theme.textTheme.bodySmall,
-                          onChanged: _busy ? null : (v) => setState(() => _rangeIndex = v ?? 0),
-                          items: [
-                            for (var i = 0; i < ranges.length; i++)
-                              DropdownMenuItem(
-                                value: i,
-                                child: Text(ranges[i].$2, overflow: TextOverflow.ellipsis),
-                              ),
-                          ],
-                        ),
+                    DropdownButton<int>(
+                      value: _rangeIndex,
+                      // Simple Mode's 44 px; the full UI stays compact.
+                      isDense: !simple,
+                      isExpanded: true,
+                      style: theme.textTheme.bodySmall,
+                      onChanged: _busy ? null : (v) => setState(() => _rangeIndex = v ?? 0),
+                      items: [
+                        for (var i = 0; i < ranges.length; i++)
+                          DropdownMenuItem(
+                            value: i,
+                            child: Text(ranges[i].$2, overflow: TextOverflow.ellipsis),
+                          ),
+                      ],
+                    ),
                   ),
                   ],
                   const SizedBox(height: 4),
@@ -319,25 +319,25 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                   // ZIP the user downloads never held what the mode scrubs.
                   option(
                     l.bugCardSharing,
-                        DropdownButton<String>(
-                          value: _mode,
-                          isDense: !simple,
-                          isExpanded: true,
-                          style: theme.textTheme.bodySmall,
-                          onChanged: _busy ? null : (v) => setState(() => _mode = v ?? 'full'),
-                          items: [
-                            for (final m in _sharingModes(l))
-                              DropdownMenuItem(
-                                value: m.$1,
-                                child: Tooltip(message: m.$3, child: Text(m.$2, overflow: TextOverflow.ellipsis)),
-                              ),
-                            if (simple)
-                              DropdownMenuItem(
-                                value: _clientLogOnly,
-                                child: Text(l.bugCardAppLog, overflow: TextOverflow.ellipsis),
-                              ),
-                          ],
-                        ),
+                    DropdownButton<String>(
+                      value: _mode,
+                      isDense: !simple,
+                      isExpanded: true,
+                      style: theme.textTheme.bodySmall,
+                      onChanged: _busy ? null : (v) => setState(() => _mode = v ?? 'full'),
+                      items: [
+                        for (final m in _sharingModes(l))
+                          DropdownMenuItem(
+                            value: m.$1,
+                            child: Tooltip(message: m.$3, child: Text(m.$2, overflow: TextOverflow.ellipsis)),
+                          ),
+                        if (simple)
+                          DropdownMenuItem(
+                            value: _clientLogOnly,
+                            child: Text(l.bugCardAppLog, overflow: TextOverflow.ellipsis),
+                          ),
+                      ],
+                    ),
                   ),
                 ],
               );

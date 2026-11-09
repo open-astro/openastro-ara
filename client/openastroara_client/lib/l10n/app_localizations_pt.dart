@@ -3356,6 +3356,22 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get storageCheckRepairedSimple => 'Disk checked — repairs were made.';
+
+  @override
+  String get storageDiskNotFormatted => 'not formatted';
+
+  @override
+  String storageDiskNeedsErasing(String fileSystem) {
+    return 'needs erasing ($fileSystem)';
+  }
+
+  @override
+  String storageDiskInUseAt(String path) {
+    return 'in use at $path';
+  }
+
+  @override
+  String get deviceChooserFindAction => 'find devices';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -6738,4 +6754,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get storageCheckRepairedSimple => 'Disco verificado, com reparos.';
+
+  @override
+  String get storageDiskNotFormatted => 'não formatado';
+
+  @override
+  String storageDiskNeedsErasing(String fileSystem) {
+    return 'precisa ser apagado ($fileSystem)';
+  }
+
+  @override
+  String storageDiskInUseAt(String path) {
+    return 'em uso em $path';
+  }
+
+  @override
+  String get deviceChooserFindAction => 'buscar dispositivos';
 }

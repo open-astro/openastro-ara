@@ -938,5 +938,9 @@
   "storageCheckAction": "verificar o disco",
   "sessionTransferredTitle": "Sessão transferida",
   "sessionTransferredDetail": "Outro cliente assumiu o controle do observatório, então este cliente foi desconectado. A sequência em andamento não é afetada e continua no Ara.",
-  "storageCheckRepairedSimple": "Disco verificado, com reparos."
+  "storageCheckRepairedSimple": "Disco verificado, com reparos.",
+  "storageDiskNotFormatted": "não formatado",
+  "storageDiskNeedsErasing": "precisa ser apagado ({fileSystem})",
+  "storageDiskInUseAt": "em uso em {path}",
+  "deviceChooserFindAction": "buscar dispositivos"
 }

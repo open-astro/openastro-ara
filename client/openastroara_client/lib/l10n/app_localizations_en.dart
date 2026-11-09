@@ -3356,4 +3356,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get storageCheckRepairedSimple => 'Disk checked — repairs were made.';
+
+  @override
+  String get storageDiskNotFormatted => 'not formatted';
+
+  @override
+  String storageDiskNeedsErasing(String fileSystem) {
+    return 'needs erasing ($fileSystem)';
+  }
+
+  @override
+  String storageDiskInUseAt(String path) {
+    return 'in use at $path';
+  }
+
+  @override
+  String get deviceChooserFindAction => 'find devices';
 }

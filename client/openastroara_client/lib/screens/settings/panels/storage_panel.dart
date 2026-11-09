@@ -656,7 +656,6 @@ class _EjectButtonState extends ConsumerState<StorageEjectButton> {
   }
 }
 
-
 /// §29 user-triggered filesystem check. exFAT (the take-home format) has no
 /// journal, so after a field power cut this is how the drive gets healthy —
 /// deliberately a button, never an automatic scan.

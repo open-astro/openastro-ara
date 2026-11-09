@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -10,6 +9,7 @@ import '../../state/equipment/alpaca_selection_state.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/settings/equipment_connection_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/friendly_error.dart';
 import '../inline_choices.dart';
 
 /// §52.2 Alpaca device chooser. Calls `/api/v1/equipment/discover/{type}`
@@ -267,13 +267,12 @@ class _ErrorState extends StatelessWidget {
   Widget build(BuildContext context) {
     final message = switch (error) {
       _NotConnected() => context.l10n.deviceChooserNotConnected,
-      DioException e =>
-        '${e.message ?? 'Network error'} (${e.response?.statusCode ?? 'no response'})',
-      Object e => e.toString(),
+      Object e => friendlyError(context.l10n, e, action: context.l10n.deviceChooserFindAction),
       _ => 'Unknown error',
     };
     return Center(
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Icon(Icons.error_outline,
@@ -301,6 +300,7 @@ class _ErrorState extends StatelessWidget {
             label: Text(context.l10n.deviceChooserRetry),
           ),
         ],
+        ),
       ),
     );
   }
