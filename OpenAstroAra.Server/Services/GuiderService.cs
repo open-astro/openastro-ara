@@ -828,6 +828,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
         }
     }
 
+    // What a flip must stop and bring back; Looping and Selected are not a guiding session.
+    internal static bool IsGuidingState(string? phdState) => phdState is "Guiding" or "Calibrating" or "LostLock";
+
     // NINA PhdAppState → §63.2 GuiderStateDto.State token. #1364 item 6 — one guider state everywhere:
     // looping and a selected star are their own states (they used to read "stopped", so the strip said
     // "stopped" while the guide camera was busy and refused a single frame), and a guiding session that

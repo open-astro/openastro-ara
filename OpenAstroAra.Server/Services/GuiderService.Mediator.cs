@@ -56,6 +56,7 @@ public sealed partial class GuiderService : IGuiderMediator {
             var connected = !_disposed && _state == EquipmentConnectionState.Connected && _guider is not null;
             return new GuiderInfo {
                 Connected = connected,
+                Guiding = connected && IsGuidingState(_guider!.State),
                 Name = connected ? "PHD2" : string.Empty,
                 DeviceId = connected ? "PHD2_Single" : string.Empty,
                 PixelScale = connected ? _guider!.PixelScale : 0,

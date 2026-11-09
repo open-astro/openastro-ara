@@ -19,6 +19,9 @@ using System.Diagnostics.Eventing.Reader;
 namespace OpenAstroAra.Equipment.Equipment.MyGuider {
 
     public class GuiderInfo : DeviceInfo {
+        /// <summary>Guiding now, or calibrating or lost-lock on the way back to it.</summary>
+        public bool Guiding { get; set; }
+
         private bool _canClearCalibration;
 
         public bool CanClearCalibration {

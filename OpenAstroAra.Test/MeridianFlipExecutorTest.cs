@@ -88,7 +88,7 @@ namespace OpenAstroAra.Test {
                 .Callback(() => callLog.Add("Flip")).ReturnsAsync(true);
 
             guider = new Mock<IGuiderMediator>();
-            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true });
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true, Guiding = true });
             guider.Setup(g => g.StopGuiding(It.IsAny<CancellationToken>()))
                 .Callback(() => callLog.Add("StopGuiding")).ReturnsAsync(true);
             guider.Setup(g => g.AutoSelectGuideStar(It.IsAny<CancellationToken>()))
@@ -222,6 +222,27 @@ namespace OpenAstroAra.Test {
             Assert.That(ok, Is.True);
             // Stop guiding → pass meridian (tracking off then on) → flip → recenter → select+resume guiding.
             Assert.That(callLog, Is.EqualTo(FullSequenceWithGuider));
+        }
+
+        [TestCase("Guiding", true)]
+        [TestCase("Calibrating", true)]
+        [TestCase("LostLock", true)]
+        [TestCase("Looping", false)]
+        [TestCase("Stopped", false)]
+        [TestCase(null, false)]
+        public void Only_a_guiding_session_counts_as_guiding(string? phdState, bool expected) {
+            Assert.That(OpenAstroAra.Server.Services.GuiderService.IsGuidingState(phdState), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public async Task MeridianFlip_leaves_a_connected_guider_alone_when_the_plan_was_not_guiding() {
+            SetupProfile();
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true, Guiding = false });
+
+            var ok = await CreateSUT().MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(callLog, Has.None.EqualTo("StopGuiding").And.None.EqualTo("AutoSelectGuideStar").And.None.EqualTo("StartGuiding"));
         }
 
         [Test]
@@ -1031,7 +1052,7 @@ namespace OpenAstroAra.Test {
             // The same legacy profile WITH a guider connected still gets guiding back (the pre-field behaviour).
             callLog.Clear(); published.Clear();
             SetupHealthyTrackingMount(); // re-arm: the mock's pier side already flipped once
-            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true });
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true, Guiding = true });
             Assert.That(await CreateSafetySUT().MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None), Is.True,
                 string.Join(" | ", published.Select(n => n.Title)));
             Assert.That(callLog, Does.Contain("AutoSelectGuideStar"));
