@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../util/stream_save_location.dart';
 
+import '../../l10n/l10n.dart';
 import '../../models/bug_report_preparation.dart';
 import '../../services/client_error_log.dart';
 import '../../state/simple_messages_state.dart';
@@ -282,7 +283,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                         style: theme.textTheme.bodySmall),
                   if (simple) ...[
                     const SizedBox(height: 4),
-                    Text('Covers', style: theme.textTheme.bodySmall),
+                    Text(context.l10n.bugReportCovers, style: theme.textTheme.bodySmall),
                     InlineChoices<int>(
                       id: 'bug-report-range',
                       value: _rangeIndex,
@@ -292,7 +293,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                       ],
                       onChanged: _busy ? null : (v) => setState(() => _rangeIndex = v),
                     ),
-                    Text('Sharing', style: theme.textTheme.bodySmall),
+                    Text(context.l10n.bugReportSharing, style: theme.textTheme.bodySmall),
                     InlineChoices<String>(
                       id: 'bug-report-sharing',
                       value: _mode,

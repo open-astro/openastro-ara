@@ -2871,6 +2871,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellStorageEject => 'Eject';
 
   @override
+  String get bugReportCovers => 'Covers';
+
+  @override
+  String get bugReportSharing => 'Sharing';
+
+  @override
   String get shellStorageCheck => 'Check disk';
 
   @override
@@ -5805,6 +5811,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get shellStorageEject => 'Ejetar';
+
+  @override
+  String get bugReportCovers => 'Abrange';
+
+  @override
+  String get bugReportSharing => 'Compartilhamento';
 
   @override
   String get shellStorageCheck => 'Verificar disco';

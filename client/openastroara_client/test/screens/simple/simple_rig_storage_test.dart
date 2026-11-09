@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/server.dart';
+import 'package:openastroara/screens/settings/panels/storage_panel.dart';
 import 'package:openastroara/screens/simple/simple_rig_storage.dart';
 import 'package:openastroara/services/storage_devices_api.dart';
 import 'package:openastroara/services/storage_space_api.dart';
@@ -99,6 +100,8 @@ Future<(ProviderContainer, _FakeApi)> _pump(
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
+        // Off, so a button's own minimum is what the 44 px checks measure.
+        theme: ThemeData(materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
@@ -266,5 +269,30 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(AlertDialog), findsOneWidget);
     expect(find.text('Choose a disk for your frames'), findsOneWidget);
+  });
+
+  testWidgets('the Full UI still asks in a dialog before checking', (tester) async {
+    final (_, api) = await _pump(
+      tester,
+      simple: false,
+      // The panel keeps the device list alive; the button only reads it.
+      child: Consumer(
+        builder: (_, ref, _) {
+          ref.watch(storageDevicesProvider);
+          return const StorageCheckDiskButton();
+        },
+      ),
+    );
+    await tester.tap(find.byType(OutlinedButton));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('Check the store drive?'), findsOneWidget);
+    expect(api.calls, isEmpty);
+    await tester.tap(find.widgetWithText(FilledButton, 'Check disk'));
+    await tester.pumpAndSettle();
+    expect(api.calls, ['check AAAA']);
+    expect(find.byType(SnackBar), findsOneWidget, reason: "the Full UI's report stays a snackbar");
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
   });
 }

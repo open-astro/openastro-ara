@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'dart:io';
 
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/bug_report_preparation.dart';
 import 'package:openastroara/services/bug_report_api.dart';
 import 'package:openastroara/services/client_error_log.dart';
@@ -102,6 +103,8 @@ Widget _host(_FakeBugReportClient api,
         clientErrorLogProvider.overrideWithValue(log ?? _MemLog()),
       ],
       child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           // A canned Save-As path stands in for the OS dialog (no platform
           // channel under widget tests); the streaming download receives it.
