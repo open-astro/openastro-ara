@@ -1362,11 +1362,13 @@ void main() {
     c.read(safetyPoliciesProvider.notifier).setCalibrationCaptureDefault(CalibrationCaptureDefault.ask);
     await tester.pump();
 
-    expect(find.byKey(const Key('simple-run-flats-0')), findsOneWidget);
+    expect(find.text('Not tonight'), findsOneWidget);
     expect(find.byType(Dialog), findsNothing);
-    await tester.ensureVisible(find.byKey(const Key('simple-run-flats-2')));
-    await tester.tap(find.byKey(const Key('simple-run-flats-2')));
-    await tester.pump();
+    await tester.ensureVisible(find.byKey(const Key('simple-run-flats')));
+    await tester.tap(find.byKey(const Key('simple-run-flats')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Panel flats at end').last);
+    await tester.pumpAndSettle();
     expect(c.read(simpleFlatsChoiceProvider), 'panel_at_end');
   });
 
@@ -1376,7 +1378,7 @@ void main() {
     c.read(safetyPoliciesProvider.notifier).setCalibrationCaptureDefault(CalibrationCaptureDefault.never);
     await tester.pump();
 
-    expect(find.byKey(const Key('simple-run-flats-0')), findsNothing);
+    expect(find.byKey(const Key('simple-run-flats')), findsNothing);
   });
 
   testWidgets('Night done: how long, how it ended, where it stopped, and the frames the library filed per filter',

@@ -11,7 +11,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/settings/safety_policies_state.dart';
 import '../../state/simple_flats_choice_state.dart';
-import '../../widgets/inline_choices.dart';
 import '../../models/sequence/imaging_run_body.dart';
 import '../../models/sequence/nina_dom.dart' show childrenOf, withChildren;
 import '../../models/sequence/sequence_summary.dart';
@@ -2780,20 +2779,33 @@ class _FlatsChoice extends ConsumerWidget {
     );
     if (!ask) return const SizedBox.shrink();
     final l10n = context.l10n;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final choice = ref.watch(simpleFlatsChoiceProvider);
+    return Row(
+      spacing: AraSpace.s12,
       children: [
         Text(l10n.planFlats, style: _dim),
-        InlineChoices<String>(
-          id: 'simple-run-flats',
-          value: ref.watch(simpleFlatsChoiceProvider),
-          options: [
-            ('later', l10n.planFlatsNotTonight),
-            ('sky_at_twilight', l10n.planFlatsSky),
-            ('panel_at_end', l10n.planFlatsPanel),
-          ],
-          onChanged: ref.read(simpleFlatsChoiceProvider.notifier).set,
-          style: kSimpleText,
+        Expanded(
+          child: DropdownButton<String>(
+            key: const Key('simple-run-flats'),
+            isExpanded: true,
+            value: choice,
+            style: kSimpleText,
+            itemHeight: kMinInteractiveDimension,
+            onChanged: (v) {
+              if (v != null) ref.read(simpleFlatsChoiceProvider.notifier).set(v);
+            },
+            items: [
+              for (final (v, label) in [
+                ('later', l10n.planFlatsNotTonight),
+                ('sky_at_twilight', l10n.planFlatsSky),
+                ('panel_at_end', l10n.planFlatsPanel),
+              ])
+                DropdownMenuItem(
+                  value: v,
+                  child: Text(label, overflow: TextOverflow.ellipsis),
+                ),
+            ],
+          ),
         ),
       ],
     );
