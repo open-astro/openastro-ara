@@ -267,7 +267,20 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
           children: [
             SupportCardRow(
             icon: Icon(Icons.bug_report_outlined, color: theme.colorScheme.primary),
-            body: Column(
+            body: (stacked) {
+              // Stacked, the label goes above: the value gets the whole row.
+              Widget option(String label, Widget dropdown) => stacked
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [Text(label, style: theme.textTheme.bodySmall), dropdown],
+                    )
+                  : Row(
+                      children: [
+                        Text(label, style: theme.textTheme.bodySmall),
+                        Flexible(child: dropdown),
+                      ],
+                    );
+              return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(l.bugCardTitle,
@@ -282,11 +295,9 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                         style: theme.textTheme.bodySmall),
                   if (!logOnly) ...[
                   const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Text(l.bugCardCovers, style: theme.textTheme.bodySmall),
-                      Flexible(
-                        child: DropdownButton<int>(
+                  option(
+                    l.bugCardCovers,
+                        DropdownButton<int>(
                           value: _rangeIndex,
                           // Simple Mode's 44 px; the full UI stays compact.
                           isDense: !simple,
@@ -301,18 +312,14 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                               ),
                           ],
                         ),
-                      ),
-                    ],
                   ),
                   ],
                   const SizedBox(height: 4),
                   // §54.3 sharing mode: chosen before the bundle is built, so the
                   // ZIP the user downloads never held what the mode scrubs.
-                  Row(
-                    children: [
-                      Text(l.bugCardSharing, style: theme.textTheme.bodySmall),
-                      Flexible(
-                        child: DropdownButton<String>(
+                  option(
+                    l.bugCardSharing,
+                        DropdownButton<String>(
                           value: _mode,
                           isDense: !simple,
                           isExpanded: true,
@@ -331,11 +338,10 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                               ),
                           ],
                         ),
-                      ),
-                    ],
                   ),
                 ],
-              ),
+              );
+            },
             action: FilledButton.icon(
               onPressed: _busy ? null : logOnly ? _saveClientLog : (api == null ? null : _run),
               icon: _busy

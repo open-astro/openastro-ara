@@ -16,6 +16,7 @@ import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
+import 'package:openastroara/screens/simple/simple_rig_storage.dart' show SimpleHostedText;
 import 'package:openastroara/screens/simple/simple_shell.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
@@ -35,6 +36,7 @@ import 'package:openastroara/screens/simple/simple_preview_panel.dart' show Simp
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
 import 'package:openastroara/widgets/inline_choices.dart';
+import 'package:openastroara/widgets/support/bug_report_card.dart';
 
 class _MemPrefs extends SimpleModePrefsService {
   bool value = true;
@@ -368,6 +370,34 @@ void main() {
       final scale = tester.getRect(line).height / tester.renderObject<RenderBox>(line).size.height;
       expect(text.style!.fontSize! * scale, greaterThanOrEqualTo(11.5 * 0.99),
           reason: '"${text.data}" renders at ${(text.style!.fontSize! * scale).toStringAsFixed(1)} px');
+    });
+  }
+
+  // The longest Covers value keeps the whole row once the card is stacked.
+  for (final (scale, width) in const [(1.0, 320.0), (1.5, 420.0)]) {
+    testWidgets('pt-BR text ${scale}x at ${width.toInt()} px: the bug report options are not cut off', skip: !hasFonts, (tester) async {
+      tester.view.physicalSize = Size(width, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [simpleModeActiveProvider.overrideWithValue(true)],
+        child: MaterialApp(
+          locale: const Locale('pt', 'BR'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: simpleTheme(ThemeData(fontFamily: 'Roboto')),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
+          home: const Scaffold(body: SingleChildScrollView(child: SimpleHostedText(child: BugReportCard()))),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      final value = lookupAppLocalizations(const Locale('pt', 'BR')).bugRangeNight;
+      final line = tester.renderObject<RenderParagraph>(find.descendant(of: find.text(value).first, matching: find.byType(RichText)));
+      expect(line.didExceedMaxLines, isFalse);
     });
   }
 

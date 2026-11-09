@@ -132,7 +132,7 @@ void main() {
                 width: 640,
                 child: SupportCardRow(
                   icon: const Icon(Icons.bug_report),
-                  body: const Text('Body', key: Key('body')),
+                  body: (_) => const Text('Body', key: Key('body')),
                   action: FilledButton(onPressed: () {}, child: const Text('Act', key: Key('act'))),
                 ),
               ),

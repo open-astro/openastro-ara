@@ -46,7 +46,7 @@ class _ClientLogCardState extends ConsumerState<ClientLogCard> {
         padding: const EdgeInsets.all(12),
         child: SupportCardRow(
             icon: Icon(Icons.laptop_outlined, color: theme.colorScheme.primary),
-            body: Column(
+            body: (_) => Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('This app\'s error log', style: theme.textTheme.titleSmall),

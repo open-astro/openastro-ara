@@ -13,15 +13,23 @@ class SupportCardRow extends StatelessWidget {
   static const double _stackBelow = 480;
 
   final Widget icon;
-  final Widget body;
+
+  /// Told whether the action sits under the text.
+  final Widget Function(bool stacked) body;
   final Widget action;
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) {
-      final info = [icon, const SizedBox(width: 12), Expanded(child: body)];
       // Large text needs the same room a narrow column lacks.
-      if (box.maxWidth >= MediaQuery.textScalerOf(context).scale(_stackBelow)) {
+      final stacked =
+          box.maxWidth < MediaQuery.textScalerOf(context).scale(_stackBelow);
+      final info = [
+        icon,
+        const SizedBox(width: 12),
+        Expanded(child: body(stacked)),
+      ];
+      if (!stacked) {
         return Row(children: [...info, const SizedBox(width: 12), action]);
       }
       return Column(
