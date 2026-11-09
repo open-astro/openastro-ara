@@ -13,6 +13,7 @@ import '../../services/client_error_log.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
 import '../../state/support/bug_report_state.dart';
+import '../../theme/ara_colors.dart';
 import 'client_log_card.dart';
 import '../inline_choices.dart';
 import 'support_card_row.dart';
@@ -266,7 +267,11 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
           spacing: 12,
           children: [
             SupportCardRow(
-            icon: Icon(Icons.bug_report_outlined, color: theme.colorScheme.primary),
+            icon: Icon(
+              Icons.bug_report_outlined,
+              // State-only colour in Simple Mode: this blue means nothing.
+              color: simple ? AraColors.textSecondary : theme.colorScheme.primary,
+            ),
             body: (stacked) {
               // Stacked, the label goes above: the value gets the whole row.
               Widget option(String label, Widget dropdown) => stacked

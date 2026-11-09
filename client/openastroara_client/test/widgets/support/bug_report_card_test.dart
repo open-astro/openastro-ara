@@ -10,6 +10,7 @@ import 'package:openastroara/services/client_error_log.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/support/bug_report_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/support/bug_report_card.dart';
 import 'package:openastroara/widgets/support/support_card_row.dart';
 
@@ -554,6 +555,16 @@ void main() {
     }
     expect(find.text('Send me a bug report'), findsNothing);
   });
+
+  for (final (simple, looks) in const [(true, 'grey in Simple Mode'), (false, 'theme blue in the full UI')]) {
+    testWidgets('the card icon is $looks', (tester) async {
+      await tester.pumpWidget(_host(_FakeBugReportClient(), simple: simple));
+      await tester.pumpAndSettle();
+      final icon = tester.widget<Icon>(find.byIcon(Icons.bug_report_outlined));
+      final primary = Theme.of(tester.element(find.byIcon(Icons.bug_report_outlined))).colorScheme.primary;
+      expect(icon.color, simple ? AraColors.textSecondary : primary);
+    });
+  }
 
   testWidgets("Simple Mode's Covers and Sharing are at least 44 px tall", (tester) async {
     await tester.pumpWidget(_host(_FakeBugReportClient(), simple: true));

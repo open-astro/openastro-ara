@@ -219,8 +219,9 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                         selected: selected,
                         // Inline it sits on Simple Mode's tiles: the theme blue reads at 2:1.
                         selectedColor: _inline ? AraColors.linkText : null,
-                        selectedTileColor:
-                            AraColors.textSecondary.withValues(alpha: 0.12),
+                        selectedTileColor: _inline
+                            ? AraColors.selectionTint
+                            : AraColors.textSecondary.withValues(alpha: 0.12),
                         leading: Icon(d.removable ? Icons.usb : Icons.storage,
                             size: 28),
                         title: Text(d.friendlyName),

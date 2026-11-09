@@ -293,6 +293,14 @@ void main() {
     expect(tester.widget<RichText>(find.descendant(of: find.text('PHOTOS'), matching: find.byType(RichText))).text.style!.color, AraColors.linkText);
   });
 
+  testWidgets('the picked disk row is filled with the selection tint', (tester) async {
+    await _pump(tester, theme: buildAraTheme());
+    await _tap(tester, find.byKey(const Key('simple-storage-choose')));
+    await _tap(tester, find.text('PHOTOS'));
+    final row = tester.widget<ListTile>(find.ancestor(of: find.text('PHOTOS'), matching: find.byType(ListTile)));
+    expect(row.selectedTileColor, AraColors.selectionTint);
+  });
+
   testWidgets('a format option is named at least as large as its detail', (tester) async {
     await _pump(tester);
     await _tap(tester, find.byKey(const Key('simple-storage-choose')));
