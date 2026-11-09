@@ -2520,20 +2520,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get focusScopeGuide => 'Guide';
 
   @override
-  String get guidedNextFocus => 'Next: Focus';
+  String get preflightNextFocus => 'Next: Focus';
 
   @override
-  String get guidedNextPolarAlign => 'Next: Polar align';
+  String get preflightNextPolarAlign => 'Next: Polar align';
 
   @override
-  String get guidedStartImaging => 'Start imaging';
+  String get preflightStartImaging => 'Start imaging';
 
   @override
-  String get guidedImagingStartsAfter =>
+  String get preflightImagingStartsAfter =>
       'Imaging starts after focus and polar alignment.';
 
   @override
-  String get guidedDoneStartImaging => 'Done · Start imaging';
+  String get preflightDoneStartImaging => 'Done · Start imaging';
 
   @override
   String get shellGuideFocalLength => 'Guide scope focal length';
@@ -2549,7 +2549,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellModeGuide => 'Guider';
 
   @override
-  String get guidedNextGuide => 'Next: Guide';
+  String get preflightNextGuide => 'Next: Guide';
 
   @override
   String get guideStart => 'Start guiding';
@@ -3383,4 +3383,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deviceChooserFindAction => 'find devices';
+
+  @override
+  String get stopMountAction => 'stop the mount';
+
+  @override
+  String get stopMountNoServer =>
+      'Stop Mount was not issued — no server connection.';
+
+  @override
+  String stopMountFailed(String reason) {
+    return '$reason Try Stop Mount again.';
+  }
 }

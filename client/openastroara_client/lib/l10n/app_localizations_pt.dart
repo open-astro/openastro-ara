@@ -2520,20 +2520,20 @@ class AppLocalizationsPt extends AppLocalizations {
   String get focusScopeGuide => 'Guide';
 
   @override
-  String get guidedNextFocus => 'Next: Focus';
+  String get preflightNextFocus => 'Next: Focus';
 
   @override
-  String get guidedNextPolarAlign => 'Next: Polar align';
+  String get preflightNextPolarAlign => 'Next: Polar align';
 
   @override
-  String get guidedStartImaging => 'Start imaging';
+  String get preflightStartImaging => 'Start imaging';
 
   @override
-  String get guidedImagingStartsAfter =>
+  String get preflightImagingStartsAfter =>
       'Imaging starts after focus and polar alignment.';
 
   @override
-  String get guidedDoneStartImaging => 'Done · Start imaging';
+  String get preflightDoneStartImaging => 'Done · Start imaging';
 
   @override
   String get shellGuideFocalLength => 'Guide scope focal length';
@@ -2549,7 +2549,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellModeGuide => 'Guider';
 
   @override
-  String get guidedNextGuide => 'Next: Guide';
+  String get preflightNextGuide => 'Next: Guide';
 
   @override
   String get guideStart => 'Start guiding';
@@ -3383,6 +3383,18 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get deviceChooserFindAction => 'find devices';
+
+  @override
+  String get stopMountAction => 'stop the mount';
+
+  @override
+  String get stopMountNoServer =>
+      'Stop Mount was not issued — no server connection.';
+
+  @override
+  String stopMountFailed(String reason) {
+    return '$reason Try Stop Mount again.';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -5924,20 +5936,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get focusScopeGuide => 'Guia';
 
   @override
-  String get guidedNextFocus => 'Próximo: Foco';
+  String get preflightNextFocus => 'Próximo: Foco';
 
   @override
-  String get guidedNextPolarAlign => 'Próximo: Alinhamento polar';
+  String get preflightNextPolarAlign => 'Próximo: Alinhamento polar';
 
   @override
-  String get guidedStartImaging => 'Iniciar a captura';
+  String get preflightStartImaging => 'Iniciar a captura';
 
   @override
-  String get guidedImagingStartsAfter =>
+  String get preflightImagingStartsAfter =>
       'A captura começa depois do foco e do alinhamento polar.';
 
   @override
-  String get guidedDoneStartImaging => 'Pronto · Iniciar a captura';
+  String get preflightDoneStartImaging => 'Pronto · Iniciar a captura';
 
   @override
   String get shellGuideFocalLength => 'Distância focal da luneta guia';
@@ -5953,7 +5965,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get shellModeGuide => 'Guia';
 
   @override
-  String get guidedNextGuide => 'Próximo: Guiagem';
+  String get preflightNextGuide => 'Próximo: Guiagem';
 
   @override
   String get guideStart => 'Iniciar guiagem';
@@ -6792,4 +6804,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get deviceChooserFindAction => 'buscar dispositivos';
+
+  @override
+  String get stopMountAction => 'parar a montagem';
+
+  @override
+  String get stopMountNoServer =>
+      'A parada da montagem não foi enviada — sem conexão com o servidor.';
+
+  @override
+  String stopMountFailed(String reason) {
+    return '$reason Tente Parar montagem de novo.';
+  }
 }

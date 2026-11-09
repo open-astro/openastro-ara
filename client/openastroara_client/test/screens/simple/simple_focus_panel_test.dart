@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/autofocus_run.dart';
@@ -222,6 +223,41 @@ void main() {
     }
   });
 
+  testWidgets('Measured stars, hidden for its room at large text before a frame, is not read out', (tester) async {
+    tester.view.physicalSize = const Size(1600, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final handle = tester.ensureSemantics();
+    await _pump(tester, focuser: _focuser());
+    expect(find.bySemanticsLabel('Measured stars'), findsNothing);
+    handle.dispose();
+  });
+
+  group('a long focus error', () {
+    final long = List.filled(60, 'the star field drifted').join(' ');
+
+    testWidgets('is never cut, and the panel keeps its height', (tester) async {
+      final (_, live) = await _pump(tester, focuser: _focuser());
+      final start = tester.getSize(find.byType(SimpleFocusPanel)).height;
+      live.state = AutofocusLive(run: AutofocusRun.idle, error: long);
+      await tester.pump();
+      expect(tester.renderObject<RenderParagraph>(find.text(long)).didExceedMaxLines, isFalse);
+      expect(tester.takeException(), isNull);
+      expect(tester.getSize(find.byType(SimpleFocusPanel)).height, start);
+      expect(find.byType(VCurveChart), findsOneWidget);
+    });
+
+    testWidgets('over a weak fit takes the warning\'s room, so nothing overflows', (tester) async {
+      final (_, live) = await _pump(tester, focuser: _focuser());
+      live.state = AutofocusLive(run: weak, error: long);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('simple-focus-weak-fit')), findsNothing);
+    });
+  });
+
   testWidgets('a weak fit says so in the panel, in words', (tester) async {
     await _pump(tester, focuser: _focuser(), run: weak);
     expect(find.textContaining('Weak curve fit (R² 0.55)'), findsOneWidget);
@@ -294,6 +330,32 @@ void main() {
     await tester.tap(find.text('Done · Start imaging'));
     expect(pilot.nexts, 1);
   });
+
+  for (final method in MainFocusMethod.values) {
+    testWidgets('Preflight with focus last: ${method.name} keeps one height when focus finishes', (tester) async {
+      Future<double> height(SetupStepState focus) async {
+        final c = ProviderContainer(overrides: [
+          focuserProvider.overrideWith(() => _Focuser(_focuser())),
+          mainFocusMethodProvider.overrideWith(() => _Pick(method)),
+          setupFocusStateProvider.overrideWithValue(focus),
+          setupPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
+          simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
+          simplePreflightProvider.overrideWith(_Pilot.new),
+        ]);
+        addTearDown(c.dispose);
+        await c.read(simplePermanentPierProvider.future);
+        await tester.pumpWidget(UncontrolledProviderScope(
+          container: c,
+          child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
+        ));
+        await tester.pump();
+        return tester.getSize(find.byType(SimpleFocusPanel)).height;
+      }
+
+      final running = await height(SetupStepState.pending);
+      expect(await height(SetupStepState.done), running);
+    });
+  }
 
   testWidgets('Preflight on a permanent pier, focused by hand: Manual has the Done too', (tester) async {
     // #1486 review: the Done only showed in Auto, so a Bahtinov focus could only Skip.

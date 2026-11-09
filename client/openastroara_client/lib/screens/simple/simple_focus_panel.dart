@@ -302,15 +302,18 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     // Preflight with focus the last step (a permanent pier, or aligned
     // already): its Done starts imaging, never the run's end on its own.
     // Auto or Manual, whichever focused.
-    final guidedDone =
+    // Its room is kept until then, so the panel holds one height through the run.
+    final preflightDone =
         ref.watch(simplePreflightProvider) == SimplePreflightStep.focus &&
-            ref.watch(setupFocusStateProvider) == SetupStepState.done &&
             simplePreflightNext(ref, after: SimplePreflightStep.focus) == null
-        ? FilledButton(
-            key: const Key('simple-focus-guided-done'),
-            style: kSimpleGoStyle,
-            onPressed: ref.read(simplePreflightProvider.notifier).next,
-            child: Text(l10n.guidedDoneStartImaging),
+        ? _keepRoom(
+            visible: ref.watch(setupFocusStateProvider) == SetupStepState.done,
+            child: FilledButton(
+              key: const Key('simple-focus-preflight-done'),
+              style: kSimpleGoStyle,
+              onPressed: ref.read(simplePreflightProvider.notifier).next,
+              child: Text(l10n.preflightDoneStartImaging),
+            ),
           )
         : null;
     return SimplePanel(
@@ -381,7 +384,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
               ..._maskQuestion(l10n)
             else if (method == MainFocusMethod.bahtinov) ...[
               ..._bahtinov(l10n, bahtinov, connected ? focuser : null),
-              ?guidedDone,
+              ?preflightDone,
             ] else ...[
               // The headline shares its row with Measured stars when there is
               // room, so the panel still fits an iPad under its two choice rows.
@@ -448,7 +451,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                     ],
                   ),
               ]),
-              ?guidedDone,
+              ?preflightDone,
               // There from the start, with its waiting text; a warning or an
               // error takes its room from the chart.
               SizedBox(
@@ -460,7 +463,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                     Expanded(child: VCurveChart(run: run)),
                     // Icon + colour + text (DESIGN.md): the tint alone all but
                     // vanishes in night mode.
-                    if (weak != null)
+                    if (weak != null && error == null)
                       Container(
                         key: const Key('simple-focus-weak-fit'),
                         padding: const EdgeInsets.all(AraSpace.s8),
@@ -490,12 +493,20 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                           ],
                         ),
                       ),
+                    // Whole, however long: up to half the slot, then it scrolls.
                     if (error != null)
-                      Text(
-                        error,
-                        style: kSimpleText.copyWith(color: AraColors.errorText),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxHeight: _kFocusChartHeight / 2,
+                        ),
+                        child: SingleChildScrollView(
+                          child: Text(
+                            error,
+                            style: kSimpleText.copyWith(
+                              color: AraColors.errorText,
+                            ),
+                          ),
+                        ),
                       ),
                   ],
                 ),
@@ -503,7 +514,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
               // The run's frame with its measured stars circled, full screen
               // behind the panels; off to start.
               if (simpleStackText(context))
-                Visibility.maintain(
+                _keepRoom(
                   visible: live.frame != null,
                   child: Row(
                   spacing: AraSpace.s12,
@@ -631,7 +642,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
           maxLines: 3,
         ),
       ]),
-      Visibility.maintain(
+      _keepRoom(
         visible: !live.finished,
         child: Row(
           spacing: AraSpace.s12,
@@ -656,7 +667,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
           ],
         ),
       ),
-      Visibility.maintain(
+      _keepRoom(
         visible: measured,
         child: FilledButton(
           key: const Key('simple-bahtinov-finish'),
@@ -765,10 +776,19 @@ const double _kFocusChartHeight = 160;
 const double _kFocusManualReadoutHeight = 124;
 const double _kFocusGuideReadoutHeight = 132;
 
+/// Holds [child]'s room while hidden; hidden, it takes no tap and is not read out.
+Widget _keepRoom({required bool visible, required Widget child}) => Visibility(
+  visible: visible,
+  maintainState: true,
+  maintainAnimation: true,
+  maintainSize: true,
+  child: child,
+);
+
 /// A status line with room for two lines, however short it is.
 Widget _twoLines(String text, TextStyle style) => Stack(
   children: [
-    Visibility.maintain(
+    _keepRoom(
       visible: false,
       child: Text('\n', style: style),
     ),

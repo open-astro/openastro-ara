@@ -84,6 +84,23 @@ void main() {
     expect(height(), start);
   });
 
+  testWidgets('Finish, hidden for its room before a measurement, takes no tap and is not read out', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, BahtinovFocusLive.idle);
+    await tester.tapAt(tester.getCenter(find.byKey(const Key('simple-bahtinov-finish'))));
+    await tester.pump();
+    expect(find.text('Take the Bahtinov mask off'), findsNothing);
+    expect(find.bySemanticsLabel('Finish'), findsNothing);
+    handle.dispose();
+  });
+
+  testWidgets('the Exposure row, hidden for its room after a finish, is not read out', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, BahtinovFocusLive(status: _running([0.1, 0.1, 0.1]), finished: true));
+    expect(find.bySemanticsLabel('Exposure'), findsNothing);
+    handle.dispose();
+  });
+
   testWidgets('while it reads: the offset big, in px from focus, and which way to turn', (tester) async {
     await _pump(tester, BahtinovFocusLive(status: _running([3.0, 3.0, 3.0, 2.0, 2.0, 2.0])));
     expect(find.text('2.00'), findsOneWidget);

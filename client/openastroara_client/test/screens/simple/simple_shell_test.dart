@@ -1138,6 +1138,41 @@ void main() {
     expect(find.text("Tonight's plan"), findsNothing);
   });
 
+  testWidgets("Plan's sheet starts under a status pill grown to two lines at large text", (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 1.3;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    final wheel = _FilterWheel(EquipmentConnectionState.connected, slots: 3);
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [filterWheelProvider.overrideWith(() => wheel)]);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-plan')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    wheel.report({'state': 'awaiting_user', 'current_slot': 1, 'pending_slot': 2}, manual: true);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final pill = tester.getRect(find.byKey(const Key('simple-status-pill')));
+    expect(pill.height, greaterThan(kSimpleStatusHeight), reason: 'precondition: two lines');
+    expect(tester.getRect(find.byType(SimpleRunSheet)).top, greaterThanOrEqualTo(pill.bottom + 8));
+  });
+
+  testWidgets('the rail names Preflight whole, never cut to an ellipsis', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-preflight')));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    final name = find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Preflight'));
+    expect(tester.renderObject<RenderParagraph>(name).didExceedMaxLines, isFalse);
+  });
+
+  test('device names sort by letter, not by code unit: Câmera before Clima', () {
+    expect((['Clima', 'Rotador', 'Câmera']..sort(simpleCompareNames)), ['Câmera', 'Clima', 'Rotador']);
+  });
+
   testWidgets("Plan's sheet and Preflight's step panels sit centred between the status pill and the bottom row; "
       'other panels stay level with the rail', (tester) async {
     // User, 2026-11-04: their spacing follows the pill's bottom and the histogram's top, equal above and below.
@@ -2577,6 +2612,26 @@ void main() {
       await open(tester);
       expect(find.bySemanticsLabel('Change rig'), findsOneWidget);
       expect(find.bySemanticsLabel('Change profile'), findsOneWidget);
+      handle.dispose();
+    });
+
+    testWidgets('a screen reader can press Change rig', (tester) async {
+      final handle = tester.ensureSemantics();
+      final c = await open(tester);
+      c.read(profileGatePassedProvider.notifier).pass();
+      tester.semantics.tap(find.semantics.byLabel('Change rig'));
+      await tester.pump();
+      expect(c.read(serverChooserRequestedProvider), isTrue);
+      handle.dispose();
+    });
+
+    testWidgets('a screen reader can press Change profile', (tester) async {
+      final handle = tester.ensureSemantics();
+      final c = await open(tester);
+      c.read(profileGatePassedProvider.notifier).pass();
+      tester.semantics.tap(find.semantics.byLabel('Change profile'));
+      await tester.pump();
+      expect(c.read(profileGatePassedProvider), isFalse);
       handle.dispose();
     });
 
@@ -4332,6 +4387,27 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.byKey(const Key('simple-status-pill')), findsNWidgets(3));
       expect(text('+1'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 2));
+    });
+
+    testWidgets('a pill that ends past the third goes at once, and the +n with it', (tester) async {
+      final guider = _GuiderAt('guiding');
+      final wheel = _FilterWheel(EquipmentConnectionState.connected, slots: 3);
+      final (c, rotator) = await rig(tester, gear: [
+        guiderStatusProvider.overrideWith(() => guider),
+        filterWheelProvider.overrideWith(() => wheel),
+      ]);
+      c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+      rotator.report('moving');
+      wheel.report({'state': 'moving', 'current_slot': -1});
+      await tester.pump();
+      expect(text('+1'), findsOneWidget, reason: 'precondition: the guider is folded');
+      guider.at('stopped');
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 2));
+      expect(text('+1'), findsNothing);
+      expect(find.byKey(const Key('simple-status-pill')), findsNWidgets(3));
+      c.read(captureProgressProvider.notifier).reset();
       await tester.pump(const Duration(seconds: 2));
     });
 

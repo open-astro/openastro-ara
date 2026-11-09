@@ -196,7 +196,7 @@ class SimpleGuidePanel extends ConsumerWidget {
     final ra = guiding ? g!.rmsRaArcsec : null;
     final dec = guiding ? g!.rmsDecArcsec : null;
     // Preflight's Guide step, the last before imaging: its Done starts it.
-    final guidedDone =
+    final preflightDone =
         guiding &&
         ref.watch(simplePreflightProvider) == SimplePreflightStep.guide &&
         simplePreflightNext(ref, after: SimplePreflightStep.guide) == null;
@@ -265,12 +265,12 @@ class SimpleGuidePanel extends ConsumerWidget {
                 ],
               ),
             ),
-            if (guidedDone)
+            if (preflightDone)
               FilledButton(
-                key: const Key('simple-guide-guided-done'),
+                key: const Key('simple-guide-preflight-done'),
                 style: kSimpleGoStyle,
                 onPressed: ref.read(simplePreflightProvider.notifier).next,
-                child: Text(l10n.guidedDoneStartImaging),
+                child: Text(l10n.preflightDoneStartImaging),
               ),
             const Divider(height: AraSpace.s8),
             // The guide camera's exposure, picked as Preview's; set live.

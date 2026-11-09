@@ -1928,8 +1928,8 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final off = sel == null || sel.belowHorizon || run.busy || imaging;
     // Preflight's plan step only queues; its green button moves on (or, with
     // focus and polar alignment done, starts imaging).
-    final guided = ref.watch(simplePreflightProvider) == SimplePreflightStep.plan;
-    final guidedNext = guided
+    final inPreflight = ref.watch(simplePreflightProvider) == SimplePreflightStep.plan;
+    final preflightNext = inPreflight
         ? simplePreflightNext(ref, after: SimplePreflightStep.plan)
         : null;
     final now = ref.watch(clockProvider)();
@@ -2236,8 +2236,8 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
           ),
         if (run.error != null || run.noStorage) _RunError(run),
         if (editing == null && !imaging) const _FlatsChoice(),
-        if (guided && editing == null)
-          Text(context.l10n.guidedImagingStartsAfter, style: _dim)
+        if (inPreflight && editing == null)
+          Text(context.l10n.preflightImagingStartsAfter, style: _dim)
         else if (editing == null && !imaging) ...[
           Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
@@ -2376,7 +2376,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 child: FilledButton(
                   key: const Key('simple-run-start'),
                   style: kSimpleGoStyle,
-                  onPressed: guided
+                  onPressed: inPreflight
                       ? (run.sequenceId == null || run.busy
                             ? null
                             : ref.read(simplePreflightProvider.notifier).next)
@@ -2391,13 +2391,13 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                           if (ok) widget.onCreated();
                         },
                   child: Text(
-                    guided
-                        ? switch (guidedNext) {
-                            SimplePreflightStep.focus => context.l10n.guidedNextFocus,
+                    inPreflight
+                        ? switch (preflightNext) {
+                            SimplePreflightStep.focus => context.l10n.preflightNextFocus,
                             SimplePreflightStep.polarAlign =>
-                              context.l10n.guidedNextPolarAlign,
-                            SimplePreflightStep.guide => context.l10n.guidedNextGuide,
-                            _ => context.l10n.guidedStartImaging,
+                              context.l10n.preflightNextPolarAlign,
+                            SimplePreflightStep.guide => context.l10n.preflightNextGuide,
+                            _ => context.l10n.preflightStartImaging,
                           }
                         : run.busy
                         ? context.l10n.planStarting

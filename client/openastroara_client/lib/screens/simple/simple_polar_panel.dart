@@ -508,8 +508,8 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                       ? l10n.polarDone
                       : simplePreflightNext(ref, after: SimplePreflightStep.polarAlign) ==
                               SimplePreflightStep.guide
-                          ? l10n.guidedNextGuide
-                          : l10n.guidedDoneStartImaging,
+                          ? l10n.preflightNextGuide
+                          : l10n.preflightDoneStartImaging,
                 ),
               ),
             // A null stage is an older daemon's one-stage routine: the fine buttons.
@@ -577,8 +577,8 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                                     after: SimplePreflightStep.polarAlign,
                                   ) ==
                                   SimplePreflightStep.guide
-                            ? l10n.guidedNextGuide
-                            : l10n.guidedDoneStartImaging,
+                            ? l10n.preflightNextGuide
+                            : l10n.preflightDoneStartImaging,
                       ),
                     ),
                   ),

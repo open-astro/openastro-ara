@@ -4345,31 +4345,31 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'Next: Focus'**
-  String get guidedNextFocus;
+  String get preflightNextFocus;
 
   /// Preflight plan step: green button, on to polar alignment
   ///
   /// In en, this message translates to:
   /// **'Next: Polar align'**
-  String get guidedNextPolarAlign;
+  String get preflightNextPolarAlign;
 
   /// Preflight plan step: green button when focus and polar alignment are done already
   ///
   /// In en, this message translates to:
   /// **'Start imaging'**
-  String get guidedStartImaging;
+  String get preflightStartImaging;
 
   /// Preflight plan step: line above the buttons
   ///
   /// In en, this message translates to:
   /// **'Imaging starts after focus and polar alignment.'**
-  String get guidedImagingStartsAfter;
+  String get preflightImagingStartsAfter;
 
   /// Preflight: the last setup step's green Done, which starts imaging
   ///
   /// In en, this message translates to:
   /// **'Done · Start imaging'**
-  String get guidedDoneStartImaging;
+  String get preflightDoneStartImaging;
 
   /// Settings › Rig: the guide scope's focal length (mm), read from the guider when unset
   ///
@@ -4399,7 +4399,7 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'Next: Guide'**
-  String get guidedNextGuide;
+  String get preflightNextGuide;
 
   /// Shutter label in Guide mode: starts the guider's routine (calibrating when needed)
   ///
@@ -5774,6 +5774,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'find devices'**
   String get deviceChooserFindAction;
+
+  /// After Couldn't: the Stop Mount request failed
+  ///
+  /// In en, this message translates to:
+  /// **'stop the mount'**
+  String get stopMountAction;
+
+  /// Message pill: Stop Mount could not be sent, no server
+  ///
+  /// In en, this message translates to:
+  /// **'Stop Mount was not issued — no server connection.'**
+  String get stopMountNoServer;
+
+  /// Message pill: Stop Mount failed. reason is a whole sentence
+  ///
+  /// In en, this message translates to:
+  /// **'{reason} Try Stop Mount again.'**
+  String stopMountFailed(String reason);
 }
 
 class _AppLocalizationsDelegate

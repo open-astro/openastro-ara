@@ -284,7 +284,9 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
     await tester.pump();
     await tester.pump();
-    expect(container.read(simpleMessagesProvider).map((m) => m.title), contains(contains('Stop Mount')));
+    expect(container.read(simpleMessagesProvider).map((m) => m.title),
+        contains("Couldn't stop the mount. Try Stop Mount again."),
+        reason: 'friendly and localised, never the raw exception');
     expect(find.byType(SnackBar), findsNothing);
   });
 

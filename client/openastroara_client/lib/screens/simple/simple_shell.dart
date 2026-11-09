@@ -233,6 +233,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   double _leftRailHeight = 0;
   double _rightRailHeight = 0;
   double _simplePreflightRowHeight = kSimplePreflightRowHeight;
+  double _statusHeight = 0;
+  final _statusKey = GlobalKey();
   final _leftRailKey = GlobalKey();
   final _rightRailKey = GlobalKey();
   final _simplePreflightRowKey = GlobalKey();
@@ -241,14 +243,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final rail = _leftRailKey.currentContext?.size?.height;
     final right = _rightRailKey.currentContext?.size?.height;
     final row = _simplePreflightRowKey.currentContext?.size?.height;
+    final status = _statusKey.currentContext?.size?.height ?? 0;
     if (!mounted) return;
     if ((rail != null && rail != _leftRailHeight) ||
         (right != null && right != _rightRailHeight) ||
-        (row != null && row != _simplePreflightRowHeight)) {
+        (row != null && row != _simplePreflightRowHeight) ||
+        status != _statusHeight) {
       setState(() {
         _leftRailHeight = rail ?? _leftRailHeight;
         _rightRailHeight = right ?? _rightRailHeight;
         _simplePreflightRowHeight = row ?? _simplePreflightRowHeight;
+        _statusHeight = status;
       });
     }
   });
@@ -917,8 +922,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // plan squares. Plan's sheet and Preflight's step panels start at its
     // top, 8 pt under the status pill; the rest sit level with the rail and
     // move up only when they don't fit (user, 2026-11-04).
-    final popoverTop = railTop + kSimpleStatusHeight + AraSpace.s8;
-    final guidedStep = pilot != null && _popover == _Popover.settings;
+    // Pills grow with large text; none showing still keeps a pill's room.
+    final popoverTop =
+        railTop +
+        math.max(kSimpleStatusHeight, _statusHeight) +
+        AraSpace.s8;
+    final preflightPanel = pilot != null && _popover == _Popover.settings;
     // Plan's sheet and Preflight's step panels: centred, content-high, in the
     // space between the status pill and the bottom row's top (the screen's
     // inset without it), at least 8 pt from each (user, 2026-11-04).
@@ -1101,7 +1110,18 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             constraints: BoxConstraints(
                               maxWidth: (width - kSimpleInset * 3) / 2,
                             ),
-                            child: SimpleStatusPill(onOpen: _openFromPill),
+                            child: NotificationListener<SizeChangedLayoutNotification>(
+                              onNotification: (_) {
+                                _measure();
+                                return true;
+                              },
+                              child: SizeChangedLayoutNotifier(
+                                child: SimpleStatusPill(
+                                  firstPillKey: _statusKey,
+                                  onOpen: _openFromPill,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                         _Fade(
@@ -1226,13 +1246,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   top: popoverTop,
                                   // Plan's bottom limit; the plan squares,
                                   // which its sheet moves, stay clear.
-                                  bottom: planSquares && !guidedStep
+                                  bottom: planSquares && !preflightPanel
                                       ? popoverBottom
                                       : betweenBottom,
                                   child: CustomSingleChildLayout(
                                     delegate: _BesideRail(
                                       centre:
-                                          guidedStep ||
+                                          preflightPanel ||
                                           (_popover == _Popover.settings &&
                                               shown == SimpleModeScreen.guide),
                                       preferredTop: math.max(
@@ -1829,6 +1849,18 @@ double simpleRailScale(BuildContext context) =>
 /// Past 1.2x text a mode panel's side-by-side groups stack, so their labels
 /// keep their full words (WCAG 1.4.4): pt-BR's "Principal" and "Contínuo"
 /// were cut from 1.3x (impeccable audit, 2026-11-04).
+/// Names in reading order: an accent doesn't move a letter.
+/// shortcut: folds en and pt-BR letters only, add a collator with a third locale.
+int simpleCompareNames(String a, String b) {
+  const accented = 'áàâãéêíóôõúüç';
+  const plain = 'aaaaeeiooouuc';
+  String key(String s) => s.toLowerCase().replaceAllMapped(
+    RegExp('[$accented]'),
+    (m) => plain[accented.indexOf(m[0]!)],
+  );
+  return key(a).compareTo(key(b));
+}
+
 bool simpleStackText(BuildContext context) =>
     MediaQuery.textScalerOf(context).scale(1) > 1.2;
 
@@ -1932,13 +1964,16 @@ class _RightRail extends ConsumerWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      (named ?? mode).railLabelOf(context.l10n),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: kSimpleText.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: modesOpen ? AraColors.accentInfo : null,
+                    // A name wider than the rail shrinks to fit, never cut.
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        (named ?? mode).railLabelOf(context.l10n),
+                        maxLines: 1,
+                        style: kSimpleText.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: modesOpen ? AraColors.accentInfo : null,
+                        ),
                       ),
                     ),
                     Icon(
@@ -2821,7 +2856,7 @@ class _Gear extends ConsumerWidget {
           provider: safetyMonitorProvider,
           onOpen: () => onOpen('Safety monitor'),
         )),
-    ]..sort((a, b) => a.$1.toLowerCase().compareTo(b.$1.toLowerCase()));
+    ]..sort((a, b) => simpleCompareNames(a.$1, b.$1));
     return Column(
       key: const Key('simple-gear'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -4176,9 +4211,6 @@ class _RigStepperState extends State<_RigStepper> {
   );
 }
 
-/// The OpenAstro Ara sheet under the mark (#1602): the versions a support
-/// question starts with, then which rig and profile this is. Settings stays
-/// on the gear.
 /// Where a device window and the Ara sheet start: one inset right of the left
 /// rail, or at the left inset when the window can't fit beside it.
 double _topLeftOverlayLeft(BuildContext context) {
@@ -4241,30 +4273,29 @@ class _ChangeRow extends StatelessWidget {
         ),
       ),
       // A plain blue "Change"; a screen reader hears what it changes.
-      Semantics(
-        label: change,
-        button: true,
-        excludeSemantics: true,
-        child: TextButton(
-          key: buttonKey,
-          style: TextButton.styleFrom(
-            // Simple Mode's 44 pt target (user, 2026-11-03), over keeping
-            // the two lines close.
-            minimumSize: const Size(0, 44),
-            padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          onPressed: onTap,
-          child: Text(
-            context.l10n.shellChange,
-            style: const TextStyle(fontSize: 14),
-          ),
+      TextButton(
+        key: buttonKey,
+        style: TextButton.styleFrom(
+          // Simple Mode's 44 pt target (user, 2026-11-03), over keeping
+          // the two lines close.
+          minimumSize: const Size(0, 44),
+          padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+        onPressed: onTap,
+        child: Text(
+          context.l10n.shellChange,
+          semanticsLabel: change,
+          style: const TextStyle(fontSize: 14),
         ),
       ),
     ],
   );
 }
 
+/// The OpenAstro Ara sheet under the mark (#1602): the versions a support
+/// question starts with, then which rig and profile this is. Settings stays
+/// on the gear.
 class _AraSheet extends ConsumerWidget {
   const _AraSheet({required this.onClose});
 

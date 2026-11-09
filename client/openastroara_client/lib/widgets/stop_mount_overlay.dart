@@ -243,10 +243,14 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
     if (!ok) {
       setState(() => _stopRequested = false);
       // A pill in Simple Mode, which has no popups (the Space key reaches here).
+      final l10n = context.l10n;
+      final why = failure == null
+          ? null
+          : friendlyError(l10n, failure, action: l10n.stopMountAction);
       userNotifier(context)(
-        failure == null
-            ? 'Stop Mount was not issued — no server connection.'
-            : 'Stop Mount failed to reach the server ($failure) — tap again.',
+        why == null
+            ? l10n.stopMountNoServer
+            : l10n.stopMountFailed(why.endsWith('.') ? why : '$why.'),
         error: true,
       );
     }

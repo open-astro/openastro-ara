@@ -1162,7 +1162,7 @@ class _PillData {
 /// it keeps the widest it has been, so a countdown or a falling temperature
 /// doesn't make it jitter (ALP-4937).
 class _StatusPill extends StatefulWidget {
-  const _StatusPill({required this.data, this.onOpen});
+  const _StatusPill({super.key, required this.data, this.onOpen});
 
   final _PillData data;
   final ValueChanged<SimpleStatusOrigin>? onOpen;
@@ -1298,7 +1298,10 @@ class _StatusPillState extends State<_StatusPill> {
 }
 
 class SimpleStatusPill extends ConsumerStatefulWidget {
-  const SimpleStatusPill({super.key, this.onOpen});
+  const SimpleStatusPill({super.key, this.firstPillKey, this.onOpen});
+
+  /// On the top pill, for the shell to measure: a pill grows with large text.
+  final GlobalKey? firstPillKey;
 
   /// Opens what the pill is about (its mode's panel, or a device window).
   final ValueChanged<SimpleStatusOrigin>? onOpen;
@@ -1768,7 +1771,11 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         );
       }
     }
-    return _StatusPillStack(pills: pills, onOpen: widget.onOpen);
+    return _StatusPillStack(
+      pills: pills,
+      firstKey: widget.firstPillKey,
+      onOpen: widget.onOpen,
+    );
   }
 }
 
@@ -1790,7 +1797,9 @@ class _KeptPill {
 /// The status pills, one per kind. A pill stays at least [_kPillMinimum], in
 /// its slot, then fades; a new pill of its kind takes over at once.
 class _StatusPillStack extends StatefulWidget {
-  const _StatusPillStack({required this.pills, this.onOpen});
+  const _StatusPillStack({required this.pills, this.firstKey, this.onOpen});
+
+  final GlobalKey? firstKey;
 
   final List<_PillData> pills;
   final ValueChanged<SimpleStatusOrigin>? onOpen;
@@ -1872,6 +1881,12 @@ class _StatusPillStackState extends State<_StatusPillStack> {
         pills.insert(math.min(i, pills.length), kept);
       }
     }
+    // A fade ends only on a shown pill: one past the third goes at once.
+    for (final k in pills.skip(3).where((k) => k.fading).toList()) {
+      k.minimum.cancel();
+      _kept.remove(k.data.origin);
+      pills.remove(k);
+    }
     _order = [for (final k in pills) k.data.origin];
     if (pills.isEmpty) return const SizedBox.shrink();
     // Three at most; the rest fold into "+n", which opens the first one left.
@@ -1882,7 +1897,7 @@ class _StatusPillStackState extends State<_StatusPillStack> {
       crossAxisAlignment: CrossAxisAlignment.end,
       spacing: AraSpace.s8,
       children: [
-        for (final k in shown)
+        for (final (i, k) in shown.indexed)
           AnimatedOpacity(
             key: ValueKey(k.data.origin),
             opacity: k.fading ? 0 : 1,
@@ -1891,7 +1906,11 @@ class _StatusPillStackState extends State<_StatusPillStack> {
             onEnd: () {
               if (k.fading) setState(() => _kept.remove(k.data.origin));
             },
-            child: _StatusPill(data: k.data, onOpen: widget.onOpen),
+            child: _StatusPill(
+              key: i == 0 ? widget.firstKey : null,
+              data: k.data,
+              onOpen: widget.onOpen,
+            ),
           ),
         if (more > 0)
           Semantics(

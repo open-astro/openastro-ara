@@ -3534,24 +3534,24 @@
   "@focusScopeGuide": {
     "description": "Focus panel: focus the guide camera (short)"
   },
-  "guidedNextFocus": "Next: Focus",
-  "@guidedNextFocus": {
+  "preflightNextFocus": "Next: Focus",
+  "@preflightNextFocus": {
     "description": "Preflight plan step: green button, on to focusing"
   },
-  "guidedNextPolarAlign": "Next: Polar align",
-  "@guidedNextPolarAlign": {
+  "preflightNextPolarAlign": "Next: Polar align",
+  "@preflightNextPolarAlign": {
     "description": "Preflight plan step: green button, on to polar alignment"
   },
-  "guidedStartImaging": "Start imaging",
-  "@guidedStartImaging": {
+  "preflightStartImaging": "Start imaging",
+  "@preflightStartImaging": {
     "description": "Preflight plan step: green button when focus and polar alignment are done already"
   },
-  "guidedImagingStartsAfter": "Imaging starts after focus and polar alignment.",
-  "@guidedImagingStartsAfter": {
+  "preflightImagingStartsAfter": "Imaging starts after focus and polar alignment.",
+  "@preflightImagingStartsAfter": {
     "description": "Preflight plan step: line above the buttons"
   },
-  "guidedDoneStartImaging": "Done · Start imaging",
-  "@guidedDoneStartImaging": {
+  "preflightDoneStartImaging": "Done · Start imaging",
+  "@preflightDoneStartImaging": {
     "description": "Preflight: the last setup step's green Done, which starts imaging"
   },
   "shellGuideFocalLength": "Guide scope focal length",
@@ -3570,8 +3570,8 @@
   "@shellModeGuide": {
     "description": "Guider mode: the guider's settings and guiding with the guide camera, started by the shutter"
   },
-  "guidedNextGuide": "Next: Guide",
-  "@guidedNextGuide": {
+  "preflightNextGuide": "Next: Guide",
+  "@preflightNextGuide": {
     "description": "Preflight button moving on to the Guide step"
   },
   "guideStart": "Start guiding",
@@ -4566,5 +4566,22 @@
   "deviceChooserFindAction": "find devices",
   "@deviceChooserFindAction": {
     "description": "After Couldn't"
+  },
+  "stopMountAction": "stop the mount",
+  "@stopMountAction": {
+    "description": "After Couldn't: the Stop Mount request failed"
+  },
+  "stopMountNoServer": "Stop Mount was not issued — no server connection.",
+  "@stopMountNoServer": {
+    "description": "Message pill: Stop Mount could not be sent, no server"
+  },
+  "stopMountFailed": "{reason} Try Stop Mount again.",
+  "@stopMountFailed": {
+    "description": "Message pill: Stop Mount failed. reason is a whole sentence",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
   }
 }
