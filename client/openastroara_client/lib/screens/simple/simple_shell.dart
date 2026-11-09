@@ -987,10 +987,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         ? leftRailTop - messagesTop - kSimpleInset
         : double.infinity;
     // Pills too tall for the room above the left rail move beside it, when
-    // that leaves them a readable width; otherwise they paint over the rail.
+    // that leaves them a readable width; otherwise they paint over it. On a
+    // phone they would run under the right rail beside the left one, so they
+    // paint over the left rail and stop short of the right one.
     final railShift = railWidth + kSimpleInset;
     final pillsBesideRail =
-        _messagesHeight > messagesRoom && messagesWidth - railShift >= 240;
+        !stacked &&
+        _messagesHeight > messagesRoom &&
+        messagesWidth - railShift >= 240;
     final pillsOverRail =
         panels &&
         _messagesHeight > messagesRoom &&
@@ -1059,7 +1063,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       left: pillsLeft,
       top: pillsTop,
       width:
-          messagesWidth - (pillsBesideRail ? railShift : 0),
+          messagesWidth - (pillsBesideRail || pillsOverRail ? railShift : 0),
       duration: motion,
       curve: Curves.easeOut,
       child: NotificationListener<SizeChangedLayoutNotification>(

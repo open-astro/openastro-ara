@@ -4667,6 +4667,37 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
     });
 
+    double rightRailLeft(WidgetTester tester) => [
+      for (final k in ['simple-mode', 'simple-shutter', 'simple-settings'])
+        tester.getRect(find.byKey(Key(k))).left,
+    ].reduce(math.min);
+
+    Future<void> tallWarning(WidgetTester tester, double scale) async {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _pump(tester, const Size(390, 844), gear: [
+        diagnosticsStateProvider.overrideWith(() => _Diagnostics({'dew_formation'})),
+        switchListProvider.overrideWith(() => _Switches([_switch('box', 'Powerbox', SwitchConnectionState.connected)])),
+      ]);
+      await settle(tester);
+      expect(pill, findsOneWidget);
+    }
+
+    testWidgets('on a phone at 1.5x text no word runs under the right rail', (tester) async {
+      await tallWarning(tester, 1.5);
+      expect(pillsRect(tester).right, lessThanOrEqualTo(rightRailLeft(tester)));
+      expect(pillsRect(tester).left, kSimpleInset, reason: 'over the left rail, never beside it, on a phone');
+    });
+
+    testWidgets("on a phone at 2x text the warning leaves the right rail's controls to press", (tester) async {
+      await tallWarning(tester, 2);
+      final rail = rightRailLeft(tester);
+      expect(pillsRect(tester).right, lessThanOrEqualTo(rail));
+      final hit = HitTestResult();
+      tester.binding.hitTestInView(hit, tester.getCenter(find.byKey(const Key('simple-mode'))), tester.view.viewId);
+      expect(hit.path.map((e) => e.target), isNot(contains(tester.renderObject(find.byType(SimpleMessagePills)))));
+    });
+
     testWidgets('no connected switch device: no button', (tester) async {
       final (c, _) = await shell(tester, start: {'dew_formation'});
       await tester.pump();
