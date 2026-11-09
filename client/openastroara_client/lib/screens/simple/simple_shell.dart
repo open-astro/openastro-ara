@@ -234,6 +234,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   double _rightRailHeight = 0;
   double _simplePreflightRowHeight = kSimplePreflightRowHeight;
   double _statusHeight = 0;
+  double _messagesHeight = 0;
+  final _messagesKey = GlobalKey();
   final _leftRailKey = GlobalKey();
   final _rightRailKey = GlobalKey();
   final _simplePreflightRowKey = GlobalKey();
@@ -242,14 +244,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final rail = _leftRailKey.currentContext?.size?.height;
     final right = _rightRailKey.currentContext?.size?.height;
     final row = _simplePreflightRowKey.currentContext?.size?.height;
+    final messages = _messagesKey.currentContext?.size?.height ?? 0;
     if (!mounted) return;
     if ((rail != null && rail != _leftRailHeight) ||
         (right != null && right != _rightRailHeight) ||
-        (row != null && row != _simplePreflightRowHeight)) {
+        (row != null && row != _simplePreflightRowHeight) ||
+        messages != _messagesHeight) {
       setState(() {
         _leftRailHeight = rail ?? _leftRailHeight;
         _rightRailHeight = right ?? _rightRailHeight;
         _simplePreflightRowHeight = row ?? _simplePreflightRowHeight;
+        _messagesHeight = messages;
       });
     }
   });
@@ -269,7 +274,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       final devices = await ref
           .read(switchListProvider.future)
           .catchError((Object _) => const <SwitchDevice>[]);
-      if (!mounted) return;
+      // Dew may have cleared during the wait.
+      if (!mounted || !ref.read(diagnosticsStateProvider).openTypes.contains(dew)) {
+        return;
+      }
       final switchUp = devices.any(
         (d) => d.connectionState == SwitchConnectionState.connected,
       );
@@ -385,9 +393,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   @override
   void dispose() {
     _publishOnTop(false);
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _messages.dismissQuestions(),
-    );
+    final dewPill = _dewPill;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _messages.dismissQuestions();
+      // Its button belongs to this shell too, and the next one shows its own.
+      if (dewPill != null) _messages.dismiss(dewPill);
+    });
     _stopDisarm?.cancel();
     _focus.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -960,6 +971,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final rightRailTop =
         railTop +
         (height - railTop - kSimpleInset * 2 - stopSize - _rightRailHeight) / 2;
+    final messagesRoom = panels
+        ? leftRailTop - messagesTop - kSimpleInset
+        : double.infinity;
+    // Pills too tall for the room above the left rail move beside it, when
+    // that leaves them a readable width (a phone has the height instead).
+    final railShift = railWidth + kSimpleInset;
+    final pillsBesideRail =
+        _messagesHeight > messagesRoom && messagesWidth - railShift >= 240;
     // The rail's popovers (a mode's panel, the modes, the queue) take the room
     // from under the status pill down to the screen's inset, over the bottom
     // row while open (they sit left of the rail, clear of Stop), above the
@@ -1130,16 +1149,24 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                         // Preflight strip when it shows), down to the left rail;
                         // they stay in the immersive view.
                         AnimatedPositioned(
-                          left: kSimpleInset,
+                          left: kSimpleInset + (pillsBesideRail ? railShift : 0),
                           top: panels ? messagesTop : kSimpleInset,
-                          width: messagesWidth,
+                          width:
+                              messagesWidth - (pillsBesideRail ? railShift : 0),
                           duration: motion,
                           curve: Curves.easeOut,
-                          child: SimpleMessagePills(
-                            onOpen: _openFromPill,
-                            maxHeight: panels
-                                ? leftRailTop - messagesTop - kSimpleInset
-                                : double.infinity,
+                          child: NotificationListener<SizeChangedLayoutNotification>(
+                            onNotification: (_) {
+                              _measure();
+                              return true;
+                            },
+                            child: SizeChangedLayoutNotifier(
+                              child: SimpleMessagePills(
+                                key: _messagesKey,
+                                onOpen: _openFromPill,
+                                maxHeight: messagesRoom,
+                              ),
+                            ),
                           ),
                         ),
                         // The camera's status, top-right under the strip (messages

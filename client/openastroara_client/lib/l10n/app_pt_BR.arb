@@ -956,5 +956,5 @@
   "focusChartFit": "ajuste {position}",
   "focusChartCalibrated": "calibrado {position}",
   "focusChartFocus": "foco {position}",
-  "simpleDewWarning": "Pode estar se formando orvalho: as estrelas estão inchando com a umidade alta. Limpe a óptica ou ligue os aquecedores de orvalho. O autofoco espera até passar."
+  "simpleDewWarning": "Pode estar se formando orvalho: as estrelas estão inchando com a umidade alta. Limpe a óptica ou ligue os aquecedores de orvalho. O autofoco programado espera até passar."
 }

@@ -3425,7 +3425,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get simpleDewWarning =>
-      'Dew may be forming: stars are swelling at high humidity. Wipe the optics or turn on the dew heaters. Autofocus waits until it clears.';
+      'Dew may be forming: stars are swelling at high humidity. Wipe the optics or turn on the dew heaters. Scheduled autofocus waits until it clears.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -6877,5 +6877,5 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get simpleDewWarning =>
-      'Pode estar se formando orvalho: as estrelas estão inchando com a umidade alta. Limpe a óptica ou ligue os aquecedores de orvalho. O autofoco espera até passar.';
+      'Pode estar se formando orvalho: as estrelas estão inchando com a umidade alta. Limpe a óptica ou ligue os aquecedores de orvalho. O autofoco programado espera até passar.';
 }

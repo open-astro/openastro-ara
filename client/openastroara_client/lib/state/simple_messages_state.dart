@@ -157,6 +157,8 @@ class SimpleMessagesNotifier extends Notifier<List<SimpleMessage>> {
   }
 
   void dismiss(int id) {
+    // Called a frame late: the container may be gone (a closing test).
+    if (!ref.mounted) return;
     _timers.remove(id)?.cancel();
     state = [
       for (final m in state)

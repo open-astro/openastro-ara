@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
@@ -327,6 +328,16 @@ class _Switches extends SwitchListNotifier {
   Future<bool> disconnect(String deviceId) async {
     calls.add('disconnect $deviceId');
     return true;
+  }
+}
+
+class _SlowSwitches extends _Switches {
+  _SlowSwitches(this.gate) : super(const []);
+  final Completer<void> gate;
+  @override
+  Future<List<SwitchDevice>> build() async {
+    await gate.future;
+    return devices;
   }
 }
 
@@ -4391,6 +4402,7 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(pill, findsOneWidget);
+      expect(find.textContaining('Scheduled autofocus waits'), findsOneWidget);
       expect(c.read(simpleMessagesProvider).single.kind, SimpleMessageKind.warning);
       d.open({'dew_formation', 'disk.low'});
       await tester.pump();
@@ -4430,10 +4442,54 @@ void main() {
         switchListProvider.overrideWith(() => _Switches([_switch('box', 'Powerbox', SwitchConnectionState.connected)])),
       ]);
       await tester.pump();
-      final action = c.read(simpleMessagesProvider).single.actions.single;
-      action.onPressed();
+      await tester.tap(find.widgetWithText(TextButton, 'Switches'));
       await tester.pump();
       expect(find.byKey(const Key('simple-device-switches')), findsOneWidget);
+      expect(c.read(simpleMessagesProvider), hasLength(1), reason: 'dew is still open');
+    });
+
+    testWidgets('leaving Simple Mode and coming back shows one pill, and it clears with the dew', (tester) async {
+      final (c, d) = await shell(tester, start: {'dew_formation'});
+      await tester.pump();
+      expect(pill, findsOneWidget);
+      await tester.pumpWidget(UncontrolledProviderScope(container: c, child: const MaterialApp(home: SizedBox())));
+      await tester.pump();
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(home: SimpleShell(planetarium: SizedBox(key: Key('sky')))),
+      ));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider), hasLength(1));
+      d.open({});
+      await tester.pump();
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider), isEmpty);
+    });
+
+    testWidgets('dew clearing while the switch list loads leaves no pill', (tester) async {
+      final gate = Completer<void>();
+      final (c, d) = await shell(tester, gear: [switchListProvider.overrideWith(() => _SlowSwitches(gate))]);
+      d.open({'dew_formation'});
+      await tester.pump();
+      await tester.pump();
+      d.open({});
+      await tester.pump();
+      await tester.pump();
+      gate.complete();
+      await tester.pump();
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider), isEmpty);
+    });
+
+    testWidgets('in a short window the pill moves beside the left rail instead of under it', (tester) async {
+      final d = _Diagnostics({'dew_formation'});
+      await _pump(tester, const Size(800, 480), gear: [diagnosticsStateProvider.overrideWith(() => d)]);
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      expect(tester.getTopLeft(pill).dx, greaterThanOrEqualTo(kSimpleInset * 2 + kSimpleRailWidth));
     });
 
     testWidgets('no connected switch device: no button', (tester) async {
