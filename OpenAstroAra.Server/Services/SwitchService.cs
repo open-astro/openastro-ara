@@ -389,6 +389,9 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
             if (fan.DeviceId != deviceId || fan.PortId is not { } portId) {
                 return; // not the fan switch (most rigs) — decided on the designation, before any wait
             }
+            if (await GetAsync(deviceId, CancellationToken.None).ConfigureAwait(false) is not { State: EquipmentConnectionState.Connected }) {
+                return; // designated ahead of its connect (a profile switch): that connect runs this catch-up
+            }
             // The connect's own RefreshCacheOnce is a CAS'd no-op while a timer pass or another
             // switch's connect is already refreshing (review of #1084), and a pass can skip a port
             // whose read failed, so the fan port may not be in the snapshot yet. Wait for it (the

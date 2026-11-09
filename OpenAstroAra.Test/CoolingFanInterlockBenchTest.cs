@@ -333,6 +333,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_fan_designated_on_a_switch_that_is_not_connected_raises_no_fault() {
+            var camera = new Mock<ICameraService>();
+            camera.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Camera(coolerOn: true));
+            var faults = new List<EquipmentFaultEvent>();
+            var sink = new Mock<IEquipmentFaultSink>();
+            sink.Setup(f => f.Publish(It.IsAny<EquipmentFaultEvent>())).Callback<EquipmentFaultEvent>(f => { lock (faults) { faults.Add(f); } });
+            var store = new InMemoryProfileStore();
+            using var svc = new SwitchService(faults: sink.Object, profileStore: store, cameraProbe: () => camera.Object);
+
+            // What a profile switch does: the new designation lands before its switch connects.
+            store.PutCoolingFan(new CoolingFanDto("not-connected-yet", 0));
+            await Task.Delay(TimeSpan.FromSeconds(1));
+
+            lock (faults) {
+                Assert.That(faults, Is.Empty, "the switch's own connect starts the fan");
+            }
+        }
+
+        [Test]
         public async Task The_catch_up_waits_for_the_fan_port_not_just_for_some_ports() {
             // Two ports; the fan (id 1) fails its reads at first, so the snapshot holds only port 0.
             var fanReadable = false;
