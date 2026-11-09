@@ -58,8 +58,9 @@ GuiderAdvancedView _guider() => GuiderAdvancedView.fromJson({
 Future<_Fake> _pump(
   WidgetTester t, {
   GuiderAdvancedSettings profile = GuiderAdvancedSettings.empty,
+  GuiderAdvancedView? guider,
 }) async {
-  final fake = _Fake(profile, _guider());
+  final fake = _Fake(profile, guider ?? _guider());
   t.view.physicalSize = const Size(900, 2400);
   t.view.devicePixelRatio = 1;
   addTearDown(t.view.resetPhysicalSize);
@@ -330,5 +331,71 @@ void main() {
       isNull,
     );
     expect(fake.putBody, isNull);
+  });
+
+  group('#1748', () {
+    GuiderAdvancedField field(String key) =>
+        GuiderAdvancedField.all.singleWhere((f) => f.key == key);
+
+    test('mass change is entered as a percentage and stored as a fraction', () {
+      final f = field('mass_change_threshold');
+      expect(GuiderAdvancedPanelTestHooks.parse(f, '35'), (0.35, null));
+      expect(f.format(0.35), '35 %');
+      expect(GuiderAdvancedPanelTestHooks.parse(f, '101').$2, isNotNull);
+    });
+
+    test('variable delays are whole seconds and allow 0', () {
+      final f = field('variable_delay_short_s');
+      expect(GuiderAdvancedPanelTestHooks.parse(f, '0'), (0, null));
+      expect(GuiderAdvancedPanelTestHooks.parse(f, '1.5').$2, 'A whole number');
+      expect(GuiderAdvancedPanelTestHooks.parse(f, '11').$2, isNotNull);
+    });
+
+    test('equal star HFDs and a pulse outside floor to ceiling are refused', () {
+      expect(
+        GuiderAdvancedPanelTestHooks.crossFieldProblem(
+          const GuiderAdvancedSettings({'min_star_hfd': 3.0, 'max_star_hfd': 3.0}),
+        ),
+        contains('Star HFD'),
+      );
+      expect(
+        GuiderAdvancedPanelTestHooks.crossFieldProblem(
+          const GuiderAdvancedSettings({'backlash_pulse_ms': 100, 'backlash_floor_ms': 200}),
+        ),
+        contains('Backlash'),
+      );
+    });
+
+    testWidgets('a saved mass change shows as a percentage', (t) async {
+      await _pump(t, profile: const GuiderAdvancedSettings({'mass_change_threshold': 0.35}));
+      expect(
+        t.widget<TextField>(find.byKey(const Key('ga-mass_change_threshold'))).controller!.text,
+        '35',
+      );
+    });
+
+    testWidgets('what the push did not land is listed with its reason', (t) async {
+      await _pump(
+        t,
+        guider: GuiderAdvancedView.fromJson({
+          'connected': true,
+          'not_applied': [
+            {'setting': 'RA aggressiveness', 'reason': 'The current guide algorithm has no aggressiveness setting.'},
+          ],
+        }),
+      );
+      expect(find.byKey(const Key('guider-not-applied')), findsOneWidget);
+      expect(find.textContaining('RA aggressiveness: The current'), findsOneWidget);
+    });
+
+    testWidgets('nothing to report shows no list', (t) async {
+      await _pump(t);
+      expect(find.byKey(const Key('guider-not-applied')), findsNothing);
+    });
+
+    testWidgets('a saved algorithm the guider does not offer is marked', (t) async {
+      await _pump(t, profile: const GuiderAdvancedSettings({'ra_algorithm': 'ZFilter'}));
+      expect(find.textContaining('ZFilter (not offered by the Guider)'), findsWidgets);
+    });
   });
 }

@@ -22,8 +22,8 @@ public static class GuiderAdvancedSettingsMapping {
 
     /// <summary>The guider's limits for these settings (openastro-guider event_server.cpp / backlash_comp.cpp).</summary>
     public const int MaxPulseLimitMs = 1_000_000;
-    public const int BacklashPulseMinMs = 20;
-    public const int BacklashPulseMaxMs = 8000;
+    public const int BacklashPulseMinMs = GuiderAdvancedLimits.BacklashPulseMinMs;
+    public const int BacklashPulseMaxMs = GuiderAdvancedLimits.BacklashPulseMaxMs;
 
     /// <summary>The guider's noise-reduction names, the only values it accepts.</summary>
     public static readonly IReadOnlyList<string> NoiseReductionMethods = ["None", "2x2 Mean", "3x3 Median"];
@@ -75,18 +75,15 @@ public static class GuiderAdvancedSettingsMapping {
         a.DitherScaleFactor, a.DitherRaOnly,
         a.RaAlgorithm, a.DecAlgorithm);
 
-    /// <summary>The first thing wrong with a PUT body, or null. Every set number must be positive (the
-    /// guider rejects zero and below for all of them, and Ara treats "unset" as null, never 0); min ≤ max
-    /// where both are set; the noise method is one of the guider's names; the variable delay comes as all
-    /// three values or none (the guider needs them together).</summary>
+    /// <summary>The first thing wrong with a PUT body, or null. Set numbers without a range of their own must
+    /// be positive (Ara treats "unset" as null, never 0); min ≤ max where both are set; the noise method is
+    /// one of the guider's names; the variable delay comes as all three values or none (the guider needs them
+    /// together); and every value meets <see cref="GuiderAdvancedLimits"/>, where a variable delay may be 0.</summary>
     public static string? Validate(GuiderAdvancedSettingsDto d) {
         static bool Bad(double? v) => v is double x && !(double.IsFinite(x) && x > 0);
         static bool BadInt(int? v) => v is int x && x <= 0;
         (string Name, double? Value)[] numbers = [
-            ("tolerate_jumps_threshold_px", d.TolerateJumpsThresholdPx), ("min_star_hfd", d.MinStarHfd),
-            ("max_star_hfd", d.MaxStarHfd), ("min_star_snr", d.MinStarSnr), ("mass_change_threshold", d.MassChangeThreshold),
-            ("auto_exposure_target_snr", d.AutoExposureTargetSnr), ("variable_delay_short_s", d.VariableDelayShortS),
-            ("variable_delay_long_s", d.VariableDelayLongS), ("dither_scale_factor", d.DitherScaleFactor),
+            ("min_star_snr", d.MinStarSnr), ("auto_exposure_target_snr", d.AutoExposureTargetSnr),
         ];
         foreach (var (name, value) in numbers) {
             if (Bad(value)) {
@@ -94,9 +91,7 @@ public static class GuiderAdvancedSettingsMapping {
             }
         }
         (string Name, int? Value)[] ints = [
-            ("search_region_px", d.SearchRegionPx), ("auto_exposure_min_ms", d.AutoExposureMinMs),
-            ("auto_exposure_max_ms", d.AutoExposureMaxMs),
-            ("backlash_floor_ms", d.BacklashFloorMs), ("backlash_ceiling_ms", d.BacklashCeilingMs),
+            ("auto_exposure_min_ms", d.AutoExposureMinMs), ("auto_exposure_max_ms", d.AutoExposureMaxMs),
         ];
         foreach (var (name, value) in ints) {
             if (BadInt(value)) {
@@ -110,23 +105,8 @@ public static class GuiderAdvancedSettingsMapping {
                 return $"{name} must be 0–{MaxPulseLimitMs} ms";
             }
         }
-        if (d.BacklashPulseMs is int pulse && pulse is < BacklashPulseMinMs or > BacklashPulseMaxMs) {
-            return $"backlash_pulse_ms must be {BacklashPulseMinMs}–{BacklashPulseMaxMs} ms";
-        }
-        // The guider takes the enable only with a pulse width: an enable alone made it range-check the
-        // pulse it already held (0) against its floor (20) and refuse the whole group on every push
-        // (2026-10-18, "Floor must be in [20, 0 (PulseWidth)]"), with nothing to show for it in the client.
-        if (d.BacklashEnabled == true && d.BacklashPulseMs is null) {
-            return $"backlash_pulse_ms ({BacklashPulseMinMs}–{BacklashPulseMaxMs} ms) is required to turn backlash compensation on";
-        }
-        if (d.MinStarHfd is double minHfd && d.MaxStarHfd is double maxHfd && minHfd > maxHfd) {
-            return "min_star_hfd must not exceed max_star_hfd";
-        }
         if (d.AutoExposureMinMs is int minExp && d.AutoExposureMaxMs is int maxExp && minExp > maxExp) {
             return "auto_exposure_min_ms must not exceed auto_exposure_max_ms";
-        }
-        if (d.BacklashFloorMs is int floor && d.BacklashCeilingMs is int ceiling && floor > ceiling) {
-            return "backlash_floor_ms must not exceed backlash_ceiling_ms";
         }
         if (d.NoiseReduction is { } nr && !NoiseReductionMethods.Contains(nr)) {
             return $"noise_reduction must be one of: {string.Join(", ", NoiseReductionMethods)}";
@@ -135,15 +115,12 @@ public static class GuiderAdvancedSettingsMapping {
         if (delaySet is 1 or 2) {
             return "variable_delay_enabled, variable_delay_short_s and variable_delay_long_s go together: set all three or none";
         }
-        if (d.VariableDelayShortS is double shortS && d.VariableDelayLongS is double longS && shortS > longS) {
-            return "variable_delay_short_s must not exceed variable_delay_long_s";
-        }
         if (d.RaAlgorithm is { } ra && string.IsNullOrWhiteSpace(ra)) {
             return "ra_algorithm must be a name, or null to keep the guider's";
         }
         if (d.DecAlgorithm is { } dec && string.IsNullOrWhiteSpace(dec)) {
             return "dec_algorithm must be a name, or null to keep the guider's";
         }
-        return null;
+        return GuiderAdvancedLimits.Apply(ToEngine(d)).Violations is [var first, ..] ? $"{first.Field} {first.Limit}" : null;
     }
 }

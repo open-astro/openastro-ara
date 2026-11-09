@@ -477,7 +477,7 @@ A trading card (2.5:3.5) in the binder grid, 130 px wide. The front is the objec
 - **Internal Padding:** 8–16 px from the spacing scale.
 
 ### Inputs / Fields
-Filled with Input Well, using the outline border. Focus uses the Material 3 primary focus outline in Console Blue.
+Filled with Input Well, using the outline border. Focus uses the Material 3 primary focus outline in Console Blue. A guider setting the latest push did not land is listed under the settings in small text, with an amber heading and the Guider's own reason (#1748); an unsaved value keeps its error under the field.
 
 ### Navigation
 A navigation rail on Panel Grey with labels always shown: Planning, Checklist, Sequence, Live. The selected destination gets a Selection Blue indicator with white icons, and unselected items use Dim Text. Settings opens from the top-bar gear, and its sidebar has no Equipment group, because each device button opens that device's page. Below 600 px wide the same four tabs move to a Material bottom navigation bar, and nothing is highlighted while Settings shows. ⌘K / Ctrl-K opens a command palette that searches every setting.

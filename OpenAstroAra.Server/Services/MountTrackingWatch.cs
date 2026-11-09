@@ -42,7 +42,7 @@ public enum TrackingWatchVerdict {
 /// unexpectedly" row): tracking was observed on, reads off for
 /// <see cref="DefaultDropThreshold"/> consecutive refresh ticks (≈6 s at the 2 s tick — the
 /// per-field read maps transient failures to <c>false</c>, so single-tick firing is unsafe),
-/// and no daemon-issued command explains it. Commands that legitimately change tracking
+/// and no daemon-issued command explains it. A tick inside a guide pulse is not counted (#1732). Commands that legitimately change tracking
 /// (SetTracking, Park, slews, axis moves) are noted BEFORE dispatch and arm a
 /// <see cref="DefaultCommandGraceTicks"/>-tick grace window during which observations update
 /// expectations instead of accusing; an observed slew or park is likewise never a drop.
@@ -121,7 +121,7 @@ public sealed class MountTrackingWatch {
     }
 
     /// <summary>One call per refresh tick with the freshly-read runtime state.</summary>
-    public TrackingWatchVerdict Observe(bool tracking, bool slewing, bool parked) {
+    public TrackingWatchVerdict Observe(bool tracking, bool slewing, bool parked, bool pulseGuiding = false) {
         if (_graceRemaining > 0) {
             _graceRemaining--;
             _dropStreak = 0;
@@ -159,6 +159,11 @@ public sealed class MountTrackingWatch {
         }
         if (!_expectTracking || _episodeFired) {
             return TrackingWatchVerdict.Idle;
+        }
+        // #1732 — an iOptron reads Tracking false for the length of a guide pulse. Such a tick says nothing
+        // either way: the streak is held, not cleared, so a real drop under constant pulsing still adds up.
+        if (pulseGuiding) {
+            return TrackingWatchVerdict.Degraded;
         }
         _dropStreak++;
         if (_dropStreak >= _threshold) {

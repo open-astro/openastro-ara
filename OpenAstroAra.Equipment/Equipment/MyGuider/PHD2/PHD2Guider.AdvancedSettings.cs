@@ -113,6 +113,7 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             if (a is null) {
                 return messages;
             }
+            a = GuiderAdvancedLimits.Apply(a).Clean!; // #1748 — a bad value already saved must not cost its group the rest
             void Group(string method, params (string Key, object? Value)[] values) {
                 var p = new Dictionary<string, object>();
                 foreach (var (key, value) in values) {
@@ -146,19 +147,11 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             Group("set_guide_limits",
                 ("MaxRaDuration", a.MaxRaDurationMs),
                 ("MaxDecDuration", a.MaxDecDurationMs));
-            // An enable without a pulse width is never sent: the guider fills the missing pulse from its own
-            // value (0 on a fresh profile) and refuses the group ("Floor must be in [20, 0 (PulseWidth)]"),
-            // so every push would fail on it. The write boundary refuses that combination for new saves
-            // (GuiderAdvancedSettingsMapping.Validate); a profile saved before that rule skips the group here.
-            if (a.BacklashEnabled == true && a.BacklashPulseMs is null) {
-                Logger.Warning("PHD2 §63.5 push - backlash compensation is on in the profile with no pulse width; set_backlash_comp skipped (enter a pulse width in Guider settings → More…)");
-            } else {
-                Group("set_backlash_comp",
-                    ("Enabled", a.BacklashEnabled),
-                    ("PulseWidth", a.BacklashPulseMs),
-                    ("Floor", a.BacklashFloorMs),
-                    ("Ceiling", a.BacklashCeilingMs));
-            }
+            Group("set_backlash_comp",
+                ("Enabled", a.BacklashEnabled),
+                ("PulseWidth", a.BacklashPulseMs),
+                ("Floor", a.BacklashFloorMs),
+                ("Ceiling", a.BacklashCeilingMs));
             Group("set_mount_options",
                 ("AssumeOrthogonal", a.AssumeOrthogonal),
                 ("StopGuidingWhenSlewing", a.StopGuidingWhenSlewing),

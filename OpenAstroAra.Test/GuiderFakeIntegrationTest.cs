@@ -2907,6 +2907,66 @@ namespace OpenAstroAra.Test {
             }
         }
 
+
+        private static async Task GuideStepsAsync(FakeGuider fake, int count, double raPx, double decPx = 0) {
+            for (var i = 0; i < count; i++) {
+                await fake.BroadcastAsync(PhdEvents.GuideStep(raDistanceRaw: raPx, decDistanceRaw: decPx)).ConfigureAwait(false);
+            }
+        }
+
+        [Test]
+        public async Task Rms_leaves_out_the_frames_taken_while_the_guider_settles() {
+            // #1749: 2.99″ in Simple Mode against 0.72″ on the Full UI strip, from dither settling frames.
+            var (fake, svc) = await ConnectedServiceAsync().ConfigureAwait(false);
+            await using var _f = fake;
+            using var _s = svc;
+            await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
+            await GuideStepsAsync(fake, 20, raPx: 0.4).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.Settling(1.2, 3, 10)).ConfigureAwait(false);
+            await GuideStepsAsync(fake, 5, raPx: 5).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.SettleDone()).ConfigureAwait(false);
+            await GuideStepsAsync(fake, 1, raPx: 0.4).ConfigureAwait(false);
+
+            var dto = await PollAsync(svc, d => d.Runtime?.State == "guiding" && d.Runtime.RmsTotal is not null).ConfigureAwait(false);
+            await Task.Delay(300).ConfigureAwait(false); // the listener has drained the burst
+            dto = await svc.GetAsync(CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(dto!.Runtime.RmsTotal, Is.EqualTo(0.4).Within(0.01), "settling frames do not count");
+            Assert.That(dto.Runtime.RmsRa, Is.EqualTo(0.4).Within(0.01), "RA follows the same frames");
+            Assert.That(dto.Runtime.RmsDec, Is.EqualTo(0).Within(0.01), "Dec follows the same frames");
+            Assert.That(dto.Runtime.RmsTotalArcsec, Is.EqualTo(0.6).Within(0.02), "the arcsecond figure too (1.5″/px)");
+        }
+
+        [Test]
+        public async Task Rms_counts_frames_again_after_settle_done() {
+            var (fake, svc) = await ConnectedServiceAsync().ConfigureAwait(false);
+            await using var _f = fake;
+            using var _s = svc;
+            await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.Settling(1.2, 3, 10)).ConfigureAwait(false);
+            await GuideStepsAsync(fake, 3, raPx: 9).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.SettleDone()).ConfigureAwait(false);
+            await GuideStepsAsync(fake, 4, raPx: 2).ConfigureAwait(false);
+
+            var dto = await PollAsync(svc, d => d.Runtime?.RmsTotal is double r && Math.Abs(r - 2) < 0.01).ConfigureAwait(false);
+            Assert.That(dto, Is.Not.Null, "a frame after SettleDone is real guiding and counts");
+        }
+
+        [Test]
+        public async Task Pulses_the_mount_did_not_execute_make_the_run_unavailable_not_a_huge_error() {
+            // #1731: ≥45′ reported against a 0.9′ three-point check, from small Dec pulses eaten by lost motion.
+            await using var rig = await StartPaRigAsync().ConfigureAwait(false);
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            for (var frame = 1; frame <= 40; frame++) {
+                var pulseMs = 75 + Math.Sin(frame * 1.7) * 40; // ~0.3 px South, none of it reaching the star
+                await rig.Fake.BroadcastAsync(PhdEvents.GuideStep(0, 0, frame: frame, decDurationMs: pulseMs, decDirection: "South")).ConfigureAwait(false);
+            }
+
+            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("unavailable")).ConfigureAwait(false), Is.True, string.Join(",", rig.Statuses));
+            Assert.That(rig.Events.Last().GetProperty("reason").GetString(), Is.EqualTo("pulse_response_low"));
+            Assert.That(rig.Log.Rows, Is.Empty, "not logged as a measurement");
+        }
+
         private static async Task<GuiderDto?> PollAsync(GuiderService svc, Func<GuiderDto, bool> predicate) {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
             try {

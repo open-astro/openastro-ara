@@ -3,6 +3,7 @@ import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../models/guider_advanced_settings.dart';
 import '../../services/profile_api.dart';
 import '../../state/guider/guider_equipment_state.dart';
 import '../../state/guider/guider_state.dart';
@@ -41,6 +42,7 @@ class GuidingTuneDialog extends ConsumerStatefulWidget {
 class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
   bool _applying = false;
   String? _status;
+  List<GuiderNotApplied> _notApplied = const [];
 
   // Hydrate gate for Apply: persistToServer PUTs the WHOLE Phd2Settings object
   // (host/port/profile and the §63.17 equipment slots included), so applying
@@ -160,8 +162,18 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
       await ref
           .read(guiderEquipmentProvider.notifier)
           .pushProfile(tuningOnly: true);
+      // #1748 — a setting the Guider's algorithm does not have shows here, where it was changed.
+      var notApplied = const <GuiderNotApplied>[];
+      try {
+        notApplied = await ref.read(guiderAdvancedApiProvider)?.getGuider().then((v) => v.notApplied) ?? notApplied;
+      } catch (_) {
+        // The list is a hint; the Apply itself succeeded.
+      }
       if (!mounted) return;
-      setState(() => _status = 'Applied — guiding continues uninterrupted.');
+      setState(() {
+        _status = 'Applied — guiding continues uninterrupted.';
+        _notApplied = notApplied;
+      });
     } catch (e) {
       if (!mounted) return;
       setState(
@@ -372,6 +384,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                       Text(_status!, style: Theme.of(context).textTheme.bodySmall),
                 ),
               const SizedBox(height: 12),
+              if (_notApplied.isNotEmpty) GuiderNotAppliedList(_notApplied),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [

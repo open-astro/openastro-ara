@@ -187,5 +187,110 @@ namespace OpenAstroAra.Test {
 
             await WaitForAsync(() => PutSeen(box, "findhome"), "the mount never received findhome");
         }
+
+        private const string GotoVerb = "slewtocoordinatesasync";
+
+        [Test]
+        public async Task A_goto_stops_guiding_before_the_mount_moves() {
+            // #1749: a Planning-tab GoTo across the meridian left the guider correcting with the old pier side.
+            await using var box = ScriptedAlpacaDevice.Start(Mount);
+            var guider = new Mock<IGuiderMediator>();
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true });
+            var movedBeforeStop = false;
+            guider.Setup(g => g.StopGuiding(It.IsAny<CancellationToken>())).Returns(() => {
+                movedBeforeStop = PutSeen(box, GotoVerb);
+                return Task.FromResult(true);
+            });
+            using var svc = await ConnectedAsync(box, () => guider.Object);
+
+            await svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => PutSeen(box, GotoVerb), "the mount never received the goto");
+            guider.Verify(g => g.StopGuiding(It.IsAny<CancellationToken>()), Times.Once);
+            Assert.That(movedBeforeStop, Is.False, "guiding stops before the mount moves");
+        }
+
+        [Test]
+        public async Task A_forced_goto_stops_guiding_like_any_other() {
+            await using var box = ScriptedAlpacaDevice.Start(Mount);
+            var (guider, _) = GuidingGuider();
+            using var svc = await ConnectedAsync(box, () => guider.Object);
+
+            await svc.SlewAsync(new SlewRequestDto(6.0, 6.0, Force: true), idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => PutSeen(box, GotoVerb), "the mount never received the goto");
+            guider.Verify(g => g.StopGuiding(It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task A_sync_leaves_guiding_alone() {
+            await using var box = ScriptedAlpacaDevice.Start(Mount);
+            var (guider, _) = GuidingGuider();
+            using var svc = await ConnectedAsync(box, () => guider.Object);
+
+            await svc.SlewAsync(new SlewRequestDto(6.0, 6.0, Sync: true), idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => PutSeen(box, "synctocoordinates"), "the mount never received the sync");
+            guider.Verify(g => g.StopGuiding(It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task A_rejected_goto_leaves_guiding_alone() {
+            await using var box = ScriptedAlpacaDevice.Start(Mount);
+            var (guider, _) = GuidingGuider();
+            using var svc = await ConnectedAsync(box, () => guider.Object);
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => svc.SlewAsync(new SlewRequestDto(25.0, 6.0), null, CancellationToken.None));
+
+            using var disconnected = new TelescopeService(guiderResolver: () => guider.Object);
+            Assert.Throws<InvalidOperationException>(() => disconnected.SlewAsync(new SlewRequestDto(6.0, 6.0), null, CancellationToken.None));
+            guider.Verify(g => g.StopGuiding(It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task A_guider_that_hangs_on_stop_delays_the_goto_only_by_the_bound() {
+            await using var box = ScriptedAlpacaDevice.Start(Mount);
+            var guider = new Mock<IGuiderMediator>();
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true });
+            var never = new TaskCompletionSource<bool>();
+            guider.Setup(g => g.StopGuiding(It.IsAny<CancellationToken>())).Returns(never.Task);
+            using var svc = await ConnectedAsync(box, () => guider.Object);
+            svc.StopGuidingBeforeMoveTimeout = TimeSpan.FromMilliseconds(200);
+
+            var started = DateTime.UtcNow;
+            await svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
+            await WaitForAsync(() => PutSeen(box, GotoVerb), "the goto never reached the mount");
+
+            Assert.That(DateTime.UtcNow - started, Is.LessThan(TimeSpan.FromSeconds(5)), "the goto waited only for the bound");
+            never.TrySetResult(true);
+        }
+
+        [Test]
+        public async Task A_goto_with_no_connected_guider_moves_and_stops_nothing() {
+            await using var box = ScriptedAlpacaDevice.Start(Mount);
+            var (guider, _) = GuidingGuider(connected: false);
+            using var svc = await ConnectedAsync(box, () => guider.Object);
+
+            await svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => PutSeen(box, GotoVerb), "the mount never received the goto");
+            guider.Verify(g => g.StopGuiding(It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task A_goto_leaves_a_looping_guider_alone() {
+            await using var box = ScriptedAlpacaDevice.Start(Mount);
+            var guider = new Mock<IGuiderMediator>();
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true });
+            guider.As<IGuiderService>().Setup(g => g.GetAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new GuiderDto("phd2", "PHD2", EquipmentConnectionState.Connected,
+                    new GuiderStateDto(State: "looping", RmsTotal: null, RmsRa: null, RmsDec: null, CurrentProfile: null)));
+            using var svc = await ConnectedAsync(box, () => guider.Object);
+
+            await svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => PutSeen(box, GotoVerb), "the mount never received the goto");
+            guider.Verify(g => g.StopGuiding(It.IsAny<CancellationToken>()), Times.Never);
+        }
     }
 }

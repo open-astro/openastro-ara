@@ -54,6 +54,35 @@ abstract final class GuiderAdvancedPanelTestHooks {
       _GuiderAdvancedPanelState.crossFieldProblem(d);
 }
 
+/// #1748 — the settings the latest push did not land, with the Guider's reason.
+class GuiderNotAppliedList extends StatelessWidget {
+  final List<GuiderNotApplied> entries;
+  const GuiderNotAppliedList(this.entries, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Column(
+        key: const Key('guider-not-applied'),
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Not applied by the Guider',
+            style: style?.copyWith(color: AraColors.accentWarning),
+          ),
+          for (final e in entries)
+            Text(
+              '${e.setting}: ${e.reason}',
+              style: style?.copyWith(color: AraColors.textSecondary),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class GuiderAdvancedPanel extends ConsumerStatefulWidget {
   const GuiderAdvancedPanel({super.key});
 
@@ -116,9 +145,11 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
         _guider = guider;
         _loading = false;
         _profileLoaded = true;
-        for (final e in _text.entries) {
-          final v = profile[e.key];
-          e.value.text = v == null ? '' : GuiderAdvancedField.editText(v);
+        for (final f in GuiderAdvancedField.all) {
+          final v = profile[f.key];
+          _text[f.key]?.text = v == null
+              ? ''
+              : GuiderAdvancedField.editText(f.scale == 1 ? v : f.shown(v as num));
         }
       });
     } catch (e) {
@@ -147,13 +178,14 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
       if (n != n.roundToDouble()) return (null, 'A whole number');
       return (n.round(), null);
     }
-    return (n.toDouble(), null);
+    return (n / f.scale, null);
   }
 
   /// The server's rules across fields, checked before Apply so the user sees
   /// them by the fields rather than as a 400: the variable delay is all three
   /// values or none (the guider takes them together), backlash compensation
-  /// turns on only with a pulse width, and each min ≤ max.
+  /// turns on only with a pulse width, floor ≤ pulse ≤ ceiling, min star HFD is
+  /// strictly below max, and each other min ≤ max.
   /// Pure — tested.
   static String? crossFieldProblem(GuiderAdvancedSettings d) {
     final delay = [
@@ -169,6 +201,18 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
     if (d['backlash_enabled'] == true && d['backlash_pulse_ms'] == null) {
       return 'Backlash compensation needs a pulse width (20–8000 ms) to turn on.';
     }
+    final minHfd = d['min_star_hfd'], maxHfd = d['max_star_hfd'];
+    if (minHfd is num && maxHfd is num && minHfd >= maxHfd) {
+      return 'Star HFD: the minimum must be below the maximum.';
+    }
+    final floor = d['backlash_floor_ms'],
+        pulse = d['backlash_pulse_ms'],
+        ceiling = d['backlash_ceiling_ms'];
+    if (pulse is num &&
+        ((floor is num && floor > pulse) ||
+            (ceiling is num && ceiling < pulse))) {
+      return 'Backlash: the pulse must sit between the floor and the ceiling.';
+    }
     String? order(String min, String max, String what) {
       final lo = d[min], hi = d[max];
       return lo is num && hi is num && lo > hi
@@ -176,8 +220,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
           : null;
     }
 
-    return order('min_star_hfd', 'max_star_hfd', 'Star HFD') ??
-        order(
+    return order(
           'auto_exposure_min_ms',
           'auto_exposure_max_ms',
           'Auto exposure',
@@ -326,6 +369,8 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
                     ],
                   ),
           ),
+          if (_guider.notApplied.isNotEmpty)
+            GuiderNotAppliedList(_guider.notApplied),
           if (_status != null)
             Padding(
               padding: const EdgeInsets.only(top: 6),
@@ -470,7 +515,14 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
       items: [
         DropdownMenuItem<String?>(value: null, child: Text(guiderLabel)),
         for (final o in options)
-          DropdownMenuItem<String?>(value: o, child: Text(o)),
+          DropdownMenuItem<String?>(
+            value: o,
+            child: Text(
+              offered.isEmpty || offered.contains(o)
+                  ? o
+                  : '$o (not offered by the Guider)',
+            ),
+          ),
       ],
       onChanged: (v) => setState(() => _draft = _draft.withValue(f.key, v)),
     );
