@@ -4014,15 +4014,15 @@
   "@planFlats": {
     "description": "Plan sheet: the flats choice for a profile set to ask"
   },
-  "planFlatsNotTonight": "Not tonight",
-  "@planFlatsNotTonight": {
+  "planFlatsNone": "None",
+  "@planFlatsNone": {
     "description": "Plan sheet flats choice: no flats this run"
   },
-  "planFlatsSky": "Sky flats at twilight",
+  "planFlatsSky": "Sky",
   "@planFlatsSky": {
     "description": "Plan sheet flats choice"
   },
-  "planFlatsPanel": "Panel flats at end",
+  "planFlatsPanel": "Panel",
   "@planFlatsPanel": {
     "description": "Plan sheet flats choice"
   }

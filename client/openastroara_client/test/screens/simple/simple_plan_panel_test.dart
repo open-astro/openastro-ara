@@ -1362,12 +1362,11 @@ void main() {
     c.read(safetyPoliciesProvider.notifier).setCalibrationCaptureDefault(CalibrationCaptureDefault.ask);
     await tester.pump();
 
-    expect(find.text('Not tonight'), findsOneWidget);
-    expect(find.byType(Dialog), findsNothing);
-    await tester.ensureVisible(find.byKey(const Key('simple-run-flats')));
-    await tester.tap(find.byKey(const Key('simple-run-flats')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Panel flats at end').last);
+    expect(find.byType(DropdownButton<String>), findsNothing);
+    expect(find.text('None'), findsOneWidget);
+    expect(find.text('Sky'), findsOneWidget);
+    await tester.ensureVisible(find.text('Panel'));
+    await tester.tap(find.text('Panel'));
     await tester.pumpAndSettle();
     expect(c.read(simpleFlatsChoiceProvider), 'panel_at_end');
   });

@@ -814,7 +814,7 @@
   "coolingFanChoose": "Escolher",
   "coolingFanNotNow": "Agora não",
   "planFlats": "Flats",
-  "planFlatsNotTonight": "Hoje não",
-  "planFlatsSky": "Flats do céu no crepúsculo",
-  "planFlatsPanel": "Flats de painel no final"
+  "planFlatsNone": "Nenhum",
+  "planFlatsSky": "Céu",
+  "planFlatsPanel": "Painel"
 }

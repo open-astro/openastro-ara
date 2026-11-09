@@ -2907,11 +2907,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planFlats => 'Flats';
 
   @override
-  String get planFlatsNotTonight => 'Not tonight';
+  String get planFlatsNone => 'None';
 
   @override
-  String get planFlatsSky => 'Sky flats at twilight';
+  String get planFlatsSky => 'Sky';
 
   @override
-  String get planFlatsPanel => 'Panel flats at end';
+  String get planFlatsPanel => 'Panel';
 }

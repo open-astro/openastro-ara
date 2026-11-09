@@ -79,6 +79,17 @@
   .modal h2 { font-size: 16px; font-weight: 600; margin: 0; }
   .modal ul { margin: 0; padding-left: 18px; color: var(--text2); }
   .why-note { min-width: 0; }
+  .plansheet { position: absolute; left: 280px; top: 88px; width: 460px; background: var(--scrim); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .plansheet h2 { font-size: 16px; font-weight: 600; margin: 0; }
+  .pl { color: var(--text); font-size: 14px; min-height: 28px; align-items: center; }
+  .startline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; }
+  .startline .grow { flex: 1; }
+  .lnk { background: transparent; border: 0; color: var(--link); font: 14px var(--sys); min-height: 44px; cursor: pointer; padding: 0 4px; }
+  .fl { display: flex; align-items: center; gap: 12px; min-height: 44px; } .fl select, .fl .segs { flex: 1; min-width: 0; }
+  select.small { width: 190px; flex: none; }
+  .segs { display: flex; background: var(--tile); border-radius: 8px; overflow: hidden; }
+  .segs button { flex: 1; border: 0; background: transparent; color: var(--text); min-height: 44px; font: 14px var(--sys); cursor: pointer; }
+  .segs button[aria-pressed="true"] { background: var(--sel); color: #fff; }
   .set { position: absolute; left: 16px; right: 16px; top: 88px; bottom: 16px; overflow-y: auto; background: var(--scrim); border-radius: 10px; padding: 16px 24px; display: flex; flex-direction: column; gap: 8px; }
   .set h2 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
   .blk { display: flex; flex-direction: column; gap: 10px; padding-block: 14px; border-top: 1px solid var(--border); max-width: 520px; width: 100%; }
@@ -94,8 +105,13 @@
 </div>
 
 <script>
-const S = { tab: 'logs', logs: 'A', storage: 'A', fan: 'A', rig: 'on', disk: 'ready', fanSet: false, share: 'full', sheet: false, modal: null, open: true };
+const S = { tab: 'flats', logs: 'A', storage: 'A', fan: 'A', flats: 'B', flatsPick: 'later', flatsOpen: false, rig: 'on', disk: 'ready', fanSet: false, share: 'full', sheet: false, modal: null, open: true };
 const OPTS = {
+  flats: { name: 'Plan Flats', layouts: [['B', 'Segments', true], ['D', 'On the start line'], ['A', 'Combo row'], ['C', 'Fold-out row']], why: {
+    D: 'D adds no height: Flats shares the line that already says when the plan starts, as a small combo box. On a narrow window it wraps under that line.',
+    A: 'A is one full-width combo row, about 48 px taller. It is what the PR has now.',
+    B: 'B shows all three at once without opening anything, about 44 px taller. The labels have to be short to fit.',
+    C: 'C is one 44 px row that says the current answer and folds open in place, adding about 132 px only while it is open.' } },
   logs: { name: 'Logs (#1659)', layouts: [['A', 'Cards as they are', true], ['B', 'Two rows']], why: {
     A: 'A hosts the existing bug-report and client-log actions as they are, as the issue decides. Everything is on one screen, at the cost of a longer window.',
     B: 'B is calmer: two rows, and the sharing choice opens only when asked. It adds a step, and restyles the actions, which the issue put out of scope.' } },
@@ -171,10 +187,25 @@ function fanWin() {
     <button class="act sec" data-do="togglefan" style="width:100%;margin-block:6px">${S.fanSet ? 'Not the camera’s fan' : 'This is the camera’s fan'}</button>
     <div class="row" style="cursor:default"><b>Dew B</b><span>40 %</span></div></div><p class="cap">${note}</p>`;
 }
+const FLATS = [['later', 'Not tonight', 'None'], ['sky_at_twilight', 'Sky flats at twilight', 'Sky'], ['panel_at_end', 'Panel flats at end', 'Panel']];
+function flatsWin() {
+  const label = FLATS.find(f => f[0] === S.flatsPick)[1];
+  const combo = (cls = '') => `<select data-flats class="${cls}" aria-label="Flats">${FLATS.map(f => `<option value="${f[0]}" ${S.flatsPick === f[0] ? 'selected' : ''}>${f[1]}</option>`).join('')}</select>`;
+  const filters = [['L', 20], ['R', 10], ['G', 10], ['B', 10]].map(([f, n]) => `<div class="kv pl"><span>${f}</span><span>${n} × 120 s</span></div>`).join('');
+  const start = `<span class="cap">Starts at dark, 21:28</span><button class="lnk">Start now</button>`;
+  let row = '', line = `<div class="startline">${start}</div>`;
+  if (S.flats === 'D') line = `<div class="startline">${start}<span class="grow"></span><span class="cap">Flats</span>${combo('small')}</div>`;
+  if (S.flats === 'A') row = `<div class="fl"><span class="cap">Flats</span>${combo()}</div>`;
+  if (S.flats === 'B') row = `<div class="fl"><span class="cap">Flats</span><div class="segs">${FLATS.map(f => `<button aria-pressed="${S.flatsPick === f[0]}" data-set="flatsPick" data-v="${f[0]}">${f[2]}</button>`).join('')}</div></div>`;
+  if (S.flats === 'C') row = `<button class="row" data-do="flatsopen"><b>Flats</b><span>${label}</span><span class="chev">${S.flatsOpen ? '⌄' : '›'}</span></button>` + (S.flatsOpen ? FLATS.map(f => `<label class="radio"><input type="radio" name="fl" data-flatsr="${f[0]}" ${S.flatsPick === f[0] ? 'checked' : ''}><span>${f[1]}</span></label>`).join('') : '');
+  return `<div class="plansheet"><h2>M 31 · Andromeda Galaxy</h2><span class="cap">Galaxy · up 62° at dark</span>${filters}${line}${row}
+    <div class="btnrow"><button class="act sec">Add to queue</button><button class="act">Start</button></div></div>`;
+}
 function render() {
   controls();
   let h = `<div class="strip"><span class="dot"><i></i>Camera</span><span class="dot"><i></i>Mount</span><span class="dot"><i></i>Guider</span><button class="gear" data-do="sheet">Settings</button></div>`;
-  if (S.tab === 'fan') { if (S.open) h += `<div class="win">${fanWin()}</div>`; }
+  if (S.tab === 'flats') h += flatsWin();
+  else if (S.tab === 'fan') { if (S.open) h += `<div class="win">${fanWin()}</div>`; }
   else h += `<div class="set"><h2>Settings › Rig</h2>
     <div class="kv"><span>This app</span><span>0.0.0-dev</span></div><div class="kv"><span>Ara server</span><span>0.0.0-dev</span></div>
     <section class="blk${S.tab === 'storage' ? ' on' : ''}">${storageWin()}</section>
@@ -201,12 +232,15 @@ document.addEventListener('click', e => {
   if (d === 'nomodal') S.modal = null;
   if (d === 'eject') S.disk = 'none';
   if (d === 'disk') S.disk = 'ready';
+  if (d === 'flatsopen') S.flatsOpen = !S.flatsOpen;
   if (d === 'togglefan') S.fanSet = !S.fanSet;
   if (d === 'openfan') { S.fan = 'A'; S.open = true; }
   render();
 });
 document.addEventListener('change', e => {
   if (e.target.dataset.share) { S.share = e.target.dataset.share; render(); }
+  if (e.target.matches('[data-flats]')) { S.flatsPick = e.target.value; render(); }
+  if (e.target.dataset.flatsr) { S.flatsPick = e.target.dataset.flatsr; render(); }
   if (e.target.matches('[data-fan]')) { S.fanSet = !!e.target.value; render(); }
 });
 render();

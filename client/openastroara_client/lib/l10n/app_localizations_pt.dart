@@ -2907,13 +2907,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planFlats => 'Flats';
 
   @override
-  String get planFlatsNotTonight => 'Not tonight';
+  String get planFlatsNone => 'None';
 
   @override
-  String get planFlatsSky => 'Sky flats at twilight';
+  String get planFlatsSky => 'Sky';
 
   @override
-  String get planFlatsPanel => 'Panel flats at end';
+  String get planFlatsPanel => 'Panel';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -5847,11 +5847,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get planFlats => 'Flats';
 
   @override
-  String get planFlatsNotTonight => 'Hoje não';
+  String get planFlatsNone => 'Nenhum';
 
   @override
-  String get planFlatsSky => 'Flats do céu no crepúsculo';
+  String get planFlatsSky => 'Céu';
 
   @override
-  String get planFlatsPanel => 'Flats de painel no final';
+  String get planFlatsPanel => 'Painel';
 }

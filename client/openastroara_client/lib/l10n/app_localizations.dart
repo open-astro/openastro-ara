@@ -4986,19 +4986,19 @@ abstract class AppLocalizations {
   /// Plan sheet flats choice: no flats this run
   ///
   /// In en, this message translates to:
-  /// **'Not tonight'**
-  String get planFlatsNotTonight;
+  /// **'None'**
+  String get planFlatsNone;
 
   /// Plan sheet flats choice
   ///
   /// In en, this message translates to:
-  /// **'Sky flats at twilight'**
+  /// **'Sky'**
   String get planFlatsSky;
 
   /// Plan sheet flats choice
   ///
   /// In en, this message translates to:
-  /// **'Panel flats at end'**
+  /// **'Panel'**
   String get planFlatsPanel;
 }
 
