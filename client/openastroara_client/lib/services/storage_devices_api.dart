@@ -289,6 +289,12 @@ class StorageDevicesApi {
   void close() => _dio.close(force: true);
 }
 
+/// Builds the storage client; tests fake the rig through this.
+final storageDevicesApiFactoryProvider =
+    Provider<StorageDevicesApi Function(AraServer)>(
+  (ref) => StorageDevicesApi.new,
+);
+
 final storageDevicesProvider =
     FutureProvider.autoDispose<List<StorageDevice>>((ref) async {
   final server = ref.watch(activeServerProvider);

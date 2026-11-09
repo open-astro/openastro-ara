@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +8,7 @@ import '../../services/storage_devices_api.dart';
 import '../../services/storage_space_api.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../widgets/inline_choices.dart';
 import '../../widgets/storage/storage_drive_dialog.dart';
 import '../../widgets/support/bug_report_card.dart';
 import '../../widgets/support/client_log_card.dart';
@@ -43,6 +46,35 @@ class SimpleStorageBlock extends ConsumerStatefulWidget {
 }
 
 class _SimpleStorageBlockState extends ConsumerState<SimpleStorageBlock> {
+  bool _choosing = false;
+
+  /// The open Check disk question, answered in the block.
+  Completer<bool>? _checkAsk;
+
+  Future<bool> _askCheck() {
+    if (_checkAsk != null) return Future.value(false);
+    final ask = Completer<bool>();
+    setState(() => _checkAsk = ask);
+    return ask.future;
+  }
+
+  void _answerCheck(bool go) {
+    _checkAsk?.complete(go);
+    setState(() => _checkAsk = null);
+  }
+
+  void _closeChooser() {
+    setState(() => _choosing = false);
+    ref.invalidate(storageSpaceProvider);
+    ref.invalidate(storageDevicesProvider);
+  }
+
+  @override
+  void dispose() {
+    _checkAsk?.complete(false);
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -123,11 +155,18 @@ class _SimpleStorageBlockState extends ConsumerState<SimpleStorageBlock> {
             key: const Key('simple-storage-choose'),
             style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
             onPressed: connected
-                ? () => showStorageDriveDialog(context, ref)
+                ? () => _choosing
+                      ? _closeChooser()
+                      : setState(() => _choosing = true)
                 : null,
             child: Text(l10n.shellStorageChoose),
           ),
         ),
+        if (_choosing && connected)
+          StorageDriveChooser(
+            key: const Key('simple-storage-chooser'),
+            onClose: _closeChooser,
+          ),
         Row(
           spacing: AraSpace.s8,
           children: [
@@ -145,10 +184,22 @@ class _SimpleStorageBlockState extends ConsumerState<SimpleStorageBlock> {
                 label: l10n.shellStorageCheck,
                 enabled: connected,
                 minHeight: 44,
+                confirm: _askCheck,
               ),
             ),
           ],
         ),
+        if (_checkAsk != null)
+          InlineConfirm(
+            id: 'simple-storage-check-ask',
+            title: storageCheckDiskTitle,
+            body: const Text(storageCheckDiskBody),
+            confirmLabel: l10n.shellStorageCheck,
+            cancelLabel: l10n.planCancel,
+            style: kSimpleText,
+            onConfirm: () => _answerCheck(true),
+            onCancel: () => _answerCheck(false),
+          ),
       ],
     );
   }

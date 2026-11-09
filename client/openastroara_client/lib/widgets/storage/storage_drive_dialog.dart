@@ -5,7 +5,9 @@ import '../../services/storage_devices_api.dart';
 import '../../services/storage_space_api.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/settings/storage_settings_state.dart';
+import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
 
@@ -20,7 +22,7 @@ Future<void> showStorageDriveDialog(BuildContext context, WidgetRef ref) async {
   }
   await showDialog<void>(
     context: context,
-    builder: (_) => const _DiskChooser(),
+    builder: (_) => const StorageDriveChooser(),
   );
   // The caller's element can be gone by the time the dialog closes —
   // touching its ref then throws (the classic Riverpod after-await footgun).
@@ -51,14 +53,29 @@ String storageConfigureMessage(
       _ => outcome.detail ?? 'Could not use ${device.friendlyName}.',
     };
 
-class _DiskChooser extends ConsumerStatefulWidget {
-  const _DiskChooser();
+/// The list and its erase step: a dialog's content on its own, or laid out in
+/// place when the host passes [onClose] (Simple Mode has no popups).
+class StorageDriveChooser extends ConsumerStatefulWidget {
+  const StorageDriveChooser({super.key, this.onClose});
+
+  /// Inline: closes it, on Cancel or after Use Disk worked.
+  final VoidCallback? onClose;
 
   @override
-  ConsumerState<_DiskChooser> createState() => _DiskChooserState();
+  ConsumerState<StorageDriveChooser> createState() =>
+      _StorageDriveChooserState();
 }
 
-class _DiskChooserState extends ConsumerState<_DiskChooser> {
+class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
+  bool get _inline => widget.onClose != null;
+
+  /// Simple Mode's 44 px floor; a dialog keeps its theme's size.
+  Size? get _minSize => _inline ? const Size(0, 44) : null;
+
+  void _close() =>
+      _inline ? widget.onClose!() : Navigator.of(context).pop();
+
+
   StorageDevice? _selected;
   final TextEditingController _confirm = TextEditingController();
   bool _busy = false;
@@ -103,7 +120,7 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
       _busy = true;
       _error = null;
     });
-    final api = StorageDevicesApi(server);
+    final api = ref.read(storageDevicesApiFactoryProvider)(server);
     try {
       final outcome = await api.configure(
         // A brand-new blank disk has no filesystem yet, hence no UUID — the
@@ -127,13 +144,17 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
         if (dir != null && dir.isNotEmpty) {
           ref.read(storageSettingsProvider.notifier).setSaveDirectory(dir);
         }
-        Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${device.friendlyName} is now used for frames.'),
-        ));
+        final notify = userNotifier(context);
+        _close();
+        notify('${device.friendlyName} is now used for frames.');
         return;
       }
-      setState(() => _error = storageConfigureMessage(outcome, device));
+      final problem = storageConfigureMessage(outcome, device);
+      if (_inline) {
+        userNotifier(context)(problem, error: true);
+      } else {
+        setState(() => _error = problem);
+      }
     } finally {
       api.close();
       if (mounted) {
@@ -146,11 +167,7 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final async = ref.watch(storageDevicesProvider);
-    return AlertDialog(
-      title: const Text('Choose a disk for your frames'),
-      content: SizedBox(
-        width: 520,
-        child: async.when(
+    final body = async.when(
           loading: () => const SizedBox(
               height: 140, child: Center(child: CircularProgressIndicator())),
           error: (e, _) => SizedBox(
@@ -193,6 +210,9 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
                 Flexible(
                   child: ListView.builder(
                     shrinkWrap: true,
+                    // Inline, the Settings page does the scrolling.
+                    physics:
+                        _inline ? const NeverScrollableScrollPhysics() : null,
                     itemCount: disks.length,
                     itemBuilder: (_, i) {
                       final d = disks[i];
@@ -301,7 +321,7 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
                     autofocus: true,
                     enabled: !_busy,
                     onChanged: (_) => setState(() {}),
-                    decoration: const InputDecoration(isDense: true),
+                    decoration: InputDecoration(isDense: !_inline),
                   ),
                 ],
                 if (_error != null) ...[
@@ -327,31 +347,60 @@ class _DiskChooserState extends ConsumerState<_DiskChooser> {
                 ],
               ],
             );
-          },
-        ),
+          },);
+    final actions = [
+      TextButton(
+        style: TextButton.styleFrom(minimumSize: _minSize),
+        onPressed: _busy ? null : () => ref.invalidate(storageDevicesProvider),
+        child: const Text('Rescan'),
       ),
-      actions: [
-        TextButton(
-          onPressed: _busy ? null : () => ref.invalidate(storageDevicesProvider),
-          child: const Text('Rescan'),
-        ),
-        TextButton(
-          onPressed: _busy ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          style: _needsErase
-              ? FilledButton.styleFrom(backgroundColor: AraColors.accentBusy)
-              : null,
-          onPressed: _busy ||
-                  _selected == null ||
-                  !_selected!.selectable ||
-                  !_confirmSatisfied
-              ? null
-              : _useDisk,
-          child: Text(_needsErase ? 'Erase and Use Disk' : 'Use Disk'),
-        ),
-      ],
+      TextButton(
+        style: TextButton.styleFrom(minimumSize: _minSize),
+        onPressed: _busy ? null : _close,
+        child: const Text('Cancel'),
+      ),
+      FilledButton(
+        style: _needsErase
+            ? FilledButton.styleFrom(
+                backgroundColor: AraColors.accentBusy,
+                minimumSize: _minSize,
+              )
+            : _inline
+            ? FilledButton.styleFrom(minimumSize: _minSize)
+            : null,
+        onPressed: _busy ||
+                _selected == null ||
+                !_selected!.selectable ||
+                !_confirmSatisfied
+            ? null
+            : _useDisk,
+        child: Text(_needsErase ? 'Erase and Use Disk' : 'Use Disk'),
+      ),
+    ];
+    const title = 'Choose a disk for your frames';
+    if (!_inline) {
+      return AlertDialog(
+        title: const Text(title),
+        content: SizedBox(width: 520, child: body),
+        actions: actions,
+      );
+    }
+    return Material(
+      type: MaterialType.transparency,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: AraSpace.s8,
+        children: [
+          Text(title, style: theme.textTheme.titleSmall),
+          body,
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: AraSpace.s8,
+            children: actions,
+          ),
+        ],
+      ),
     );
   }
 }
