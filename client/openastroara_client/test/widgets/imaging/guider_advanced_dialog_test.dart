@@ -434,5 +434,20 @@ void main() {
       expect(GuiderAdvancedPanelTestHooks.parse(field('dither_scale_factor'), '101').$2, 'Up to 100');
       expect(GuiderAdvancedPanelTestHooks.parse(field('variable_delay_long_s'), '121').$2, '0–120');
     });
+
+    testWidgets('the Apply result is announced from anywhere in the settings', (t) async {
+      await _pump(t);
+      await t.tap(find.widgetWithText(FilledButton, 'Apply'));
+      await t.pumpAndSettle();
+      expect(t.getSemantics(find.byKey(const Key('guider-advanced-status'))).flagsCollection.isLiveRegion, isTrue);
+    });
+
+    testWidgets('a field error reads in the error text colour', (t) async {
+      await _pump(t);
+      await t.enterText(find.byKey(const Key('ga-dither_scale_factor')), '101');
+      await t.pump();
+      final field = t.widget<TextField>(find.byKey(const Key('ga-dither_scale_factor')));
+      expect(field.decoration?.errorStyle?.color, AraColors.errorText);
+    });
   });
 }

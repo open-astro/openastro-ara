@@ -403,13 +403,17 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
           if (_status != null)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                _status!,
-                key: const Key('guider-advanced-status'),
-                style: text.bodySmall?.copyWith(
-                  color: _statusIsError
-                      ? AraColors.errorText
-                      : AraColors.textSecondary,
+              // The list may be scrolled out of the tree; this line is always built.
+              child: Semantics(
+                liveRegion: true,
+                child: Text(
+                  _status!,
+                  key: const Key('guider-advanced-status'),
+                  style: text.bodySmall?.copyWith(
+                    color: _statusIsError
+                        ? AraColors.errorText
+                        : AraColors.textSecondary,
+                  ),
                 ),
               ),
             ),
@@ -495,6 +499,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
             suffixText: f.unit,
             errorText: _errors[f.key],
             errorMaxLines: 2,
+            errorStyle: const TextStyle(color: AraColors.errorText),
           ),
           onChanged: (raw) => _onText(f, raw),
         ),

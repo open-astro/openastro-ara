@@ -4616,6 +4616,57 @@ void main() {
       expect(least, greaterThanOrEqualTo(kSimpleInset - 0.5));
     });
 
+
+    Future<void> settle(WidgetTester tester) async {
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+    }
+
+    Rect pillsRect(WidgetTester tester) => tester.getRect(
+      find.ancestor(of: find.byType(SimpleMessagePills), matching: find.byType(SingleChildScrollView)).first,
+    );
+
+    testWidgets('on a phone at 2x text the warning stays clear of Stop', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _pump(tester, const Size(360, 640), gear: [
+        diagnosticsStateProvider.overrideWith(() => _Diagnostics({'dew_formation'})),
+        switchListProvider.overrideWith(() => _Switches([_switch('box', 'Powerbox', SwitchConnectionState.connected)])),
+      ]);
+      await settle(tester);
+      expect(pill, findsOneWidget);
+      expect(pillsRect(tester).overlaps(tester.getRect(find.byType(EmergencyStopButton))), isFalse);
+    });
+
+    testWidgets('with a status pill the warning keeps a readable width, under it', (tester) async {
+      final c = await _pump(tester, const Size(390, 844), gear: [
+        diagnosticsStateProvider.overrideWith(() => _Diagnostics({'dew_formation'})),
+      ]);
+      c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+      await settle(tester);
+      final status = _panelOf(tester, find.textContaining('Taking a frame'));
+      final pills = pillsRect(tester);
+      expect(pills.width, greaterThanOrEqualTo(240), reason: 'beside the rail at worst, never half the row');
+      expect(pills.top, greaterThanOrEqualTo(status.bottom));
+      c.read(captureProgressProvider.notifier).reset();
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('a status pill arriving leaves the warning where it is', (tester) async {
+      final c = await _pump(tester, const Size(390, 844), gear: [
+        diagnosticsStateProvider.overrideWith(() => _Diagnostics({'dew_formation'})),
+      ]);
+      await settle(tester);
+      final before = pillsRect(tester);
+      c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+      await settle(tester);
+      expect(find.textContaining('Taking a frame'), findsOneWidget);
+      expect(pillsRect(tester), before);
+      c.read(captureProgressProvider.notifier).reset();
+      await tester.pump(const Duration(seconds: 1));
+    });
+
     testWidgets('no connected switch device: no button', (tester) async {
       final (c, _) = await shell(tester, start: {'dew_formation'});
       await tester.pump();
