@@ -83,6 +83,23 @@ class SimpleMessage {
   final bool sticky;
 }
 
+/// True while Simple Mode's shell is the screen on top, showing its own
+/// pills: the layer over every route draws them only when it is not.
+class SimpleShellOnTopNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set(bool onTop) {
+    // Called a frame late: the container may be gone (a closing test).
+    if (ref.mounted) state = onTop;
+  }
+}
+
+final simpleShellOnTopProvider =
+    NotifierProvider<SimpleShellOnTopNotifier, bool>(
+      SimpleShellOnTopNotifier.new,
+    );
+
 /// The pills showing, newest first.
 class SimpleMessagesNotifier extends Notifier<List<SimpleMessage>> {
   var _next = 0;

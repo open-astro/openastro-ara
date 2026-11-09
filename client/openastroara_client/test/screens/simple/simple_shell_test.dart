@@ -3651,6 +3651,23 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('a message shows once with the shell on top, and still on a page pushed over it', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), manualAlarm: true);
+    await tester.pump();
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, 'Something to see');
+    await tester.pump();
+    expect(find.text('Something to see'), findsOneWidget, reason: 'the shell, and no second pill over it');
+    navigator.push(MaterialPageRoute<void>(builder: (_) => const Scaffold(body: Text('page'))));
+    await tester.pumpAndSettle();
+    expect(find.text('page'), findsOneWidget);
+    expect(find.text('Something to see'), findsOneWidget, reason: 'the page on top shows it');
+    navigator.pop();
+    await tester.pumpAndSettle();
+    expect(find.text('Something to see'), findsOneWidget, reason: 'and back on the shell, still one');
+    await tester.pump(kSimpleErrorLife + const Duration(seconds: 1));
+  });
+
   testWidgets('a tap on a message opens what it came from, as the status pills do (user, 2026-11-04)', (tester) async {
     final polar = _PolarRun();
     await _pump(tester, const Size(1024, 768), gear: [polarAlignLiveProvider.overrideWith(() => polar)]);

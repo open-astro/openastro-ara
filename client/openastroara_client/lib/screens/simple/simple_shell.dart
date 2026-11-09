@@ -318,8 +318,21 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
   }
 
+  late final _onTop = ref.read(simpleShellOnTopProvider.notifier);
+
+  // A frame late: providers can't change while the tree builds or unmounts.
+  void _publishOnTop(bool onTop) => WidgetsBinding.instance
+      .addPostFrameCallback((_) => _onTop.set(onTop));
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _publishOnTop(ModalRoute.isCurrentOf(context) ?? true);
+  }
+
   @override
   void dispose() {
+    _publishOnTop(false);
     _stopDisarm?.cancel();
     _focus.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
