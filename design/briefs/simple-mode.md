@@ -34,7 +34,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
 ## Scope
 
 - **One screen:** a mode grid with Autopilot · Preview · Focus · Polar align · Plan.
-- **Settings:** the strip's gear opens a menu: System (the server's figures: storage free, CPU, memory, uptime), the rig and profile with Change profile and Change rig, and All settings, which opens Settings over Simple Mode. Device dots and ⌘, open Settings over Simple Mode too. Nothing leads to the full UI (user, 2026-11-03); Settings' Simple Mode switch is the way out.
+- **Settings:** the strip's gear opens a menu: System (the server's figures: storage free, CPU, memory, uptime), the rig and profile with Change profile and Change rig, and All settings, which opens Settings over Simple Mode. Device dots and ⌘, open Settings over Simple Mode too. The strip's Full UI button, between Night mode and Settings, is the one way to the full UI (#1677, 2026-11-09).
 - **Getting in:** turn on Settings → System → Experimental → Simple Mode (off by default, per client), then use the frame icon in the full UI's top-right cluster, between Night mode and the gear.
 - **Plan** (named Run until 2026-11-02): a quick plan builder only. It sets exposure and frame count per filter for the current target, and autofocus, dither and flats follow the profile's defaults. The sequence editor stays in the full UI only.
 - **Phones:** they run Simple Mode only, with no Sequence tab, once Simple Mode exists. Until then, PR #1474's phone layout stands.
