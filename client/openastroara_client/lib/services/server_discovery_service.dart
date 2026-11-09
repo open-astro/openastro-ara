@@ -103,18 +103,40 @@ class ServerDiscoveryService {
   }
 
   Stream<AraServer> _bonjourDiscover() async* {
+    final found = <AraServer>[];
     for (final r in await (nativeBrowse ?? _channelBrowse)()) {
       if (r is! Map) continue;
       final host = r['host'], port = r['port'], name = r['name'], uuid = r['uuid'];
       if (host is String && port is int) {
-        yield AraServer(
+        found.add(AraServer(
           hostname: host,
           port: port,
           mdnsName: name is String ? name : null,
           uuid: uuid is String ? uuid : null,
-        );
+        ));
       }
     }
+    yield* Stream.fromIterable(_oneRowPerRig(found, await _localAddresses()));
+  }
+
+  /// One result per daemon, on the address this device can reach (#1741): the
+  /// first [preferLocalSubnet] keeps. A result with no uuid passes through.
+  static List<AraServer> _oneRowPerRig(
+    List<AraServer> found,
+    Iterable<String> localAddresses,
+  ) {
+    final hosts = <String, List<String>>{};
+    for (final s in found) {
+      if (s.uuid case final id?) (hosts[id] ??= []).add(s.hostname);
+    }
+    final kept = {
+      for (final e in hosts.entries)
+        e.key: preferLocalSubnet(e.value, localAddresses).first,
+    };
+    return [
+      for (final s in found)
+        if (s.uuid == null || s.hostname == kept[s.uuid]) s,
+    ];
   }
 
   /// `multicast_dns` binds with `reusePort: true`, which `dart:io` rejects on
@@ -271,7 +293,7 @@ class ServerDiscoveryService {
   /// current (in flight, or finished within [sweepReplayWindow]) is joined at
   /// once for its hits; a NEW sweep is spawned only if this pass's mDNS stays
   /// empty (grace timer) or finishes empty, and an mDNS answer drops the
-  /// sweep strands. Results dedupe by endpoint; the stream closes when every
+  /// sweep strands. Results dedupe by endpoint and uuid; the stream closes when every
   /// started strategy is done.
   Stream<AraServer> discover() {
     final controller = StreamController<AraServer>();
@@ -296,7 +318,10 @@ class ServerDiscoveryService {
       // A rig answered, by whatever path: the local network is reachable.
       _localNetworkBlocked.value = false;
       _lastRigSeen = DateTime.now();
-      if (!controller.isClosed && seen.add('${s.hostname}:${s.port}')) {
+      final newEndpoint = seen.add('${s.hostname}:${s.port}');
+      // Two addresses of one daemon are one rig (#1741).
+      final newRig = s.uuid == null || seen.add('uuid:${s.uuid}');
+      if (!controller.isClosed && newEndpoint && newRig) {
         controller.add(s);
       }
     }

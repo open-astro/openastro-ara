@@ -42,7 +42,7 @@ import '../../l10n/l10n.dart';
 import '../../state/app_locale_state.dart';
 import '../../util/friendly_error.dart';
 import '../../util/tonight_sky_local.dart'
-    show darkStart, dawnStopFor, nightEnd, scheduleAllowed;
+    show altitudeDegAt, darkStart, dawnStopFor, nightEnd, scheduleAllowed;
 import '../../widgets/sequencer/target_plan_dialog.dart'
     show planFrameCount, planOptionsAvailable, suggestedSubSeconds;
 import '../../state/ws/ws_providers.dart';
@@ -387,15 +387,13 @@ double simpleAltitudeDeg(
   required double latitudeDeg,
   required double longitudeDeg,
   required DateTime utc,
-}) {
-  double rad(double deg) => deg * math.pi / 180;
-  final days = utc.difference(DateTime.utc(2000, 1, 1, 12)).inSeconds / 86400;
-  final hourAngle = 280.46061837 + 360.98564736629 * days + longitudeDeg - raDeg;
-  final sine =
-      math.sin(rad(decDeg)) * math.sin(rad(latitudeDeg)) +
-      math.cos(rad(decDeg)) * math.cos(rad(latitudeDeg)) * math.cos(rad(hourAngle));
-  return math.asin(sine.clamp(-1.0, 1.0)) * 180 / math.pi;
-}
+}) => altitudeDegAt(
+  raDeg,
+  decDeg,
+  latitudeDeg: latitudeDeg,
+  longitudeDeg: longitudeDeg,
+  utc: utc,
+);
 
 /// A picked catalog object as the selection, at the site and time now.
 PlanetariumSelection simplePickDso(WidgetRef ref, PlanningDso d) {
@@ -2052,7 +2050,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               ),
             ),
           ),
-          // Matching objects as you type; a tap searches the one picked.
+          // Matching objects as you type; a tap sets the one picked as the target.
           if (_suggesting)
             for (final (i, hit) in searchSuggestions(
               ref.watch(bundledCatalogProvider).value ?? const [],

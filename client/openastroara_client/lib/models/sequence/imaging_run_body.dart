@@ -289,7 +289,7 @@ Map<String, dynamic> buildTargetBlock({
   // With a filter wheel, a real SwitchFilter; without one (screw-in filters
   // on an OSC or manual rig), a Wait for User that parks the run in the
   // awaiting-user state until the human has swapped the glass and pressed
-  // Resume (S58.12-b).
+  // Resume (S58.12-b), or nothing when pauseForFilterSwap is off.
   Map<String, dynamic>? switchTo(String filter) => handSwap
       ? (rig.pauseForFilterSwap
             ? (_item(waitForUserType)

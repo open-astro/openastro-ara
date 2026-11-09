@@ -1115,6 +1115,19 @@ double _localSiderealTimeDeg(DateTime atUtc, double longitudeDeg) {
   return _mod360(gmst + longitudeDeg);
 }
 
+/// A position's altitude above the site at [utc], in degrees.
+double altitudeDegAt(
+  double raDeg,
+  double decDeg, {
+  required double latitudeDeg,
+  required double longitudeDeg,
+  required DateTime utc,
+}) => _altitudeFromHourAngleDeg(
+  decDeg,
+  latitudeDeg,
+  _mod360(_localSiderealTimeDeg(utc, longitudeDeg) - raDeg),
+);
+
 double _altitudeFromHourAngleDeg(
   double decDeg,
   double latDeg,

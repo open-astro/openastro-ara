@@ -31,8 +31,10 @@ class _Guider extends GuiderStatusNotifier {
   final String connection;
   final String runtime;
   @override
-  Future<GuiderStatus?> build() async => GuiderStatus.fromJson(
-      {'device_id': 'g', 'name': 'PHD2', 'state': connection, 'runtime': {'state': runtime}});
+  Future<GuiderStatus?> build() async => connection == 'none'
+      ? null
+      : GuiderStatus.fromJson(
+          {'device_id': 'g', 'name': 'PHD2', 'state': connection, 'runtime': {'state': runtime}});
 }
 
 class _Wheel extends FilterWheelNotifier {
@@ -128,6 +130,14 @@ void main() {
     await _pump(tester, const SimpleSettingsPopover(), guider: 'disconnected');
     expect(_row('main'), findsOneWidget);
     expect(_row('guide'), findsNothing);
+  });
+
+  testWidgets('a running guide loop keeps its Stop while the guider status is briefly gone', (tester) async {
+    await _pump(tester, const SimpleShutter(), guider: 'none', guideRunning: true);
+    _c.read(previewCameraProvider.notifier).set(PreviewCamera.guide);
+    await tester.pump();
+    await tester.tap(find.byType(SimpleShutter));
+    expect(_g.calls, ['stop']);
   });
 
   testWidgets('while guiding the guide camera is greyed out and says why', (tester) async {
