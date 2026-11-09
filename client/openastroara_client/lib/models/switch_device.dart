@@ -162,22 +162,47 @@ class SwitchDevice {
       );
 }
 
-/// The camera's cooling fan as exposed by the bridge: the first *connected*
-/// device whose name marks it as the ToupTek **Thermal Switch** with a
-/// writable "Fan" port, or null.
+/// The switch port the profile designates as the camera's cooling fan (#1700):
+/// the switch's Alpaca `UniqueId` and the port's id. Both null = none.
+@immutable
+class CoolingFan {
+  final String? deviceId;
+  final int? portId;
+  const CoolingFan({this.deviceId, this.portId});
+
+  static const none = CoolingFan();
+  bool get isNone => deviceId == null;
+
+  factory CoolingFan.fromJson(Map<String, dynamic> json) => CoolingFan(
+        deviceId: json['device_id'] as String?,
+        portId: (json['port_id'] as num?)?.toInt(),
+      );
+
+  Map<String, dynamic> toJson() => {'device_id': deviceId, 'port_id': portId};
+
+  @override
+  bool operator ==(Object other) =>
+      other is CoolingFan &&
+      other.deviceId == deviceId &&
+      other.portId == portId;
+
+  @override
+  int get hashCode => Object.hash(deviceId, portId);
+}
+
+/// The designated [fan] when its switch is *connected* and the port writable,
+/// or null.
 ///
 /// The client's copy of the daemon's fan-port rule (`CoolingFanInterlock`
 /// server-side, #1065) — used only to decide whether to SHOW the Settings fan
 /// toggle (FanSwitchRow); the sync and the fan-off interlock themselves run
-/// in the daemon. The device-name scoping keeps an unrelated switch that
-/// happens to have a port literally named "Fan" from being presented as the
-/// cooling fan.
-({SwitchDevice device, SwitchPort port})? findThermalSwitchFanPort(
-    List<SwitchDevice> switches) {
+/// in the daemon.
+({SwitchDevice device, SwitchPort port})? findCoolingFanPort(
+    List<SwitchDevice> switches, CoolingFan fan) {
   for (final device in switches) {
     if (!device.isConnected) continue;
     for (final port in device.ports) {
-      if (isThermalSwitchFanPort(device, port) && port.canWrite) {
+      if (isCoolingFanPort(device, port, fan) && port.canWrite) {
         return (device: device, port: port);
       }
     }
@@ -185,7 +210,7 @@ class SwitchDevice {
   return null;
 }
 
-/// Whether [port] on [device] is the camera's cooling fan — the device/port
-/// identification [findThermalSwitchFanPort] uses (mirrors the daemon's rule).
-bool isThermalSwitchFanPort(SwitchDevice device, SwitchPort port) =>
-    device.name.contains('Thermal Switch') && port.name == 'Fan';
+/// Whether [port] on [device] is the designated [fan] (mirrors the daemon's
+/// rule).
+bool isCoolingFanPort(SwitchDevice device, SwitchPort port, CoolingFan fan) =>
+    device.deviceId == fan.deviceId && port.id == fan.portId;

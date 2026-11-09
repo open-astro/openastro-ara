@@ -209,6 +209,8 @@ public sealed partial class FileProfileStore : IProfileStore {
     public void PutFilterWheelLabels(FilterWheelLabelsDto value) => UpdateAndPersist(s => s with { FilterWheelLabels = value });
     public FilterWheelPolicyDto GetFilterWheelPolicy() { lock (_lock) { return _snapshot.FilterWheelPolicy ?? FilterWheelPolicyDto.Default; } }
     public void PutFilterWheelPolicy(FilterWheelPolicyDto value) => UpdateAndPersist(s => s with { FilterWheelPolicy = value });
+    public CoolingFanDto GetCoolingFan() { lock (_lock) { return _snapshot.CoolingFan ?? CoolingFanDto.None; } }
+    public void PutCoolingFan(CoolingFanDto value) => UpdateAndPersist(s => s with { CoolingFan = value });
 
     public CustomHorizonDto GetCustomHorizon() { lock (_lock) { return _snapshot.CustomHorizon!; } }
     public void PutCustomHorizon(CustomHorizonDto value) => UpdateAndPersist(s => s with { CustomHorizon = value });

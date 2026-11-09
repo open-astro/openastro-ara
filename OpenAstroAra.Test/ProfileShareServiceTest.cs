@@ -115,7 +115,9 @@ public class ProfileShareServiceTest {
         CustomHorizon: new([new CustomHorizonPointDto(123.75, 41.5)]),
         // #1264 — measured on the donor's mount; must be stripped.
         TrackingCalibration: new(CeilingSeconds: 45, MeasuredUtc: DateTimeOffset.UtcNow, PolarAlignErrorArcmin: 3,
-            PixelScaleArcsec: 1.2, SeeingFwhmArcsec: 2.5, PriorSeconds: null, Source: "measured", Rungs: []));
+            PixelScaleArcsec: 1.2, SeeingFwhmArcsec: 2.5, PriorSeconds: null, Source: "measured", Rungs: []),
+        // #1700 — names the donor's own switch; must be stripped.
+        CoolingFan: new("DONOR-SWITCH-DO-NOT-LEAK", 3));
 
     [Test]
     public async Task Export_strips_the_donors_tracking_calibration() {
@@ -124,6 +126,13 @@ public class ProfileShareServiceTest {
         var settings = share!.Manifest.GetProperty("settings");
         settings.TryGetProperty("tracking_calibration", out var tracking).Should().BeTrue();
         tracking.ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Test]
+    public async Task Export_strips_the_donors_cooling_fan_designation() {
+        using var repo = new FakeRepo(DonorSnapshot());
+        var share = await new ProfileShareService(repo).ExportAsync(ProfileId, CancellationToken.None);
+        share!.Manifest.GetProperty("settings").GetProperty("cooling_fan").ValueKind.Should().Be(JsonValueKind.Null);
     }
 
     [Test]
@@ -255,7 +264,7 @@ public class ProfileShareServiceTest {
             PushSecret, TelegramSecret, PushUserKeySecret, TelegramChatSecret,
             @"C:\Astro\Captures", @"C:\Program Files\astap\astap.exe", @"C:\astap\db",
             "Joey's backyard", "America/Los_Angeles",
-            "guidepi.local", "Donor PHD2 profile",
+            "guidepi.local", "Donor PHD2 profile", "DONOR-SWITCH-DO-NOT-LEAK",
         };
         foreach (var sentinel in mustNotAppear) {
             raw.Should().NotContain(sentinel, "'{0}' is host/identity-specific and must be stripped", sentinel);
@@ -437,6 +446,8 @@ public class ProfileShareServiceTest {
                 settings.GetProperty("filter_set").GetProperty("filters").GetArrayLength() == 0),
             ("guide-scope geometry", () =>
                 settings.GetProperty("phd2").GetProperty("guide_focal_length").GetInt32() == 0),
+            ("Cooling fan", () =>
+                settings.GetProperty("cooling_fan").ValueKind == JsonValueKind.Null),
             ("Tracking calibration", () =>
                 settings.GetProperty("tracking_calibration").ValueKind == JsonValueKind.Null),
             ("Sky-model calibration", () =>

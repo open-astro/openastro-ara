@@ -7,12 +7,15 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../models/equipment_readiness.dart';
 import '../../../models/profile_draft.dart';
 import '../../../models/solver_recommendation.dart';
+import '../../../models/switch_device.dart' show CoolingFan;
 import '../../../services/equipment_discovery_api.dart';
 import '../../../state/saved_server_state.dart';
+import '../../../state/settings/cooling_fan_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/wizard_state.dart';
 import '../../../state/wizard/equipment_readiness_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../widgets/equipment/cooling_fan_picker.dart';
 import '../wizard_facts_apply.dart';
 import '../wizard_form_kit.dart';
 import '../wizard_save.dart' show seedReducerFromBaseProfile;
@@ -360,6 +363,12 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
             onChoose: () => unawaited(_choose(type)),
           ),
         _switchSection(context),
+        CoolingFanPicker(
+          value: _draft.coolingFan ??
+              ref.watch(coolingFanProvider).value ??
+              CoolingFan.none,
+          onChanged: (v) => setState(() => _draft.coolingFan = v),
+        ),
       ],
     );
   }

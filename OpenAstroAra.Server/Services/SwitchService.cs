@@ -128,6 +128,10 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         _profileStore = profileStore;
         _ws = ws;
         _cameraProbe = cameraProbe;
+        _lastCoolingFan = CoolingFan;
+        if (_profileStore is not null) {
+            _profileStore.Changed += OnProfileChanged;
+        }
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
@@ -294,6 +298,19 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
     // it is cooling before it lets the fan stop.
     private readonly Func<ICameraService?>? _cameraProbe;
 
+    private CoolingFanDto CoolingFan => _profileStore?.GetCoolingFan() ?? CoolingFanDto.None;
+    private CoolingFanDto _lastCoolingFan;
+
+    // #1700 — a fan designated while the camera is already cooling starts now, the same catch-up as
+    // a switch connecting late. Raised for every profile section, so only a changed designation acts.
+    private void OnProfileChanged(object? sender, EventArgs e) {
+        var fan = CoolingFan;
+        if (Equals(Interlocked.Exchange(ref _lastCoolingFan, fan), fan) || fan.DeviceId is not { } deviceId) {
+            return;
+        }
+        _ = Task.Run(() => SyncFanToCoolingCameraAsync(deviceId), CancellationToken.None);
+    }
+
     public async Task SetValueAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
         ArgumentException.ThrowIfNullOrEmpty(deviceId);
         ArgumentNullException.ThrowIfNull(request);
@@ -327,11 +344,11 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         if (device is null || device.State != EquipmentConnectionState.Connected) {
             return null;
         }
-        if (!CoolingFanInterlock.IsPlausibleFanOff(device, request)) {
+        if (!CoolingFanInterlock.IsPlausibleFanOff(device, CoolingFan, request)) {
             return null;
         }
-        // Either the identified Fan port is being driven to its floor, or the connected Thermal
-        // Switch's port snapshot is still unread and the write is to 0 or below. Both ask the camera.
+        // Either the designated fan port is being driven to its floor, or it isn't in the snapshot
+        // yet and the write is to 0 or below. Both ask the camera.
         return CoolingFanInterlock.FanOffRefusal(await ProbeCoolerStateAsync(ct).ConfigureAwait(false));
     }
 
@@ -368,25 +385,22 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         Justification = "Catch-up fan sync boundary: a failing camera probe or fan write on a late-connecting switch must be a logged fault, never fault the connect task. CA1031's log-and-recover boundary applies.")]
     private async Task SyncFanToCoolingCameraAsync(string deviceId) {
         try {
+            var fan = CoolingFan;
+            if (fan.DeviceId != deviceId || fan.PortId is not { } portId) {
+                return; // not the fan switch (most rigs) — decided on the designation, before any wait
+            }
             // The connect's own RefreshCacheOnce is a CAS'd no-op while a timer pass or another
-            // switch's connect is already refreshing (review of #1084), so the port snapshot may
-            // still be empty here and the fan port unidentifiable. Wait for the first ports read
-            // (the next 2 s tick at the latest) rather than deciding on an empty snapshot and
-            // never coming back — this is a one-shot task.
-            var connected = await GetAsync(deviceId, CancellationToken.None).ConfigureAwait(false);
-            if (connected is null || !CoolingFanInterlock.IsThermalSwitchDevice(connected)) {
-                return; // not the fan switch (most rigs) — decided on the name, before any wait
-            }
-            var device = await WaitForPortsAsync(deviceId, PortsWaitBudget).ConfigureAwait(false);
-            if (device is null || CoolingFanInterlock.FindThermalSwitchFanPort([device]) is null) {
-                return; // no Fan port, or the ports never read
-            }
+            // switch's connect is already refreshing (review of #1084), and a pass can skip a port
+            // whose read failed, so the fan port may not be in the snapshot yet. Wait for it (the
+            // next 2 s tick at the latest) rather than deciding without it and never coming back —
+            // this is a one-shot task.
+            var device = await WaitForPortAsync(deviceId, portId, PortsWaitBudget).ConfigureAwait(false);
             if (await ProbeCoolerStateAsync(CancellationToken.None).ConfigureAwait(false) != true) {
                 return; // the camera is not (known to be) cooling — nothing to catch up
             }
-            var sync = CoolingFanInterlock.FanSyncRequest([device], cooling: true);
+            var sync = device is null ? null : CoolingFanInterlock.FanSyncRequest([device], fan, cooling: true);
             if (sync is null) {
-                return;
+                throw new InvalidOperationException("the designated fan port was not readable and writable in time");
             }
             await SetValueCoreAsync(sync.Value.DeviceId, sync.Value.Request, CancellationToken.None).ConfigureAwait(false);
             LogFanCaughtUp(_logger, deviceId);
@@ -400,20 +414,20 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         }
     }
 
-    /// <summary>How long the late-connect catch-up waits for the switch's first ports read: well
+    /// <summary>How long the late-connect catch-up waits for the fan port's first read: well
     /// past one refresh interval, so a CAS-skipped seed refresh is covered by the next tick.</summary>
     private static readonly TimeSpan PortsWaitBudget = TimeSpan.FromSeconds(10);
 
-    /// <summary>The switch's DTO once its ports have been read (cache polling only, no device I/O
-    /// of our own); null if it is gone, disposed, or the ports never land within the budget.</summary>
-    private async Task<SwitchDto?> WaitForPortsAsync(string deviceId, TimeSpan budget) {
+    /// <summary>The switch's DTO once the fan port has been read (cache polling only, no device I/O
+    /// of our own); null if it is gone, disposed, or the port never lands within the budget.</summary>
+    private async Task<SwitchDto?> WaitForPortAsync(string deviceId, int portId, TimeSpan budget) {
         var deadline = DateTimeOffset.UtcNow + budget;
         while (true) {
             var device = await GetAsync(deviceId, CancellationToken.None).ConfigureAwait(false);
             if (device is null || device.State != EquipmentConnectionState.Connected) {
                 return null;
             }
-            if (device.Ports.Count > 0) {
+            if (device.Ports.Any(p => p.Id == portId)) {
                 return device;
             }
             if (DateTimeOffset.UtcNow >= deadline) {
@@ -707,7 +721,7 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
             }
             if (stillConnected) {
                 LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
-                // #1076 — a Thermal Switch that connects AFTER the cooler was turned on: the fan
+                // #1076 — the fan's switch connecting AFTER the cooler was turned on: the fan
                 // sync only fires on a cooler write, so catch up here from the camera's current
                 // state (best-effort; a failure is a logged fault like any fan-sync failure).
                 _ = Task.Run(() => SyncFanToCoolingCameraAsync(conn.Key), CancellationToken.None);
@@ -969,6 +983,9 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
                 return;
             }
             _disposed = true;
+            if (_profileStore is not null) {
+                _profileStore.Changed -= OnProfileChanged;
+            }
             foreach (var conn in _connections.Values) {
                 if (conn.Client is not null) {
                     clients.Add(conn.Client);

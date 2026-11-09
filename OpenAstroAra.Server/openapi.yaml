@@ -6566,6 +6566,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/FilterWheelPolicyDto'
+  /api/v1/profile/cooling-fan:
+    get:
+      tags:
+        - Profile
+      summary: Get the switch port designated as the active profile's cooling fan.
+      operationId: GetCoolingFan
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoolingFanDto'
+    put:
+      tags:
+        - Profile
+      summary: 'Designate the active profile''s cooling fan: a switch''s device_id and port_id, or both null for none.'
+      operationId: PutCoolingFan
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoolingFanDto'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoolingFanDto'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/equipment-connection:
     get:
       tags:
@@ -8546,6 +8583,20 @@ components:
       properties:
         device:
           $ref: '#/components/schemas/DiscoveredDeviceDto'
+    CoolingFanDto:
+      type: object
+      properties:
+        device_id:
+          type:
+            - 'null'
+            - string
+        port_id:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
     CreateProfileRequestDto:
       required:
         - name
@@ -13270,6 +13321,10 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/SavedTargetsDto'
+        cooling_fan:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/CoolingFanDto'
     QualityScoreBreakdownDto:
       required:
         - composite

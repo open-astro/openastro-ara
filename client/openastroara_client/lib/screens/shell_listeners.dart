@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../widgets/auto_flats_prompt_listener.dart';
 import '../widgets/connection_policy_listener.dart';
+import '../widgets/cooling_fan_prompt_listener.dart';
 import '../widgets/manual_filter_swap_listener.dart';
 import '../widgets/pending_profile_replay_listener.dart';
 import '../widgets/preflight_checklist_listener.dart';
@@ -53,7 +54,13 @@ class ShellListeners extends StatelessWidget {
                     quiet: quiet,
                     // §57 — the Stop Mount panic overlay surfaces over every
                     // tab while the daemon reports an autonomous slew.
-                    child: StopMountListener(quiet: quiet, child: child),
+                    child: StopMountListener(
+                      quiet: quiet,
+                      child: CoolingFanPromptListener(
+                        quiet: quiet,
+                        child: child,
+                      ),
+                    ),
                   ),
                 ),
               ),

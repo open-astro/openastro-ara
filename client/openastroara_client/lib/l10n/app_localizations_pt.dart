@@ -2731,6 +2731,40 @@ class AppLocalizationsPt extends AppLocalizations {
   String albumSinceLastVisit(String changes) {
     return '$changes since your last visit';
   }
+
+  @override
+  String get coolingFan => 'Cooling fan';
+
+  @override
+  String get coolingFanNone => 'None';
+
+  @override
+  String get coolingFanNotConnected => 'Chosen fan (not connected)';
+
+  @override
+  String get coolingFanChosenNote =>
+      'This fan starts with the cooler and cannot be turned off while the camera is cooling.';
+
+  @override
+  String get coolingFanNoneNote =>
+      'No fan is chosen, so Ara does not run a fan with the cooler.';
+
+  @override
+  String get coolingFanCouldntSave => 'Couldn\'t save the cooling fan';
+
+  @override
+  String get coolingFanAsk =>
+      'Choose your camera\'s cooling fan so it runs with the cooler.';
+
+  @override
+  String get coolingFanAskFullUi =>
+      'Choose your camera\'s cooling fan in Settings › Camera so it runs with the cooler.';
+
+  @override
+  String get coolingFanChoose => 'Choose';
+
+  @override
+  String get coolingFanNotNow => 'Not now';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -5485,4 +5519,39 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String albumSinceLastVisit(String changes) {
     return '$changes desde a última visita';
   }
+
+  @override
+  String get coolingFan => 'Ventoinha de refrigeração';
+
+  @override
+  String get coolingFanNone => 'Nenhuma';
+
+  @override
+  String get coolingFanNotConnected => 'Ventoinha escolhida (não conectada)';
+
+  @override
+  String get coolingFanChosenNote =>
+      'Esta ventoinha liga com a refrigeração e não pode ser desligada enquanto a câmera estiver refrigerando.';
+
+  @override
+  String get coolingFanNoneNote =>
+      'Nenhuma ventoinha foi escolhida, então o Ara não aciona uma ventoinha com a refrigeração.';
+
+  @override
+  String get coolingFanCouldntSave =>
+      'Não foi possível salvar a ventoinha de refrigeração';
+
+  @override
+  String get coolingFanAsk =>
+      'Escolha a ventoinha de refrigeração da sua câmera para que ela funcione com a refrigeração.';
+
+  @override
+  String get coolingFanAskFullUi =>
+      'Escolha a ventoinha de refrigeração da sua câmera em Ajustes › Câmera para que ela funcione com a refrigeração.';
+
+  @override
+  String get coolingFanChoose => 'Escolher';
+
+  @override
+  String get coolingFanNotNow => 'Agora não';
 }

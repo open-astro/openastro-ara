@@ -673,6 +673,13 @@ public sealed record FilterWheelPolicyDto(bool HomeOnFirstConnect = true) {
     public static FilterWheelPolicyDto Default { get; } = new();
 }
 
+/// <summary>#1700 — the switch port that runs the camera's cooling fan: the switch's Alpaca
+/// <c>UniqueId</c> and the port's id. Alpaca has no fan capability, so the user designates it. Both
+/// null = no designation, no fan interlock.</summary>
+public sealed record CoolingFanDto(string? DeviceId = null, int? PortId = null) {
+    public static CoolingFanDto None { get; } = new();
+}
+
 public sealed record CameraElectronicsDto(
     string SensorName = "",
     double ReadNoiseE = 0,

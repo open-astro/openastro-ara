@@ -134,6 +134,10 @@ public interface IProfileStore {
     FilterWheelPolicyDto GetFilterWheelPolicy();
     void PutFilterWheelPolicy(FilterWheelPolicyDto value);
 
+    // #1700 — the switch port designated as the camera's cooling fan.
+    CoolingFanDto GetCoolingFan();
+    void PutCoolingFan(CoolingFanDto value);
+
     /// <summary>§36 custom terrain horizon (sorted az/alt skyline; empty = none entered).</summary>
     CustomHorizonDto GetCustomHorizon();
     void PutCustomHorizon(CustomHorizonDto value);

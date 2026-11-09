@@ -4676,6 +4676,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{changes} since your last visit'**
   String albumSinceLastVisit(String changes);
+
+  /// Camera window: the heading of the cooling fan choice (#1700)
+  ///
+  /// In en, this message translates to:
+  /// **'Cooling fan'**
+  String get coolingFan;
+
+  /// Cooling fan choice: no fan is chosen
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get coolingFanNone;
+
+  /// Cooling fan choice: the chosen switch isn't connected right now
+  ///
+  /// In en, this message translates to:
+  /// **'Chosen fan (not connected)'**
+  String get coolingFanNotConnected;
+
+  /// Cooling fan caption when a fan is chosen
+  ///
+  /// In en, this message translates to:
+  /// **'This fan starts with the cooler and cannot be turned off while the camera is cooling.'**
+  String get coolingFanChosenNote;
+
+  /// Cooling fan caption when no fan is chosen
+  ///
+  /// In en, this message translates to:
+  /// **'No fan is chosen, so Ara does not run a fan with the cooler.'**
+  String get coolingFanNoneNote;
+
+  /// Error when the daemon didn't store the cooling fan choice
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save the cooling fan'**
+  String get coolingFanCouldntSave;
+
+  /// Simple Mode pill asking once for the cooling fan
+  ///
+  /// In en, this message translates to:
+  /// **'Choose your camera\'s cooling fan so it runs with the cooler.'**
+  String get coolingFanAsk;
+
+  /// Full UI one-time prompt for the cooling fan
+  ///
+  /// In en, this message translates to:
+  /// **'Choose your camera\'s cooling fan in Settings › Camera so it runs with the cooler.'**
+  String get coolingFanAskFullUi;
+
+  /// Cooling fan pill's action: opens the Camera window
+  ///
+  /// In en, this message translates to:
+  /// **'Choose'**
+  String get coolingFanChoose;
+
+  /// Cooling fan pill's dismiss action
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get coolingFanNotNow;
 }
 
 class _AppLocalizationsDelegate

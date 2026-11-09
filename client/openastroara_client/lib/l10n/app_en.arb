@@ -3770,5 +3770,45 @@
   "@albumSinceLastVisit": {
     "description": "Sky Album header after a sync brought cards; {changes} is albumNewCards and/or albumTiersUp joined by ' · '",
     "placeholders": {"changes": {"type": "String"}}
+  },
+  "coolingFan": "Cooling fan",
+  "@coolingFan": {
+    "description": "Camera window: the heading of the cooling fan choice (#1700)"
+  },
+  "coolingFanNone": "None",
+  "@coolingFanNone": {
+    "description": "Cooling fan choice: no fan is chosen"
+  },
+  "coolingFanNotConnected": "Chosen fan (not connected)",
+  "@coolingFanNotConnected": {
+    "description": "Cooling fan choice: the chosen switch isn't connected right now"
+  },
+  "coolingFanChosenNote": "This fan starts with the cooler and cannot be turned off while the camera is cooling.",
+  "@coolingFanChosenNote": {
+    "description": "Cooling fan caption when a fan is chosen"
+  },
+  "coolingFanNoneNote": "No fan is chosen, so Ara does not run a fan with the cooler.",
+  "@coolingFanNoneNote": {
+    "description": "Cooling fan caption when no fan is chosen"
+  },
+  "coolingFanCouldntSave": "Couldn't save the cooling fan",
+  "@coolingFanCouldntSave": {
+    "description": "Error when the daemon didn't store the cooling fan choice"
+  },
+  "coolingFanAsk": "Choose your camera's cooling fan so it runs with the cooler.",
+  "@coolingFanAsk": {
+    "description": "Simple Mode pill asking once for the cooling fan"
+  },
+  "coolingFanAskFullUi": "Choose your camera's cooling fan in Settings › Camera so it runs with the cooler.",
+  "@coolingFanAskFullUi": {
+    "description": "Full UI one-time prompt for the cooling fan"
+  },
+  "coolingFanChoose": "Choose",
+  "@coolingFanChoose": {
+    "description": "Cooling fan pill's action: opens the Camera window"
+  },
+  "coolingFanNotNow": "Not now",
+  "@coolingFanNotNow": {
+    "description": "Cooling fan pill's dismiss action"
   }
 }

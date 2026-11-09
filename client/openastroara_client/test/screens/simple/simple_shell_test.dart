@@ -27,6 +27,7 @@ import 'package:openastroara/screens/simple/simple_search.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart' show simpleMountMotionProvider, simpleSwitchSettingProvider;
 import 'package:openastroara/models/switch_device.dart';
 import 'package:openastroara/state/equipment/switch_state.dart';
+import 'package:openastroara/state/settings/cooling_fan_state.dart';
 import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
@@ -4481,4 +4482,51 @@ void main() {
     await tester.pumpAndSettle();
     expect(c.read(siteSettingsProvider).latitudeDeg, closeTo(before.abs() + 10, 0.001));
   });
+
+  testWidgets('#1700: a pill asks once for the cooling fan; Choose opens the Camera window', (tester) async {
+    final asked = _MemPrefs()..value = false;
+    await _pump(tester, const Size(1024, 768),
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      cameraStatusProvider.overrideWith(() => _CoolingCamera(-10)),
+      switchListProvider.overrideWith(() => _Switches([
+        SwitchDevice(deviceId: 'box', alpacaDeviceNumber: 0, name: 'Box', connectionState: SwitchConnectionState.connected,
+            ports: [SwitchPort(id: 0, name: 'Fan 1', value: 0, min: 0, max: 1, canWrite: true)]),
+      ])),
+      coolingFanProvider.overrideWith(_NoFan.new),
+      coolingFanAskedPrefsProvider.overrideWith((ref, id) => asked),
+    ]);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    const ask = "Choose your camera's cooling fan so it runs with the cooler.";
+    expect(find.text(ask), findsOneWidget);
+    expect(asked.value, isTrue, reason: 'remembered, so it asks once');
+    await tester.tap(find.widgetWithText(FilledButton, 'Choose'));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-device-camera')), findsOneWidget);
+    expect(find.text(ask), findsNothing);
+  });
+
+  testWidgets('#1700: an already-asked profile gets no pill', (tester) async {
+    final asked = _MemPrefs()..value = true;
+    await _pump(tester, const Size(1024, 768),
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      cameraStatusProvider.overrideWith(() => _CoolingCamera(-10)),
+      switchListProvider.overrideWith(() => _Switches([
+        SwitchDevice(deviceId: 'box', alpacaDeviceNumber: 0, name: 'Box', connectionState: SwitchConnectionState.connected,
+            ports: [SwitchPort(id: 0, name: 'Fan 1', value: 0, min: 0, max: 1, canWrite: true)]),
+      ])),
+      coolingFanProvider.overrideWith(_NoFan.new),
+      coolingFanAskedPrefsProvider.overrideWith((ref, id) => asked),
+    ]);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.textContaining('cooling fan'), findsNothing);
+  });
+}
+
+class _NoFan extends CoolingFanNotifier {
+  @override
+  Future<CoolingFan> build() async => CoolingFan.none;
 }

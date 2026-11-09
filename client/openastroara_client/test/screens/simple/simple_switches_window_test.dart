@@ -13,6 +13,7 @@ import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/services/switch_api.dart';
 import 'package:openastroara/state/equipment/switch_state.dart';
+import 'package:openastroara/state/settings/cooling_fan_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
@@ -88,7 +89,7 @@ SwitchDevice _box({String id = 'box', String name = 'Pegasus Powerbox', List<Swi
     );
 
 Future<(ProviderContainer, _Rig)> _pump(WidgetTester tester, List<SwitchDevice> devices,
-    {bool inSettings = false, Map<String, DeviceDriver> drivers = const {}, double? width}) async {
+    {bool inSettings = false, Map<String, DeviceDriver> drivers = const {}, double? width, CoolingFan fan = CoolingFan.none}) async {
   final rig = _Rig(devices);
   final c = ProviderContainer(overrides: [
     savedServerServiceProvider.overrideWithValue(_Servers()),
@@ -97,9 +98,11 @@ Future<(ProviderContainer, _Rig)> _pump(WidgetTester tester, List<SwitchDevice> 
     wsEventStreamProvider.overrideWith((ref) => null),
     simpleModeActiveProvider.overrideWithValue(true), // errors go to a pill
     deviceDriverProvider.overrideWith((ref, key) async => drivers[key]),
+    coolingFanProvider.overrideWith(() => _FixedFan(fan)),
   ]);
   addTearDown(c.dispose);
   await c.read(switchListProvider.future);
+  await c.read(coolingFanProvider.future);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: c,
     child: MaterialApp(
@@ -316,12 +319,19 @@ void main() {
   testWidgets("the camera's cooling fan isn't listed; each device has its titled section", (tester) async {
     await _pump(tester, [
       _box(),
-      _box(id: 'ts', name: 'ToupTek Thermal Switch', ports: [_port(0, 'Fan', 1), _port(1, 'Heater', 0, max: 5)]),
-    ]);
+      _box(id: 'ts', name: 'Any Box', ports: [_port(0, 'Fan', 1), _port(1, 'Heater', 0, max: 5)]),
+    ], fan: const CoolingFan(deviceId: 'ts', portId: 0));
     expect(find.text('Pegasus Powerbox · 2 ports'), findsOneWidget);
-    expect(find.text('ToupTek Thermal Switch · 1 port'), findsOneWidget);
+    expect(find.text('Any Box · 1 port'), findsOneWidget);
     expect(find.text('Fan'), findsNothing);
     expect(_level('Heater', '0 %'), findsOneWidget);
+  });
+
+  testWidgets('an undesignated Thermal Switch keeps its Fan port in the list', (tester) async {
+    await _pump(tester, [
+      _box(id: 'ts', name: 'ToupTek Thermal Switch', ports: [_port(0, 'Fan', 1)]),
+    ]);
+    expect(find.text('Fan'), findsOneWidget);
   });
 
   testWidgets('a disconnected device is not listed', (tester) async {
@@ -527,4 +537,11 @@ void main() {
     rig.hold!.complete();
     await tester.pumpAndSettle();
   });
+}
+
+class _FixedFan extends CoolingFanNotifier {
+  _FixedFan(this.fan);
+  final CoolingFan fan;
+  @override
+  Future<CoolingFan> build() async => fan;
 }

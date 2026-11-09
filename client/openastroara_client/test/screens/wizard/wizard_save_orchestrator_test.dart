@@ -6,6 +6,7 @@ import 'package:openastroara/models/profile_draft.dart'
     hide ImagingDefaults, PlateSolveSettings, AutofocusSettings, SafetyPolicies;
 import 'package:openastroara/models/profile_meta.dart';
 import 'package:openastroara/models/server.dart';
+import 'package:openastroara/models/switch_device.dart' show CoolingFan;
 import 'package:openastroara/screens/wizard/wizard_save.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
@@ -50,6 +51,8 @@ class _FakeProfileApi extends ProfileApi {
     return value;
   }
 
+  @override
+  Future<CoolingFan> putCoolingFan(CoolingFan v) => _put('cooling-fan', v);
   @override
   Future<SiteSettings> getSiteSettings() async => const SiteSettings();
   @override
@@ -168,5 +171,14 @@ void main() {
     final mixed = _FakeProfileApi()..failSections.add('site');
     await expectLater(saveWizardProfile(mixed, ProfileDraft()..profileName = 'Rejected'),
         throwsA(isA<Exception>().having((e) => e.toString(), 'message', contains('1 profile section'))));
+  });
+
+  test('#1700: a chosen cooling fan is saved; a wizard that left it alone sends nothing', () async {
+    final api = _FakeProfileApi();
+    await saveWizardProfile(api, ProfileDraft()..profileName = 'P'..coolingFan = const CoolingFan(deviceId: 'box', portId: 3));
+    expect(api.putCalls, contains('cooling-fan'));
+    final untouched = _FakeProfileApi();
+    await saveWizardProfile(untouched, ProfileDraft()..profileName = 'P');
+    expect(untouched.putCalls, isNot(contains('cooling-fan')));
   });
 }

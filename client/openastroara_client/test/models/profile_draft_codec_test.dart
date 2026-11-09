@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/profile_draft.dart';
 import 'package:openastroara/models/profile_draft_codec.dart';
+import 'package:openastroara/models/switch_device.dart' show CoolingFan;
 
 void main() {
   test('#1137: a fully populated draft round-trips through JSON', () {
@@ -150,5 +151,18 @@ void main() {
     expect(bad.filterWheel.filters.single.name, 'L');
     expect(bad.filterWheel.filters.single.type, isNull);
     expect(bad.skippedScreens, {3});
+  });
+
+  test('#1700: a chosen cooling fan survives the draft codec; untouched stays null', () {
+    final chosen = ProfileDraft()
+      ..coolingFan = const CoolingFan(deviceId: 'box', portId: 3);
+    expect(
+      profileDraftFromJson(profileDraftToJson(chosen)).coolingFan,
+      const CoolingFan(deviceId: 'box', portId: 3),
+    );
+    expect(
+      profileDraftFromJson(profileDraftToJson(ProfileDraft())).coolingFan,
+      isNull,
+    );
   });
 }
