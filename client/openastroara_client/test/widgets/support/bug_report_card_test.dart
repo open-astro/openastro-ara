@@ -11,6 +11,7 @@ import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/support/bug_report_state.dart';
 import 'package:openastroara/widgets/support/bug_report_card.dart';
+import 'package:openastroara/widgets/support/support_card_row.dart';
 
 /// In-memory client log: exportTo records the path instead of touching disk
 /// (real file IO never completes inside a widget test's fake-async zone).
@@ -119,6 +120,30 @@ Widget _host(_FakeBugReportClient api,
     );
 
 void main() {
+  testWidgets('large text moves the action under the text in a column that fits it at 1x', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(size: Size(800, 600), textScaler: TextScaler.linear(2)),
+          child: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 640,
+                child: SupportCardRow(
+                  icon: const Icon(Icons.bug_report),
+                  body: const Text('Body', key: Key('body')),
+                  action: FilledButton(onPressed: () {}, child: const Text('Act', key: Key('act'))),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.getTopLeft(find.byKey(const Key('act'))).dy, greaterThan(tester.getBottomLeft(find.byKey(const Key('body'))).dy));
+  });
+
   testWidgets('the prepare action moves under the text in a phone-width column', (tester) async {
     // Inline in Simple Mode's Settings on a phone, the column is this narrow.
     tester.view.physicalSize = const Size(360, 800);

@@ -231,6 +231,19 @@ void main() {
     },
   );
 
+  testWidgets("a pill's Dismiss is 44 px on the desktop too", (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final (c, _) = await _pump(tester);
+    c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, 'Failed');
+    await tester.pumpAndSettle();
+    final size = tester.getSize(find.byType(IconButton));
+    expect(size.height, greaterThanOrEqualTo(44));
+    expect(size.width, greaterThanOrEqualTo(44));
+    debugDefaultTargetPlatformOverride = null;
+    await tester.pump(kSimpleErrorLife);
+  });
+
   testWidgets("a pill over a pushed page keeps Simple Mode's 44 px, readable buttons", (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);

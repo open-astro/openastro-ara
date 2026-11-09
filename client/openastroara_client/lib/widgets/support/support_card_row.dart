@@ -20,7 +20,8 @@ class SupportCardRow extends StatelessWidget {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, box) {
       final info = [icon, const SizedBox(width: 12), Expanded(child: body)];
-      if (box.maxWidth >= _stackBelow) {
+      // Large text needs the same room a narrow column lacks.
+      if (box.maxWidth >= MediaQuery.textScalerOf(context).scale(_stackBelow)) {
         return Row(children: [...info, const SizedBox(width: 12), action]);
       }
       return Column(

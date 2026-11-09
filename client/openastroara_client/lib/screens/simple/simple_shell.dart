@@ -2444,6 +2444,11 @@ ThemeData simpleTheme(ThemeData base) {
     filledButtonTheme: FilledButtonThemeData(
       style: buttons.merge(base.filledButtonTheme.style),
     ),
+    iconButtonTheme: IconButtonThemeData(
+      style: const ButtonStyle(
+        minimumSize: WidgetStatePropertyAll(Size(44, 44)),
+      ).merge(base.iconButtonTheme.style),
+    ),
     // The theme's primary (#1565C0) reads at 3:1 on a panel and 2:1 on a
     // tile; labels need 4.5:1 (WCAG 2.2 AA): text buttons in linkText,
     // outlined ones in white.

@@ -34,6 +34,7 @@ import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimpleStatusPill;
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
+import 'package:openastroara/widgets/inline_choices.dart';
 
 class _MemPrefs extends SimpleModePrefsService {
   bool value = true;
@@ -368,6 +369,45 @@ void main() {
       expect(text.style!.fontSize! * scale, greaterThanOrEqualTo(11.5 * 0.99),
           reason: '"${text.data}" renders at ${(text.style!.fontSize! * scale).toStringAsFixed(1)} px');
     });
+  }
+
+  // The bug report's review, the longest inline confirm, inside its card's 20 px.
+  for (final locale in const [Locale('en'), Locale('pt', 'BR')]) {
+    for (final (scale, width) in const [(1.0, 320.0), (2.0, 320.0), (2.0, 420.0)]) {
+      final lang = locale.toLanguageTag();
+      testWidgets('$lang text ${scale}x at ${width.toInt()} px: the inline confirm keeps its buttons on screen', skip: !hasFonts, (tester) async {
+        tester.view.physicalSize = Size(width, 800);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final l = lookupAppLocalizations(locale);
+        await tester.pumpWidget(MaterialApp(
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: simpleTheme(ThemeData(fontFamily: 'Roboto')),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: InlineConfirm(
+                id: 'ask',
+                title: l.bugReviewTitle,
+                body: Text(l.bugReviewTrust),
+                confirmLabel: l.bugReviewDownload,
+                cancelLabel: l.planCancel,
+                onConfirm: () {},
+                onCancel: () {},
+              ),
+            ),
+          ),
+        ));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
+    }
   }
 
   // #1596: the skipped-run pill is one line in a 300 px pill; its cause must

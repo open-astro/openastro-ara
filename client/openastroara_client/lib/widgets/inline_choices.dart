@@ -162,8 +162,8 @@ class InlineConfirm extends StatelessWidget {
             ),
           ),
           DefaultTextStyle.merge(style: style, child: body),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          Wrap(
+            alignment: WrapAlignment.end,
             spacing: AraSpace.s8,
             children: [
               TextButton(
