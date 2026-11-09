@@ -66,6 +66,7 @@ import 'package:openastroara/screens/simple/simple_guide_panel.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart';
+import 'package:openastroara/state/diagnostics/diagnostics_state.dart';
 import 'package:openastroara/state/simple_preflight_state.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/app_shell_state.dart';
@@ -295,6 +296,16 @@ class _Rotator extends RotatorNotifier with _Calls<RotatorStatus> {
 
   /// What the rotator reports next ("moving", "idle").
   void report(String runtime) => state = AsyncData(RotatorStatus.fromJson(_json(runtime)));
+}
+
+class _Diagnostics extends DiagnosticsNotifier {
+  _Diagnostics(this.start);
+  final Set<String> start;
+  static DiagnosticsSnapshot snap(Set<String> open) =>
+      DiagnosticsSnapshot(level: StatusLevel.connected, label: 'x', openTypes: open);
+  @override
+  DiagnosticsSnapshot build() => snap(start);
+  void open(Set<String> types) => state = snap(types);
 }
 
 /// The rig's switch devices, recording Connect and Disconnect.
@@ -4361,6 +4372,75 @@ void main() {
     wheel.report({'state': 'awaiting_user', 'current_slot': 1, 'pending_slot': 2}, manual: true);
     await tester.pump();
     expect(find.descendant(of: pill, matching: find.textContaining('Swap in F2, then confirm.')), findsOneWidget);
+  });
+
+  group('the dew warning pill (#1564)', () {
+    final pill = find.textContaining('Dew may be forming');
+
+    Future<(ProviderContainer, _Diagnostics)> shell(WidgetTester tester, {Set<String> start = const {}, List<Override> gear = const []}) async {
+      final d = _Diagnostics(start);
+      final c = await _pump(tester, const Size(1024, 768), gear: [diagnosticsStateProvider.overrideWith(() => d), ...gear]);
+      await tester.pump();
+      return (c, d);
+    }
+
+    testWidgets('open shows one amber warning; cleared takes it away', (tester) async {
+      final (c, d) = await shell(tester);
+      expect(pill, findsNothing);
+      d.open({'dew_formation'});
+      await tester.pump();
+      await tester.pump();
+      expect(pill, findsOneWidget);
+      expect(c.read(simpleMessagesProvider).single.kind, SimpleMessageKind.warning);
+      d.open({'dew_formation', 'disk.low'});
+      await tester.pump();
+      await tester.pump();
+      expect(pill, findsOneWidget, reason: 'another issue is no new opening');
+      d.open({});
+      await tester.pump();
+      await tester.pump();
+      expect(pill, findsNothing);
+    });
+
+    testWidgets('closed by hand, it comes back the next time dew opens', (tester) async {
+      final (c, d) = await shell(tester);
+      d.open({'dew_formation'});
+      await tester.pump();
+      await tester.pump();
+      c.read(simpleMessagesProvider.notifier).dismiss(c.read(simpleMessagesProvider).single.id);
+      await tester.pump();
+      expect(pill, findsNothing);
+      d.open({});
+      await tester.pump();
+      await tester.pump();
+      d.open({'dew_formation'});
+      await tester.pump();
+      await tester.pump();
+      expect(pill, findsOneWidget);
+    });
+
+    testWidgets('dew already open when the shell builds shows the pill', (tester) async {
+      await shell(tester, start: {'dew_formation'});
+      await tester.pump();
+      expect(pill, findsOneWidget);
+    });
+
+    testWidgets('the Switches button shows only with a connected switch device, and opens its window', (tester) async {
+      final (c, _) = await shell(tester, start: {'dew_formation'}, gear: [
+        switchListProvider.overrideWith(() => _Switches([_switch('box', 'Powerbox', SwitchConnectionState.connected)])),
+      ]);
+      await tester.pump();
+      final action = c.read(simpleMessagesProvider).single.actions.single;
+      action.onPressed();
+      await tester.pump();
+      expect(find.byKey(const Key('simple-device-switches')), findsOneWidget);
+    });
+
+    testWidgets('no connected switch device: no button', (tester) async {
+      final (c, _) = await shell(tester, start: {'dew_formation'});
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider).single.actions, isEmpty);
+    });
   });
 
   group('status pills stay at least 1 s, then fade (#1679)', () {

@@ -11,6 +11,7 @@ import 'dart:math' as math;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/diagnostics/diagnostics_state.dart';
 import '../../state/library/live_library_state.dart' show libraryFilterProvider;
 import '../../state/time_sync_state.dart' show timeSyncApiProvider;
 import '../../state/sky_atlas/tonight_sky_state.dart'
@@ -253,6 +254,42 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
   });
 
+  int? _dewPill;
+
+  /// #1564 — one warning for each time dew opens; a reconnect's snapshot counts.
+  Future<void> _syncDewPill(
+    DiagnosticsSnapshot? previous,
+    DiagnosticsSnapshot next,
+  ) async {
+    const dew = 'dew_formation';
+    final open = next.openTypes.contains(dew);
+    final messages = ref.read(simpleMessagesProvider.notifier);
+    if (open && !(previous?.openTypes.contains(dew) ?? false)) {
+      // Awaited: at startup the list may not have loaded yet.
+      final devices = await ref
+          .read(switchListProvider.future)
+          .catchError((Object _) => const <SwitchDevice>[]);
+      if (!mounted) return;
+      final switchUp = devices.any(
+        (d) => d.connectionState == SwitchConnectionState.connected,
+      );
+      _dewPill = messages.show(
+        SimpleMessageKind.warning,
+        context.l10n.simpleDewWarning,
+        actions: [
+          if (switchUp)
+            SimpleMessageAction(
+              context.l10n.shellSwitches,
+              () => _openFromPill(SimpleStatusOrigin.switches),
+            ),
+        ],
+      );
+    } else if (!open && _dewPill != null) {
+      messages.dismiss(_dewPill!);
+      _dewPill = null;
+    }
+  }
+
   void _setStatusHeight(double height) {
     if (mounted && height != _statusHeight) {
       setState(() => _statusHeight = height);
@@ -285,6 +322,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focus.requestFocus();
     });
+    // A frame late: this also fires from initState, and a pill changes a provider.
+    ref.listenManual(diagnosticsStateProvider, (previous, next) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_syncDewPill(previous, next));
+      });
+    }, fireImmediately: true);
     ref.listenManual(coolingFanAskDueProvider, (_, due) {
       if (due) unawaited(_askCoolingFan());
     }, fireImmediately: true);

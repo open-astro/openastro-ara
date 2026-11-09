@@ -40,6 +40,10 @@ at the top. This happens in the same commit that pushes the release tag.
 - Emergency Stop stops the mount right after aborting runs, ahead of the slower steps, and stops it again if a polar alignment was running. The app now waits long enough for the whole stop to report back (#1739).
 - Simple Mode: Preview's Camera settings offer Already in focus when an off-axis Guide shutter is waiting on main focus (#1739).
 
+### Added (Simple Mode)
+
+- An amber warning pill says when the rig suspects dew, names the fix, and offers Switches when a switch device is connected (#1564).
+
 ### Fixed (meridian flip)
 
 - Runs the app builds now carry the meridian flip trigger, so Auto flip takes effect. They never flipped before, and the Auto flip setting was not read at run time.

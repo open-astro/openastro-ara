@@ -18,6 +18,21 @@ void main() {
   });
 
   group('DiagnosticsAccumulator', () {
+    test('the open types follow detected, cleared and a snapshot (#1564)', () {
+      final acc = DiagnosticsAccumulator();
+      acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'dew_formation', 'severity': 'yellow'}));
+      expect(acc.snapshot.openTypes, {'dew_formation'});
+      acc.apply(_ev(DiagnosticsWsEvents.cleared, {'event_type': 'dew_formation'}, seq: 2));
+      expect(acc.snapshot.openTypes, isEmpty);
+      acc.apply(_ev(DiagnosticsWsEvents.issueDetected, {'event_type': 'disk.low', 'severity': 'yellow'}, seq: 3));
+      acc.apply(_ev(DiagnosticsWsEvents.snapshot, {
+        'open_issues': [
+          {'event_type': 'dew_formation', 'severity': 'yellow'},
+        ],
+      }, seq: 4));
+      expect(acc.snapshot.openTypes, {'dew_formation'});
+    });
+
     test('empty state reads as nominal', () {
       final snap = DiagnosticsAccumulator().snapshot;
       expect(snap.level, StatusLevel.connected);

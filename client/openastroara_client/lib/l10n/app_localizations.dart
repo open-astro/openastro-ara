@@ -5834,6 +5834,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'focus {position}'**
   String focusChartFocus(int position);
+
+  /// Simple Mode warning pill while the daemon's dew_formation diagnostic is open
+  ///
+  /// In en, this message translates to:
+  /// **'Dew may be forming: stars are swelling at high humidity. Wipe the optics or turn on the dew heaters. Autofocus waits until it clears.'**
+  String get simpleDewWarning;
 }
 
 class _AppLocalizationsDelegate
