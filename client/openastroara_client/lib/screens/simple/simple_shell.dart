@@ -2310,6 +2310,7 @@ class SimpleSegment extends StatelessWidget {
   const SimpleSegment({
     super.key,
     required this.label,
+    this.group,
     required this.selected,
     required this.radius,
     this.onTap,
@@ -2318,6 +2319,9 @@ class SimpleSegment extends StatelessWidget {
   });
 
   final String label;
+
+  /// What the row of segments chooses, for screen readers.
+  final String? group;
   final Alignment alignment;
 
   /// Around the label; a list sets it to line its labels up.
@@ -2329,6 +2333,7 @@ class SimpleSegment extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Semantics(
     button: true,
+    label: group,
     // A segment that takes no tap is read as disabled, not as a button; the
     // selected one stays enabled, read as selected (a native segmented control).
     enabled: onTap != null || selected,
@@ -2369,6 +2374,7 @@ class SimpleSegments<T> extends StatelessWidget {
     required this.onPick,
     this.keyPrefix,
     this.expand = true,
+    this.group,
   });
 
   final List<(T, String, String)> options;
@@ -2376,6 +2382,9 @@ class SimpleSegments<T> extends StatelessWidget {
   final ValueChanged<T>? onPick;
   final String? keyPrefix;
   final bool expand;
+
+  /// Read with each segment: what the row chooses.
+  final String? group;
 
   @override
   Widget build(BuildContext context) => DecoratedBox(
@@ -2391,6 +2400,7 @@ class SimpleSegments<T> extends StatelessWidget {
             final segment = SimpleSegment(
               key: keyPrefix == null ? null : Key('$keyPrefix-$id'),
               label: label,
+              group: group,
               selected: value == selected,
               radius: 8,
               onTap: onPick == null || value == selected

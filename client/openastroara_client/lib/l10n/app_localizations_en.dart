@@ -3205,4 +3205,152 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filterSwapCouldntCancel => 'Couldn\'t cancel the swap';
+
+  @override
+  String get bugCardTitle => 'Send me a bug report';
+
+  @override
+  String get bugCardBody =>
+      'Bundles the rig\'s logs (Ara, AlpacaBridge, the guider, the system journal) + your profile + system info into a ZIP you can attach to a report.';
+
+  @override
+  String bugCardPacking(String size) {
+    return 'Packing the logs on the rig… $size read';
+  }
+
+  @override
+  String get bugCardCovers => 'Covers: ';
+
+  @override
+  String get bugCardSharing => 'Sharing: ';
+
+  @override
+  String get bugCardAppLog => 'This app\'s error log';
+
+  @override
+  String get bugCardPrepare => 'Prepare & download';
+
+  @override
+  String get bugCardSaveLog => 'Save client log';
+
+  @override
+  String get bugRangeNight => 'Last night (whole rig)';
+
+  @override
+  String get bugRange3Days => 'Last 3 days (whole rig)';
+
+  @override
+  String get bugRange7Days => 'Last 7 days (whole rig)';
+
+  @override
+  String get bugRangeAraOnly => 'Ara logs only';
+
+  @override
+  String get bugModeFull => 'Include everything';
+
+  @override
+  String get bugModeFullNote => 'best for debugging';
+
+  @override
+  String get bugModeCoarse => 'Coarse GPS only';
+
+  @override
+  String get bugModeCoarseNote => 'site rounded to ~111 km';
+
+  @override
+  String get bugModeRedacted => 'Redact all sensitive items';
+
+  @override
+  String get bugModeRedactedNote =>
+      'coordinates, serials, hostnames, usernames in paths, private IPs, tokens';
+
+  @override
+  String get bugPickTitle => 'Choose where to save the bug report';
+
+  @override
+  String bugSaved(String name) {
+    return 'Saved $name';
+  }
+
+  @override
+  String bugSavedBoth(String name, String log) {
+    return 'Saved $name and $log';
+  }
+
+  @override
+  String bugFailed(String reason) {
+    return 'Bug report failed: $reason';
+  }
+
+  @override
+  String get bugFailStillPacking =>
+      'the rig is still packing the logs; try again in a moment';
+
+  @override
+  String get bugFailCouldNotPack => 'the rig could not pack the logs';
+
+  @override
+  String get bugFailTimeout => 'Ara took too long to respond.';
+
+  @override
+  String get bugFailUnreachable => 'could not reach Ara.';
+
+  @override
+  String bugFailStatus(String status) {
+    return 'Ara returned an error ($status).';
+  }
+
+  @override
+  String get bugFailTalking => 'something went wrong talking to Ara.';
+
+  @override
+  String get bugFailUnexpected => 'an unexpected error occurred.';
+
+  @override
+  String get clientLogPickTitle => 'Choose where to save the client log';
+
+  @override
+  String clientLogSaved(String path) {
+    return 'Saved $path';
+  }
+
+  @override
+  String get clientLogSaveAction => 'save the log';
+
+  @override
+  String get storageEjected => 'Ejected — safe to unplug the drive.';
+
+  @override
+  String get storageEjectBusy =>
+      'The drive is busy — wait for writes to finish and try again.';
+
+  @override
+  String storageEjectFailed(String reason) {
+    return 'Eject failed: $reason';
+  }
+
+  @override
+  String get storageEjectAction => 'eject the drive';
+
+  @override
+  String get storageCheckRepaired =>
+      'Disk checked — repairs were made. Worth re-running \"Find frames on disk\".';
+
+  @override
+  String get storageCheckClean => 'Disk checked — clean.';
+
+  @override
+  String storageCheckFailed(String reason) {
+    return 'Check failed: $reason';
+  }
+
+  @override
+  String get storageCheckAction => 'check the disk';
+
+  @override
+  String get sessionTransferredTitle => 'Session transferred';
+
+  @override
+  String get sessionTransferredDetail =>
+      'Another client took control of the observatory, so this client was disconnected. The running sequence is unaffected — it continues on Ara.';
 }

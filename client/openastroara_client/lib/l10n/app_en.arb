@@ -4353,5 +4353,181 @@
   "filterSwapCouldntCancel": "Couldn't cancel the swap",
   "@filterSwapCouldntCancel": {
     "description": "Manual filter swap failure"
+  },
+  "bugCardTitle": "Send me a bug report",
+  "@bugCardTitle": {
+    "description": "Bug report card title"
+  },
+  "bugCardBody": "Bundles the rig's logs (Ara, AlpacaBridge, the guider, the system journal) + your profile + system info into a ZIP you can attach to a report.",
+  "@bugCardBody": {
+    "description": "Bug report card"
+  },
+  "bugCardPacking": "Packing the logs on the rig… {size} read",
+  "@bugCardPacking": {
+    "description": "Bug report card: progress",
+    "placeholders": {"size": {"type": "String"}}
+  },
+  "bugCardCovers": "Covers: ",
+  "@bugCardCovers": {
+    "description": "Bug report card: label before the range"
+  },
+  "bugCardSharing": "Sharing: ",
+  "@bugCardSharing": {
+    "description": "Bug report card: label before the sharing mode"
+  },
+  "bugCardAppLog": "This app's error log",
+  "@bugCardAppLog": {
+    "description": "Bug report card: sharing option"
+  },
+  "bugCardPrepare": "Prepare & download",
+  "@bugCardPrepare": {
+    "description": "Bug report card: action"
+  },
+  "bugCardSaveLog": "Save client log",
+  "@bugCardSaveLog": {
+    "description": "Bug report card: action"
+  },
+  "bugRangeNight": "Last night (whole rig)",
+  "@bugRangeNight": {
+    "description": "Bug report range"
+  },
+  "bugRange3Days": "Last 3 days (whole rig)",
+  "@bugRange3Days": {
+    "description": "Bug report range"
+  },
+  "bugRange7Days": "Last 7 days (whole rig)",
+  "@bugRange7Days": {
+    "description": "Bug report range"
+  },
+  "bugRangeAraOnly": "Ara logs only",
+  "@bugRangeAraOnly": {
+    "description": "Bug report range"
+  },
+  "bugModeFull": "Include everything",
+  "@bugModeFull": {
+    "description": "Bug report sharing mode"
+  },
+  "bugModeFullNote": "best for debugging",
+  "@bugModeFullNote": {
+    "description": "Bug report sharing mode"
+  },
+  "bugModeCoarse": "Coarse GPS only",
+  "@bugModeCoarse": {
+    "description": "Bug report sharing mode"
+  },
+  "bugModeCoarseNote": "site rounded to ~111 km",
+  "@bugModeCoarseNote": {
+    "description": "Bug report sharing mode"
+  },
+  "bugModeRedacted": "Redact all sensitive items",
+  "@bugModeRedacted": {
+    "description": "Bug report sharing mode"
+  },
+  "bugModeRedactedNote": "coordinates, serials, hostnames, usernames in paths, private IPs, tokens",
+  "@bugModeRedactedNote": {
+    "description": "Bug report sharing mode"
+  },
+  "bugPickTitle": "Choose where to save the bug report",
+  "@bugPickTitle": {
+    "description": "Bug report: file dialog title"
+  },
+  "bugSaved": "Saved {name}",
+  "@bugSaved": {
+    "description": "Bug report saved",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "bugSavedBoth": "Saved {name} and {log}",
+  "@bugSavedBoth": {
+    "description": "Bug report and client log saved",
+    "placeholders": {"name": {"type": "String"}, "log": {"type": "String"}}
+  },
+  "bugFailed": "Bug report failed: {reason}",
+  "@bugFailed": {
+    "description": "Bug report failed",
+    "placeholders": {"reason": {"type": "String"}}
+  },
+  "bugFailStillPacking": "the rig is still packing the logs; try again in a moment",
+  "@bugFailStillPacking": {
+    "description": "Bug report failure reason"
+  },
+  "bugFailCouldNotPack": "the rig could not pack the logs",
+  "@bugFailCouldNotPack": {
+    "description": "Bug report failure reason"
+  },
+  "bugFailTimeout": "Ara took too long to respond.",
+  "@bugFailTimeout": {
+    "description": "Bug report failure reason"
+  },
+  "bugFailUnreachable": "could not reach Ara.",
+  "@bugFailUnreachable": {
+    "description": "Bug report failure reason"
+  },
+  "bugFailStatus": "Ara returned an error ({status}).",
+  "@bugFailStatus": {
+    "description": "Bug report failure reason",
+    "placeholders": {"status": {"type": "String"}}
+  },
+  "bugFailTalking": "something went wrong talking to Ara.",
+  "@bugFailTalking": {
+    "description": "Bug report failure reason"
+  },
+  "bugFailUnexpected": "an unexpected error occurred.",
+  "@bugFailUnexpected": {
+    "description": "Bug report failure reason"
+  },
+  "clientLogPickTitle": "Choose where to save the client log",
+  "@clientLogPickTitle": {
+    "description": "Client log: file dialog title"
+  },
+  "clientLogSaved": "Saved {path}",
+  "@clientLogSaved": {
+    "description": "Client log saved",
+    "placeholders": {"path": {"type": "String"}}
+  },
+  "clientLogSaveAction": "save the log",
+  "@clientLogSaveAction": {
+    "description": "After Couldn't"
+  },
+  "storageEjected": "Ejected — safe to unplug the drive.",
+  "@storageEjected": {
+    "description": "Eject result"
+  },
+  "storageEjectBusy": "The drive is busy — wait for writes to finish and try again.",
+  "@storageEjectBusy": {
+    "description": "Eject result"
+  },
+  "storageEjectFailed": "Eject failed: {reason}",
+  "@storageEjectFailed": {
+    "description": "Eject result",
+    "placeholders": {"reason": {"type": "String"}}
+  },
+  "storageEjectAction": "eject the drive",
+  "@storageEjectAction": {
+    "description": "After Couldn't"
+  },
+  "storageCheckRepaired": "Disk checked — repairs were made. Worth re-running \"Find frames on disk\".",
+  "@storageCheckRepaired": {
+    "description": "Check disk result; the quoted name is a full UI button"
+  },
+  "storageCheckClean": "Disk checked — clean.",
+  "@storageCheckClean": {
+    "description": "Check disk result"
+  },
+  "storageCheckFailed": "Check failed: {reason}",
+  "@storageCheckFailed": {
+    "description": "Check disk result",
+    "placeholders": {"reason": {"type": "String"}}
+  },
+  "storageCheckAction": "check the disk",
+  "@storageCheckAction": {
+    "description": "After Couldn't"
+  },
+  "sessionTransferredTitle": "Session transferred",
+  "@sessionTransferredTitle": {
+    "description": "Another client took control"
+  },
+  "sessionTransferredDetail": "Another client took control of the observatory, so this client was disconnected. The running sequence is unaffected — it continues on Ara.",
+  "@sessionTransferredDetail": {
+    "description": "Another client took control"
   }
 }

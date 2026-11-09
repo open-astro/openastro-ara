@@ -75,6 +75,15 @@ void main() {
     expect(c.read(simpleMessagesProvider), isEmpty);
   });
 
+  testWidgets("a refused pill's time-left line is amber, like its dot", (tester) async {
+    final c = await _pump(tester);
+    c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.refused, 'No disk to eject');
+    await tester.pump();
+    final amber = AraColors.accentWarning.withValues(alpha: 0.6);
+    expect(find.byWidgetPredicate((w) => w is Container && w.color == amber), findsOneWidget);
+    await tester.pump(kSimpleResultLife);
+  });
+
   testWidgets('a result fades after 10 s; an error stays longer, then fades too (user, 2026-11-04); × closes it',
       (tester) async {
     final c = await _pump(tester);

@@ -431,7 +431,7 @@ void main() {
       addTearDown(tester.view.reset);
       await tester.pumpWidget(_host(_FakeBugReportClient(), simple: true, locale: const Locale('pt', 'BR')));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Prepare & download'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Preparar e baixar'));
       await settle(tester);
       const title = 'Antes de compartilhar este relatório de erro';
       expect(find.text(title), findsOneWidget);
@@ -519,6 +519,15 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byType(AlertDialog), findsOneWidget);
     expect(find.byType(DropdownButton<String>), findsOneWidget);
+  });
+
+  testWidgets("the card's own words are in Brazilian Portuguese", (tester) async {
+    await tester.pumpWidget(_host(_FakeBugReportClient(), simple: true, locale: const Locale('pt', 'BR')));
+    await tester.pumpAndSettle();
+    for (final words in ['Enviar um relatório de erro', 'Abrange: ', 'Compartilhar: ', 'Última noite (equipamento inteiro)', 'Incluir tudo', 'Preparar e baixar']) {
+      expect(find.text(words), findsOneWidget, reason: words);
+    }
+    expect(find.text('Send me a bug report'), findsNothing);
   });
 
   testWidgets("Simple Mode's Covers and Sharing are at least 44 px tall", (tester) async {

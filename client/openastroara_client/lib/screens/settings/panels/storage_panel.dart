@@ -617,16 +617,16 @@ class _EjectButtonState extends ConsumerState<StorageEjectButton> {
       ref.invalidate(storageDevicesProvider);
       notify(
         outcome.success
-            ? 'Ejected — safe to unplug the drive.'
+            ? l10n.storageEjected
             : outcome.code == 'device_busy'
-            ? 'The drive is busy — wait for writes to finish and try again.'
-            : 'Eject failed: ${outcome.detail ?? outcome.code}',
+            ? l10n.storageEjectBusy
+            : l10n.storageEjectFailed(outcome.detail ?? outcome.code),
         error: !outcome.success,
         snackBarRed: false,
       );
     } catch (e) {
       notify(
-        friendlyError(l10n, e, action: 'eject the drive'),
+        friendlyError(l10n, e, action: l10n.storageEjectAction),
         error: true,
         snackBarRed: false,
       );
@@ -725,16 +725,15 @@ class _CheckDiskButtonState extends ConsumerState<StorageCheckDiskButton> {
       notify(
         outcome.success
             ? (outcome.code == 'repaired'
-                  ? 'Disk checked — repairs were made. Worth re-running '
-                        '"Find frames on disk".'
-                  : 'Disk checked — clean.')
-            : 'Check failed: ${outcome.detail ?? outcome.code}',
+                  ? l10n.storageCheckRepaired
+                  : l10n.storageCheckClean)
+            : l10n.storageCheckFailed(outcome.detail ?? outcome.code),
         error: !outcome.success,
         snackBarRed: false,
       );
     } catch (e) {
       notify(
-        friendlyError(l10n, e, action: 'check the disk'),
+        friendlyError(l10n, e, action: l10n.storageCheckAction),
         error: true,
         snackBarRed: false,
       );

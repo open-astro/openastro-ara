@@ -14,8 +14,8 @@ import '../../widgets/storage/storage_drive_dialog.dart';
 import '../../widgets/support/bug_report_card.dart';
 import '../settings/panels/storage_panel.dart';
 
-/// Settings › Rig › Logs & bug report: the Full UI's two save actions, hosted
-/// as they are. The bug report needs the rig; the client log does not.
+/// Settings › Rig › Logs & bug report: the Full UI's bug report card, hosted
+/// as it is. Its Sharing adds the client log, which needs no rig.
 class SimpleLogsBlock extends StatelessWidget {
   const SimpleLogsBlock({super.key});
 
@@ -96,7 +96,8 @@ class _SimpleStorageBlockState extends ConsumerState<SimpleStorageBlock> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final space = ref.watch(storageSpaceProvider);
-    final devices = ref.watch(storageDevicesProvider).asData?.value;
+    final devicesRead = ref.watch(storageDevicesProvider);
+    final devices = devicesRead.asData?.value;
     final value = space.asData?.value;
     final reading = value == null && space.isLoading && !space.hasError;
     // Only a missing server answers null: a failed read still has a rig.
@@ -105,7 +106,7 @@ class _SimpleStorageBlockState extends ConsumerState<SimpleStorageBlock> {
     final store = devices?.where((d) => d.isAraStore).firstOrNull;
     final name =
         store?.friendlyName ??
-        (space.hasError
+        (space.hasError || devices == null
             ? l10n.shellStorageUnknownDisk
             : l10n.shellStorageInternal);
     final free = value?.freeBytes;
@@ -133,7 +134,7 @@ class _SimpleStorageBlockState extends ConsumerState<SimpleStorageBlock> {
         Text(
           noRig
               ? l10n.shellRigNotConnected
-              : reading
+              : reading || (devices == null && devicesRead.isLoading)
               ? l10n.shellStorageReading
               : name,
           style: kSimpleText.copyWith(

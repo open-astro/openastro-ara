@@ -48,21 +48,21 @@ class BugReportCard extends ConsumerStatefulWidget {
 }
 
 /// §54.3 sharing modes, in the order the review modal lists them.
-const bugReportSharingModes = <(String wire, String label, String detail)>[
-  ('full', 'Include everything', 'best for debugging'),
-  ('coarse_gps', 'Coarse GPS only', 'site rounded to ~111 km'),
-  ('redacted', 'Redact all sensitive items', 'coordinates, serials, hostnames, usernames in paths, private IPs, tokens'),
+List<(String wire, String label, String detail)> _sharingModes(AppLocalizations l) => [
+  ('full', l.bugModeFull, l.bugModeFullNote),
+  ('coarse_gps', l.bugModeCoarse, l.bugModeCoarseNote),
+  ('redacted', l.bugModeRedacted, l.bugModeRedactedNote),
 ];
 
 /// What the bundle covers: Ara's newest logs only, or the whole rig's logs
 /// (Ara, its NINA layer, AlpacaBridge, the guider, package history and the
 /// journal) written in the range. "Last night" is the default: it is what a
 /// report about a night at the rig needs.
-const bugReportRanges = <(Duration? range, String label)>[
-  (Duration(hours: 24), 'Last night (whole rig)'),
-  (Duration(days: 3), 'Last 3 days (whole rig)'),
-  (Duration(days: 7), 'Last 7 days (whole rig)'),
-  (null, 'Ara logs only'),
+List<(Duration? range, String label)> _ranges(AppLocalizations l) => [
+  (const Duration(hours: 24), l.bugRangeNight),
+  (const Duration(days: 3), l.bugRange3Days),
+  (const Duration(days: 7), l.bugRange7Days),
+  (null, l.bugRangeAraOnly),
 ];
 
 /// The disclosure's name for each source the daemon's manifest reports.
@@ -113,9 +113,10 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
   Future<void> _run() async {
     final api = ref.read(bugReportApiProvider);
     if (api == null) return;
+    final l = context.l10n;
     setState(() => _busy = true);
     try {
-      final range = bugReportRanges[_rangeIndex].$1;
+      final range = _ranges(l)[_rangeIndex].$1;
       var prep = await api.prepare(
           mode: _mode,
           since: range == null ? null : DateTime.now().toUtc().subtract(range));
@@ -125,7 +126,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
         if (!mounted) return;
         setState(() => _packed = prep.estimatedSizeBytes);
         if (DateTime.now().isAfter(deadline)) {
-          throw const _PackingFailed('the rig is still packing the logs; try again in a moment');
+          throw _PackingFailed(l.bugFailStillPacking);
         }
         await Future<void>.delayed(widget.pollInterval);
         prep = await api.status(prep.preparationId);
@@ -133,7 +134,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
       if (!mounted) return;
       setState(() => _packed = null);
       if (prep.isFailed) {
-        throw _PackingFailed(prep.error ?? 'the rig could not pack the logs');
+        throw _PackingFailed(prep.error ?? l.bugFailCouldNotPack);
       }
 
       // PII gate: the user must see what's in the bundle before it's downloaded.
@@ -144,7 +145,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
       // chunk instead of being buffered whole in memory (§54 follow-up).
       final pick = widget.savePathPicker ?? pickStreamSavePath;
       final savePath = await pick(
-          'Choose where to save the bug report', 'openastroara-bug-report.zip');
+          l.bugPickTitle, 'openastroara-bug-report.zip');
       if (!mounted || savePath == null) return;
       final name = await api.downloadTo(savePath, prep.preparationId);
       // #1111 — the client's own error log goes beside the ZIP. The bundle
@@ -152,12 +153,12 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
       final clientLogName = await _saveClientLogBeside(savePath);
       if (!mounted) return;
       userNotifier(context)(
-        clientLogName == null ? 'Saved $name' : 'Saved $name and $clientLogName',
+        clientLogName == null ? l.bugSaved(name) : l.bugSavedBoth(name, clientLogName),
       );
     } catch (e) {
       if (!mounted) return;
       userNotifier(context)(
-        'Bug report failed: ${_friendly(e)}',
+        l.bugFailed(_friendly(l, e)),
         error: true,
         snackBarRed: false,
       );
@@ -254,6 +255,8 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
     final review = _review;
     final simple = ref.watch(simpleModeActiveProvider);
     final logOnly = _mode == _clientLogOnly;
+    final l = context.l10n;
+    final ranges = _ranges(l);
     return Card(
       margin: const EdgeInsets.all(8),
       child: Padding(
@@ -267,23 +270,21 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
             body: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Send me a bug report',
+                  Text(l.bugCardTitle,
                       style: theme.textTheme.titleSmall),
                   const SizedBox(height: 2),
                   Text(
-                    'Bundles the rig\'s logs (Ara, AlpacaBridge, the guider, '
-                    'the system journal) + your profile + system info into a '
-                    'ZIP you can attach to a report.',
+                    l.bugCardBody,
                     style: theme.textTheme.bodySmall,
                   ),
                   if (_packed != null)
-                    Text('Packing the logs on the rig… ${_humanSize(_packed!)} read',
+                    Text(l.bugCardPacking(_humanSize(_packed!)),
                         style: theme.textTheme.bodySmall),
                   if (!logOnly) ...[
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Text('Covers: ', style: theme.textTheme.bodySmall),
+                      Text(l.bugCardCovers, style: theme.textTheme.bodySmall),
                       Flexible(
                         child: DropdownButton<int>(
                           value: _rangeIndex,
@@ -293,10 +294,10 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                           style: theme.textTheme.bodySmall,
                           onChanged: _busy ? null : (v) => setState(() => _rangeIndex = v ?? 0),
                           items: [
-                            for (var i = 0; i < bugReportRanges.length; i++)
+                            for (var i = 0; i < ranges.length; i++)
                               DropdownMenuItem(
                                 value: i,
-                                child: Text(bugReportRanges[i].$2, overflow: TextOverflow.ellipsis),
+                                child: Text(ranges[i].$2, overflow: TextOverflow.ellipsis),
                               ),
                           ],
                         ),
@@ -309,7 +310,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                   // ZIP the user downloads never held what the mode scrubs.
                   Row(
                     children: [
-                      Text('Sharing: ', style: theme.textTheme.bodySmall),
+                      Text(l.bugCardSharing, style: theme.textTheme.bodySmall),
                       Flexible(
                         child: DropdownButton<String>(
                           value: _mode,
@@ -318,15 +319,15 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                           style: theme.textTheme.bodySmall,
                           onChanged: _busy ? null : (v) => setState(() => _mode = v ?? 'full'),
                           items: [
-                            for (final m in bugReportSharingModes)
+                            for (final m in _sharingModes(l))
                               DropdownMenuItem(
                                 value: m.$1,
                                 child: Tooltip(message: m.$3, child: Text(m.$2, overflow: TextOverflow.ellipsis)),
                               ),
                             if (simple)
-                              const DropdownMenuItem(
+                              DropdownMenuItem(
                                 value: _clientLogOnly,
-                                child: Text("This app's error log", overflow: TextOverflow.ellipsis),
+                                child: Text(l.bugCardAppLog, overflow: TextOverflow.ellipsis),
                               ),
                           ],
                         ),
@@ -344,7 +345,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : Icon(logOnly ? Icons.save_alt : Icons.bug_report, size: 18),
-              label: Text(logOnly ? 'Save client log' : 'Prepare & download'),
+              label: Text(logOnly ? l.bugCardSaveLog : l.bugCardPrepare),
             ),
             ),
             if (review != null)
@@ -364,7 +365,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
   }
 
   // Short, user-facing message — don't leak Dio's verbose toString (URLs etc.).
-  static String _friendly(Object e) {
+  static String _friendly(AppLocalizations l, Object e) {
     // The card's own failures (packing failed or timed out) already read as a sentence for the user.
     if (e is _PackingFailed) return e.message;
     if (e is DioException) {
@@ -372,15 +373,15 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
         DioExceptionType.connectionTimeout ||
         DioExceptionType.sendTimeout ||
         DioExceptionType.receiveTimeout =>
-          'Ara took too long to respond.',
+          l.bugFailTimeout,
         DioExceptionType.connectionError =>
-          'could not reach Ara.',
+          l.bugFailUnreachable,
         DioExceptionType.badResponse =>
-          'Ara returned an error (${e.response?.statusCode}).',
-        _ => 'something went wrong talking to Ara.',
+          l.bugFailStatus('${e.response?.statusCode}'),
+        _ => l.bugFailTalking,
       };
     }
-    return 'an unexpected error occurred.';
+    return l.bugFailUnexpected;
   }
 
   // "• AlpacaBridge logs (camera, mount, focuser, wheel): 2 files, 31.2 MB, cut to

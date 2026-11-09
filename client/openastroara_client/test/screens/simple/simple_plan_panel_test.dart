@@ -1371,6 +1371,17 @@ void main() {
     expect(c.read(simpleFlatsChoiceProvider), 'panel_at_end');
   });
 
+  testWidgets('each Flats segment says it is about Flats to screen readers', (tester) async {
+    final handle = tester.ensureSemantics();
+    final c = await _pump(tester, _Seq(),
+        SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
+    c.read(safetyPoliciesProvider.notifier).setCalibrationCaptureDefault(CalibrationCaptureDefault.ask);
+    await tester.pump();
+    final node = tester.getSemantics(find.byKey(const Key('simple-run-flats-sky')));
+    expect(node.label, allOf(contains('Flats'), contains('Sky')));
+    handle.dispose();
+  });
+
   testWidgets('a profile with its own flats setting shows no flats choice', (tester) async {
     final c = await _pump(tester, _Seq(),
         SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));

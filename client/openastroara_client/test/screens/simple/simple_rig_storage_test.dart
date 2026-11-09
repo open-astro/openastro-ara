@@ -83,6 +83,7 @@ Future<(ProviderContainer, _FakeApi)> _pump(
   ThemeData? theme,
   Future<StorageSpace?> Function()? space,
   List<StorageDevice> devices = const [_store, _ntfs],
+  Future<List<StorageDevice>> Function()? readDevices,
 }) async {
   tester.view.physicalSize = const Size(800, 1400);
   tester.view.devicePixelRatio = 1;
@@ -93,7 +94,9 @@ Future<(ProviderContainer, _FakeApi)> _pump(
       simpleModeActiveProvider.overrideWithValue(simple),
       activeServerProvider.overrideWithValue(_server),
       storageDevicesApiFactoryProvider.overrideWithValue((_) => api),
-      storageDevicesProvider.overrideWith((ref) async => devices),
+      storageDevicesProvider.overrideWith(
+        (ref) => readDevices?.call() ?? Future.value(devices),
+      ),
       storageSpaceProvider.overrideWith(
         (ref) =>
             space?.call() ??
@@ -204,6 +207,33 @@ void main() {
       'Ejected — safe to unplug the drive.',
     );
     await tester.pump(kSimpleResultLife); // the pill's timer
+  });
+
+  testWidgets('with the disk list still out the heading does not say Internal storage', (tester) async {
+    await _pump(tester, readDevices: () => Completer<List<StorageDevice>>().future);
+    expect(find.text('Internal storage'), findsNothing);
+    expect(find.text('Checking the disk…'), findsOneWidget);
+  });
+
+  testWidgets('a failed disk list reads as an unknown disk, not Internal storage', (tester) async {
+    await _pump(tester, readDevices: () async => throw StateError('no answer'));
+    expect(find.text('Internal storage'), findsNothing);
+    expect(find.text('Unknown disk'), findsOneWidget);
+  });
+
+  testWidgets('with the disk list read and no store, it is Internal storage', (tester) async {
+    await _pump(tester, devices: const [_ntfs]);
+    expect(find.text('Internal storage'), findsOneWidget);
+  });
+
+  testWidgets('Eject and Check disk results are in Brazilian Portuguese', (tester) async {
+    final (c, _) = await _pump(tester, locale: const Locale('pt', 'BR'));
+    await _tap(tester, find.byKey(const Key('simple-storage-eject')));
+    expect(c.read(simpleMessagesProvider).first.title, 'Ejetado. Já pode desconectar o disco.');
+    await _tap(tester, find.byKey(const Key('simple-storage-check')));
+    await _tap(tester, find.byKey(const Key('simple-storage-check-ask-confirm')));
+    expect(c.read(simpleMessagesProvider).first.title, 'Disco verificado: sem problemas.');
+    await tester.pump(kSimpleResultLife);
   });
 
   testWidgets('a refused Eject is an error pill', (tester) async {

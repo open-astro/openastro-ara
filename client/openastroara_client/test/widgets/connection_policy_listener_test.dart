@@ -258,6 +258,17 @@ void main() {
     List<SimpleMessage> pills(WidgetTester tester) =>
         ProviderScope.containerOf(tester.element(find.byType(ConnectionPolicyListener))).read(simpleMessagesProvider);
 
+    testWidgets('the session-transferred pill is in Brazilian Portuguese', (tester) async {
+      final (conn, _) = await pumpListener(tester, simple: true, locale: const Locale('pt', 'BR'));
+      conn.legs.first.closeCode = 4004;
+      await conn.legs.first.incoming.close();
+      await tester.pump();
+      await tester.pump();
+      final pill = pills(tester).single;
+      expect(pill.title, 'Sessão transferida');
+      expect(pill.actions.map((a) => a.label), ['OK', 'Reconectar']);
+    });
+
     testWidgets('a takeover pill is in Brazilian Portuguese', (tester) async {
       final (conn, _) = await pumpListener(tester, simple: true, locale: const Locale('pt', 'BR'));
       conn.legs.first.incoming.add(jsonEncode({'type': 'connection.request', 'from': 'ipad.local', 'request_id': 'req-9'}));

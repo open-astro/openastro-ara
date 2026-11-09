@@ -2787,6 +2787,7 @@ class _FlatsChoice extends ConsumerWidget {
         Expanded(
           child: SimpleSegments<String>(
             keyPrefix: 'simple-run-flats',
+            group: l10n.planFlats,
             options: [
               ('later', l10n.planFlatsNone, 'none'),
               ('sky_at_twilight', l10n.planFlatsSky, 'sky'),

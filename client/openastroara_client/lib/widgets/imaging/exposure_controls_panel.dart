@@ -716,7 +716,10 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
                     });
                   }
                   if (!context.mounted) return;
-                  userNotifier(context)(context.l10n.filterDropdownBusy);
+                  userNotifier(context)(
+                    context.l10n.filterDropdownBusy,
+                    refused: true,
+                  );
                   return;
                 }
                 // No onChanged(n) here for NAMED target slots — the

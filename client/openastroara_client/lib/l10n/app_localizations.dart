@@ -5474,6 +5474,258 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t cancel the swap'**
   String get filterSwapCouldntCancel;
+
+  /// Bug report card title
+  ///
+  /// In en, this message translates to:
+  /// **'Send me a bug report'**
+  String get bugCardTitle;
+
+  /// Bug report card
+  ///
+  /// In en, this message translates to:
+  /// **'Bundles the rig\'s logs (Ara, AlpacaBridge, the guider, the system journal) + your profile + system info into a ZIP you can attach to a report.'**
+  String get bugCardBody;
+
+  /// Bug report card: progress
+  ///
+  /// In en, this message translates to:
+  /// **'Packing the logs on the rig… {size} read'**
+  String bugCardPacking(String size);
+
+  /// Bug report card: label before the range
+  ///
+  /// In en, this message translates to:
+  /// **'Covers: '**
+  String get bugCardCovers;
+
+  /// Bug report card: label before the sharing mode
+  ///
+  /// In en, this message translates to:
+  /// **'Sharing: '**
+  String get bugCardSharing;
+
+  /// Bug report card: sharing option
+  ///
+  /// In en, this message translates to:
+  /// **'This app\'s error log'**
+  String get bugCardAppLog;
+
+  /// Bug report card: action
+  ///
+  /// In en, this message translates to:
+  /// **'Prepare & download'**
+  String get bugCardPrepare;
+
+  /// Bug report card: action
+  ///
+  /// In en, this message translates to:
+  /// **'Save client log'**
+  String get bugCardSaveLog;
+
+  /// Bug report range
+  ///
+  /// In en, this message translates to:
+  /// **'Last night (whole rig)'**
+  String get bugRangeNight;
+
+  /// Bug report range
+  ///
+  /// In en, this message translates to:
+  /// **'Last 3 days (whole rig)'**
+  String get bugRange3Days;
+
+  /// Bug report range
+  ///
+  /// In en, this message translates to:
+  /// **'Last 7 days (whole rig)'**
+  String get bugRange7Days;
+
+  /// Bug report range
+  ///
+  /// In en, this message translates to:
+  /// **'Ara logs only'**
+  String get bugRangeAraOnly;
+
+  /// Bug report sharing mode
+  ///
+  /// In en, this message translates to:
+  /// **'Include everything'**
+  String get bugModeFull;
+
+  /// Bug report sharing mode
+  ///
+  /// In en, this message translates to:
+  /// **'best for debugging'**
+  String get bugModeFullNote;
+
+  /// Bug report sharing mode
+  ///
+  /// In en, this message translates to:
+  /// **'Coarse GPS only'**
+  String get bugModeCoarse;
+
+  /// Bug report sharing mode
+  ///
+  /// In en, this message translates to:
+  /// **'site rounded to ~111 km'**
+  String get bugModeCoarseNote;
+
+  /// Bug report sharing mode
+  ///
+  /// In en, this message translates to:
+  /// **'Redact all sensitive items'**
+  String get bugModeRedacted;
+
+  /// Bug report sharing mode
+  ///
+  /// In en, this message translates to:
+  /// **'coordinates, serials, hostnames, usernames in paths, private IPs, tokens'**
+  String get bugModeRedactedNote;
+
+  /// Bug report: file dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Choose where to save the bug report'**
+  String get bugPickTitle;
+
+  /// Bug report saved
+  ///
+  /// In en, this message translates to:
+  /// **'Saved {name}'**
+  String bugSaved(String name);
+
+  /// Bug report and client log saved
+  ///
+  /// In en, this message translates to:
+  /// **'Saved {name} and {log}'**
+  String bugSavedBoth(String name, String log);
+
+  /// Bug report failed
+  ///
+  /// In en, this message translates to:
+  /// **'Bug report failed: {reason}'**
+  String bugFailed(String reason);
+
+  /// Bug report failure reason
+  ///
+  /// In en, this message translates to:
+  /// **'the rig is still packing the logs; try again in a moment'**
+  String get bugFailStillPacking;
+
+  /// Bug report failure reason
+  ///
+  /// In en, this message translates to:
+  /// **'the rig could not pack the logs'**
+  String get bugFailCouldNotPack;
+
+  /// Bug report failure reason
+  ///
+  /// In en, this message translates to:
+  /// **'Ara took too long to respond.'**
+  String get bugFailTimeout;
+
+  /// Bug report failure reason
+  ///
+  /// In en, this message translates to:
+  /// **'could not reach Ara.'**
+  String get bugFailUnreachable;
+
+  /// Bug report failure reason
+  ///
+  /// In en, this message translates to:
+  /// **'Ara returned an error ({status}).'**
+  String bugFailStatus(String status);
+
+  /// Bug report failure reason
+  ///
+  /// In en, this message translates to:
+  /// **'something went wrong talking to Ara.'**
+  String get bugFailTalking;
+
+  /// Bug report failure reason
+  ///
+  /// In en, this message translates to:
+  /// **'an unexpected error occurred.'**
+  String get bugFailUnexpected;
+
+  /// Client log: file dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Choose where to save the client log'**
+  String get clientLogPickTitle;
+
+  /// Client log saved
+  ///
+  /// In en, this message translates to:
+  /// **'Saved {path}'**
+  String clientLogSaved(String path);
+
+  /// After Couldn't
+  ///
+  /// In en, this message translates to:
+  /// **'save the log'**
+  String get clientLogSaveAction;
+
+  /// Eject result
+  ///
+  /// In en, this message translates to:
+  /// **'Ejected — safe to unplug the drive.'**
+  String get storageEjected;
+
+  /// Eject result
+  ///
+  /// In en, this message translates to:
+  /// **'The drive is busy — wait for writes to finish and try again.'**
+  String get storageEjectBusy;
+
+  /// Eject result
+  ///
+  /// In en, this message translates to:
+  /// **'Eject failed: {reason}'**
+  String storageEjectFailed(String reason);
+
+  /// After Couldn't
+  ///
+  /// In en, this message translates to:
+  /// **'eject the drive'**
+  String get storageEjectAction;
+
+  /// Check disk result; the quoted name is a full UI button
+  ///
+  /// In en, this message translates to:
+  /// **'Disk checked — repairs were made. Worth re-running \"Find frames on disk\".'**
+  String get storageCheckRepaired;
+
+  /// Check disk result
+  ///
+  /// In en, this message translates to:
+  /// **'Disk checked — clean.'**
+  String get storageCheckClean;
+
+  /// Check disk result
+  ///
+  /// In en, this message translates to:
+  /// **'Check failed: {reason}'**
+  String storageCheckFailed(String reason);
+
+  /// After Couldn't
+  ///
+  /// In en, this message translates to:
+  /// **'check the disk'**
+  String get storageCheckAction;
+
+  /// Another client took control
+  ///
+  /// In en, this message translates to:
+  /// **'Session transferred'**
+  String get sessionTransferredTitle;
+
+  /// Another client took control
+  ///
+  /// In en, this message translates to:
+  /// **'Another client took control of the observatory, so this client was disconnected. The running sequence is unaffected — it continues on Ara.'**
+  String get sessionTransferredDetail;
 }
 
 class _AppLocalizationsDelegate

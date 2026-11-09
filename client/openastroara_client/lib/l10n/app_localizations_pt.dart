@@ -3205,6 +3205,154 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get filterSwapCouldntCancel => 'Couldn\'t cancel the swap';
+
+  @override
+  String get bugCardTitle => 'Send me a bug report';
+
+  @override
+  String get bugCardBody =>
+      'Bundles the rig\'s logs (Ara, AlpacaBridge, the guider, the system journal) + your profile + system info into a ZIP you can attach to a report.';
+
+  @override
+  String bugCardPacking(String size) {
+    return 'Packing the logs on the rig… $size read';
+  }
+
+  @override
+  String get bugCardCovers => 'Covers: ';
+
+  @override
+  String get bugCardSharing => 'Sharing: ';
+
+  @override
+  String get bugCardAppLog => 'This app\'s error log';
+
+  @override
+  String get bugCardPrepare => 'Prepare & download';
+
+  @override
+  String get bugCardSaveLog => 'Save client log';
+
+  @override
+  String get bugRangeNight => 'Last night (whole rig)';
+
+  @override
+  String get bugRange3Days => 'Last 3 days (whole rig)';
+
+  @override
+  String get bugRange7Days => 'Last 7 days (whole rig)';
+
+  @override
+  String get bugRangeAraOnly => 'Ara logs only';
+
+  @override
+  String get bugModeFull => 'Include everything';
+
+  @override
+  String get bugModeFullNote => 'best for debugging';
+
+  @override
+  String get bugModeCoarse => 'Coarse GPS only';
+
+  @override
+  String get bugModeCoarseNote => 'site rounded to ~111 km';
+
+  @override
+  String get bugModeRedacted => 'Redact all sensitive items';
+
+  @override
+  String get bugModeRedactedNote =>
+      'coordinates, serials, hostnames, usernames in paths, private IPs, tokens';
+
+  @override
+  String get bugPickTitle => 'Choose where to save the bug report';
+
+  @override
+  String bugSaved(String name) {
+    return 'Saved $name';
+  }
+
+  @override
+  String bugSavedBoth(String name, String log) {
+    return 'Saved $name and $log';
+  }
+
+  @override
+  String bugFailed(String reason) {
+    return 'Bug report failed: $reason';
+  }
+
+  @override
+  String get bugFailStillPacking =>
+      'the rig is still packing the logs; try again in a moment';
+
+  @override
+  String get bugFailCouldNotPack => 'the rig could not pack the logs';
+
+  @override
+  String get bugFailTimeout => 'Ara took too long to respond.';
+
+  @override
+  String get bugFailUnreachable => 'could not reach Ara.';
+
+  @override
+  String bugFailStatus(String status) {
+    return 'Ara returned an error ($status).';
+  }
+
+  @override
+  String get bugFailTalking => 'something went wrong talking to Ara.';
+
+  @override
+  String get bugFailUnexpected => 'an unexpected error occurred.';
+
+  @override
+  String get clientLogPickTitle => 'Choose where to save the client log';
+
+  @override
+  String clientLogSaved(String path) {
+    return 'Saved $path';
+  }
+
+  @override
+  String get clientLogSaveAction => 'save the log';
+
+  @override
+  String get storageEjected => 'Ejected — safe to unplug the drive.';
+
+  @override
+  String get storageEjectBusy =>
+      'The drive is busy — wait for writes to finish and try again.';
+
+  @override
+  String storageEjectFailed(String reason) {
+    return 'Eject failed: $reason';
+  }
+
+  @override
+  String get storageEjectAction => 'eject the drive';
+
+  @override
+  String get storageCheckRepaired =>
+      'Disk checked — repairs were made. Worth re-running \"Find frames on disk\".';
+
+  @override
+  String get storageCheckClean => 'Disk checked — clean.';
+
+  @override
+  String storageCheckFailed(String reason) {
+    return 'Check failed: $reason';
+  }
+
+  @override
+  String get storageCheckAction => 'check the disk';
+
+  @override
+  String get sessionTransferredTitle => 'Session transferred';
+
+  @override
+  String get sessionTransferredDetail =>
+      'Another client took control of the observatory, so this client was disconnected. The running sequence is unaffected — it continues on Ara.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -6437,4 +6585,152 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get filterSwapCouldntCancel => 'Não foi possível cancelar a troca';
+
+  @override
+  String get bugCardTitle => 'Enviar um relatório de erro';
+
+  @override
+  String get bugCardBody =>
+      'Reúne os logs do setup (Ara, AlpacaBridge, guia, journal do sistema), seu perfil e informações do sistema em um ZIP que você pode anexar a um relatório.';
+
+  @override
+  String bugCardPacking(String size) {
+    return 'Empacotando os logs no setup… $size lidos';
+  }
+
+  @override
+  String get bugCardCovers => 'Abrange: ';
+
+  @override
+  String get bugCardSharing => 'Compartilhar: ';
+
+  @override
+  String get bugCardAppLog => 'Log de erros deste aplicativo';
+
+  @override
+  String get bugCardPrepare => 'Preparar e baixar';
+
+  @override
+  String get bugCardSaveLog => 'Salvar log do cliente';
+
+  @override
+  String get bugRangeNight => 'Última noite (equipamento inteiro)';
+
+  @override
+  String get bugRange3Days => 'Últimos 3 dias (equipamento inteiro)';
+
+  @override
+  String get bugRange7Days => 'Últimos 7 dias (equipamento inteiro)';
+
+  @override
+  String get bugRangeAraOnly => 'Somente logs do Ara';
+
+  @override
+  String get bugModeFull => 'Incluir tudo';
+
+  @override
+  String get bugModeFullNote => 'melhor para depuração';
+
+  @override
+  String get bugModeCoarse => 'Somente GPS aproximado';
+
+  @override
+  String get bugModeCoarseNote => 'local arredondado para ~111 km';
+
+  @override
+  String get bugModeRedacted => 'Remover todos os itens sensíveis';
+
+  @override
+  String get bugModeRedactedNote =>
+      'coordenadas, números de série, nomes de host, nomes de usuário em caminhos, IPs privados, tokens';
+
+  @override
+  String get bugPickTitle => 'Escolha onde salvar o relatório de erro';
+
+  @override
+  String bugSaved(String name) {
+    return '$name salvo';
+  }
+
+  @override
+  String bugSavedBoth(String name, String log) {
+    return '$name e $log salvos';
+  }
+
+  @override
+  String bugFailed(String reason) {
+    return 'Falha no relatório de erro: $reason';
+  }
+
+  @override
+  String get bugFailStillPacking =>
+      'o setup ainda está empacotando os logs; tente de novo em instantes';
+
+  @override
+  String get bugFailCouldNotPack => 'o setup não conseguiu empacotar os logs';
+
+  @override
+  String get bugFailTimeout => 'o Ara demorou demais para responder.';
+
+  @override
+  String get bugFailUnreachable => 'não foi possível acessar o Ara.';
+
+  @override
+  String bugFailStatus(String status) {
+    return 'o Ara retornou um erro ($status).';
+  }
+
+  @override
+  String get bugFailTalking => 'algo deu errado na comunicação com o Ara.';
+
+  @override
+  String get bugFailUnexpected => 'ocorreu um erro inesperado.';
+
+  @override
+  String get clientLogPickTitle => 'Escolha onde salvar o log do cliente';
+
+  @override
+  String clientLogSaved(String path) {
+    return '$path salvo';
+  }
+
+  @override
+  String get clientLogSaveAction => 'salvar o log';
+
+  @override
+  String get storageEjected => 'Ejetado. Já pode desconectar o disco.';
+
+  @override
+  String get storageEjectBusy =>
+      'O disco está ocupado. Aguarde o fim das gravações e tente de novo.';
+
+  @override
+  String storageEjectFailed(String reason) {
+    return 'Falha ao ejetar: $reason';
+  }
+
+  @override
+  String get storageEjectAction => 'ejetar o disco';
+
+  @override
+  String get storageCheckRepaired =>
+      'Disco verificado, com reparos. Vale a pena executar \"Find frames on disk\" de novo.';
+
+  @override
+  String get storageCheckClean => 'Disco verificado: sem problemas.';
+
+  @override
+  String storageCheckFailed(String reason) {
+    return 'Falha na verificação: $reason';
+  }
+
+  @override
+  String get storageCheckAction => 'verificar o disco';
+
+  @override
+  String get sessionTransferredTitle => 'Sessão transferida';
+
+  @override
+  String get sessionTransferredDetail =>
+      'Outro cliente assumiu o controle do observatório, então este cliente foi desconectado. A sequência em andamento não é afetada e continua no Ara.';
 }

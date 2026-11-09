@@ -125,15 +125,16 @@ class _ConnectionPolicyListenerState
   void _showSessionTransferredDialog() {
     // The takeover-request dialog (if the user never answered it) is moot now.
     _dismissTakeoverDialog?.call();
+    final l10n = context.l10n;
     if (ref.read(simpleModeActiveProvider)) {
       ref.read(simpleMessagesProvider.notifier).show(
         SimpleMessageKind.question,
-        _transferredTitle,
-        detail: _transferredDetail,
+        l10n.sessionTransferredTitle,
+        detail: l10n.sessionTransferredDetail,
         actions: [
-          SimpleMessageAction('OK', () {}),
+          SimpleMessageAction(l10n.shellOk, () {}),
           SimpleMessageAction(
-            'Reconnect',
+            l10n.shellReconnect,
             () => ref.read(wsEventStreamProvider)?.connect(),
           ),
         ],
@@ -144,12 +145,12 @@ class _ConnectionPolicyListenerState
       showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text(_transferredTitle),
-          content: const Text(_transferredDetail),
+          title: Text(l10n.sessionTransferredTitle),
+          content: Text(l10n.sessionTransferredDetail),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('OK'),
+              child: Text(l10n.shellOk),
             ),
             FilledButton(
               onPressed: () {
@@ -158,7 +159,7 @@ class _ConnectionPolicyListenerState
                 // the Allow / Keep-me-connected modal in turn.
                 ref.read(wsEventStreamProvider)?.connect();
               },
-              child: const Text('Reconnect'),
+              child: Text(l10n.shellReconnect),
             ),
           ],
         ),
@@ -166,11 +167,6 @@ class _ConnectionPolicyListenerState
     );
   }
 }
-
-const _transferredTitle = 'Session transferred';
-const _transferredDetail =
-    'Another client took control of the observatory, so this client was '
-    'disconnected. The running sequence is unaffected — it continues on Ara.';
 
 /// The holder-side §27.1 modal. Auto-dismisses shortly before the daemon's
 /// 30 s answer window lapses (an unanswered request reads as "unresponsive"

@@ -101,17 +101,17 @@ Future<void> saveClientLog(
   try {
     final pick = picker ?? pickStreamSavePath;
     final savePath = await pick(
-      'Choose where to save the client log',
+      context.l10n.clientLogPickTitle,
       ClientLogCard.suggestedFileName,
     );
     if (!context.mounted || savePath == null) return;
     await log.exportTo(savePath);
     if (!context.mounted) return;
-    userNotifier(context)('Saved $savePath');
+    userNotifier(context)(context.l10n.clientLogSaved(savePath));
   } catch (e) {
     if (!context.mounted) return;
     userNotifier(context)(
-      friendlyError(context.l10n, e, action: 'save the log'),
+      friendlyError(context.l10n, e, action: context.l10n.clientLogSaveAction),
       error: true,
       snackBarRed: false,
     );

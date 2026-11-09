@@ -295,7 +295,7 @@ class _Pill extends ConsumerWidget {
                       widthFactor: v,
                       child: Container(
                         height: 2,
-                        color: AraColors.accentConnected.withValues(alpha: 0.6),
+                        color: dot.withValues(alpha: 0.6),
                       ),
                     ),
                   ),
