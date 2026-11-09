@@ -146,6 +146,16 @@ class SimpleMessagesNotifier extends Notifier<List<SimpleMessage>> {
     return id;
   }
 
+  /// Drops every question: their buttons belong to the shell that asked.
+  void dismissQuestions() {
+    // Called a frame late: the container may be gone (a closing test).
+    if (!ref.mounted) return;
+    state = [
+      for (final m in state)
+        if (m.kind != SimpleMessageKind.question) m,
+    ];
+  }
+
   void dismiss(int id) {
     _timers.remove(id)?.cancel();
     state = [

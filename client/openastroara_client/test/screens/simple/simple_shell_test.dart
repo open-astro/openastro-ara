@@ -3477,6 +3477,16 @@ void main() {
     expect(c.read(simpleModeProvider).value, isTrue);
   });
 
+  testWidgets('leaving Simple Mode clears its question pills, whose buttons died with it', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    final messages = c.read(simpleMessagesProvider.notifier);
+    messages.show(SimpleMessageKind.question, 'Which fan?');
+    messages.show(SimpleMessageKind.error, 'Failed');
+    await tester.pumpWidget(UncontrolledProviderScope(container: c, child: const SizedBox()));
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider).map((m) => m.title), ['Failed']);
+  });
+
   testWidgets('Open Storage reveals once: Settings › Rig opened later does not jump', (tester) async {
     final c = await _pump(tester, const Size(1024, 768));
     c.read(selectedSettingsPanelProvider.notifier).select('session.storage');

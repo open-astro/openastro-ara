@@ -362,7 +362,9 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
             : _inline
             ? FilledButton.styleFrom(minimumSize: _minSize)
             : null,
+        // A failed list can't vouch for the disk the confirmation named.
         onPressed: _busy ||
+                async.hasError ||
                 _selected == null ||
                 !_selected!.selectable ||
                 !_confirmSatisfied

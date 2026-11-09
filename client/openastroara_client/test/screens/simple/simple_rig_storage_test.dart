@@ -301,6 +301,24 @@ void main() {
     expect(row.selectedTileColor, AraColors.selectionTint);
   });
 
+  testWidgets('Erase turns off when a refreshed disk list fails', (tester) async {
+    var fail = false;
+    final (c, _) = await _pump(tester, theme: buildAraTheme(), readDevices: () async {
+      if (fail) throw StateError('no answer');
+      return const [_store, _ntfs];
+    });
+    await _tap(tester, find.byKey(const Key('simple-storage-choose')));
+    await _tap(tester, find.text('PHOTOS'));
+    await tester.enterText(find.byType(TextField), 'PHOTOS');
+    await tester.pumpAndSettle();
+    FilledButton erase() => tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Erase and Use Disk'));
+    expect(erase().onPressed, isNotNull, reason: 'confirmed against a list it can see');
+    fail = true;
+    c.invalidate(storageDevicesProvider);
+    await tester.pumpAndSettle();
+    expect(erase().onPressed, isNull);
+  });
+
   testWidgets('a format option is named at least as large as its detail', (tester) async {
     await _pump(tester);
     await _tap(tester, find.byKey(const Key('simple-storage-choose')));

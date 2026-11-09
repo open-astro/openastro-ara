@@ -49,6 +49,7 @@ namespace OpenAstroAra.Test {
         private FileProfileRepository repo = null!;
         private EquipmentSelectionStore selections = null!;
         private ActiveRunSessionRegistry runs = null!;
+        private readonly Mock<ISequencerService> sequencer = new();
         private FakeRig rig = null!;
         private readonly Mock<IGuiderService> guider = new();
         private Guid sim;
@@ -113,6 +114,9 @@ namespace OpenAstroAra.Test {
             builder.Services.AddSingleton<IProfileRepository>(repo);
             builder.Services.AddSingleton(guider.Object);
             builder.Services.AddSingleton(runs);
+            sequencer.Reset();
+            sequencer.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(Array.Empty<Guid>());
+            builder.Services.AddSingleton(sequencer.Object);
             AddDevices(builder.Services);
             builder.Services.AddSingleton<IEquipmentSelectionStore>(selections);
             builder.Services.AddSingleton<IEquipmentReconnector>(rig);
@@ -282,6 +286,20 @@ namespace OpenAstroAra.Test {
 
             Assert.That(body!.DeviceMessages.Select(m => m.DeviceName), Is.EqualTo(OnlySimSafety));
             Assert.That(rig.Log, Does.Not.Contain("forget:safety"), "the profile still remembers it");
+        }
+
+        [Test]
+        public async Task A_run_with_no_catalog_session_still_refuses_a_switch_create_and_delete() {
+            await SimRigConnectedAsync();
+            sequencer.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new[] { Guid.NewGuid() });
+
+            var (select, _) = await SelectAsync(real);
+            var create = await CreateAsync();
+            var delete = await DeleteAsync(sim);
+
+            Assert.That(new[] { select, create, delete }, Is.All.EqualTo(HttpStatusCode.Conflict));
+            Assert.That(repo.ActiveId, Is.EqualTo(sim));
+            Assert.That(rig.Log, Is.Empty);
         }
 
         [Test]
