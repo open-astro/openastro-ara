@@ -4541,6 +4541,21 @@ void main() {
       expect(hit.path.map((e) => e.target), isNot(contains(tester.renderObject(pill))));
     });
 
+    testWidgets('on a phone the sheet for editing a queued target sits above the warning', (tester) async {
+      final d = _Diagnostics({'dew_formation'});
+      final c = await _pump(tester, const Size(390, 844), plan: _queuedM31, gear: [diagnosticsStateProvider.overrideWith(() => d)]);
+      await _frame(tester, c);
+      await _openEditOfM31(tester);
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      final overlap = tester.getRect(find.byType(SimpleRunSheet)).intersect(tester.getRect(pill));
+      expect(overlap.isEmpty, isFalse, reason: 'precondition: the sheet and the words overlap');
+      final hit = HitTestResult();
+      tester.binding.hitTestInView(hit, overlap.center, tester.view.viewId);
+      expect(hit.path.map((e) => e.target), isNot(contains(tester.renderObject(pill))));
+    });
+
     testWidgets('on a phone a pill arriving and leaving keeps the widgets around it', (tester) async {
       final d = await phone(tester);
       Element settings() => tester.element(find.byKey(const Key('simple-settings')));

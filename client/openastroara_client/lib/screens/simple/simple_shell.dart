@@ -984,7 +984,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         _messagesHeight > messagesRoom &&
         !pillsBesideRail &&
         _device == null &&
-        _popover == _Popover.none;
+        _popover == _Popover.none &&
+        !_adding;
     // The rail's popovers (a mode's panel, the modes, the queue) take the room
     // from under the status pill down to the screen's inset, over the bottom
     // row while open (they sit left of the rail, clear of Stop), above the
