@@ -40,6 +40,11 @@ at the top. This happens in the same commit that pushes the release tag.
 - Emergency Stop stops the mount right after aborting runs, ahead of the slower steps, and stops it again if a polar alignment was running. The app now waits long enough for the whole stop to report back (#1739).
 - Simple Mode: Preview's Camera settings offer Already in focus when an off-axis Guide shutter is waiting on main focus (#1739).
 
+### Added (daemon, for the client)
+
+- The run status and `sequence.progress` carry the next meridian flip: when it is expected, its state and its target (#1597).
+- Each analysed frame records how many stars were clipped; `GET` frame histogram gains `clipped_stars`, null for a frame analysed before this (#1723).
+
 ### Fixed (bug sweep)
 
 - Switching, creating or deleting the active profile now changes the connected devices. Each profile remembers its own devices, the Safety Monitor drops first, and a running plan refuses the switch (#1710).

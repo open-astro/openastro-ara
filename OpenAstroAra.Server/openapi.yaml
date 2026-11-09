@@ -10252,6 +10252,13 @@ components:
             - integer
             - string
           format: int32
+        clipped_stars:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
     FrameListItemDto:
       required:
         - id
@@ -11939,6 +11946,24 @@ components:
         reshoot_assumed_coverage:
           type: boolean
           default: false
+    MeridianFlipStatusDto:
+      required:
+        - expected_utc
+        - state
+        - target
+      type: object
+      properties:
+        expected_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        state:
+          type: string
+        target:
+          type:
+            - 'null'
+            - string
     MosaicCreateRequestDto:
       required:
         - name
@@ -14355,6 +14380,10 @@ components:
           type:
             - 'null'
             - string
+        meridian_flip:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/MeridianFlipStatusDto'
     SequenceShareDto:
       required:
         - sequence_id

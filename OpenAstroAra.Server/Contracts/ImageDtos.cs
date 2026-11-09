@@ -146,7 +146,9 @@ public sealed record FrameHistogramDto(
     int? Stars = null,
     double? Hfr = null,
     int? Gain = null,
-    int? Offset = null);
+    int? Offset = null,
+    // #1723 — stars rejected as saturated; null for a frame analysed before the column existed.
+    int? ClippedStars = null);
 
 public sealed record FramePreviewRequestDto(
     string StretchPalette,

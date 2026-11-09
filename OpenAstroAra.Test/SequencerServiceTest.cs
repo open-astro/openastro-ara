@@ -17,6 +17,7 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
@@ -1237,6 +1238,93 @@ namespace OpenAstroAra.Test {
             var done = await WaitForTerminalAsync(svc, id);
             Assert.That(done!.State, Is.EqualTo(SequenceRunState.Completed));
             Assert.That(done.ReasonCode, Is.Null, "the wait is over, so is its reason");
+        }
+
+        [Test]
+        public async Task The_run_state_carries_the_flip_during_a_run_and_not_after() {
+            var coords = new OpenAstroAra.Astrometry.Coordinates(
+                OpenAstroAra.Astrometry.Angle.ByHours(5), OpenAstroAra.Astrometry.Angle.ByDegree(20),
+                OpenAstroAra.Astrometry.Epoch.J2000);
+            var telescope = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>();
+            telescope.Setup(t => t.GetCurrentPosition()).Returns(coords);
+            telescope.Setup(t => t.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyTelescope.TelescopeInfo {
+                Connected = true, TrackingEnabled = true, TimeToMeridianFlip = 0, Coordinates = coords,
+            });
+            var release = new TaskCompletionSource<bool>();
+            var executor = new Mock<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor>();
+            executor.Setup(x => x.MeridianFlip(It.IsAny<OpenAstroAra.Astrometry.Coordinates>(), It.IsAny<TimeSpan>(),
+                    It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Returns(release.Task);
+            var profile = new HeadlessProfileService();
+            profile.ActiveProfile.MeridianFlipSettings.UseSideOfPier = false;
+            var factory = HeadlessSequencerFactory.WithDefaults(
+                telescopeMediator: telescope.Object, profileService: profile, meridianFlipExecutor: executor.Object);
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Triggers.Add(new OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger(
+                    profile, telescope.Object, executor.Object));
+                c.Items.Add(new Annotation { Name = "after the flip" });
+            }, factory), factory: factory);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            SequenceRunStateDto? during = null;
+            for (var i = 0; i < 250 && during?.MeridianFlip?.State != MeridianFlipStates.Flipping; i++) {
+                during = await svc.GetRunStateAsync(id, CancellationToken.None);
+                await Task.Delay(20);
+            }
+            Assert.That(during!.MeridianFlip?.State, Is.EqualTo(MeridianFlipStates.Flipping));
+
+            release.SetResult(true);
+            var done = await WaitForTerminalAsync(svc, id);
+            Assert.That(done!.MeridianFlip, Is.Null);
+        }
+
+        private static OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger DueFlipTrigger(double hoursToFlip) {
+            var coords = new OpenAstroAra.Astrometry.Coordinates(
+                OpenAstroAra.Astrometry.Angle.ByHours(5), OpenAstroAra.Astrometry.Angle.ByDegree(20),
+                OpenAstroAra.Astrometry.Epoch.J2000);
+            var telescope = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>();
+            telescope.Setup(t => t.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyTelescope.TelescopeInfo {
+                Connected = true, TrackingEnabled = true, TimeToMeridianFlip = hoursToFlip, Coordinates = coords,
+            });
+            return new OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger(new HeadlessProfileService(), telescope.Object,
+                new Mock<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor>().Object);
+        }
+
+        private static readonly DateTimeOffset FlipStatusNow = new(2026, 11, 9, 10, 0, 0, TimeSpan.Zero);
+
+        [Test]
+        public void Flip_status_without_a_trigger_says_auto_flip_is_off() {
+            var status = SequencerService.FlipStatus(new SequentialContainer(), "M 31", 3600, FlipStatusNow);
+            Assert.That(status, Is.EqualTo(new MeridianFlipStatusDto(null, MeridianFlipStates.AutoFlipOff, "M 31")));
+        }
+
+        [Test]
+        public void Flip_status_names_the_target_and_the_time() {
+            var top = new SequentialContainer();
+            top.Triggers.Add(DueFlipTrigger(2));
+            var status = SequencerService.FlipStatus(top, "M 31", 4 * 3600, FlipStatusNow);
+            Assert.That(status.State, Is.EqualTo(MeridianFlipStates.DueAt));
+            Assert.That(status.Target, Is.EqualTo("M 31"));
+            Assert.That(status.ExpectedUtc, Is.Not.Null);
+        }
+
+        [Test]
+        public void Flip_status_past_the_end_of_the_run_is_none_tonight() {
+            var top = new SequentialContainer();
+            top.Triggers.Add(DueFlipTrigger(2));
+            var status = SequencerService.FlipStatus(top, "M 31", 3600, FlipStatusNow);
+            Assert.That(status.State, Is.EqualTo(MeridianFlipStates.NoneTonight));
+            Assert.That(status.ExpectedUtc, Is.Null);
+        }
+
+        [Test]
+        public void Flip_status_finds_a_trigger_inside_a_target_block() {
+            var block = new SequentialContainer();
+            block.Triggers.Add(DueFlipTrigger(2));
+            var top = new SequentialContainer();
+            top.Items.Add(block);
+            Assert.That(SequencerService.FlipStatus(top, null, null, FlipStatusNow).State, Is.EqualTo(MeridianFlipStates.DueAt));
         }
 
         [Test]

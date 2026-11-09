@@ -21,8 +21,23 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.Interfaces {
 
+    /// <summary>#1597 — the wire values of <see cref="MeridianFlipForecast.State"/>.</summary>
+    public static class MeridianFlipStates {
+        public const string DueAt = "due_at";
+        public const string WaitingForExposure = "waiting_for_exposure";
+        public const string Flipping = "flipping";
+        public const string AutoFlipOff = "auto_flip_off";
+        public const string NoneTonight = "none_tonight";
+    }
+
+    /// <summary>#1597 — when the trigger expects to fire. <c>ExpectedUtc</c> is null when no time applies.</summary>
+    public sealed record MeridianFlipForecast(string State, DateTimeOffset? ExpectedUtc);
+
     public interface IMeridianFlipTrigger : ISequenceTrigger {
         DateTime LatestFlipTime { get; }
         DateTime EarliestFlipTime { get; }
+
+        /// <summary>#1597 — the trigger's own decision, read ahead of time for the run status.</summary>
+        MeridianFlipForecast Forecast(DateTimeOffset now);
     }
 }

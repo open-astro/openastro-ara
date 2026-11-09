@@ -26,6 +26,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-09 — #1597 the next meridian flip in the run status; #1723 clipped stars on the frame histogram
+
+**Endpoint(s) or area:** `GET /api/v1/sequences/{id}/state` and WS `sequence.progress` gain `meridian_flip`; the frame histogram response gains `clipped_stars`.
+
+**Decision:** `meridian_flip` is `{expected_utc, state, target}`, null when no run is active. `state` is `due_at`, `waiting_for_exposure` (due, held until the running item ends), `flipping`, `auto_flip_off` (this run has no flip trigger) or `none_tonight` (the mount cannot be evaluated, this target already flipped, or the flip falls after the run's estimated end); `expected_utc` is null unless a time applies. It comes from `MeridianFlipTrigger.Forecast`, which shares the trigger's own window maths, including its early fire when the next item would overrun. `clipped_stars` is the count of candidates the detector rejected only for a saturated peak, and is not part of `stars`; a share is `clipped_stars / (stars + clipped_stars)`. No new routes (ADR 0009 rule 1).
+
+**Reasoning:** the preflight forecast is an estimate from transit, not the trigger's time. A clipped-pixel fraction hides a few blown-out cores; a star count does not.
+
+**Spec ref:** `MeridianFlipTrigger.Forecast`, `SequencerService.FlipStatus`, `StarDetector.Measure`, `SqliteFrameRepository.UpdateStarClippingAsync`.
+
+**Related:** #1538, #1724.
+
+---
+
 ### Template for future entries
 
 ```

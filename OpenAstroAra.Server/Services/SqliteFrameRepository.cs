@@ -340,6 +340,17 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         await PublishFrameAnalyzedAsync(frameId, hfr, starCount, ct).ConfigureAwait(false);
     }
 
+    /// <inheritdoc />
+    public async Task UpdateStarClippingAsync(Guid frameId, int starCount, int clippedStars, CancellationToken ct) {
+        await using var conn = _db.OpenConnection();
+        var cmd = conn.CreateCommand();
+        cmd.CommandText = "UPDATE frames SET star_count = $star_count, clipped_stars = $clipped WHERE id = $id";
+        cmd.Parameters.AddWithValue("$star_count", starCount);
+        cmd.Parameters.AddWithValue("$clipped", clippedStars);
+        cmd.Parameters.AddWithValue("$id", frameId.ToString("D"));
+        await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+    }
+
     // §59.5 frame.analyzed — the post-capture star analysis landed; live listeners (library
     // strips showing the HFR badge) refresh the row without polling. Same raw-JSON posture
     // as frame.complete: numbers + a Guid are literal-safe.
@@ -1430,7 +1441,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
         await using var conn = _db.OpenConnection();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            SELECT width, height, bit_depth, star_count, hfr, gain, "offset", background_adu
+            SELECT width, height, bit_depth, star_count, hfr, gain, "offset", background_adu, clipped_stars
             FROM frames WHERE id = $id LIMIT 1;
             """;
         cmd.Parameters.AddWithValue("$id", id.ToString());
@@ -1445,6 +1456,7 @@ public sealed partial class SqliteFrameRepository : IFrameRepository {
                     Hfr = await reader.IsDBNullAsync(4, ct) ? null : reader.GetDouble(4),
                     Gain = await reader.IsDBNullAsync(5, ct) ? null : reader.GetInt32(5),
                     Offset = await reader.IsDBNullAsync(6, ct) ? null : reader.GetInt32(6),
+                    ClippedStars = await reader.IsDBNullAsync(8, ct) ? null : reader.GetInt32(8),
                 };
                 backgroundMissing = await reader.IsDBNullAsync(7, ct);
             }

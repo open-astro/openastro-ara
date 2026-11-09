@@ -23,6 +23,10 @@ class FrameHistogram {
 
   /// Null until the frame's star analysis lands (or for non-light frames).
   final int? stars;
+
+  /// Stars rejected as saturated (#1723), not part of [stars]; null for a
+  /// frame analysed before the daemon counted them.
+  final int? clippedStars;
   final double? hfr;
   final int? gain;
   final int? offset;
@@ -43,6 +47,7 @@ class FrameHistogram {
     required this.height,
     required this.bitDepth,
     this.stars,
+    this.clippedStars,
     this.hfr,
     this.gain,
     this.offset,
@@ -66,6 +71,7 @@ class FrameHistogram {
         height: (json['height'] as num?)?.toInt() ?? 0,
         bitDepth: (json['bit_depth'] as num?)?.toInt() ?? 0,
         stars: (json['stars'] as num?)?.toInt(),
+        clippedStars: (json['clipped_stars'] as num?)?.toInt(),
         hfr: (json['hfr'] as num?)?.toDouble(),
         gain: (json['gain'] as num?)?.toInt(),
         offset: (json['offset'] as num?)?.toInt(),

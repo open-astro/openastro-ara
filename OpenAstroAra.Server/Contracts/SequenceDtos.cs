@@ -122,7 +122,12 @@ public sealed record SequenceRunStateDto(
     // #1596 — why the run ended without imaging ("target_skipped") or is waiting on the meridian
     // ("meridian"); code is for clients to branch on, text is shown as-is. Both null otherwise.
     string? ReasonCode = null,
-    string? ReasonText = null);
+    string? ReasonText = null,
+    // #1597 — the next meridian flip as the run's trigger sees it; null when no run is active.
+    MeridianFlipStatusDto? MeridianFlip = null);
+
+/// <summary>#1597 — the run's next flip. State: due_at, waiting_for_exposure, flipping, auto_flip_off or none_tonight.</summary>
+public sealed record MeridianFlipStatusDto(DateTimeOffset? ExpectedUtc, string State, string? Target);
 
 /// <summary>Per-instruction progress payload (WS sequence.instruction_started / _complete / _failed).</summary>
 public sealed record InstructionProgressDto(

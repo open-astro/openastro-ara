@@ -141,6 +141,37 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Detect_counts_saturated_stars_as_clipped_and_leaves_the_rest_alone() {
+            int w = 200, h = 200;
+            var clean = FlatField(w, h);
+            foreach (var (x, y) in new[] { (40, 40), (100, 40), (160, 40) }) {
+                AddStar(clean, w, h, x, y, amplitude: 20000, sigma: 2.0);
+            }
+            var clipped = (ushort[])clean.Clone();
+            AddStar(clipped, w, h, 40, 150, amplitude: 70000, sigma: 2.0);
+            AddStar(clipped, w, h, 150, 150, amplitude: 70000, sigma: 2.0);
+
+            var expected = StarDetector.Detect(clean, w, h, NormalParams());
+            var result = StarDetector.Detect(clipped, w, h, NormalParams());
+
+            Assert.That(result.ClippedStars, Is.EqualTo(2));
+            Assert.That(result.DetectedStars, Is.EqualTo(expected.DetectedStars));
+            Assert.That(result.AverageHFR, Is.EqualTo(expected.AverageHFR).Within(0.01));
+            Assert.That(expected.ClippedStars, Is.Zero);
+        }
+
+        [Test]
+        public void Detect_does_not_count_other_rejections_as_clipped() {
+            int w = 100, h = 100;
+            var frame = FlatField(w, h);
+            AddStar(frame, w, h, 0, 50, amplitude: 70000, sigma: 2.0); // touches the frame edge
+            frame[50 * w + 50] = ushort.MaxValue; // one hot pixel: noise, too small to be a star
+
+            var result = StarDetector.Detect(frame, w, h, NormalParams());
+            Assert.That(result.ClippedStars, Is.Zero);
+        }
+
+        [Test]
         public void Detect_rejects_a_saturated_star() {
             int w = 100, h = 100;
             var frame = FlatField(w, h);
