@@ -319,6 +319,15 @@ void main() {
     expect(erase().onPressed, isNull);
   });
 
+  testWidgets('the picked disk shows a check, so colour is not its only cue', (tester) async {
+    await _pump(tester);
+    await _tap(tester, find.byKey(const Key('simple-storage-choose')));
+    expect(find.byIcon(Icons.check_circle), findsNothing);
+    await _tap(tester, find.text('PHOTOS'));
+    final row = find.ancestor(of: find.text('PHOTOS'), matching: find.byType(ListTile));
+    expect(find.descendant(of: row, matching: find.byIcon(Icons.check_circle)), findsOneWidget);
+  });
+
   testWidgets('a format option is named at least as large as its detail', (tester) async {
     await _pump(tester);
     await _tap(tester, find.byKey(const Key('simple-storage-choose')));

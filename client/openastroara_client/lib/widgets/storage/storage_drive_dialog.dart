@@ -222,7 +222,13 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                         selectedTileColor: _inline
                             ? AraColors.selectionTint
                             : AraColors.textSecondary.withValues(alpha: 0.12),
-                        leading: Icon(d.removable ? Icons.usb : Icons.storage,
+                        // A check too: the tint alone barely shows in Night mode.
+                        leading: Icon(
+                            selected
+                                ? Icons.check_circle
+                                : d.removable
+                                ? Icons.usb
+                                : Icons.storage,
                             size: 28),
                         title: Text(d.friendlyName),
                         subtitle: Text(d.detailLine(l10n)),
