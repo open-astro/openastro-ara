@@ -21,7 +21,7 @@ import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/equipment/switch_state.dart';
 import 'package:openastroara/state/settings/cooling_fan_state.dart';
 import 'package:openastroara/state/settings/equipment_connection_state.dart';
-import 'package:openastroara/models/switch_device.dart' show CoolingFan, SwitchDevice;
+import 'package:openastroara/models/switch_device.dart' show CoolingFan, SwitchConnectionState, SwitchDevice;
 import 'package:openastroara/state/wizard/equipment_readiness_state.dart';
 import 'package:openastroara/state/wizard_state.dart';
 
@@ -102,6 +102,7 @@ class _FakeFactsSource implements DeviceFactsSource {
 
 Future<ProviderContainer> _pump(
   WidgetTester tester, {
+  List<SwitchDevice> switches = const [],
   required Map<EquipmentDeviceType, List<DiscoveredDevice>> byType,
   CameraGeometry? camera,
   TelescopeOptics? optics,
@@ -113,7 +114,7 @@ Future<ProviderContainer> _pump(
       profileApiProvider.overrideWithValue(_OpticsOnlyProfileApi(baseOptics)),
     savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
     coolingFanProvider.overrideWith(_NoFan.new),
-    switchListProvider.overrideWith(_NoSwitches.new),
+    switchListProvider.overrideWith(() => _Switches(switches)),
     equipmentDiscoveryApiFactoryProvider
         .overrideWithValue((_) => _FakeDiscoveryApi(byType)),
     deviceFactsSourceFactoryProvider.overrideWithValue(
@@ -131,8 +132,21 @@ Future<ProviderContainer> _pump(
 }
 
 void main() {
+  testWidgets('#1700: with no switch connected the wizard hides the Cooling fan row', (tester) async {
+    await _pump(tester, byType: const {});
+    expect(find.byKey(const Key('cooling-fan-picker')), findsNothing);
+  });
+
   testWidgets('#1700: the wizard offers the Cooling fan choice and keeps it in the draft', (tester) async {
-    final container = await _pump(tester, byType: const {});
+    final container = await _pump(tester, byType: const {}, switches: const [
+      SwitchDevice(
+        deviceId: 'sw',
+        alpacaDeviceNumber: 0,
+        name: 'Powerbox',
+        connectionState: SwitchConnectionState.connected,
+        ports: [],
+      ),
+    ]);
     expect(find.byKey(const Key('cooling-fan-picker')), findsOneWidget);
     expect(container.read(wizardControllerProvider).draft.coolingFan, isNull,
         reason: 'untouched: Save keeps the base profile choice');
@@ -345,7 +359,9 @@ class _NoFan extends CoolingFanNotifier {
   Future<CoolingFan> build() async => CoolingFan.none;
 }
 
-class _NoSwitches extends SwitchListNotifier {
+class _Switches extends SwitchListNotifier {
+  _Switches(this.switches);
+  final List<SwitchDevice> switches;
   @override
-  Future<List<SwitchDevice>> build() async => const [];
+  Future<List<SwitchDevice>> build() async => switches;
 }

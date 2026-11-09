@@ -7,7 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../models/equipment_readiness.dart';
 import '../../../models/profile_draft.dart';
 import '../../../models/solver_recommendation.dart';
-import '../../../models/switch_device.dart' show CoolingFan;
+import '../../../models/switch_device.dart' show CoolingFan, SwitchDevice;
+import '../../../state/equipment/switch_state.dart';
 import '../../../services/equipment_discovery_api.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/cooling_fan_state.dart';
@@ -313,6 +314,8 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
 
   @override
   Widget build(BuildContext context) {
+    final fan = _draft.coolingFan ?? ref.watch(coolingFanProvider).value ?? CoolingFan.none;
+    final switches = ref.watch(switchListProvider).value ?? const <SwitchDevice>[];
     // Every landed read writes its facts into the draft — the save mappers
     // consume the draft, and inline fallback fields must not fight fresh
     // device truth.
@@ -367,12 +370,12 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
             onChoose: () => unawaited(_choose(type)),
           ),
         _switchSection(context),
-        CoolingFanPicker(
-          value: _draft.coolingFan ??
-              ref.watch(coolingFanProvider).value ??
-              CoolingFan.none,
-          onChanged: (v) => setState(() => _draft.coolingFan = v),
-        ),
+        // A switch's ports are only known once it connects; a first run has none to offer yet.
+        if (fan != CoolingFan.none || switches.isNotEmpty)
+          CoolingFanPicker(
+            value: fan,
+            onChanged: (v) => setState(() => _draft.coolingFan = v),
+          ),
       ],
     );
   }
