@@ -4527,6 +4527,96 @@ abstract class AppLocalizations {
   /// **'Dec aggressiveness'**
   String get guideDecAggressiveness;
 
+  /// No description provided for @guideTabGuide.
+  ///
+  /// In en, this message translates to:
+  /// **'Guide'**
+  String get guideTabGuide;
+
+  /// No description provided for @guideTabTuning.
+  ///
+  /// In en, this message translates to:
+  /// **'Tuning'**
+  String get guideTabTuning;
+
+  /// No description provided for @guideTabTools.
+  ///
+  /// In en, this message translates to:
+  /// **'Tools'**
+  String get guideTabTools;
+
+  /// No description provided for @guideMinimumMove.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum move · goes to the Guider now'**
+  String get guideMinimumMove;
+
+  /// No description provided for @guideSettle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle after each dither'**
+  String get guideSettle;
+
+  /// No description provided for @guideSettleWithin.
+  ///
+  /// In en, this message translates to:
+  /// **'Within'**
+  String get guideSettleWithin;
+
+  /// No description provided for @guideSettleFor.
+  ///
+  /// In en, this message translates to:
+  /// **'For'**
+  String get guideSettleFor;
+
+  /// No description provided for @guideSettleGiveUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Give up after'**
+  String get guideSettleGiveUp;
+
+  /// No description provided for @guideRecalibrateNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Recalibrate now'**
+  String get guideRecalibrateNow;
+
+  /// No description provided for @guideRunAssistant.
+  ///
+  /// In en, this message translates to:
+  /// **'Run Guiding Assistant'**
+  String get guideRunAssistant;
+
+  /// No description provided for @guideStopAssistant.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop Guiding Assistant'**
+  String get guideStopAssistant;
+
+  /// No description provided for @guideAssistantMeasuring.
+  ///
+  /// In en, this message translates to:
+  /// **'Measuring. Guide corrections are off for now.'**
+  String get guideAssistantMeasuring;
+
+  /// No description provided for @guideAssistantApply.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Apply 1 suggestion} other{Apply {count} suggestions}}'**
+  String guideAssistantApply(int count);
+
+  /// No description provided for @guideStopPlanFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the plan to use these.'**
+  String get guideStopPlanFirst;
+
+  /// No description provided for @guideStopGuidingFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop guiding to recalibrate.'**
+  String get guideStopGuidingFirst;
+
   /// No description provided for @guideDecMode.
   ///
   /// In en, this message translates to:

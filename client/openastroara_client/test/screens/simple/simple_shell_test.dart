@@ -1259,6 +1259,12 @@ void main() {
     expect(panel.bottom, lessThanOrEqualTo(768 - kSimpleInset));
     expect(panel.top, greaterThanOrEqualTo(kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight),
         reason: 'under the status pill');
+    // #1722 — the longest other tab has to fit too.
+    await tester.tap(find.byKey(const Key('simple-guider-tab-tuning')));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-window-row-RA minimum move')), findsOneWidget);
+    expect(scroll.position.maxScrollExtent, 0, reason: 'Tuning fits as well');
+    expect(tester.getRect(find.byKey(const Key('simple-guide-panel'))).bottom, lessThanOrEqualTo(768 - kSimpleInset));
   });
 
   testWidgets("with the histogram showing, a mode panel stops above the bottom row, like Plan's sheet (user, 2026-11-09)",

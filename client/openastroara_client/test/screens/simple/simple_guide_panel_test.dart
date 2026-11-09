@@ -9,6 +9,9 @@ import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/screens/simple/simple_guide_panel.dart';
 import 'package:openastroara/services/guider_api.dart' show GuiderClient, GuideStartFailed;
 import 'package:openastroara/state/guider/guider_state.dart';
+import 'package:openastroara/models/guiding_assistant.dart';
+import 'package:openastroara/state/guider/guider_live_state.dart';
+import 'package:openastroara/state/guider/guiding_assistant_state.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/services/guider_equipment_api.dart' show GuiderEquipmentClient;
@@ -111,7 +114,129 @@ Future<ProviderContainer> _pump(WidgetTester tester, Map<String, dynamic> wire,
   return c;
 }
 
+class _Live extends GuiderLiveNotifier {
+  @override
+  GuiderLiveState build() => const GuiderLiveState();
+  @override
+  Future<void> clearCalibration() async => _g.calls.add('clear');
+}
+
+class _Assistant extends GuidingAssistantNotifier {
+  _Assistant(this.status);
+  final GuidingAssistantStatus status;
+  final started = <bool>[];
+  final applied = <List<String>>[];
+  @override
+  GuidingAssistantState build() => GuidingAssistantState(status: status, loaded: true);
+  @override
+  Future<void> start({double? durationSec, required bool measureBacklash}) async {
+    expect(durationSec, isNull, reason: 'no options: the guider picks');
+    started.add(measureBacklash);
+  }
+
+  @override
+  Future<void> apply(List<String> which) async => applied.add(which);
+}
+
+GuidingAssistantStatus _assistant(String state, {Map<String, dynamic>? recs}) =>
+    GuidingAssistantStatus.fromJson({'connected': true, 'state': state, 'recommendations': ?recs});
+
+final _idleAssistant = _assistant('idle');
+
+Future<void> _tab(WidgetTester tester, String name) async {
+  await tester.tap(find.byKey(Key('simple-guider-tab-$name')));
+  await tester.pump();
+}
+
 void main() {
+  group('the Guider tabs (#1722)', () {
+    List<Override> rig(_GuiderEquipment e, {_Assistant? assistant, SequenceRunState? run}) => [
+          profileApiProvider.overrideWithValue(_Profile()),
+          guiderEquipmentApiProvider.overrideWithValue(e),
+          guiderLiveProvider.overrideWith(_Live.new),
+          guidingAssistantProvider.overrideWith(() => assistant ?? _Assistant(_idleAssistant)),
+          if (run != null) sequenceRunStateProvider.overrideWith(() => _Run(run)),
+        ];
+    FilledButton button(WidgetTester t, String key) => t.widget<FilledButton>(find.byKey(Key(key)));
+
+    testWidgets('Tuning and Tools hold the new controls; the Guide tab opens first', (tester) async {
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment()));
+      expect(find.byKey(const Key('simple-guide-exposure')), findsOneWidget);
+      expect(find.byKey(const Key('simple-window-row-RA minimum move')), findsNothing);
+      await _tab(tester, 'tuning');
+      expect(find.byKey(const Key('simple-window-row-RA minimum move')), findsOneWidget);
+      await _tab(tester, 'tools');
+      expect(find.byKey(const Key('simple-guider-recalibrate')), findsOneWidget);
+      expect(find.byKey(const Key('simple-guider-assistant')), findsOneWidget);
+      expect(find.text('Build dark library'), findsNothing);
+    });
+
+    testWidgets('a minimum move goes to the Guider live', (tester) async {
+      final e = _GuiderEquipment();
+      final c = await _pump(tester, _wire(), rig: rig(e));
+      final before = c.read(phd2SettingsProvider).minimumMove;
+      await _tab(tester, 'tuning');
+      await tester.tap(find.byKey(const Key('simple-guider-min-move-ra-up')));
+      await tester.pump();
+      await tester.pump();
+      expect(c.read(phd2SettingsProvider).minimumMove, closeTo(before + 0.05, 1e-9));
+      expect(e.pushes, [true]);
+    });
+
+    testWidgets('a settle change is saved for the next dither, with no live push', (tester) async {
+      final e = _GuiderEquipment();
+      final c = await _pump(tester, _wire(), rig: rig(e));
+      await _tab(tester, 'tuning');
+      await tester.tap(find.byKey(const Key('simple-guider-settle-time-up')));
+      await tester.pump();
+      await tester.pump();
+      expect(c.read(phd2SettingsProvider).settleTimeSec, 11);
+      expect(e.pushes, isEmpty);
+    });
+
+    testWidgets('Recalibrate now forgets the calibration, then starts the routine', (tester) async {
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment()));
+      await _tab(tester, 'tools');
+      await tester.tap(find.byKey(const Key('simple-guider-recalibrate')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(_g.calls, ['clear', 'start']);
+    });
+
+    testWidgets('a running plan refuses Recalibrate now and the Guiding Assistant', (tester) async {
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), run: SequenceRunState.running));
+      await _tab(tester, 'tools');
+      await tester.pump(); // the run state's first read
+      expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
+      expect(button(tester, 'simple-guider-assistant').onPressed, isNull);
+    });
+
+    testWidgets('guiding refuses Recalibrate now and says to stop first', (tester) async {
+      await _pump(tester, _wire(), rig: rig(_GuiderEquipment()));
+      await _tab(tester, 'tools');
+      expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
+      expect(find.text('Stop guiding to recalibrate.'), findsOneWidget);
+    });
+
+    testWidgets('the Guiding Assistant is one action with no options', (tester) async {
+      final a = _Assistant(_idleAssistant);
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      await tester.tap(find.byKey(const Key('simple-guider-assistant')));
+      await tester.pump();
+      expect(a.started, [true]);
+    });
+
+    testWidgets('a finished Guiding Assistant applies every suggestion in one tap', (tester) async {
+      final a = _Assistant(_assistant('done', recs: {'min_move_ra_px': 0.2, 'min_move_dec_px': 0.3}));
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      await tester.tap(find.text('Apply 2 suggestions'));
+      await tester.pump();
+      expect(a.applied, [['min_move_ra', 'min_move_dec']]);
+    });
+  });
+
   group('what the guider is doing, for the shutter and Preflight', () {
     GuiderStatus at(String state, String runtime) =>
         GuiderStatus.fromJson({'device_id': 'g', 'name': 'PHD2', 'state': state, 'runtime': {'state': runtime}});
@@ -469,6 +594,7 @@ void main() {
       ..setDitherEnabled(true)
       ..setDitherPixels(5);
     await tester.pump();
+    await _tab(tester, 'tuning');
     expect(find.text('5 px'), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-guider-dither-px-up')));
     await tester.pump();

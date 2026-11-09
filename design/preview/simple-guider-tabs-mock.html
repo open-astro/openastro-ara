@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guider Mode Controls</title>
+<style>
+  /* Single dark look on purpose: DESIGN.md tokens from lib/theme/ara_colors.dart. Layout: the iPad scene, Mode > Guider panel left of the right rail. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+    --ok: #4CAF50; --busy: #FFB300; --info: #42A5F5; --sel: #1976D2; --tile: #383838;
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys); padding-block: 32px 64px;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .page { max-width: 1024px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 72ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+  .lbl { color: var(--text2); font-size: 13px; margin-right: 6px; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; vertical-align: middle; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+  .ipad { height: 768px; max-width: 100%; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 35% 45%, #2a2f3a 0, #101217 55%, #07080b 100%); }
+  .p { position: absolute; background: rgba(26,26,26,.92); border-radius: 10px; }
+  .rail { right: 16px; top: 180px; width: 72px; padding: 8px 6px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .chip { width: 60px; min-height: 52px; border-radius: 8px; background: var(--tile); display: grid; place-items: center; text-align: center; font-size: 12px; line-height: 1.25; padding: 4px; }
+  .chip.on { background: var(--sel); color: #fff; }
+  .chip small { display: block; opacity: .8; }
+  .shutter { width: 60px; height: 60px; border-radius: 50%; border: 3px solid #fff; display: grid; place-items: center; }
+  .shutter b { width: 46px; height: 46px; border-radius: 50%; background: #fff; }
+  .panel { right: 104px; top: 16px; bottom: 16px; width: min(344px, calc(100% - 120px)); padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+  .head { display: flex; align-items: center; gap: 8px; font-weight: 600; min-height: 32px; }
+  .head i { width: 9px; height: 9px; border-radius: 50%; background: var(--text2); }
+  .head button { background: transparent; border: 0; color: var(--text); font: 20px var(--sys); width: 32px; height: 32px; cursor: pointer; }
+  .sect { color: var(--text2); font-size: 12px; margin-top: 10px; min-height: 20px; }
+  .r { display: flex; align-items: center; gap: 10px; min-height: 46px; }
+  .r .l { flex: 1; min-width: 0; }
+  .v { font-variant-numeric: tabular-nums; color: var(--text2); }
+  .dim { color: var(--text2); font-size: 12px; }
+  .stepper { display: inline-flex; align-items: center; background: var(--tile); border-radius: 8px; flex: none; }
+  .stepper button { width: 44px; height: 44px; border: 0; background: transparent; color: var(--text); font: 20px var(--sys); cursor: pointer; }
+  .stepper output { min-width: 56px; text-align: center; font-variant-numeric: tabular-nums; }
+  .bar { flex: 1; max-width: 130px; height: 4px; background: var(--tile); border-radius: 2px; position: relative; }
+  .bar b { position: absolute; left: 0; top: 0; bottom: 0; background: var(--info); border-radius: 2px; }
+  .act { min-height: 44px; width: 100%; border: 0; border-radius: 8px; background: var(--tile); color: var(--text); font: 600 14px var(--sys); cursor: pointer; padding: 8px 12px; }
+  .act[disabled] { color: var(--text2); cursor: default; }
+  .acts { display: flex; flex-direction: column; gap: 8px; }
+  .link { background: transparent; border: 0; color: var(--text); font: 14px var(--sys); min-height: 44px; cursor: pointer; padding: 0; display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: auto; }
+  .tabs { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin: 4px 0 6px; flex: none; }
+  .tabs button { flex: 1; background: transparent; color: var(--text); border: 0; min-height: 40px; font: 13px var(--sys); cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--sel); color: #fff; }
+  .new { outline: 1.5px dashed var(--busy); outline-offset: 1px; border-radius: 8px; }
+  .pill { position: absolute; left: 16px; top: 16px; max-width: 300px; padding: 10px 14px; border-radius: 10px; background: rgba(26,26,26,.92); display: flex; gap: 8px; align-items: center; }
+  .pill i { width: 10px; height: 10px; border-radius: 50%; background: var(--info); flex: none; }
+  @media (max-width: 720px) { .pill { display: none; } }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <h1>Mode › Guider: more guiding controls</h1>
+  <p class="note">Mock for #1722, third round. The new guider controls moved here, and the Camera (Guide) window keeps only its camera controls and changes in no way. Build dark library is left out: it belongs to a later Calibration menu. Dashed amber marks what is new. Values are examples. The panel has to fit an iPad without scrolling, so the new controls can't simply be added under the old ones. Layout B is the one chosen.</p>
+  <div class="controls">
+    <span><span class="lbl">Layout</span><span class="seg" id="layout"><button data-v="a" aria-pressed="false">A · A second page</button><button data-v="b" aria-pressed="true">B · Three tabs (chosen)</button></span></span>
+    <span><span class="lbl">Rig</span><span class="seg" id="run"><button data-v="idle" aria-pressed="true">Idle</button><button data-v="run" aria-pressed="false">Plan running</button></span></span>
+  </div>
+
+  <div class="ipad">
+    <div class="pill" id="pill" hidden><i></i><span id="ptext"></span></div>
+
+    <div class="p panel" aria-label="Guider panel">
+      <div class="head" id="head"><button id="back" aria-label="Back to Guider" hidden>‹</button><i id="dot"></i><span id="title">Not guiding</span></div>
+
+      <div class="tabs new" id="tabs" role="tablist" hidden>
+        <button role="tab" data-t="main" aria-selected="true">Guide</button>
+        <button role="tab" data-t="tuning" aria-selected="false">Tuning</button>
+        <button role="tab" data-t="tools" aria-selected="false">Tools</button>
+      </div>
+
+      <section data-p="main">
+        <div class="r"><span class="l">RMS</span><span class="v">Off</span></div>
+        <div class="r"><span class="l">Exposure</span><span class="stepper"><button aria-label="Less exposure">−</button><output>2.0 s</output><button aria-label="More exposure">+</button></span></div>
+        <div class="r"><span class="l">Gain</span><span class="bar"><b style="width:60%"></b></span><span class="v">60%</span></div>
+        <div class="sect">Aggressiveness</div>
+        <div class="r"><span class="l">RA</span><span class="bar"><b style="width:70%"></b></span><span class="v">70</span></div>
+        <div class="r"><span class="l">Dec</span><span class="bar"><b style="width:100%"></b></span><span class="v">100</span></div>
+        <div class="r"><span class="l">Dec guide mode</span><span class="v">Auto</span></div>
+        <div class="r"><span class="l">Dither</span><span class="stepper"><button aria-label="Dither less often">−</button><output>Every 3</output><button aria-label="Dither more often">+</button></span></div>
+      </section>
+
+      <section data-p="tuning" hidden>
+        <div class="sect">Minimum move · goes to the Guider now</div>
+        <div class="r"><span class="l">RA<div class="dim">pixels</div></span><span class="stepper" data-step=".05" data-min="0" data-fix="2"><button aria-label="Lower RA minimum move">−</button><output>0.15</output><button aria-label="Raise RA minimum move">+</button></span></div>
+        <div class="r"><span class="l">Dec<div class="dim">pixels</div></span><span class="stepper" data-step=".05" data-min="0" data-fix="2"><button aria-label="Lower Dec minimum move">−</button><output>0.20</output><button aria-label="Raise Dec minimum move">+</button></span></div>
+        <div class="r"><span class="l">Dither by</span><span class="stepper" data-step="1" data-min="1" data-fix="0"><button aria-label="Dither by less">−</button><output>3</output><button aria-label="Dither by more">+</button></span></div>
+        <div class="sect">Settle after each dither</div>
+        <div class="r"><span class="l">Within<div class="dim">pixels</div></span><span class="stepper" data-step=".1" data-min=".1" data-fix="1"><button aria-label="Lower settle distance">−</button><output>1.5</output><button aria-label="Raise settle distance">+</button></span></div>
+        <div class="r"><span class="l">For<div class="dim">seconds</div></span><span class="stepper" data-step="1" data-min="1" data-fix="0"><button aria-label="Shorter settle time">−</button><output>10</output><button aria-label="Longer settle time">+</button></span></div>
+        <div class="r"><span class="l">Give up after<div class="dim">seconds</div></span><span class="stepper" data-step="5" data-min="5" data-fix="0"><button aria-label="Shorter settle timeout">−</button><output>40</output><button aria-label="Longer settle timeout">+</button></span></div>
+      </section>
+
+      <section data-p="tools" hidden>
+        <div class="sect">Actions</div>
+        <div class="acts">
+          <button class="act" data-pill="Guider · Calibrating…" data-busy>Recalibrate now</button>
+          <button class="act" data-pill="Guiding Assistant · Measuring…">Run Guiding Assistant</button>
+        </div>
+        <div class="dim" id="why" hidden>Stop the plan to recalibrate.</div>
+      </section>
+
+      <button class="link new" id="more"><span>Tuning and tools</span><span aria-hidden="true">›</span></button>
+    </div>
+
+    <div class="p rail" aria-hidden="true">
+      <div class="chip">Preflight</div>
+      <div class="chip">Preview</div>
+      <div class="chip">Focus</div>
+      <div class="chip">Polar</div>
+      <div class="chip on">Guider<small>Off</small></div>
+      <div class="chip">Plan</div>
+      <div class="shutter"><b></b></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = s => document.querySelector(s);
+  const $$ = s => document.querySelectorAll(s);
+  const seg = (id, on) => $$(`#${id} button`).forEach(b => b.onclick = () => {
+    $$(`#${id} button`).forEach(x => x.setAttribute('aria-pressed', x === b));
+    on(b.dataset.v);
+  });
+  let layout = 'b', page = 'main';
+  const show = names => $$('section[data-p]').forEach(s => { s.hidden = !names.includes(s.dataset.p); });
+  const paint = () => {
+    const a = layout === 'a';
+    $('#tabs').hidden = a;
+    $('#more').hidden = !a || page !== 'main';
+    $('#back').hidden = !a || page === 'main';
+    $('#dot').hidden = a && page !== 'main';
+    $('#title').textContent = a && page !== 'main' ? 'Tuning and tools' : 'Not guiding';
+    show(a && page !== 'main' ? ['tuning', 'tools'] : [page]);
+    $$('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.t === page));
+    // The second page holds both groups, so the five rows and two actions tighten to fit.
+    $$('section[data-p="tuning"] .r').forEach(r => { r.style.minHeight = a && page !== 'main' ? '44px' : ''; });
+  };
+  seg('layout', v => { layout = v; page = 'main'; paint(); });
+  $('#more').onclick = () => { page = 'tuning'; paint(); };
+  $('#back').onclick = () => { page = 'main'; paint(); };
+  $$('#tabs button').forEach(b => b.onclick = () => { page = b.dataset.t; paint(); });
+  seg('run', v => {
+    $('[data-busy]').disabled = v === 'run';
+    $('#why').hidden = v !== 'run';
+  });
+  $$('.act').forEach(b => b.onclick = () => {
+    $('#ptext').textContent = b.dataset.pill;
+    $('#pill').hidden = false;
+  });
+  $$('.stepper[data-step]').forEach(s => {
+    const [down, out, up] = s.children;
+    const step = +s.dataset.step, min = +s.dataset.min, fix = +s.dataset.fix;
+    const set = d => { out.textContent = Math.max(min, +out.textContent + d).toFixed(fix); };
+    down.onclick = () => set(-step);
+    up.onclick = () => set(step);
+  });
+  paint();
+</script>
+</body>
+</html>

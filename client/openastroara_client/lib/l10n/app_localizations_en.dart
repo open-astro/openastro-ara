@@ -2621,6 +2621,60 @@ class AppLocalizationsEn extends AppLocalizations {
   String get guideDecAggressiveness => 'Dec aggressiveness';
 
   @override
+  String get guideTabGuide => 'Guide';
+
+  @override
+  String get guideTabTuning => 'Tuning';
+
+  @override
+  String get guideTabTools => 'Tools';
+
+  @override
+  String get guideMinimumMove => 'Minimum move · goes to the Guider now';
+
+  @override
+  String get guideSettle => 'Settle after each dither';
+
+  @override
+  String get guideSettleWithin => 'Within';
+
+  @override
+  String get guideSettleFor => 'For';
+
+  @override
+  String get guideSettleGiveUp => 'Give up after';
+
+  @override
+  String get guideRecalibrateNow => 'Recalibrate now';
+
+  @override
+  String get guideRunAssistant => 'Run Guiding Assistant';
+
+  @override
+  String get guideStopAssistant => 'Stop Guiding Assistant';
+
+  @override
+  String get guideAssistantMeasuring =>
+      'Measuring. Guide corrections are off for now.';
+
+  @override
+  String guideAssistantApply(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Apply $count suggestions',
+      one: 'Apply 1 suggestion',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get guideStopPlanFirst => 'Stop the plan to use these.';
+
+  @override
+  String get guideStopGuidingFirst => 'Stop guiding to recalibrate.';
+
+  @override
   String get guideDecMode => 'Dec guide mode';
 
   @override

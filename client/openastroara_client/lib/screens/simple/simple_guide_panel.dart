@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
+import '../../state/sequencer/sequence_list_state.dart';
+import '../../state/guider/guiding_assistant_state.dart';
+import '../../state/guider/guider_live_state.dart';
+import '../../models/guiding_assistant.dart';
 import '../../models/guider_status.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
@@ -69,6 +73,16 @@ class SimpleGuiderPending extends Notifier<bool?> {
 
 final simpleGuiderPendingProvider =
     NotifierProvider<SimpleGuiderPending, bool?>(SimpleGuiderPending.new);
+
+/// The Guider panel's open tab: 0 Guide, 1 Tuning, 2 Tools (#1722).
+class SimpleGuiderTab extends Notifier<int> {
+  @override
+  int build() => 0;
+  void set(int v) => state = v;
+}
+
+final simpleGuiderTabProvider =
+    NotifierProvider<SimpleGuiderTab, int>(SimpleGuiderTab.new);
 
 /// The guider's dot: the top bar's colour (a lost star amber, settling blue),
 /// grey without a guider.
@@ -190,8 +204,8 @@ class SimpleGuidePanel extends ConsumerWidget {
         ? AraColors.accentInfo
         : simpleGuiderColour(g);
     final phd2 = ref.watch(phd2SettingsProvider);
+    final tab = ref.watch(simpleGuiderTabProvider);
     final every = phd2.ditherEnabled ? math.max(1, phd2.ditherEveryNFrames) : 0;
-    final px = phd2.ditherPixels;
     final total = guiding ? g!.rmsTotalArcsec : null;
     final ra = guiding ? g!.rmsRaArcsec : null;
     final dec = guiding ? g!.rmsDecArcsec : null;
@@ -244,6 +258,24 @@ class SimpleGuidePanel extends ConsumerWidget {
               Text(g.outOfStepReason ?? l10n.guideTapShutter, style: AraText.caption),
             if (!connected)
               Text(l10n.guideConnectFirst, style: AraText.caption),
+            if (preflightDone)
+              FilledButton(
+                key: const Key('simple-guide-preflight-done'),
+                style: kSimpleGoStyle,
+                onPressed: ref.read(simplePreflightProvider.notifier).next,
+                child: Text(l10n.preflightDoneStartImaging),
+              ),
+            _SimpleGuiderTabs(selected: tab),
+            // Guide stays laid out, so the panel keeps one height across tabs.
+            IndexedStack(
+              index: tab,
+              sizing: StackFit.loose,
+              children: [
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  spacing: 4,
+                  children: [
             simpleWindowRow(
               l10n.deviceRms,
               id: 'RMS',
@@ -265,14 +297,6 @@ class SimpleGuidePanel extends ConsumerWidget {
                 ],
               ),
             ),
-            if (preflightDone)
-              FilledButton(
-                key: const Key('simple-guide-preflight-done'),
-                style: kSimpleGoStyle,
-                onPressed: ref.read(simplePreflightProvider.notifier).next,
-                child: Text(l10n.preflightDoneStartImaging),
-              ),
-            const Divider(height: AraSpace.s8),
             // The guide camera's exposure, picked as Preview's; set live.
             SimplePresetTile<int>(
               key: const Key('simple-guide-exposure'),
@@ -339,21 +363,12 @@ class SimpleGuidePanel extends ConsumerWidget {
                 onMore: () => _setDither(context, ref, every + 1),
               ),
             ),
-            if (every > 0)
-              simpleWindowRow(
-                l10n.deviceDitherBy,
-                id: 'Dither by',
-                simpleWindowStepper(
-                  id: 'simple-guider-dither-px',
-                  text: '${px == px.roundToDouble() ? px.round() : px} px',
-                  onLess: () => px > 1
-                      ? _save(context, ref, (p) => p.setDitherPixels(px - 1))
-                      : null,
-                  onMore: () => px < 30
-                      ? _save(context, ref, (p) => p.setDitherPixels(px + 1))
-                      : null,
+                  ],
                 ),
-              ),
+                tab == 1 ? const _SimpleGuiderTuning() : const SizedBox.shrink(),
+                tab == 2 ? const _SimpleGuiderTools() : const SizedBox.shrink(),
+              ],
+            ),
           ],
         ),
       ),
@@ -374,6 +389,209 @@ class SimpleGuidePanel extends ConsumerWidget {
     WidgetRef ref,
     void Function(Phd2SettingsNotifier) change,
   ) => simpleSaveGuider(context, ref, change);
+}
+
+class _SimpleGuiderTabs extends ConsumerWidget {
+  const _SimpleGuiderTabs({required this.selected});
+
+  final int selected;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    ButtonSegment<int> tab(int i, String id, String label) => ButtonSegment(
+      value: i,
+      label: Text(label, key: Key('simple-guider-tab-$id')),
+    );
+    return SegmentedButton<int>(
+      showSelectedIcon: false,
+      segments: [
+        tab(0, 'guide', l10n.guideTabGuide),
+        tab(1, 'tuning', l10n.guideTabTuning),
+        tab(2, 'tools', l10n.guideTabTools),
+      ],
+      selected: {selected},
+      onSelectionChanged: (s) =>
+          ref.read(simpleGuiderTabProvider.notifier).set(s.single),
+    );
+  }
+}
+
+/// The Guider's numbers that are worth changing only when guiding is poor.
+/// Minimum move reaches the Guider live; settle applies from the next dither.
+class _SimpleGuiderTuning extends ConsumerWidget {
+  const _SimpleGuiderTuning();
+
+  // In hundredths, so repeated taps don't drift by floating-point error.
+  static double _stepped(double v, double by) => ((v + by) * 100).round() / 100;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final phd2 = ref.watch(phd2SettingsProvider);
+    final px = phd2.ditherPixels;
+    // Label beside a narrower stepper: this tab has six of them to fit on an iPad.
+    Widget row(String label, Widget stepper, {required String id}) => Row(
+      key: Key('simple-window-row-$id'),
+      spacing: AraSpace.s8,
+      children: [
+        Expanded(child: Text(label, style: kSimpleText)),
+        SizedBox(width: 176, child: stepper),
+      ],
+    );
+    void live(void Function(Phd2SettingsNotifier) change) =>
+        simpleSaveGuider(context, ref, change, live: true);
+    void save(void Function(Phd2SettingsNotifier) change) =>
+        simpleSaveGuider(context, ref, change);
+    Widget minMove(String axis, String label, String id, double v, void Function(Phd2SettingsNotifier, double) set) =>
+        row(
+          axis,
+          id: label,
+          simpleWindowStepper(
+            id: 'simple-guider-min-move-$id',
+            text: '${v.toStringAsFixed(2)} px',
+            onLess: () {
+              if (v > 0) live((p) => set(p, math.max(0, _stepped(v, -0.05))));
+            },
+            onMore: () => live((p) => set(p, _stepped(v, 0.05))),
+          ),
+        );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: 2,
+      children: [
+        Text(l10n.guideMinimumMove, style: AraText.caption),
+        minMove(l10n.guideAxisRa, 'RA minimum move', 'ra', phd2.minimumMove, (p, v) => p.setMinimumMove(v)),
+        minMove(l10n.guideAxisDec, 'Dec minimum move', 'dec', phd2.decMinimumMove, (p, v) => p.setDecMinimumMove(v)),
+        if (phd2.ditherEnabled)
+          row(
+            l10n.deviceDitherBy,
+            id: 'Dither by',
+            simpleWindowStepper(
+              id: 'simple-guider-dither-px',
+              text: '${px == px.roundToDouble() ? px.round() : px} px',
+              onLess: () {
+                if (px > 1) save((p) => p.setDitherPixels(px - 1));
+              },
+              onMore: () {
+                if (px < 30) save((p) => p.setDitherPixels(px + 1));
+              },
+            ),
+          ),
+        Text(l10n.guideSettle, style: AraText.caption),
+        row(
+          l10n.guideSettleWithin,
+          id: 'Settle within',
+          simpleWindowStepper(
+            id: 'simple-guider-settle-px',
+            text: '${phd2.settlePixels.toStringAsFixed(1)} px',
+            onLess: () {
+              if (phd2.settlePixels > 0.1) save((p) => p.setSettlePixels(_stepped(phd2.settlePixels, -0.1)));
+            },
+            onMore: () => save((p) => p.setSettlePixels(_stepped(phd2.settlePixels, 0.1))),
+          ),
+        ),
+        row(
+          l10n.guideSettleFor,
+          id: 'Settle for',
+          simpleWindowStepper(
+            id: 'simple-guider-settle-time',
+            text: '${phd2.settleTimeSec} s',
+            onLess: () {
+              if (phd2.settleTimeSec > 1) save((p) => p.setSettleTimeSec(phd2.settleTimeSec - 1));
+            },
+            onMore: () => save((p) => p.setSettleTimeSec(phd2.settleTimeSec + 1)),
+          ),
+        ),
+        row(
+          l10n.guideSettleGiveUp,
+          id: 'Settle give up',
+          simpleWindowStepper(
+            id: 'simple-guider-settle-timeout',
+            text: '${phd2.settleTimeoutSec} s',
+            onLess: () {
+              if (phd2.settleTimeoutSec > 5) save((p) => p.setSettleTimeoutSec(phd2.settleTimeoutSec - 5));
+            },
+            onMore: () => save((p) => p.setSettleTimeoutSec(phd2.settleTimeoutSec + 5)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Recalibrate now and the Guiding Assistant, one action each.
+class _SimpleGuiderTools extends ConsumerWidget {
+  const _SimpleGuiderTools();
+
+  static Future<void> _recalibrate(BuildContext context, WidgetRef ref) async {
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.guide);
+    final container = ProviderScope.containerOf(context, listen: false);
+    await container.read(guiderLiveProvider.notifier).clearCalibration();
+    if (container.read(guiderLiveProvider).error case final error?) {
+      notify(error, error: true, snackBarRed: false);
+      return;
+    }
+    if (context.mounted) await simpleGuideRun(context, start: true);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final g = ref.watch(guiderStatusProvider).value;
+    final connected = g != null && g.isConnected;
+    final active = simpleGuideActive(g);
+    final planRunning =
+        ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
+    final assistant = ref.watch(guidingAssistantProvider);
+    final notifier = ref.read(guidingAssistantProvider.notifier);
+    final status = assistant.status;
+    final done = ref.watch(guidingAssistantAppliedProvider);
+    final suggestions = [
+      if (status.isDone)
+        for (final s in status.recommendations?.suggestions ?? const <GuidingAssistantSuggestion>[])
+          if (!done.contains(s.key)) s.key,
+    ];
+    final problem = assistant.error ?? status.error;
+    final why = planRunning
+        ? l10n.guideStopPlanFirst
+        : active
+        ? l10n.guideStopGuidingFirst
+        : null;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
+      children: [
+        FilledButton.tonal(
+          key: const Key('simple-guider-recalibrate'),
+          onPressed: connected && !planRunning && !active
+              ? () => _recalibrate(context, ref)
+              : null,
+          child: Text(l10n.guideRecalibrateNow),
+        ),
+        if (why != null) Text(why, style: AraText.caption),
+        FilledButton.tonal(
+          key: const Key('simple-guider-assistant'),
+          onPressed: !connected || assistant.busy || (planRunning && !status.isRunning)
+              ? null
+              : status.isRunning
+              ? notifier.stop
+              : () => notifier.start(measureBacklash: true),
+          child: Text(status.isRunning ? l10n.guideStopAssistant : l10n.guideRunAssistant),
+        ),
+        if (status.isRunning) Text(l10n.guideAssistantMeasuring, style: AraText.caption),
+        if (suggestions.isNotEmpty)
+          FilledButton(
+            style: kSimpleGoStyle,
+            onPressed: assistant.busy ? null : () => notifier.apply(suggestions),
+            child: Text(l10n.guideAssistantApply(suggestions.length)),
+          ),
+        if (problem != null) Text(problem, style: AraText.caption),
+      ],
+    );
+  }
 }
 
 /// How strongly the guider corrects one axis: 0-100 % in 5s, set when the

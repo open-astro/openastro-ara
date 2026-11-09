@@ -3651,6 +3651,28 @@
   },
   "guideRaAggressiveness": "RA aggressiveness",
   "guideDecAggressiveness": "Dec aggressiveness",
+  "guideTabGuide": "Guide",
+  "guideTabTuning": "Tuning",
+  "guideTabTools": "Tools",
+  "guideMinimumMove": "Minimum move · goes to the Guider now",
+  "guideSettle": "Settle after each dither",
+  "guideSettleWithin": "Within",
+  "guideSettleFor": "For",
+  "guideSettleGiveUp": "Give up after",
+  "guideRecalibrateNow": "Recalibrate now",
+  "guideRunAssistant": "Run Guiding Assistant",
+  "guideStopAssistant": "Stop Guiding Assistant",
+  "guideAssistantMeasuring": "Measuring. Guide corrections are off for now.",
+  "guideAssistantApply": "{count, plural, =1{Apply 1 suggestion} other{Apply {count} suggestions}}",
+  "@guideAssistantApply": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "guideStopPlanFirst": "Stop the plan to use these.",
+  "guideStopGuidingFirst": "Stop guiding to recalibrate.",
   "guideDecMode": "Dec guide mode",
   "guideDecAuto": "Auto",
   "guideDecNorth": "North",
