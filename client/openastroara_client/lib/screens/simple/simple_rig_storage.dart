@@ -14,6 +14,29 @@ import '../../widgets/storage/storage_drive_dialog.dart';
 import '../../widgets/support/bug_report_card.dart';
 import '../settings/panels/storage_panel.dart';
 
+/// A Full UI block hosted in Simple Mode: its small text (Material's 12 px
+/// bodySmall) reads at Simple Mode's 14 px; the full UI keeps 12.
+class SimpleHostedText extends StatelessWidget {
+  const SimpleHostedText({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Theme(
+      data: theme.copyWith(
+        textTheme: theme.textTheme.copyWith(
+          bodySmall: theme.textTheme.bodySmall?.copyWith(
+            fontSize: kSimpleText.fontSize,
+          ),
+        ),
+      ),
+      child: child,
+    );
+  }
+}
+
 /// Settings › Rig › Logs & bug report: the Full UI's bug report card, hosted
 /// as it is. Its Sharing adds the client log, which needs no rig.
 class SimpleLogsBlock extends StatelessWidget {
@@ -28,7 +51,7 @@ class SimpleLogsBlock extends StatelessWidget {
         context.l10n.shellLogs,
         style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
       ),
-      const BugReportCard(),
+      const SimpleHostedText(child: BugReportCard()),
     ],
   );
 }
@@ -181,9 +204,11 @@ class _SimpleStorageBlockState extends ConsumerState<SimpleStorageBlock> {
           ),
         ),
         if (_choosing && connected)
-          StorageDriveChooser(
-            key: const Key('simple-storage-chooser'),
-            onClose: _closeChooser,
+          SimpleHostedText(
+            child: StorageDriveChooser(
+              key: const Key('simple-storage-chooser'),
+              onClose: _closeChooser,
+            ),
           ),
         Row(
           spacing: AraSpace.s8,

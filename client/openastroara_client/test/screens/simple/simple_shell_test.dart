@@ -2789,6 +2789,21 @@ void main() {
     expect(mount.calls, ['reconnect'], reason: 'Connect: the device the rig remembers, no chooser');
   });
 
+  testWidgets('the hosted device chooser reads its small text at 14 px', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      mountProvider.overrideWith(() => _Mount(EquipmentConnectionState.disconnected)),
+    ]);
+    await _openSection(tester, 'Devices');
+    await tester.ensureVisible(find.byKey(const Key('simple-gear-add-choose')));
+    await tester.tap(find.byKey(const Key('simple-gear-add-choose')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('simple-gear-add-camera')));
+    await tester.tap(find.byKey(const Key('simple-gear-add-camera')));
+    await tester.pumpAndSettle();
+    final cancel = tester.element(find.byKey(const Key('alpaca-chooser-cancel')));
+    expect(Theme.of(cancel).textTheme.bodySmall!.fontSize, 14);
+  });
+
   testWidgets('Add a device and Choose pick in place, with no popup', (tester) async {
     await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
       mountProvider.overrideWith(() => _Mount(EquipmentConnectionState.disconnected)),

@@ -3056,7 +3056,8 @@ _GearChooser _deviceChooser(
   EquipmentDeviceType type,
   String typeLabel,
   Future<bool> Function(DiscoveredDevice device) connect,
-) => (context, close) => AlpacaDeviceChooser(
+) => (context, close) => SimpleHostedText(
+  child: AlpacaDeviceChooser(
   type: type,
   deviceTypeLabel: typeLabel,
   onClose: close,
@@ -3073,6 +3074,7 @@ _GearChooser _deviceChooser(
       );
     }
   },
+),
 );
 
 /// Add a device, in place: the types the rig has none of, then the chooser

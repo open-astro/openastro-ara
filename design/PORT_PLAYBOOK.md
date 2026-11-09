@@ -8661,7 +8661,7 @@ What stays running:
 - mDNS announce (so WILMA can still find the Pi)
 - Notification system (both the failure event and the shutdown event remain in the feed)
 
-**Why 10 minutes specifically** — Goldilocks zone. Long enough for an alarmed user to grab their phone, fumble to WILMA, and tap acknowledge. Short enough that a sleeping user who genuinely doesn't wake up doesn't burn 6 hours of battery. NINA has no equivalent (it just keeps running); ASIAir powers things off harder on some failures but the threshold isn't user-configurable. ARA splits the difference and gives the user the dial.
+**Why 30 minutes for new profiles** — 10 was too short (#1712). Long enough for a user who stepped outside to come back, grab their phone and tap acknowledge. Short enough that a sleeping user who genuinely doesn't wake up doesn't burn 6 hours of battery. NINA has no equivalent (it just keeps running); ASIAir powers things off harder on some failures but the threshold isn't user-configurable. ARA splits the difference and gives the user the dial.
 
 **Configuration in profile:**
 
@@ -8669,7 +8669,7 @@ What stays running:
 {
   "unattended_failure_shutdown": {
     "enabled": true,
-    "wait_minutes": 10,
+    "wait_minutes": 30,
     "actions": ["stop_guider", "warm_cooler", "park_mount", "disconnect_equipment"],
     "keep_server_running": true,
     "stop_alarm_after_shutdown": true

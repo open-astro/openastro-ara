@@ -256,6 +256,36 @@ void main() {
     expect(find.textContaining('Find frames on disk'), findsOneWidget);
   });
 
+  double fontSize(WidgetTester tester, Finder f) =>
+      tester.widget<RichText>(find.descendant(of: f, matching: find.byType(RichText)).first).text.style!.fontSize!;
+
+  testWidgets('the erase warning and its typed confirmation read at 14 px', (tester) async {
+    await _pump(tester);
+    await _tap(tester, find.byKey(const Key('simple-storage-choose')));
+    await _tap(tester, find.text('PHOTOS'));
+    for (final words in ['ARA saves frames in', 'to confirm:']) {
+      final text = find.ancestor(of: find.byWidgetPredicate((w) => w is RichText && w.text.toPlainText().contains(words)), matching: find.byType(Text)).first;
+      expect(fontSize(tester, text), 14, reason: words);
+    }
+  });
+
+  testWidgets('the erase step fits a phone at 2x text', (tester) async {
+    await _pump(tester);
+    tester.view.physicalSize = const Size(320, 1400);
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpAndSettle();
+    await _tap(tester, find.byKey(const Key('simple-storage-choose')));
+    await _tap(tester, find.text('PHOTOS'));
+    expect(tester.takeException(), isNull);
+    expect(find.text('Erase and Use Disk'), findsOneWidget);
+  });
+
+  testWidgets('the hosted bug report reads its options at 14 px', (tester) async {
+    await _pump(tester, child: const SimpleLogsBlock());
+    expect(fontSize(tester, find.ancestor(of: find.text('Include everything'), matching: find.byType(DropdownButton<String>))), 14);
+  });
+
   testWidgets('a refused Eject is an error pill', (tester) async {
     final (c, api) = await _pump(tester);
     api.eject_ = const StorageConfigureOutcome(
