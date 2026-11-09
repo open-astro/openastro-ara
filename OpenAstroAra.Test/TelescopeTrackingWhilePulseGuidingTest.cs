@@ -117,8 +117,10 @@ namespace OpenAstroAra.Test {
             using var _ = svc;
 
             Volatile.Write(ref tracking, "false");
+            var since = Reads(box, "tracking");
 
             await WaitForAsync(() => Lost(faults), "an unsupported read counts as no pulse");
+            Assert.That(Reads(box, "tracking") - since, Is.LessThan(MountTrackingWatch.MaxPulseHoldTicks), "it fires at the normal streak, not after the pulse hold");
         }
 
         [Test]
