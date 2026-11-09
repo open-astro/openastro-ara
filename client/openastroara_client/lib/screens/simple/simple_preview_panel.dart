@@ -1137,6 +1137,9 @@ class _PillData {
   /// Stays its minimum after its state ends (#1679).
   final bool holds;
 
+  /// Which state this is: a countdown or a reading changes only the detail.
+  Object get state => (label, dot, ring, working);
+
   final SimpleStatusOrigin origin;
   final String label;
   final String? detail;
@@ -1162,9 +1165,12 @@ class _PillData {
 /// it keeps the widest it has been, so a countdown or a falling temperature
 /// doesn't make it jitter (ALP-4937).
 class _StatusPill extends StatefulWidget {
-  const _StatusPill({super.key, required this.data, this.onOpen});
+  const _StatusPill({required this.data, this.onHeight, this.onOpen});
 
   final _PillData data;
+
+  /// Told the pill's height after each frame.
+  final ValueChanged<double>? onHeight;
   final ValueChanged<SimpleStatusOrigin>? onOpen;
 
   @override
@@ -1177,8 +1183,11 @@ class _StatusPillState extends State<_StatusPill> {
   double _width = 0;
 
   void _keepWidth() {
-    final w = _panelKey.currentContext?.size?.width ?? 0;
-    if (mounted && w > _width) setState(() => _width = w);
+    if (!mounted) return;
+    final size = _panelKey.currentContext?.size;
+    if (size == null) return;
+    widget.onHeight?.call(size.height);
+    if (size.width > _width) setState(() => _width = size.width);
   }
 
   @override
@@ -1298,10 +1307,10 @@ class _StatusPillState extends State<_StatusPill> {
 }
 
 class SimpleStatusPill extends ConsumerStatefulWidget {
-  const SimpleStatusPill({super.key, this.firstPillKey, this.onOpen});
+  const SimpleStatusPill({super.key, this.onFirstHeight, this.onOpen});
 
-  /// On the top pill, for the shell to measure: a pill grows with large text.
-  final GlobalKey? firstPillKey;
+  /// The top pill's height, 0 with none: a pill grows with large text.
+  final ValueChanged<double>? onFirstHeight;
 
   /// Opens what the pill is about (its mode's panel, or a device window).
   final ValueChanged<SimpleStatusOrigin>? onOpen;
@@ -1773,7 +1782,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     }
     return _StatusPillStack(
       pills: pills,
-      firstKey: widget.firstPillKey,
+      onFirstHeight: widget.onFirstHeight,
       onOpen: widget.onOpen,
     );
   }
@@ -1797,9 +1806,13 @@ class _KeptPill {
 /// The status pills, one per kind. A pill stays at least [_kPillMinimum], in
 /// its slot, then fades; a new pill of its kind takes over at once.
 class _StatusPillStack extends StatefulWidget {
-  const _StatusPillStack({required this.pills, this.firstKey, this.onOpen});
+  const _StatusPillStack({
+    required this.pills,
+    this.onFirstHeight,
+    this.onOpen,
+  });
 
-  final GlobalKey? firstKey;
+  final ValueChanged<double>? onFirstHeight;
 
   final List<_PillData> pills;
   final ValueChanged<SimpleStatusOrigin>? onOpen;
@@ -1819,7 +1832,8 @@ class _StatusPillStackState extends State<_StatusPillStack> {
   });
 
   void _leave(SimpleStatusOrigin origin, _KeptPill kept) {
-    if (MediaQuery.disableAnimationsOf(context)) {
+    if (MediaQuery.disableAnimationsOf(context) || !kept.data.holds) {
+      kept.minimum.cancel();
       _kept.remove(origin);
     } else {
       kept.fading = true;
@@ -1833,10 +1847,13 @@ class _StatusPillStackState extends State<_StatusPillStack> {
         _kept[d.origin] = _KeptPill(d, _minimum(d.origin));
         continue;
       }
+      final newState = kept.data.state != d.state;
       kept
         ..data = d
         ..live = true;
-      if (kept.fading) {
+      // Each state gets its own minimum, a takeover included.
+      if (kept.fading || newState) {
+        kept.minimum.cancel();
         kept
           ..fading = false
           ..minimum = _minimum(d.origin);
@@ -1888,7 +1905,12 @@ class _StatusPillStackState extends State<_StatusPillStack> {
       pills.remove(k);
     }
     _order = [for (final k in pills) k.data.origin];
-    if (pills.isEmpty) return const SizedBox.shrink();
+    if (pills.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => widget.onFirstHeight?.call(0),
+      );
+      return const SizedBox.shrink();
+    }
     // Three at most; the rest fold into "+n", which opens the first one left.
     final shown = pills.take(3).toList();
     final more = pills.length - shown.length;
@@ -1907,8 +1929,8 @@ class _StatusPillStackState extends State<_StatusPillStack> {
               if (k.fading) setState(() => _kept.remove(k.data.origin));
             },
             child: _StatusPill(
-              key: i == 0 ? widget.firstKey : null,
               data: k.data,
+              onHeight: i == 0 ? widget.onFirstHeight : null,
               onOpen: widget.onOpen,
             ),
           ),

@@ -1,6 +1,7 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n.dart';
 import '../../models/autofocus_run.dart';
 import '../../theme/ara_colors.dart';
 
@@ -15,15 +16,14 @@ class VCurveChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final sweep = run.sweepProbes;
     final coarse = run.coarseProbes;
     final fit = run.fit;
     if (sweep.isEmpty && coarse.isEmpty) {
       return Center(
         child: Text(
-          run.isRunning
-              ? 'Waiting for the first probe…'
-              : 'Run autofocus to see the V-curve.',
+          run.isRunning ? l10n.focusChartFirstProbe : l10n.focusChartEmpty,
           style: Theme.of(context)
               .textTheme
               .bodySmall
@@ -123,8 +123,8 @@ class VCurveChart extends StatelessWidget {
           alignment: Alignment.topRight,
           style: const TextStyle(fontSize: 10, color: AraColors.accentInfo),
           labelResolver: (_) => fit.algorithm == 'calibration'
-              ? 'calibrated ${fit.bestPosition.round()}'
-              : 'fit ${fit.bestPosition.round()}',
+              ? l10n.focusChartCalibrated(fit.bestPosition.round())
+              : l10n.focusChartFit(fit.bestPosition.round()),
         ),
       ));
     }
@@ -137,7 +137,7 @@ class VCurveChart extends StatelessWidget {
           show: true,
           alignment: Alignment.bottomRight,
           style: const TextStyle(fontSize: 10, color: AraColors.accentConnected),
-          labelResolver: (_) => 'focus ${run.finalPosition}',
+          labelResolver: (_) => l10n.focusChartFocus(run.finalPosition!),
         ),
       ));
     }
@@ -168,7 +168,7 @@ class VCurveChart extends StatelessWidget {
               sideTitles: SideTitles(showTitles: true, reservedSize: 36),
             ),
             bottomTitles: AxisTitles(
-              axisNameWidget: const Text('Focuser position', style: TextStyle(fontSize: 11)),
+              axisNameWidget: Text(l10n.focusChartPosition, style: const TextStyle(fontSize: 11)),
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 26,

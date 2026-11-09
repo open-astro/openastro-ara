@@ -1155,7 +1155,13 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     final pill = tester.getRect(find.byKey(const Key('simple-status-pill')));
     expect(pill.height, greaterThan(kSimpleStatusHeight), reason: 'precondition: two lines');
-    expect(tester.getRect(find.byType(SimpleRunSheet)).top, greaterThanOrEqualTo(pill.bottom + 8));
+    final sheet = tester.getRect(find.byType(SimpleRunSheet));
+    expect(sheet.top, greaterThanOrEqualTo(pill.bottom + 8));
+    wheel.report({'state': 'idle', 'current_slot': 2});
+    await tester.pump();
+    await _letPillLeave(tester);
+    await tester.pump();
+    expect(tester.getRect(find.byType(SimpleRunSheet)).center.dy, lessThan(sheet.center.dy), reason: 'the room comes back');
   });
 
   testWidgets('the rail names Preflight whole, never cut to an ellipsis', (tester) async {
@@ -4411,6 +4417,36 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
 
+    testWidgets('the pill below keeps its element when the top one goes', (tester) async {
+      final guider = _GuiderAt('guiding');
+      final c = await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => guider)]);
+      c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+      await tester.pump();
+      final pills = find.byKey(const Key('simple-status-pill'));
+      expect(pills, findsNWidgets(2), reason: 'precondition: a frame above Guiding');
+      final below = tester.element(pills.last);
+      c.read(captureProgressProvider.notifier).reset();
+      await _letPillLeave(tester);
+      expect(pills, findsOneWidget);
+      expect(tester.element(pills), same(below));
+    });
+
+    testWidgets('a short state taking over from a long one still stays its second', (tester) async {
+      final guider = _GuiderAt('guiding');
+      await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => guider)]);
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 5));
+      guider.at('calibrating');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      guider.at('stopped');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+      expect(text('Calibrating'), findsOneWidget);
+      await _letPillLeave(tester);
+      expect(text('Calibrating'), findsNothing);
+    });
+
     testWidgets('a tap on a pill staying on opens its window', (tester) async {
       final (_, rotator) = await rig(tester);
       rotator.report('moving');
@@ -4478,6 +4514,16 @@ void main() {
       await tester.pumpWidget(const SizedBox());
       c.dispose();
       await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('moving to the next Preflight step shows one waiting pill, with no overlap', (tester) async {
+      await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => _GuiderAt('stopped'))]);
+      await _startPreflight(tester);
+      await tester.tap(find.byKey(const Key('preflight-skip')));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(text('waiting for you'), findsOneWidget);
     });
 
     testWidgets('no Preflight and nothing running: no pill (#1482)', (tester) async {

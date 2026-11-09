@@ -948,5 +948,11 @@
   "deviceChooserFindAction": "buscar dispositivos",
   "stopMountAction": "parar a montagem",
   "stopMountNoServer": "A parada da montagem não foi enviada — sem conexão com o servidor.",
-  "stopMountFailed": "{reason} Tente Parar montagem de novo."
+  "stopMountFailed": "{reason} Tente Parar montagem de novo.",
+  "focusChartFirstProbe": "Aguardando a primeira medição…",
+  "focusChartEmpty": "Execute o autofoco para ver a curva em V.",
+  "focusChartPosition": "Posição do focalizador",
+  "focusChartFit": "ajuste {position}",
+  "focusChartCalibrated": "calibrado {position}",
+  "focusChartFocus": "foco {position}"
 }

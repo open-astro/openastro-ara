@@ -5792,6 +5792,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{reason} Try Stop Mount again.'**
   String stopMountFailed(String reason);
+
+  /// V-curve chart: autofocus is running, no probe yet
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the first probe…'**
+  String get focusChartFirstProbe;
+
+  /// V-curve chart: nothing measured yet
+  ///
+  /// In en, this message translates to:
+  /// **'Run autofocus to see the V-curve.'**
+  String get focusChartEmpty;
+
+  /// V-curve chart: bottom axis name
+  ///
+  /// In en, this message translates to:
+  /// **'Focuser position'**
+  String get focusChartPosition;
+
+  /// V-curve chart: marker at the fitted best position
+  ///
+  /// In en, this message translates to:
+  /// **'fit {position}'**
+  String focusChartFit(int position);
+
+  /// V-curve chart: marker at the calibrated best position
+  ///
+  /// In en, this message translates to:
+  /// **'calibrated {position}'**
+  String focusChartCalibrated(int position);
+
+  /// V-curve chart: marker at the final focus position
+  ///
+  /// In en, this message translates to:
+  /// **'focus {position}'**
+  String focusChartFocus(int position);
 }
 
 class _AppLocalizationsDelegate

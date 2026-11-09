@@ -3395,6 +3395,30 @@ class AppLocalizationsPt extends AppLocalizations {
   String stopMountFailed(String reason) {
     return '$reason Try Stop Mount again.';
   }
+
+  @override
+  String get focusChartFirstProbe => 'Waiting for the first probe…';
+
+  @override
+  String get focusChartEmpty => 'Run autofocus to see the V-curve.';
+
+  @override
+  String get focusChartPosition => 'Focuser position';
+
+  @override
+  String focusChartFit(int position) {
+    return 'fit $position';
+  }
+
+  @override
+  String focusChartCalibrated(int position) {
+    return 'calibrated $position';
+  }
+
+  @override
+  String focusChartFocus(int position) {
+    return 'focus $position';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -6815,5 +6839,29 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String stopMountFailed(String reason) {
     return '$reason Tente Parar montagem de novo.';
+  }
+
+  @override
+  String get focusChartFirstProbe => 'Aguardando a primeira medição…';
+
+  @override
+  String get focusChartEmpty => 'Execute o autofoco para ver a curva em V.';
+
+  @override
+  String get focusChartPosition => 'Posição do focalizador';
+
+  @override
+  String focusChartFit(int position) {
+    return 'ajuste $position';
+  }
+
+  @override
+  String focusChartCalibrated(int position) {
+    return 'calibrado $position';
+  }
+
+  @override
+  String focusChartFocus(int position) {
+    return 'foco $position';
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
@@ -233,6 +234,23 @@ void main() {
     await _pump(tester, focuser: _focuser());
     expect(find.bySemanticsLabel('Measured stars'), findsNothing);
     handle.dispose();
+  });
+
+  testWidgets('the V-curve chart speaks pt-BR, empty and with probes', (tester) async {
+    const locale = Locale('pt', 'BR');
+    final pt = lookupAppLocalizations(locale);
+    Future<void> show(AutofocusRun run) => tester.pumpWidget(MaterialApp(
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(body: SizedBox(width: 400, height: 200, child: VCurveChart(run: run))),
+        ));
+    await show(AutofocusRun.idle);
+    await tester.pump();
+    expect(find.text(pt.focusChartEmpty), findsOneWidget);
+    await show(AutofocusRun(state: AutofocusRunStates.running, phase: 'sweep', probes: [_probe(0, 3.1), _probe(1, 2.4)]));
+    await tester.pump();
+    expect(find.text(pt.focusChartPosition), findsOneWidget);
   });
 
   group('a long focus error', () {

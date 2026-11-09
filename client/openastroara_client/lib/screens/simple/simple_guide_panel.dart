@@ -46,8 +46,8 @@ bool simpleGuideActive(GuiderStatus? g) =>
       GuiderRuntimeState.unknown,
     }.contains(g.runtimeState);
 
-/// Guiding, or about to be back at it (a dither's settle): what Preflight
-///'s Guide step waits for. Pure — unit-tested.
+/// Guiding, or about to be back at it (a dither's settle): what Preflight's
+/// Guide step waits for. Pure — unit-tested.
 bool simpleGuiding(GuiderStatus? g) =>
     g != null &&
     g.isConnected &&

@@ -4583,5 +4583,44 @@
         "type": "String"
       }
     }
+  },
+  "focusChartFirstProbe": "Waiting for the first probe…",
+  "@focusChartFirstProbe": {
+    "description": "V-curve chart: autofocus is running, no probe yet"
+  },
+  "focusChartEmpty": "Run autofocus to see the V-curve.",
+  "@focusChartEmpty": {
+    "description": "V-curve chart: nothing measured yet"
+  },
+  "focusChartPosition": "Focuser position",
+  "@focusChartPosition": {
+    "description": "V-curve chart: bottom axis name"
+  },
+  "focusChartFit": "fit {position}",
+  "@focusChartFit": {
+    "description": "V-curve chart: marker at the fitted best position",
+    "placeholders": {
+      "position": {
+        "type": "int"
+      }
+    }
+  },
+  "focusChartCalibrated": "calibrated {position}",
+  "@focusChartCalibrated": {
+    "description": "V-curve chart: marker at the calibrated best position",
+    "placeholders": {
+      "position": {
+        "type": "int"
+      }
+    }
+  },
+  "focusChartFocus": "focus {position}",
+  "@focusChartFocus": {
+    "description": "V-curve chart: marker at the final focus position",
+    "placeholders": {
+      "position": {
+        "type": "int"
+      }
+    }
   }
 }

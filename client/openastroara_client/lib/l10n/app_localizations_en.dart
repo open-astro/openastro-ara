@@ -3395,4 +3395,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String stopMountFailed(String reason) {
     return '$reason Try Stop Mount again.';
   }
+
+  @override
+  String get focusChartFirstProbe => 'Waiting for the first probe…';
+
+  @override
+  String get focusChartEmpty => 'Run autofocus to see the V-curve.';
+
+  @override
+  String get focusChartPosition => 'Focuser position';
+
+  @override
+  String focusChartFit(int position) {
+    return 'fit $position';
+  }
+
+  @override
+  String focusChartCalibrated(int position) {
+    return 'calibrated $position';
+  }
+
+  @override
+  String focusChartFocus(int position) {
+    return 'focus $position';
+  }
 }

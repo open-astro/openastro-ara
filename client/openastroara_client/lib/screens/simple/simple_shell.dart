@@ -170,9 +170,8 @@ enum _Popover {
 /// beside the rail and close with a tap on the image. Tapping the image with
 /// nothing open hides everything (the immersive view).
 ///
-/// All five modes stay here, and nothing here leads to the full UI: Settings
-/// (the gear's menu, ⌘, a device dot, Open Storage) opens over Simple Mode.
-/// The way out is Settings' own Simple Mode switch.
+/// All five modes stay here: Settings (the gear's menu, ⌘, a device dot, Open
+/// Storage) opens over Simple Mode. The way out is the strip's Full UI button.
 class SimpleShell extends ConsumerStatefulWidget {
   const SimpleShell({
     super.key,
@@ -234,7 +233,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   double _rightRailHeight = 0;
   double _simplePreflightRowHeight = kSimplePreflightRowHeight;
   double _statusHeight = 0;
-  final _statusKey = GlobalKey();
   final _leftRailKey = GlobalKey();
   final _rightRailKey = GlobalKey();
   final _simplePreflightRowKey = GlobalKey();
@@ -243,20 +241,23 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final rail = _leftRailKey.currentContext?.size?.height;
     final right = _rightRailKey.currentContext?.size?.height;
     final row = _simplePreflightRowKey.currentContext?.size?.height;
-    final status = _statusKey.currentContext?.size?.height ?? 0;
     if (!mounted) return;
     if ((rail != null && rail != _leftRailHeight) ||
         (right != null && right != _rightRailHeight) ||
-        (row != null && row != _simplePreflightRowHeight) ||
-        status != _statusHeight) {
+        (row != null && row != _simplePreflightRowHeight)) {
       setState(() {
         _leftRailHeight = rail ?? _leftRailHeight;
         _rightRailHeight = right ?? _rightRailHeight;
         _simplePreflightRowHeight = row ?? _simplePreflightRowHeight;
-        _statusHeight = status;
       });
     }
   });
+
+  void _setStatusHeight(double height) {
+    if (mounted && height != _statusHeight) {
+      setState(() => _statusHeight = height);
+    }
+  }
 
   void _startSimplePreflight() {
     setState(() => _popover = _Popover.settings);
@@ -1110,17 +1111,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             constraints: BoxConstraints(
                               maxWidth: (width - kSimpleInset * 3) / 2,
                             ),
-                            child: NotificationListener<SizeChangedLayoutNotification>(
-                              onNotification: (_) {
-                                _measure();
-                                return true;
-                              },
-                              child: SizeChangedLayoutNotifier(
-                                child: SimpleStatusPill(
-                                  firstPillKey: _statusKey,
-                                  onOpen: _openFromPill,
-                                ),
-                              ),
+                            child: SimpleStatusPill(
+                              onFirstHeight: _setStatusHeight,
+                              onOpen: _openFromPill,
                             ),
                           ),
                         ),
@@ -1846,9 +1839,6 @@ const double kSimpleSettingsMaxWidth = 640;
 double simpleRailScale(BuildContext context) =>
     math.max(1, MediaQuery.textScalerOf(context).scale(1) / 1.1);
 
-/// Past 1.2x text a mode panel's side-by-side groups stack, so their labels
-/// keep their full words (WCAG 1.4.4): pt-BR's "Principal" and "Contínuo"
-/// were cut from 1.3x (impeccable audit, 2026-11-04).
 /// Names in reading order: an accent doesn't move a letter.
 /// shortcut: folds en and pt-BR letters only, add a collator with a third locale.
 int simpleCompareNames(String a, String b) {
@@ -1861,6 +1851,9 @@ int simpleCompareNames(String a, String b) {
   return key(a).compareTo(key(b));
 }
 
+/// Past 1.2x text a mode panel's side-by-side groups stack, so their labels
+/// keep their full words (WCAG 1.4.4): pt-BR's "Principal" and "Contínuo"
+/// were cut from 1.3x (impeccable audit, 2026-11-04).
 bool simpleStackText(BuildContext context) =>
     MediaQuery.textScalerOf(context).scale(1) > 1.2;
 
