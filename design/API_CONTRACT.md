@@ -1377,3 +1377,13 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Related:** #1364, #1592
 
 ---
+
+## 2026-11-10 — Stop the focuser: `POST /equipment/focuser/halt`; each-night guider calibration in plans (#1542, #1716)
+
+**Endpoint(s) or area:** new `POST /api/v1/equipment/focuser/halt` (202); `CalibrateEachNight` on the Start Guiding instruction; `RecalibrateGuider` on the Meridian Flip trigger; diagnostic `guider.calibration.failed`.
+
+**Decision:** the halt has the rotator's shape: the 202 means the stop reached the driver, and a focuser that is not connected answers 500. Both new sequence fields default to false, so a body without them behaves as before. Simple Mode sets both. `CalibrateEachNight`: the night's first start (a night starts at local noon) recalibrates, later starts that night reuse the calibration. `RecalibrateGuider`: guiding comes back after the flip on a new calibration, unless `meridian_guider_recal` is `skip`. When a calibration fails, the daemon calls the Guider's `restore_calibration` and guides on the earlier calibration. The diagnostic `guider.calibration.failed` (yellow) stays open until a calibration works. With nothing to restore, or a Guider without the call, the start fails and the run pauses awaiting the user.
+
+**Reasoning:** the Guider erases its calibration before it calibrates, so a failed run left none. An unattended plan should not end the night for that.
+
+**Spec ref:** `GuiderService.RecalibrateAndGuide`, `GuiderService.StartGuidingCalibratedTonight`, `MeridianFlipExecutor.MeridianFlip`, `FocuserService.HaltAsync`
