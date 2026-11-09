@@ -17,6 +17,7 @@ using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Locale;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
+using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using OpenAstroAra.Sequencer.Validations;
 using System;
@@ -187,9 +188,31 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Utility {
         // ResetProgress. Ticks, 0 = unset, Volatile: the run-state readers are on other threads.
         private long heldTargetTicks;
 
-        public override Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
+        public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
             Volatile.Write(ref heldTargetTicks, HasFixedTimeProvider ? 0 : ResolveTarget(DateTime.Now).Ticks);
-            return OpenAstroAra.Core.Utility.CoreUtil.Wait(GetEstimatedDuration(), true, progress, "", token);
+            var duration = GetEstimatedDuration();
+            var gate = ItemUtility.GetPauseGate(Parent);
+            if (gate is null) {
+                await OpenAstroAra.Core.Utility.CoreUtil.Wait(duration, true, progress, "", token);
+                return;
+            }
+            // This wait can run for hours (until dark), so a pause must not queue behind it: suspend
+            // here, then wait out what is left of the same target.
+            var end = DateTime.UtcNow + duration;
+            while (end > DateTime.UtcNow) {
+                await gate.WaitWhilePausedAsync(token);
+                var left = end - DateTime.UtcNow;
+                if (left <= TimeSpan.Zero) {
+                    return;
+                }
+                using var interrupt = CancellationTokenSource.CreateLinkedTokenSource(token);
+                var wait = OpenAstroAra.Core.Utility.CoreUtil.Wait(left, true, progress, "", interrupt.Token);
+                var requested = gate.WhenPauseRequestedAsync(interrupt.Token);
+                await Task.WhenAny(wait, requested);
+                await interrupt.CancelAsync();
+                token.ThrowIfCancellationRequested();
+                await Task.WhenAll(wait, requested).ContinueWith(_ => { }, TaskScheduler.Default);
+            }
         }
 
         public override void ResetProgress() {

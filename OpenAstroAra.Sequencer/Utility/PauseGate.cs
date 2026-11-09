@@ -92,6 +92,13 @@ namespace OpenAstroAra.Sequencer.Utility {
             toComplete?.TrySetResult();
         }
 
+        /// <summary>Completes once a pause is requested; for a long step that must not hold a pause back.</summary>
+        public async Task WhenPauseRequestedAsync(CancellationToken token) {
+            while (!IsPauseRequested) {
+                await Task.Delay(100, token).ConfigureAwait(false);
+            }
+        }
+
         /// <summary>
         /// Suspend while a pause is requested; return immediately otherwise. Loops
         /// so a re-pause racing the resume still holds the run at this boundary.

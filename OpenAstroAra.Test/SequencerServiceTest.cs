@@ -780,6 +780,40 @@ namespace OpenAstroAra.Test {
             Assert.That(ws.Events, Does.Not.Contain("sequence.stopped"));
         }
 
+        // A plan queued before dark starts with a wait that can be hours long.
+        private static WaitForTime WaitAnHour() {
+            var wait = (WaitForTime)HeadlessSequencerFactory.WithDefaults().Items.OfType<WaitForTime>().First().Clone();
+            var at = DateTime.Now.AddHours(1);
+            wait.Hours = at.Hour;
+            wait.Minutes = at.Minute;
+            return wait;
+        }
+
+        [Test]
+        public async Task Pause_lands_during_a_long_wait_for_a_time_and_resume_goes_back_to_waiting() {
+            var id = Guid.NewGuid();
+            var ws = new RecordingWsBroadcaster();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(WaitAnHour());
+                c.Items.Add(new Annotation { Name = "after-the-wait" });
+            }), ws);
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+
+            await svc.PauseAsync(id, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Paused);
+            Assert.That(ws.Events, Does.Contain("sequence.paused"));
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Running);
+            await Task.Delay(300);
+            var state = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(state!.State, Is.EqualTo(SequenceRunState.Running), "still waiting for its time");
+            Assert.That(state.InstructionsCompleted, Is.Zero, "the wait did not end because of the pause");
+
+            await svc.AbortAsync(id, null, CancellationToken.None);
+        }
+
         [Test]
         public async Task Pause_suspends_at_the_instruction_boundary_and_resume_completes() {
             // §38 pause: the current instruction (a 2s wait) always finishes; the
