@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/ws_event_stream.dart';
+import '../state/simple_messages_state.dart';
+import '../state/simple_mode_state.dart';
 import '../state/ws/ws_providers.dart';
 
 /// §27 single-client policy surfacing. Wraps the app shell's body and listens
@@ -33,6 +35,15 @@ class _ConnectionPolicyListenerState
   /// dance at a time), so a still-open first dialog is stale — close it.
   VoidCallback? _dismissTakeoverDialog;
 
+  /// Simple Mode's takeover pill, withdrawn just before the daemon times out.
+  Timer? _takeoverPillTimeout;
+
+  @override
+  void dispose() {
+    _takeoverPillTimeout?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     ref.listen(wsTakeoverRequestsProvider, (previous, next) {
@@ -52,6 +63,10 @@ class _ConnectionPolicyListenerState
 
   void _showTakeoverRequestDialog(WsConnectionRequest request) {
     _dismissTakeoverDialog?.call();
+    if (ref.read(simpleModeActiveProvider)) {
+      _askTakeoverInPill(request);
+      return;
+    }
     var dismissed = false;
     _dismissTakeoverDialog = () {
       if (!dismissed && mounted) {
@@ -80,19 +95,55 @@ class _ConnectionPolicyListenerState
     );
   }
 
+  /// Simple Mode has no popups: the same question on a pill.
+  void _askTakeoverInPill(WsConnectionRequest request) {
+    final messages = ref.read(simpleMessagesProvider.notifier);
+    void answer(bool allow) => ref
+        .read(wsEventStreamProvider)
+        ?.sendConnectionResponse(request.requestId, allow: allow);
+    final id = messages.show(
+      SimpleMessageKind.question,
+      '${request.from} wants to connect',
+      detail: _takeoverDetail,
+      actions: [
+        SimpleMessageAction('Keep me connected', () => answer(false)),
+        SimpleMessageAction('Allow', () => answer(true)),
+      ],
+    );
+    void withdraw() {
+      _takeoverPillTimeout?.cancel();
+      _dismissTakeoverDialog = null;
+      messages.dismiss(id);
+    }
+
+    _dismissTakeoverDialog = withdraw;
+    _takeoverPillTimeout = Timer(_TakeoverRequestDialog.timeout, withdraw);
+  }
+
   void _showSessionTransferredDialog() {
     // The takeover-request dialog (if the user never answered it) is moot now.
     _dismissTakeoverDialog?.call();
+    if (ref.read(simpleModeActiveProvider)) {
+      ref.read(simpleMessagesProvider.notifier).show(
+        SimpleMessageKind.question,
+        _transferredTitle,
+        detail: _transferredDetail,
+        actions: [
+          SimpleMessageAction('OK', () {}),
+          SimpleMessageAction(
+            'Reconnect',
+            () => ref.read(wsEventStreamProvider)?.connect(),
+          ),
+        ],
+      );
+      return;
+    }
     unawaited(
       showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          title: const Text('Session transferred'),
-          content: const Text(
-            'Another client took control of the observatory, so this '
-            'client was disconnected. The running sequence is unaffected — it '
-            'continues on Ara.',
-          ),
+          title: const Text(_transferredTitle),
+          content: const Text(_transferredDetail),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
@@ -113,6 +164,15 @@ class _ConnectionPolicyListenerState
     );
   }
 }
+
+const _transferredTitle = 'Session transferred';
+const _transferredDetail =
+    'Another client took control of the observatory, so this client was '
+    'disconnected. The running sequence is unaffected — it continues on Ara.';
+const _takeoverDetail =
+    'Only one client can control the observatory at a time. Allowing hands '
+    'control to the other client and disconnects this one; the running '
+    'sequence continues either way.';
 
 /// The holder-side §27.1 modal. Auto-dismisses shortly before the daemon's
 /// 30 s answer window lapses (an unanswered request reads as "unresponsive"
@@ -160,11 +220,7 @@ class _TakeoverRequestDialogState extends State<_TakeoverRequestDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text('${widget.from} wants to connect'),
-      content: const Text(
-        'Only one client can control the observatory at a time. Allowing '
-        'hands control to the other client and disconnects this one; the '
-        'running sequence continues either way.',
-      ),
+      content: const Text(_takeoverDetail),
       actions: [
         TextButton(
           onPressed: () => _answer(false),

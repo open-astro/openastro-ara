@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/equipment_device_api.dart';
 import '../state/equipment/filter_wheel_state.dart';
+import '../state/simple_messages_state.dart';
+import '../state/simple_mode_state.dart';
 import '../state/ws/ws_providers.dart';
 import '../theme/ara_colors.dart';
 import 'equipment/manual_filter_wheel_body.dart';
@@ -88,6 +90,10 @@ class _ManualFilterSwapListenerState
   void _show(int position, String target, String? current) {
     _dismiss?.call();
     _shownFor = position;
+    if (ref.read(simpleModeActiveProvider)) {
+      _askInPill(position, target, current);
+      return;
+    }
     var shown = false;
     var open = false;
     var withdrawn = false;
@@ -133,6 +139,43 @@ class _ManualFilterSwapListenerState
     });
   }
 
+  /// Simple Mode has no popups: the same three answers, on a question pill.
+  void _askInPill(int position, String target, String? current) {
+    final messages = ref.read(simpleMessagesProvider.notifier);
+    final id = messages.show(
+      SimpleMessageKind.question,
+      'Install the $target filter',
+      detail: manualSwapDetail(target, current),
+      actions: [
+        SimpleMessageAction(
+          'Cancel swap',
+          () => _answer(
+            position,
+            target,
+            current,
+            (n) => n.cancelManualSwap(),
+            "Couldn't cancel the swap",
+          ),
+        ),
+        SimpleMessageAction('Later', () {}),
+        SimpleMessageAction(
+          '$target is in',
+          () => _answer(
+            position,
+            target,
+            current,
+            (n) => n.reportInstalled(position),
+            "Couldn't confirm the filter",
+          ),
+        ),
+      ],
+    );
+    _dismiss = () {
+      _dismiss = null;
+      messages.dismiss(id);
+    };
+  }
+
   Future<void> _answer(
     int position,
     String target,
@@ -154,9 +197,7 @@ class _ManualFilterSwapListenerState
     if (problem == null || !mounted) return;
     // Nothing reached the daemon, so the swap still stands: reopen it.
     _shownFor = null;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(problem), backgroundColor: AraColors.accentError),
-    );
+    userNotifier(context)(problem, error: true);
     _show(position, target, current);
   }
 }

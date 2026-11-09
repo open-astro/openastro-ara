@@ -9,6 +9,8 @@ import 'package:openastroara/models/ws_event.dart';
 import 'package:openastroara/services/equipment_device_api.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/manual_filter_swap_listener.dart';
 
 /// The wheel as the listener sees it: one read at launch, the two actions,
@@ -69,6 +71,7 @@ Future<(List<String>, StreamController<WsEvent>)> _pump(
   WidgetTester tester,
   FilterWheelStatus? initial, {
   bool performs = true,
+  bool simple = false,
 }) async {
   final calls = <String>[];
   final ws = StreamController<WsEvent>.broadcast();
@@ -76,6 +79,7 @@ Future<(List<String>, StreamController<WsEvent>)> _pump(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        if (simple) simpleModeActiveProvider.overrideWithValue(true),
         filterWheelProvider.overrideWith(
           () => _FakeWheel(initial, calls, performs: performs),
         ),
@@ -193,5 +197,33 @@ void main() {
       ),
     );
     expect(find.byType(AlertDialog), findsNothing);
+  });
+
+  group('Simple Mode', () {
+    List<SimpleMessage> pills(WidgetTester tester) =>
+        ProviderScope.containerOf(tester.element(find.text('shell'))).read(simpleMessagesProvider);
+
+    testWidgets('the prompt is a question pill, no dialog; its answer reports the filter', (tester) async {
+      final (calls, _) = await _pump(tester, _manual(currentSlot: 0, pendingSlot: 1), simple: true);
+      expect(find.byType(AlertDialog), findsNothing);
+      final pill = pills(tester).single;
+      expect(pill.kind, SimpleMessageKind.question);
+      expect(pill.title, 'Install the Ha filter');
+      expect(pill.detail, contains('Take out L'));
+      expect(pill.actions.map((a) => a.label), ['Cancel swap', 'Later', 'Ha is in']);
+      pill.actions.last.onPressed();
+      await tester.pumpAndSettle();
+      expect(calls, contains('installed:1'));
+    });
+
+    testWidgets('a swap resolved elsewhere takes its pill away', (tester) async {
+      final (_, ws) = await _pump(tester, _manual(currentSlot: 0), simple: true);
+      ws.add(_swap(pending: 1, pendingName: 'Ha', current: 'L'));
+      await tester.pumpAndSettle();
+      expect(pills(tester), hasLength(1));
+      ws.add(_swap(pending: null));
+      await tester.pumpAndSettle();
+      expect(pills(tester), isEmpty);
+    });
   });
 }
