@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/services/equipment_discovery_api.dart';
 import 'package:openastroara/state/equipment/equipment_discovery_provider.dart';
@@ -2687,6 +2688,33 @@ void main() {
       expect(find.descendant(of: sheet, matching: find.bySemanticsLabel('Open-source licenses')), findsOneWidget);
       handle.dispose();
     });
+
+    for (final (name, key) in const [
+      ('Change rig', 'simple-ara-change-rig'),
+      ('Change profile', 'simple-ara-change-profile'),
+      ('Licenses', 'simple-ara-licenses'),
+    ]) {
+      testWidgets('hovering $name highlights its word, not the whole 44 pt target', (tester) async {
+        await open(tester);
+        final button = find.byKey(Key(key));
+        final highlight = find.descendant(of: button, matching: find.byKey(const Key('simple-link-highlight')));
+        final style = tester.widget<TextButton>(button).style!;
+        expect(style.overlayColor!.resolve({WidgetState.hovered}), Colors.transparent, reason: 'no fill over the target');
+        Color? fill() => (tester.widget<DecoratedBox>(highlight).decoration as BoxDecoration).color;
+        expect(fill(), isNull, reason: 'nothing until the pointer is on it');
+        final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+        addTearDown(mouse.removePointer);
+        await mouse.addPointer(location: Offset.zero);
+        await mouse.moveTo(tester.getTopLeft(button) + const Offset(4, 2));
+        await tester.pump();
+        expect(fill(), isNotNull, reason: 'anywhere on the target lights it');
+        final word = tester.getRect(find.descendant(of: button, matching: find.byType(Text)));
+        final box = tester.getRect(highlight);
+        expect(box.height, lessThan(word.height + 8));
+        expect(box.top, lessThanOrEqualTo(word.top));
+        expect(box.bottom, greaterThanOrEqualTo(word.bottom));
+      });
+    }
 
     testWidgets('Open-source licenses opens the licenses page, over a closed sheet (#1645)', (tester) async {
       await open(tester);

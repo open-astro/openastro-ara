@@ -4274,11 +4274,7 @@ class _ChangeRow extends StatelessWidget {
       // A plain blue "Change"; a screen reader hears what it changes.
       TextButton(
         key: buttonKey,
-        style: TextButton.styleFrom(
-          // Simple Mode's 44 pt target (user, 2026-11-03).
-          minimumSize: const Size(0, 44),
-          padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        style: _linkStyle(
           alignment: switch (linePlace) {
             CrossAxisAlignment.end => Alignment.bottomCenter,
             CrossAxisAlignment.start => Alignment.topCenter,
@@ -4293,6 +4289,49 @@ class _ChangeRow extends StatelessWidget {
         ),
       ),
     ],
+  );
+}
+
+/// A blue text link with Simple Mode's 44 pt target (user, 2026-11-03). Its
+/// hover, focus and press tint fits the word: a target that reaches away from
+/// its line must not light up the empty space.
+ButtonStyle _linkStyle({Alignment alignment = Alignment.center}) {
+  final tint = AraColors.linkText.withValues(alpha: 0.16);
+  return TextButton.styleFrom(
+    minimumSize: const Size(0, 44),
+    padding: EdgeInsets.zero,
+    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    alignment: alignment,
+    overlayColor: Colors.transparent,
+    foregroundBuilder: (context, states, child) {
+      final lit =
+          states.contains(WidgetState.hovered) ||
+          states.contains(WidgetState.focused) ||
+          states.contains(WidgetState.pressed);
+      return Stack(
+        clipBehavior: Clip.none,
+        children: [
+          // Past the word's line height, without moving the word off its row.
+          Positioned(
+            left: 0,
+            right: 0,
+            top: -2,
+            bottom: -2,
+            child: DecoratedBox(
+              key: const Key('simple-link-highlight'),
+              decoration: BoxDecoration(
+                color: lit ? tint : null,
+                borderRadius: BorderRadius.circular(6),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
+            child: child,
+          ),
+        ],
+      );
+    },
   );
 }
 
@@ -4350,11 +4389,7 @@ class _AraSheet extends ConsumerWidget {
               title: kAppName,
               titleAction: TextButton(
                 key: const Key('simple-ara-licenses'),
-                style: TextButton.styleFrom(
-                  minimumSize: const Size(0, 44),
-                  padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
+                style: _linkStyle(),
                 onPressed: () {
                   showAppLicenses(context, version);
                   onClose();
