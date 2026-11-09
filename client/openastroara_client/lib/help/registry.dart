@@ -446,7 +446,7 @@ const Map<String, Help> helpRegistry = {
     body:
         'A meridian flip is when a German Equatorial Mount (GEM) swaps sides of the pier to keep tracking a target that crossed the meridian (south line at culmination).\n\n'
         '* **On** (recommended): the mount flips automatically when the target reaches the configured meridian-limit (set per-mount by the mount-safety policy). Exposure pauses, mount flips, plate-solve re-centers, guider re-calibrates, exposure resumes.\n'
-        '* **Off**: the sequence pauses at the meridian-limit and waits for you to manually flip + resume.\n\n'
+        '* **Off**: the run does not flip and does not pause at the meridian-limit. It keeps imaging, so on a German mount stop the run yourself before the scope reaches the pier.\n\n'
         'Fork-mounted scopes (CGEM-DX, alt-az without wedge) don\'t need a meridian flip — turn this off and the meridian-limit policy is ignored.',
     relatedSettings: [
       'safety.policies.meridian_pause_min',

@@ -255,7 +255,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.policies.meridian_flip_auto',
     label: 'Auto meridian flip',
-    description: 'Automatically execute the meridian flip when the target crosses the meridian. Off = sequence pauses and waits for manual flip.',
+    description: 'Automatically execute the meridian flip when the target crosses the meridian. Off = the run never flips and does not pause at the meridian; it keeps imaging.',
     keywords: [
       'meridian',
       'flip',

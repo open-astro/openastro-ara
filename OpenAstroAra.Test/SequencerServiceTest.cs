@@ -815,23 +815,48 @@ namespace OpenAstroAra.Test {
             await svc.AbortAsync(id, null, CancellationToken.None);
         }
 
-        private static (SequencerService Service, Guid Id, Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator> Imaging, TaskCompletionSource<OpenAstroAra.Image.Interfaces.IExposureData> Frame) ExposingRun() {
+        private static (SequencerService Service, Guid Id, Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator> Imaging, TaskCompletionSource<OpenAstroAra.Image.Interfaces.IExposureData> Frame) ExposingRun(
+                IWsBroadcaster? ws = null, double exposureSeconds = 1, Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>? flipTelescope = null) {
             var camera = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ICameraMediator>();
             camera.Setup(c => c.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyCamera.CameraInfo { Connected = true });
             var frame = new TaskCompletionSource<OpenAstroAra.Image.Interfaces.IExposureData>(TaskCreationOptions.RunContinuationsAsynchronously);
             var imaging = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator>();
             imaging.Setup(m => m.CaptureImage(It.IsAny<OpenAstroAra.Equipment.Model.CaptureSequence>(), It.IsAny<CancellationToken>(),
                     It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>>(), It.IsAny<string>())).Returns(frame.Task);
-            var factory = HeadlessSequencerFactory.WithDefaults(cameraMediator: camera.Object, imagingMediator: imaging.Object);
+            var factory = HeadlessSequencerFactory.WithDefaults(cameraMediator: camera.Object, imagingMediator: imaging.Object, telescopeMediator: flipTelescope?.Object);
             var id = Guid.NewGuid();
             var exposure = (OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure)factory.Items
                 .OfType<OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure>().First().Clone();
-            exposure.ExposureTime = 1;
+            exposure.ExposureTime = exposureSeconds;
             var svc = BuildService(id, BuildBody(c => {
+                if (flipTelescope is not null) {
+                    c.Triggers.Add(new OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger(new HeadlessProfileService(), flipTelescope.Object,
+                        new Mock<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor>().Object));
+                    c.Items.Add((ISequenceItem)exposure.Clone()); // the run outlasts the flip, the next item does not
+                }
                 c.Items.Add(exposure);
                 c.Items.Add(new Annotation { Name = "never reached" });
-            }, factory), factory: factory);
+            }, factory), ws: ws, factory: factory);
             return (svc, id, imaging, frame);
+        }
+
+        [Test]
+        public async Task Progress_frames_carry_the_flip_and_stop_after_frame() {
+            var ws = new RecordingWsBroadcaster();
+            var (svc, id, _, frame) = ExposingRun(ws, exposureSeconds: 3600, flipTelescope: TelescopeWithFlipIn(2));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+
+            await svc.StopAfterFrameAsync(id, null, CancellationToken.None);
+            frame.SetResult(new Mock<OpenAstroAra.Image.Interfaces.IExposureData>().Object);
+            await WaitForTerminalAsync(svc, id);
+
+            var progress = ws.Records.Where(e => e.Type == "sequence.progress").Select(e => e.Payload).ToList();
+            Assert.That(progress.Any(p => p.GetProperty("stop_after_frame").GetBoolean()), Is.True, "the armed stop reaches the wire");
+            var flip = progress.Select(p => p.GetProperty("meridian_flip")).First(f => f.ValueKind == JsonValueKind.Object);
+            Assert.That(flip.GetProperty("state").GetString(), Is.EqualTo(MeridianFlipStates.DueAt));
+            Assert.That(flip.GetProperty("expected_utc").ValueKind, Is.EqualTo(JsonValueKind.String));
+            Assert.That(flip.TryGetProperty("target", out _), Is.True);
         }
 
         [Test]
@@ -1328,7 +1353,11 @@ namespace OpenAstroAra.Test {
             Assert.That(done!.MeridianFlip, Is.Null);
         }
 
-        private static OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger DueFlipTrigger(double hoursToFlip) {
+        private static OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger DueFlipTrigger(double hoursToFlip) =>
+            new(new HeadlessProfileService(), TelescopeWithFlipIn(hoursToFlip).Object,
+                new Mock<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor>().Object);
+
+        private static Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator> TelescopeWithFlipIn(double hoursToFlip) {
             var coords = new OpenAstroAra.Astrometry.Coordinates(
                 OpenAstroAra.Astrometry.Angle.ByHours(5), OpenAstroAra.Astrometry.Angle.ByDegree(20),
                 OpenAstroAra.Astrometry.Epoch.J2000);
@@ -1336,8 +1365,7 @@ namespace OpenAstroAra.Test {
             telescope.Setup(t => t.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyTelescope.TelescopeInfo {
                 Connected = true, TrackingEnabled = true, TimeToMeridianFlip = hoursToFlip, Coordinates = coords,
             });
-            return new OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger(new HeadlessProfileService(), telescope.Object,
-                new Mock<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor>().Object);
+            return telescope;
         }
 
         private static readonly DateTimeOffset FlipStatusNow = new(2026, 11, 9, 10, 0, 0, TimeSpan.Zero);

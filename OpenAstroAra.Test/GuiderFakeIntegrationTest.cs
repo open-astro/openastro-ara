@@ -171,6 +171,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task GetInfo_counts_only_a_guiding_session_as_guiding() {
+            var (fake, svc) = await ConnectedServiceAsync().ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            Assert.That(svc.GetInfo().Guiding, Is.False, "stopped is not guiding");
+
+            await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetInfo().Guiding).ConfigureAwait(false), Is.True, "a flip must stop and resume this session");
+
+            await fake.BroadcastAsync(PhdEvents.AppState("Looping")).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => !svc.GetInfo().Guiding).ConfigureAwait(false), Is.True, "looping is not a guiding session");
+        }
+
+        [Test]
         public async Task The_guider_state_lists_the_guider_profiles_for_the_profile_picker() {
             var (fake, svc) = await ConnectedServiceAsync().ConfigureAwait(false);
             await using var _ = fake;
