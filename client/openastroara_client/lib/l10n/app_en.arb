@@ -936,14 +936,6 @@
   "@previewGuideEmpty": {
     "description": "Empty screen in Preview with the guide camera picked and no guide frame yet"
   },
-  "simpleNoFlatsThisRun": "No flats this run",
-  "@simpleNoFlatsThisRun": {
-    "description": "Simple Mode pill when a run starts on a profile set to ask about flats"
-  },
-  "simpleNoFlatsThisRunDetail": "Your profile asks before each run, and Simple Mode doesn't ask. Turn off Simple Mode in Settings → Rig, then set Capture calibration after a sequence under Settings → Session → Calibration.",
-  "@simpleNoFlatsThisRunDetail": {
-    "description": "Why the run takes no flats and where to change it; the setting names match the English-only Settings panel"
-  },
   "previewCamera": "Camera",
   "@previewCamera": {
     "description": "Simple Mode: label above the list of connected cameras in Preview's settings."
@@ -4025,5 +4017,21 @@
   "coolingFanNotNow": "Not now",
   "@coolingFanNotNow": {
     "description": "Cooling fan pill's dismiss action"
+  },
+  "planFlats": "Flats",
+  "@planFlats": {
+    "description": "Plan sheet: the flats choice for a profile set to ask"
+  },
+  "planFlatsNotTonight": "Not tonight",
+  "@planFlatsNotTonight": {
+    "description": "Plan sheet flats choice: no flats this run"
+  },
+  "planFlatsSky": "Sky flats at twilight",
+  "@planFlatsSky": {
+    "description": "Plan sheet flats choice"
+  },
+  "planFlatsPanel": "Panel flats at end",
+  "@planFlatsPanel": {
+    "description": "Plan sheet flats choice"
   }
 }

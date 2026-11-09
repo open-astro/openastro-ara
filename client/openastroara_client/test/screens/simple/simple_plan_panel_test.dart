@@ -50,6 +50,8 @@ import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/stop_mount_overlay.dart' show SlewWsEvents;
 import 'package:openastroara/models/library/live_library.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
+import 'package:openastroara/state/simple_flats_choice_state.dart';
+import 'package:openastroara/state/settings/safety_policies_state.dart';
 
 const _m42 = PlanetariumSelection(
     name: 'M42', kind: 'Nebula', raHours: 5.59, decDeg: -5.39, raJ2000Hours: 5.59, decJ2000Deg: -5.39, altDeg: 30, maxAltDeg: 45);
@@ -1352,6 +1354,29 @@ void main() {
     expect(c.read(selectedSettingsPanelProvider), 'session.storage');
     expect(c.read(selectedTabIndexProvider), kOptionsTabIndex);
     expect(prefs.value, isTrue, reason: 'Settings opens over Simple Mode (the shell shows it)');
+  });
+
+  testWidgets('a profile set to ask offers flats inline on the Plan sheet, not tonight first', (tester) async {
+    final c = await _pump(tester, _Seq(),
+        SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
+    c.read(safetyPoliciesProvider.notifier).setCalibrationCaptureDefault(CalibrationCaptureDefault.ask);
+    await tester.pump();
+
+    expect(find.byKey(const Key('simple-run-flats-0')), findsOneWidget);
+    expect(find.byType(Dialog), findsNothing);
+    await tester.ensureVisible(find.byKey(const Key('simple-run-flats-2')));
+    await tester.tap(find.byKey(const Key('simple-run-flats-2')));
+    await tester.pump();
+    expect(c.read(simpleFlatsChoiceProvider), 'panel_at_end');
+  });
+
+  testWidgets('a profile with its own flats setting shows no flats choice', (tester) async {
+    final c = await _pump(tester, _Seq(),
+        SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}));
+    c.read(safetyPoliciesProvider.notifier).setCalibrationCaptureDefault(CalibrationCaptureDefault.never);
+    await tester.pump();
+
+    expect(find.byKey(const Key('simple-run-flats-0')), findsNothing);
   });
 
   testWidgets('Night done: how long, how it ended, where it stopped, and the frames the library filed per filter',

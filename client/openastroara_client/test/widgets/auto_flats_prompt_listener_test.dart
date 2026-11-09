@@ -12,6 +12,7 @@ import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
+import 'package:openastroara/state/simple_flats_choice_state.dart';
 import 'package:openastroara/widgets/auto_flats_prompt_listener.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 
@@ -157,7 +158,24 @@ void main() {
       expect(client.lastRemember, isTrue);
     });
 
-    testWidgets('Simple Mode shows no calibration popup; an unanswered run ends without flats', (tester) async {
+    testWidgets('Simple Mode sends the flats choice made on the Plan sheet, with no popup or pill', (tester) async {
+      final (conn, client) = await pumpListener(tester, simple: true);
+      await tester.pump();
+      final c = ProviderScope.containerOf(tester.element(find.byType(AutoFlatsPromptListener)));
+      c.read(simpleFlatsChoiceProvider.notifier).set('panel_at_end');
+
+      emitPrompt(conn);
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Capture calibration frames tonight?'), findsNothing);
+      expect(client.lastId, 'seq-1');
+      expect(client.lastChoice, 'panel_at_end');
+      expect(client.lastRemember, isFalse, reason: 'this plan only');
+      expect(c.read(simpleMessagesProvider), isEmpty);
+    });
+
+    testWidgets('Simple Mode says not tonight when nothing was picked', (tester) async {
       final (conn, client) = await pumpListener(tester, simple: true);
       await tester.pump();
 
@@ -165,24 +183,7 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(find.text('Capture calibration frames tonight?'), findsNothing);
-      expect(client.calls, 0);
-    });
-
-    testWidgets('Simple Mode says in one pill that this run takes no flats', (tester) async {
-      List<SimpleMessage> pills() => ProviderScope.containerOf(tester.element(find.byType(AutoFlatsPromptListener)))
-          .read(simpleMessagesProvider);
-      final (conn, _) = await pumpListener(tester, simple: true);
-      await tester.pump();
-      emitPrompt(conn);
-      await tester.pump();
-      await tester.pump();
-      emitPrompt(conn, seq: 2);
-      await tester.pump();
-      await tester.pump();
-      expect(pills().map((m) => (m.kind, m.title)), [(SimpleMessageKind.warning, 'No flats this run')]);
-      expect(pills().single.detail, contains('Turn off Simple Mode'), reason: 'the setting is only in the full app');
-      expect(pills().single.detail, contains('Settings → Session → Calibration'));
+      expect(client.lastChoice, 'later');
     });
 
     testWidgets('"Not tonight" posts later without remember', (tester) async {

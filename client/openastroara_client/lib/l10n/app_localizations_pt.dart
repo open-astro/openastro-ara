@@ -702,13 +702,6 @@ class AppLocalizationsPt extends AppLocalizations {
       'Tap the shutter for the guide camera\'s frames';
 
   @override
-  String get simpleNoFlatsThisRun => 'No flats this run';
-
-  @override
-  String get simpleNoFlatsThisRunDetail =>
-      'Your profile asks before each run, and Simple Mode doesn\'t ask. Turn off Simple Mode in Settings → Rig, then set Capture calibration after a sequence under Settings → Session → Calibration.';
-
-  @override
   String get previewCamera => 'Camera';
 
   @override
@@ -2915,6 +2908,18 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get coolingFanNotNow => 'Not now';
+
+  @override
+  String get planFlats => 'Flats';
+
+  @override
+  String get planFlatsNotTonight => 'Not tonight';
+
+  @override
+  String get planFlatsSky => 'Sky flats at twilight';
+
+  @override
+  String get planFlatsPanel => 'Panel flats at end';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -3626,13 +3631,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get previewGuideEmpty =>
       'Toque no obturador para ver os quadros da câmera guia';
-
-  @override
-  String get simpleNoFlatsThisRun => 'Sem flats nesta sessão';
-
-  @override
-  String get simpleNoFlatsThisRunDetail =>
-      'Seu perfil pergunta antes de cada sessão, e o Modo Simples não pergunta. Desligue o Modo Simples em Ajustes → Setup e ajuste Capture calibration after a sequence em Ajustes → Session → Calibration.';
 
   @override
   String get previewCamera => 'Câmera';
@@ -5856,4 +5854,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get coolingFanNotNow => 'Agora não';
+
+  @override
+  String get planFlats => 'Flats';
+
+  @override
+  String get planFlatsNotTonight => 'Hoje não';
+
+  @override
+  String get planFlatsSky => 'Flats do céu no crepúsculo';
+
+  @override
+  String get planFlatsPanel => 'Flats de painel no final';
 }

@@ -1215,18 +1215,6 @@ abstract class AppLocalizations {
   /// **'Tap the shutter for the guide camera\'s frames'**
   String get previewGuideEmpty;
 
-  /// Simple Mode pill when a run starts on a profile set to ask about flats
-  ///
-  /// In en, this message translates to:
-  /// **'No flats this run'**
-  String get simpleNoFlatsThisRun;
-
-  /// Why the run takes no flats and where to change it; the setting names match the English-only Settings panel
-  ///
-  /// In en, this message translates to:
-  /// **'Your profile asks before each run, and Simple Mode doesn\'t ask. Turn off Simple Mode in Settings → Rig, then set Capture calibration after a sequence under Settings → Session → Calibration.'**
-  String get simpleNoFlatsThisRunDetail;
-
   /// Simple Mode: label above the list of connected cameras in Preview's settings.
   ///
   /// In en, this message translates to:
@@ -5000,6 +4988,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Not now'**
   String get coolingFanNotNow;
+
+  /// Plan sheet: the flats choice for a profile set to ask
+  ///
+  /// In en, this message translates to:
+  /// **'Flats'**
+  String get planFlats;
+
+  /// Plan sheet flats choice: no flats this run
+  ///
+  /// In en, this message translates to:
+  /// **'Not tonight'**
+  String get planFlatsNotTonight;
+
+  /// Plan sheet flats choice
+  ///
+  /// In en, this message translates to:
+  /// **'Sky flats at twilight'**
+  String get planFlatsSky;
+
+  /// Plan sheet flats choice
+  ///
+  /// In en, this message translates to:
+  /// **'Panel flats at end'**
+  String get planFlatsPanel;
 }
 
 class _AppLocalizationsDelegate

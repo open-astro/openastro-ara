@@ -186,8 +186,6 @@
   "previewStars": "Estrelas",
   "previewStopGuideFrames": "Pare os quadros da câmera guia primeiro.",
   "previewGuideEmpty": "Toque no obturador para ver os quadros da câmera guia",
-  "simpleNoFlatsThisRun": "Sem flats nesta sessão",
-  "simpleNoFlatsThisRunDetail": "Seu perfil pergunta antes de cada sessão, e o Modo Simples não pergunta. Desligue o Modo Simples em Ajustes → Setup e ajuste Capture calibration after a sequence em Ajustes → Session → Calibration.",
   "previewCamera": "Câmera",
   "previewExposure": "Exposição",
   "previewGainOffset": "Ganho · offset",
@@ -816,5 +814,9 @@
   "coolingFanAsk": "Escolha a ventoinha de refrigeração da sua câmera para que ela funcione com a refrigeração.",
   "coolingFanAskFullUi": "Escolha a ventoinha de refrigeração da sua câmera em Ajustes › Câmera para que ela funcione com a refrigeração.",
   "coolingFanChoose": "Escolher",
-  "coolingFanNotNow": "Agora não"
+  "coolingFanNotNow": "Agora não",
+  "planFlats": "Flats",
+  "planFlatsNotTonight": "Hoje não",
+  "planFlatsSky": "Flats do céu no crepúsculo",
+  "planFlatsPanel": "Flats de painel no final"
 }

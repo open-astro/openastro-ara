@@ -702,13 +702,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Tap the shutter for the guide camera\'s frames';
 
   @override
-  String get simpleNoFlatsThisRun => 'No flats this run';
-
-  @override
-  String get simpleNoFlatsThisRunDetail =>
-      'Your profile asks before each run, and Simple Mode doesn\'t ask. Turn off Simple Mode in Settings → Rig, then set Capture calibration after a sequence under Settings → Session → Calibration.';
-
-  @override
   String get previewCamera => 'Camera';
 
   @override
@@ -2915,4 +2908,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get coolingFanNotNow => 'Not now';
+
+  @override
+  String get planFlats => 'Flats';
+
+  @override
+  String get planFlatsNotTonight => 'Not tonight';
+
+  @override
+  String get planFlatsSky => 'Sky flats at twilight';
+
+  @override
+  String get planFlatsPanel => 'Panel flats at end';
 }
