@@ -8,6 +8,7 @@ import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/services/equipment_discovery_api.dart';
 import 'package:openastroara/state/equipment/equipment_discovery_provider.dart';
 import 'package:openastroara/state/settings/equipment_connection_state.dart' show EquipmentDeviceType;
+import 'package:flutter/gestures.dart' show HitTestResult;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
@@ -4490,6 +4491,29 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
       }
       expect(tester.getTopLeft(pill).dx, greaterThanOrEqualTo(kSimpleInset * 2 + kSimpleRailWidth));
+    });
+
+    testWidgets('on a phone in portrait the words sit above the rail, and Switches still works', (tester) async {
+      final d = _Diagnostics({'dew_formation'});
+      await _pump(tester, const Size(390, 844), gear: [
+        diagnosticsStateProvider.overrideWith(() => d),
+        switchListProvider.overrideWith(() => _Switches([_switch('box', 'Powerbox', SwitchConnectionState.connected)])),
+      ]);
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      final words = tester.getRect(pill);
+      final covered = [
+        for (final k in ['simple-sky', 'simple-info', 'simple-library', 'simple-album'])
+          tester.getCenter(find.byKey(Key(k))),
+      ].where(words.contains).toList();
+      expect(covered, isNotEmpty, reason: 'precondition: the rail runs behind the words');
+      final hit = HitTestResult();
+      tester.binding.hitTestInView(hit, covered.first, tester.view.viewId);
+      expect(hit.path.map((e) => e.target), contains(tester.renderObject(pill)));
+      await tester.tap(find.widgetWithText(TextButton, 'Switches'));
+      await tester.pump();
+      expect(find.byKey(const Key('simple-device-switches')), findsOneWidget);
     });
 
     testWidgets('no connected switch device: no button', (tester) async {

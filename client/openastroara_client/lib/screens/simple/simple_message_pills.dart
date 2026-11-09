@@ -205,7 +205,7 @@ class _Pill extends ConsumerWidget {
                   : CrossAxisAlignment.center,
               children: [
                 Padding(
-                  padding: EdgeInsets.only(top: warning ? 11 : 0),
+                  padding: EdgeInsets.only(top: warning ? 19 : 0),
                   child: Icon(Icons.circle, size: 10, color: dot),
                 ),
                 Expanded(
@@ -214,7 +214,8 @@ class _Pill extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    // A warning's first line sits level with its ×.
+                    padding: EdgeInsets.only(top: warning ? 14 : 6, bottom: 6),
                     child: Text.rich(
                       TextSpan(
                         text: m.title,

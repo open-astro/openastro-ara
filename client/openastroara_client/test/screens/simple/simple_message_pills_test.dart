@@ -171,6 +171,10 @@ void main() {
     const words = 'Dew may be forming: stars are swelling at high humidity. Wipe the optics or turn on the dew heaters.';
 
     testWidgets('at phone width its action sits under the words, × last, and the words keep their room', (tester) async {
+      // Tall enough for the test font's square glyphs.
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
       final c = await _pump(tester, width: 171);
       c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.warning, words,
           actions: [SimpleMessageAction('Switches', () {})]);
@@ -181,6 +185,15 @@ void main() {
       final action = tester.getRect(find.widgetWithText(TextButton, 'Switches'));
       expect(action.top, greaterThanOrEqualTo(text.bottom));
       expect(tester.getCenter(find.byTooltip('Dismiss')).dx, greaterThan(action.left));
+    });
+
+    testWidgets('a one-line warning lines its words and dot up with the ×', (tester) async {
+      final c = await _pump(tester);
+      c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.warning, 'Rig busy');
+      await tester.pump();
+      final close = tester.getCenter(find.byTooltip('Dismiss')).dy;
+      expect(tester.getCenter(find.textContaining('Rig busy')).dy, closeTo(close, 2));
+      expect(tester.getCenter(find.byIcon(Icons.circle)).dy, closeTo(close, 2));
     });
 
     testWidgets('its action leaves the warning up', (tester) async {

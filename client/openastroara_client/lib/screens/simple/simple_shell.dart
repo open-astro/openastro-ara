@@ -975,10 +975,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         ? leftRailTop - messagesTop - kSimpleInset
         : double.infinity;
     // Pills too tall for the room above the left rail move beside it, when
-    // that leaves them a readable width (a phone has the height instead).
+    // that leaves them a readable width; otherwise they paint over the rail.
     final railShift = railWidth + kSimpleInset;
     final pillsBesideRail =
         _messagesHeight > messagesRoom && messagesWidth - railShift >= 240;
+    final pillsOverRail =
+        panels && _messagesHeight > messagesRoom && !pillsBesideRail;
     // The rail's popovers (a mode's panel, the modes, the queue) take the room
     // from under the status pill down to the screen's inset, over the bottom
     // row while open (they sit left of the rail, clear of Stop), above the
@@ -1025,6 +1027,27 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final motion = reduceMotionOf(context)
         ? Duration.zero
         : const Duration(milliseconds: 220);
+    final messagePills = AnimatedPositioned(
+      left: kSimpleInset + (pillsBesideRail ? railShift : 0),
+      top: panels ? messagesTop : kSimpleInset,
+      width:
+          messagesWidth - (pillsBesideRail ? railShift : 0),
+      duration: motion,
+      curve: Curves.easeOut,
+      child: NotificationListener<SizeChangedLayoutNotification>(
+        onNotification: (_) {
+          _measure();
+          return true;
+        },
+        child: SizeChangedLayoutNotifier(
+          child: SimpleMessagePills(
+            key: _messagesKey,
+            onOpen: _openFromPill,
+            maxHeight: messagesRoom,
+          ),
+        ),
+      ),
+    );
     return Theme(
       data: simpleTheme(Theme.of(context)),
       child: Scaffold(
@@ -1148,27 +1171,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                         // The message pills, top-left under the strip (under the
                         // Preflight strip when it shows), down to the left rail;
                         // they stay in the immersive view.
-                        AnimatedPositioned(
-                          left: kSimpleInset + (pillsBesideRail ? railShift : 0),
-                          top: panels ? messagesTop : kSimpleInset,
-                          width:
-                              messagesWidth - (pillsBesideRail ? railShift : 0),
-                          duration: motion,
-                          curve: Curves.easeOut,
-                          child: NotificationListener<SizeChangedLayoutNotification>(
-                            onNotification: (_) {
-                              _measure();
-                              return true;
-                            },
-                            child: SizeChangedLayoutNotifier(
-                              child: SimpleMessagePills(
-                                key: _messagesKey,
-                                onOpen: _openFromPill,
-                                maxHeight: messagesRoom,
-                              ),
-                            ),
-                          ),
-                        ),
+                        if (!pillsOverRail) messagePills,
                         // The camera's status, top-right under the strip (messages
                         // have the top-left), at most half the row; it stays in
                         // the immersive view and moves up into the corner.
@@ -1515,6 +1518,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             ],
                           ),
                         ),
+                        // Painted last only when the rail would otherwise cover them.
+                        if (pillsOverRail) messagePills,
                       ],
                     ),
                     ),
