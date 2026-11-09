@@ -1527,6 +1527,34 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_failure_during_a_plans_own_prompt_starts_the_unattended_shutdown_countdown() {
+            // #1712 review: the prompt holds the run in PausedAwaitingUser with no clock, so a parallel
+            // branch failing then finds no state change left to make.
+            using var shutdown = new UnattendedShutdownService();
+            var id = Guid.NewGuid();
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            factory.Items.Add(new FailsDuringThePromptItem());
+            var svc = BuildService(id, BuildBody(c => {
+                var par = new ParallelContainer { Name = "parallel" };
+                var prompted = new SequentialContainer { Name = "prompted" };
+                prompted.Add(new WaitForUser { Text = "Switch to the Ha filter" });
+                prompted.Add(new Annotation { Name = "after the prompt" });
+                par.Add(prompted);
+                par.Add(new FailsDuringThePromptItem());
+                c.Items.Add(par);
+            }, factory), factory: factory, unattendedShutdown: shutdown);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.PausedAwaitingUser);
+            for (var i = 0; i < 100 && !shutdown.IsCountingDown; i++) {
+                await Task.Delay(20);
+            }
+
+            Assert.That(shutdown.IsCountingDown, Is.True, "a real failure needs the clock, prompt or no prompt");
+            await svc.AbortAsync(id, null, CancellationToken.None);
+        }
+
+        [Test]
         public async Task Abort_wins_over_a_pause_awaiting_user() {
             // §58.12: abort must win over an awaiting-user suspension exactly as it
             // does over an ordinary pause — the run ends Stopped, never wedged.
@@ -1737,6 +1765,22 @@ namespace OpenAstroAra.Test {
         /// whose failure path is validation, not execution).
         /// </summary>
         [Newtonsoft.Json.JsonObject(Newtonsoft.Json.MemberSerialization.OptIn)]
+        private sealed class FailsDuringThePromptItem : OpenAstroAra.Sequencer.SequenceItem.SequenceItem {
+
+            public FailsDuringThePromptItem() { }
+
+            private FailsDuringThePromptItem(FailsDuringThePromptItem cloneMe) : base(cloneMe) { }
+
+            public override async Task Execute(IProgress<OpenAstroAra.Core.Model.ApplicationStatus> progress, CancellationToken token) {
+                await Task.Delay(600, token); // the prompt's branch has suspended by now
+                var gate = OpenAstroAra.Sequencer.Utility.ItemUtility.GetPauseGate(Parent)!;
+                gate.RequestPause(OpenAstroAra.Sequencer.Utility.PauseKind.AwaitingUser);
+                await gate.WaitWhilePausedAsync(token);
+            }
+
+            public override object Clone() => new FailsDuringThePromptItem(this);
+        }
+
         private sealed class AlwaysThrowingItem : OpenAstroAra.Sequencer.SequenceItem.SequenceItem {
 
             public AlwaysThrowingItem() { }

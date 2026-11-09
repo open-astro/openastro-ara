@@ -50,6 +50,7 @@ namespace OpenAstroAra.Test {
         private EquipmentSelectionStore selections = null!;
         private ActiveRunSessionRegistry runs = null!;
         private FakeRig rig = null!;
+        private readonly Mock<IGuiderService> guider = new();
         private Guid sim;
         private Guid real;
 
@@ -96,6 +97,7 @@ namespace OpenAstroAra.Test {
 
         [SetUp]
         public async Task Start() {
+            guider.Reset();
             dir = Path.Combine(Path.GetTempPath(), "ara-profile-devices-" + Path.GetRandomFileName());
             Directory.CreateDirectory(dir);
             store = new FileProfileStore(dir);
@@ -109,7 +111,7 @@ namespace OpenAstroAra.Test {
             var builder = WebApplication.CreateSlimBuilder();
             builder.WebHost.UseUrls("http://127.0.0.1:0");
             builder.Services.AddSingleton<IProfileRepository>(repo);
-            builder.Services.AddSingleton(new Mock<IGuiderService>().Object);
+            builder.Services.AddSingleton(guider.Object);
             builder.Services.AddSingleton(runs);
             AddDevices(builder.Services);
             builder.Services.AddSingleton<IEquipmentSelectionStore>(selections);
@@ -386,6 +388,24 @@ namespace OpenAstroAra.Test {
 
             Assert.That(repo.ActiveId, Is.EqualTo(real));
             Assert.That(rig.Log.Where(l => !l.StartsWith("forget:", StringComparison.Ordinal)), Is.EqualTo(SafetyThenMountThenConnect));
+        }
+
+        [Test]
+        public async Task Deleting_the_active_profile_moves_the_guider_to_the_one_that_takes_over() {
+            await SimRigConnectedAsync();
+
+            await DeleteAsync(sim);
+
+            guider.Verify(g => g.PushGuiderProfileAsync(null, It.IsAny<CancellationToken>(), false), Times.Once);
+        }
+
+        [Test]
+        public async Task Deleting_another_profile_leaves_the_guider_alone() {
+            await SimRigConnectedAsync();
+
+            await DeleteAsync(real);
+
+            guider.Verify(g => g.PushGuiderProfileAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>(), It.IsAny<bool>()), Times.Never);
         }
 
         [Test]

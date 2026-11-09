@@ -123,6 +123,8 @@ class ProfileApi {
     final res = await _dio.post<Map<String, dynamic>>(
       '/api/v1/profiles',
       data: {'name': name},
+      // The daemon changes the connected devices before it answers (#1710).
+      options: Options(receiveTimeout: const Duration(seconds: 60)),
     );
     final meta = ProfileMeta.fromJson(res.data ?? const <String, dynamic>{});
     if (meta.id.isEmpty) {

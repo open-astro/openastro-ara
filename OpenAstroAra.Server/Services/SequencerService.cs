@@ -383,6 +383,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 // clock. Runs on the engine thread: the call only arms a timer.
                 _unattendedShutdown?.NotifyRunPausedAwaitingUser(sequenceId, run.RunId);
             }
+        } else if (kind == OpenAstroAra.Sequencer.Utility.PauseKind.AwaitingUser && run.State == SequenceRunState.PausedAwaitingUser) {
+            // #1712 — a plan's prompt already holds the run there with no clock; a failure still starts it (repeats join).
+            _unattendedShutdown?.NotifyRunPausedAwaitingUser(sequenceId, run.RunId);
         }
     }
 

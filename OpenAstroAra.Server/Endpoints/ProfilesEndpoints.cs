@@ -135,7 +135,8 @@ public static partial class ProfilesEndpoints {
         profiles.MapDelete("/{id:guid}", async (Guid id,
                 [FromQuery(Name = "guider_profile")] string? guiderProfile,
                 [FromQuery(Name = "dark_library")] string? darkLibrary,
-                IProfileRepository repo, IGuiderService guider, ActiveRunSessionRegistry runs, ProfileDeviceSwitch devices) => {
+                IProfileRepository repo, IGuiderService guider, ActiveRunSessionRegistry runs, ProfileDeviceSwitch devices,
+                Microsoft.Extensions.Logging.ILoggerFactory loggerFactory) => {
                 // §63.4 — the guider twin goes only on an explicit ask (default keep): an older client
                 // that sends no parameter never deletes guider data without the user being asked.
                 bool deleteTwin;
@@ -171,6 +172,8 @@ public static partial class ProfilesEndpoints {
                     return Results.Problem(statusCode: StatusCodes.Status500InternalServerError);
                 }
                 if (wasActive) {
+                    // A connected guider follows, as on a select: left alone it stays on the deleted profile's twin.
+                    _ = PushGuiderAfterProfileSwitchAsync(guider, loggerFactory.CreateLogger("ProfilesEndpoints"), refuseUnservedSelection: false);
                     await devices.ApplyAsync(CancellationToken.None).ConfigureAwait(false);
                 }
                 if (!deleteTwin) {
