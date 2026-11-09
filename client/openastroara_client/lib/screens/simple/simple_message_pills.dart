@@ -174,6 +174,10 @@ class _Pill extends ConsumerWidget {
       ),
     };
     final reduced = reduceMotionOf(context);
+    // A warning stays and can run long: its × and dot keep to its first line,
+    // and its action goes under the words so they keep the width.
+    final warning = m.kind == SimpleMessageKind.warning;
+    final actionBelow = warning && m.actions.isNotEmpty;
     return Semantics(
       // Read out as it appears.
       liveRegion: true,
@@ -196,11 +200,22 @@ class _Pill extends ConsumerWidget {
           children: [
             Row(
               spacing: 10,
+              crossAxisAlignment: warning
+                  ? CrossAxisAlignment.start
+                  : CrossAxisAlignment.center,
               children: [
-                Icon(Icons.circle, size: 10, color: dot),
+                Padding(
+                  padding: EdgeInsets.only(top: warning ? 19 : 0),
+                  child: Icon(Icons.circle, size: 10, color: dot),
+                ),
                 Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                    // A warning's first line sits level with its ×.
+                    padding: EdgeInsets.only(top: warning ? 14 : 6, bottom: 6),
                     child: Text.rich(
                       TextSpan(
                         text: m.title,
@@ -225,6 +240,13 @@ class _Pill extends ConsumerWidget {
                       // was cut at two lines (user, 2026-11-04).
                       style: kSimpleText,
                     ),
+                  ),
+                      if (actionBelow)
+                        TextButton(
+                          onPressed: () => _answer(notifier, 0),
+                          child: Text(m.actions.first.label),
+                        ),
+                    ],
                   ),
                 ),
                 if (more != null)
@@ -267,7 +289,7 @@ class _Pill extends ConsumerWidget {
                       ],
                     ),
                   )
-                else if (m.actions.isNotEmpty)
+                else if (m.actions.isNotEmpty && !actionBelow)
                   // A message's one action (Undo), there while the pill lasts.
                   TextButton(
                     onPressed: () => _answer(notifier, 0),
@@ -310,7 +332,8 @@ class _Pill extends ConsumerWidget {
   }
 
   void _answer(SimpleMessagesNotifier notifier, int i) {
-    notifier.dismiss(message.id);
+    // A warning stays until it is closed or cleared; its action is help.
+    if (message.kind != SimpleMessageKind.warning) notifier.dismiss(message.id);
     message.actions[i].onPressed();
   }
 }

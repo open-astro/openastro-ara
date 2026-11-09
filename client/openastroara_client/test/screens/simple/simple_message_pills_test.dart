@@ -17,7 +17,7 @@ class _Prefs extends SimpleModePrefsService {
 }
 
 Future<ProviderContainer> _pump(WidgetTester tester,
-    {bool simple = true, bool feature = true, double maxHeight = 600}) async {
+    {bool simple = true, bool feature = true, double maxHeight = 600, double width = 420}) async {
   final c = ProviderContainer(overrides: [
     simpleModePrefsProvider.overrideWithValue(_Prefs(simple)),
     simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(feature)),
@@ -31,7 +31,7 @@ Future<ProviderContainer> _pump(WidgetTester tester,
       home: Scaffold(
         body: Builder(
           builder: (context) => Column(children: [
-            SizedBox(width: 420, child: SimpleMessagePills(maxHeight: maxHeight)),
+            SizedBox(width: width, child: SimpleMessagePills(maxHeight: maxHeight)),
             TextButton(
               key: const Key('notify'),
               onPressed: () => userNotifier(context)("Couldn't move", detail: 'Focuser is busy', error: true),
@@ -165,6 +165,48 @@ void main() {
     await tester.pump();
     expect(slewed, isTrue);
     expect(c.read(simpleMessagesProvider), isEmpty);
+  });
+
+  group('a long warning with an action', () {
+    const words = 'Dew may be forming: stars are swelling at high humidity. Wipe the optics or turn on the dew heaters.';
+
+    testWidgets('at phone width its action sits under the words, × last, and the words keep their room', (tester) async {
+      // Tall enough for the test font's square glyphs.
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final c = await _pump(tester, width: 171);
+      c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.warning, words,
+          actions: [SimpleMessageAction('Switches', () {})]);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      final text = tester.getRect(find.textContaining('Dew may be forming'));
+      expect(text.width, greaterThan(60));
+      final action = tester.getRect(find.widgetWithText(TextButton, 'Switches'));
+      expect(action.top, greaterThanOrEqualTo(text.bottom));
+      expect(tester.getCenter(find.byTooltip('Dismiss')).dx, greaterThan(action.left));
+    });
+
+    testWidgets('a one-line warning lines its words and dot up with the ×', (tester) async {
+      final c = await _pump(tester);
+      c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.warning, 'Rig busy');
+      await tester.pump();
+      final close = tester.getCenter(find.byTooltip('Dismiss')).dy;
+      expect(tester.getCenter(find.textContaining('Rig busy')).dy, closeTo(close, 2));
+      expect(tester.getCenter(find.byIcon(Icons.circle)).dy, closeTo(close, 2));
+    });
+
+    testWidgets('its action leaves the warning up', (tester) async {
+      final c = await _pump(tester);
+      var opened = false;
+      c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.warning, words,
+          actions: [SimpleMessageAction('Switches', () => opened = true)]);
+      await tester.pump();
+      await tester.tap(find.widgetWithText(TextButton, 'Switches'));
+      await tester.pump();
+      expect(opened, isTrue);
+      expect(c.read(simpleMessagesProvider), hasLength(1));
+    });
   });
 
   testWidgets('a result can carry one action (Undo), shown on the pill while it lasts', (tester) async {

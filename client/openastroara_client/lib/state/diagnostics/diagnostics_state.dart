@@ -29,10 +29,14 @@ class DiagnosticsSnapshot {
   final StatusLevel level;
   final String label;
   final List<DiagnosticEvent> events;
+
+  /// The issue types open right now (#1564), for a client that watches one.
+  final Set<String> openTypes;
   const DiagnosticsSnapshot({
     required this.level,
     required this.label,
     this.events = const <DiagnosticEvent>[],
+    this.openTypes = const <String>{},
   });
 }
 
@@ -117,6 +121,7 @@ class DiagnosticsAccumulator {
       level: level,
       label: _label(level),
       events: List<DiagnosticEvent>.unmodifiable(_log),
+      openTypes: Set<String>.unmodifiable(_open.keys),
     );
   }
 

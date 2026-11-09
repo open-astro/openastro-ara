@@ -246,6 +246,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(SequenceRunItemRemoveRequestDto))]
 [JsonSerializable(typeof(SequenceRunItemMoveRequestDto))]
 [JsonSerializable(typeof(SequenceRunStateDto))]
+[JsonSerializable(typeof(MeridianFlipStatusDto))]
 [JsonSerializable(typeof(SequenceShareDto))]
 [JsonSerializable(typeof(SequenceStartRequestDto))]
 [JsonSerializable(typeof(SequenceTemplateDto))]

@@ -114,6 +114,11 @@ public interface ISequencerService {
     Task<OperationAcceptedDto> AbortAsync(Guid id, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> StopAsync(Guid id, string? idempotencyKey, CancellationToken ct);
 
+    /// <summary>#1557 — finish and file the exposure in progress, then end the run as Stopped. Server state,
+    /// so it holds through a client disconnect. With no exposure in progress the run stops now.</summary>
+    Task<OperationAcceptedDto> StopAfterFrameAsync(Guid id, string? idempotencyKey, CancellationToken ct) =>
+        StopAsync(id, idempotencyKey, ct);
+
     /// <summary>
     /// §29 — abort every still-running sequence (the disk-space monitor's "abort on critical" policy uses this
     /// so a full disk halts capture rather than failing frame-by-frame). Returns the count of runs asked to abort.

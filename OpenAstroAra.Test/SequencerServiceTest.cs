@@ -17,6 +17,7 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
@@ -814,6 +815,80 @@ namespace OpenAstroAra.Test {
             await svc.AbortAsync(id, null, CancellationToken.None);
         }
 
+        private static (SequencerService Service, Guid Id, Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator> Imaging, TaskCompletionSource<OpenAstroAra.Image.Interfaces.IExposureData> Frame) ExposingRun(
+                IWsBroadcaster? ws = null, double exposureSeconds = 1, Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>? flipTelescope = null) {
+            var camera = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ICameraMediator>();
+            camera.Setup(c => c.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyCamera.CameraInfo { Connected = true });
+            var frame = new TaskCompletionSource<OpenAstroAra.Image.Interfaces.IExposureData>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var imaging = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator>();
+            imaging.Setup(m => m.CaptureImage(It.IsAny<OpenAstroAra.Equipment.Model.CaptureSequence>(), It.IsAny<CancellationToken>(),
+                    It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>>(), It.IsAny<string>())).Returns(frame.Task);
+            var factory = HeadlessSequencerFactory.WithDefaults(cameraMediator: camera.Object, imagingMediator: imaging.Object, telescopeMediator: flipTelescope?.Object);
+            var id = Guid.NewGuid();
+            var exposure = (OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure)factory.Items
+                .OfType<OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure>().First().Clone();
+            exposure.ExposureTime = exposureSeconds;
+            var svc = BuildService(id, BuildBody(c => {
+                if (flipTelescope is not null) {
+                    c.Triggers.Add(new OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger(new HeadlessProfileService(), flipTelescope.Object,
+                        new Mock<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor>().Object));
+                    c.Items.Add((ISequenceItem)exposure.Clone()); // the run outlasts the flip, the next item does not
+                }
+                c.Items.Add(exposure);
+                c.Items.Add(new Annotation { Name = "never reached" });
+            }, factory), ws: ws, factory: factory);
+            return (svc, id, imaging, frame);
+        }
+
+        [Test]
+        public async Task Progress_frames_carry_the_flip_and_stop_after_frame() {
+            var ws = new RecordingWsBroadcaster();
+            var (svc, id, _, frame) = ExposingRun(ws, exposureSeconds: 3600, flipTelescope: TelescopeWithFlipIn(2));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+
+            await svc.StopAfterFrameAsync(id, null, CancellationToken.None);
+            frame.SetResult(new Mock<OpenAstroAra.Image.Interfaces.IExposureData>().Object);
+            await WaitForTerminalAsync(svc, id);
+
+            var progress = ws.Records.Where(e => e.Type == "sequence.progress").Select(e => e.Payload).ToList();
+            Assert.That(progress.Any(p => p.GetProperty("stop_after_frame").GetBoolean()), Is.True, "the armed stop reaches the wire");
+            var flip = progress.Select(p => p.GetProperty("meridian_flip")).First(f => f.ValueKind == JsonValueKind.Object);
+            Assert.That(flip.GetProperty("state").GetString(), Is.EqualTo(MeridianFlipStates.DueAt));
+            Assert.That(flip.GetProperty("expected_utc").ValueKind, Is.EqualTo(JsonValueKind.String));
+            Assert.That(flip.TryGetProperty("target", out _), Is.True);
+        }
+
+        [Test]
+        public async Task Stop_after_frame_files_the_exposure_then_ends_stopped() {
+            var (svc, id, _, frame) = ExposingRun();
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+
+            await svc.StopAfterFrameAsync(id, null, CancellationToken.None);
+            await Task.Delay(200);
+            var during = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(during!.State, Is.EqualTo(SequenceRunState.Running), "the exposure in progress is not lost");
+            Assert.That(during.StopAfterFrame, Is.True);
+
+            frame.SetResult(new Mock<OpenAstroAra.Image.Interfaces.IExposureData>().Object);
+            var done = await WaitForTerminalAsync(svc, id);
+            Assert.That(done!.State, Is.EqualTo(SequenceRunState.Stopped));
+            Assert.That(done.InstructionsCompleted, Is.EqualTo(1), "the frame finished and the next instruction never ran");
+        }
+
+        [Test]
+        public async Task Stop_after_frame_with_no_exposure_in_progress_stops_now() {
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new WaitForTimeSpan { Time = 60 })));
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+
+            await svc.StopAfterFrameAsync(id, null, CancellationToken.None);
+
+            Assert.That((await WaitForTerminalAsync(svc, id))!.State, Is.EqualTo(SequenceRunState.Stopped));
+        }
+
         [Test]
         public async Task Pause_suspends_at_the_instruction_boundary_and_resume_completes() {
             // §38 pause: the current instruction (a 2s wait) always finishes; the
@@ -1237,6 +1312,109 @@ namespace OpenAstroAra.Test {
             var done = await WaitForTerminalAsync(svc, id);
             Assert.That(done!.State, Is.EqualTo(SequenceRunState.Completed));
             Assert.That(done.ReasonCode, Is.Null, "the wait is over, so is its reason");
+        }
+
+        [Test]
+        public async Task The_run_state_carries_the_flip_during_a_run_and_not_after() {
+            var coords = new OpenAstroAra.Astrometry.Coordinates(
+                OpenAstroAra.Astrometry.Angle.ByHours(5), OpenAstroAra.Astrometry.Angle.ByDegree(20),
+                OpenAstroAra.Astrometry.Epoch.J2000);
+            var telescope = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>();
+            telescope.Setup(t => t.GetCurrentPosition()).Returns(coords);
+            telescope.Setup(t => t.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyTelescope.TelescopeInfo {
+                Connected = true, TrackingEnabled = true, TimeToMeridianFlip = 0, Coordinates = coords,
+            });
+            var release = new TaskCompletionSource<bool>();
+            var executor = new Mock<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor>();
+            executor.Setup(x => x.MeridianFlip(It.IsAny<OpenAstroAra.Astrometry.Coordinates>(), It.IsAny<TimeSpan>(),
+                    It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Returns(release.Task);
+            var profile = new HeadlessProfileService();
+            profile.ActiveProfile.MeridianFlipSettings.UseSideOfPier = false;
+            var factory = HeadlessSequencerFactory.WithDefaults(
+                telescopeMediator: telescope.Object, profileService: profile, meridianFlipExecutor: executor.Object);
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Triggers.Add(new OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger(
+                    profile, telescope.Object, executor.Object));
+                c.Items.Add(new Annotation { Name = "after the flip" });
+            }, factory), factory: factory);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            SequenceRunStateDto? during = null;
+            for (var i = 0; i < 250 && during?.MeridianFlip?.State != MeridianFlipStates.Flipping; i++) {
+                during = await svc.GetRunStateAsync(id, CancellationToken.None);
+                await Task.Delay(20);
+            }
+            Assert.That(during!.MeridianFlip?.State, Is.EqualTo(MeridianFlipStates.Flipping));
+
+            release.SetResult(true);
+            var done = await WaitForTerminalAsync(svc, id);
+            Assert.That(done!.MeridianFlip, Is.Null);
+        }
+
+        private static OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger DueFlipTrigger(double hoursToFlip) =>
+            new(new HeadlessProfileService(), TelescopeWithFlipIn(hoursToFlip).Object,
+                new Mock<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor>().Object);
+
+        private static Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator> TelescopeWithFlipIn(double hoursToFlip) {
+            var coords = new OpenAstroAra.Astrometry.Coordinates(
+                OpenAstroAra.Astrometry.Angle.ByHours(5), OpenAstroAra.Astrometry.Angle.ByDegree(20),
+                OpenAstroAra.Astrometry.Epoch.J2000);
+            var telescope = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>();
+            telescope.Setup(t => t.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyTelescope.TelescopeInfo {
+                Connected = true, TrackingEnabled = true, TimeToMeridianFlip = hoursToFlip, Coordinates = coords,
+            });
+            return telescope;
+        }
+
+        private static readonly DateTimeOffset FlipStatusNow = new(2026, 11, 9, 10, 0, 0, TimeSpan.Zero);
+
+        [Test]
+        public void Flip_status_without_a_trigger_says_auto_flip_is_off() {
+            var status = SequencerService.FlipStatus(new SequentialContainer(), "M 31", 3600, FlipStatusNow);
+            Assert.That(status, Is.EqualTo(new MeridianFlipStatusDto(null, MeridianFlipStates.AutoFlipOff, "M 31")));
+        }
+
+        [Test]
+        public void Flip_status_names_the_target_and_the_time() {
+            var top = new SequentialContainer();
+            top.Triggers.Add(DueFlipTrigger(2));
+            var status = SequencerService.FlipStatus(top, "M 31", 4 * 3600, FlipStatusNow);
+            Assert.That(status.State, Is.EqualTo(MeridianFlipStates.DueAt));
+            Assert.That(status.Target, Is.EqualTo("M 31"));
+            Assert.That(status.ExpectedUtc, Is.Not.Null);
+        }
+
+        [Test]
+        public void Flip_status_past_the_end_of_the_run_is_none_tonight() {
+            var top = new SequentialContainer();
+            top.Triggers.Add(DueFlipTrigger(2));
+            var status = SequencerService.FlipStatus(top, "M 31", 3600, FlipStatusNow);
+            Assert.That(status.State, Is.EqualTo(MeridianFlipStates.NoneTonight));
+            Assert.That(status.ExpectedUtc, Is.Null);
+        }
+
+        [Test]
+        public void Flip_status_reads_the_running_loops_trigger() {
+            var finished = new SequentialContainer();
+            finished.Triggers.Add(DueFlipTrigger(2));
+            var running = new SequentialContainer();
+            running.Triggers.Add(DueFlipTrigger(double.NaN));
+            var top = new SequentialContainer();
+            top.Items.Add(finished);
+            top.Items.Add(running);
+            running.Status = SequenceEntityStatus.RUNNING;
+            Assert.That(SequencerService.FlipStatus(top, null, null, FlipStatusNow).State, Is.EqualTo(MeridianFlipStates.NoneTonight));
+        }
+
+        [Test]
+        public void Flip_status_finds_a_trigger_inside_a_target_block() {
+            var block = new SequentialContainer();
+            block.Triggers.Add(DueFlipTrigger(2));
+            var top = new SequentialContainer();
+            top.Items.Add(block);
+            Assert.That(SequencerService.FlipStatus(top, null, null, FlipStatusNow).State, Is.EqualTo(MeridianFlipStates.DueAt));
         }
 
         [Test]

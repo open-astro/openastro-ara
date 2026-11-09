@@ -79,7 +79,7 @@ void main() {
       findsNWidgets(2),
       reason: 'one per filter loop',
     );
-    expect(find.text('AF every 23 · dither every 1'), findsNWidgets(2));
+    expect(find.text('AF every 23 · dither every 1 · meridian flip if Auto flip is on'), findsNWidgets(2));
     expect(
       find.text('while above horizon'),
       findsOneWidget,
@@ -89,7 +89,7 @@ void main() {
     // layout cut them to "× 34 · 5.2 mi…".
     for (final t in [
       '× 56 · 5.2 min · ≈ 4.8 h',
-      'AF every 23 · dither every 1',
+      'AF every 23 · dither every 1 · meridian flip if Auto flip is on',
     ]) {
       final p = tester.renderObject<RenderParagraph>(find.text(t).first);
       expect(p.didExceedMaxLines, isFalse, reason: '"$t" is ellipsized');
@@ -105,7 +105,7 @@ void main() {
     expect(find.text('Take Exposure'), findsOneWidget);
     expect(
       find.text(
-        'Repeats 56× in Ha Imaging (≈ 4.8 h) · AF every 23 · dither every 1',
+        'Repeats 56× in Ha Imaging (≈ 4.8 h) · AF every 23 · dither every 1 · meridian flip if Auto flip is on',
       ),
       findsOneWidget,
     );

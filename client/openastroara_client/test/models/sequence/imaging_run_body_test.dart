@@ -3,10 +3,15 @@ import 'package:openastroara/models/sequence/condition_catalog.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
+import 'package:openastroara/models/sequence/nina_dom.dart' as dom show triggersOf;
 import 'package:openastroara/models/sequence/rig_capabilities.dart';
 import 'package:openastroara/models/sequence/trigger_catalog.dart';
 import 'package:openastroara/util/input_coordinates.dart';
 import 'package:openastroara/models/sequence/slew_target_body.dart';
+
+/// The cadence triggers: every loop also carries the flip, pinned in its own group.
+List<Map<String, dynamic>> triggersOf(Map<String, dynamic> node) =>
+    [for (final t in dom.triggersOf(node)) if (t[r'$type'] != meridianFlipTriggerType) t];
 
 void main() {
   group('buildImagingRunBody', () {
@@ -841,6 +846,32 @@ void main() {
   // §38.10a — every generated target block carries an AboveHorizonCondition
   // with the TARGET's own coordinates, so a target that sets below the
   // profile's horizon ends its block instead of imaging the murk.
+  group('the meridian flip', () {
+    List<String> flips(Map<String, dynamic> node) =>
+        [for (final t in (node['Triggers'] as Map<String, dynamic>?)?['\$values'] as List? ?? const []) (t as Map)['\$type'] as String];
+
+    // On the block it fired before the first slew, from wherever the mount
+    // happened to be (simulator run, 2026-11-09).
+    test('the flip trigger is on the imaging loop, not the block that slews', () {
+      final block = buildTargetBlock(raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10);
+      expect(flips(block).where((t) => t.contains('MeridianFlipTrigger')), isEmpty);
+      final loop = childrenOf(block).singleWhere((c) => c['Name'] == 'Imaging');
+      expect(flips(loop).where((t) => t.contains('MeridianFlipTrigger')), hasLength(1));
+    });
+
+    test('a filter plan has one on each loop', () {
+      final block = buildTargetBlock(raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10, filterPlan: const [
+        FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 5),
+        FilterPlanStep(filterName: 'R', exposureSeconds: 60, frameCount: 5),
+      ]);
+      final loops = childrenOf(block).where((c) => (c['Name'] as String? ?? '').endsWith('Imaging'));
+      expect(loops, hasLength(2));
+      for (final loop in loops) {
+        expect(flips(loop).where((t) => t.contains('MeridianFlipTrigger')), hasLength(1));
+      }
+    });
+  });
+
   group('target block horizon condition', () {
     test('buildTargetBlock attaches AboveHorizonCondition with the target coords',
         () {

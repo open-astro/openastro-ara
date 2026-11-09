@@ -3422,4 +3422,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String focusChartFocus(int position) {
     return 'focus $position';
   }
+
+  @override
+  String get simpleDewWarning =>
+      'Dew may be forming: stars are swelling at high humidity. Wipe the optics or turn on the dew heaters. Scheduled autofocus waits until it clears.';
 }

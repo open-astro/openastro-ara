@@ -4626,5 +4626,9 @@
         "type": "int"
       }
     }
+  },
+  "simpleDewWarning": "Dew may be forming: stars are swelling at high humidity. Wipe the optics or turn on the dew heaters. Scheduled autofocus waits until it clears.",
+  "@simpleDewWarning": {
+    "description": "Simple Mode warning pill while the daemon's dew_formation diagnostic is open"
   }
 }

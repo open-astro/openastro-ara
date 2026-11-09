@@ -334,6 +334,23 @@ public class FrameFileConfinementTest {
         }
 
         [Test]
+        public async Task A_histogram_reports_clipped_stars_and_null_for_a_frame_analysed_before_them() {
+            var analysed = Path.Combine(_root, "analysed.fits");
+            var id = await InsertAsync(analysed);
+            WriteRealFits(analysed, Enumerable.Repeat((ushort)500, 16).ToArray());
+            var older = Path.Combine(_root, "older.fits");
+            var olderId = await InsertAsync(older);
+            WriteRealFits(older, Enumerable.Repeat((ushort)500, 16).ToArray());
+
+            await _repo.UpdateStarClippingAsync(id, 40, 3, CancellationToken.None);
+
+            var histogram = await _repo.GetHistogramAsync(id, CancellationToken.None);
+            Assert.That(histogram!.ClippedStars, Is.EqualTo(3));
+            Assert.That(histogram.Stars, Is.EqualTo(40));
+            Assert.That((await _repo.GetHistogramAsync(olderId, CancellationToken.None))!.ClippedStars, Is.Null);
+        }
+
+        [Test]
         public async Task A_histogram_read_back_fills_the_sky_background_once_and_keeps_a_measured_value() {
             // #1140 P2 — 15 sky pixels at 500 and one star at 9000: p05 (rank 1 of 16) and the median are both 500.
             var sky = Enumerable.Repeat((ushort)500, 15).Append((ushort)9000).ToArray();

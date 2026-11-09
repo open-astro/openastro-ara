@@ -62,6 +62,10 @@ public interface IFrameRepository {
     Task UpdateAnalysisAsync(Guid frameId, double hfr, int starCount, double? eccentricity, CancellationToken ct) =>
         UpdateAnalysisAsync(frameId, hfr, starCount, ct);
 
+    /// <summary>#1723 — the detector's star count and how many it rejected as clipped, written for every
+    /// analysed frame, one with too few stars for an HFR included. A deleted frame is a silent no-op.</summary>
+    Task UpdateStarClippingAsync(Guid frameId, int starCount, int clippedStars, CancellationToken ct) => Task.CompletedTask;
+
     /// <summary>#1140 P2 — stamp the frame's sky background (5th-percentile and median ADU, see
     /// <see cref="FrameBackground"/>). Written for every frame, stars or not; a deleted frame is a
     /// silent no-op. Default no-op so fakes keep compiling.</summary>

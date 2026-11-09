@@ -40,6 +40,21 @@ at the top. This happens in the same commit that pushes the release tag.
 - Emergency Stop stops the mount right after aborting runs, ahead of the slower steps, and stops it again if a polar alignment was running. The app now waits long enough for the whole stop to report back (#1739).
 - Simple Mode: Preview's Camera settings offer Already in focus when an off-axis Guide shutter is waiting on main focus (#1739).
 
+### Added (Simple Mode)
+
+- An amber warning pill says when the rig suspects dew, names the fix, and offers Switches when a switch device is connected (#1564).
+
+### Fixed (meridian flip)
+
+- A flip leaves a connected guider alone when the plan was not guiding; it used to start guiding, and calibrate, after the flip.
+- Runs the app builds now carry the meridian flip trigger, so Auto flip takes effect. They never flipped before, and the Auto flip setting was not read at run time. With Auto flip off, a run neither flips nor pauses at the meridian.
+
+### Added (daemon, for the client)
+
+- The run status and `sequence.progress` carry the next meridian flip: when it is expected, its state and its target (#1597).
+- `POST /sequences/{id}/stop-after-frame` files the exposure in progress, then ends the run as Stopped, and holds through a client disconnect; the run status shows `stop_after_frame` (#1557).
+- Each analysed frame records how many stars were clipped; `GET` frame histogram gains `clipped_stars`, null for a frame analysed before this (#1723).
+
 ### Fixed (bug sweep)
 
 - Switching, creating or deleting the active profile now changes the connected devices. Each profile remembers its own devices, the Safety Monitor drops first, and a running plan refuses the switch (#1710).

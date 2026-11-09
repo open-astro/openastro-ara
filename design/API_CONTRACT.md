@@ -26,6 +26,34 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-09 — #1597 the next meridian flip in the run status; #1723 clipped stars on the frame histogram
+
+**Endpoint(s) or area:** `GET /api/v1/sequences/{id}/state` and WS `sequence.progress` gain `meridian_flip`; the frame histogram response gains `clipped_stars`.
+
+**Decision:** `meridian_flip` is `{expected_utc, state, target}`, null when no run is active. `state` is `due_at`, `waiting_for_exposure` (due, held until the running item ends), `flipping`, `auto_flip_off` (this run has no flip trigger, or Auto flip is off in the profile) or `none_tonight` (the mount cannot be evaluated, this target already flipped, or the flip falls after the run's estimated end); `expected_utc` is null unless a time applies. It comes from `MeridianFlipTrigger.Forecast`, which shares the trigger's own window maths, including its early fire when the next item would overrun. `clipped_stars` is the count of candidates the detector rejected only for a saturated peak, and is not part of `stars`; a share is `clipped_stars / (stars + clipped_stars)`. No new routes (ADR 0009 rule 1).
+
+**Reasoning:** the preflight forecast is an estimate from transit, not the trigger's time. A clipped-pixel fraction hides a few blown-out cores; a star count does not.
+
+**Spec ref:** `MeridianFlipTrigger.Forecast`, `SequencerService.FlipStatus`, `StarDetector.Measure`, `SqliteFrameRepository.UpdateStarClippingAsync`.
+
+**Related:** #1538, #1724.
+
+---
+
+## 2026-11-09 — #1557 stop after the current frame
+
+**Endpoint(s) or area:** `POST /api/v1/sequences/{id}/stop-after-frame` (202); `stop_after_frame` on `GET …/state` and WS `sequence.progress`.
+
+**Decision:** a new lifecycle op, not a body on `/stop`: an older daemon answers 404 instead of ignoring the body and stopping at once, which would lose the frame. With an exposure running, the run arms the pause gate and ends as Stopped when the gate lands, at the boundary after that exposure. With no exposure running (a slew, a cool-down, a wait, an already-paused run) it stops at once, since no frame would be saved by waiting.
+
+**Reasoning:** the state lives on the daemon, so a sleeping iPad or a dropped link can't lose the request.
+
+**Spec ref:** `SequencerService.StopAfterFrameAsync`, `OnPauseEntered`.
+
+**Related:** #1557.
+
+---
+
 ### Template for future entries
 
 ```

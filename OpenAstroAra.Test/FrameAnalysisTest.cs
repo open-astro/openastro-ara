@@ -137,6 +137,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_frame_with_no_stars_records_zero_stars_and_zero_clipped() {
+            var frames = new Mock<IFrameRepository>();
+            using var camera = new CameraService(frames: frames.Object);
+            var id = Guid.NewGuid();
+            var pixels = new ushort[640 * 480];
+            Array.Fill(pixels, (ushort)1000);
+
+            await camera.AnalyzeFrameAsync(id, pixels, 640, 480, "L");
+
+            frames.Verify(f => f.UpdateStarClippingAsync(id, 0, 0, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task The_metric_seam_knows_no_clipping_and_writes_none() {
+            using var camera = Analyzer(out var frames, out _, (_, _, _) => (2.5, 42));
+            await camera.AnalyzeFrameAsync(Guid.NewGuid(), new ushort[4], 2, 2, "Ha");
+            frames.Verify(f => f.UpdateStarClippingAsync(It.IsAny<Guid>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
         public async Task Analysis_writes_back_and_feeds_the_session_history() {
             using var camera = Analyzer(out var frames, out var history, (_, _, _) => (2.5, 42));
             var id = Guid.NewGuid();

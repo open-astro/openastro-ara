@@ -45,6 +45,10 @@ namespace OpenAstroAra.Image.ImageAnalysis {
 
     public class StarDetectionResult {
         public int DetectedStars { get; set; }
+
+        /// <summary>#1723 — candidates rejected only because their peak reached the saturation level.
+        /// Not part of <see cref="DetectedStars"/>. With a star cap, only the candidates measured.</summary>
+        public int ClippedStars { get; set; }
         public double AverageHFR { get; set; }
         public double HFRStdDev { get; set; }
         public IReadOnlyList<DetectedStar> StarList { get; set; } = new List<DetectedStar>();

@@ -176,7 +176,7 @@ String _triggerNote(Map<String, dynamic> t) {
     case 'AutofocusAfterFilterChange':
       return 'AF after filter change';
     case 'MeridianFlipTrigger':
-      return 'meridian flip';
+      return 'meridian flip if Auto flip is on';
     case 'CenterAfterDriftTrigger':
       return 're-centre past ${_fmtAmount(t['DistanceArcMinutes'])}′';
   }

@@ -2816,6 +2816,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationAcceptedDto'
+  '/api/v1/sequences/{id}/stop-after-frame':
+    post:
+      tags:
+        - Sequences
+      operationId: StopSequenceAfterFrame
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAcceptedDto'
   /api/v1/sequences/templates:
     get:
       tags:
@@ -10252,6 +10275,13 @@ components:
             - integer
             - string
           format: int32
+        clipped_stars:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
     FrameListItemDto:
       required:
         - id
@@ -11939,6 +11969,24 @@ components:
         reshoot_assumed_coverage:
           type: boolean
           default: false
+    MeridianFlipStatusDto:
+      required:
+        - expected_utc
+        - state
+        - target
+      type: object
+      properties:
+        expected_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        state:
+          type: string
+        target:
+          type:
+            - 'null'
+            - string
     MosaicCreateRequestDto:
       required:
         - name
@@ -14355,6 +14403,13 @@ components:
           type:
             - 'null'
             - string
+        meridian_flip:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/MeridianFlipStatusDto'
+        stop_after_frame:
+          type: boolean
+          default: false
     SequenceShareDto:
       required:
         - sequence_id

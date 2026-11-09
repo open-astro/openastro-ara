@@ -402,7 +402,15 @@ Map<String, dynamic> buildTargetBlock({
           ..['AfterExposures'] = unguidedOptions.recentreSolveEveryN,
       );
     }
-    if (triggers.isNotEmpty) imaging = withTriggers(imaging, triggers);
+    // On the loop, not the block: a trigger on the block fires before the
+    // first slew, from wherever the mount happened to be. The profile's Auto
+    // flip decides whether it fires.
+    final flipDef = triggerForType(meridianFlipTriggerType);
+    if (flipDef == null) {
+      throw StateError('MeridianFlipTrigger missing from the trigger catalog');
+    }
+    triggers.add(flipDef.build());
+    imaging = withTriggers(imaging, triggers);
     return imaging;
   }
 

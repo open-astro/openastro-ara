@@ -27,6 +27,8 @@ namespace OpenAstroAra.Profile.Interfaces {
         double MaxMinutesAfterMeridian { get; set; }
 
         double PauseTimeBeforeMeridian { get; set; }
+        /// <summary>The profile's Auto flip setting: off, a flip trigger never fires.</summary>
+        bool AutoFlip { get; set; }
         bool Recenter { get; set; }
         int SettleTime { get; set; }
         bool UseSideOfPier { get; set; }

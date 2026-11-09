@@ -165,6 +165,8 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
         await AddColumnIfMissingAsync(conn, "frames", "updated_utc", "TEXT", ct);
         await AddColumnIfMissingAsync(conn, "frames", "pointing_probed_utc", "TEXT", ct);
         await AddColumnIfMissingAsync(conn, "frames", "captured_by_ara", "INTEGER", ct);
+        // #1723 — NULL for a frame analysed before this column. Same after-the-rebuilds placement.
+        await AddColumnIfMissingAsync(conn, "frames", "clipped_stars", "INTEGER", ct);
 
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_session_id ON frames(session_id);", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_frames_captured_utc ON frames(captured_utc);", ct);

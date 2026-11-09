@@ -131,6 +131,8 @@ class TriggerDef {
 /// The assembly-qualified `$type` of the Autofocus-After-Exposures trigger —
 /// the single source of truth, reused by the Planning tab's imaging-run
 /// builder for the AF cadence.
+const String meridianFlipTriggerType =
+    'OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger, OpenAstroAra.Sequencer';
 const String ditherAfterExposuresType =
     'OpenAstroAra.Sequencer.Trigger.Guider.DitherAfterExposures, OpenAstroAra.Sequencer';
 const String autofocusAfterExposuresType =
@@ -212,8 +214,7 @@ const List<TriggerDef> triggerCatalog = [
   // The meridian flip — the canonical trigger. No serialized fields: the flip
   // timing/side-of-pier parameters live in the profile, not the sequence.
   TriggerDef(
-    type:
-        'OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger, OpenAstroAra.Sequencer',
+    type: meridianFlipTriggerType,
     label: 'Meridian Flip',
     icon: Icons.flip_camera_android_outlined,
   ),

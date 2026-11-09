@@ -22,6 +22,7 @@ using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Sequencer.Utility;
 using OpenAstroAra.Sequencer.Validations;
 using Newtonsoft.Json;
@@ -49,6 +50,9 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
         // runs a trigger on a single sequential flow (Run() awaits Execute(); ShouldTrigger is called between
         // items), so these never overlap for one instance. Revisit if trigger evaluation ever goes concurrent.
         private DateTime lastFlipTime = DateTime.MinValue;
+        // #1597 — written on the run's flow, read by the run status on another thread.
+        private volatile bool _flipping;
+        private double _nextItemSeconds;
         private Coordinates? lastFlipCoordinates;
 
         public MeridianFlipTrigger(IProfileService profileService, ITelescopeMediator telescopeMediator, IMeridianFlipExecutor executor) : base() {
@@ -92,6 +96,11 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
 
         public virtual double MaxMinutesAfterMeridian {
             get => profileService.ActiveProfile.MeridianFlipSettings.MaxMinutesAfterMeridian;
+            set { }
+        }
+
+        public virtual bool AutoFlip {
+            get => profileService.ActiveProfile.MeridianFlipSettings.AutoFlip;
             set { }
         }
 
@@ -166,7 +175,13 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
                 timeToFlip = TimeSpan.Zero;
             }
 
-            var success = await executor.MeridianFlip(target, timeToFlip, progress, token);
+            bool success;
+            _flipping = true;
+            try {
+                success = await executor.MeridianFlip(target, timeToFlip, progress, token);
+            } finally {
+                _flipping = false;
+            }
             if (!success) {
                 // A failed flip must not continue un-flipped — by the next ShouldTrigger the mount may be past
                 // its flip window, the very OTA-collision risk the design guards against. §58.12: instead of
@@ -196,6 +211,45 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
             lastFlipCoordinates = target;
         }
 
+        public MeridianFlipForecast Forecast(DateTimeOffset now) {
+            if (_flipping) {
+                return new(MeridianFlipStates.Flipping, null);
+            }
+            if (!AutoFlip) {
+                return new(MeridianFlipStates.AutoFlipOff, null);
+            }
+            var info = telescopeMediator.GetInfo();
+            if (!info.Connected || double.IsNaN(info.TimeToMeridianFlip) || info.AtPark || info.AtHome || !info.TrackingEnabled
+                    || info.Coordinates == null || AlreadyFlippedHere(info)) {
+                return new(MeridianFlipStates.NoneTonight, null);
+            }
+            // ShouldTrigger also fires early when the next item would not finish in time.
+            var (minimum, maximum) = FlipWindow(info.TimeToMeridianFlip);
+            var margin = TimeSpan.FromSeconds(Volatile.Read(ref _nextItemSeconds));
+            if (!UseSideOfPier || info.SideOfPier == PierSide.pierUnknown) {
+                margin += TimeSpan.FromMinutes(2);
+            }
+            var beforeNextItem = maximum - margin;
+            var remaining = minimum < beforeNextItem ? minimum : beforeNextItem;
+            return remaining <= TimeSpan.Zero
+                ? new(MeridianFlipStates.WaitingForExposure, now)
+                : new(MeridianFlipStates.DueAt, now + remaining);
+        }
+
+        private (TimeSpan Minimum, TimeSpan Maximum) FlipWindow(double timeToMeridianFlipHours) {
+            var minimum = CalculateMinimumTimeRemaining(timeToMeridianFlipHours);
+            var maximum = CalculateMaximumTimeRemaining(timeToMeridianFlipHours);
+            if (PauseTimeBeforeMeridian != 0) {
+                //A pause prior to a meridian flip is a hard limit due to equipment obstruction. There is no possibility for a timerange as we have to pause early and wait for meridian to pass
+                minimum = minimum - TimeSpan.FromMinutes(MinutesAfterMeridian) - TimeSpan.FromMinutes(PauseTimeBeforeMeridian);
+                maximum = minimum;
+            }
+            return (minimum, maximum);
+        }
+
+        private bool AlreadyFlippedHere(TelescopeInfo info) =>
+            UseSideOfPier == false && (DateTime.Now - lastFlipTime) < TimeSpan.FromHours(11) && lastFlipCoordinates != null && (lastFlipCoordinates - info.Coordinates).Distance.ArcMinutes < 20;
+
         public override void AfterParentChanged() {
             lastFlipTime = DateTime.MinValue;
             lastFlipCoordinates = null;
@@ -219,6 +273,13 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
         }
 
         public override bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem) {
+            if (!AutoFlip) {
+                EarliestFlipTime = DateTime.MinValue;
+                LatestFlipTime = DateTime.MinValue;
+                Logger.Info("Meridian Flip - Auto flip is off in the profile. Skip flip evaluation");
+                return false;
+            }
+
             var telescopeInfo = telescopeMediator.GetInfo();
 
             if (!telescopeInfo.Connected || double.IsNaN(telescopeInfo.TimeToMeridianFlip)) {
@@ -265,25 +326,20 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
             }
 
             // When side of pier is disabled - check if the last flip time was less than 11 hours ago and further check if the current position is similar to the last flip position. If all are true, no flip is required.
-            if (UseSideOfPier == false && (DateTime.Now - lastFlipTime) < TimeSpan.FromHours(11) && lastFlipCoordinates != null && (lastFlipCoordinates - telescopeInfo.Coordinates).Distance.ArcMinutes < 20) {
+            if (AlreadyFlippedHere(telescopeInfo)) {
                 //A flip for the same target is only expected every 12 hours on planet earth and
                 Logger.Info($"Meridian Flip - Flip for the current target already happened at {lastFlipTime}. Skip flip evaluation");
                 return false;
             }
 
             var nextInstructionTime = nextItem?.GetEstimatedDuration().TotalSeconds ?? 0;
+            Volatile.Write(ref _nextItemSeconds, nextInstructionTime);
 
             //The time to meridian flip reported by the telescope is the latest time for a flip to happen.
             //Use the snapshot guarded for NaN above — not the property — so the derived calc can't re-read a
             //changed (NaN) value mid-evaluation.
-            var minimumTimeRemaining = CalculateMinimumTimeRemaining(telescopeInfo.TimeToMeridianFlip);
-            var maximumTimeRemaining = CalculateMaximumTimeRemaining(telescopeInfo.TimeToMeridianFlip);
-            var originalMaximumTimeRemaining = maximumTimeRemaining;
-            if (PauseTimeBeforeMeridian != 0) {
-                //A pause prior to a meridian flip is a hard limit due to equipment obstruction. There is no possibility for a timerange as we have to pause early and wait for meridian to pass
-                minimumTimeRemaining = minimumTimeRemaining - TimeSpan.FromMinutes(MinutesAfterMeridian) - TimeSpan.FromMinutes(PauseTimeBeforeMeridian);
-                maximumTimeRemaining = minimumTimeRemaining;
-            }
+            var (minimumTimeRemaining, maximumTimeRemaining) = FlipWindow(telescopeInfo.TimeToMeridianFlip);
+            var originalMaximumTimeRemaining = CalculateMaximumTimeRemaining(telescopeInfo.TimeToMeridianFlip);
 
             UpdateMeridianFlipTimeTriggerValues(minimumTimeRemaining, originalMaximumTimeRemaining, TimeSpan.FromMinutes(PauseTimeBeforeMeridian), TimeSpan.FromMinutes(MaxMinutesAfterMeridian));
 

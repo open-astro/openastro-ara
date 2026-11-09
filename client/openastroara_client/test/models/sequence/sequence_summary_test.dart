@@ -2,6 +2,37 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 
 void main() {
+  test('stop after frame parses and follows a progress frame (#1557)', () {
+    expect(SequenceRunStateInfo.fromJson(const {}).stopAfterFrame, isFalse);
+    final info = SequenceRunStateInfo.fromJson(const {'stop_after_frame': true});
+    expect(info.stopAfterFrame, isTrue);
+    expect(info.applyWsProgress(const {}).stopAfterFrame, isTrue);
+    expect(info.applyWsProgress(const {'stop_after_frame': false}).stopAfterFrame, isFalse);
+  });
+
+  group('the run state\'s meridian flip (#1597)', () {
+    const flip = {'expected_utc': '2026-11-09T10:30:00+00:00', 'state': 'due_at', 'target': 'M 31'};
+
+    test('parses the time, state and target', () {
+      final info = SequenceRunStateInfo.fromJson({'meridian_flip': flip}).meridianFlip!;
+      expect(info.expectedUtc, DateTime.utc(2026, 11, 9, 10, 30));
+      expect(info.state, 'due_at');
+      expect(info.target, 'M 31');
+    });
+
+    test('a run state without one has none', () {
+      expect(SequenceRunStateInfo.fromJson(const {}).meridianFlip, isNull);
+    });
+
+    test('a progress frame replaces it, clears it with null, and keeps it when omitted', () {
+      final info = SequenceRunStateInfo.fromJson({'meridian_flip': flip});
+      final moved = info.applyWsProgress({'meridian_flip': {'state': 'flipping'}});
+      expect(moved.meridianFlip!.state, 'flipping');
+      expect(info.applyWsProgress({'meridian_flip': null}).meridianFlip, isNull);
+      expect(info.applyWsProgress(const {}).meridianFlip!.state, 'due_at');
+    });
+  });
+
   group('SequenceRunState.fromWire', () {
     test('parses every state by its daemon wire name (lowercased enum name)',
         () {

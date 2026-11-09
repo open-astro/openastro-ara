@@ -1151,10 +1151,15 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             // #1264 star shape (median FWHM and roundness → eccentricity) the unguided guard reads.
             double hfr, fwhm = double.NaN, eccentricity = double.NaN;
             int stars;
+            int? clipped = null;
             if (AnalysisMetricOverride is { } metric) {
                 (hfr, stars) = metric(pixels, width, height);
             } else {
-                (hfr, stars, fwhm, eccentricity) = DefaultAnalysisMetric(pixels, width, height);
+                (hfr, stars, fwhm, eccentricity, clipped) = DefaultAnalysisMetric(pixels, width, height);
+            }
+            // Before the too-few-stars return: a frame of nothing but clipped stars still reports them.
+            if (_frames is not null && clipped is { } clippedStars) {
+                await _frames.UpdateStarClippingAsync(frameId, stars, clippedStars, CancellationToken.None).ConfigureAwait(false);
             }
             if (stars < MinStarsForAnalysis || double.IsNaN(hfr) || hfr <= 0) {
                 LogFrameAnalysisSkipped(frameId, stars);
@@ -1220,11 +1225,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     internal static StarDetectionParams AnalysisDetectionParams(int maxStars = 0) =>
         new() { Sensitivity = 8.0, NoiseReduction = 0, IsAutoFocus = false, MaxNumberOfStars = maxStars };
 
-    private static (double Hfr, int Stars, double FwhmPx, double Eccentricity) DefaultAnalysisMetric(ushort[] pixels, int width, int height) {
+    private static (double Hfr, int Stars, double FwhmPx, double Eccentricity, int ClippedStars) DefaultAnalysisMetric(ushort[] pixels, int width, int height) {
         var result = StarDetector.Detect(
             pixels, width, height, AnalysisDetectionParams(), CancellationToken.None);
         var features = FocusFeatureExtractor.Extract(result);
-        return (result.AverageHFR, result.DetectedStars, features.MedianFWHM, TrackingProbeService.Eccentricity(features.MedianRoundness));
+        return (result.AverageHFR, result.DetectedStars, features.MedianFWHM, TrackingProbeService.Eccentricity(features.MedianRoundness), result.ClippedStars);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

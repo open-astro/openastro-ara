@@ -11,6 +11,7 @@ import 'dart:math' as math;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/diagnostics/diagnostics_state.dart';
 import '../../state/library/live_library_state.dart' show libraryFilterProvider;
 import '../../state/time_sync_state.dart' show timeSyncApiProvider;
 import '../../state/sky_atlas/tonight_sky_state.dart'
@@ -233,6 +234,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   double _rightRailHeight = 0;
   double _simplePreflightRowHeight = kSimplePreflightRowHeight;
   double _statusHeight = 0;
+  double _messagesHeight = 0;
+  final _messagesKey = GlobalKey();
   final _leftRailKey = GlobalKey();
   final _rightRailKey = GlobalKey();
   final _simplePreflightRowKey = GlobalKey();
@@ -241,17 +244,59 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final rail = _leftRailKey.currentContext?.size?.height;
     final right = _rightRailKey.currentContext?.size?.height;
     final row = _simplePreflightRowKey.currentContext?.size?.height;
+    final messages = _messagesKey.currentContext?.size?.height ?? 0;
     if (!mounted) return;
     if ((rail != null && rail != _leftRailHeight) ||
         (right != null && right != _rightRailHeight) ||
-        (row != null && row != _simplePreflightRowHeight)) {
+        (row != null && row != _simplePreflightRowHeight) ||
+        messages != _messagesHeight) {
       setState(() {
         _leftRailHeight = rail ?? _leftRailHeight;
         _rightRailHeight = right ?? _rightRailHeight;
         _simplePreflightRowHeight = row ?? _simplePreflightRowHeight;
+        _messagesHeight = messages;
       });
     }
   });
+
+  int? _dewPill;
+
+  /// #1564 — one warning for each time dew opens; a reconnect's snapshot counts.
+  Future<void> _syncDewPill(
+    DiagnosticsSnapshot? previous,
+    DiagnosticsSnapshot next,
+  ) async {
+    const dew = 'dew_formation';
+    final open = next.openTypes.contains(dew);
+    final messages = ref.read(simpleMessagesProvider.notifier);
+    if (open && !(previous?.openTypes.contains(dew) ?? false)) {
+      // Awaited: at startup the list may not have loaded yet.
+      final devices = await ref
+          .read(switchListProvider.future)
+          .catchError((Object _) => const <SwitchDevice>[]);
+      // Dew may have cleared during the wait.
+      if (!mounted || !ref.read(diagnosticsStateProvider).openTypes.contains(dew)) {
+        return;
+      }
+      final switchUp = devices.any(
+        (d) => d.connectionState == SwitchConnectionState.connected,
+      );
+      _dewPill = messages.show(
+        SimpleMessageKind.warning,
+        context.l10n.simpleDewWarning,
+        actions: [
+          if (switchUp)
+            SimpleMessageAction(
+              context.l10n.shellSwitches,
+              () => _openFromPill(SimpleStatusOrigin.switches),
+            ),
+        ],
+      );
+    } else if (!open && _dewPill != null) {
+      messages.dismiss(_dewPill!);
+      _dewPill = null;
+    }
+  }
 
   void _setStatusHeight(double height) {
     if (mounted && height != _statusHeight) {
@@ -285,6 +330,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _focus.requestFocus();
     });
+    // A frame late: this also fires from initState, and a pill changes a provider.
+    ref.listenManual(diagnosticsStateProvider, (previous, next) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_syncDewPill(previous, next));
+      });
+    }, fireImmediately: true);
     ref.listenManual(coolingFanAskDueProvider, (_, due) {
       if (due) unawaited(_askCoolingFan());
     }, fireImmediately: true);
@@ -342,9 +393,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   @override
   void dispose() {
     _publishOnTop(false);
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _messages.dismissQuestions(),
-    );
+    final dewPill = _dewPill;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _messages.dismissQuestions();
+      // Its button belongs to this shell too, and the next one shows its own.
+      if (dewPill != null) _messages.dismiss(dewPill);
+    });
     _stopDisarm?.cancel();
     _focus.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -917,6 +971,21 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final rightRailTop =
         railTop +
         (height - railTop - kSimpleInset * 2 - stopSize - _rightRailHeight) / 2;
+    final messagesRoom = panels
+        ? leftRailTop - messagesTop - kSimpleInset
+        : double.infinity;
+    // Pills too tall for the room above the left rail move beside it, when
+    // that leaves them a readable width; otherwise they paint over the rail.
+    final railShift = railWidth + kSimpleInset;
+    final pillsBesideRail =
+        _messagesHeight > messagesRoom && messagesWidth - railShift >= 240;
+    final pillsOverRail =
+        panels &&
+        _messagesHeight > messagesRoom &&
+        !pillsBesideRail &&
+        _device == null &&
+        _popover == _Popover.none &&
+        !_adding;
     // The rail's popovers (a mode's panel, the modes, the queue) take the room
     // from under the status pill down to the screen's inset, over the bottom
     // row while open (they sit left of the rail, clear of Stop), above the
@@ -963,6 +1032,35 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final motion = reduceMotionOf(context)
         ? Duration.zero
         : const Duration(milliseconds: 220);
+    // Both slots stay filled, and with one type, or the pills moving between
+    // them would shift their siblings and rebuild them from scratch.
+    final emptyPillSlot = AnimatedPositioned(
+      duration: Duration.zero,
+      left: 0,
+      top: 0,
+      child: const SizedBox.shrink(),
+    );
+    final messagePills = AnimatedPositioned(
+      left: kSimpleInset + (pillsBesideRail ? railShift : 0),
+      top: panels ? messagesTop : kSimpleInset,
+      width:
+          messagesWidth - (pillsBesideRail ? railShift : 0),
+      duration: motion,
+      curve: Curves.easeOut,
+      child: NotificationListener<SizeChangedLayoutNotification>(
+        onNotification: (_) {
+          _measure();
+          return true;
+        },
+        child: SizeChangedLayoutNotifier(
+          child: SimpleMessagePills(
+            key: _messagesKey,
+            onOpen: _openFromPill,
+            maxHeight: messagesRoom,
+          ),
+        ),
+      ),
+    );
     return Theme(
       data: simpleTheme(Theme.of(context)),
       child: Scaffold(
@@ -1086,19 +1184,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                         // The message pills, top-left under the strip (under the
                         // Preflight strip when it shows), down to the left rail;
                         // they stay in the immersive view.
-                        AnimatedPositioned(
-                          left: kSimpleInset,
-                          top: panels ? messagesTop : kSimpleInset,
-                          width: messagesWidth,
-                          duration: motion,
-                          curve: Curves.easeOut,
-                          child: SimpleMessagePills(
-                            onOpen: _openFromPill,
-                            maxHeight: panels
-                                ? leftRailTop - messagesTop - kSimpleInset
-                                : double.infinity,
-                          ),
-                        ),
+                        pillsOverRail ? emptyPillSlot : messagePills,
                         // The camera's status, top-right under the strip (messages
                         // have the top-left), at most half the row; it stays in
                         // the immersive view and moves up into the corner.
@@ -1445,6 +1531,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             ],
                           ),
                         ),
+                        // Above the rail only when it would cover them, and
+                        // never above an open window or popover.
+                        pillsOverRail ? messagePills : emptyPillSlot,
                       ],
                     ),
                     ),

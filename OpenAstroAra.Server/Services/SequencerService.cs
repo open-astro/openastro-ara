@@ -19,6 +19,8 @@ using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Sequencer;
 using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.Interfaces;
+using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Server.Contracts;
 using System;
@@ -361,6 +363,10 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     // failing while the user has the run paused): the next branch to reach its
     // boundary re-fires this callback and upgrades the state.
     private void OnPauseEntered(Guid sequenceId, RunState run) {
+        if (run.StopAfterFrame) {
+            _ = RequestCancelAsync(sequenceId, SequenceRunState.Stopped);
+            return;
+        }
         var kind = run.Gate.PendingKind;
         var target = kind >= OpenAstroAra.Sequencer.Utility.PauseKind.Prompt
             ? SequenceRunState.PausedAwaitingUser
@@ -410,6 +416,18 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         _unattendedShutdown?.NotifyUserActivity("sequencer.stop");
         await RequestCancelAsync(id, SequenceRunState.Stopped);
         return PlaceholderEquipmentHelpers.Accepted("sequencer.stop", idempotencyKey);
+    }
+
+    public async Task<OperationAcceptedDto> StopAfterFrameAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
+        _unattendedShutdown?.NotifyUserActivity("sequencer.stop_after_frame");
+        if (_runs.TryGetValue(id, out var run) && run.State == SequenceRunState.Running && HasFrameInProgress(run)) {
+            // The pause gate waits for the running exposure; OnPauseEntered turns its landing into the stop.
+            run.StopAfterFrame = true;
+            await PauseAsync(id, idempotencyKey, ct);
+        } else {
+            await RequestCancelAsync(id, SequenceRunState.Stopped);
+        }
+        return PlaceholderEquipmentHelpers.Accepted("sequencer.stop_after_frame", idempotencyKey);
     }
 
     public Task<IReadOnlyList<Guid>> ActiveRunIdsAsync(CancellationToken ct) {
@@ -1257,15 +1275,46 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 ["current_target_name"] = run.CurrentTargetName,
                 ["current_instruction_progress"] = run.CurrentInstructionProgress,
                 ["frames_captured"] = run.FramesCaptured,
+                ["stop_after_frame"] = run.StopAfterFrame,
             };
             var (estimatedTotal, estimatedRemaining) = run.EstimatedSeconds();
             payload["estimated_total_seconds"] = estimatedTotal;
             payload["estimated_remaining_seconds"] = estimatedRemaining;
+            payload["meridian_flip"] = run.MeridianFlipStatus() is { } flip
+                ? new JsonObject { ["expected_utc"] = flip.ExpectedUtc, ["state"] = flip.State, ["target"] = flip.Target }
+                : null;
             using var doc = JsonDocument.Parse(payload.ToJsonString());
             await _ws.PublishAsync(eventType, doc.RootElement.Clone(), CancellationToken.None);
         } catch (Exception) {
             // WS is best-effort; a failed publish must not affect the run.
         }
+    }
+
+    /// <summary>#1597 — the run's next flip, from the trigger that will fire it.</summary>
+    internal static MeridianFlipStatusDto FlipStatus(ISequenceContainer top, string? target, double? remainingSeconds, DateTimeOffset now) {
+        var trigger = FindFlipTrigger(top);
+        if (trigger is null) {
+            return new(null, MeridianFlipStates.AutoFlipOff, target);
+        }
+        var forecast = trigger.Forecast(now);
+        if (forecast.State == MeridianFlipStates.DueAt && remainingSeconds is { } remaining && forecast.ExpectedUtc > now.AddSeconds(remaining)) {
+            return new(null, MeridianFlipStates.NoneTonight, target);
+        }
+        return new(forecast.ExpectedUtc, forecast.State, target);
+    }
+
+    // The running branch's trigger, else the first in the tree (a block not started yet).
+    private static IMeridianFlipTrigger? FindFlipTrigger(ISequenceContainer container) {
+        var own = (container as ITriggerable)?.GetTriggersSnapshot().OfType<IMeridianFlipTrigger>().FirstOrDefault();
+        IMeridianFlipTrigger? later = null;
+        foreach (var child in container.GetItemsSnapshot().OfType<ISequenceContainer>()) {
+            var found = FindFlipTrigger(child);
+            if (found is not null && child.Status == SequenceEntityStatus.RUNNING) {
+                return found;
+            }
+            later ??= found;
+        }
+        return own ?? later;
     }
 
     // §42.4 — the instruction-level failure event. Same payload as the run events plus the
@@ -1563,6 +1612,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         /// <summary>Frames filed under <see cref="CaptureSessionId"/> so far; polled by the live status.</summary>
         public int FramesCaptured { get; private set; }
 
+        /// <summary>#1557 — end as Stopped when the run reaches the boundary after this exposure.</summary>
+        public volatile bool StopAfterFrame;
+
         public bool SetFramesCaptured(int count) {
             lock (_gate) {
                 if (count == FramesCaptured) return false;
@@ -1681,16 +1733,34 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             return _cachedEstimate;
         }
 
+        // Outside the run's lock: the forecast reads the telescope, which has a lock of its own.
+        public MeridianFlipStatusDto? MeridianFlipStatus() {
+            ISequenceContainer? top;
+            string? target;
+            double? remaining;
+            lock (_gate) {
+                top = (ISequenceContainer?)_root ?? _bodyTop;
+                if (top is null || CompletedUtc is not null) {
+                    return null;
+                }
+                target = CurrentTargetName;
+                remaining = EstimatedSecondsLocked().Remaining;
+            }
+            return FlipStatus(top, target, remaining, DateTimeOffset.UtcNow);
+        }
+
         public SequenceRunStateDto ToDto(Guid sequenceId) {
+            SequenceRunStateDto dto;
             lock (_gate) {
                 var (total, remaining) = EstimatedSecondsLocked();
-                return new(
+                dto = new(
                     SequenceId: sequenceId,
                     RunId: RunId,
                     State: State,
                     CurrentInstructionIndex: CurrentInstructionIndex,
                     CurrentTargetName: CurrentTargetName,
                     FramesCaptured: FramesCaptured,
+                    StopAfterFrame: StopAfterFrame,
                     StartedUtc: StartedUtc,
                     CompletedUtc: CompletedUtc,
                     InstructionsCompleted: InstructionsCompleted,
@@ -1702,6 +1772,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     ReasonCode: _reasonCode,
                     ReasonText: _reasonText);
             }
+            return dto with { MeridianFlip = MeridianFlipStatus() };
         }
     }
 }

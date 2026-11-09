@@ -80,7 +80,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             double threshold = median + k * Math.Max(1.0, sigma);
 
             var stars = FindStars(work, width, height, threshold, background: median,
-                maxStars: parameters.MaxNumberOfStars, token);
+                maxStars: parameters.MaxNumberOfStars, out var clippedStars, token);
 
             // Highest-quality stars first (a capped FindStars already returns brightest-first —
             // this sort is then a no-op — but the uncapped path measures in scan order). With a
@@ -90,7 +90,9 @@ namespace OpenAstroAra.Image.ImageAnalysis {
             // bright-star statistic, not a field average.
             stars.Sort((a, b) => b.MaxBrightness.CompareTo(a.MaxBrightness));
 
-            return Summarize(stars);
+            var summary = Summarize(stars);
+            summary.ClippedStars = clippedStars;
+            return summary;
         }
 
         // Background is a sky-wide statistic, so a subsample (~BackgroundSampleTarget pixels) gives the same
@@ -142,11 +144,12 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         // pays the full two-pass centroid/HFR/moments measurement for thousands of blobs it then
         // discards. Uncapped (≤ 0) measures inline exactly as before, so no candidate list accumulates.
         private static List<DetectedStar> FindStars(ReadOnlySpan<ushort> pixels, int width, int height,
-                double threshold, double background, int maxStars, CancellationToken token) {
+                double threshold, double background, int maxStars, out int clippedStars, CancellationToken token) {
             var stars = new List<DetectedStar>();
             var candidates = maxStars > 0 ? new List<(int[] Blob, ushort Peak)>() : null;
             // BitArray (1 bit/pixel) over bool[] (1 byte/pixel): ~6 MB vs ~50 MB for a 50 MP frame —
             // meaningful headroom on the Raspberry Pi target that shares RAM with the OS + FITS I/O.
+            clippedStars = 0;
             var visited = new System.Collections.BitArray(pixels.Length);
             int maxArea = Math.Max(MaxStarAreaFloor, (int)(MaxStarAreaFraction * pixels.Length));
             var stack = new Stack<int>();
@@ -223,7 +226,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 if (candidates != null) {
                     candidates.Add((blob.ToArray(), blobPeak));
                 } else {
-                    var star = Measure(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(blob), pixels, width, background);
+                    var star = Measure(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(blob), pixels, width, background, ref clippedStars);
                     if (star != null) {
                         stars.Add(star);
                     }
@@ -237,7 +240,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 candidates.Sort((a, b) => b.Peak.CompareTo(a.Peak));
                 foreach (var (candidate, _) in candidates) {
                     token.ThrowIfCancellationRequested();
-                    var star = Measure(candidate, pixels, width, background);
+                    var star = Measure(candidate, pixels, width, background, ref clippedStars);
                     if (star != null) {
                         stars.Add(star);
                         if (stars.Count >= maxStars) {
@@ -254,7 +257,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
         // needed. HFR = Σ f·dist / Σ f, the radius that flux-weights to the star's spread. A saturated peak
         // is rejected — its clipped-flat core biases both centroid and HFR. The same second pass folds in
         // the flux-weighted second-moment tensor that yields the §59 Smart Focus shape features.
-        private static DetectedStar? Measure(ReadOnlySpan<int> blob, ReadOnlySpan<ushort> pixels, int width, double background) {
+        private static DetectedStar? Measure(ReadOnlySpan<int> blob, ReadOnlySpan<ushort> pixels, int width, double background, ref int clippedStars) {
             double sumF = 0, sumX = 0, sumY = 0, sumV = 0;
             ushort peak = 0;
             foreach (int p in blob) {
@@ -268,6 +271,7 @@ namespace OpenAstroAra.Image.ImageAnalysis {
                 sumY += f * y;
             }
             if (peak >= SaturationLevel) {
+                clippedStars++;
                 return null;
             }
             double cx = sumX / sumF, cy = sumY / sumF;

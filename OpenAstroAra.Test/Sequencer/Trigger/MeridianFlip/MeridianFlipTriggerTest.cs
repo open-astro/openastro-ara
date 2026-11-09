@@ -21,6 +21,7 @@ using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Trigger.MeridianFlip;
 using OpenAstroAra.Sequencer.Utility;
@@ -51,11 +52,117 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
             executorMock = new Mock<IMeridianFlipExecutor>();
             settingsMock = new Mock<IMeridianFlipSettings>();
             settingsMock.SetupGet(m => m.UseSideOfPier).Returns(false);
+            settingsMock.SetupGet(m => m.AutoFlip).Returns(true);
             profileServiceMock.SetupGet(m => m.ActiveProfile.MeridianFlipSettings).Returns(settingsMock.Object);
         }
 
         private MeridianFlipTrigger CreateSUT() =>
             new(profileServiceMock.Object, telescopeMediatorMock.Object, executorMock.Object);
+
+        private static readonly DateTimeOffset ForecastNow = new(2026, 11, 9, 10, 0, 0, TimeSpan.Zero);
+
+        private void SetFlipWindow(double after, double maxAfter, double pause = 0) {
+            settingsMock.SetupGet(m => m.MinutesAfterMeridian).Returns(after);
+            settingsMock.SetupGet(m => m.MaxMinutesAfterMeridian).Returns(maxAfter);
+            settingsMock.SetupGet(m => m.PauseTimeBeforeMeridian).Returns(pause);
+        }
+
+        [Test]
+        public void Auto_flip_off_never_fires_inside_the_window() {
+            SetFlipWindow(after: 5, maxAfter: 20);
+            SetTelescope(0.2);
+            Assert.That(CreateSUT().ShouldTrigger(null, null), Is.True, "precondition: this window fires");
+            settingsMock.SetupGet(m => m.AutoFlip).Returns(false);
+            Assert.That(CreateSUT().ShouldTrigger(null, null), Is.False);
+        }
+
+        [Test]
+        public void Forecast_says_auto_flip_is_off() {
+            SetFlipWindow(after: 5, maxAfter: 20);
+            SetTelescope(2);
+            settingsMock.SetupGet(m => m.AutoFlip).Returns(false);
+            var forecast = CreateSUT().Forecast(ForecastNow);
+            Assert.That(forecast, Is.EqualTo(new MeridianFlipForecast(MeridianFlipStates.AutoFlipOff, null)));
+        }
+
+        [Test]
+        public void Forecast_is_due_when_the_flip_window_opens() {
+            SetFlipWindow(after: 5, maxAfter: 20);
+            SetTelescope(2);
+            var forecast = CreateSUT().Forecast(ForecastNow);
+            Assert.That(forecast.State, Is.EqualTo(MeridianFlipStates.DueAt));
+            Assert.That(forecast.ExpectedUtc, Is.EqualTo(ForecastNow.AddMinutes(105)));
+        }
+
+        [Test]
+        public void Forecast_comes_earlier_with_a_pause_before_the_meridian() {
+            SetFlipWindow(after: 5, maxAfter: 20, pause: 10);
+            SetTelescope(2);
+            var forecast = CreateSUT().Forecast(ForecastNow);
+            Assert.That(forecast.State, Is.EqualTo(MeridianFlipStates.DueAt));
+            // A pause makes the window one instant, so the two-minute margin decides it.
+            Assert.That(forecast.ExpectedUtc, Is.EqualTo(ForecastNow.AddMinutes(88)));
+        }
+
+        [Test]
+        public void Forecast_waits_for_the_exposure_once_the_window_is_open() {
+            SetFlipWindow(after: 5, maxAfter: 20);
+            SetTelescope(0.2);
+            Assert.That(CreateSUT().Forecast(ForecastNow).State, Is.EqualTo(MeridianFlipStates.WaitingForExposure));
+        }
+
+        [TestCase(false, true, false, false, true)]
+        [TestCase(true, false, false, false, true)]
+        [TestCase(true, true, true, false, true)]
+        [TestCase(true, true, false, true, true)]
+        [TestCase(true, true, false, false, false)]
+        public void Forecast_has_no_flip_when_the_trigger_could_not_evaluate_one(
+                bool connected, bool tracking, bool parked, bool atHome, bool withCoordinates) {
+            SetFlipWindow(after: 5, maxAfter: 20);
+            SetTelescope(2, connected, tracking, parked, atHome, withCoordinates);
+            var forecast = CreateSUT().Forecast(ForecastNow);
+            Assert.That(forecast.State, Is.EqualTo(MeridianFlipStates.NoneTonight));
+            Assert.That(forecast.ExpectedUtc, Is.Null);
+        }
+
+        [Test]
+        public async Task Forecast_says_flipping_while_the_flip_runs() {
+            SetFlipWindow(after: 5, maxAfter: 20);
+            SetTelescope(2);
+            telescopeMediatorMock.Setup(x => x.GetCurrentPosition())
+                .Returns(new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000));
+            var release = new TaskCompletionSource<bool>();
+            executorMock.Setup(x => x.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<TimeSpan>(),
+                It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).Returns(release.Task);
+            var sut = CreateSUT();
+            var running = sut.Execute(null!, new Progress<ApplicationStatus>(), CancellationToken.None);
+            Assert.That(sut.Forecast(ForecastNow).State, Is.EqualTo(MeridianFlipStates.Flipping));
+            release.SetResult(true);
+            await running;
+            Assert.That(sut.Forecast(ForecastNow).State, Is.Not.EqualTo(MeridianFlipStates.Flipping));
+        }
+
+        [TestCase(5, 20, 0)]
+        [TestCase(5, 5, 0)]
+        [TestCase(5, 20, 10)]
+        public void Forecast_matches_when_the_trigger_fires_within_a_minute(double after, double maxAfter, double pause) {
+            SetFlipWindow(after, maxAfter, pause);
+            var next = new Mock<ISequenceItem>();
+            next.Setup(x => x.GetEstimatedDuration()).Returns(TimeSpan.FromMinutes(10));
+            const double startHours = 2;
+            SetTelescope(startHours);
+            var sut = CreateSUT();
+            Assert.That(sut.ShouldTrigger(null, next.Object), Is.False, "the flip is well ahead");
+            var expected = sut.Forecast(ForecastNow).ExpectedUtc;
+            Assert.That(expected, Is.Not.Null);
+            var seconds = 0;
+            do {
+                seconds += 30;
+                SetTelescope(startHours - seconds / 3600.0);
+            } while (!sut.ShouldTrigger(null, next.Object) && seconds < 3 * 3600);
+            var fired = ForecastNow.AddSeconds(seconds);
+            Assert.That(Math.Abs((fired - expected!.Value).TotalSeconds), Is.LessThanOrEqualTo(60));
+        }
 
         private void SetTelescope(double timeToMeridianFlipHours, bool connected = true, bool tracking = true, bool parked = false, bool atHome = false, bool withCoordinates = true) {
             telescopeMediatorMock.Setup(x => x.GetInfo()).Returns(new TelescopeInfo {

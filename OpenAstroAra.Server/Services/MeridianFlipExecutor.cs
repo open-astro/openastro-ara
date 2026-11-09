@@ -143,15 +143,15 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         ArgumentNullException.ThrowIfNull(targetCoordinates);
 
         var settings = profileService.ActiveProfile.MeridianFlipSettings;
-        // A guider is only relevant when one is actually connected; with no guider (the common camera-only
-        // rig) the stop/select/resume steps are skipped entirely. ARA's guider is PHD2-backed, so there is no
-        // NINA "DirectGuider" exclusion to make here.
-        var guiderConnected = guiderMediator.GetInfo().Connected;
+        // The guider only matters when it was guiding: a connected but idle guider (an unguided plan) is left
+        // alone, or the flip would start guiding, and calibrating, that nobody asked for. ARA's guider is
+        // PHD2-backed, so there is no NINA "DirectGuider" exclusion to make here.
+        var wasGuiding = guiderMediator.GetInfo().Guiding;
 
         Logger.Info(
             $"Meridian Flip - Initializing. Target RA: {targetCoordinates.RAString} Dec: {targetCoordinates.DecString} Epoch: {targetCoordinates.Epoch}. " +
             $"Remaining wait: {timeToFlip}. Recenter: {settings.Recenter}. AutoFocusAfterFlip: {settings.AutoFocusAfterFlip}. " +
-            $"SettleTime: {settings.SettleTime}s. GuiderConnected: {guiderConnected}.");
+            $"SettleTime: {settings.SettleTime}s. WasGuiding: {wasGuiding}.");
 
         // §58.9 Layer 1 — the pre-flip flight check runs BEFORE any state is touched: on a failed
         // check the flip never starts, the mount stays in its known-safe pre-flip state (tracking
@@ -197,7 +197,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         var trackingDisabled = false;
 
         try {
-            if (guiderConnected) {
+            if (wasGuiding) {
                 await StopAutoguider(token);
                 guidingStopped = true;
             }
@@ -239,10 +239,10 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             // §58.4 step 4 — the guider comes back per meridian_guider_recal: auto_restore (the guider's
             // own restore, reverse-Dec), full (a full recalibration), or skip.
             var guiderMode = MeridianFlipPolicy.GuiderPlan(safety).Mode;
-            if (guiderConnected && guiderMode != MeridianFlipPolicy.GuiderSkip) {
+            if (wasGuiding && guiderMode != MeridianFlipPolicy.GuiderSkip) {
                 await SelectNewGuideStar(token);
                 await ResumeAutoguider(guiderMode == MeridianFlipPolicy.GuiderFull, progress, token);
-            } else if (guiderConnected) {
+            } else if (wasGuiding) {
                 Logger.Info("Meridian Flip - guiding not resumed (meridian_guider_recal = skip).");
             }
 

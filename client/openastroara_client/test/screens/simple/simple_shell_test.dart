@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
@@ -7,6 +8,7 @@ import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/services/equipment_discovery_api.dart';
 import 'package:openastroara/state/equipment/equipment_discovery_provider.dart';
 import 'package:openastroara/state/settings/equipment_connection_state.dart' show EquipmentDeviceType;
+import 'package:flutter/gestures.dart' show HitTestResult;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
@@ -66,6 +68,7 @@ import 'package:openastroara/screens/simple/simple_guide_panel.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart';
+import 'package:openastroara/state/diagnostics/diagnostics_state.dart';
 import 'package:openastroara/state/simple_preflight_state.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/app_shell_state.dart';
@@ -297,6 +300,16 @@ class _Rotator extends RotatorNotifier with _Calls<RotatorStatus> {
   void report(String runtime) => state = AsyncData(RotatorStatus.fromJson(_json(runtime)));
 }
 
+class _Diagnostics extends DiagnosticsNotifier {
+  _Diagnostics(this.start);
+  final Set<String> start;
+  static DiagnosticsSnapshot snap(Set<String> open) =>
+      DiagnosticsSnapshot(level: StatusLevel.connected, label: 'x', openTypes: open);
+  @override
+  DiagnosticsSnapshot build() => snap(start);
+  void open(Set<String> types) => state = snap(types);
+}
+
 /// The rig's switch devices, recording Connect and Disconnect.
 class _Switches extends SwitchListNotifier {
   _Switches(this.devices);
@@ -316,6 +329,16 @@ class _Switches extends SwitchListNotifier {
   Future<bool> disconnect(String deviceId) async {
     calls.add('disconnect $deviceId');
     return true;
+  }
+}
+
+class _SlowSwitches extends _Switches {
+  _SlowSwitches(this.gate) : super(const []);
+  final Completer<void> gate;
+  @override
+  Future<List<SwitchDevice>> build() async {
+    await gate.future;
+    return devices;
   }
 }
 
@@ -4361,6 +4384,205 @@ void main() {
     wheel.report({'state': 'awaiting_user', 'current_slot': 1, 'pending_slot': 2}, manual: true);
     await tester.pump();
     expect(find.descendant(of: pill, matching: find.textContaining('Swap in F2, then confirm.')), findsOneWidget);
+  });
+
+  group('the dew warning pill (#1564)', () {
+    final pill = find.textContaining('Dew may be forming');
+
+    Future<(ProviderContainer, _Diagnostics)> shell(WidgetTester tester, {Set<String> start = const {}, List<Override> gear = const []}) async {
+      final d = _Diagnostics(start);
+      final c = await _pump(tester, const Size(1024, 768), gear: [diagnosticsStateProvider.overrideWith(() => d), ...gear]);
+      await tester.pump();
+      return (c, d);
+    }
+
+    testWidgets('open shows one amber warning; cleared takes it away', (tester) async {
+      final (c, d) = await shell(tester);
+      expect(pill, findsNothing);
+      d.open({'dew_formation'});
+      await tester.pump();
+      await tester.pump();
+      expect(pill, findsOneWidget);
+      expect(find.textContaining('Scheduled autofocus waits'), findsOneWidget);
+      expect(c.read(simpleMessagesProvider).single.kind, SimpleMessageKind.warning);
+      d.open({'dew_formation', 'disk.low'});
+      await tester.pump();
+      await tester.pump();
+      expect(pill, findsOneWidget, reason: 'another issue is no new opening');
+      d.open({});
+      await tester.pump();
+      await tester.pump();
+      expect(pill, findsNothing);
+    });
+
+    testWidgets('closed by hand, it comes back the next time dew opens', (tester) async {
+      final (c, d) = await shell(tester);
+      d.open({'dew_formation'});
+      await tester.pump();
+      await tester.pump();
+      c.read(simpleMessagesProvider.notifier).dismiss(c.read(simpleMessagesProvider).single.id);
+      await tester.pump();
+      expect(pill, findsNothing);
+      d.open({});
+      await tester.pump();
+      await tester.pump();
+      d.open({'dew_formation'});
+      await tester.pump();
+      await tester.pump();
+      expect(pill, findsOneWidget);
+    });
+
+    testWidgets('dew already open when the shell builds shows the pill', (tester) async {
+      await shell(tester, start: {'dew_formation'});
+      await tester.pump();
+      expect(pill, findsOneWidget);
+    });
+
+    testWidgets('the Switches button shows only with a connected switch device, and opens its window', (tester) async {
+      final (c, _) = await shell(tester, start: {'dew_formation'}, gear: [
+        switchListProvider.overrideWith(() => _Switches([_switch('box', 'Powerbox', SwitchConnectionState.connected)])),
+      ]);
+      await tester.pump();
+      await tester.tap(find.widgetWithText(TextButton, 'Switches'));
+      await tester.pump();
+      expect(find.byKey(const Key('simple-device-switches')), findsOneWidget);
+      expect(c.read(simpleMessagesProvider), hasLength(1), reason: 'dew is still open');
+    });
+
+    testWidgets('leaving Simple Mode and coming back shows one pill, and it clears with the dew', (tester) async {
+      final (c, d) = await shell(tester, start: {'dew_formation'});
+      await tester.pump();
+      expect(pill, findsOneWidget);
+      await tester.pumpWidget(UncontrolledProviderScope(container: c, child: const MaterialApp(home: SizedBox())));
+      await tester.pump();
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(home: SimpleShell(planetarium: SizedBox(key: Key('sky')))),
+      ));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider), hasLength(1));
+      d.open({});
+      await tester.pump();
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider), isEmpty);
+    });
+
+    testWidgets('dew clearing while the switch list loads leaves no pill', (tester) async {
+      final gate = Completer<void>();
+      final (c, d) = await shell(tester, gear: [switchListProvider.overrideWith(() => _SlowSwitches(gate))]);
+      d.open({'dew_formation'});
+      await tester.pump();
+      await tester.pump();
+      d.open({});
+      await tester.pump();
+      await tester.pump();
+      gate.complete();
+      await tester.pump();
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider), isEmpty);
+    });
+
+    testWidgets('in a short window the pill moves beside the left rail instead of under it', (tester) async {
+      final d = _Diagnostics({'dew_formation'});
+      await _pump(tester, const Size(800, 480), gear: [diagnosticsStateProvider.overrideWith(() => d)]);
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      expect(tester.getTopLeft(pill).dx, greaterThanOrEqualTo(kSimpleInset * 2 + kSimpleRailWidth));
+    });
+
+    testWidgets('on a phone in portrait the words sit above the rail, and Switches still works', (tester) async {
+      final d = _Diagnostics({'dew_formation'});
+      await _pump(tester, const Size(390, 844), gear: [
+        diagnosticsStateProvider.overrideWith(() => d),
+        switchListProvider.overrideWith(() => _Switches([_switch('box', 'Powerbox', SwitchConnectionState.connected)])),
+      ]);
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      final words = tester.getRect(pill);
+      final covered = [
+        for (final k in ['simple-sky', 'simple-info', 'simple-library', 'simple-album'])
+          tester.getCenter(find.byKey(Key(k))),
+      ].where(words.contains).toList();
+      expect(covered, isNotEmpty, reason: 'precondition: the rail runs behind the words');
+      final hit = HitTestResult();
+      tester.binding.hitTestInView(hit, covered.first, tester.view.viewId);
+      expect(hit.path.map((e) => e.target), contains(tester.renderObject(pill)));
+      await tester.tap(find.widgetWithText(TextButton, 'Switches'));
+      await tester.pump();
+      expect(find.byKey(const Key('simple-device-switches')), findsOneWidget);
+    });
+
+    Future<_Diagnostics> phone(WidgetTester tester, {Set<String> start = const {}}) async {
+      final d = _Diagnostics(start);
+      await _pump(tester, const Size(390, 844), gear: [
+        diagnosticsStateProvider.overrideWith(() => d),
+        switchListProvider.overrideWith(() => _Switches([_switch('box', 'Powerbox', SwitchConnectionState.connected)])),
+      ]);
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      return d;
+    }
+
+    testWidgets('on a phone the window Switches opens sits above the warning', (tester) async {
+      await phone(tester, start: {'dew_formation'});
+      await tester.tap(find.widgetWithText(TextButton, 'Switches'));
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      final overlap = tester.getRect(find.byKey(const Key('simple-device-switches'))).intersect(tester.getRect(pill));
+      expect(overlap.isEmpty, isFalse, reason: 'precondition: the window and the words overlap');
+      final hit = HitTestResult();
+      tester.binding.hitTestInView(hit, overlap.center, tester.view.viewId);
+      expect(hit.path.map((e) => e.target), isNot(contains(tester.renderObject(pill))));
+    });
+
+    testWidgets('on a phone the sheet for editing a queued target sits above the warning', (tester) async {
+      final d = _Diagnostics({'dew_formation'});
+      final c = await _pump(tester, const Size(390, 844), plan: _queuedM31, gear: [diagnosticsStateProvider.overrideWith(() => d)]);
+      await _frame(tester, c);
+      await _openEditOfM31(tester);
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      final overlap = tester.getRect(find.byType(SimpleRunSheet)).intersect(tester.getRect(pill));
+      expect(overlap.isEmpty, isFalse, reason: 'precondition: the sheet and the words overlap');
+      final hit = HitTestResult();
+      tester.binding.hitTestInView(hit, overlap.center, tester.view.viewId);
+      expect(hit.path.map((e) => e.target), isNot(contains(tester.renderObject(pill))));
+    });
+
+    testWidgets('on a phone a pill arriving and leaving keeps the widgets around it', (tester) async {
+      final d = await phone(tester);
+      Element settings() => tester.element(find.byKey(const Key('simple-settings')));
+      Element strip() => tester.element(find.byKey(const Key('simple-full-ui-button')));
+      final (before, stripBefore) = (settings(), strip());
+      Future<void> settle() async {
+        for (var i = 0; i < 4; i++) {
+          await tester.pump(const Duration(milliseconds: 300));
+        }
+      }
+      d.open({'dew_formation'});
+      await settle();
+      expect(pill, findsOneWidget);
+      expect(identical(settings(), before), isTrue);
+      expect(identical(strip(), stripBefore), isTrue);
+      d.open({});
+      await settle();
+      expect(pill, findsNothing);
+      expect(identical(settings(), before), isTrue);
+      expect(identical(strip(), stripBefore), isTrue);
+    });
+
+    testWidgets('no connected switch device: no button', (tester) async {
+      final (c, _) = await shell(tester, start: {'dew_formation'});
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider).single.actions, isEmpty);
+    });
   });
 
   group('status pills stay at least 1 s, then fade (#1679)', () {

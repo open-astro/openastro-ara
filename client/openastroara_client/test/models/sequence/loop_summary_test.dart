@@ -46,7 +46,7 @@ void main() {
     expect(ha.exposuresPerPass, 1);
     expect(ha.totalFrames, 56);
     expect(ha.loopChip, '× 56 · 5.2 min · ≈ 4.8 h');
-    expect(ha.triggerChip, 'AF every 23 · dither every 1');
+    expect(ha.triggerChip, 'AF every 23 · dither every 1 · meridian flip if Auto flip is on');
   });
 
   // #1195 — an unguided rig's loop carries the re-centre trigger; the note names
@@ -85,7 +85,7 @@ void main() {
       final ha = _find(_run(), 'Ha Imaging');
       expect(
         exposureRepeatLine(ha),
-        'Repeats 56× in Ha Imaging (≈ 4.8 h) · AF every 23 · dither every 1',
+        'Repeats 56× in Ha Imaging (≈ 4.8 h) · AF every 23 · dither every 1 · meridian flip if Auto flip is on',
       );
     },
   );

@@ -328,6 +328,29 @@ class SequenceTemplate {
   int get hashCode => Object.hash(name, category, description, isBuiltIn);
 }
 
+/// #1597 — the run's next meridian flip, as the run's own trigger sees it.
+class MeridianFlipInfo {
+  final DateTime? expectedUtc;
+
+  /// `due_at`, `waiting_for_exposure`, `flipping`, `auto_flip_off` or
+  /// `none_tonight`.
+  final String state;
+  final String? target;
+
+  const MeridianFlipInfo({this.expectedUtc, required this.state, this.target});
+
+  static MeridianFlipInfo? tryParse(Object? json) {
+    if (json is! Map<String, dynamic>) return null;
+    final state = _str(json['state']);
+    if (state == null) return null;
+    return MeridianFlipInfo(
+      expectedUtc: _dt(json['expected_utc']),
+      state: state,
+      target: _str(json['target']),
+    );
+  }
+}
+
 /// Live run state of an active sequence — daemon's `SequenceRunStateDto`
 /// (`GET /api/v1/sequences/{id}/state`). null from the API means no active run.
 class SequenceRunStateInfo {
@@ -362,6 +385,12 @@ class SequenceRunStateInfo {
   final String? reasonCode;
   final String? reasonText;
 
+  /// #1597 — the next flip; null when no run is active.
+  final MeridianFlipInfo? meridianFlip;
+
+  /// #1557 — the run ends once the exposure in progress is filed.
+  final bool stopAfterFrame;
+
   const SequenceRunStateInfo({
     this.sequenceId = '',
     this.runId = '',
@@ -379,6 +408,8 @@ class SequenceRunStateInfo {
     this.currentInstructionProgress,
     this.reasonCode,
     this.reasonText,
+    this.meridianFlip,
+    this.stopAfterFrame = false,
   });
 
   factory SequenceRunStateInfo.fromJson(Map<String, dynamic> json) {
@@ -401,6 +432,8 @@ class SequenceRunStateInfo {
           _doubleOrNull(json['current_instruction_progress']),
       reasonCode: _str(json['reason_code']),
       reasonText: _str(json['reason_text']),
+      meridianFlip: MeridianFlipInfo.tryParse(json['meridian_flip']),
+      stopAfterFrame: json['stop_after_frame'] == true,
     );
   }
 
@@ -455,6 +488,13 @@ class SequenceRunStateInfo {
       reasonText: payload.containsKey('reason_text')
           ? _str(payload['reason_text'])
           : reasonText,
+      // A null clears it (the run ended); an older daemon omits the key.
+      meridianFlip: payload.containsKey('meridian_flip')
+          ? MeridianFlipInfo.tryParse(payload['meridian_flip'])
+          : meridianFlip,
+      stopAfterFrame: payload.containsKey('stop_after_frame')
+          ? payload['stop_after_frame'] == true
+          : stopAfterFrame,
     );
   }
 
