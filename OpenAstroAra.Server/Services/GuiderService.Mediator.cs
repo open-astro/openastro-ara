@@ -27,6 +27,7 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -128,6 +129,72 @@ public sealed partial class GuiderService : IGuiderMediator {
         await ReleaseGuideCameraQuietlyAsync().ConfigureAwait(false);
         await ClearPaSessionQuietlyAsync(guider, token).ConfigureAwait(false);
         return await guider.StartGuiding(forceCalibration, progress ?? _noProgress, token).ConfigureAwait(false);
+    }
+
+    internal Func<DateTimeOffset> CalibrationNightClock { get; set; } = () => DateTimeOffset.UtcNow;
+
+    private const string CalibrationFailedEvent = "guider.calibration.failed";
+
+    private DateTimeOffset? _calibratedNight; // guarded by _gate
+
+    public async Task<bool> RecalibrateAndGuide(IProgress<ApplicationStatus> progress, CancellationToken token) {
+        if (await StartGuiding(forceCalibration: true, progress, token).ConfigureAwait(false)) {
+            await RecordCalibrationOutcomeQuietlyAsync(failed: false).ConfigureAwait(false);
+            return true;
+        }
+        // The guider erased its calibration before it calibrated, so the earlier one has to be put back first.
+        var guider = MediatorGuider();
+        if (guider is null
+            || !await guider.RestoreCalibrationAsync(token).ConfigureAwait(false)
+            || !await StartGuiding(forceCalibration: false, progress, token).ConfigureAwait(false)) {
+            return false;
+        }
+        await RecordCalibrationOutcomeQuietlyAsync(failed: true).ConfigureAwait(false);
+        return true;
+    }
+
+    public async Task<bool> StartGuidingCalibratedTonight(IProgress<ApplicationStatus> progress, CancellationToken token) {
+        var night = PreflightChecklistService.NightStart(CalibrationNightClock());
+        bool calibrated;
+        lock (_gate) {
+            calibrated = _calibratedNight == night;
+        }
+        if (calibrated) {
+            return await StartGuiding(forceCalibration: false, progress, token).ConfigureAwait(false);
+        }
+        var started = await RecalibrateAndGuide(progress, token).ConfigureAwait(false);
+        if (started) {
+            lock (_gate) {
+                _calibratedNight = night;
+            }
+        }
+        return started;
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A diagnostics store fault must never undo a guiding start that worked; log-and-recover boundary like the other diagnostic helpers.")]
+    private async Task RecordCalibrationOutcomeQuietlyAsync(bool failed) {
+        if (failed) {
+            await NotifyQuietlyAsync(NotificationSeverity.Warning, "Guider calibration failed",
+                "The guider could not calibrate, so it is guiding on its earlier calibration.").ConfigureAwait(false);
+        }
+        if (_diagnostics is null) {
+            return;
+        }
+        try {
+            if (failed) {
+                await _diagnostics.CreateEventAsync(
+                    new DiagnosticEventDto(Guid.NewGuid(), CalibrationFailedEvent, DiagnosticHealth.Yellow,
+                        "The guider could not calibrate, so it is guiding on its earlier calibration.", DateTimeOffset.UtcNow,
+                        ClearedUtc: null, AutoActionTaken: true, AutoActionDescription: "Restored the earlier calibration."),
+                    recommendedAction: "Check the guide star and the mount's guide output, then calibrate again.",
+                    autoCorrectible: false, CancellationToken.None).ConfigureAwait(false);
+            } else {
+                await _diagnostics.ClearOpenEventsByTypeAsync(CalibrationFailedEvent, DateTimeOffset.UtcNow, CancellationToken.None).ConfigureAwait(false);
+            }
+        } catch (Exception ex) {
+            LogDiagnosticRecordFailed(ex);
+        }
     }
 
     /// <summary>

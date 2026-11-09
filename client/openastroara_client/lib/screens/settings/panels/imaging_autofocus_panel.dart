@@ -4,6 +4,7 @@ import '../../../l10n/l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
+import '../../../state/equipment/focuser_state.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/autofocus_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
@@ -68,6 +69,19 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
     } catch (e) {
       if (!mounted) return;
       setState(() => _lastError = friendlyError(context.l10n, e, action: 'save that'));
+      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
+    }
+  }
+
+  Future<void> _resetCalibration() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(autofocusApiProvider)?.recalibrate();
+      if (!mounted) return;
+      messenger.showSnackBar(const SnackBar(content: Text('Focus calibration reset.')));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _lastError = friendlyError(context.l10n, e, action: 'reset the focus calibration'));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -242,6 +256,20 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
           label: 'Restore position on failure',
           value: s.restorePositionOnFailure,
           onChanged: n.setRestorePositionOnFailure,
+        ),
+        const SettingsSectionHeader('Calibration'),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton(
+            key: const Key('af-reset-calibration'),
+            onPressed: ref.watch(autofocusApiProvider) == null ? null : _resetCalibration,
+            child: const Text('Reset focus calibration'),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'The next autofocus runs a full sweep and calibrates again.',
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 24),
         if (_lastError != null) ...[

@@ -183,6 +183,36 @@ namespace OpenAstroAra.Test {
             public void Report(ApplicationStatus value) => Reports.Add(value);
         }
 
+        private const string RecalibrateAndGuide = "RecalibrateAndGuide";
+
+        private void SetupRecalibrateAndGuide(bool result) =>
+            guider.Setup(g => g.RecalibrateAndGuide(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Callback(() => callLog.Add(RecalibrateAndGuide)).ReturnsAsync(result);
+
+        [Test]
+        public async Task A_plan_that_asks_for_it_recalibrates_the_guider_after_the_flip() {
+            // #1716
+            SetupProfile(recenter: false);
+            SetupRecalibrateAndGuide(true);
+
+            var ok = await CreateSUT().MeridianFlip(Target, TimeSpan.Zero, recalibrateGuider: true, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(callLog, Has.Member(RecalibrateAndGuide).And.None.EqualTo("StartGuiding"));
+        }
+
+        [Test]
+        public async Task A_flip_that_cannot_get_guiding_back_on_any_calibration_reports_failure_without_a_safe_rest() {
+            // #1716: the failed return pauses the run. The flip itself worked, so the mount keeps tracking.
+            SetupProfile(recenter: false);
+            SetupRecalibrateAndGuide(false);
+
+            var ok = await CreateSUT().MeridianFlip(Target, TimeSpan.Zero, recalibrateGuider: true, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            Assert.That(callLog.Last(), Is.EqualTo(RecalibrateAndGuide));
+        }
+
         [Test]
         public async Task The_passing_meridian_countdown_is_reported_as_a_wait() {
             // #1596 — the run status shows a "meridian" reason only for WaitSource reports.

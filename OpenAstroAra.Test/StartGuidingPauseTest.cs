@@ -128,6 +128,20 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_step_that_calibrates_each_night_asks_for_tonights_calibration() {
+            // #1716
+            var guider = Guider();
+            guider.Setup(g => g.StartGuidingCalibratedTonight(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+            var item = new StartGuiding(guider.Object) { CalibrateEachNight = true };
+
+            await item.Execute(NoProgress, CancellationToken.None);
+
+            guider.Verify(g => g.StartGuidingCalibratedTonight(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Once);
+            guider.Verify(g => g.StartGuiding(It.IsAny<bool>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never);
+            Assert.That(((StartGuiding)item.Clone()).CalibrateEachNight, Is.True);
+        }
+
+        [Test]
         public async Task Without_a_pause_gate_a_refused_start_fails_the_instruction() {
             var guider = Guider();
             guider.Setup(g => g.StartGuiding(false, It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).ReturnsAsync(false);

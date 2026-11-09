@@ -35,6 +35,19 @@ namespace OpenAstroAra.Test {
     public class FocuserServiceTest {
 
         [Test]
+        public async Task HaltAsync_when_not_connected_throws_InvalidOperation() {
+            using var svc = new FocuserService();
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.HaltAsync(null, CancellationToken.None));
+        }
+
+        [Test]
+        public async Task HaltAsync_after_Dispose_throws_ObjectDisposedException() {
+            var svc = new FocuserService();
+            svc.Dispose();
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => svc.HaltAsync(null, CancellationToken.None));
+        }
+
+        [Test]
         public async Task ForgetAsync_with_no_device_retained_returns_false() {
             using var svc = new FocuserService();
             Assert.That(await svc.ForgetAsync(CancellationToken.None), Is.False);

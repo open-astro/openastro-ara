@@ -15,6 +15,9 @@ import 'package:openastroara/state/ws/ws_providers.dart';
 /// Only the state read matters for this test; the verdict never hits REST.
 class _IdleApi implements AutofocusApi {
   @override
+  Future<void> recalibrate() async {}
+
+  @override
   Future<AutofocusRun> state() async => AutofocusRun.idle;
   @override
   Future<AutofocusFrame?> fetchFrame() async => null;

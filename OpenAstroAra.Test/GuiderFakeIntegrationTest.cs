@@ -2530,6 +2530,116 @@ namespace OpenAstroAra.Test {
             Assert.That(op.GetProperty("ok").GetBoolean(), Is.True, "guiding began; the settle timeout does not fail the start");
         }
 
+        private static GuiderService CalibratedTonightService(IDiagnosticsService diagnostics) =>
+            new(new HeadlessProfileService(), NewRecovery(), NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(),
+                diagnostics: diagnostics, araProfileResolver: () => (Guid.NewGuid(), "Rig A"));
+
+        private static async Task ConnectToAsync(GuiderService svc, FakeGuider fake) {
+            await svc.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await PollAsync(svc, d => d.State == EquipmentConnectionState.Connected).ConfigureAwait(false), Is.Not.Null);
+        }
+
+        private static string RpcError(string id, int code, string message) =>
+            "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":" + code + ",\"message\":\"" + message + "\"},\"id\":" + id + "}";
+
+        private static string RpcOk(string id) => "{\"jsonrpc\":\"2.0\",\"result\":0,\"id\":" + id + "}";
+
+        private const string CalibrationFailed = "guider.calibration.failed";
+
+        // A start waits out the settle after guiding begins; the fake never settles on its own.
+        private static async Task<bool> SettlingAsync(FakeGuider fake, Task<bool> start) {
+            while (!start.IsCompleted) {
+                await fake.BroadcastAsync(PhdEvents.SettleDone()).ConfigureAwait(false);
+                await Task.Delay(200).ConfigureAwait(false);
+            }
+            return await start.ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task The_nights_first_start_recalibrates_the_next_does_not_and_a_new_night_does_again() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            var guiding = 0;
+            var recalibrate = new List<bool>();
+            fake.OnRpc("get_app_state", _ => JsonValue.Create(Volatile.Read(ref guiding) == 0 ? "Stopped" : "Guiding"));
+            fake.OnRpc("get_calibrated", JsonValue.Create(true));
+            fake.OnRpc("get_lock_position", new JsonArray(100.0, 100.0));
+            fake.OnRpc("guide", p => {
+                lock (recalibrate) { recalibrate.Add(p["params"]?["recalibrate"]?.GetValue<bool>() ?? false); }
+                Volatile.Write(ref guiding, 1);
+                return JsonValue.Create(0);
+            });
+            var diagnostics = new Mock<IDiagnosticsService>();
+            using var svc = CalibratedTonightService(diagnostics.Object);
+            await ConnectToAsync(svc, fake).ConfigureAwait(false);
+            var now = new DateTimeOffset(2026, 11, 10, 22, 0, 0, TimeSpan.Zero);
+            svc.CalibrationNightClock = () => now;
+            var noProgress = new Progress<OpenAstroAra.Core.Model.ApplicationStatus>();
+
+            Assert.That(await SettlingAsync(fake, svc.StartGuidingCalibratedTonight(noProgress, CancellationToken.None)).ConfigureAwait(false), Is.True);
+            Volatile.Write(ref guiding, 0);
+            Assert.That(await SettlingAsync(fake, svc.StartGuidingCalibratedTonight(noProgress, CancellationToken.None)).ConfigureAwait(false), Is.True);
+            Volatile.Write(ref guiding, 0);
+            now = now.AddDays(1);
+            Assert.That(await SettlingAsync(fake, svc.StartGuidingCalibratedTonight(noProgress, CancellationToken.None)).ConfigureAwait(false), Is.True);
+
+            Assert.That(string.Join(",", recalibrate), Is.EqualTo("True,False,True"));
+            diagnostics.Verify(d => d.ClearOpenEventsByTypeAsync(CalibrationFailed, It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()), Times.Exactly(2));
+        }
+
+        [Test]
+        public async Task A_failed_recalibration_goes_on_with_the_restored_calibration_and_warns() {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            var guides = 0;
+            var guiding = 0;
+            fake.OnRpc("get_app_state", _ => JsonValue.Create(Volatile.Read(ref guiding) == 0 ? "Stopped" : "Guiding"));
+            fake.OnRpc("get_calibrated", JsonValue.Create(true));
+            fake.OnRpc("get_lock_position", new JsonArray(100.0, 100.0));
+            fake.OnRpc("restore_calibration", JsonValue.Create(true));
+            fake.OnRawRpc("guide", id => {
+                if (Interlocked.Increment(ref guides) == 1) { return RpcError(id, 1, "calibration failed"); }
+                Volatile.Write(ref guiding, 1);
+                return RpcOk(id);
+            });
+            var diagnostics = new Mock<IDiagnosticsService>();
+            using var svc = CalibratedTonightService(diagnostics.Object);
+            await ConnectToAsync(svc, fake).ConfigureAwait(false);
+
+            var ok = await SettlingAsync(fake, svc.RecalibrateAndGuide(new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(), CancellationToken.None)).ConfigureAwait(false);
+
+            Assert.That(ok, Is.True);
+            Assert.That(guides, Is.EqualTo(2));
+            Assert.That(fake.ReceivedMethods, Has.Member("restore_calibration"));
+            diagnostics.Verify(d => d.CreateEventAsync(
+                It.Is<DiagnosticEventDto>(e => e.EventType == CalibrationFailed && e.Severity == DiagnosticHealth.Yellow),
+                It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [TestCase(true, TestName = "With_nothing_saved_a_failed_recalibration_reports_failure")]
+        [TestCase(false, TestName = "A_guider_without_the_restore_call_reports_failure")]
+        public async Task No_earlier_calibration_means_the_start_fails_and_nothing_is_warned(bool guiderKnowsRestore) {
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            var guides = 0;
+            fake.OnRpc("get_app_state", _ => JsonValue.Create("Stopped"));
+            fake.OnRawRpc("guide", id => { Interlocked.Increment(ref guides); return RpcError(id, 1, "calibration failed"); });
+            if (guiderKnowsRestore) {
+                fake.OnRpc("restore_calibration", JsonValue.Create(false));
+            } else {
+                fake.OnRawRpc("restore_calibration", id => RpcError(id, -32601, "method not found"));
+            }
+            var diagnostics = new Mock<IDiagnosticsService>();
+            using var svc = CalibratedTonightService(diagnostics.Object);
+            await ConnectToAsync(svc, fake).ConfigureAwait(false);
+
+            var ok = await svc.RecalibrateAndGuide(new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(), CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(ok, Is.False);
+            Assert.That(guides, Is.EqualTo(1));
+            diagnostics.Verify(d => d.CreateEventAsync(It.IsAny<DiagnosticEventDto>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
         [TestCase("camera has no gain control", true)]
         [TestCase("Camera has no gain control.", true)]
         [TestCase("camera not connected", false)]

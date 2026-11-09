@@ -5835,6 +5835,12 @@ abstract class AppLocalizations {
   /// **'focus {position}'**
   String focusChartFocus(int position);
 
+  /// Simple Mode warning pill while the daemon's guider.calibration.failed diagnostic is open
+  ///
+  /// In en, this message translates to:
+  /// **'The guider could not calibrate, so it is guiding on its earlier calibration. Guiding may be less accurate tonight.'**
+  String get simpleGuiderCalibrationFailed;
+
   /// Simple Mode warning pill while the daemon's dew_formation diagnostic is open
   ///
   /// In en, this message translates to:

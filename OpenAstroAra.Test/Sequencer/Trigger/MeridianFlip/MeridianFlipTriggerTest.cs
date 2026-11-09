@@ -142,6 +142,28 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
             Assert.That(sut.Forecast(ForecastNow).State, Is.Not.EqualTo(MeridianFlipStates.Flipping));
         }
 
+        [TestCase(true)]
+        [TestCase(false)]
+        public async Task The_trigger_passes_on_whether_the_plan_recalibrates_the_guider(bool recalibrate) {
+            // #1716
+            SetFlipWindow(after: 5, maxAfter: 20);
+            SetTelescope(2);
+            telescopeMediatorMock.Setup(x => x.GetCurrentPosition())
+                .Returns(new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000));
+            executorMock.Setup(x => x.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<TimeSpan>(),
+                It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+            executorMock.Setup(x => x.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<TimeSpan>(), true,
+                It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
+            var sut = CreateSUT();
+            sut.RecalibrateGuider = recalibrate;
+
+            await sut.Execute(null!, new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            executorMock.Verify(x => x.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<TimeSpan>(), true,
+                It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), recalibrate ? Times.Once() : Times.Never());
+            Assert.That(((MeridianFlipTrigger)sut.Clone()).RecalibrateGuider, Is.EqualTo(recalibrate));
+        }
+
         [TestCase(5, 20, 0)]
         [TestCase(5, 5, 0)]
         [TestCase(5, 20, 10)]

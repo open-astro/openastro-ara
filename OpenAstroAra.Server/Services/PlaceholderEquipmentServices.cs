@@ -95,6 +95,8 @@ public sealed class PlaceholderTelescopeService : ITelescopeService {
 }
 
 public sealed class PlaceholderFocuserService : IFocuserService {
+    public Task<OperationAcceptedDto> HaltAsync(string? idempotencyKey, CancellationToken ct) =>
+        Task.FromResult(PlaceholderEquipmentHelpers.Accepted("focuser.halt", idempotencyKey));
     public Task<bool> ForgetAsync(CancellationToken ct) => Task.FromResult(false); // nothing retained to drop
     public Task<FocuserDto?> GetAsync(CancellationToken ct) => Task.FromResult<FocuserDto?>(null);
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) =>

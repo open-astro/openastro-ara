@@ -49,6 +49,14 @@ namespace OpenAstroAra.Equipment.Interfaces.Mediator {
 
         Task<bool> StartGuiding(bool forceCalibration, IProgress<ApplicationStatus> progress, CancellationToken token);
 
+        /// <summary>#1716: guide on a new calibration. If that fails, put back the guider's saved
+        /// calibration, guide on it and warn. False only when neither gives guiding.</summary>
+        Task<bool> RecalibrateAndGuide(IProgress<ApplicationStatus> progress, CancellationToken token);
+
+        /// <summary>#1716: the first start of the night (a night starts at local noon) goes through
+        /// <see cref="RecalibrateAndGuide"/>; later starts that night reuse the calibration.</summary>
+        Task<bool> StartGuidingCalibratedTonight(IProgress<ApplicationStatus> progress, CancellationToken token);
+
         Task<bool> StopGuiding(CancellationToken token);
 
         Task<bool> AutoSelectGuideStar(CancellationToken token);

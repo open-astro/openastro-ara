@@ -719,6 +719,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         frameCount: steps.first.frameCount,
         gain: gain,
         stopAtDawn: dawn,
+        recalibrateGuider: true,
         parkAtEnd: true,
         pauseForFilterSwap: false,
       );
@@ -828,6 +829,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         frameCount: steps.first.frameCount,
         gain: gain,
         stopAtDawn: state.dawnStop,
+        recalibrateGuider: true,
       );
       if (r == null || r.draft || r.sequenceId != id) {
         throw StateError("the rig didn't take the edited plan");
@@ -911,6 +913,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         frameCount: t.steps.first.frameCount,
         gain: t.gain,
         stopAtDawn: state.dawnStop,
+        recalibrateGuider: true,
       );
       if (r == null || r.draft || r.sequenceId != id) {
         throw StateError("the rig didn't take it back");

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/screens/settings/panels/imaging_autofocus_panel.dart';
+import 'package:openastroara/services/autofocus_api.dart';
+import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
@@ -9,7 +11,7 @@ import 'package:openastroara/widgets/settings/editable_field.dart';
 // §59.8 — the Automatic step size switch and the Advanced disclosure that
 // hides the raw sweep knobs. No server: the panel keeps the notifier's
 // defaults instead of hydrating.
-Future<void> _pump(WidgetTester tester) async {
+Future<void> _pump(WidgetTester tester, {AutofocusApi? api}) async {
   // Wide desktop surface + half text scale, as the sibling panel tests do:
   // Ahem renders every glyph at full point size and the fixed labels overflow.
   tester.view.physicalSize = const Size(1600, 1600);
@@ -24,7 +26,10 @@ Future<void> _pump(WidgetTester tester) async {
   addTearDown(() => FlutterError.onError = prior);
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [activeServerProvider.overrideWithValue(null)],
+      overrides: [
+        activeServerProvider.overrideWithValue(null),
+        autofocusApiProvider.overrideWithValue(api),
+      ],
       child: MaterialApp(
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context)
@@ -43,7 +48,32 @@ Finder _autoSwitch() => find.descendant(
       matching: find.byType(Switch),
     );
 
+class _RecalibrateApi implements AutofocusApi {
+  int recalibrates = 0;
+  @override
+  Future<void> recalibrate() async => recalibrates++;
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 void main() {
+  testWidgets('Reset focus calibration asks the rig to forget it (#1543)', (tester) async {
+    final api = _RecalibrateApi();
+    await _pump(tester, api: api);
+    await tester.ensureVisible(find.byKey(const Key('af-reset-calibration')));
+    await tester.pump();
+
+    await tester.tap(find.byKey(const Key('af-reset-calibration')));
+    await tester.pump();
+
+    expect(api.recalibrates, 1);
+  });
+
+  testWidgets('with no rig the reset is off', (tester) async {
+    await _pump(tester);
+    expect(tester.widget<OutlinedButton>(find.byKey(const Key('af-reset-calibration'))).onPressed, isNull);
+  });
+
   testWidgets('automatic step size is on by default and the raw knobs sit behind Advanced', (tester) async {
     await _pump(tester);
 

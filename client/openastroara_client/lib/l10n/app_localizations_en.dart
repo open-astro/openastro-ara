@@ -3424,6 +3424,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get simpleGuiderCalibrationFailed =>
+      'The guider could not calibrate, so it is guiding on its earlier calibration. Guiding may be less accurate tonight.';
+
+  @override
   String get simpleDewWarning =>
       'Dew may be forming: stars are swelling at high humidity. Wipe the optics or turn on the dew heaters. Scheduled autofocus waits until it clears.';
 }

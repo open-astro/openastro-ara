@@ -42,5 +42,10 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
         /// return false or throw on unrecoverable failure; both stop the sequence.
         /// </summary>
         Task<bool> MeridianFlip(Coordinates targetCoordinates, TimeSpan timeToFlip, IProgress<ApplicationStatus> progress, CancellationToken token);
+
+        /// <summary>#1716: the same flip; with <paramref name="recalibrateGuider"/> guiding comes back on a
+        /// new calibration whatever the profile's mode says, unless that mode is skip.</summary>
+        Task<bool> MeridianFlip(Coordinates targetCoordinates, TimeSpan timeToFlip, bool recalibrateGuider, IProgress<ApplicationStatus> progress, CancellationToken token) =>
+            MeridianFlip(targetCoordinates, timeToFlip, progress, token);
     }
 }

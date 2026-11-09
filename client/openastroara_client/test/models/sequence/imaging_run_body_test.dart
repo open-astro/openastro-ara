@@ -612,6 +612,36 @@ void main() {
           containsAll([autofocusAfterExposuresType, ditherAfterExposuresType]));
     });
 
+    // #1716
+    group('recalibrateGuider', () {
+      Map<String, dynamic> calibrated(bool on) => buildTargetBlock(
+            raDeg: 1,
+            decDeg: 2,
+            targetName: 'Veil',
+            exposureSeconds: 60,
+            frameCount: 10,
+            startGuiding: true,
+            recalibrateGuider: on,
+          );
+      Map<String, dynamic> flipOf(Map<String, dynamic> b) => dom.triggersOf(
+            childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging'),
+          ).singleWhere((t) => t[r'$type'] == meridianFlipTriggerType);
+      Map<String, dynamic> startOf(Map<String, dynamic> b) =>
+          childrenOf(b).singleWhere((c) => c[r'$type'] == startGuidingType);
+
+      test('asks for a calibration each night and after each flip', () {
+        final b = calibrated(true);
+        expect(startOf(b)['CalibrateEachNight'], isTrue);
+        expect(flipOf(b)['RecalibrateGuider'], isTrue);
+      });
+
+      test('a plan that does not ask leaves both alone', () {
+        final b = calibrated(false);
+        expect(startOf(b).containsKey('CalibrateEachNight'), isFalse);
+        expect(flipOf(b).containsKey('RecalibrateGuider'), isFalse);
+      });
+    });
+
     test('a guider alone adds guiding + dither and nothing else', () {
       final b = block(const RigCapabilities(guider: true));
       expect(types(b), contains(startGuidingType));

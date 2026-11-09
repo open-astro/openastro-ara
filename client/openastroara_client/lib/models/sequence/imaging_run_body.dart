@@ -101,6 +101,9 @@ Map<String, dynamic> buildImagingRunBody({
   double? positionAngleDeg,
   List<FilterPlanStep>? filterPlan,
   bool startGuiding = false,
+  // #1716 — Simple Mode: the Guider calibrates at the night's first start and
+  // after each meridian flip. Off = the profile's own calibration settings.
+  bool recalibrateGuider = false,
   int? ditherEveryNExposures,
   bool manualFilterSwap = false,
   // What the rig has — every device-bound step below is gated on it (see
@@ -139,6 +142,7 @@ Map<String, dynamic> buildImagingRunBody({
     positionAngleDeg: positionAngleDeg,
     filterPlan: filterPlan,
     startGuiding: startGuiding,
+    recalibrateGuider: recalibrateGuider,
     ditherEveryNExposures: ditherEveryNExposures,
     manualFilterSwap: manualFilterSwap,
     rig: rig,
@@ -218,6 +222,9 @@ Map<String, dynamic> buildTargetBlock({
   double? positionAngleDeg,
   List<FilterPlanStep>? filterPlan,
   bool startGuiding = false,
+  // #1716 — Simple Mode: the Guider calibrates at the night's first start and
+  // after each meridian flip. Off = the profile's own calibration settings.
+  bool recalibrateGuider = false,
   int? ditherEveryNExposures,
   bool manualFilterSwap = false,
   RigCapabilities rig = RigCapabilities.everything,
@@ -409,7 +416,9 @@ Map<String, dynamic> buildTargetBlock({
     if (flipDef == null) {
       throw StateError('MeridianFlipTrigger missing from the trigger catalog');
     }
-    triggers.add(flipDef.build());
+    final flip = flipDef.build();
+    if (guide && recalibrateGuider) flip['RecalibrateGuider'] = true;
+    triggers.add(flip);
     imaging = withTriggers(imaging, triggers);
     return imaging;
   }
@@ -474,7 +483,10 @@ Map<String, dynamic> buildTargetBlock({
       ?switchTo(filterName),
     if (afAtStart) _item(runAutofocusType),
     if (focusFirst) goToTarget,
-    if (guide) _item(startGuidingType),
+    if (guide)
+      recalibrateGuider
+          ? (_item(startGuidingType)..['CalibrateEachNight'] = true)
+          : _item(startGuidingType),
     // After focus (the probe judges FWHM growth against its first rung, so it
     // must see focused stars) and before the first imaging loop.
     if (unguided) trackingProbe(),

@@ -130,6 +130,9 @@ public interface IFocuserService {
     /// on live hardware is always an explicit two-step.</summary>
     Task<bool> ForgetAsync(CancellationToken ct);
     Task<OperationAcceptedDto> MoveAsync(FocuserMoveRequestDto request, string? idempotencyKey, CancellationToken ct);
+    /// <summary>#1542: stop a focuser move now, the same panic-stop shape as the rotator. Throws
+    /// InvalidOperationException when not connected.</summary>
+    Task<OperationAcceptedDto> HaltAsync(string? idempotencyKey, CancellationToken ct);
 }
 
 public interface IFilterWheelService {

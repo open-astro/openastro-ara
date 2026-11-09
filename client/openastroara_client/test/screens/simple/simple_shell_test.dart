@@ -4416,6 +4416,19 @@ void main() {
       expect(pill, findsNothing);
     });
 
+    testWidgets('a guider calibration fallback warns until a calibration works (#1716)', (tester) async {
+      final (c, d) = await shell(tester);
+      d.open({'guider.calibration.failed'});
+      await tester.pump();
+      await tester.pump();
+      expect(find.textContaining('could not calibrate'), findsOneWidget);
+      expect(c.read(simpleMessagesProvider).single.kind, SimpleMessageKind.warning);
+      d.open({});
+      await tester.pump();
+      await tester.pump();
+      expect(find.textContaining('could not calibrate'), findsNothing);
+    });
+
     testWidgets('closed by hand, it comes back the next time dew opens', (tester) async {
       final (c, d) = await shell(tester);
       d.open({'dew_formation'});

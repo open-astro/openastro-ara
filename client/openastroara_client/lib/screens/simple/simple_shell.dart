@@ -303,6 +303,28 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
   }
 
+  int? _calibrationPill;
+
+  /// #1716 — one warning each time the Guider falls back to its earlier
+  /// calibration; the next calibration that works takes it away.
+  void _syncCalibrationPill(
+    DiagnosticsSnapshot? previous,
+    DiagnosticsSnapshot next,
+  ) {
+    const failed = 'guider.calibration.failed';
+    final open = next.openTypes.contains(failed);
+    final messages = ref.read(simpleMessagesProvider.notifier);
+    if (open && !(previous?.openTypes.contains(failed) ?? false)) {
+      _calibrationPill = messages.show(
+        SimpleMessageKind.warning,
+        context.l10n.simpleGuiderCalibrationFailed,
+      );
+    } else if (!open && _calibrationPill != null) {
+      messages.dismiss(_calibrationPill!);
+      _calibrationPill = null;
+    }
+  }
+
   void _setStatusHeight(double height) {
     if (mounted && height != _statusHeight) {
       setState(() => _statusHeight = height);
@@ -339,6 +361,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     ref.listenManual(diagnosticsStateProvider, (previous, next) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_syncDewPill(previous, next));
+        if (mounted) _syncCalibrationPill(previous, next);
       });
     }, fireImmediately: true);
     ref.listenManual(coolingFanAskDueProvider, (_, due) {

@@ -347,6 +347,8 @@ public static partial class EquipmentEndpoints {
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         focuser.MapPost("/move", async ([FromBody] FocuserMoveRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.MoveAsync(request, key, ct)));
+        focuser.MapPost("/halt", async ([FromHeader(Name = "Idempotency-Key")] string? key, IFocuserService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.HaltAsync(key, ct)));
         // §59 — run one autofocus V-curve sweep with the profile's §37.11 settings, as a
         // §65.5 background job (a sweep is minutes of focuser moves + probe exposures — far too
         // long for a request). Returns 202 + the job; poll GET /api/v1/jobs/{id} for state, and

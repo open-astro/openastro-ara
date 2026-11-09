@@ -43,12 +43,17 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
 
         public override object Clone() {
             return new StartGuiding(this) {
-                ForceCalibration = ForceCalibration
+                ForceCalibration = ForceCalibration,
+                CalibrateEachNight = CalibrateEachNight
             };
         }
 
         [JsonProperty]
         public bool ForceCalibration { get; set; } = false;
+
+        /// <summary>#1716: set by Simple Mode plans: the night's first start recalibrates.</summary>
+        [JsonProperty]
+        public bool CalibrateEachNight { get; set; } = false;
 
         private IList<string> issues = new List<string>();
 
@@ -75,7 +80,9 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Guider {
                 string? reason = null;
                 bool started;
                 try {
-                    started = await guiderMediator.StartGuiding(ForceCalibration, progress, token);
+                    started = CalibrateEachNight
+                        ? await guiderMediator.StartGuidingCalibratedTonight(progress, token)
+                        : await guiderMediator.StartGuiding(ForceCalibration, progress, token);
                 } catch (OperationCanceledException) {
                     throw;
                 } catch (Exception ex) {
