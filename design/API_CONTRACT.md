@@ -1316,3 +1316,15 @@ its start and the client has nothing to do with it.
 **Spec ref:** `Services/FilterFocusOffset.cs`, `Services/UnattendedShutdownService.cs`
 
 **Related:** #1667, #1712
+
+## 2026-11-09 — Emergency Stop failed rungs, and frames on `sequence.progress` (#1738)
+
+**Endpoint(s) or area:** `POST /api/v1/server/emergency-stop` (`failed_rungs`), WS `safety.action_taken`, WS `sequence.progress`
+
+**Decision:** `failed_rungs` holds zero or more of these tokens: `abort_runs`, `halt_rotator`, `abort_exposure`, `stop_guide_focus`, `stop_bahtinov`, `cancel_autofocus`, `stop_polar_align`, `stop_guiding`, `stop_mount`, `flat_panel_light_off`, `cooler_off`. A device that is not connected is not a failed rung. `frames_captured` (int) is also on WS `sequence.progress`, with the same meaning as on the polled run state.
+
+**Reasoning:** Clients read both fields, and neither was written down in full.
+
+**Spec ref:** `Services/EmergencyStopService.cs`, `Services/SequencerService.cs`
+
+**Related:** #1738

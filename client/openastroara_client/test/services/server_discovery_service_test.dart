@@ -554,6 +554,75 @@ void main() {
       expect(first.hostname, '10.0.0.7');
     });
 
+    group('one row per rig by uuid (#1741)', () {
+      Future<List<AraServer>> browse(List<String> local, List<Map<String, Object?>> rigs) {
+        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+        addTearDown(() => debugDefaultTargetPlatformOverride = null);
+        return ServerDiscoveryService(
+          mdnsClientFactory: () => throw StateError('iOS must not open mDNS'),
+          localAddresses: () async => local,
+          nativeBrowse: () async => rigs,
+          sweepSource: () => const Stream<AraServer>.empty(),
+        ).discover().toList();
+      }
+
+      const lan = {'name': 'openastro', 'host': '192.0.2.20', 'port': 5555, 'uuid': 'u1'};
+      const hotspot = {'name': 'openastro', 'host': '172.24.1.1', 'port': 5555, 'uuid': 'u1'};
+
+      test('a device on the LAN gets one row, the LAN address', () async {
+        final found = await browse(const ['192.0.2.5'], const [hotspot, lan]);
+        expect(found.map((s) => s.hostname), ['192.0.2.20']);
+      });
+
+      test('a device on the hotspot gets one row, the hotspot address', () async {
+        final found = await browse(const ['172.24.1.9'], const [lan, hotspot]);
+        expect(found.map((s) => s.hostname), ['172.24.1.1']);
+      });
+
+      test('with no shared subnet one row keeps the first address found', () async {
+        final found = await browse(const ['10.9.9.9'], const [hotspot, lan]);
+        expect(found.map((s) => s.hostname), ['172.24.1.1']);
+      });
+
+      test('two rigs with different uuids stay two rows', () async {
+        final found = await browse(const ['192.0.2.5'], const [
+          lan,
+          {'name': 'other', 'host': '192.0.2.21', 'port': 5555, 'uuid': 'u2'},
+        ]);
+        expect(found.map((s) => s.hostname), ['192.0.2.20', '192.0.2.21']);
+      });
+
+      test('results with no uuid are still listed by endpoint', () async {
+        final found = await browse(const ['192.0.2.5'], const [
+          {'name': 'a', 'host': '192.0.2.20', 'port': 5555},
+          {'name': 'b', 'host': '192.0.2.21', 'port': 5555},
+        ]);
+        expect(found.map((s) => s.hostname), ['192.0.2.20', '192.0.2.21']);
+      });
+
+      test('the same uuid found by two paths is one row', () async {
+        final found = await ServerDiscoveryService(
+          mdnsSource: () => Stream.fromIterable(const [
+            AraServer(hostname: '192.0.2.20', port: 5555, uuid: 'u1'),
+            AraServer(hostname: '172.24.1.1', port: 5555, uuid: 'u1'),
+          ]),
+          sweepSource: () => const Stream.empty(),
+        ).discover().toList();
+        expect(found.map((s) => s.hostname), ['192.0.2.20']);
+      });
+
+      test('a row with no uuid and one with a uuid on the same endpoint are one row', () async {
+        final found = await ServerDiscoveryService(
+          mdnsSource: () => Stream.fromIterable(const [
+            AraServer(hostname: '192.0.2.20', port: 5555),
+            AraServer(hostname: '192.0.2.20', port: 5555, uuid: 'u1'),
+          ]),
+          sweepSource: () => const Stream.empty(),
+        ).discover().toList();
+        expect(found, hasLength(1));
+      });
+    });
+
     test('duplicate endpoints dedupe to one entry', () async {
       final svc = ServerDiscoveryService(
         mdnsSource: () => Stream.fromIterable([

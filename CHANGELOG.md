@@ -53,6 +53,8 @@ at the top. This happens in the same commit that pushes the release tag.
 - A profile set to ask about flats now answers on Simple Mode's Plan sheet, in place of the "No flats this run" pill.
 - On a Mac in full screen, changing profile no longer shrinks the app to the profile window's size.
 - The cooling fan is chosen in the profile, by switch and port, on any driver, not found by the device name "Thermal Switch". **Every existing profile has no fan following the cooler until you choose one**; a pill asks once (#1700).
+- The rig list shows one row for a rig that announces several addresses, on the address this device can reach (#1741).
+- Simple Mode: a running guide loop keeps its Stop while the guider status is briefly gone (#1738).
 
 ### Removed (bug sweep)
 
