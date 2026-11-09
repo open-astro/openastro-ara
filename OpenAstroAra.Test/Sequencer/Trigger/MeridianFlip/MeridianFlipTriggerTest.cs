@@ -52,6 +52,7 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
             executorMock = new Mock<IMeridianFlipExecutor>();
             settingsMock = new Mock<IMeridianFlipSettings>();
             settingsMock.SetupGet(m => m.UseSideOfPier).Returns(false);
+            settingsMock.SetupGet(m => m.AutoFlip).Returns(true);
             profileServiceMock.SetupGet(m => m.ActiveProfile.MeridianFlipSettings).Returns(settingsMock.Object);
         }
 
@@ -64,6 +65,24 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
             settingsMock.SetupGet(m => m.MinutesAfterMeridian).Returns(after);
             settingsMock.SetupGet(m => m.MaxMinutesAfterMeridian).Returns(maxAfter);
             settingsMock.SetupGet(m => m.PauseTimeBeforeMeridian).Returns(pause);
+        }
+
+        [Test]
+        public void Auto_flip_off_never_fires_inside_the_window() {
+            SetFlipWindow(after: 5, maxAfter: 20);
+            SetTelescope(0.2);
+            Assert.That(CreateSUT().ShouldTrigger(null, null), Is.True, "precondition: this window fires");
+            settingsMock.SetupGet(m => m.AutoFlip).Returns(false);
+            Assert.That(CreateSUT().ShouldTrigger(null, null), Is.False);
+        }
+
+        [Test]
+        public void Forecast_says_auto_flip_is_off() {
+            SetFlipWindow(after: 5, maxAfter: 20);
+            SetTelescope(2);
+            settingsMock.SetupGet(m => m.AutoFlip).Returns(false);
+            var forecast = CreateSUT().Forecast(ForecastNow);
+            Assert.That(forecast, Is.EqualTo(new MeridianFlipForecast(MeridianFlipStates.AutoFlipOff, null)));
         }
 
         [Test]

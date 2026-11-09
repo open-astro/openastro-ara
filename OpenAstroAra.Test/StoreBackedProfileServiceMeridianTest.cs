@@ -40,6 +40,14 @@ namespace OpenAstroAra.Test {
             return (profile.Object, meridian);
         }
 
+        [TestCase(true)]
+        [TestCase(false)]
+        public void AutoFlip_mirrors_the_auto_flip_policy(bool auto) {
+            var (profile, meridian) = Profile();
+            ProfileStoreMapper.ApplyMeridian(Safety("never") with { MeridianFlipAuto = auto }, profile);
+            Assert.That(meridian.Object.AutoFlip, Is.EqualTo(auto));
+        }
+
         [TestCase("never", false)]
         [TestCase("if_temp_drifted", true)]
         [TestCase("always", true)]

@@ -497,6 +497,13 @@ Map<String, dynamic> buildTargetBlock({
   final name = targetName?.trim();
   block['Name'] = (name != null && name.isNotEmpty) ? name : 'Target';
   block = withChildren(block, children);
+  // On the block, so a plan with several filters has one flip, not one per
+  // loop. The profile's Auto flip decides whether it fires.
+  final flipDef = triggerForType(meridianFlipTriggerType);
+  if (flipDef == null) {
+    throw StateError('MeridianFlipTrigger missing from the trigger catalog');
+  }
+  block = withTriggers(block, [flipDef.build()]);
   // §38.10a — the block self-terminates when the target sets below the
   // profile's (custom) horizon: the daemon evaluates this at every instruction
   // boundary, so a paused-then-resumed (or simply long-running) target that

@@ -257,8 +257,8 @@ internal static class ProfileStoreMapper {
         // #1138 — the NINA-side flag mirrors the store's meridian_refocus policy for any legacy reader;
         // the executor itself decides from the store (always / if_temp_drifted / never).
         meridian.AutoFocusAfterFlip = MeridianFlipPolicy.RefocusMode(policies.MeridianRefocus) != MeridianFlipPolicy.RefocusNever;
-        // MeridianFlipAuto gates the flip *trigger* (sequence-level, not ported yet); the guider
-        // re-calibration flag rides on the §63 PHD2 wiring — store-only here.
+        meridian.AutoFlip = policies.MeridianFlipAuto;
+        // The guider re-calibration flag rides on the §63 PHD2 wiring — store-only here.
     }
 
     // FileFormat tokens per the §29 contract: fits / xisf (#1148). The retired fits_rice/fits_gzip

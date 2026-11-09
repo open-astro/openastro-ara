@@ -99,6 +99,11 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
             set { }
         }
 
+        public virtual bool AutoFlip {
+            get => profileService.ActiveProfile.MeridianFlipSettings.AutoFlip;
+            set { }
+        }
+
         public virtual bool UseSideOfPier {
             get => profileService.ActiveProfile.MeridianFlipSettings.UseSideOfPier;
             set { }
@@ -210,6 +215,9 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
             if (_flipping) {
                 return new(MeridianFlipStates.Flipping, null);
             }
+            if (!AutoFlip) {
+                return new(MeridianFlipStates.AutoFlipOff, null);
+            }
             var info = telescopeMediator.GetInfo();
             if (!info.Connected || double.IsNaN(info.TimeToMeridianFlip) || info.AtPark || info.AtHome || !info.TrackingEnabled
                     || info.Coordinates == null || AlreadyFlippedHere(info)) {
@@ -265,6 +273,13 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
         }
 
         public override bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem) {
+            if (!AutoFlip) {
+                EarliestFlipTime = DateTime.MinValue;
+                LatestFlipTime = DateTime.MinValue;
+                Logger.Info("Meridian Flip - Auto flip is off in the profile. Skip flip evaluation");
+                return false;
+            }
+
             var telescopeInfo = telescopeMediator.GetInfo();
 
             if (!telescopeInfo.Connected || double.IsNaN(telescopeInfo.TimeToMeridianFlip)) {

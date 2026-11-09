@@ -841,6 +841,27 @@ void main() {
   // §38.10a — every generated target block carries an AboveHorizonCondition
   // with the TARGET's own coordinates, so a target that sets below the
   // profile's horizon ends its block instead of imaging the murk.
+  group('the meridian flip', () {
+    List<String> flips(Map<String, dynamic> node) =>
+        [for (final t in (node['Triggers'] as Map<String, dynamic>?)?['\$values'] as List? ?? const []) (t as Map)['\$type'] as String];
+
+    test('a target block carries the flip trigger, once', () {
+      final block = buildTargetBlock(raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10);
+      expect(flips(block).where((t) => t.contains('MeridianFlipTrigger')), hasLength(1));
+    });
+
+    test('a filter plan still has one, on the block and not on each loop', () {
+      final block = buildTargetBlock(raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10, filterPlan: const [
+        FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 5),
+        FilterPlanStep(filterName: 'R', exposureSeconds: 60, frameCount: 5),
+      ]);
+      expect(flips(block).where((t) => t.contains('MeridianFlipTrigger')), hasLength(1));
+      for (final child in childrenOf(block)) {
+        expect(flips(child).where((t) => t.contains('MeridianFlipTrigger')), isEmpty);
+      }
+    });
+  });
+
   group('target block horizon condition', () {
     test('buildTargetBlock attaches AboveHorizonCondition with the target coords',
         () {

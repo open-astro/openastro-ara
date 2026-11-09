@@ -32,6 +32,7 @@ namespace OpenAstroAra.Profile {
         }
 
         protected override void SetDefaultValues() {
+            autoFlip = true;
             recenter = true;
             minutesAfterMeridian = 5;
             MaxMinutesAfterMeridian = 10;
@@ -40,6 +41,19 @@ namespace OpenAstroAra.Profile {
             pauseTimeBeforeMeridian = 0;
             autoFocusAfterFlip = false;
             rotateImageAfterFlip = false;
+        }
+
+        private bool autoFlip;
+
+        [DataMember]
+        public bool AutoFlip {
+            get => autoFlip;
+            set {
+                if (autoFlip != value) {
+                    autoFlip = value;
+                    RaisePropertyChanged();
+                }
+            }
         }
 
         private bool recenter;
