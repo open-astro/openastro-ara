@@ -7,14 +7,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../util/stream_save_location.dart';
 
-import '../../l10n/l10n.dart';
 import '../../models/bug_report_preparation.dart';
 import '../../services/client_error_log.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
 import '../../state/support/bug_report_state.dart';
-import '../inline_choices.dart';
 import 'client_log_card.dart';
+import '../inline_choices.dart';
 import 'support_card_row.dart';
 
 /// §54 "Send me a bug report" action — prepares a diagnostic bundle on the
@@ -254,7 +253,6 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
     // stays alive for the card's lifetime and can't be torn down mid prepare/
     // download. Also gates the button when no server is connected.
     final api = ref.watch(bugReportApiProvider);
-    final simple = ref.watch(simpleModeActiveProvider);
     final review = _review;
     return Card(
       margin: const EdgeInsets.all(8),
@@ -281,27 +279,6 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                   if (_packed != null)
                     Text('Packing the logs on the rig… ${_humanSize(_packed!)} read',
                         style: theme.textTheme.bodySmall),
-                  if (simple) ...[
-                    const SizedBox(height: 4),
-                    Text(context.l10n.bugReportCovers, style: theme.textTheme.bodySmall),
-                    InlineChoices<int>(
-                      id: 'bug-report-range',
-                      value: _rangeIndex,
-                      options: [
-                        for (var i = 0; i < bugReportRanges.length; i++)
-                          (i, bugReportRanges[i].$2),
-                      ],
-                      onChanged: _busy ? null : (v) => setState(() => _rangeIndex = v),
-                    ),
-                    Text(context.l10n.bugReportSharing, style: theme.textTheme.bodySmall),
-                    InlineChoices<String>(
-                      id: 'bug-report-sharing',
-                      value: _mode,
-                      options: [for (final m in bugReportSharingModes) (m.$1, m.$2)],
-                      detail: (v) => bugReportSharingModes.firstWhere((m) => m.$1 == v).$3,
-                      onChanged: _busy ? null : (v) => setState(() => _mode = v),
-                    ),
-                  ] else ...[
                   const SizedBox(height: 4),
                   Row(
                     children: [
@@ -348,7 +325,6 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                       ),
                     ],
                   ),
-                  ],
                 ],
               ),
             action: FilledButton.icon(

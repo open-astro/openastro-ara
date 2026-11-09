@@ -800,8 +800,6 @@
   "shellStorageFull": "O disco está cheio. Não é possível salvar os quadros.",
   "shellStorageChoose": "Escolher disco",
   "shellStorageEject": "Ejetar",
-  "bugReportCovers": "Abrange",
-  "bugReportSharing": "Compartilhamento",
   "shellStorageCheck": "Verificar disco",
   "searchSettingStorage": "Armazenamento",
   "searchWordsStorage": "disco hd ssd quadros salvar espaço ejetar usb",

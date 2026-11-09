@@ -447,25 +447,16 @@ void main() {
       expect(find.text('Before you share this bug report'), findsNothing);
     });
 
-    testWidgets('Covers and Sharing are radio rows at least 44 px, and the pick is sent', (tester) async {
+    testWidgets('In Simple Mode Covers and Sharing are combo boxes, and no radio rows', (tester) async {
       tester.view.physicalSize = const Size(800, 1600);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
       final api = _FakeBugReportClient();
       await tester.pumpWidget(_host(api, simple: true));
-      expect(find.byType(DropdownButton<String>), findsNothing);
-      expect(find.byType(DropdownButton<int>), findsNothing);
-      expect(tester.getSize(find.byKey(const Key('bug-report-sharing-2'))).height, greaterThanOrEqualTo(44));
-      expect(tester.getSize(find.byKey(const Key('bug-report-range-1'))).height, greaterThanOrEqualTo(44));
-      await tester.tap(find.byKey(const Key('bug-report-sharing-2')));
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('bug-report-range-3')));
-      await tester.pump();
-      expectNoPopup(tester);
-      await tester.tap(find.widgetWithText(FilledButton, 'Prepare & download'));
-      await settle(tester);
-      expect(api.lastMode, 'redacted');
-      expect(api.sinceSent, isFalse, reason: 'Ara logs only has no range');
+      expect(find.byType(DropdownButton<String>), findsOneWidget);
+      expect(find.byType(DropdownButton<int>), findsOneWidget);
+      expect(find.byKey(const Key('bug-report-sharing-0')), findsNothing);
+      expect(find.byKey(const Key('bug-report-range-0')), findsNothing);
     });
 
     testWidgets('a failure is an error pill', (tester) async {

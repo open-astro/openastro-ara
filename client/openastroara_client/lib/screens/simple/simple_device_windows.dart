@@ -220,7 +220,7 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
       if (caps != null && caps.hasCooler) {
         children.addAll([
           const Divider(height: AraSpace.s16),
-          const ProfileCoolingFanPicker(style: kSimpleText, inline: true),
+          const ProfileCoolingFanPicker(style: kSimpleText),
         ]);
       }
       // The camera's gain, shared with Preview's chip.

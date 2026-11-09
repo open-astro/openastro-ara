@@ -100,7 +100,6 @@ Future<void> _pumpPicker(
   CoolingFan value = CoolingFan.none,
   List<SwitchDevice> switches = const [],
   ValueChanged<CoolingFan>? onChanged,
-  bool inline = false,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -109,7 +108,7 @@ Future<void> _pumpPicker(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
-          body: CoolingFanPicker(value: value, inline: inline, onChanged: onChanged ?? (_) {}),
+          body: CoolingFanPicker(value: value, onChanged: onChanged ?? (_) {}),
         ),
       ),
     ),
@@ -358,17 +357,6 @@ void main() {
       expect(await claimCoolingFanAsk(c.read), isTrue);
       expect(await claimCoolingFanAsk(c.read), isFalse);
     });
-  });
-
-  testWidgets('inline, each option is a row and picking one hands back its designation', (tester) async {
-    CoolingFan? picked;
-    await _pumpPicker(tester, switches: [_box()], inline: true, onChanged: (v) => picked = v);
-    expect(find.byType(DropdownButton<CoolingFan>), findsNothing);
-    await tester.tap(find.textContaining('Fan 1').last);
-    await tester.pumpAndSettle();
-    expect(tester.state<NavigatorState>(find.byType(Navigator)).canPop(), isFalse);
-    expect(picked, isNotNull);
-    expect(picked!.isNone, isFalse);
   });
 }
 

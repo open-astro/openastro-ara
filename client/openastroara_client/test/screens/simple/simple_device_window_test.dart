@@ -254,14 +254,10 @@ void main() {
     expect(find.byKey(const Key('cooling-fan-picker')), findsNothing);
   });
 
-  testWidgets('the Camera window picks its Cooling fan inline, no dropdown route', (tester) async {
-    final (c, _) = await _pump(tester, _wire());
+  testWidgets('the Camera window picks its Cooling fan from a combo box', (tester) async {
+    await _pump(tester, _wire());
     await tester.pumpAndSettle();
-    expect(find.byType(DropdownButton<CoolingFan>), findsNothing);
-    final none = find.byKey(const Key('cooling-fan-picker-0'));
-    await tester.ensureVisible(none);
-    expect(tester.getSize(none).height, greaterThanOrEqualTo(44));
-    expect(tester.state<NavigatorState>(find.byType(Navigator)).canPop(), isFalse);
-    expect(c.read(coolingFanProvider).value, CoolingFan.none);
+    expect(find.byType(DropdownButton<CoolingFan>), findsOneWidget);
+    expect(find.byKey(const Key('cooling-fan-picker-0')), findsNothing, reason: 'no inline rows');
   });
 }

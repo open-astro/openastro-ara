@@ -3958,14 +3958,6 @@
   "@shellStorageEject": {
     "description": "Simple Mode Settings › Rig › Storage block: button, safely remove the disk"
   },
-  "bugReportCovers": "Covers",
-  "@bugReportCovers": {
-    "description": "Label above the range choices in the bug report card."
-  },
-  "bugReportSharing": "Sharing",
-  "@bugReportSharing": {
-    "description": "Label above the sharing mode choices in the bug report card."
-  },
   "shellStorageCheck": "Check disk",
   "@shellStorageCheck": {
     "description": "Simple Mode Settings › Rig › Storage block: button, check the disk's filesystem"

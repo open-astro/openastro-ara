@@ -2861,12 +2861,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellStorageEject => 'Eject';
 
   @override
-  String get bugReportCovers => 'Covers';
-
-  @override
-  String get bugReportSharing => 'Sharing';
-
-  @override
   String get shellStorageCheck => 'Check disk';
 
   @override

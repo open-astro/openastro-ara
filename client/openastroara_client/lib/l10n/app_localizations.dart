@@ -4899,18 +4899,6 @@ abstract class AppLocalizations {
   /// **'Eject'**
   String get shellStorageEject;
 
-  /// Label above the range choices in the bug report card.
-  ///
-  /// In en, this message translates to:
-  /// **'Covers'**
-  String get bugReportCovers;
-
-  /// Label above the sharing mode choices in the bug report card.
-  ///
-  /// In en, this message translates to:
-  /// **'Sharing'**
-  String get bugReportSharing;
-
   /// Simple Mode Settings › Rig › Storage block: button, check the disk's filesystem
   ///
   /// In en, this message translates to:
