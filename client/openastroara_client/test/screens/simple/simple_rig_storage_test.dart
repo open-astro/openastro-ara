@@ -419,7 +419,7 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('Erase and Use Disk is dark on its amber, past 4.5:1', (tester) async {
+  testWidgets('Erase and Use Disk is the destructive red, past 4.5:1', (tester) async {
     await _pump(tester, theme: buildAraTheme());
     await _tap(tester, find.byKey(const Key('simple-storage-choose')));
     await _tap(tester, find.text('PHOTOS'));
@@ -428,7 +428,9 @@ void main() {
     final erase = find.widgetWithText(FilledButton, 'Erase and Use Disk');
     final label = tester.widget<RichText>(find.descendant(of: erase, matching: find.byType(RichText)).first);
     final a = label.text.style!.color!.computeLuminance();
-    final b = AraColors.accentBusy.computeLuminance();
+    final style = tester.widget<FilledButton>(erase).style!;
+    expect(style.backgroundColor!.resolve({}), AraColors.emergencyStop);
+    final b = AraColors.emergencyStop.computeLuminance();
     final ratio = (math.max(a, b) + .05) / (math.min(a, b) + .05);
     expect(ratio, greaterThanOrEqualTo(4.5));
   });

@@ -355,8 +355,8 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
       FilledButton(
         style: _needsErase
             ? FilledButton.styleFrom(
-                backgroundColor: AraColors.accentBusy,
-                foregroundColor: AraColors.bgPrimary,
+                backgroundColor: AraColors.emergencyStop,
+                foregroundColor: AraColors.onEmergencyStop,
                 minimumSize: _minSize,
               )
             : _inline

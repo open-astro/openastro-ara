@@ -5,6 +5,7 @@ import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/equipment_connection_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/equipment/alpaca_chooser_dialog.dart';
 import 'package:openastroara/widgets/inline_choices.dart';
 
@@ -104,6 +105,11 @@ void main() {
     await pumpChooser(tester);
     expect(tester.takeAnnouncements().map((a) => a.message), contains('Choose Camera'));
     expect(FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<AlpacaDeviceChooser>(), isNotNull);
+  });
+
+  testWidgets('a failed discovery shows the red error icon', (tester) async {
+    await pumpChooser(tester);
+    expect(tester.widget<Icon>(find.byIcon(Icons.error_outline)).color, AraColors.accentError);
   });
 
   testWidgets('a refused discovery says so in plain words and fits a phone', (tester) async {

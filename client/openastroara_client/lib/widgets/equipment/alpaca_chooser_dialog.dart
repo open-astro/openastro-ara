@@ -276,7 +276,7 @@ class _ErrorState extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Icon(Icons.error_outline,
-              size: 48, color: AraColors.accentBusy),
+              size: 48, color: AraColors.accentError),
           const SizedBox(height: 12),
           Text(
             context.l10n.deviceChooserFailed,
