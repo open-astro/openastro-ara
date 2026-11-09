@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../services/profile_api.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/simple_messages_state.dart';
+import '../../../state/simple_mode_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/storage_settings_state.dart';
 import '../../../services/storage_space_api.dart';
@@ -725,7 +726,10 @@ class _CheckDiskButtonState extends ConsumerState<StorageCheckDiskButton> {
       notify(
         outcome.success
             ? (outcome.code == 'repaired'
-                  ? l10n.storageCheckRepaired
+                  // Simple Mode has no Find frames on disk to point at.
+                  ? ref.read(simpleModeActiveProvider)
+                        ? l10n.storageCheckRepairedSimple
+                        : l10n.storageCheckRepaired
                   : l10n.storageCheckClean)
             : l10n.storageCheckFailed(outcome.detail ?? outcome.code),
         error: !outcome.success,

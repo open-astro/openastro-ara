@@ -20,6 +20,7 @@ import 'package:openastroara/widgets/storage/storage_drive_dialog.dart';
 class _FakeApi extends StorageDevicesApi {
   _FakeApi() : super(_server);
   final calls = <String>[];
+  String checkCode = 'clean';
   StorageConfigureOutcome eject_ = const StorageConfigureOutcome(
     success: true,
     code: 'ejected',
@@ -28,7 +29,7 @@ class _FakeApi extends StorageDevicesApi {
   @override
   Future<StorageConfigureOutcome> check({required String uuid}) async {
     calls.add('check $uuid');
-    return const StorageConfigureOutcome(success: true, code: 'clean');
+    return StorageConfigureOutcome(success: true, code: checkCode);
   }
 
   @override
@@ -234,6 +235,25 @@ void main() {
     await _tap(tester, find.byKey(const Key('simple-storage-check-ask-confirm')));
     expect(c.read(simpleMessagesProvider).first.title, 'Disco verificado: sem problemas.');
     await tester.pump(kSimpleResultLife);
+  });
+
+  testWidgets('a repaired disk in Simple Mode names no full UI button', (tester) async {
+    final (c, api) = await _pump(tester);
+    api.checkCode = 'repaired';
+    await _tap(tester, find.byKey(const Key('simple-storage-check')));
+    await _tap(tester, find.byKey(const Key('simple-storage-check-ask-confirm')));
+    expect(c.read(simpleMessagesProvider).single.title, 'Disk checked — repairs were made.');
+    await tester.pump(kSimpleResultLife);
+  });
+
+  testWidgets('the full UI still points a repaired disk at Find frames on disk', (tester) async {
+    final (c, api) = await _pump(tester, simple: false, child: StorageCheckDiskButton(label: 'Check', confirm: () async => true));
+    c.listen(storageDevicesProvider, (_, _) {}); // the button only reads what the panel keeps loaded
+    await tester.pump();
+    api.checkCode = 'repaired';
+    await tester.tap(find.text('Check'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Find frames on disk'), findsOneWidget);
   });
 
   testWidgets('a refused Eject is an error pill', (tester) async {

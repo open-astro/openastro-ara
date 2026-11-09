@@ -5726,6 +5726,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Another client took control of the observatory, so this client was disconnected. The running sequence is unaffected — it continues on Ara.'**
   String get sessionTransferredDetail;
+
+  /// Check disk result in Simple Mode, which has no Find frames on disk button
+  ///
+  /// In en, this message translates to:
+  /// **'Disk checked — repairs were made.'**
+  String get storageCheckRepairedSimple;
 }
 
 class _AppLocalizationsDelegate

@@ -524,7 +524,7 @@ void main() {
   testWidgets("the card's own words are in Brazilian Portuguese", (tester) async {
     await tester.pumpWidget(_host(_FakeBugReportClient(), simple: true, locale: const Locale('pt', 'BR')));
     await tester.pumpAndSettle();
-    for (final words in ['Enviar um relatório de erro', 'Abrange: ', 'Compartilhar: ', 'Última noite (equipamento inteiro)', 'Incluir tudo', 'Preparar e baixar']) {
+    for (final words in ['Enviar um relatório de erro', 'Abrange: ', 'Compartilhar: ', 'Última noite (setup inteiro)', 'Incluir tudo', 'Preparar e baixar']) {
       expect(find.text(words), findsOneWidget, reason: words);
     }
     expect(find.text('Send me a bug report'), findsNothing);

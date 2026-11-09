@@ -780,7 +780,7 @@
   "albumImageThis": "Fotografar este alvo",
   "albumAddTime": "Adicionar mais tempo",
   "albumLoadFailed": "Não foi possível carregar o álbum: {reason}",
-  "albumNoServer": "Conecte-se a um equipamento para preencher o álbum",
+  "albumNoServer": "Conecte-se a um setup para preencher o álbum",
   "albumCardSemantics": "{label} {name}, {state}",
   "albumFilterAll": "Todos",
   "albumFilterCollected": "Coletados",
@@ -796,7 +796,7 @@
   "shellStorageInternal": "Armazenamento interno",
   "shellStorageFreeOf": "{free} livres de {total}",
   "shellStorageNotPlugged": "Nenhum disco conectado. Não é possível salvar os quadros.",
-  "shellStorageUnreadable": "Não foi possível ler o armazenamento do equipamento. Não é possível salvar os quadros.",
+  "shellStorageUnreadable": "Não foi possível ler o armazenamento do setup. Não é possível salvar os quadros.",
   "shellStorageFull": "O disco está cheio. Não é possível salvar os quadros.",
   "shellStorageChoose": "Escolher disco",
   "shellStorageEject": "Ejetar",
@@ -904,9 +904,9 @@
   "bugCardAppLog": "Log de erros deste aplicativo",
   "bugCardPrepare": "Preparar e baixar",
   "bugCardSaveLog": "Salvar log do cliente",
-  "bugRangeNight": "Última noite (equipamento inteiro)",
-  "bugRange3Days": "Últimos 3 dias (equipamento inteiro)",
-  "bugRange7Days": "Últimos 7 dias (equipamento inteiro)",
+  "bugRangeNight": "Última noite (setup inteiro)",
+  "bugRange3Days": "Últimos 3 dias (setup inteiro)",
+  "bugRange7Days": "Últimos 7 dias (setup inteiro)",
   "bugRangeAraOnly": "Somente logs do Ara",
   "bugModeFull": "Incluir tudo",
   "bugModeFullNote": "melhor para depuração",
@@ -937,5 +937,6 @@
   "storageCheckFailed": "Falha na verificação: {reason}",
   "storageCheckAction": "verificar o disco",
   "sessionTransferredTitle": "Sessão transferida",
-  "sessionTransferredDetail": "Outro cliente assumiu o controle do observatório, então este cliente foi desconectado. A sequência em andamento não é afetada e continua no Ara."
+  "sessionTransferredDetail": "Outro cliente assumiu o controle do observatório, então este cliente foi desconectado. A sequência em andamento não é afetada e continua no Ara.",
+  "storageCheckRepairedSimple": "Disco verificado, com reparos."
 }

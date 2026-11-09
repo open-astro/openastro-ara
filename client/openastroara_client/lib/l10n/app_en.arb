@@ -4529,5 +4529,9 @@
   "sessionTransferredDetail": "Another client took control of the observatory, so this client was disconnected. The running sequence is unaffected — it continues on Ara.",
   "@sessionTransferredDetail": {
     "description": "Another client took control"
+  },
+  "storageCheckRepairedSimple": "Disk checked — repairs were made.",
+  "@storageCheckRepairedSimple": {
+    "description": "Check disk result in Simple Mode, which has no Find frames on disk button"
   }
 }

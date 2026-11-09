@@ -3353,4 +3353,7 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get sessionTransferredDetail =>
       'Another client took control of the observatory, so this client was disconnected. The running sequence is unaffected — it continues on Ara.';
+
+  @override
+  String get storageCheckRepairedSimple => 'Disk checked — repairs were made.';
 }

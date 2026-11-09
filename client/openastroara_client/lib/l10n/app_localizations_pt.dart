@@ -3353,6 +3353,9 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get sessionTransferredDetail =>
       'Another client took control of the observatory, so this client was disconnected. The running sequence is unaffected — it continues on Ara.';
+
+  @override
+  String get storageCheckRepairedSimple => 'Disk checked — repairs were made.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -6150,8 +6153,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String get albumNoServer =>
-      'Conecte-se a um equipamento para preencher o álbum';
+  String get albumNoServer => 'Conecte-se a um setup para preencher o álbum';
 
   @override
   String albumCardSemantics(String label, String name, String state) {
@@ -6225,7 +6227,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get shellStorageUnreadable =>
-      'Não foi possível ler o armazenamento do equipamento. Não é possível salvar os quadros.';
+      'Não foi possível ler o armazenamento do setup. Não é possível salvar os quadros.';
 
   @override
   String get shellStorageFull =>
@@ -6614,13 +6616,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get bugCardSaveLog => 'Salvar log do cliente';
 
   @override
-  String get bugRangeNight => 'Última noite (equipamento inteiro)';
+  String get bugRangeNight => 'Última noite (setup inteiro)';
 
   @override
-  String get bugRange3Days => 'Últimos 3 dias (equipamento inteiro)';
+  String get bugRange3Days => 'Últimos 3 dias (setup inteiro)';
 
   @override
-  String get bugRange7Days => 'Últimos 7 dias (equipamento inteiro)';
+  String get bugRange7Days => 'Últimos 7 dias (setup inteiro)';
 
   @override
   String get bugRangeAraOnly => 'Somente logs do Ara';
@@ -6733,4 +6735,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get sessionTransferredDetail =>
       'Outro cliente assumiu o controle do observatório, então este cliente foi desconectado. A sequência em andamento não é afetada e continua no Ara.';
+
+  @override
+  String get storageCheckRepairedSimple => 'Disco verificado, com reparos.';
 }
