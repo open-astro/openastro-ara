@@ -49,6 +49,7 @@ at the top. This happens in the same commit that pushes the release tag.
 - The bedtime check counts only tonight's unresolved faults and names the device (#1714).
 - A Plan waiting for its start time can now be paused at once, and goes back to waiting on Resume.
 - Night done has one action, New plan; the left rail already opens the Library.
+- Simple Mode has no popups: confirmations and choices are inline, and every notification is a message pill.
 - On a Mac in full screen, changing profile no longer shrinks the app to the profile window's size.
 - The cooling fan is chosen in the profile, by switch and port, on any driver, not found by the device name "Thermal Switch". **Every existing profile has no fan following the cooler until you choose one**; a pill asks once (#1700).
 
