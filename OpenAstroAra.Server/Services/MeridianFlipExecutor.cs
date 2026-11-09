@@ -248,9 +248,11 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
                 if (recalibrateGuider) {
                     progress.Report(new ApplicationStatus { Source = "MeridianFlip", Status = "Recalibrating the guider" });
                     if (!await guiderMediator.RecalibrateAndGuide(progress, token)) {
-                        // The flip worked, so no safe rest: the false return only pauses the run for the user.
+                        // The flip worked, so no safe rest: the trigger records the flip and pauses the run.
                         Logger.Error("Meridian Flip - Guiding did not come back on a new or an earlier calibration.");
-                        return false;
+                        await NotifyCritical("Guiding did not come back after the flip",
+                            "The mount flipped, but the guider could not calibrate and has no earlier calibration. The run is paused awaiting your attention.");
+                        throw new GuidingNotRestoredException();
                     }
                 } else {
                     await ResumeAutoguider(guiderMode == MeridianFlipPolicy.GuiderFull, progress, token);
@@ -282,7 +284,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
                 TryRestoreTracking();
             }
             throw;
-        } catch (Exception ex) {
+        } catch (Exception ex) when (ex is not GuidingNotRestoredException) {
             // A failed flip suspends the sequence: the trigger arms the pause gate as
             // AwaitingUser on our false return (§58.12), so the run sits resumable once
             // the user sorts the rig out (it halts outright only when no gate is wired).

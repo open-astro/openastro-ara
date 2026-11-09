@@ -142,6 +142,27 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
             Assert.That(sut.Forecast(ForecastNow).State, Is.Not.EqualTo(MeridianFlipStates.Flipping));
         }
 
+        [Test]
+        public async Task A_flip_whose_guiding_did_not_come_back_pauses_and_does_not_flip_again_on_resume() {
+            // #1716: the mount has flipped, and a quick resume is still inside the flip window.
+            SetFlipWindow(after: 5, maxAfter: 20);
+            SetTelescope(0.2);
+            telescopeMediatorMock.Setup(x => x.GetCurrentPosition())
+                .Returns(new Coordinates(Angle.ByHours(5), Angle.ByDegree(20), Epoch.J2000));
+            executorMock.Setup(x => x.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<TimeSpan>(), true,
+                It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).ThrowsAsync(new GuidingNotRestoredException());
+            var gate = new PauseGate();
+            var root = new SequenceRootContainer { PauseGate = gate };
+            var sut = CreateSUT();
+            sut.RecalibrateGuider = true;
+            Assert.That(sut.ShouldTrigger(null, null), Is.True, "precondition: this window fires");
+
+            await sut.Execute(root, new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(gate.PendingKind, Is.EqualTo(PauseKind.AwaitingUser));
+            Assert.That(sut.ShouldTrigger(null, null), Is.False, "the flip happened: a resume must not flip again");
+        }
+
         [TestCase(true)]
         [TestCase(false)]
         public async Task The_trigger_passes_on_whether_the_plan_recalibrates_the_guider(bool recalibrate) {

@@ -186,6 +186,11 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
                 success = RecalibrateGuider
                     ? await executor.MeridianFlip(target, timeToFlip, recalibrateGuider: true, progress, token)
                     : await executor.MeridianFlip(target, timeToFlip, progress, token);
+            } catch (GuidingNotRestoredException) {
+                // #1716: the mount did flip, so record it; a resume inside the window must not flip it again.
+                lastFlipTime = DateTime.Now;
+                lastFlipCoordinates = target;
+                success = false;
             } finally {
                 _flipping = false;
             }

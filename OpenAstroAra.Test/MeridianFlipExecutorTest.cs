@@ -26,6 +26,7 @@ using OpenAstroAra.Equipment.Equipment.MyCamera;
 using OpenAstroAra.Equipment.Equipment.MyFocuser;
 using OpenAstroAra.PlateSolving;
 using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Sequencer.Trigger.MeridianFlip;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 // Both the server contracts and the equipment interfaces define a DeviceType; the §58.9
@@ -207,9 +208,10 @@ namespace OpenAstroAra.Test {
             SetupProfile(recenter: false);
             SetupRecalibrateAndGuide(false);
 
-            var ok = await CreateSUT().MeridianFlip(Target, TimeSpan.Zero, recalibrateGuider: true, Progress, CancellationToken.None);
+            await Assert.ThatAsync(
+                () => CreateSUT().MeridianFlip(Target, TimeSpan.Zero, recalibrateGuider: true, Progress, CancellationToken.None),
+                Throws.TypeOf<GuidingNotRestoredException>());
 
-            Assert.That(ok, Is.False);
             Assert.That(callLog.Last(), Is.EqualTo(RecalibrateAndGuide));
         }
 
@@ -859,6 +861,23 @@ namespace OpenAstroAra.Test {
             Assert.That(n.Message, Does.Contain("paused awaiting your attention"));
             Assert.That(n.Message, Does.Not.Contain("could NOT be resumed"),
                 "the guider resume succeeded here, so the message must not cry wolf");
+        }
+
+        [Test]
+        public async Task A_flip_that_cannot_get_guiding_back_tells_the_user_the_run_is_paused() {
+            // #1716: nobody is watching at the meridian.
+            SetupProfile(recenter: false);
+            SetupSafety(Safety(enabled: false));
+            SetupRecalibrateAndGuide(false);
+            var sut = CreateSafetySUT();
+
+            await Assert.ThatAsync(
+                () => sut.MeridianFlip(Target, TimeSpan.Zero, recalibrateGuider: true, Progress, CancellationToken.None),
+                Throws.TypeOf<GuidingNotRestoredException>());
+
+            var n = published.Single();
+            Assert.That(n.Severity, Is.EqualTo(NotificationSeverity.Critical));
+            Assert.That(n.Message, Does.Contain("paused"));
         }
 
         [Test]
