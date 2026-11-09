@@ -706,8 +706,8 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             }
             ObserveProbeIfLive(client, probeSucceeded: true);
             var runtime = ReadRuntime(client, out var readError, out var slewingUnknown);
-            // #1732 — asked only when tracking reads off, so a healthy mount's poll is unchanged.
-            var pulseGuiding = !runtime.Tracking && ReadPulseGuiding(client);
+            // #1732 — asked only while tracking reads off on an unparked mount; the watch ignores a parked one.
+            var pulseGuiding = !runtime.Tracking && !runtime.Parked && ReadPulseGuiding(client);
             bool readPierSide;
             lock (_gate) {
                 readPierSide = !_sideOfPierUnsupported;

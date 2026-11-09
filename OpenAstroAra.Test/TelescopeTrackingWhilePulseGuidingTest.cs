@@ -124,6 +124,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_parked_mount_is_not_asked_about_pulses() {
+            await using var box = ScriptedAlpacaDevice.Start(path =>
+                path.EndsWith("/connected", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/slewing", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/tracking", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/ispulseguiding", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/atpark", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/athome", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/rightascension", StringComparison.Ordinal) ? "6.0"
+                : path.EndsWith("/declination", StringComparison.Ordinal) ? "6.0"
+                : null);
+            var hub = new EquipmentFaultHub(Mock.Of<IWsBroadcaster>());
+            using var svc = new TelescopeService(faults: hub) { RefreshPeriod = Tick };
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForAsync(() => Reads(box, "tracking") >= 5, "the refresh never ran");
+
+            Assert.That(Reads(box, "ispulseguiding"), Is.Zero);
+        }
+
+        [Test]
         public void A_pulse_tick_holds_the_streak_instead_of_clearing_it() {
             var watch = new MountTrackingWatch(threshold: 3, graceTicks: 0);
             watch.Observe(tracking: true, slewing: false, parked: false);
