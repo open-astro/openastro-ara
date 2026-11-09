@@ -26,7 +26,7 @@ Future<void> showAlpacaChooserDialog(
 }) {
   return showDialog<void>(
     context: context,
-    builder: (_) => _AlpacaChooserDialog(
+    builder: (_) => AlpacaDeviceChooser(
       type: type,
       deviceTypeLabel: deviceTypeLabel,
       onPick: onPick,
@@ -34,23 +34,35 @@ Future<void> showAlpacaChooserDialog(
   );
 }
 
-class _AlpacaChooserDialog extends ConsumerStatefulWidget {
+/// The discovery list: a dialog's body, or laid out in place when the host
+/// passes [onClose] (Simple Mode has no popups).
+class AlpacaDeviceChooser extends ConsumerStatefulWidget {
   final EquipmentDeviceType type;
   final String deviceTypeLabel;
   final void Function(DiscoveredDevice device)? onPick;
 
-  const _AlpacaChooserDialog({
+  /// Inline: closes it, on Cancel or after a pick.
+  final VoidCallback? onClose;
+
+  const AlpacaDeviceChooser({
+    super.key,
     required this.type,
     required this.deviceTypeLabel,
     this.onPick,
+    this.onClose,
   });
 
   @override
-  ConsumerState<_AlpacaChooserDialog> createState() =>
-      _AlpacaChooserDialogState();
+  ConsumerState<AlpacaDeviceChooser> createState() =>
+      _AlpacaDeviceChooserState();
 }
 
-class _AlpacaChooserDialogState extends ConsumerState<_AlpacaChooserDialog> {
+class _AlpacaDeviceChooserState extends ConsumerState<AlpacaDeviceChooser> {
+  bool get _inline => widget.onClose != null;
+
+  void _close() =>
+      _inline ? widget.onClose!() : Navigator.of(context).pop();
+
   late Future<List<DiscoveredDevice>> _future;
 
   @override
@@ -81,60 +93,72 @@ class _AlpacaChooserDialogState extends ConsumerState<_AlpacaChooserDialog> {
     } else {
       ref.read(alpacaSelectionProvider.notifier).select(widget.type, device);
     }
-    Navigator.of(context).pop();
+    _close();
   }
+
+  Widget _list() => FutureBuilder<List<DiscoveredDevice>>(
+    future: _future,
+    builder: (context, snap) {
+      if (snap.connectionState == ConnectionState.waiting) {
+        return const Center(heightFactor: 2, child: CircularProgressIndicator());
+      }
+      if (snap.hasError) {
+        return _ErrorState(error: snap.error, onRetry: _refresh);
+      }
+      final devices = snap.data ?? const <DiscoveredDevice>[];
+      if (devices.isEmpty) {
+        return const _EmptyState();
+      }
+      return ListView.separated(
+        shrinkWrap: _inline,
+        itemCount: devices.length,
+        separatorBuilder: (_, _) =>
+            const Divider(height: 1, color: AraColors.border),
+        itemBuilder: (_, i) => _DeviceTile(
+          device: devices[i],
+          onTap: () => _pick(devices[i]),
+        ),
+      );
+    },
+  );
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Row(
-        children: [
-          Text('Choose ${widget.deviceTypeLabel}'),
-          const Spacer(),
-          IconButton(
-            tooltip: 'Re-scan',
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
-      content: SizedBox(
-        width: 480,
-        height: 320,
-        child: FutureBuilder<List<DiscoveredDevice>>(
-          future: _future,
-          builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snap.hasError) {
-              return _ErrorState(
-                error: snap.error,
-                onRetry: _refresh,
-              );
-            }
-            final devices = snap.data ?? const <DiscoveredDevice>[];
-            if (devices.isEmpty) {
-              return const _EmptyState();
-            }
-            return ListView.separated(
-              itemCount: devices.length,
-              separatorBuilder: (_, _) =>
-                  const Divider(height: 1, color: AraColors.border),
-              itemBuilder: (_, i) => _DeviceTile(
-                device: devices[i],
-                onTap: () => _pick(devices[i]),
+    final title = Text('Choose ${widget.deviceTypeLabel}');
+    final rescan = IconButton(
+      tooltip: 'Re-scan',
+      onPressed: _refresh,
+      icon: const Icon(Icons.refresh),
+    );
+    if (_inline) {
+      return Material(
+        type: MaterialType.transparency,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(children: [Expanded(child: title), rescan]),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 320),
+              child: _list(),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                key: const Key('alpaca-chooser-cancel'),
+                style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
+                onPressed: _close,
+                child: const Text('Cancel'),
               ),
-            );
-          },
+            ),
+          ],
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-      ],
+      );
+    }
+    return AlertDialog(
+      title: Row(children: [title, const Spacer(), rescan]),
+      content: SizedBox(width: 480, height: 320, child: _list()),
+      actions: [TextButton(onPressed: _close, child: const Text('Cancel'))],
     );
   }
 }
