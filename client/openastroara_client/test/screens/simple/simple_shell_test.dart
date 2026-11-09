@@ -2694,6 +2694,13 @@ void main() {
       ('Change profile', 'simple-ara-change-profile'),
       ('Licenses', 'simple-ara-licenses'),
     ]) {
+      testWidgets("$name's tint keeps all four round corners: the target's edge does not cut it", (tester) async {
+        await open(tester);
+        final button = find.byKey(Key(key));
+        final material = find.descendant(of: button, matching: find.byType(Material)).first;
+        expect(tester.widget<Material>(material).clipBehavior, Clip.none);
+      });
+
       testWidgets('hovering $name highlights its word, not the whole 44 pt target', (tester) async {
         await open(tester);
         final button = find.byKey(Key(key));

@@ -4274,6 +4274,8 @@ class _ChangeRow extends StatelessWidget {
       // A plain blue "Change"; a screen reader hears what it changes.
       TextButton(
         key: buttonKey,
+        // A foreground builder turns clipping on, which cuts the tint's corners.
+        clipBehavior: Clip.none,
         style: _linkStyle(
           alignment: switch (linePlace) {
             CrossAxisAlignment.end => Alignment.bottomCenter,
@@ -4389,6 +4391,8 @@ class _AraSheet extends ConsumerWidget {
               title: kAppName,
               titleAction: TextButton(
                 key: const Key('simple-ara-licenses'),
+                // A foreground builder turns clipping on, which cuts the tint's corners.
+                clipBehavior: Clip.none,
                 style: _linkStyle(),
                 onPressed: () {
                   showAppLicenses(context, version);
