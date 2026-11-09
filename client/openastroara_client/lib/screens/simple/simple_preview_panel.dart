@@ -871,6 +871,12 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
   }
 
   @override
+  void didUpdateWidget(SimplePresetTile<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_open && widget.onSelected == null) _toggle();
+  }
+
+  @override
   void dispose() {
     _wheel?.dispose();
     super.dispose();
@@ -879,6 +885,9 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
   @override
   Widget build(BuildContext context) {
     final items = _items;
+    final enabled = widget.onSelected != null;
+    // Null keeps each text's own colour.
+    final dim = enabled ? null : AraColors.textDisabled;
     // Ink, so the focus and press highlight paints over the fill, not under.
     final tile = ConstrainedBox(
       // At least 48 px; taller when the user's text is larger.
@@ -895,13 +904,13 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
           children: [
             Text(
               widget.label,
-              style: AraText.caption,
+              style: AraText.caption.copyWith(color: dim),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
             Text(
               widget.format(widget.value),
-              style: kSimpleText,
+              style: kSimpleText.copyWith(color: dim),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -923,11 +932,14 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
             button: true,
             expanded: _open,
             label: widget.label,
+            value: widget.format(widget.value),
+            enabled: enabled,
             // An InkWell, not a bare tap: Tab reaches it and Enter opens it.
             child: InkWell(
               borderRadius: BorderRadius.circular(10),
-              onTap: widget.onSelected == null ? null : _toggle,
-              child: tile,
+              onTap: enabled ? _toggle : null,
+              // The label and value above say it once.
+              child: ExcludeSemantics(child: tile),
             ),
           ),
         ),

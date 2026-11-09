@@ -2914,6 +2914,297 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get planFlatsPanel => 'Panel';
+
+  @override
+  String get shellStorageReading => 'Checking the disk…';
+
+  @override
+  String get shellStorageUnknownDisk => 'Unknown disk';
+
+  @override
+  String get storageDiskChooseTitle => 'Choose a disk for your frames';
+
+  @override
+  String get storageDiskRescan => 'Rescan';
+
+  @override
+  String get storageDiskUse => 'Use Disk';
+
+  @override
+  String get storageDiskEraseUse => 'Erase and Use Disk';
+
+  @override
+  String get storageDiskNoneFound =>
+      'No external disks found.\n\nConnect a USB drive or SSD to the server, then Rescan.';
+
+  @override
+  String get storageDiskInUse => 'In use';
+
+  @override
+  String get storageDiskEraseChange => 'Erase and change format';
+
+  @override
+  String storageDiskEraseChangeNote(String fileSystem) {
+    return 'This disk already works as a store ($fileSystem). Turn this on only to reformat it — everything on it will be lost.';
+  }
+
+  @override
+  String get storageDiskMustErase => 'This disk must be erased';
+
+  @override
+  String get storageDiskMustEraseNote =>
+      'ARA saves frames in a format this disk doesn\'t use, so it has to be erased first. Everything on it will be lost.';
+
+  @override
+  String get storageDiskExfat => 'exFAT — take the drive with you';
+
+  @override
+  String get storageDiskExfatNote =>
+      'Plugs straight into Windows and Mac at home. After a power cut, run Check disk.';
+
+  @override
+  String get storageDiskExt4 => 'ext4 — drive lives on the rig';
+
+  @override
+  String get storageDiskExt4Note =>
+      'Journaled (self-healing after power cuts). Readable on Linux computers; Windows and Mac can\'t read it — frames arrive there via the backup mirror.';
+
+  @override
+  String storageDiskTypeLabel(String label) {
+    return 'Type “$label” to confirm:';
+  }
+
+  @override
+  String get storageDiskTypeErase =>
+      'This disk has no label — type ERASE to confirm:';
+
+  @override
+  String get storageDiskErasing => 'Erasing and connecting the disk…';
+
+  @override
+  String get storageDiskConnecting => 'Connecting the disk…';
+
+  @override
+  String storageDiskNowUsed(String name) {
+    return '$name is now used for frames.';
+  }
+
+  @override
+  String get storageDiskReadAction => 'read the server\'s disks';
+
+  @override
+  String get storageConfigureNotExt4 =>
+      'This disk needs to be erased before ARA can use it.';
+
+  @override
+  String get storageConfigureLabelMismatch =>
+      'The disk changed since the list was loaded. Rescan and try again.';
+
+  @override
+  String get storageConfigurePreviousBusy =>
+      'The disk frames are saved to now is in use, so ARA can\'t switch away from it. Close anything reading it, then try again.';
+
+  @override
+  String get storageConfigureBusy =>
+      'The disk is in use. Close anything reading it, then try again.';
+
+  @override
+  String get storageConfigureSystemDisk =>
+      'That disk holds the server\'s operating system and can\'t be used.';
+
+  @override
+  String get storageConfigureDisconnected =>
+      'The disk disconnected. Reconnect it and rescan.';
+
+  @override
+  String get storageConfigureHelperMissing =>
+      'The server is missing part of its installation. Reinstall openastroara-server.';
+
+  @override
+  String get storageConfigureMkfsFailed =>
+      'Erasing the disk failed. See the server log for details.';
+
+  @override
+  String get storageConfigureMountFailed =>
+      'The disk was prepared but could not be connected.';
+
+  @override
+  String storageConfigureFailed(String name) {
+    return 'Could not use $name.';
+  }
+
+  @override
+  String get storageCheckTitle => 'Check the store drive?';
+
+  @override
+  String get storageCheckBody =>
+      'The drive is briefly taken offline while its filesystem is verified and repaired if needed. Takes seconds to a couple of minutes; capture must be idle.';
+
+  @override
+  String get storageNoDriveEject => 'No store drive to eject.';
+
+  @override
+  String get storageNoDriveCheck =>
+      'No store drive to check — connect one first.';
+
+  @override
+  String deviceChooserTitle(String type) {
+    return 'Choose $type';
+  }
+
+  @override
+  String get deviceChooserRescan => 'Re-scan';
+
+  @override
+  String get deviceChooserManualWheel =>
+      'No driver: you swap filters by hand and Ara asks for each one';
+
+  @override
+  String get deviceChooserNoneTitle => 'No devices found';
+
+  @override
+  String get deviceChooserNoneBody =>
+      'No Alpaca responder answered on Ara\'s subnet — most often AlpacaBridge (ARA\'s equipment hub) is not installed or its service is stopped. On Ara host, check:';
+
+  @override
+  String get deviceChooserOtherHost =>
+      'A driver on another host must be reachable from Ara\'s subnet (UDP 32227).';
+
+  @override
+  String get deviceChooserFailed => 'Discovery failed';
+
+  @override
+  String get deviceChooserRetry => 'Retry';
+
+  @override
+  String get deviceChooserNotConnected =>
+      'Not connected — connect to your rig to save this.';
+
+  @override
+  String get bugReviewTitle => 'Before you share this bug report';
+
+  @override
+  String get bugReviewDownload => 'Download anyway';
+
+  @override
+  String get bugReviewContains => 'The bundle contains:';
+
+  @override
+  String get bugReviewNoSources => '• Ara\'s recent log files';
+
+  @override
+  String get bugReviewProfileRedacted =>
+      '• your profile with coordinates, serial numbers, hostnames, usernames in paths, private network addresses and tokens scrubbed';
+
+  @override
+  String get bugReviewProfileCoarse =>
+      '• your profile with the site rounded to ~111 km — it may still include equipment credentials, API / notification tokens and network addresses';
+
+  @override
+  String get bugReviewProfileFull =>
+      '• your full profile — which may include equipment credentials, API / notification tokens, precise observatory coordinates, and network addresses';
+
+  @override
+  String get bugReviewSystemRedacted =>
+      '• system info, with this device\'s username scrubbed from its path';
+
+  @override
+  String get bugReviewSystemFull =>
+      '• system info, including this device\'s filesystem path';
+
+  @override
+  String get bugReviewClientLog =>
+      '• this app\'s own error log, saved as a separate file beside the ZIP';
+
+  @override
+  String bugReviewSize(String size) {
+    return 'Approximate size: $size.';
+  }
+
+  @override
+  String get bugReviewTrust =>
+      'Only share it with people you trust (e.g. the developers) — treat it like a password.';
+
+  @override
+  String get bugReviewNone => 'none';
+
+  @override
+  String get bugReviewOneFile => '1 file';
+
+  @override
+  String bugReviewFiles(String count) {
+    return '$count files';
+  }
+
+  @override
+  String get bugReviewCut => ', the largest cut to their newest part';
+
+  @override
+  String get bugSourceAra => 'Ara\'s own logs';
+
+  @override
+  String get bugSourceAraNina => 'Ara\'s NINA-layer logs';
+
+  @override
+  String get bugSourceAlpacaBridge =>
+      'AlpacaBridge logs (camera, mount, focuser, wheel)';
+
+  @override
+  String get bugSourceGuider => 'guider (PHD2) debug and guide logs';
+
+  @override
+  String get bugSourceSystem => 'package install history';
+
+  @override
+  String get bugSourceJournal =>
+      'system journal (Ara, AlpacaBridge, the guider, the kernel)';
+
+  @override
+  String takeoverWants(String name) {
+    return '$name wants to connect';
+  }
+
+  @override
+  String get takeoverDetail =>
+      'Only one client can control the observatory at a time. Allowing hands control to the other client and disconnects this one; the running sequence continues either way.';
+
+  @override
+  String get takeoverKeep => 'Keep me connected';
+
+  @override
+  String get takeoverAllow => 'Allow';
+
+  @override
+  String filterSwapInstall(String target) {
+    return 'Install the $target filter';
+  }
+
+  @override
+  String filterSwapDetail(String target) {
+    return 'Swap in $target, then confirm. A run waiting on it continues when you do.';
+  }
+
+  @override
+  String filterSwapDetailFrom(String current, String target) {
+    return 'Take out $current and swap in $target, then confirm. A run waiting on it continues when you do.';
+  }
+
+  @override
+  String get filterSwapCancel => 'Cancel swap';
+
+  @override
+  String get filterSwapLater => 'Later';
+
+  @override
+  String filterSwapIsIn(String target) {
+    return '$target is in';
+  }
+
+  @override
+  String get filterSwapCouldntConfirm => 'Couldn\'t confirm the filter';
+
+  @override
+  String get filterSwapCouldntCancel => 'Couldn\'t cancel the swap';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -5854,4 +6145,296 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get planFlatsPanel => 'Painel';
+
+  @override
+  String get shellStorageReading => 'Verificando o disco…';
+
+  @override
+  String get shellStorageUnknownDisk => 'Disco desconhecido';
+
+  @override
+  String get storageDiskChooseTitle => 'Escolha um disco para os seus quadros';
+
+  @override
+  String get storageDiskRescan => 'Procurar de novo';
+
+  @override
+  String get storageDiskUse => 'Usar disco';
+
+  @override
+  String get storageDiskEraseUse => 'Apagar e usar disco';
+
+  @override
+  String get storageDiskNoneFound =>
+      'Nenhum disco externo encontrado.\n\nConecte um pen drive ou SSD ao servidor e toque em Procurar de novo.';
+
+  @override
+  String get storageDiskInUse => 'Em uso';
+
+  @override
+  String get storageDiskEraseChange => 'Apagar e mudar o formato';
+
+  @override
+  String storageDiskEraseChangeNote(String fileSystem) {
+    return 'Este disco já funciona para salvar quadros ($fileSystem). Ative somente para reformatá-lo: tudo o que estiver nele será perdido.';
+  }
+
+  @override
+  String get storageDiskMustErase => 'Este disco precisa ser apagado';
+
+  @override
+  String get storageDiskMustEraseNote =>
+      'O ARA salva quadros em um formato que este disco não usa, então ele precisa ser apagado primeiro. Tudo o que estiver nele será perdido.';
+
+  @override
+  String get storageDiskExfat => 'exFAT — leve o disco com você';
+
+  @override
+  String get storageDiskExfatNote =>
+      'Conecta direto no Windows e no Mac em casa. Depois de uma queda de energia, use Verificar disco.';
+
+  @override
+  String get storageDiskExt4 => 'ext4 — o disco fica no setup';
+
+  @override
+  String get storageDiskExt4Note =>
+      'Com journaling (se recupera sozinho após quedas de energia). Legível em computadores Linux; Windows e Mac não leem este formato, e os quadros chegam a eles pelo espelho de backup.';
+
+  @override
+  String storageDiskTypeLabel(String label) {
+    return 'Digite “$label” para confirmar:';
+  }
+
+  @override
+  String get storageDiskTypeErase =>
+      'Este disco não tem rótulo. Digite ERASE para confirmar:';
+
+  @override
+  String get storageDiskErasing => 'Apagando e conectando o disco…';
+
+  @override
+  String get storageDiskConnecting => 'Conectando o disco…';
+
+  @override
+  String storageDiskNowUsed(String name) {
+    return '$name agora é usado para os quadros.';
+  }
+
+  @override
+  String get storageDiskReadAction => 'ler os discos do servidor';
+
+  @override
+  String get storageConfigureNotExt4 =>
+      'Este disco precisa ser apagado antes que o ARA possa usá-lo.';
+
+  @override
+  String get storageConfigureLabelMismatch =>
+      'O disco mudou desde que a lista foi carregada. Procure de novo e tente outra vez.';
+
+  @override
+  String get storageConfigurePreviousBusy =>
+      'O disco onde os quadros são salvos agora está em uso, então o ARA não consegue trocá-lo. Feche o que estiver lendo esse disco e tente de novo.';
+
+  @override
+  String get storageConfigureBusy =>
+      'O disco está em uso. Feche o que estiver lendo esse disco e tente de novo.';
+
+  @override
+  String get storageConfigureSystemDisk =>
+      'Esse disco contém o sistema operacional do servidor e não pode ser usado.';
+
+  @override
+  String get storageConfigureDisconnected =>
+      'O disco foi desconectado. Conecte-o de novo e procure outra vez.';
+
+  @override
+  String get storageConfigureHelperMissing =>
+      'Falta parte da instalação do servidor. Reinstale o openastroara-server.';
+
+  @override
+  String get storageConfigureMkfsFailed =>
+      'Não foi possível apagar o disco. Veja o log do servidor para mais detalhes.';
+
+  @override
+  String get storageConfigureMountFailed =>
+      'O disco foi preparado, mas não pôde ser conectado.';
+
+  @override
+  String storageConfigureFailed(String name) {
+    return 'Não foi possível usar $name.';
+  }
+
+  @override
+  String get storageCheckTitle => 'Verificar o disco de armazenamento?';
+
+  @override
+  String get storageCheckBody =>
+      'O disco fica offline por um momento enquanto o sistema de arquivos é verificado e, se preciso, reparado. Leva de alguns segundos a uns dois minutos; a captura precisa estar parada.';
+
+  @override
+  String get storageNoDriveEject =>
+      'Não há disco de armazenamento para ejetar.';
+
+  @override
+  String get storageNoDriveCheck =>
+      'Não há disco de armazenamento para verificar. Conecte um primeiro.';
+
+  @override
+  String deviceChooserTitle(String type) {
+    return 'Escolher $type';
+  }
+
+  @override
+  String get deviceChooserRescan => 'Procurar de novo';
+
+  @override
+  String get deviceChooserManualWheel =>
+      'Sem driver: você troca os filtros à mão e o Ara pede cada um';
+
+  @override
+  String get deviceChooserNoneTitle => 'Nenhum dispositivo encontrado';
+
+  @override
+  String get deviceChooserNoneBody =>
+      'Nenhum dispositivo Alpaca respondeu na sub-rede do Ara. Na maioria das vezes, o AlpacaBridge (o hub de equipamentos do ARA) não está instalado ou o serviço está parado. No host do Ara, verifique:';
+
+  @override
+  String get deviceChooserOtherHost =>
+      'Um driver em outro host precisa estar acessível a partir da sub-rede do Ara (UDP 32227).';
+
+  @override
+  String get deviceChooserFailed => 'Falha na busca';
+
+  @override
+  String get deviceChooserRetry => 'Tentar de novo';
+
+  @override
+  String get deviceChooserNotConnected =>
+      'Não conectado — conecte-se ao seu setup para salvar.';
+
+  @override
+  String get bugReviewTitle => 'Antes de compartilhar este relatório de erro';
+
+  @override
+  String get bugReviewDownload => 'Baixar mesmo assim';
+
+  @override
+  String get bugReviewContains => 'O pacote contém:';
+
+  @override
+  String get bugReviewNoSources => '• os arquivos de log recentes do Ara';
+
+  @override
+  String get bugReviewProfileRedacted =>
+      '• seu perfil com coordenadas, números de série, nomes de host, nomes de usuário em caminhos, endereços de rede privada e tokens removidos';
+
+  @override
+  String get bugReviewProfileCoarse =>
+      '• seu perfil com o local arredondado para ~111 km; ainda pode incluir credenciais de equipamentos, tokens de API / notificação e endereços de rede';
+
+  @override
+  String get bugReviewProfileFull =>
+      '• seu perfil completo, que pode incluir credenciais de equipamentos, tokens de API / notificação, coordenadas precisas do observatório e endereços de rede';
+
+  @override
+  String get bugReviewSystemRedacted =>
+      '• informações do sistema, sem o nome de usuário deste dispositivo no caminho';
+
+  @override
+  String get bugReviewSystemFull =>
+      '• informações do sistema, incluindo o caminho deste dispositivo no sistema de arquivos';
+
+  @override
+  String get bugReviewClientLog =>
+      '• o log de erros deste aplicativo, salvo em um arquivo separado ao lado do ZIP';
+
+  @override
+  String bugReviewSize(String size) {
+    return 'Tamanho aproximado: $size.';
+  }
+
+  @override
+  String get bugReviewTrust =>
+      'Compartilhe somente com pessoas de confiança (por exemplo, os desenvolvedores) e trate-o como uma senha.';
+
+  @override
+  String get bugReviewNone => 'nenhum';
+
+  @override
+  String get bugReviewOneFile => '1 arquivo';
+
+  @override
+  String bugReviewFiles(String count) {
+    return '$count arquivos';
+  }
+
+  @override
+  String get bugReviewCut => ', os maiores cortados na parte mais recente';
+
+  @override
+  String get bugSourceAra => 'logs do próprio Ara';
+
+  @override
+  String get bugSourceAraNina => 'logs da camada NINA do Ara';
+
+  @override
+  String get bugSourceAlpacaBridge =>
+      'logs do AlpacaBridge (câmera, montagem, focalizador, roda de filtros)';
+
+  @override
+  String get bugSourceGuider => 'logs de depuração e de guiagem do guia (PHD2)';
+
+  @override
+  String get bugSourceSystem => 'histórico de instalação de pacotes';
+
+  @override
+  String get bugSourceJournal =>
+      'journal do sistema (Ara, AlpacaBridge, guia, kernel)';
+
+  @override
+  String takeoverWants(String name) {
+    return '$name quer se conectar';
+  }
+
+  @override
+  String get takeoverDetail =>
+      'Apenas um cliente pode controlar o observatório por vez. Permitir passa o controle para o outro cliente e desconecta este; a sequência em andamento continua de qualquer forma.';
+
+  @override
+  String get takeoverKeep => 'Manter conectado';
+
+  @override
+  String get takeoverAllow => 'Permitir';
+
+  @override
+  String filterSwapInstall(String target) {
+    return 'Coloque o filtro $target';
+  }
+
+  @override
+  String filterSwapDetail(String target) {
+    return 'Coloque $target e confirme. Uma sequência à espera continua quando você confirmar.';
+  }
+
+  @override
+  String filterSwapDetailFrom(String current, String target) {
+    return 'Retire $current, coloque $target e confirme. Uma sequência à espera continua quando você confirmar.';
+  }
+
+  @override
+  String get filterSwapCancel => 'Cancelar troca';
+
+  @override
+  String get filterSwapLater => 'Depois';
+
+  @override
+  String filterSwapIsIn(String target) {
+    return '$target colocado';
+  }
+
+  @override
+  String get filterSwapCouldntConfirm => 'Não foi possível confirmar o filtro';
+
+  @override
+  String get filterSwapCouldntCancel => 'Não foi possível cancelar a troca';
 }

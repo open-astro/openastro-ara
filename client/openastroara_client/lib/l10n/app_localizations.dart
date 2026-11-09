@@ -5000,6 +5000,480 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Panel'**
   String get planFlatsPanel;
+
+  /// Simple Mode Storage block: heading while the first read is out
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the disk…'**
+  String get shellStorageReading;
+
+  /// Simple Mode Storage block: heading when the read failed and no store is known
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown disk'**
+  String get shellStorageUnknownDisk;
+
+  /// Disk chooser title
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a disk for your frames'**
+  String get storageDiskChooseTitle;
+
+  /// Disk chooser: look for disks again
+  ///
+  /// In en, this message translates to:
+  /// **'Rescan'**
+  String get storageDiskRescan;
+
+  /// Disk chooser: confirm the selected disk
+  ///
+  /// In en, this message translates to:
+  /// **'Use Disk'**
+  String get storageDiskUse;
+
+  /// Disk chooser: confirm, erasing the disk
+  ///
+  /// In en, this message translates to:
+  /// **'Erase and Use Disk'**
+  String get storageDiskEraseUse;
+
+  /// Disk chooser with no disks
+  ///
+  /// In en, this message translates to:
+  /// **'No external disks found.\n\nConnect a USB drive or SSD to the server, then Rescan.'**
+  String get storageDiskNoneFound;
+
+  /// Disk chooser: the disk frames go to now
+  ///
+  /// In en, this message translates to:
+  /// **'In use'**
+  String get storageDiskInUse;
+
+  /// Disk chooser: switch to reformat a working disk
+  ///
+  /// In en, this message translates to:
+  /// **'Erase and change format'**
+  String get storageDiskEraseChange;
+
+  /// Disk chooser: under the reformat switch
+  ///
+  /// In en, this message translates to:
+  /// **'This disk already works as a store ({fileSystem}). Turn this on only to reformat it — everything on it will be lost.'**
+  String storageDiskEraseChangeNote(String fileSystem);
+
+  /// Disk chooser: warning heading
+  ///
+  /// In en, this message translates to:
+  /// **'This disk must be erased'**
+  String get storageDiskMustErase;
+
+  /// Disk chooser: why the disk must be erased
+  ///
+  /// In en, this message translates to:
+  /// **'ARA saves frames in a format this disk doesn\'t use, so it has to be erased first. Everything on it will be lost.'**
+  String get storageDiskMustEraseNote;
+
+  /// Disk chooser: format option
+  ///
+  /// In en, this message translates to:
+  /// **'exFAT — take the drive with you'**
+  String get storageDiskExfat;
+
+  /// Disk chooser: exFAT detail
+  ///
+  /// In en, this message translates to:
+  /// **'Plugs straight into Windows and Mac at home. After a power cut, run Check disk.'**
+  String get storageDiskExfatNote;
+
+  /// Disk chooser: format option
+  ///
+  /// In en, this message translates to:
+  /// **'ext4 — drive lives on the rig'**
+  String get storageDiskExt4;
+
+  /// Disk chooser: ext4 detail
+  ///
+  /// In en, this message translates to:
+  /// **'Journaled (self-healing after power cuts). Readable on Linux computers; Windows and Mac can\'t read it — frames arrive there via the backup mirror.'**
+  String get storageDiskExt4Note;
+
+  /// Disk chooser: type the disk name before erasing
+  ///
+  /// In en, this message translates to:
+  /// **'Type “{label}” to confirm:'**
+  String storageDiskTypeLabel(String label);
+
+  /// Disk chooser: the word ERASE is typed literally, keep it in English
+  ///
+  /// In en, this message translates to:
+  /// **'This disk has no label — type ERASE to confirm:'**
+  String get storageDiskTypeErase;
+
+  /// Disk chooser: in progress
+  ///
+  /// In en, this message translates to:
+  /// **'Erasing and connecting the disk…'**
+  String get storageDiskErasing;
+
+  /// Disk chooser: in progress
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting the disk…'**
+  String get storageDiskConnecting;
+
+  /// Disk chooser: done
+  ///
+  /// In en, this message translates to:
+  /// **'{name} is now used for frames.'**
+  String storageDiskNowUsed(String name);
+
+  /// Disk chooser: after Couldn't
+  ///
+  /// In en, this message translates to:
+  /// **'read the server\'s disks'**
+  String get storageDiskReadAction;
+
+  /// Use Disk failed
+  ///
+  /// In en, this message translates to:
+  /// **'This disk needs to be erased before ARA can use it.'**
+  String get storageConfigureNotExt4;
+
+  /// Use Disk failed
+  ///
+  /// In en, this message translates to:
+  /// **'The disk changed since the list was loaded. Rescan and try again.'**
+  String get storageConfigureLabelMismatch;
+
+  /// Use Disk failed
+  ///
+  /// In en, this message translates to:
+  /// **'The disk frames are saved to now is in use, so ARA can\'t switch away from it. Close anything reading it, then try again.'**
+  String get storageConfigurePreviousBusy;
+
+  /// Use Disk failed
+  ///
+  /// In en, this message translates to:
+  /// **'The disk is in use. Close anything reading it, then try again.'**
+  String get storageConfigureBusy;
+
+  /// Use Disk failed
+  ///
+  /// In en, this message translates to:
+  /// **'That disk holds the server\'s operating system and can\'t be used.'**
+  String get storageConfigureSystemDisk;
+
+  /// Use Disk failed
+  ///
+  /// In en, this message translates to:
+  /// **'The disk disconnected. Reconnect it and rescan.'**
+  String get storageConfigureDisconnected;
+
+  /// Use Disk failed
+  ///
+  /// In en, this message translates to:
+  /// **'The server is missing part of its installation. Reinstall openastroara-server.'**
+  String get storageConfigureHelperMissing;
+
+  /// Use Disk failed
+  ///
+  /// In en, this message translates to:
+  /// **'Erasing the disk failed. See the server log for details.'**
+  String get storageConfigureMkfsFailed;
+
+  /// Use Disk failed
+  ///
+  /// In en, this message translates to:
+  /// **'The disk was prepared but could not be connected.'**
+  String get storageConfigureMountFailed;
+
+  /// Use Disk failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not use {name}.'**
+  String storageConfigureFailed(String name);
+
+  /// Check disk question
+  ///
+  /// In en, this message translates to:
+  /// **'Check the store drive?'**
+  String get storageCheckTitle;
+
+  /// Check disk question
+  ///
+  /// In en, this message translates to:
+  /// **'The drive is briefly taken offline while its filesystem is verified and repaired if needed. Takes seconds to a couple of minutes; capture must be idle.'**
+  String get storageCheckBody;
+
+  /// Eject refused
+  ///
+  /// In en, this message translates to:
+  /// **'No store drive to eject.'**
+  String get storageNoDriveEject;
+
+  /// Check disk refused
+  ///
+  /// In en, this message translates to:
+  /// **'No store drive to check — connect one first.'**
+  String get storageNoDriveCheck;
+
+  /// Device chooser title
+  ///
+  /// In en, this message translates to:
+  /// **'Choose {type}'**
+  String deviceChooserTitle(String type);
+
+  /// Device chooser: tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Re-scan'**
+  String get deviceChooserRescan;
+
+  /// Device chooser: the manual filter wheel row
+  ///
+  /// In en, this message translates to:
+  /// **'No driver: you swap filters by hand and Ara asks for each one'**
+  String get deviceChooserManualWheel;
+
+  /// Device chooser: empty
+  ///
+  /// In en, this message translates to:
+  /// **'No devices found'**
+  String get deviceChooserNoneTitle;
+
+  /// Device chooser: empty
+  ///
+  /// In en, this message translates to:
+  /// **'No Alpaca responder answered on Ara\'s subnet — most often AlpacaBridge (ARA\'s equipment hub) is not installed or its service is stopped. On Ara host, check:'**
+  String get deviceChooserNoneBody;
+
+  /// Device chooser: empty
+  ///
+  /// In en, this message translates to:
+  /// **'A driver on another host must be reachable from Ara\'s subnet (UDP 32227).'**
+  String get deviceChooserOtherHost;
+
+  /// Device chooser: error
+  ///
+  /// In en, this message translates to:
+  /// **'Discovery failed'**
+  String get deviceChooserFailed;
+
+  /// Device chooser: error
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get deviceChooserRetry;
+
+  /// Device chooser: no rig
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected — connect to your rig to save this.'**
+  String get deviceChooserNotConnected;
+
+  /// Bug report review title
+  ///
+  /// In en, this message translates to:
+  /// **'Before you share this bug report'**
+  String get bugReviewTitle;
+
+  /// Bug report review confirm
+  ///
+  /// In en, this message translates to:
+  /// **'Download anyway'**
+  String get bugReviewDownload;
+
+  /// Bug report review
+  ///
+  /// In en, this message translates to:
+  /// **'The bundle contains:'**
+  String get bugReviewContains;
+
+  /// Bug report review
+  ///
+  /// In en, this message translates to:
+  /// **'• Ara\'s recent log files'**
+  String get bugReviewNoSources;
+
+  /// Bug report review
+  ///
+  /// In en, this message translates to:
+  /// **'• your profile with coordinates, serial numbers, hostnames, usernames in paths, private network addresses and tokens scrubbed'**
+  String get bugReviewProfileRedacted;
+
+  /// Bug report review
+  ///
+  /// In en, this message translates to:
+  /// **'• your profile with the site rounded to ~111 km — it may still include equipment credentials, API / notification tokens and network addresses'**
+  String get bugReviewProfileCoarse;
+
+  /// Bug report review
+  ///
+  /// In en, this message translates to:
+  /// **'• your full profile — which may include equipment credentials, API / notification tokens, precise observatory coordinates, and network addresses'**
+  String get bugReviewProfileFull;
+
+  /// Bug report review
+  ///
+  /// In en, this message translates to:
+  /// **'• system info, with this device\'s username scrubbed from its path'**
+  String get bugReviewSystemRedacted;
+
+  /// Bug report review
+  ///
+  /// In en, this message translates to:
+  /// **'• system info, including this device\'s filesystem path'**
+  String get bugReviewSystemFull;
+
+  /// Bug report review
+  ///
+  /// In en, this message translates to:
+  /// **'• this app\'s own error log, saved as a separate file beside the ZIP'**
+  String get bugReviewClientLog;
+
+  /// Bug report review
+  ///
+  /// In en, this message translates to:
+  /// **'Approximate size: {size}.'**
+  String bugReviewSize(String size);
+
+  /// Bug report review
+  ///
+  /// In en, this message translates to:
+  /// **'Only share it with people you trust (e.g. the developers) — treat it like a password.'**
+  String get bugReviewTrust;
+
+  /// Bug report review: a source with no files
+  ///
+  /// In en, this message translates to:
+  /// **'none'**
+  String get bugReviewNone;
+
+  /// Bug report review
+  ///
+  /// In en, this message translates to:
+  /// **'1 file'**
+  String get bugReviewOneFile;
+
+  /// Bug report review
+  ///
+  /// In en, this message translates to:
+  /// **'{count} files'**
+  String bugReviewFiles(String count);
+
+  /// Bug report review
+  ///
+  /// In en, this message translates to:
+  /// **', the largest cut to their newest part'**
+  String get bugReviewCut;
+
+  /// Bug report source
+  ///
+  /// In en, this message translates to:
+  /// **'Ara\'s own logs'**
+  String get bugSourceAra;
+
+  /// Bug report source
+  ///
+  /// In en, this message translates to:
+  /// **'Ara\'s NINA-layer logs'**
+  String get bugSourceAraNina;
+
+  /// Bug report source
+  ///
+  /// In en, this message translates to:
+  /// **'AlpacaBridge logs (camera, mount, focuser, wheel)'**
+  String get bugSourceAlpacaBridge;
+
+  /// Bug report source
+  ///
+  /// In en, this message translates to:
+  /// **'guider (PHD2) debug and guide logs'**
+  String get bugSourceGuider;
+
+  /// Bug report source
+  ///
+  /// In en, this message translates to:
+  /// **'package install history'**
+  String get bugSourceSystem;
+
+  /// Bug report source
+  ///
+  /// In en, this message translates to:
+  /// **'system journal (Ara, AlpacaBridge, the guider, the kernel)'**
+  String get bugSourceJournal;
+
+  /// Takeover request title
+  ///
+  /// In en, this message translates to:
+  /// **'{name} wants to connect'**
+  String takeoverWants(String name);
+
+  /// Takeover request
+  ///
+  /// In en, this message translates to:
+  /// **'Only one client can control the observatory at a time. Allowing hands control to the other client and disconnects this one; the running sequence continues either way.'**
+  String get takeoverDetail;
+
+  /// Takeover request answer
+  ///
+  /// In en, this message translates to:
+  /// **'Keep me connected'**
+  String get takeoverKeep;
+
+  /// Takeover request answer
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get takeoverAllow;
+
+  /// Manual filter swap title
+  ///
+  /// In en, this message translates to:
+  /// **'Install the {target} filter'**
+  String filterSwapInstall(String target);
+
+  /// Manual filter swap
+  ///
+  /// In en, this message translates to:
+  /// **'Swap in {target}, then confirm. A run waiting on it continues when you do.'**
+  String filterSwapDetail(String target);
+
+  /// Manual filter swap
+  ///
+  /// In en, this message translates to:
+  /// **'Take out {current} and swap in {target}, then confirm. A run waiting on it continues when you do.'**
+  String filterSwapDetailFrom(String current, String target);
+
+  /// Manual filter swap answer
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel swap'**
+  String get filterSwapCancel;
+
+  /// Manual filter swap answer
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get filterSwapLater;
+
+  /// Manual filter swap answer
+  ///
+  /// In en, this message translates to:
+  /// **'{target} is in'**
+  String filterSwapIsIn(String target);
+
+  /// Manual filter swap failure
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t confirm the filter'**
+  String get filterSwapCouldntConfirm;
+
+  /// Manual filter swap failure
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t cancel the swap'**
+  String get filterSwapCouldntCancel;
 }
 
 class _AppLocalizationsDelegate

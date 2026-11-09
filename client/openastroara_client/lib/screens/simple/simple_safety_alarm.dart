@@ -12,7 +12,8 @@ import '../../widgets/emergency_stop_button.dart'
     show localEmergencyStopProvider;
 import '../../theme/ara_metrics.dart';
 import 'simple_message_pills.dart';
-import 'simple_shell.dart' show kSimpleInset, kSimpleMessagesMaxWidth;
+import 'simple_shell.dart'
+    show kSimpleInset, kSimpleMessagesMaxWidth, simpleTheme;
 
 /// Simple Mode's safety alarm over every screen: MaterialApp's builder puts
 /// it above the Navigator, so the Image Library or the full Settings page
@@ -44,31 +45,35 @@ class _MessagesOverRoutes extends StatelessWidget {
   const _MessagesOverRoutes();
 
   @override
-  Widget build(BuildContext context) => BackdropGroup(
-    child: Overlay(
-      initialEntries: [
-        OverlayEntry(
-          builder: (context) {
-            final media = MediaQuery.of(context);
-            return Stack(
-              children: [
-                Positioned(
-                  left: kSimpleInset,
-                  top: media.padding.top + kToolbarHeight + kSimpleInset,
-                  width: math.min(
-                    kSimpleMessagesMaxWidth,
-                    media.size.width - kSimpleInset * 2,
+  // Above the shell, so without its theme unless this layer brings it.
+  Widget build(BuildContext context) => Theme(
+    data: simpleTheme(Theme.of(context)),
+    child: BackdropGroup(
+      child: Overlay(
+        initialEntries: [
+          OverlayEntry(
+            builder: (context) {
+              final media = MediaQuery.of(context);
+              return Stack(
+                children: [
+                  Positioned(
+                    left: kSimpleInset,
+                    top: media.padding.top + kToolbarHeight + kSimpleInset,
+                    width: math.min(
+                      kSimpleMessagesMaxWidth,
+                      media.size.width - kSimpleInset * 2,
+                    ),
+                    child: const Material(
+                      type: MaterialType.transparency,
+                      child: SimpleMessagePills(maxHeight: double.infinity),
+                    ),
                   ),
-                  child: const Material(
-                    type: MaterialType.transparency,
-                    child: SimpleMessagePills(maxHeight: double.infinity),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ],
+                ],
+              );
+            },
+          ),
+        ],
+      ),
     ),
   );
 }

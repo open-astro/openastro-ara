@@ -1,10 +1,13 @@
+import 'dart:ui' show Tristate;
+
 import 'package:flutter/cupertino.dart' show CupertinoPicker;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 
-Future<List<int>> _pump(WidgetTester tester, {bool wheel = false}) async {
+Future<List<int>> _pump(WidgetTester tester, {bool wheel = false, bool enabled = true}) async {
   tester.view.physicalSize = const Size(800, 1000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -20,7 +23,7 @@ Future<List<int>> _pump(WidgetTester tester, {bool wheel = false}) async {
           value: 10,
           options: const [5, 10, 20],
           format: (n) => '× $n',
-          onSelected: picks.add,
+          onSelected: enabled ? picks.add : null,
           wheel: wheel,
         ),
       ),
@@ -55,5 +58,28 @@ void main() {
     await tester.pumpAndSettle();
     expect(picks, [5]);
     expect(find.byType(CupertinoPicker), findsNothing);
+  });
+
+  testWidgets('a disabled tile greys out and tells screen readers', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, enabled: false);
+    final color = tester.widget<RichText>(find.descendant(of: find.byKey(const Key('tile')), matching: find.byType(RichText)).last).text.style!.color;
+    expect(color, AraColors.textDisabled);
+    final node = tester.getSemantics(find.byType(InkWell));
+    expect(node.label, 'Frames');
+    expect(node.value, '× 10');
+    expect(node.flagsCollection.isEnabled, Tristate.isFalse);
+    handle.dispose();
+  });
+
+  testWidgets('a tile disabled while open folds away and takes no pick', (tester) async {
+    final picks = await _pump(tester);
+    await tester.tap(find.byKey(const Key('tile')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-preset-2')), findsOneWidget);
+    await _pump(tester, enabled: false);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-preset-2')), findsNothing);
+    expect(picks, isEmpty);
   });
 }

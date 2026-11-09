@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/l10n.dart';
 import '../services/ws_event_stream.dart';
 import '../state/simple_messages_state.dart';
 import '../state/simple_mode_state.dart';
@@ -98,16 +99,17 @@ class _ConnectionPolicyListenerState
   /// Simple Mode has no popups: the same question on a pill.
   void _askTakeoverInPill(WsConnectionRequest request) {
     final messages = ref.read(simpleMessagesProvider.notifier);
+    final l10n = context.l10n;
     void answer(bool allow) => ref
         .read(wsEventStreamProvider)
         ?.sendConnectionResponse(request.requestId, allow: allow);
     final id = messages.show(
       SimpleMessageKind.question,
-      '${request.from} wants to connect',
-      detail: _takeoverDetail,
+      l10n.takeoverWants(request.from),
+      detail: l10n.takeoverDetail,
       actions: [
-        SimpleMessageAction('Keep me connected', () => answer(false)),
-        SimpleMessageAction('Allow', () => answer(true)),
+        SimpleMessageAction(l10n.takeoverKeep, () => answer(false)),
+        SimpleMessageAction(l10n.takeoverAllow, () => answer(true)),
       ],
     );
     void withdraw() {
@@ -169,10 +171,6 @@ const _transferredTitle = 'Session transferred';
 const _transferredDetail =
     'Another client took control of the observatory, so this client was '
     'disconnected. The running sequence is unaffected — it continues on Ara.';
-const _takeoverDetail =
-    'Only one client can control the observatory at a time. Allowing hands '
-    'control to the other client and disconnects this one; the running '
-    'sequence continues either way.';
 
 /// The holder-side §27.1 modal. Auto-dismisses shortly before the daemon's
 /// 30 s answer window lapses (an unanswered request reads as "unresponsive"
@@ -219,16 +217,16 @@ class _TakeoverRequestDialogState extends State<_TakeoverRequestDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('${widget.from} wants to connect'),
-      content: const Text(_takeoverDetail),
+      title: Text(context.l10n.takeoverWants(widget.from)),
+      content: Text(context.l10n.takeoverDetail),
       actions: [
         TextButton(
           onPressed: () => _answer(false),
-          child: const Text('Keep me connected'),
+          child: Text(context.l10n.takeoverKeep),
         ),
         FilledButton(
           onPressed: () => _answer(true),
-          child: const Text('Allow'),
+          child: Text(context.l10n.takeoverAllow),
         ),
       ],
     );

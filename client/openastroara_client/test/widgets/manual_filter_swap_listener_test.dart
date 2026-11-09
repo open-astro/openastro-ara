@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/models/ws_event.dart';
@@ -72,6 +73,7 @@ Future<(List<String>, StreamController<WsEvent>)> _pump(
   FilterWheelStatus? initial, {
   bool performs = true,
   bool simple = false,
+  Locale? locale,
 }) async {
   final calls = <String>[];
   final ws = StreamController<WsEvent>.broadcast();
@@ -85,8 +87,11 @@ Future<(List<String>, StreamController<WsEvent>)> _pump(
         ),
         wsEventsProvider.overrideWith((ref) => ws.stream),
       ],
-      child: const MaterialApp(
-        home: ManualFilterSwapListener(child: Scaffold(body: Text('shell'))),
+      child: MaterialApp(
+        locale: locale,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const ManualFilterSwapListener(child: Scaffold(body: Text('shell'))),
       ),
     ),
   );
@@ -225,5 +230,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(pills(tester), isEmpty);
     });
+  });
+
+  testWidgets('the filter swap pill is in Brazilian Portuguese', (tester) async {
+    await _pump(tester, _manual(currentSlot: 0, pendingSlot: 1), simple: true, locale: const Locale('pt', 'BR'));
+    final c = ProviderScope.containerOf(tester.element(find.byType(ManualFilterSwapListener)));
+    final pill = c.read(simpleMessagesProvider).single;
+    expect(pill.title, 'Coloque o filtro Ha');
+    expect(pill.actions.map((a) => a.label), ['Cancelar troca', 'Depois', 'Ha colocado']);
   });
 }

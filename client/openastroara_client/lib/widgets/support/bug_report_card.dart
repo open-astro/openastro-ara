@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../util/stream_save_location.dart';
 
 import '../../models/bug_report_preparation.dart';
@@ -65,13 +66,14 @@ const bugReportRanges = <(Duration? range, String label)>[
 ];
 
 /// The disclosure's name for each source the daemon's manifest reports.
-const bugReportSourceLabels = <String, String>{
-  'ara': 'Ara\'s own logs',
-  'ara-nina': 'Ara\'s NINA-layer logs',
-  'alpacabridge': 'AlpacaBridge logs (camera, mount, focuser, wheel)',
-  'guider': 'guider (PHD2) debug and guide logs',
-  'system': 'package install history',
-  'journal': 'system journal (Ara, AlpacaBridge, the guider, the kernel)',
+String _sourceLabel(AppLocalizations l, String source) => switch (source) {
+  'ara' => l.bugSourceAra,
+  'ara-nina' => l.bugSourceAraNina,
+  'alpacabridge' => l.bugSourceAlpacaBridge,
+  'guider' => l.bugSourceGuider,
+  'system' => l.bugSourceSystem,
+  'journal' => l.bugSourceJournal,
+  _ => source,
 };
 
 class _BugReportCardState extends ConsumerState<BugReportCard> {
@@ -184,8 +186,6 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
     }
   }
 
-  static const _reviewTitle = 'Before you share this bug report';
-
   Future<bool?> _showDisclosure(BugReportPreparation prep) {
     if (ref.read(simpleModeActiveProvider)) {
       final answer = Completer<bool>();
@@ -198,18 +198,18 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
     return showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text(_reviewTitle),
+        title: Text(context.l10n.bugReviewTitle),
         // Scrollable so the disclosure can't overflow on a small viewport or a
         // large accessibility font scale.
         content: SingleChildScrollView(child: _disclosure(prep)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(context.l10n.planCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Download anyway'),
+            child: Text(context.l10n.bugReviewDownload),
           ),
         ],
       ),
@@ -217,43 +217,32 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
   }
 
   /// What the bundle holds: the review's words, dialog or inline.
-  Widget _disclosure(BugReportPreparation prep) => Column(
-    mainAxisSize: MainAxisSize.min,
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text('The bundle contains:'),
-      const SizedBox(height: 8),
-      if (prep.sources.isEmpty) const Text('• Ara\'s recent log files'),
-      for (final s in prep.sources) Text(_sourceLine(s)),
-      Text(switch (prep.sharingMode) {
-        'redacted' =>
-          '• your profile with coordinates, serial numbers, hostnames, '
-              'usernames in paths, private network addresses and tokens '
-              'scrubbed',
-        'coarse_gps' =>
-          '• your profile with the site rounded to ~111 km — it may still '
-              'include equipment credentials, API / notification tokens '
-              'and network addresses',
-        _ =>
-          '• your full profile — which may include equipment credentials, '
-              'API / notification tokens, precise observatory coordinates, and '
-              'network addresses',
-      }),
-      Text(prep.sharingMode == 'redacted'
-          ? '• system info, with this device\'s username scrubbed from its path'
-          : '• system info, including this device\'s filesystem path'),
-      const Text(
-          '• this app\'s own error log, saved as a separate file beside '
-          'the ZIP'),
-      const SizedBox(height: 12),
-      Text('Approximate size: ${_humanSize(prep.estimatedSizeBytes)}.'),
-      const SizedBox(height: 8),
-      const Text(
-        'Only share it with people you trust (e.g. the developers) — '
-        'treat it like a password.',
-      ),
-    ],
-  );
+  Widget _disclosure(BugReportPreparation prep) {
+    final l = context.l10n;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l.bugReviewContains),
+        const SizedBox(height: 8),
+        if (prep.sources.isEmpty) Text(l.bugReviewNoSources),
+        for (final s in prep.sources) Text(_sourceLine(l, s)),
+        Text(switch (prep.sharingMode) {
+          'redacted' => l.bugReviewProfileRedacted,
+          'coarse_gps' => l.bugReviewProfileCoarse,
+          _ => l.bugReviewProfileFull,
+        }),
+        Text(prep.sharingMode == 'redacted'
+            ? l.bugReviewSystemRedacted
+            : l.bugReviewSystemFull),
+        Text(l.bugReviewClientLog),
+        const SizedBox(height: 12),
+        Text(l.bugReviewSize(_humanSize(prep.estimatedSizeBytes))),
+        const SizedBox(height: 8),
+        Text(l.bugReviewTrust),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -298,7 +287,8 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                       Flexible(
                         child: DropdownButton<int>(
                           value: _rangeIndex,
-                          isDense: true,
+                          // Simple Mode's 44 px; the full UI stays compact.
+                          isDense: !simple,
                           isExpanded: true,
                           style: theme.textTheme.bodySmall,
                           onChanged: _busy ? null : (v) => setState(() => _rangeIndex = v ?? 0),
@@ -323,7 +313,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
                       Flexible(
                         child: DropdownButton<String>(
                           value: _mode,
-                          isDense: true,
+                          isDense: !simple,
                           isExpanded: true,
                           style: theme.textTheme.bodySmall,
                           onChanged: _busy ? null : (v) => setState(() => _mode = v ?? 'full'),
@@ -360,10 +350,10 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
             if (review != null)
               InlineConfirm(
                 id: 'bug-report-review',
-                title: _reviewTitle,
+                title: context.l10n.bugReviewTitle,
                 body: _disclosure(review),
-                confirmLabel: 'Download anyway',
-                cancelLabel: 'Cancel',
+                confirmLabel: context.l10n.bugReviewDownload,
+                cancelLabel: context.l10n.planCancel,
                 onConfirm: () => _answerReview(true),
                 onCancel: () => _answerReview(false),
               ),
@@ -395,13 +385,13 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
 
   // "• AlpacaBridge logs (camera, mount, focuser, wheel): 2 files, 31.2 MB, cut to
   // the newest part" — or why a source is not there.
-  static String _sourceLine(BugReportSourceSummary s) {
-    final label = bugReportSourceLabels[s.source] ?? s.source;
+  static String _sourceLine(AppLocalizations l, BugReportSourceSummary s) {
+    final label = _sourceLabel(l, s.source);
     if (s.files == 0) {
-      return '• $label: none${s.note == null ? '' : ' (${s.note})'}';
+      return '• $label: ${l.bugReviewNone}${s.note == null ? '' : ' (${s.note})'}';
     }
-    final files = s.files == 1 ? '1 file' : '${s.files} files';
-    final cut = s.truncated ? ', the largest cut to their newest part' : '';
+    final files = s.files == 1 ? l.bugReviewOneFile : l.bugReviewFiles('${s.files}');
+    final cut = s.truncated ? l.bugReviewCut : '';
     final note = s.note == null ? '' : ' (${s.note})';
     return '• $label: $files, ${_humanSize(s.bytes)}$cut$note';
   }

@@ -159,6 +159,10 @@ class _Pill extends ConsumerWidget {
     final notifier = ref.read(simpleMessagesProvider.notifier);
     final (dot, outline) = switch (m.kind) {
       SimpleMessageKind.result => (AraColors.accentConnected, null),
+      SimpleMessageKind.refused => (
+        AraColors.accentWarning,
+        AraColors.accentWarning,
+      ),
       SimpleMessageKind.error => (AraColors.accentError, AraColors.accentError),
       SimpleMessageKind.question => (
         AraColors.accentBusy,
@@ -269,12 +273,15 @@ class _Pill extends ConsumerWidget {
                     onPressed: () => _answer(notifier, 0),
                     child: Text(m.actions.first.label),
                   )
-                else if (m.kind == SimpleMessageKind.result)
+                else if (m.kind == SimpleMessageKind.result ||
+                    m.kind == SimpleMessageKind.refused)
                   const SizedBox(width: kSimpleInset - 4),
               ],
             ),
             // A result's time left, as a line along its foot.
-            if (m.kind == SimpleMessageKind.result && !reduced)
+            if ((m.kind == SimpleMessageKind.result ||
+                    m.kind == SimpleMessageKind.refused) &&
+                !reduced)
               Positioned(
                 left: 0,
                 right: 14,

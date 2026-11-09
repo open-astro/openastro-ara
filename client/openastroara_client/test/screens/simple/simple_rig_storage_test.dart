@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -10,6 +13,8 @@ import 'package:openastroara/services/storage_space_api.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/theme/ara_theme.dart';
 import 'package:openastroara/widgets/storage/storage_drive_dialog.dart';
 
 class _FakeApi extends StorageDevicesApi {
@@ -74,6 +79,10 @@ Future<(ProviderContainer, _FakeApi)> _pump(
   WidgetTester tester, {
   bool simple = true,
   Widget? child,
+  Locale? locale,
+  ThemeData? theme,
+  Future<StorageSpace?> Function()? space,
+  List<StorageDevice> devices = const [_store, _ntfs],
 }) async {
   tester.view.physicalSize = const Size(800, 1400);
   tester.view.devicePixelRatio = 1;
@@ -84,14 +93,18 @@ Future<(ProviderContainer, _FakeApi)> _pump(
       simpleModeActiveProvider.overrideWithValue(simple),
       activeServerProvider.overrideWithValue(_server),
       storageDevicesApiFactoryProvider.overrideWithValue((_) => api),
-      storageDevicesProvider.overrideWith((ref) async => const [_store, _ntfs]),
+      storageDevicesProvider.overrideWith((ref) async => devices),
       storageSpaceProvider.overrideWith(
-        (ref) async => const StorageSpace(
-          saveDirectory: '/mnt/store',
-          isFallback: false,
-          freeBytes: 100,
-          totalBytes: 200,
-        ),
+        (ref) =>
+            space?.call() ??
+            Future.value(
+              const StorageSpace(
+                saveDirectory: '/mnt/store',
+                isFallback: false,
+                freeBytes: 100,
+                totalBytes: 200,
+              ),
+            ),
       ),
     ],
   );
@@ -100,8 +113,9 @@ Future<(ProviderContainer, _FakeApi)> _pump(
     UncontrolledProviderScope(
       container: container,
       child: MaterialApp(
+        locale: locale,
         // Off, so a button's own minimum is what the 44 px checks measure.
-        theme: ThemeData(materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+        theme: theme ?? ThemeData(materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
@@ -294,5 +308,79 @@ void main() {
     expect(find.byType(SnackBar), findsOneWidget, reason: "the Full UI's report stays a snackbar");
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('Erase and Use Disk is dark on its amber, past 4.5:1', (tester) async {
+    await _pump(tester, theme: buildAraTheme());
+    await _tap(tester, find.byKey(const Key('simple-storage-choose')));
+    await _tap(tester, find.text('PHOTOS'));
+    await tester.enterText(find.byType(TextField), 'PHOTOS');
+    await tester.pumpAndSettle();
+    final erase = find.widgetWithText(FilledButton, 'Erase and Use Disk');
+    final label = tester.widget<RichText>(find.descendant(of: erase, matching: find.byType(RichText)).first);
+    final a = label.text.style!.color!.computeLuminance();
+    final b = AraColors.accentBusy.computeLuminance();
+    final ratio = (math.max(a, b) + .05) / (math.min(a, b) + .05);
+    expect(ratio, greaterThanOrEqualTo(4.5));
+  });
+
+  testWidgets('while the first read is out the block does not claim there is no rig', (tester) async {
+    await _pump(tester, space: () => Completer<StorageSpace?>().future);
+    expect(find.text('Rig not connected'), findsNothing);
+    expect(find.text('Checking the disk…'), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.byKey(const Key('simple-storage-choose'))).onPressed, isNull);
+  });
+
+  testWidgets('a failed read says so, not that the rig is gone, and the disk actions stay on', (tester) async {
+    await _pump(tester, space: () async => throw StateError('no answer'), devices: const [_ntfs]);
+    expect(find.text('Rig not connected'), findsNothing);
+    expect(find.text('Internal storage'), findsNothing, reason: 'it does not know which disk');
+    expect(find.byKey(const Key('simple-storage-problem')), findsOneWidget);
+    expect(tester.widget<FilledButton>(find.byKey(const Key('simple-storage-choose'))).onPressed, isNotNull);
+    expect(
+      tester.widget<OutlinedButton>(find.descendant(of: find.byKey(const Key('simple-storage-check')), matching: find.byWidgetPredicate((w) => w is OutlinedButton))).onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets('the free-space bar turns amber under the profile warning, with saving still working', (tester) async {
+    const gb = 1000 * 1000 * 1000;
+    await _pump(tester, space: () async => const StorageSpace(saveDirectory: '/mnt/store', isFallback: false, freeBytes: 9 * gb, totalBytes: 900 * gb));
+    expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).color, AraColors.accentWarning);
+    expect(find.byKey(const Key('simple-storage-problem')), findsNothing);
+  });
+
+  testWidgets('a disk with room keeps the theme blue bar', (tester) async {
+    const gb = 1000 * 1000 * 1000;
+    await _pump(tester, space: () async => const StorageSpace(saveDirectory: '/mnt/store', isFallback: false, freeBytes: 11 * gb, totalBytes: 900 * gb));
+    expect(tester.widget<LinearProgressIndicator>(find.byType(LinearProgressIndicator)).color, isNull);
+  });
+
+  for (final (key, words) in [('eject', 'No store drive to eject.'), ('check', 'No store drive to check — connect one first.')]) {
+    testWidgets('$key with no store is a refused pill that fades, not a green result', (tester) async {
+      final (c, _) = await _pump(tester, devices: const [_ntfs]);
+      await _tap(tester, find.byKey(Key('simple-storage-$key')));
+      final pill = c.read(simpleMessagesProvider).single;
+      expect(pill.title, words);
+      expect(pill.kind, SimpleMessageKind.refused);
+      await tester.pump(kSimpleResultLife);
+      expect(c.read(simpleMessagesProvider), isEmpty, reason: 'it fades');
+    });
+  }
+
+  testWidgets('the inline disk chooser takes the focus and says its title', (tester) async {
+    await _pump(tester);
+    await _tap(tester, find.byKey(const Key('simple-storage-choose')));
+    expect(tester.takeAnnouncements().map((a) => a.message), contains('Choose a disk for your frames'));
+    expect(FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<StorageDriveChooser>(), isNotNull);
+  });
+
+  testWidgets('the disk chooser and Check disk question are in Brazilian Portuguese', (tester) async {
+    await _pump(tester, locale: const Locale('pt', 'BR'));
+    await _tap(tester, find.byKey(const Key('simple-storage-choose')));
+    expect(find.text('Escolha um disco para os seus quadros'), findsOneWidget);
+    expect(find.text('Usar disco'), findsOneWidget);
+    await _tap(tester, find.byKey(const Key('simple-storage-check')));
+    expect(find.text('Verificar o disco de armazenamento?'), findsOneWidget);
   });
 }

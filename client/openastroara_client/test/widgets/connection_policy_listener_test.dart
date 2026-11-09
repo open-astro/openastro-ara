@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/ws_event_stream.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
@@ -43,6 +44,7 @@ void main() {
   Future<(_FakeConnector, WsEventStream)> pumpListener(
     WidgetTester tester, {
     bool simple = false,
+    Locale? locale,
   }) async {
     final conn = _FakeConnector();
     final stream = WsEventStream(server, connect: conn.connect);
@@ -60,8 +62,11 @@ void main() {
             return stream;
           }),
         ],
-        child: const MaterialApp(
-          home: Scaffold(
+        child: MaterialApp(
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const Scaffold(
             body: ConnectionPolicyListener(child: SizedBox.shrink()),
           ),
         ),
@@ -252,6 +257,17 @@ void main() {
   group('Simple Mode', () {
     List<SimpleMessage> pills(WidgetTester tester) =>
         ProviderScope.containerOf(tester.element(find.byType(ConnectionPolicyListener))).read(simpleMessagesProvider);
+
+    testWidgets('a takeover pill is in Brazilian Portuguese', (tester) async {
+      final (conn, _) = await pumpListener(tester, simple: true, locale: const Locale('pt', 'BR'));
+      conn.legs.first.incoming.add(jsonEncode({'type': 'connection.request', 'from': 'ipad.local', 'request_id': 'req-9'}));
+      await tester.pump();
+      await tester.pump();
+      final pill = pills(tester).single;
+      expect(pill.title, 'ipad.local quer se conectar');
+      expect(pill.actions.map((a) => a.label), ['Manter conectado', 'Permitir']);
+      await tester.pump(const Duration(seconds: 30)); // the request's timer
+    });
 
     testWidgets('a takeover request is a question pill and Allow answers allow', (tester) async {
       final (conn, _) = await pumpListener(tester, simple: true);

@@ -92,7 +92,7 @@ Directory _freshDir() {
 }
 
 Widget _host(_FakeBugReportClient api,
-        {ClientErrorLog? log, Directory? dir, Duration packingTimeout = const Duration(minutes: 15), bool simple = false}) =>
+        {ClientErrorLog? log, Directory? dir, Duration packingTimeout = const Duration(minutes: 15), bool simple = false, Locale? locale}) =>
     ProviderScope(
       overrides: [
         if (simple) simpleModeActiveProvider.overrideWithValue(true),
@@ -103,6 +103,7 @@ Widget _host(_FakeBugReportClient api,
         clientErrorLogProvider.overrideWithValue(log ?? _MemLog()),
       ],
       child: MaterialApp(
+        locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
@@ -424,6 +425,24 @@ void main() {
       await settle(tester);
     }
 
+    testWidgets('the review opens scrolled in, focused and announced, in Brazilian Portuguese', (tester) async {
+      tester.view.physicalSize = const Size(800, 300);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_host(_FakeBugReportClient(), simple: true, locale: const Locale('pt', 'BR')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Prepare & download'));
+      await settle(tester);
+      const title = 'Antes de compartilhar este relatório de erro';
+      expect(find.text(title), findsOneWidget);
+      expect(find.text('Baixar mesmo assim'), findsOneWidget);
+      expect(tester.takeAnnouncements().map((a) => a.message), contains(title));
+      final top = tester.getRect(find.text(title)).top;
+      expect(top, inInclusiveRange(0, 300), reason: 'taller than the view, it keeps its title in sight');
+      await tester.tap(find.byKey(const Key('bug-report-review-cancel')));
+      await settle(tester);
+    });
+
     testWidgets('the review is inline and Download anyway downloads, ending in a pill', (tester) async {
       final api = _FakeBugReportClient();
       await tester.pumpWidget(_host(api, simple: true));
@@ -500,5 +519,13 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byType(AlertDialog), findsOneWidget);
     expect(find.byType(DropdownButton<String>), findsOneWidget);
+  });
+
+  testWidgets("Simple Mode's Covers and Sharing are at least 44 px tall", (tester) async {
+    await tester.pumpWidget(_host(_FakeBugReportClient(), simple: true));
+    await tester.pumpAndSettle();
+    for (final d in [find.byType(DropdownButton<int>), find.byType(DropdownButton<String>)]) {
+      expect(tester.getSize(d).height, greaterThanOrEqualTo(44));
+    }
   });
 }

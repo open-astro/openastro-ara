@@ -8,6 +8,7 @@ import '../../state/settings/storage_settings_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../inline_choices.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
 
@@ -32,25 +33,20 @@ Future<void> showStorageDriveDialog(BuildContext context, WidgetRef ref) async {
 }
 
 /// What the disk chooser says when Use Disk fails, keyed on the helper's code.
-String storageConfigureMessage(
+String storageConfigureMessage(AppLocalizations l,
         StorageConfigureOutcome outcome, StorageDevice device) =>
     switch (outcome.code) {
-      'not_ext4' => 'This disk needs to be erased before ARA can use it.',
-      'label_mismatch' =>
-        'The disk changed since the list was loaded. Rescan and try again.',
+      'not_ext4' => l.storageConfigureNotExt4,
+      'label_mismatch' => l.storageConfigureLabelMismatch,
       'device_busy' when outcome.detail == 'previous_store' =>
-        'The disk frames are saved to now is in use, so ARA can\'t switch '
-            'away from it. Close anything reading it, then try again.',
-      'device_busy' =>
-        'The disk is in use. Close anything reading it, then try again.',
-      'system_disk' || 'refused' =>
-        'That disk holds the server\'s operating system and can\'t be used.',
-      'uuid_not_found' => 'The disk disconnected. Reconnect it and rescan.',
-      'helper_missing' =>
-        'The server is missing part of its installation. Reinstall openastroara-server.',
-      'mkfs_failed' => 'Erasing the disk failed. See the server log for details.',
-      'mount_failed' => 'The disk was prepared but could not be connected.',
-      _ => outcome.detail ?? 'Could not use ${device.friendlyName}.',
+        l.storageConfigurePreviousBusy,
+      'device_busy' => l.storageConfigureBusy,
+      'system_disk' || 'refused' => l.storageConfigureSystemDisk,
+      'uuid_not_found' => l.storageConfigureDisconnected,
+      'helper_missing' => l.storageConfigureHelperMissing,
+      'mkfs_failed' => l.storageConfigureMkfsFailed,
+      'mount_failed' => l.storageConfigureMountFailed,
+      _ => outcome.detail ?? l.storageConfigureFailed(device.friendlyName),
     };
 
 /// The list and its erase step: a dialog's content on its own, or laid out in
@@ -145,11 +141,12 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
           ref.read(storageSettingsProvider.notifier).setSaveDirectory(dir);
         }
         final notify = userNotifier(context);
+        final done = context.l10n.storageDiskNowUsed(device.friendlyName);
         _close();
-        notify('${device.friendlyName} is now used for frames.');
+        notify(done);
         return;
       }
-      final problem = storageConfigureMessage(outcome, device);
+      final problem = storageConfigureMessage(context.l10n, outcome, device);
       if (_inline) {
         userNotifier(context)(problem, error: true);
       } else {
@@ -166,6 +163,7 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = context.l10n;
     final async = ref.watch(storageDevicesProvider);
     final body = async.when(
           loading: () => const SizedBox(
@@ -173,7 +171,7 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
           error: (e, _) => SizedBox(
             height: 140,
             child: Center(
-                child: Text(friendlyError(context.l10n, e, action: "read the server's disks"),
+                child: Text(friendlyError(l10n, e, action: l10n.storageDiskReadAction),
                     textAlign: TextAlign.center)),
           ),
           data: (all) {
@@ -192,12 +190,11 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
               }
             }
             if (disks.isEmpty) {
-              return const SizedBox(
+              return SizedBox(
                 height: 140,
                 child: Center(
                   child: Text(
-                    'No external disks found.\n\n'
-                    'Connect a USB drive or SSD to the server, then Rescan.',
+                    l10n.storageDiskNoneFound,
                     textAlign: TextAlign.center,
                   ),
                 ),
@@ -227,7 +224,7 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                         title: Text(d.friendlyName),
                         subtitle: Text(d.detailLine),
                         trailing: d.isAraStore
-                            ? Text('In use', style: theme.textTheme.bodySmall)
+                            ? Text(l10n.storageDiskInUse, style: theme.textTheme.bodySmall)
                             : null,
                         onTap: _busy
                             ? null
@@ -248,11 +245,10 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                   SwitchListTile(
                     dense: true,
                     contentPadding: EdgeInsets.zero,
-                    title: const Text('Erase and change format'),
+                    title: Text(l10n.storageDiskEraseChange),
                     subtitle: Text(
-                        'This disk already works as a store '
-                        '(${_selected!.fileSystem}). Turn this on only to '
-                        'reformat it — everything on it will be lost.',
+                        l10n.storageDiskEraseChangeNote(
+                            '${_selected!.fileSystem}'),
                         style: theme.textTheme.bodySmall),
                     value: _eraseAnyway,
                     onChanged: _busy
@@ -266,14 +262,12 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                 if (_needsErase) ...[
                   if (_mustErase) ...[
                     const Divider(height: 24),
-                    Text('This disk must be erased',
+                    Text(l10n.storageDiskMustErase,
                         style: theme.textTheme.titleSmall
                             ?.copyWith(color: AraColors.accentBusy)),
                     const SizedBox(height: 6),
                     Text(
-                      'ARA saves frames in a format this disk doesn\'t use, so '
-                      'it has to be erased first. Everything on it will be '
-                      'lost.',
+                      l10n.storageDiskMustEraseNote,
                       style: theme.textTheme.bodySmall,
                     ),
                   ],
@@ -288,22 +282,18 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                           value: 'exfat',
                           dense: true,
                           contentPadding: EdgeInsets.zero,
-                          title: const Text('exFAT — take the drive with you'),
+                          title: Text(l10n.storageDiskExfat),
                           subtitle: Text(
-                              'Plugs straight into Windows and Mac at home. '
-                              'After a power cut, run Check disk.',
+                              l10n.storageDiskExfatNote,
                               style: theme.textTheme.bodySmall),
                         ),
                         RadioListTile<String>(
                           value: 'ext4',
                           dense: true,
                           contentPadding: EdgeInsets.zero,
-                          title: const Text('ext4 — drive lives on the rig'),
+                          title: Text(l10n.storageDiskExt4),
                           subtitle: Text(
-                              'Journaled (self-healing after power cuts). '
-                              'Readable on Linux computers; Windows and Mac '
-                              'can\'t read it — frames arrive there via the '
-                              'backup mirror.',
+                              l10n.storageDiskExt4Note,
                               style: theme.textTheme.bodySmall),
                         ),
                       ],
@@ -312,8 +302,8 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                   const SizedBox(height: 10),
                   Text(
                       (_selected!.label ?? '').isNotEmpty
-                          ? 'Type “${_selected!.label}” to confirm:'
-                          : 'This disk has no label — type ERASE to confirm:',
+                          ? l10n.storageDiskTypeLabel(_selected!.label!)
+                          : l10n.storageDiskTypeErase,
                       style: theme.textTheme.bodySmall),
                   const SizedBox(height: 4),
                   TextField(
@@ -340,8 +330,8 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                     const SizedBox(width: 10),
                     Text(
                         _needsErase
-                            ? 'Erasing and connecting the disk…'
-                            : 'Connecting the disk…',
+                            ? l10n.storageDiskErasing
+                            : l10n.storageDiskConnecting,
                         style: theme.textTheme.bodySmall),
                   ]),
                 ],
@@ -352,17 +342,18 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
       TextButton(
         style: TextButton.styleFrom(minimumSize: _minSize),
         onPressed: _busy ? null : () => ref.invalidate(storageDevicesProvider),
-        child: const Text('Rescan'),
+        child: Text(l10n.storageDiskRescan),
       ),
       TextButton(
         style: TextButton.styleFrom(minimumSize: _minSize),
         onPressed: _busy ? null : _close,
-        child: const Text('Cancel'),
+        child: Text(l10n.planCancel),
       ),
       FilledButton(
         style: _needsErase
             ? FilledButton.styleFrom(
                 backgroundColor: AraColors.accentBusy,
+                foregroundColor: AraColors.bgPrimary,
                 minimumSize: _minSize,
               )
             : _inline
@@ -374,32 +365,36 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                 !_confirmSatisfied
             ? null
             : _useDisk,
-        child: Text(_needsErase ? 'Erase and Use Disk' : 'Use Disk'),
+        child: Text(
+            _needsErase ? l10n.storageDiskEraseUse : l10n.storageDiskUse),
       ),
     ];
-    const title = 'Choose a disk for your frames';
+    final title = l10n.storageDiskChooseTitle;
     if (!_inline) {
       return AlertDialog(
-        title: const Text(title),
+        title: Text(title),
         content: SizedBox(width: 520, child: body),
         actions: actions,
       );
     }
-    return Material(
-      type: MaterialType.transparency,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        spacing: AraSpace.s8,
-        children: [
-          Text(title, style: theme.textTheme.titleSmall),
-          body,
-          Wrap(
-            alignment: WrapAlignment.end,
-            spacing: AraSpace.s8,
-            children: actions,
-          ),
-        ],
+    return InlineAttention(
+      title: title,
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: AraSpace.s8,
+          children: [
+            Text(title, style: theme.textTheme.titleSmall),
+            body,
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: AraSpace.s8,
+              children: actions,
+            ),
+          ],
+        ),
       ),
     );
   }

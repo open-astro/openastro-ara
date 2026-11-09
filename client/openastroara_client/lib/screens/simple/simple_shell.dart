@@ -540,6 +540,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// key rebuilds the sheet when it is already open.
   int _revealStorage = 0;
 
+  /// Open Storage's one scroll: only the sheet it opens jumps to Storage.
+  bool _revealStoragePending = false;
+
   void _openMenu({String section = 'Rig'}) {
     _menuSection = section;
     _toggle(_Popover.menu);
@@ -734,8 +737,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
             _device = null;
             _menuSection = 'Rig';
             _revealStorage++;
+            _revealStoragePending = true;
             _popover = _Popover.menu;
           });
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => _revealStoragePending = false,
+          );
         } else {
           _openSettings();
         }
@@ -1384,7 +1391,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                           _revealStorage,
                                         )),
                                         section: _menuSection,
-                                        revealStorage: _revealStorage > 0,
+                                        revealStorage: _revealStoragePending,
                                         onClose: () => setState(
                                           () => _popover = _Popover.none,
                                         ),

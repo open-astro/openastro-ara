@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n/l10n.dart';
 import '../services/equipment_device_api.dart';
 import '../state/equipment/filter_wheel_state.dart';
 import '../state/simple_messages_state.dart';
@@ -142,30 +143,31 @@ class _ManualFilterSwapListenerState
   /// Simple Mode has no popups: the same three answers, on a question pill.
   void _askInPill(int position, String target, String? current) {
     final messages = ref.read(simpleMessagesProvider.notifier);
+    final l10n = context.l10n;
     final id = messages.show(
       SimpleMessageKind.question,
-      'Install the $target filter',
-      detail: manualSwapDetail(target, current),
+      l10n.filterSwapInstall(target),
+      detail: manualSwapDetail(l10n, target, current),
       actions: [
         SimpleMessageAction(
-          'Cancel swap',
+          l10n.filterSwapCancel,
           () => _answer(
             position,
             target,
             current,
             (n) => n.cancelManualSwap(),
-            "Couldn't cancel the swap",
+            l10n.filterSwapCouldntCancel,
           ),
         ),
-        SimpleMessageAction('Later', () {}),
+        SimpleMessageAction(l10n.filterSwapLater, () {}),
         SimpleMessageAction(
-          '$target is in',
+          l10n.filterSwapIsIn(target),
           () => _answer(
             position,
             target,
             current,
             (n) => n.reportInstalled(position),
-            "Couldn't confirm the filter",
+            l10n.filterSwapCouldntConfirm,
           ),
         ),
       ],
@@ -223,7 +225,7 @@ class _ManualSwapDialog extends StatelessWidget {
         color: AraColors.accentWarning,
       ),
       title: Text('Install the $target filter'),
-      content: Text(manualSwapDetail(target, current)),
+      content: Text(manualSwapDetail(context.l10n, target, current)),
       actions: [
         TextButton(onPressed: onCancel, child: const Text('Cancel swap')),
         TextButton(

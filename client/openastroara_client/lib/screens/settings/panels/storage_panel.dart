@@ -605,7 +605,7 @@ class _EjectButtonState extends ConsumerState<StorageEjectButton> {
     final notify = userNotifier(context);
     final l10n = context.l10n;
     if (store == null || store.isEmpty) {
-      notify('No store drive to eject.');
+      notify(l10n.storageNoDriveEject, refused: true);
       return;
     }
     setState(() => _busy = true);
@@ -655,11 +655,6 @@ class _EjectButtonState extends ConsumerState<StorageEjectButton> {
   }
 }
 
-const storageCheckDiskTitle = 'Check the store drive?';
-const storageCheckDiskBody =
-    'The drive is briefly taken offline while its filesystem is verified and '
-    'repaired if needed. Takes seconds to a couple of minutes; capture must '
-    'be idle.';
 
 /// §29 user-triggered filesystem check. exFAT (the take-home format) has no
 /// journal, so after a field power cut this is how the drive gets healthy —
@@ -691,8 +686,8 @@ class _CheckDiskButtonState extends ConsumerState<StorageCheckDiskButton> {
   Future<bool?> _askInDialog() => showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text(storageCheckDiskTitle),
-      content: const Text(storageCheckDiskBody),
+      title: Text(context.l10n.storageCheckTitle),
+      content: Text(context.l10n.storageCheckBody),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(false),
@@ -716,7 +711,7 @@ class _CheckDiskButtonState extends ConsumerState<StorageCheckDiskButton> {
     final notify = userNotifier(context);
     final l10n = context.l10n;
     if (store == null || store.isEmpty) {
-      notify('No store drive to check — connect one first.');
+      notify(l10n.storageNoDriveCheck, refused: true);
       return;
     }
     final proceed = await (widget.confirm?.call() ?? _askInDialog());

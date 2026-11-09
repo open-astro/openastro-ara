@@ -21,6 +21,10 @@ enum SimpleMessageKind {
 
   /// Amber outline with its buttons; stays until answered.
   question,
+
+  /// Amber dot and outline; fades after [kSimpleResultLife]: the action was
+  /// refused (no disk to eject), nothing went wrong.
+  refused,
 }
 
 /// How long a result pill stays.
@@ -136,7 +140,7 @@ class SimpleMessagesNotifier extends Notifier<List<SimpleMessage>> {
       ),
       ...state,
     ];
-    if (kind == SimpleMessageKind.result) {
+    if (kind == SimpleMessageKind.result || kind == SimpleMessageKind.refused) {
       _timers[id] = Timer(kSimpleResultLife, () => dismiss(id));
     }
     return id;
@@ -166,6 +170,7 @@ typedef UserNotify = void Function(
   bool? snackBarRed,
   Duration? snackBarDuration,
   bool warning,
+  bool refused,
   bool sticky,
 });
 
@@ -181,6 +186,7 @@ UserNotify userNotifier(BuildContext context, {SimpleStatusOrigin? origin}) {
     bool? snackBarRed,
     Duration? snackBarDuration,
     bool warning = false,
+    bool refused = false,
     bool sticky = false,
   }) {
     // Active, not just chosen: with the Experimental switch off the full UI
@@ -193,6 +199,8 @@ UserNotify userNotifier(BuildContext context, {SimpleStatusOrigin? origin}) {
                 ? SimpleMessageKind.error
                 : warning
                 ? SimpleMessageKind.warning
+                : refused
+                ? SimpleMessageKind.refused
                 : SimpleMessageKind.result,
             title,
             detail: detail,

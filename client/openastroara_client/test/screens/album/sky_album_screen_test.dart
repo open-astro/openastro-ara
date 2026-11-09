@@ -116,7 +116,30 @@ final _m31Frames = [
         capturedUtc: DateTime(2026, 3, 2 + i, 22).toUtc()),
 ];
 
+Finder albumTierNameFinder(AlbumTier tier) => find.text(switch (tier) {
+      AlbumTier.bronze => 'Bronze',
+      AlbumTier.silver => 'Silver',
+      AlbumTier.gold => 'Gold',
+    });
+
 void main() {
+  testWidgets('the reveal fades the tier word in with the border, not in its final colour', (tester) async {
+    final card = AlbumCardData(
+      dso: _m31,
+      label: 'M31',
+      number: 31,
+      bookSize: 110,
+      stats: CardStats(frameCount: 5000, integrationHours: 100, firstCaptureUtc: DateTime.utc(2026), filters: const ['L']),
+    );
+    final tier = card.tier!;
+    final word = albumTierNameFinder(tier);
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: SizedBox(width: 200, height: 280, child: AlbumCardFront(card, reveal: true, revealFrom: AlbumTier.values.first == tier ? null : AlbumTier.values.first)))));
+    Color colour() => tester.widget<Text>(word).style!.color!;
+    expect(colour(), isNot(albumTierColor(tier)), reason: 'first frame');
+    await tester.pumpAndSettle();
+    expect(colour(), albumTierColor(tier));
+  });
+
   testWidgets('a missing card\'s action calls back with that object', (tester) async {
     PlanningDso? picked;
     await _pump(tester, frames: _m31Frames, onImageTarget: (d) => picked = d);

@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/screens/simple/simple_rig_storage.dart';
 import 'package:openastroara/screens/album/sky_album_screen.dart';
 import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
@@ -3459,6 +3460,19 @@ void main() {
     expect(find.byKey(const Key('simple-storage')), findsOneWidget);
     expect(tester.getRect(find.byKey(const Key('simple-storage'))).bottom, lessThanOrEqualTo(768));
     expect(c.read(simpleModeProvider).value, isTrue);
+  });
+
+  testWidgets('Open Storage reveals once: Settings › Rig opened later does not jump', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    c.read(selectedSettingsPanelProvider.notifier).select('session.storage');
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-storage')), findsOneWidget);
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-menu')), findsNothing, reason: 'closed');
+    await _openSection(tester, 'Rig');
+    expect(tester.widget<SimpleStorageBlock>(find.byType(SimpleStorageBlock)).reveal, isFalse);
   });
 
   testWidgets('a jump to another settings panel opens it over Simple Mode', (tester) async {

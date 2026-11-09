@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/l10n.dart';
 import '../../services/storage_devices_api.dart';
 import '../../services/storage_space_api.dart';
+import '../../state/settings/storage_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../widgets/inline_choices.dart';
@@ -97,20 +98,29 @@ class _SimpleStorageBlockState extends ConsumerState<SimpleStorageBlock> {
     final space = ref.watch(storageSpaceProvider);
     final devices = ref.watch(storageDevicesProvider).asData?.value;
     final value = space.asData?.value;
-    final connected = value != null;
+    final reading = value == null && space.isLoading && !space.hasError;
+    // Only a missing server answers null: a failed read still has a rig.
+    final noRig = value == null && !reading && !space.hasError;
+    final connected = !reading && !noRig;
     final store = devices?.where((d) => d.isAraStore).firstOrNull;
-    final name = store?.friendlyName ?? l10n.shellStorageInternal;
+    final name =
+        store?.friendlyName ??
+        (space.hasError
+            ? l10n.shellStorageUnknownDisk
+            : l10n.shellStorageInternal);
     final free = value?.freeBytes;
     final total = value?.totalBytes;
     final hasFigures = free != null && total != null && total > 0;
     // The one reason saving can't work right now, said in red.
     final problem = space.hasError
         ? l10n.shellStorageUnreadable
-        : connected && !hasFigures
+        : value != null && !hasFigures
         ? l10n.shellStorageNotPlugged
         : hasFigures && free <= 0
         ? l10n.shellStorageFull
         : null;
+    final warnBytes =
+        ref.watch(storageSettingsProvider).minFreeDiskWarnGb * 1000000000;
     return Column(
       key: const Key('simple-storage'),
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -121,7 +131,11 @@ class _SimpleStorageBlockState extends ConsumerState<SimpleStorageBlock> {
           style: kSimpleText.copyWith(color: AraColors.textSecondary),
         ),
         Text(
-          connected ? name : l10n.shellRigNotConnected,
+          noRig
+              ? l10n.shellRigNotConnected
+              : reading
+              ? l10n.shellStorageReading
+              : name,
           style: kSimpleText.copyWith(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -133,7 +147,11 @@ class _SimpleStorageBlockState extends ConsumerState<SimpleStorageBlock> {
             child: LinearProgressIndicator(
               value: (1 - free / total).clamp(0.0, 1.0),
               minHeight: 8,
-              color: problem != null ? AraColors.accentError : null,
+              color: problem != null
+                  ? AraColors.accentError
+                  : free <= warnBytes
+                  ? AraColors.accentWarning
+                  : null,
               backgroundColor: AraColors.textSecondary.withValues(alpha: 0.2),
             ),
           ),
@@ -191,8 +209,8 @@ class _SimpleStorageBlockState extends ConsumerState<SimpleStorageBlock> {
         if (_checkAsk != null)
           InlineConfirm(
             id: 'simple-storage-check-ask',
-            title: storageCheckDiskTitle,
-            body: const Text(storageCheckDiskBody),
+            title: l10n.storageCheckTitle,
+            body: Text(l10n.storageCheckBody),
             confirmLabel: l10n.shellStorageCheck,
             cancelLabel: l10n.planCancel,
             style: kSimpleText,

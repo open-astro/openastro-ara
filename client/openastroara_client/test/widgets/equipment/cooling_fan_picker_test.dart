@@ -122,6 +122,14 @@ Future<void> _open(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('the combo box tells screen readers it is the Cooling fan', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pumpPicker(tester);
+    final node = tester.getSemantics(find.byKey(const Key('cooling-fan-picker')));
+    expect(node.label, allOf(contains('Cooling fan'), contains('None')));
+    handle.dispose();
+  });
+
   testWidgets('None comes first, then each writable port as Device › Port', (
     tester,
   ) async {

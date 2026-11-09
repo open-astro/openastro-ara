@@ -221,7 +221,7 @@ class AlbumCardFront extends StatelessWidget {
             const SizedBox(width: 6),
             Flexible(
               child: Text(albumTierName(context, tier),
-                  maxLines: 1, overflow: TextOverflow.ellipsis, style: AraText.caption.copyWith(color: albumTierColor(tier))),
+                  maxLines: 1, overflow: TextOverflow.ellipsis, style: AraText.caption.copyWith(color: borderColor.withValues(alpha: t))),
             ),
           ],
         ]),

@@ -51,23 +51,28 @@ class CoolingFanPicker extends ConsumerWidget {
             fontWeight: FontWeight.w600,
           ),
         ),
-        DropdownButton<CoolingFan>(
-          key: const Key('cooling-fan-picker'),
-          isExpanded: true,
-          value: value,
-          // 48 is Flutter's own floor for this control: over Simple Mode's 44.
-          itemHeight: kMinInteractiveDimension,
-          style: style,
-          onChanged: (v) {
-            if (v != null && v != value) onChanged(v);
-          },
-          items: [
-            for (final o in options.entries)
-              DropdownMenuItem(
-                value: o.key,
-                child: Text(o.value, overflow: TextOverflow.ellipsis),
-              ),
-          ],
+        MergeSemantics(
+          child: Semantics(
+            label: l10n.coolingFan,
+            child: DropdownButton<CoolingFan>(
+              key: const Key('cooling-fan-picker'),
+              isExpanded: true,
+              value: value,
+              // 48 is Flutter's own floor for this control: over Simple Mode's 44.
+              itemHeight: kMinInteractiveDimension,
+              style: style,
+              onChanged: (v) {
+                if (v != null && v != value) onChanged(v);
+              },
+              items: [
+                for (final o in options.entries)
+                  DropdownMenuItem(
+                    value: o.key,
+                    child: Text(o.value, overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+            ),
+          ),
         ),
         Text(
           value.isNone ? l10n.coolingFanNoneNote : l10n.coolingFanChosenNote,
