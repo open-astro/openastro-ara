@@ -20,11 +20,11 @@ namespace OpenAstroAra.Server.Services;
 /// §35.3 emergency stop — the one-button "make everything stop moving NOW"
 /// path behind <c>POST /api/v1/server/emergency-stop</c>. Rungs, in order:
 /// abort active sequence runs FIRST (so a still-running instruction can't
-/// start a fresh exposure or slew behind the stop), then halt the rotator
+/// start a fresh exposure or slew behind the stop), then stop the mount where it is, halt the rotator
 /// where it is (aborting a run only stops the sequencer waiting on its move,
 /// #1671), abort the in-flight exposure, stop the guide-camera focus loop, the Bahtinov readout,
-/// a running autofocus and polar alignment, stop guiding, stop the mount where it is, switch
-/// the flat panel's light off, and switch the camera's cooler off. Every rung is best-effort — a
+/// a running autofocus and polar alignment, stop guiding, stop the mount again if a polar alignment
+/// was running, switch the flat panel's light off, and switch the camera's cooler off. Every rung is best-effort — a
 /// dead device must never block the remaining rungs — and the result reports honestly what each rung did.
 /// The <c>safety.emergency_stop</c> WS event fires up-front so WILMA can
 /// show the stop banner while the daemon works.
