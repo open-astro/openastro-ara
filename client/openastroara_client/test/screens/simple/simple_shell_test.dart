@@ -4516,6 +4516,53 @@ void main() {
       expect(find.byKey(const Key('simple-device-switches')), findsOneWidget);
     });
 
+    Future<_Diagnostics> phone(WidgetTester tester, {Set<String> start = const {}}) async {
+      final d = _Diagnostics(start);
+      await _pump(tester, const Size(390, 844), gear: [
+        diagnosticsStateProvider.overrideWith(() => d),
+        switchListProvider.overrideWith(() => _Switches([_switch('box', 'Powerbox', SwitchConnectionState.connected)])),
+      ]);
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      return d;
+    }
+
+    testWidgets('on a phone the window Switches opens sits above the warning', (tester) async {
+      await phone(tester, start: {'dew_formation'});
+      await tester.tap(find.widgetWithText(TextButton, 'Switches'));
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+      final overlap = tester.getRect(find.byKey(const Key('simple-device-switches'))).intersect(tester.getRect(pill));
+      expect(overlap.isEmpty, isFalse, reason: 'precondition: the window and the words overlap');
+      final hit = HitTestResult();
+      tester.binding.hitTestInView(hit, overlap.center, tester.view.viewId);
+      expect(hit.path.map((e) => e.target), isNot(contains(tester.renderObject(pill))));
+    });
+
+    testWidgets('on a phone a pill arriving and leaving keeps the widgets around it', (tester) async {
+      final d = await phone(tester);
+      Element settings() => tester.element(find.byKey(const Key('simple-settings')));
+      Element strip() => tester.element(find.byKey(const Key('simple-full-ui-button')));
+      final (before, stripBefore) = (settings(), strip());
+      Future<void> settle() async {
+        for (var i = 0; i < 4; i++) {
+          await tester.pump(const Duration(milliseconds: 300));
+        }
+      }
+      d.open({'dew_formation'});
+      await settle();
+      expect(pill, findsOneWidget);
+      expect(identical(settings(), before), isTrue);
+      expect(identical(strip(), stripBefore), isTrue);
+      d.open({});
+      await settle();
+      expect(pill, findsNothing);
+      expect(identical(settings(), before), isTrue);
+      expect(identical(strip(), stripBefore), isTrue);
+    });
+
     testWidgets('no connected switch device: no button', (tester) async {
       final (c, _) = await shell(tester, start: {'dew_formation'});
       await tester.pump();

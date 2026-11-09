@@ -980,7 +980,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final pillsBesideRail =
         _messagesHeight > messagesRoom && messagesWidth - railShift >= 240;
     final pillsOverRail =
-        panels && _messagesHeight > messagesRoom && !pillsBesideRail;
+        panels &&
+        _messagesHeight > messagesRoom &&
+        !pillsBesideRail &&
+        _device == null &&
+        _popover == _Popover.none;
     // The rail's popovers (a mode's panel, the modes, the queue) take the room
     // from under the status pill down to the screen's inset, over the bottom
     // row while open (they sit left of the rail, clear of Stop), above the
@@ -1027,6 +1031,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final motion = reduceMotionOf(context)
         ? Duration.zero
         : const Duration(milliseconds: 220);
+    // Both slots stay filled, and with one type, or the pills moving between
+    // them would shift their siblings and rebuild them from scratch.
+    final emptyPillSlot = AnimatedPositioned(
+      duration: Duration.zero,
+      left: 0,
+      top: 0,
+      child: const SizedBox.shrink(),
+    );
     final messagePills = AnimatedPositioned(
       left: kSimpleInset + (pillsBesideRail ? railShift : 0),
       top: panels ? messagesTop : kSimpleInset,
@@ -1171,7 +1183,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                         // The message pills, top-left under the strip (under the
                         // Preflight strip when it shows), down to the left rail;
                         // they stay in the immersive view.
-                        if (!pillsOverRail) messagePills,
+                        pillsOverRail ? emptyPillSlot : messagePills,
                         // The camera's status, top-right under the strip (messages
                         // have the top-left), at most half the row; it stays in
                         // the immersive view and moves up into the corner.
@@ -1518,8 +1530,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             ],
                           ),
                         ),
-                        // Painted last only when the rail would otherwise cover them.
-                        if (pillsOverRail) messagePills,
+                        // Above the rail only when it would cover them, and
+                        // never above an open window or popover.
+                        pillsOverRail ? messagePills : emptyPillSlot,
                       ],
                     ),
                     ),
