@@ -2663,6 +2663,31 @@ void main() {
       expect(asked, 1);
     });
 
+    testWidgets('Rig and Profile sit as close as the version lines, each Change still a 44 pt target', (tester) async {
+      await open(tester);
+      double top(String t) => tester.getTopLeft(find.descendant(of: sheet, matching: find.text(t))).dy;
+      expect(top('Profile') - top('Rig'), closeTo(top('Ara server') - top('This app'), 1));
+      final rig = tester.getRect(find.byKey(const Key('simple-ara-change-rig')));
+      final profile = tester.getRect(find.byKey(const Key('simple-ara-change-profile')));
+      expect(rig.height, greaterThanOrEqualTo(44));
+      expect(profile.height, greaterThanOrEqualTo(44));
+      expect(rig.overlaps(profile), isFalse, reason: 'a tap lands on one Change only');
+    });
+
+    testWidgets('Licenses is a 44 pt target on the title line, read out in full', (tester) async {
+      final handle = tester.ensureSemantics();
+      await open(tester);
+      final link = find.byKey(const Key('simple-ara-licenses'));
+      final title = tester.getCenter(find.descendant(of: sheet, matching: find.text('OpenAstro Ara')));
+      expect(tester.getCenter(link).dy, closeTo(title.dy, 1));
+      expect(tester.getSize(link).height, greaterThanOrEqualTo(44));
+      expect(tester.getTopRight(find.descendant(of: link, matching: find.text('Licenses'))).dx,
+          closeTo(tester.getTopRight(find.descendant(of: find.byKey(const Key('simple-ara-change-rig')), matching: find.text('Change'))).dx, 1),
+          reason: 'one right edge with the Change buttons');
+      expect(find.descendant(of: sheet, matching: find.bySemanticsLabel('Open-source licenses')), findsOneWidget);
+      handle.dispose();
+    });
+
     testWidgets('Open-source licenses opens the licenses page, over a closed sheet (#1645)', (tester) async {
       await open(tester);
       await tester.tap(find.byKey(const Key('simple-ara-licenses')));

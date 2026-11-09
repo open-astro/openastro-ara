@@ -2577,11 +2577,17 @@ abstract class AppLocalizations {
   /// **'Full UI'**
   String get shellFullUi;
 
-  /// OpenAstro Ara sheet: link to the licenses page
+  /// OpenAstro Ara sheet: screen-reader name of the link to the licenses page
   ///
   /// In en, this message translates to:
   /// **'Open-source licenses'**
   String get shellOpenSourceLicenses;
+
+  /// OpenAstro Ara sheet: short link to the licenses page on the title line
+  ///
+  /// In en, this message translates to:
+  /// **'Licenses'**
+  String get shellLicenses;
 
   /// Simple Mode Settings › Rig switch: turn Simple Mode off to go to the full app
   ///

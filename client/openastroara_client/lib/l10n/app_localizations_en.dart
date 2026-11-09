@@ -1449,6 +1449,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellOpenSourceLicenses => 'Open-source licenses';
 
   @override
+  String get shellLicenses => 'Licenses';
+
+  @override
   String get shellSimpleMode => 'Simple Mode';
 
   @override

@@ -1449,6 +1449,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellOpenSourceLicenses => 'Open-source licenses';
 
   @override
+  String get shellLicenses => 'Licenses';
+
+  @override
   String get shellSimpleMode => 'Simple Mode';
 
   @override
@@ -4880,6 +4883,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get shellOpenSourceLicenses => 'Licenças de código aberto';
+
+  @override
+  String get shellLicenses => 'Licenças';
 
   @override
   String get shellSimpleMode => 'Modo Simples';

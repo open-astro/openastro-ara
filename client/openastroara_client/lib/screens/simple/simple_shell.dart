@@ -4239,6 +4239,7 @@ class _ChangeRow extends StatelessWidget {
     required this.change,
     required this.onTap,
     this.wrapValue = false,
+    this.linePlace = CrossAxisAlignment.center,
   });
 
   final Key buttonKey;
@@ -4252,9 +4253,14 @@ class _ChangeRow extends StatelessWidget {
   /// The Ara sheet wraps a long name; Settings cuts it to one line.
   final bool wrapValue;
 
+  /// Where the line sits in the 44 pt target. The Ara sheet puts two rows'
+  /// lines together and spends each target's height away from the other.
+  final CrossAxisAlignment linePlace;
+
   @override
   Widget build(BuildContext context) => Row(
     spacing: AraSpace.s12,
+    crossAxisAlignment: linePlace,
     children: [
       Text(label, style: kSimpleText),
       Expanded(
@@ -4269,11 +4275,15 @@ class _ChangeRow extends StatelessWidget {
       TextButton(
         key: buttonKey,
         style: TextButton.styleFrom(
-          // Simple Mode's 44 pt target (user, 2026-11-03), over keeping
-          // the two lines close.
+          // Simple Mode's 44 pt target (user, 2026-11-03).
           minimumSize: const Size(0, 44),
           padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          alignment: switch (linePlace) {
+            CrossAxisAlignment.end => Alignment.bottomCenter,
+            CrossAxisAlignment.start => Alignment.topCenter,
+            _ => Alignment.center,
+          },
         ),
         onPressed: onTap,
         child: Text(
@@ -4325,45 +4335,20 @@ class _AraSheet extends ConsumerWidget {
       ),
       child: IntrinsicWidth(
         child: SimplePanel(
-        padding: const EdgeInsets.all(AraSpace.s16),
+        // The top and bottom 44 pt targets fill most of the usual inset.
+        padding: const EdgeInsets.fromLTRB(
+          AraSpace.s16,
+          AraSpace.s4,
+          AraSpace.s16,
+          0,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: AraSpace.s8,
           children: [
             SimpleVersions(
               title: kAppName,
-              rows: [
-                (l10n.shellThisApp, version ?? '—'),
-                (l10n.shellAraServer, rig?.daemonVersion ?? '—'),
-                if (rig?.guiderVersion != null)
-                  (l10n.deviceGuider, rig!.guiderVersion!),
-              ],
-            ),
-            _ChangeRow(
-              buttonKey: const Key('simple-ara-change-rig'),
-              label: l10n.shellSectionRig,
-              value: server == null ? '—' : server.mdnsName ?? server.hostname,
-              change: l10n.shellChangeRig,
-              wrapValue: true,
-              onTap: () => _changeRigOrProfile(ref, onClose, rig: true),
-            ),
-            _ChangeRow(
-              buttonKey: const Key('simple-ara-change-profile'),
-              label: l10n.shellProfile,
-              value: profile ?? '—',
-              change: l10n.shellChangeProfile,
-              wrapValue: true,
-              onTap: () => _changeRigOrProfile(ref, onClose, rig: false),
-            ),
-            if (running)
-              Text(
-                l10n.shellPlanRunning,
-                style: AraText.caption.copyWith(color: AraColors.accentBusy),
-              ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
+              titleAction: TextButton(
                 key: const Key('simple-ara-licenses'),
                 style: TextButton.styleFrom(
                   minimumSize: const Size(0, 44),
@@ -4375,11 +4360,53 @@ class _AraSheet extends ConsumerWidget {
                   onClose();
                 },
                 child: Text(
-                  l10n.shellOpenSourceLicenses,
+                  l10n.shellLicenses,
+                  semanticsLabel: l10n.shellOpenSourceLicenses,
                   style: const TextStyle(fontSize: 14),
                 ),
               ),
+              rows: [
+                (l10n.shellThisApp, version ?? '—'),
+                (l10n.shellAraServer, rig?.daemonVersion ?? '—'),
+                if (rig?.guiderVersion != null)
+                  (l10n.deviceGuider, rig!.guiderVersion!),
+              ],
             ),
+            // Half of the version table's 4 px line gap on each side.
+            Padding(
+              padding: const EdgeInsets.only(bottom: AraSpace.s4 / 2),
+              child: _ChangeRow(
+                buttonKey: const Key('simple-ara-change-rig'),
+                label: l10n.shellSectionRig,
+                value: server == null
+                    ? '—'
+                    : server.mdnsName ?? server.hostname,
+                change: l10n.shellChangeRig,
+                wrapValue: true,
+                linePlace: CrossAxisAlignment.end,
+                onTap: () => _changeRigOrProfile(ref, onClose, rig: true),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: AraSpace.s4 / 2),
+              child: _ChangeRow(
+                buttonKey: const Key('simple-ara-change-profile'),
+                label: l10n.shellProfile,
+                value: profile ?? '—',
+                change: l10n.shellChangeProfile,
+                wrapValue: true,
+                linePlace: CrossAxisAlignment.start,
+                onTap: () => _changeRigOrProfile(ref, onClose, rig: false),
+              ),
+            ),
+            if (running)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AraSpace.s16),
+                child: Text(
+                  l10n.shellPlanRunning,
+                  style: AraText.caption.copyWith(color: AraColors.accentBusy),
+                ),
+              ),
           ],
         ),
       ),

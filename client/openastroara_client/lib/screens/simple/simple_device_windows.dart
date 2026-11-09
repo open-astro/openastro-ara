@@ -539,21 +539,36 @@ class _OnOff extends StatelessWidget {
 /// A titled two-column list of versions, each beside its name (Settings ›
 /// Rig, a device's page in Settings and the OpenAstro Ara sheet).
 class SimpleVersions extends StatelessWidget {
-  const SimpleVersions({super.key, required this.rows, this.title});
+  const SimpleVersions({
+    super.key,
+    required this.rows,
+    this.title,
+    this.titleAction,
+  });
 
   final List<(String, String)> rows;
 
   /// "Versions" unless given.
   final String? title;
 
+  /// A tall button at the title line's end; its height replaces the gap.
+  final Widget? titleAction;
+
   @override
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
-    spacing: AraSpace.s8,
+    spacing: titleAction == null ? AraSpace.s8 : 0,
     children: [
-      Text(
-        title ?? context.l10n.deviceVersions,
-        style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+      Row(
+        children: [
+          Expanded(
+            child: Text(
+              title ?? context.l10n.deviceVersions,
+              style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+            ),
+          ),
+          ?titleAction,
+        ],
       ),
       Table(
         defaultColumnWidth: const IntrinsicColumnWidth(),

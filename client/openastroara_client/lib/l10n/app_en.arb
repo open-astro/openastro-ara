@@ -2000,7 +2000,11 @@
   },
   "shellOpenSourceLicenses": "Open-source licenses",
   "@shellOpenSourceLicenses": {
-    "description": "OpenAstro Ara sheet: link to the licenses page"
+    "description": "OpenAstro Ara sheet: screen-reader name of the link to the licenses page"
+  },
+  "shellLicenses": "Licenses",
+  "@shellLicenses": {
+    "description": "OpenAstro Ara sheet: short link to the licenses page on the title line"
   },
   "shellSimpleMode": "Simple Mode",
   "@shellSimpleMode": {

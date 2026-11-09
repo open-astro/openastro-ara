@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-09T20:07:22+13:00",
+  "generatedAt": "2026-11-09T20:21:17+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -829,7 +829,7 @@
       "name": "Ara Sheet (Simple Mode)",
       "kind": "card",
       "refersTo": "ara-sheet-simple",
-      "description": "Opened from the mark, beside the left rail: versions, then rig and profile each with a Change button, and an Open-source licenses link; as wide as its text from 280 to 420 px; no Settings row. Each Change button is a real button to a screen reader, named for what it changes.",
+      "description": "Opened from the mark, beside the left rail: versions with a Licenses link at the title line's end, then rig and profile at the version lines' pitch, each with a Change button whose 44 pt target spends its height away from the other; as wide as its text from 280 to 420 px; no Settings row. Each Change button is a real button to a screen reader, named for what it changes.",
       "html": "<div class=\"ds-ara-sheet\"><div class=\"ds-ara-sheet-title\">OpenAstro Ara</div><table><tr><td>This app</td><td>0.0.1</td></tr><tr><td>Ara server</td><td>1.0.0.0</td></tr><tr><td>Guider</td><td>2.1.0</td></tr><tr><td>Rig</td><td>astro</td></tr><tr><td>Profile</td><td>Backyard Rig</td></tr></table></div>",
       "css": ".ds-ara-sheet { display: inline-block; min-width: 280px; max-width: 420px; padding: 16px; background: rgba(26,26,26,.9); border-radius: 10px; color: #E0E0E0; font: 14px system-ui, sans-serif; } .ds-ara-sheet-title { font-weight: 600; margin-bottom: 8px; } .ds-ara-sheet table { border-collapse: collapse; } .ds-ara-sheet td { padding: 0 0 4px; vertical-align: baseline; } .ds-ara-sheet td:first-child { color: #A0A0A0; padding-right: 24px; }"
     },
