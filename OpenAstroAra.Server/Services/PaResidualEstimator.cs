@@ -192,6 +192,8 @@ internal sealed class PaResidualEstimator {
 
     // The next frame's Dec change regressed on the commanded move (pooled within segments, so the drift
     // is each segment's intercept). 1 when the pulses do not vary enough to tell.
+    // shortcut: on a seeing-dominated closed loop each pulse answers its frame's own noise, so this reads high and
+    // a mount that ignores its pulses can escape the refusal. Upgrade against a real guide log.
     private double PulseResponse(double ratePxPerMs) {
         double sxx = 0, sxy = 0;
         foreach (var segment in Usable()) {

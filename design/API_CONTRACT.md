@@ -1357,3 +1357,23 @@ its start and the client has nothing to do with it.
 **Spec ref:** `Services/EmergencyStopService.cs`, `Services/SequencerService.cs`
 
 **Related:** #1738
+
+---
+
+## 2026-11-09 — What a guider settings push did not land: `not_applied`; the Guider's limits at save (#1748)
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/guider/advanced` gains `not_applied` (`GuiderAdvancedViewDto`, new `GuiderNotAppliedDto`); `PUT /api/v1/profile/guider-advanced` refuses more values; the guider push (connect-time, `POST /api/v1/equipment/guider/profile/push`, both scopes). This changes the 2026-10-16 entry for the guider-advanced section.
+
+**Decision:** the view is `{connected, current, ra_algorithms[], dec_algorithms[], not_applied[{setting, reason}]}`. `setting` is the name the imager sees, `reason` plain text; for a refusal it is the Guider's own message. The list holds the latest push only, each push replaces it, and it is empty when nothing failed, when no push has run and when the Guider is not connected. A refused message from the push is logged and listed, and raises no notification.
+
+The PUT answers 400 outside these limits (`GuiderAdvancedLimits`): search region whole, 7–50; mass change threshold above 0, at most 1 (a fraction on the wire); min and max star HFD each above 0, min strictly below max when both are set; tolerate-jumps threshold and dither scale above 0, at most 100; backlash pulse 20–8000, floor at least 20 and at most the pulse, ceiling at most 8000 and at least the pulse, floor at most ceiling; variable delays whole seconds, short 0–10, long 0–120, short at most long (0 is now allowed; null still means unset); RA algorithm one of Hysteresis, Lowpass, Lowpass2, Resist Switch, Predictive PEC, ZFilter; Dec algorithm the same list without Predictive PEC. Names are checked after trimming.
+
+The push applies the same limits to values already saved: a bad value is left out of its group and listed, and the rest of the group is sent. An inconsistent backlash group goes whole, which replaces the earlier log-only skip of an enable with no pulse. Aggressiveness resolves per axis after any `set_algo` in the same push, from `get_algo_param_names`: `aggression` or `reactiveWeight` as Ara's 0..1 fraction, `aggressiveness` as the fraction × 100, none of these with other names present not sent and listed. A question that failed, or only `algorithmName` back, sends `aggression` as before.
+
+**Reasoning:** an imager with one refused setting got a false Critical on every connect, an aggressiveness change did nothing on four algorithms, and one bad value cost its whole message. The limits are the Guider's own. They are declared in the Equipment project because the push lives there and the Server project maps onto them.
+
+**Spec ref:** `GuiderAdvancedLimits`, `PHD2Guider.ResolveAggressiveness`, `PHD2Guider.LastPushNotApplied`, `GuiderLiveService.GetAdvancedAsync`
+
+**Related:** #1364, #1592
+
+---

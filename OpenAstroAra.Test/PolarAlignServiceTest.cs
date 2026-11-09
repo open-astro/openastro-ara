@@ -963,6 +963,23 @@ namespace OpenAstroAra.Test {
             Assert.That(paCalls, Is.Empty, "no lease is taken for a start that failed");
         }
 
+
+        [Test]
+        public async Task The_loop_stop_shares_one_time_limit_between_its_two_steps() {
+            // #1749 asks for at most 10 s; a slow stop_capture must not earn the state wait a fresh limit.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls, answerCaptures: false);
+            fake.OnRpc("get_app_state", _ => JsonValue.Create("Looping"));
+            fake.OnRpc("stop_capture", _ => { Thread.Sleep(800); return JsonValue.Create(0); });
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var stopped = await guider.RequireConnectedGuider().StopLoopForCaptureAsync(TimeSpan.FromSeconds(1), CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(stopped, Is.False);
+            Assert.That(clock.Elapsed, Is.LessThan(TimeSpan.FromMilliseconds(1600)));
+        }
+
         [Test]
         public async Task A_start_right_after_a_stop_waits_for_the_guiders_capture_to_finish() {
             // #1711: Stop abandons the capture the guider is still exposing; a Start within seconds sent a
