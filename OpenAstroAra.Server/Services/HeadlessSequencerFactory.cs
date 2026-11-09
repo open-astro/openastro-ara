@@ -253,7 +253,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 // §38k-4 — utility instructions with no equipment deps.
                 new Annotation(),
                 // §58.12-b — pause-for-a-human step (manual filter swap on an
-                // OSC rig, etc.); arms the root's pause gate as AwaitingUser.
+                // OSC rig, etc.); arms the root's pause gate as Prompt.
                 new WaitForUser(),
                 new WaitForTimeSpan(),
                 new WaitForTime(timeSources, clockTime),
