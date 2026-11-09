@@ -132,6 +132,27 @@ class AdrScopeTest(unittest.TestCase):
         r = self.run_script("--list", stdin="lib/a/sub/x.dart\n")
         self.assertEqual(r.stdout, "")
 
+    def proposed_record(self, body=None):
+        self.write("docs/adr/0003-p.md", RECORD_B.replace("Status: accepted", "Status: proposed"))
+        if body is not None:
+            self.env["PR_BODY"] = body
+        return self.run_script("--list", stdin="lib/c.dart\n")
+
+    def test_list_skips_a_proposed_record_the_pr_body_does_not_name(self):
+        r = self.proposed_record("## Decision records\n\n- 0001: unrelated\n")
+        self.assertEqual(r.stdout, "0002-b.md: rules 1\n")
+
+    def test_list_skips_a_proposed_record_when_there_is_no_pr_body(self):
+        self.assertEqual(self.proposed_record().stdout, "0002-b.md: rules 1\n")
+
+    def test_list_includes_a_proposed_record_the_pr_body_names(self):
+        r = self.proposed_record("## Decision records\n\n- 0003: this is its pilot change\n")
+        self.assertEqual(r.stdout, "0002-b.md: rules 1\n0003-p.md: rules 1\n")
+
+    def test_list_ignores_a_proposed_record_named_outside_the_section(self):
+        r = self.proposed_record("## Summary\n\n0003\n\n## Decision records\n\n<!-- 0003 -->\nNone\n")
+        self.assertEqual(r.stdout, "0002-b.md: rules 1\n")
+
     def test_list_skips_superseded_and_retired_records(self):
         self.write("docs/adr/0001-a.md", RECORD_A.replace("Status: accepted", "Status: superseded by 0002"))
         self.write("docs/adr/0002-b.md", RECORD_B.replace("Status: accepted", "Status: retired (#5)"))

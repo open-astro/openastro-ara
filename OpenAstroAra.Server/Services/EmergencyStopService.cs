@@ -20,11 +20,11 @@ namespace OpenAstroAra.Server.Services;
 /// §35.3 emergency stop — the one-button "make everything stop moving NOW"
 /// path behind <c>POST /api/v1/server/emergency-stop</c>. Rungs, in order:
 /// abort active sequence runs FIRST (so a still-running instruction can't
-/// start a fresh exposure or slew behind the stop), then halt the rotator
+/// start a fresh exposure or slew behind the stop), then stop the mount where it is, halt the rotator
 /// where it is (aborting a run only stops the sequencer waiting on its move,
 /// #1671), abort the in-flight exposure, stop the guide-camera focus loop, the Bahtinov readout,
-/// a running autofocus and polar alignment, stop guiding, stop the mount where it is, switch
-/// the flat panel's light off, and switch the camera's cooler off. Every rung is best-effort — a
+/// a running autofocus and polar alignment, stop guiding, stop the mount again if a polar alignment
+/// was running, switch the flat panel's light off, and switch the camera's cooler off. Every rung is best-effort — a
 /// dead device must never block the remaining rungs — and the result reports honestly what each rung did.
 /// The <c>safety.emergency_stop</c> WS event fires up-front so WILMA can
 /// show the stop banner while the daemon works.
@@ -55,7 +55,7 @@ public sealed partial class EmergencyStopService {
     // instead of stalling the ladder behind it and wedging the single-flight
     // gate for the rest of the session — abort_exposure in particular blocks
     // on the real Alpaca HTTP call, unlike the 202-style rungs. 10 s per rung
-    // keeps the worst-case ladder inside the client's 60 s receive timeout.
+    // puts the worst-case ladder at 14 rungs, 140 s, inside the client's 150 s receive timeout.
     // Internal knob so tests can compress it.
     internal TimeSpan RungTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
@@ -123,6 +123,20 @@ public sealed partial class EmergencyStopService {
 
         var (runsAborted, abortRunsOutcome) = await AbortRunsQuietlyAsync().ConfigureAwait(false);
         if (abortRunsOutcome is RungOutcome.Failed) { failedRungs.Add("abort_runs"); }
+        // §35.3 step 3: stop where it is, next after the runs so no hung rung below can hold the mount up.
+        // Never a park, home or slew: if the slew or park code is what went wrong, parking would repeat
+        // it. Two rungs so a hung abort still gets the tracking write.
+        Func<Task<bool>>? mountCanMove = _telescope is null ? null : async () => (await _telescope.GetAsync(CancellationToken.None).ConfigureAwait(false)) is { State: EquipmentConnectionState.Connected } mount && mount.Runtime?.Parked != true;
+        var mountFaulted = false;
+        async Task<bool> StopMountAsync(string pass) {
+            var abortSlew = await RungAsync($"abort mount slew ({pass})", mountCanMove,
+                _telescope is null ? null : ct => _telescope.AbortSlewAsync(ct)).ConfigureAwait(false);
+            var trackingOff = await RungAsync($"mount tracking off ({pass})", mountCanMove,
+                _telescope is null ? null : ct => _telescope.SetTrackingAsync(false, ct)).ConfigureAwait(false);
+            mountFaulted |= abortSlew is RungOutcome.Failed || trackingOff is RungOutcome.Failed;
+            return abortSlew is RungOutcome.Done && trackingOff is RungOutcome.Done;
+        }
+        var mountStoppedFirst = await StopMountAsync("first").ConfigureAwait(false);
         // Left where it stops (§35.3 step 4): Halt sends no target, so a turning rotator just stops.
         var rotatorOutcome = await RungAsync("halt rotator",
             _rotator is null ? null : async () => (await _rotator.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
@@ -156,14 +170,9 @@ public sealed partial class EmergencyStopService {
             _guider is null ? null : async () => (await _guider.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _guider is null ? null : async ct => await _guider.StopGuidingAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);
         if (guidingOutcome is RungOutcome.Failed) { failedRungs.Add("stop_guiding"); }
-        // §35.3 step 3: stop where it is. Never a park, home or slew: if the slew or park code is what
-        // went wrong, parking would repeat it. Two rungs so a hung abort still gets the tracking write.
-        Func<Task<bool>>? mountCanMove = _telescope is null ? null : async () => (await _telescope.GetAsync(CancellationToken.None).ConfigureAwait(false)) is { State: EquipmentConnectionState.Connected } mount && mount.Runtime?.Parked != true;
-        var abortSlewOutcome = await RungAsync("abort mount slew", mountCanMove,
-            _telescope is null ? null : ct => _telescope.AbortSlewAsync(ct)).ConfigureAwait(false);
-        var trackingOffOutcome = await RungAsync("mount tracking off", mountCanMove,
-            _telescope is null ? null : ct => _telescope.SetTrackingAsync(false, ct)).ConfigureAwait(false);
-        if (abortSlewOutcome is RungOutcome.Failed || trackingOffOutcome is RungOutcome.Failed) { failedRungs.Add("stop_mount"); }
+        // Polar alignment can move the mount and turn tracking on until its Stop lands.
+        if (polarOutcome is not RungOutcome.NotAvailable) { await StopMountAsync("again").ConfigureAwait(false); }
+        if (mountFaulted) { failedRungs.Add("stop_mount"); }
         var flatOutcome = await RungAsync("flat panel light off",
             _flatDevice is null ? null : async () => (await _flatDevice.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _flatDevice is null ? null : async ct => await _flatDevice.ApplyFlatPanelAsync(new FlatPanelRequestDto(LightOn: false), null, ct).ConfigureAwait(false)).ConfigureAwait(false);
@@ -177,7 +186,7 @@ public sealed partial class EmergencyStopService {
 
         var exposureAborted = exposureOutcome is RungOutcome.Done;
         var guidingStopped = guidingOutcome is RungOutcome.Done;
-        var mountStopped = abortSlewOutcome is RungOutcome.Done && trackingOffOutcome is RungOutcome.Done;
+        var mountStopped = mountStoppedFirst && !mountFaulted;
         var flatLightOff = flatOutcome is RungOutcome.Done;
 
         LogCompleted(runsAborted, exposureAborted, guidingStopped, mountStopped, flatLightOff);
