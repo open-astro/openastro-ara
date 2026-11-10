@@ -352,17 +352,17 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
 
     /// <summary>What erasing <paramref name="device"/> would lose. A drive that is not
     /// mounted cannot be read, and says so rather than reporting no frames.</summary>
-    public static StorageContentsDto ContentsOf(StorageDeviceDto? device) =>
+    public static StorageContentsDto ContentsOf(StorageDeviceDto? device, CancellationToken ct = default) =>
         device?.MountPoint is { } mount && Directory.Exists(mount)
-            ? Summarize(mount)
+            ? Summarize(mount, ct)
             : new StorageContentsDto(false, 0, null, 0);
 
-    internal static StorageContentsDto Summarize(string root) {
+    internal static StorageContentsDto Summarize(string root, CancellationToken ct = default) {
         var marker = new FileInfo(Path.Combine(root, LastCopyMarker));
         DateTime? copiedUntil = marker.Exists ? marker.LastWriteTimeUtc : null;
         int frames = 0, notCopied = 0;
         DateTime? newest = null;
-        foreach (var file in Walk(new DirectoryInfo(root), CancellationToken.None)) {
+        foreach (var file in Walk(new DirectoryInfo(root), ct)) {
             if (!CaptureScanService.LooksLikeFrameFile(file.Name)) {
                 continue;
             }

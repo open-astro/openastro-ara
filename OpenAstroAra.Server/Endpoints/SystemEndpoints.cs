@@ -342,7 +342,9 @@ public static class SystemEndpoints {
         storage.MapGet("/contents", async (string uuid, IStorageDeviceService svc, CancellationToken ct) => {
                 var drives = await svc.ListAsync(ct).ConfigureAwait(false);
                 var drive = drives.FirstOrDefault(d => string.Equals(d.Uuid, uuid, StringComparison.OrdinalIgnoreCase));
-                return Results.Ok(StorageCopyService.ContentsOf(drive));
+                // A store full of frames takes a while to walk: off the request thread, and
+                // stopped when the client goes away.
+                return Results.Ok(await Task.Run(() => StorageCopyService.ContentsOf(drive, ct), ct).ConfigureAwait(false));
             })
             .Produces<StorageContentsDto>()
             .WithName("GetStorageContents")
