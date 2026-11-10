@@ -815,8 +815,27 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // opening Simple Mode adopts a run in progress; only Plan acts on it.
     // Selects, not the whole run state: progress frames arrive every few
     // seconds and would rebuild the whole screen.
+    final screen = SimpleScreen.of(shown);
+    final screenHost = SimpleScreenHost(
+      onAddTarget: () => _openSheet(),
+      onEditTarget: (i) => _openSheet(edit: i),
+      editing: _editing,
+      onShowSky: () => setState(() => _sky = true),
+      onPickInSky: () => setState(() {
+        _sky = true;
+        _popover = _Popover.none;
+        _closeSheet();
+      }),
+      onSheetDone: () => setState(() {
+        _popover = _Popover.none;
+        _closeSheet();
+      }),
+      onTrackerTap: () => _toggle(_Popover.queue),
+    );
+    final sheet = screen.overlay(screenHost);
+    final tracker = screen.tracker(screenHost);
     final runActive =
-        shown == SimpleModeScreen.plan &&
+        sheet != null &&
         ref.watch(
           sequenceRunStateProvider.select(
             (s) => s.value?.state?.isActive ?? false,
@@ -917,27 +936,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
               kSimplePlanSquareHeight * simpleRailScale(context) +
               kSimpleInset
         : kSimpleInset;
-    final screenHost = SimpleScreenHost(
-      onAddTarget: () => _openSheet(),
-      onEditTarget: (i) => _openSheet(edit: i),
-    );
     final queuePanel = SimpleScreen.of(SimpleModeScreen.plan).panel(screenHost);
     final runSheet =
-        shown == SimpleModeScreen.plan &&
+        sheet != null &&
         ((_popover == _Popover.settings && !runActive) || _adding);
-    final sheet = SimpleRunSheet(
-      editing: _editing,
-      onShowSky: () => setState(() => _sky = true),
-      onPickInSky: () => setState(() {
-        _sky = true;
-        _popover = _Popover.none;
-        _closeSheet();
-      }),
-      onCreated: () => setState(() {
-        _popover = _Popover.none;
-        _closeSheet();
-      }),
-    );
     final sel = ref.watch(planetariumSelectionProvider);
     final motion = reduceMotionOf(context)
         ? Duration.zero
@@ -1295,7 +1297,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // The plan squares hug the bottom-right corner, just
                               // above the bottom row, growing left over the right
                               // half (the Info tiles have the left).
-                              if (shown == SimpleModeScreen.plan && !runSheet)
+                              if (tracker != null && !runSheet)
                                 AnimatedPositioned(
                                   key: const ValueKey('plan-squares'),
                                   left: width / 2,
@@ -1305,9 +1307,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   curve: Curves.easeOut,
                                   child: Align(
                                     alignment: Alignment.bottomRight,
-                                    child: SimpleRunTracker(
-                                      onTap: () => _toggle(_Popover.queue),
-                                    ),
+                                    child: tracker,
                                   ),
                                 ),
                               // The sky's pick, offered to Plan.

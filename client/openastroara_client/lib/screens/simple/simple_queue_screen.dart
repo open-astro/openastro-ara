@@ -27,6 +27,18 @@ class SimpleQueueScreen extends SimpleScreen {
   );
 
   @override
+  Widget overlay(SimpleScreenHost host) => SimpleRunSheet(
+    editing: host.editing,
+    onShowSky: host.onShowSky ?? () {},
+    onPickInSky: host.onPickInSky ?? () {},
+    onCreated: host.onSheetDone ?? () {},
+  );
+
+  @override
+  Widget tracker(SimpleScreenHost host) =>
+      SimpleRunTracker(onTap: host.onTrackerTap ?? () {});
+
+  @override
   Widget get shutter => const SimpleRunShutter();
 
   @override
