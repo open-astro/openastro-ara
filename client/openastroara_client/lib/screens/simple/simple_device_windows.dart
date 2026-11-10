@@ -21,6 +21,7 @@ import '../../widgets/equipment/cooling_fan_picker.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../models/guider_status.dart';
 import '../../state/equipment/filter_wheel_state.dart';
+import '../../state/equipment/filter_wheel_command_state.dart';
 import '../../state/equipment/dome_state.dart';
 import '../../state/equipment/dome_shutter_state.dart';
 import '../../state/equipment/flat_panel_state.dart';
@@ -2584,31 +2585,6 @@ class SimpleFilterWheelWindow extends ConsumerStatefulWidget {
 
 class _SimpleFilterWheelWindowState
     extends ConsumerState<SimpleFilterWheelWindow> {
-  /// The slot asked for, until the wheel lands: it reads Moving to … at once,
-  /// before the poll sees the wheel turn.
-  int? _sent;
-  bool _sawMove = false;
-
-  /// A change the wheel accepted but never seen turning (it failed on the
-  /// rig, or turned and landed between two polls) stops reading Moving to …
-  /// after this, so the filters never stay locked.
-  static const _settle = Duration(seconds: 10);
-  Timer? _settleTimer;
-
-  /// A filter tapped while a plan runs: the window asks first.
-  int? _asking;
-
-  @override
-  void dispose() {
-    _settleTimer?.cancel();
-    super.dispose();
-  }
-
-  void _clearSent() {
-    _settleTimer?.cancel();
-    if (mounted) setState(() => _sent = null);
-  }
-
   String _name(FilterSlot slot) =>
       slot.name.isEmpty ? context.l10n.deviceSlot(slot.position) : slot.name;
 
@@ -2625,19 +2601,30 @@ class _SimpleFilterWheelWindowState
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(filterWheelProvider, (_, next) {
-      final w = next.value;
-      if (_sent == null) return;
-      if (w != null && w.isMoving) {
-        _sawMove = true;
-      } else if (w == null ||
-          !w.isConnected ||
-          w.isAwaitingUser ||
-          w.currentSlot == _sent ||
-          _sawMove) {
-        _clearSent();
+    // The change itself is the shared device command's (ADR 0013); a refused
+    // one says why in a pill.
+    ref.listen(filterWheelCommandProvider, (prev, next) {
+      if (next.outcomes == prev?.outcomes) return;
+      final l10n = context.l10n;
+      switch (next.refusal) {
+        case DeviceCommandRefusal.busy:
+          _sayBusy(ref, l10n);
+        case DeviceCommandRefusal.failed:
+          userNotifier(context, origin: SimpleStatusOrigin.filterWheel)(
+            l10n.deviceCouldntChangeFilter,
+            detail: describeEquipmentError(next.error!),
+            error: true,
+          );
+        case DeviceCommandRefusal.didntMove:
+          userNotifier(context, origin: SimpleStatusOrigin.filterWheel)(
+            l10n.filterDropdownDidntMove,
+            error: true,
+          );
+        case null:
+          break;
       }
     });
+    final command = ref.watch(filterWheelCommandProvider);
     final l10n = context.l10n;
     final w = ref.watch(filterWheelProvider).value;
     final children = <Widget>[
@@ -2653,12 +2640,12 @@ class _SimpleFilterWheelWindowState
         ),
       );
     } else {
-      // Watched, so it's known by the time a filter is tapped.
-      final planRunning =
-          ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
-      final sent = _sent == null
+      final sentSlot = command.phase == DeviceCommandPhase.moving
+          ? command.target
+          : null;
+      final sent = sentSlot == null
           ? null
-          : w.slots.where((s) => s.position == _sent).firstOrNull;
+          : w.slots.where((s) => s.position == sentSlot).firstOrNull;
       final moving = sent != null || w.isMoving;
       final pending = w.isAwaitingUser ? w.pending : null;
       children.add(
@@ -2683,17 +2670,14 @@ class _SimpleFilterWheelWindowState
           ),
         ),
       );
-      if (_asking != null) {
-        final slot = _asking!;
+      if (command.phase == DeviceCommandPhase.asking) {
+        final cmd = ref.read(filterWheelCommandProvider.notifier);
         children.add(
           simpleWindowConfirm(
             question: l10n.devicePlanRunningChangeFilter,
             confirm: l10n.deviceChangeAnyway,
-            onCancel: () => setState(() => _asking = null),
-            onConfirm: () {
-              setState(() => _asking = null);
-              _change(slot);
-            },
+            onCancel: cmd.cancel,
+            onConfirm: cmd.confirm,
           ),
         );
       }
@@ -2764,16 +2748,17 @@ class _SimpleFilterWheelWindowState
                               end: 14,
                             ),
                             label: _labelled(slot),
-                            selected: (_sent ?? w.currentSlot) == slot.position,
+                            selected:
+                                (sentSlot ?? w.currentSlot) == slot.position,
                             radius: 8,
                             onTap:
                                 moving ||
                                     pending != null ||
                                     slot.position == w.currentSlot
                                 ? null
-                                : () => planRunning
-                                      ? setState(() => _asking = slot.position)
-                                      : _change(slot.position),
+                                : () => ref
+                                      .read(filterWheelCommandProvider.notifier)
+                                      .request(slot.position),
                           ),
                       ],
                     ),
@@ -2796,18 +2781,6 @@ class _SimpleFilterWheelWindowState
       spacing: AraSpace.s4,
       children: children,
     );
-  }
-
-  Future<void> _change(int position) async {
-    setState(() {
-      _sent = position;
-      _sawMove = false;
-    });
-    _settleTimer?.cancel();
-    _settleTimer = Timer(_settle, () {
-      if (!_sawMove) _clearSent();
-    });
-    if (!await _run((n) => n.changeFilter(position))) _clearSent();
   }
 
   /// False when the wheel refused or dropped it (a pill says why).

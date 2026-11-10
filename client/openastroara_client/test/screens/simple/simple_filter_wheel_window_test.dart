@@ -28,6 +28,10 @@ class _Wheel extends FilterWheelNotifier {
 
   void set(Map<String, dynamic> next) => state = AsyncData(FilterWheelStatus.fromJson(next));
 
+  /// No rig behind it: a re-read keeps what the test set.
+  @override
+  Future<void> refresh([client]) async {}
+
   @override
   Future<bool> changeFilter(int position) async {
     calls.add('change $position');
