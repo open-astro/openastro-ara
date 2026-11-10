@@ -124,7 +124,7 @@ class _Step extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
           color: on ? AraColors.selectionTint : null,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AraRadius.container),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,

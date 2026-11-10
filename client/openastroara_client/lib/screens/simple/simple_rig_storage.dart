@@ -167,7 +167,7 @@ class _SimpleStorageBlockState extends ConsumerState<SimpleStorageBlock> {
         ),
         if (hasFigures) ...[
           ClipRRect(
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(AraRadius.field),
             child: LinearProgressIndicator(
               value: (1 - free / total).clamp(0.0, 1.0),
               minHeight: 8,

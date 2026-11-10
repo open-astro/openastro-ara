@@ -288,7 +288,7 @@ class AlbumCardBack extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
           child: Row(children: [
             DecoratedBox(
-              decoration: BoxDecoration(color: AraColors.bgPanel, borderRadius: BorderRadius.circular(4)),
+              decoration: BoxDecoration(color: AraColors.bgPanel, borderRadius: BorderRadius.circular(AraRadius.field)),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 child: Text(card.label, style: AraText.caption.copyWith(color: AraColors.textPrimary)),

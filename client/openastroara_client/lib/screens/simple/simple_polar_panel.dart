@@ -195,7 +195,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
       padding: const EdgeInsets.all(AraSpace.s8),
       decoration: BoxDecoration(
         color: AraColors.tileFill,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AraRadius.simplePanel),
       ),
       child: Row(
         spacing: AraSpace.s8,
@@ -282,7 +282,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                     Text(
                       '${total.toStringAsFixed(1)}′',
                       style: kSimpleText.copyWith(
-                        fontSize: 30,
+                        fontSize: AraFontSize.simpleReadingLarge,
                         fontWeight: FontWeight.w300,
                       ),
                     ),

@@ -1489,7 +1489,7 @@ class _SkyPick extends StatelessWidget {
                   simpleTargetStatus(selection, context.l10n),
                 ].join(' · '),
                 style: kSimpleText.copyWith(
-                  fontSize: 12,
+                  fontSize: AraFontSize.simpleCaption,
                   color: selection.belowHorizon
                       ? AraColors.accentBusy
                       : AraColors.textSecondary,
@@ -1552,7 +1552,7 @@ class SimplePanel extends StatelessWidget {
       // On top, not a border, so the contour takes no room from the content.
       foregroundDecoration: BoxDecoration(
         border: Border.all(color: AraColors.border),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AraRadius.simplePanel),
       ),
       child: child,
     ),
@@ -1563,7 +1563,7 @@ class SimplePanel extends StatelessWidget {
 /// the surfaces that draw their own scrim (pills, tiles, plan squares).
 /// Grouped: the shell's [BackdropGroup] blurs the image once for all of them.
 Widget simpleFrost(Widget child) => ClipRRect(
-  borderRadius: BorderRadius.circular(10),
+  borderRadius: BorderRadius.circular(AraRadius.simplePanel),
   child: AraBlur.panel == 0
       ? child
       : BackdropFilter.grouped(
@@ -1780,10 +1780,10 @@ class _RailButton extends StatelessWidget {
     label: label,
     child: Material(
       color: selected ? AraColors.selectionTint : Colors.transparent,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AraRadius.container),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AraRadius.container),
         child: SizedBox(
           width: 60 * simpleRailScale(context),
           height: (tall ? 72 : 56) * simpleRailScale(context),
@@ -1948,7 +1948,7 @@ class _RightRail extends ConsumerWidget {
             child: InkWell(
               key: const Key('simple-mode'),
               onTap: onModes,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(AraRadius.container),
               child: SizedBox(
                 width: 60 * simpleRailScale(context),
                 height: 48 * simpleRailScale(context),
@@ -2032,10 +2032,10 @@ class _ModeGrid extends ConsumerWidget {
                   color: m == current
                       ? AraColors.selectionBg
                       : AraColors.tileFill,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(AraRadius.simplePanel),
                   child: InkWell(
                     key: Key('simple-mode-${m.name}'),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(AraRadius.simplePanel),
                     onTap: () => onPicked(m),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -2442,7 +2442,7 @@ class SimpleSegments<T> extends StatelessWidget {
   Widget build(BuildContext context) => DecoratedBox(
     decoration: BoxDecoration(
       color: AraColors.tileFill,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AraRadius.container),
     ),
     child: Row(
       mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
@@ -2479,7 +2479,7 @@ final kSimpleGoStyle = FilledButton.styleFrom(
 
 ThemeData simpleTheme(ThemeData base) {
   const shape = RoundedRectangleBorder(
-    borderRadius: BorderRadius.all(Radius.circular(10)),
+    borderRadius: BorderRadius.all(Radius.circular(AraRadius.simplePanel)),
   );
   final buttons = ButtonStyle(
     shape: const WidgetStatePropertyAll(shape),
@@ -2488,7 +2488,7 @@ ThemeData simpleTheme(ThemeData base) {
   // Underline-style (not outline) so the label sits inside the tile instead
   // of straddling its top edge.
   const tile = UnderlineInputBorder(
-    borderRadius: BorderRadius.all(Radius.circular(10)),
+    borderRadius: BorderRadius.all(Radius.circular(AraRadius.simplePanel)),
     borderSide: BorderSide.none,
   );
   return base.copyWith(
@@ -2671,10 +2671,10 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                       color: _section == name
                           ? AraColors.selectionTint
                           : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(AraRadius.container),
                       child: InkWell(
                         key: Key('simple-menu-nav-$name'),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(AraRadius.container),
                         onTap: () => setState(() => _section = name),
                         child: Semantics(
                           selected: _section == name,
@@ -3267,7 +3267,7 @@ Widget _gearRow({
     ),
     decoration: BoxDecoration(
       color: AraColors.tileFill,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(AraRadius.simplePanel),
     ),
     child: Row(
       spacing: AraSpace.s12,
@@ -3330,7 +3330,7 @@ Widget _gearRow({
             // Focusable, so a keyboard opens the window too.
             child: InkWell(
               key: Key('simple-gear-$id'),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AraRadius.simplePanel),
               onTap: onOpen,
               child: row,
             ),
@@ -3700,7 +3700,7 @@ class _ThisRig extends ConsumerWidget {
             DecoratedBox(
               decoration: BoxDecoration(
                 color: AraColors.tileFill,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AraRadius.container),
               ),
               // Wraps at large text sizes rather than overflow.
               child: Wrap(
@@ -4171,7 +4171,7 @@ class _RigStepperState extends State<_RigStepper> {
           width: kSimpleRigControlWidth,
           decoration: BoxDecoration(
             color: AraColors.tileFill,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(AraRadius.container),
           ),
           child: Row(
             children: [
@@ -4314,7 +4314,7 @@ ButtonStyle _linkStyle({Alignment alignment = Alignment.center}) {
               key: const Key('simple-link-highlight'),
               decoration: BoxDecoration(
                 color: lit ? tint : null,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(AraRadius.card),
               ),
             ),
           ),

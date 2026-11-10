@@ -313,13 +313,17 @@ The device windows' drawings (the Dome window's clamshell and dial, the Flat pan
 - **Label** (500, 11px, 0.5px tracking, Material label-small): device names under the equipment-button icons, in plain case ("Filter Wheel"), scaled down to fit rather than widening the button.
 
 **Simple Mode's ramp** (all of it follows the user's text size, WCAG 1.4.4):
-- **Readout** (300, 30px, tabular figures): the one number a mode is about: HFR in Focus, the polar error, Night done's frame count.
+- **Readout** (300, 30px, tabular figures, `AraFontSize.simpleReadingLarge`): the one number a mode is about: HFR in Focus, the polar error, Night done's frame count.
+- **Large reading** (600, 30px, tabular, `kSimpleReadingLarge`): a device window's one big reading, the Focuser's steps and the Rotator's angle.
+- **Reading** (600, 22px, tabular, `kSimpleReading`) with its **unit** (400, 13px, Dim Text, `kSimpleUnit`): a Weather tile's value and unit.
 - **Alarm** (26px title, 20px button, 16px reason): the full-screen safety alarm only.
 - **Hint** (400, 20px, 2px tracking): the "Tap the shutter to take a frame" line over the empty sky.
 - **Heading** (600, 16px): the sheet's and panels' titles ("Edit M42", "Night done").
 - **Body** (`body-simple`, 400, 14px): everything a user reads or taps; the minimum for running text.
-- **Fact value** (600, 13px, tabular): the value in an Info or System tile.
-- **Secondary line** (400, 11.5–12px, Dim Text): the line under a name in a tile, a plan square or the picked target ("Galaxy · up 62°", "L · 5 s"), and the rail captions (11px).
+- **Fact value** (600, 13px, tabular, `AraFontSize.simpleUnit`): the value in an Info or System tile.
+- **Secondary line** (400, 11.5–12px, Dim Text; the 12px caption is `kSimpleCaption`, its size `AraFontSize.simpleCaption`): the line under a name in a tile, a plan square or the picked target ("Galaxy · up 62°", "L · 5 s"), and the rail captions (11px).
+
+Simple Mode's code names these sizes (`lib/theme/ara_metrics.dart`), and a test (`test/theme/simple_size_tokens_test.dart`) fails on a bare font size in Simple Mode or the Sky Album. A size with no role here is listed in that test's allow-list with its reason.
 
 ### Named Rules
 **The Steady Digits Rule.** Every number that updates live uses tabular figures. A countdown never shifts its neighbours.
@@ -364,11 +368,14 @@ Flat. Depth comes from tonal layering: Night Floor, then Panel Grey, then Panel 
 
 ## Shapes
 
-Gently rounded and small, matching the dense layout:
-- 4 px on fields and small controls;
-- 6 px on cards, equipment chips and ink highlights (the most common radius);
-- 8 px on larger containers;
-- a 12 px pill on status indicators and state chips.
+Gently rounded and small, matching the dense layout. Each role is a token in `AraRadius` (`lib/theme/ara_metrics.dart`):
+- 4 px on fields and small controls (`AraRadius.field`);
+- 6 px on cards, equipment chips and ink highlights, the most common radius (`AraRadius.card`);
+- 8 px on larger containers (`AraRadius.container`);
+- 10 px on Simple Mode's panels and device windows (`AraRadius.simplePanel`);
+- a 12 px pill on status indicators and state chips (`AraRadius.pill`).
+
+Simple Mode and the Sky Album use these tokens; a test (`test/theme/simple_size_tokens_test.dart`) fails on a bare radius there. The Full UI keeps its bare numbers for now.
 
 Status dots are 10 px circles. On an equipment chip the dot carries a 2 px ring in the panel colour, so it reads as a badge sitting on the icon.
 

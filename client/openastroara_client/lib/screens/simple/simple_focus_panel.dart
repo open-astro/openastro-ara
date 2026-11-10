@@ -417,7 +417,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   Text(
                     context.l10n.focusHfr(hfr?.toStringAsFixed(2) ?? '—'),
                     style: kSimpleText.copyWith(
-                      fontSize: 30,
+                      fontSize: AraFontSize.simpleReadingLarge,
                       fontWeight: FontWeight.w300,
                     ),
                   ),
@@ -460,7 +460,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                         padding: const EdgeInsets.all(AraSpace.s8),
                         decoration: BoxDecoration(
                           color: AraColors.accentWarning.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(AraRadius.simplePanel),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -811,7 +811,7 @@ Widget _figure(String label, String value) => Expanded(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
     decoration: BoxDecoration(
       color: AraColors.tileFill,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(AraRadius.simplePanel),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,

@@ -455,7 +455,7 @@ class _PlanSquare extends StatelessWidget {
         color: AraColors.overlayScrim,
         shape: RoundedRectangleBorder(
           side: BorderSide(color: color),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AraRadius.simplePanel),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -1017,10 +1017,10 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                     color: sel?.name == o.name
                         ? AraColors.selectionBg
                         : AraColors.tileFill,
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(AraRadius.simplePanel),
                     child: InkWell(
                       key: Key('simple-run-suggestion-${o.name}'),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(AraRadius.simplePanel),
                       onTap: () => ref
                           .read(planetariumSelectionProvider.notifier)
                           .set(simpleSelectionOf(o)),
@@ -1050,7 +1050,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                               Text(
                                 simpleSuggestionLine(context.l10n, o),
                                 style: _dim.copyWith(
-                                  fontSize: 12,
+                                  fontSize: AraFontSize.simpleCaption,
                                   color: sel?.name == o.name
                                       ? AraColors.selectionFg
                                       : null,
@@ -1558,7 +1558,7 @@ class _QueueList extends ConsumerWidget {
           Expanded(
             child: InkWell(
               key: Key('simple-run-edit-$i'),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(AraRadius.container),
               onTap: open(i) ? () => onEdit(i) : null,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1571,7 +1571,7 @@ class _QueueList extends ConsumerWidget {
                   ),
                   Text(
                     '$got / ${simplePlanTotal(t.steps)} · ${simpleRunDuration(left)}',
-                    style: _dim.copyWith(fontSize: 12),
+                    style: _dim.copyWith(fontSize: AraFontSize.simpleCaption),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1607,7 +1607,7 @@ class _QueueList extends ConsumerWidget {
                   padding: const EdgeInsets.only(right: AraSpace.s16),
                   decoration: BoxDecoration(
                     color: AraColors.emergencyStop,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(AraRadius.container),
                   ),
                   child: Text(
                     context.l10n.planRemove,
@@ -1904,7 +1904,7 @@ class SimpleRunPanel extends ConsumerWidget {
                     ? context.l10n.planFrameCount(captured)
                     : '$captured / ${simplePlanTotal(steps)}',
                 style: const TextStyle(
-                  fontSize: 30,
+                  fontSize: AraFontSize.simpleReadingLarge,
                   fontWeight: FontWeight.w300,
                   color: AraColors.textPrimary,
                   fontFeatures: [FontFeature.tabularFigures()],
@@ -1983,7 +1983,7 @@ class SimpleRunPanel extends ConsumerWidget {
             if (imaging && paused) ...[
               Text(
                 context.l10n.planHintResume,
-                style: _dim.copyWith(fontSize: 12),
+                style: _dim.copyWith(fontSize: AraFontSize.simpleCaption),
               ),
               TextButton(
                 onPressed: () => ref
@@ -1999,7 +1999,7 @@ class SimpleRunPanel extends ConsumerWidget {
             ] else if (imaging)
               Text(
                 context.l10n.planHintPause,
-                style: _dim.copyWith(fontSize: 12),
+                style: _dim.copyWith(fontSize: AraFontSize.simpleCaption),
               ),
             // Solid like the sheet's Add to queue (user, 2026-11-04).
             FilledButton(
@@ -2037,7 +2037,7 @@ class SimpleSuggestion extends StatelessWidget {
         context.l10n.planMagnitude(o.magnitude!.toStringAsFixed(1)),
     ].join(' · ');
     return InkWell(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AraRadius.container),
       onTap: onTap,
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 44),

@@ -264,7 +264,7 @@ class SimpleGuidePanel extends ConsumerWidget {
                   Text(
                     total == null ? '—' : _arcsec(total),
                     style: kSimpleText.copyWith(
-                      fontSize: 30,
+                      fontSize: AraFontSize.simpleReadingLarge,
                       fontWeight: FontWeight.w300,
                     ),
                   ),
@@ -678,7 +678,7 @@ class _SimpleAssistantFailureState extends State<_SimpleAssistantFailure> {
     expanded: _whole,
     child: InkWell(
       key: const Key('simple-guider-assistant-failed'),
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AraRadius.container),
       onTap: () => setState(() => _whole = !_whole),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 44),
