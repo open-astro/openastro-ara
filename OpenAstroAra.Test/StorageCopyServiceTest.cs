@@ -105,6 +105,60 @@ public class StorageCopyServiceTest {
         devices.Verify(d => d.ReleaseCopyTargetAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
 
+    private void PutAt(string relative, DateTime modifiedUtc) {
+        Put(relative);
+        File.SetLastWriteTimeUtc(Path.Combine(store, relative), modifiedUtc);
+    }
+
+    [Test]
+    public void Contents_count_the_frames_and_date_the_newest() {
+        PutAt("night/Light/a.fits", new DateTime(2026, 10, 1, 22, 0, 0, DateTimeKind.Utc));
+        PutAt("night/Light/b.xisf", new DateTime(2026, 10, 3, 23, 30, 0, DateTimeKind.Utc));
+        PutAt("night/Light/c.fits.tmp", new DateTime(2026, 10, 9, 1, 0, 0, DateTimeKind.Utc));
+        PutAt(".Trashes/d.fits", new DateTime(2026, 10, 9, 1, 0, 0, DateTimeKind.Utc));
+        Put("notes.txt", "mine");
+
+        var contents = StorageCopyService.Summarize(store);
+
+        Assert.That(contents.Readable, Is.True);
+        Assert.That(contents.Frames, Is.EqualTo(2), "frames only: no in-flight writes, OS metadata or other files");
+        Assert.That(contents.NewestFrameUtc, Is.EqualTo(new DateTimeOffset(2026, 10, 3, 23, 30, 0, TimeSpan.Zero)));
+        Assert.That(contents.FramesNotCopied, Is.EqualTo(2), "no copy has run from this drive");
+    }
+
+    [Test]
+    public async Task A_clean_copy_of_the_whole_store_counts_its_frames_as_copied() {
+        PutAt("night/a.fits", DateTime.UtcNow.AddHours(-2));
+
+        var status = await RunToEnd(Svc).ConfigureAwait(false);
+        Assert.That(status.State, Is.EqualTo("done"), status.ErrorDetail);
+        Assert.That(StorageCopyService.Summarize(store).FramesNotCopied, Is.Zero);
+
+        PutAt("night/b.fits", DateTime.UtcNow.AddHours(1));
+        Assert.That(StorageCopyService.Summarize(store).FramesNotCopied, Is.EqualTo(1), "a frame saved after the copy");
+    }
+
+    [Test]
+    public async Task A_copy_of_chosen_folders_leaves_the_store_not_copied() {
+        PutAt("manual/M31/a.fits", DateTime.UtcNow.AddHours(-2));
+        PutAt("manual/M42/b.fits", DateTime.UtcNow.AddHours(-2));
+
+        var status = await RunToEnd(Svc, "6EF6-FD21", "manual/M31").ConfigureAwait(false);
+
+        Assert.That(status.State, Is.EqualTo("done"), status.ErrorDetail);
+        Assert.That(StorageCopyService.Summarize(store).FramesNotCopied, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void A_drive_that_is_not_mounted_cannot_be_read() {
+        var unmounted = new Server.Contracts.StorageDeviceDto("/dev/sdb1", "6EF6-FD21", "ARA-DISK", null, "exfat",
+            1L << 30, null, true, "usb", false, false);
+
+        Assert.That(StorageCopyService.ContentsOf(unmounted).Readable, Is.False);
+        Assert.That(StorageCopyService.ContentsOf(null).Readable, Is.False);
+        Assert.That(StorageCopyService.ContentsOf(unmounted with { MountPoint = store }).Readable, Is.True);
+    }
+
     [Test]
     public async Task A_second_copy_skips_what_is_there_and_never_overwrites_a_different_file() {
         Put("night/a.fits", "aaaa");

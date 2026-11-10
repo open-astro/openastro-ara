@@ -57,6 +57,9 @@ public interface IStorageCopyService {
 public sealed partial class StorageCopyService : IStorageCopyService, IDisposable, IAsyncDisposable {
 
     internal const string TempSuffix = ".ara-copy.tmp";
+    /// <summary>Touched on the store when a copy of all of it finishes with every file in
+    /// place: frames older than it are on another drive. Hidden, so it is never copied.</summary>
+    internal const string LastCopyMarker = ".ara-last-copy";
 
     /// <summary>Per-file allowance on top of the bytes themselves when checking free
     /// space: the target rounds every file up to its cluster size (exFAT on large
@@ -246,6 +249,9 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
                 await CopyOneAsync(current, file, ct).ConfigureAwait(false);
             }
             outcome = ("done", null, null);
+            if (current.Folders.Count == 0 && current.FilesFailed == 0 && current.FilesConflicting == 0) {
+                MarkCopied(sourceRoot);
+            }
         } catch (OperationCanceledException) {
             outcome = ("cancelled", null, null);
         } catch (Exception ex) {
@@ -338,6 +344,46 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
                     yield return file;
                 }
             }
+        }
+    }
+
+    /// <summary>What erasing <paramref name="device"/> would lose. A drive that is not
+    /// mounted cannot be read, and says so rather than reporting no frames.</summary>
+    public static StorageContentsDto ContentsOf(StorageDeviceDto? device) =>
+        device?.MountPoint is { } mount && Directory.Exists(mount)
+            ? Summarize(mount)
+            : new StorageContentsDto(false, 0, null, 0);
+
+    internal static StorageContentsDto Summarize(string root) {
+        var marker = new FileInfo(Path.Combine(root, LastCopyMarker));
+        DateTime? copiedUntil = marker.Exists ? marker.LastWriteTimeUtc : null;
+        int frames = 0, notCopied = 0;
+        DateTime? newest = null;
+        foreach (var file in Walk(new DirectoryInfo(root), CancellationToken.None)) {
+            if (!CaptureScanService.LooksLikeFrameFile(file.Name)) {
+                continue;
+            }
+            var modified = file.LastWriteTimeUtc;
+            frames++;
+            if (newest is null || modified > newest) {
+                newest = modified;
+            }
+            if (copiedUntil is null || modified > copiedUntil) {
+                notCopied++;
+            }
+        }
+        return new StorageContentsDto(true, frames,
+            newest is { } n ? new DateTimeOffset(n, TimeSpan.Zero) : null, notCopied);
+    }
+
+    private void MarkCopied(string root) {
+        try {
+            var path = Path.Combine(root, LastCopyMarker);
+            File.WriteAllBytes(path, []);
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            // The copy itself worked; the erase warning just stays on the safe side.
+            LogMarkFailed(logger, ex);
         }
     }
 
@@ -447,6 +493,9 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Disk-to-disk copy to {Uuid} started: {What}.")]
     private static partial void LogStarted(ILogger logger, string uuid, string what);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Disk-to-disk copy: could not mark the store as copied.")]
+    private static partial void LogMarkFailed(ILogger logger, Exception ex);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Disk-to-disk copy {State}: {Copied} copied, {Skipped} already there, {Conflicting} conflicting, {Failed} failed.")]
     private static partial void LogFinished(ILogger logger, string state, int copied, int skipped, int conflicting, int failed);

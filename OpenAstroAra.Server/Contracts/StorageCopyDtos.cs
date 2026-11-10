@@ -30,6 +30,16 @@ public sealed record StorageCopyRequestDto(
 /// skipped; one with a different size is a conflict and is left alone (copy never
 /// overwrites or deletes). <c>TargetReleased</c> is true once the target drive was
 /// flushed and unmounted, i.e. it is safe to unplug.</summary>
+/// <summary><c>GET /api/v1/storage/contents?uuid=</c> — what erasing a drive would lose.
+/// Only a mounted drive can be read; any other answers <c>Readable</c> false, never zero
+/// frames. <c>FramesNotCopied</c> counts frames saved after the last disk-to-disk copy
+/// of the whole drive that finished with every file in place (all of them when none has).</summary>
+public sealed record StorageContentsDto(
+    bool Readable,
+    int Frames,
+    DateTimeOffset? NewestFrameUtc,
+    int FramesNotCopied);
+
 public sealed record StorageCopyStatusDto(
     string State,
     string? TargetUuid,
