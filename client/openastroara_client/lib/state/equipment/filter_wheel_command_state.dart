@@ -23,7 +23,7 @@ class DeviceCommand {
     this.refusal,
     this.error,
     this.outcomes = 0,
-    this.by,
+    this.byRef,
   });
 
   final DeviceCommandPhase phase;
@@ -41,8 +41,9 @@ class DeviceCommand {
 
   /// Who asked for this move (a picker passes itself): only it renders the
   /// question and reacts to the outcome, so two pickers on screen never both
-  /// ask or both report.
-  final Object? by;
+  /// ask or both report. Held weakly: a picker that closed is not kept alive.
+  final WeakReference<Object>? byRef;
+  Object? get by => byRef?.target;
 
   DeviceCommand copyWith({
     DeviceCommandPhase? phase,
@@ -57,7 +58,7 @@ class DeviceCommand {
     refusal: refusal,
     error: error,
     outcomes: outcomes + (outcome ? 1 : 0),
-    by: by ?? this.by,
+    byRef: by == null ? byRef : WeakReference(by),
   );
 }
 
@@ -69,6 +70,9 @@ class FilterWheelCommandNotifier extends Notifier<DeviceCommand> {
   /// No motion seen in this long fails the move; motion seen arms [backstop].
   static const firstStall = Duration(seconds: 10);
   static const backstop = Duration(seconds: 45);
+
+  /// How long a tap waits for an unread run state before it asks anyway.
+  static const runStateWait = Duration(seconds: 3);
 
   /// The wheel's live poll runs every 15 s; a move re-reads it this often
   /// (up to [_reconcileTicks] times) so a landing shows within seconds.
@@ -103,10 +107,11 @@ class FilterWheelCommandNotifier extends Notifier<DeviceCommand> {
     final run = ref.read(sequenceRunStateProvider);
     if (run.hasValue) return _decide(position, by, run.value?.state?.isActive ?? false);
     // Not read yet: wait for it rather than send without asking. A read that
-    // fails asks, the safe side.
+    // fails, or takes longer than [runStateWait], asks: the safe side.
     unawaited(
       ref
           .read(sequenceRunStateProvider.future)
+          .timeout(runStateWait)
           .then((info) => info?.state?.isActive ?? false, onError: (_) => true)
           .then((running) {
             if (ref.mounted) _decide(position, by, running);

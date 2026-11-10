@@ -175,4 +175,16 @@ void main() {
       expect(c.read(filterWheelCommandProvider).by, same(picker));
     });
   });
+
+  test('a run state that never answers asks after 3 s instead of doing nothing', () {
+    fakeAsync((async) {
+      final (c, wheel) = _rig(async, planRunning: false, runReadTakes: const Duration(days: 1));
+      c.read(filterWheelCommandProvider.notifier).request(1);
+      async.elapse(const Duration(seconds: 2));
+      expect(c.read(filterWheelCommandProvider).phase, DeviceCommandPhase.idle);
+      async.elapse(const Duration(seconds: 2));
+      expect(c.read(filterWheelCommandProvider).phase, DeviceCommandPhase.asking);
+      expect(wheel.sent, isEmpty);
+    });
+  });
 }
