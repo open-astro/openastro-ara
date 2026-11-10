@@ -201,11 +201,12 @@ class _ManualFocusControlState extends ConsumerState<ManualFocusControl> {
     if (target < (caps?.minPosition ?? 0)) target = caps?.minPosition ?? 0;
     // A device that reports no travel has a max of 0: no upper clamp then.
     if (caps != null && caps.maxPosition > 0 && target > caps.maxPosition) target = caps.maxPosition;
-    _command((n) => n.move(target), "Couldn't move");
+    _command((n) => n.move(target), context.l10n.focusMoveFailed);
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final moving = widget.focuser.isMoving;
     final canNudge = !moving && widget.focuser.position != null;
     return Wrap(
@@ -214,10 +215,9 @@ class _ManualFocusControlState extends ConsumerState<ManualFocusControl> {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         SegmentedButton<int>(
-          segments: const [
-            ButtonSegment(value: 10, label: Text('10')),
-            ButtonSegment(value: 50, label: Text('50')),
-            ButtonSegment(value: 200, label: Text('200')),
+          segments: [
+            for (final steps in const [10, 50, 200])
+              ButtonSegment(value: steps, label: Text('$steps'), tooltip: l10n.focusNudgeSteps(steps)),
           ],
           selected: {_step},
           showSelectedIcon: false,
@@ -225,21 +225,21 @@ class _ManualFocusControlState extends ConsumerState<ManualFocusControl> {
         ),
         IconButton.outlined(
           key: const Key('manual-focus-in'),
-          tooltip: 'Nudge in',
+          tooltip: l10n.focusNudgeIn,
           onPressed: canNudge ? () => _nudge(-1) : null,
           icon: const Icon(Icons.remove),
         ),
         IconButton.outlined(
           key: const Key('manual-focus-out'),
-          tooltip: 'Nudge out',
+          tooltip: l10n.focusNudgeOut,
           onPressed: canNudge ? () => _nudge(1) : null,
           icon: const Icon(Icons.add),
         ),
         FilledButton.tonalIcon(
           key: const Key('manual-focus-stop'),
-          onPressed: moving ? () => _command((n) => n.halt(), "Couldn't stop the focuser") : null,
+          onPressed: moving ? () => _command((n) => n.halt(), l10n.focusStopFailed) : null,
           icon: const Icon(Icons.stop_rounded, size: 18),
-          label: const Text('Stop'),
+          label: Text(l10n.focusNudgeStop),
         ),
       ],
     );
@@ -265,7 +265,10 @@ class MainFocusCard extends ConsumerWidget {
             (focuserConnected ? MainFocusMethod.autofocus : MainFocusMethod.bahtinov);
     final selector = MainFocusMethodSelector(method: method);
     if (method == MainFocusMethod.bahtinov) {
-      return BahtinovFocusCard(methodSelector: selector);
+      return BahtinovFocusCard(
+        methodSelector: selector,
+        manualFocus: focuserConnected ? ManualFocusControl(focuser: focuser!) : null,
+      );
     }
     final run = live.run;
     final apiAvailable = ref.watch(autofocusApiProvider) != null;

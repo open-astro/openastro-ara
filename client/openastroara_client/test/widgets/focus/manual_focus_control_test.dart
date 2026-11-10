@@ -5,6 +5,7 @@ import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
+import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
 import 'package:openastroara/widgets/focus/focusing_pane.dart';
 
 class _Focuser extends FocuserNotifier {
@@ -54,7 +55,40 @@ final _inward = find.byKey(const Key('manual-focus-in'));
 final _outward = find.byKey(const Key('manual-focus-out'));
 final _stop = find.byKey(const Key('manual-focus-stop'));
 
+class _Bahtinov extends MainFocusMethodNotifier {
+  @override
+  MainFocusMethod? build() => MainFocusMethod.bahtinov;
+}
+
+class _Connected extends FocuserNotifier {
+  @override
+  Future<FocuserStatus?> build() async => _status();
+}
+
 void main() {
+  testWidgets('the Bahtinov card has the nudge too (#1542)', (tester) async {
+    tester.view.physicalSize = const Size(2400, 3600);
+    addTearDown(tester.view.resetPhysicalSize);
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        focuserProvider.overrideWith(_Connected.new),
+        mainFocusMethodProvider.overrideWith(_Bahtinov.new),
+      ],
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const Scaffold(body: SizedBox(width: 1100, height: 1600, child: MainFocusCard())),
+      ),
+    ));
+    await tester.pump();
+    expect(_stop, findsOneWidget);
+  });
+
+  testWidgets('the step choices are named for a screen reader', (tester) async {
+    await _pump(tester, _status());
+    expect(find.byTooltip('200 steps'), findsOneWidget);
+  });
+
   testWidgets('the arrows nudge by the chosen step (#1542)', (tester) async {
     final f = await _pump(tester, _status());
     await tester.tap(_inward);

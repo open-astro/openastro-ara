@@ -4489,6 +4489,27 @@ void main() {
       expect(c.read(simpleMessagesProvider), isEmpty);
     });
 
+    testWidgets('a calibration warning: leaving and coming back shows one pill, and it clears (#1716)', (tester) async {
+      final calPill = find.textContaining('could not calibrate');
+      final (c, d) = await shell(tester, start: {'guider.calibration.failed'});
+      await tester.pump();
+      expect(calPill, findsOneWidget);
+      await tester.pumpWidget(UncontrolledProviderScope(container: c, child: const MaterialApp(home: SizedBox())));
+      await tester.pump();
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(home: SimpleShell(planetarium: SizedBox(key: Key('sky')))),
+      ));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider), hasLength(1));
+      d.open({});
+      await tester.pump();
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider), isEmpty);
+    });
+
     testWidgets('dew clearing while the switch list loads leaves no pill', (tester) async {
       final gate = Completer<void>();
       final (c, d) = await shell(tester, gear: [switchListProvider.overrideWith(() => _SlowSwitches(gate))]);

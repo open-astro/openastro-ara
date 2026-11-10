@@ -2672,7 +2672,75 @@ class AppLocalizationsPt extends AppLocalizations {
   String get guideStopPlanFirst => 'Stop the plan to use these.';
 
   @override
-  String get guideStopGuidingFirst => 'Stop guiding to recalibrate.';
+  String get guideStopGuidingFirst => 'Stop guiding to use these.';
+
+  @override
+  String get guideTabsGroup => 'Guider page';
+
+  @override
+  String get guideMinimumMoveName => 'Minimum move';
+
+  @override
+  String get guideStopLoopFirst => 'Stop the guide loop to recalibrate.';
+
+  @override
+  String get guideAssistantCalibrateFirst =>
+      'Calibrate first: press Recalibrate now, then run the Guiding Assistant.';
+
+  @override
+  String get guideAssistantNoStar =>
+      'The guider found no star to measure. Check the guide camera, then try again.';
+
+  @override
+  String get focusNudgeIn => 'Nudge in';
+
+  @override
+  String get focusNudgeOut => 'Nudge out';
+
+  @override
+  String get focusNudgeStop => 'Stop';
+
+  @override
+  String focusNudgeSteps(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count steps',
+      one: '1 step',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get focusMoveFailed => 'Couldn\'t move the focuser';
+
+  @override
+  String get focusStopFailed => 'Couldn\'t stop the focuser';
+
+  @override
+  String get focusCalibrationSection => 'Calibration';
+
+  @override
+  String get focusCalibrationReset => 'Reset focus calibration';
+
+  @override
+  String get focusCalibrationResetHint =>
+      'The next autofocus runs a full sweep and calibrates again.';
+
+  @override
+  String get focusCalibrationResetAsk => 'Reset the focus calibration?';
+
+  @override
+  String get focusCalibrationResetCancel => 'Keep it';
+
+  @override
+  String get focusCalibrationResetConfirm => 'Reset';
+
+  @override
+  String get focusCalibrationResetDone => 'Focus calibration reset.';
+
+  @override
+  String get focusCalibrationResetAction => 'reset the focus calibration';
 
   @override
   String get guideDecMode => 'Dec guide mode';
@@ -6178,7 +6246,75 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get guideStopPlanFirst => 'Pare o plano para usar estas opções.';
 
   @override
-  String get guideStopGuidingFirst => 'Pare a guiagem para recalibrar.';
+  String get guideStopGuidingFirst => 'Pare a guiagem para usar estas opções.';
+
+  @override
+  String get guideTabsGroup => 'Página do Guia';
+
+  @override
+  String get guideMinimumMoveName => 'Movimento mínimo';
+
+  @override
+  String get guideStopLoopFirst => 'Pare o loop de guiagem para recalibrar.';
+
+  @override
+  String get guideAssistantCalibrateFirst =>
+      'Calibre primeiro: toque em Recalibrar agora e depois execute o Assistente de Guiagem.';
+
+  @override
+  String get guideAssistantNoStar =>
+      'O Guia não encontrou estrela para medir. Verifique a câmera de guiagem e tente de novo.';
+
+  @override
+  String get focusNudgeIn => 'Mover para dentro';
+
+  @override
+  String get focusNudgeOut => 'Mover para fora';
+
+  @override
+  String get focusNudgeStop => 'Parar';
+
+  @override
+  String focusNudgeSteps(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count passos',
+      one: '1 passo',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get focusMoveFailed => 'Não foi possível mover o focalizador';
+
+  @override
+  String get focusStopFailed => 'Não foi possível parar o focalizador';
+
+  @override
+  String get focusCalibrationSection => 'Calibração';
+
+  @override
+  String get focusCalibrationReset => 'Redefinir a calibração de foco';
+
+  @override
+  String get focusCalibrationResetHint =>
+      'O próximo autofoco faz uma varredura completa e calibra de novo.';
+
+  @override
+  String get focusCalibrationResetAsk => 'Redefinir a calibração de foco?';
+
+  @override
+  String get focusCalibrationResetCancel => 'Manter';
+
+  @override
+  String get focusCalibrationResetConfirm => 'Redefinir';
+
+  @override
+  String get focusCalibrationResetDone => 'Calibração de foco redefinida.';
+
+  @override
+  String get focusCalibrationResetAction => 'redefinir a calibração de foco';
 
   @override
   String get guideDecMode => 'Modo de guiagem em Dec';

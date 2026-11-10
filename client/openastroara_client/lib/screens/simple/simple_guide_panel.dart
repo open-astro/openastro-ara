@@ -35,7 +35,7 @@ import 'simple_preview_panel.dart'
         formatExposure,
         kSimpleText,
         simpleMainCameraBusy;
-import 'simple_shell.dart' show SimplePanel, kSimpleGoStyle;
+import 'simple_shell.dart' show SimplePanel, SimpleSegments, kSimpleGoStyle;
 
 /// Guide mode: the guider's routine (loop, pick a star, calibrate when
 /// needed, settle, guide) runs from the shutter; its red square stops it.
@@ -399,20 +399,17 @@ class _SimpleGuiderTabs extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
-    ButtonSegment<int> tab(int i, String id, String label) => ButtonSegment(
-      value: i,
-      label: Text(label, key: Key('simple-guider-tab-$id')),
-    );
-    return SegmentedButton<int>(
-      showSelectedIcon: false,
-      segments: [
-        tab(0, 'guide', l10n.guideTabGuide),
-        tab(1, 'tuning', l10n.guideTabTuning),
-        tab(2, 'tools', l10n.guideTabTools),
+    return SimpleSegments<int>(
+      keyPrefix: 'simple-guider-tab',
+      shrinkToFit: true,
+      group: l10n.guideTabsGroup,
+      options: [
+        (0, l10n.guideTabGuide, 'guide'),
+        (1, l10n.guideTabTuning, 'tuning'),
+        (2, l10n.guideTabTools, 'tools'),
       ],
-      selected: {selected},
-      onSelectionChanged: (s) =>
-          ref.read(simpleGuiderTabProvider.notifier).set(s.single),
+      selected: selected,
+      onPick: ref.read(simpleGuiderTabProvider.notifier).set,
     );
   }
 }
@@ -431,13 +428,19 @@ class _SimpleGuiderTuning extends ConsumerWidget {
     final phd2 = ref.watch(phd2SettingsProvider);
     final px = phd2.ditherPixels;
     // Label beside a narrower stepper: this tab has six of them to fit on an iPad.
-    Widget row(String label, Widget stepper, {required String id}) => Row(
-      key: Key('simple-window-row-$id'),
-      spacing: AraSpace.s8,
-      children: [
-        Expanded(child: Text(label, style: kSimpleText)),
-        SizedBox(width: 176, child: stepper),
-      ],
+    // Read whole, because "For" or "RA" means nothing without its group.
+    Widget row(String label, Widget stepper, {required String id, String? group}) => Semantics(
+      container: true,
+      explicitChildNodes: true,
+      label: group == null ? label : '$group, $label',
+      child: Row(
+        key: Key('simple-window-row-$id'),
+        spacing: AraSpace.s8,
+        children: [
+          Expanded(child: ExcludeSemantics(child: Text(label, style: kSimpleText))),
+          SizedBox(width: 176, child: stepper),
+        ],
+      ),
     );
     void live(void Function(Phd2SettingsNotifier) change) =>
         simpleSaveGuider(context, ref, change, live: true);
@@ -447,6 +450,7 @@ class _SimpleGuiderTuning extends ConsumerWidget {
         row(
           axis,
           id: label,
+          group: l10n.guideMinimumMoveName,
           simpleWindowStepper(
             id: 'simple-guider-min-move-$id',
             text: '${v.toStringAsFixed(2)} px',
@@ -483,6 +487,7 @@ class _SimpleGuiderTuning extends ConsumerWidget {
         row(
           l10n.guideSettleWithin,
           id: 'Settle within',
+          group: l10n.guideSettle,
           simpleWindowStepper(
             id: 'simple-guider-settle-px',
             text: '${phd2.settlePixels.toStringAsFixed(1)} px',
@@ -495,6 +500,7 @@ class _SimpleGuiderTuning extends ConsumerWidget {
         row(
           l10n.guideSettleFor,
           id: 'Settle for',
+          group: l10n.guideSettle,
           simpleWindowStepper(
             id: 'simple-guider-settle-time',
             text: '${phd2.settleTimeSec} s',
@@ -507,6 +513,7 @@ class _SimpleGuiderTuning extends ConsumerWidget {
         row(
           l10n.guideSettleGiveUp,
           id: 'Settle give up',
+          group: l10n.guideSettle,
           simpleWindowStepper(
             id: 'simple-guider-settle-timeout',
             text: '${phd2.settleTimeoutSec} s',
@@ -522,26 +529,83 @@ class _SimpleGuiderTuning extends ConsumerWidget {
 }
 
 /// Recalibrate now and the Guiding Assistant, one action each.
-class _SimpleGuiderTools extends ConsumerWidget {
+class _SimpleGuiderTools extends ConsumerStatefulWidget {
   const _SimpleGuiderTools();
 
-  static Future<void> _recalibrate(BuildContext context, WidgetRef ref) async {
+  @override
+  ConsumerState<_SimpleGuiderTools> createState() => _SimpleGuiderToolsState();
+}
+
+class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
+  // Picking a star takes seconds, before the assistant's own state shows it.
+  bool _preparing = false;
+
+  Future<void> _recalibrate() async {
     final notify = userNotifier(context, origin: SimpleStatusOrigin.guide);
     final container = ProviderScope.containerOf(context, listen: false);
-    await container.read(guiderLiveProvider.notifier).clearCalibration();
-    if (container.read(guiderLiveProvider).error case final error?) {
-      notify(error, error: true, snackBarRed: false);
-      return;
+    // Held across the await: nothing else watches it here, so autoDispose would lose the error.
+    final keep = container.listen(guiderLiveProvider, (_, _) {});
+    try {
+      await container.read(guiderLiveProvider.notifier).clearCalibration();
+      if (container.read(guiderLiveProvider).error case final error?) {
+        notify(error, error: true, snackBarRed: false);
+        return;
+      }
+    } finally {
+      keep.close();
     }
-    if (context.mounted) await simpleGuideRun(context, start: true);
+    if (mounted) await simpleGuideRun(context, start: true);
+  }
+
+  /// The assistant needs a calibration and a star held in a loop; the shutter
+  /// never stops at that state, so this tap gets there itself.
+  Future<void> _runAssistant() async {
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.guide);
+    final l10n = context.l10n;
+    final container = ProviderScope.containerOf(context, listen: false);
+    final keep = container.listen(guiderLiveProvider, (_, _) {});
+    setState(() => _preparing = true);
+    GuiderLiveState live() => container.read(guiderLiveProvider);
+    bool starHeld() => live().live.isLooping && live().live.hasLock;
+    try {
+      final notifier = container.read(guiderLiveProvider.notifier);
+      await notifier.refresh();
+      if (live().calibration.data?.calibrated != true) {
+        notify(l10n.guideAssistantCalibrateFirst, error: true, snackBarRed: false);
+        return;
+      }
+      if (!starHeld()) {
+        await notifier.findStar();
+        await notifier.refresh();
+      }
+      if (!starHeld()) {
+        notify(live().error ?? l10n.guideAssistantNoStar, error: true, snackBarRed: false);
+        return;
+      }
+      await container.read(guidingAssistantProvider.notifier).start(measureBacklash: true);
+    } finally {
+      keep.close();
+      if (mounted) setState(() => _preparing = false);
+    }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final l10n = context.l10n;
+    ref.listen(
+      guidingAssistantProvider.select((s) => s.error ?? s.status.error),
+      (previous, problem) {
+        if (problem != null && problem != previous) {
+          userNotifier(context, origin: SimpleStatusOrigin.guide)(problem, error: true, snackBarRed: false);
+        }
+      },
+    );
     final g = ref.watch(guiderStatusProvider).value;
     final connected = g != null && g.isConnected;
     final active = simpleGuideActive(g);
+    final guiding = g != null && guiderIsGuiding(g.runtimeState);
+    final pending = ref.watch(simpleGuiderPendingProvider);
+    final cameraBusy = simpleMainCameraBusy(ref, pausedQueueBusy: false);
     final planRunning =
         ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
     final assistant = ref.watch(guidingAssistantProvider);
@@ -553,12 +617,16 @@ class _SimpleGuiderTools extends ConsumerWidget {
         for (final s in status.recommendations?.suggestions ?? const <GuidingAssistantSuggestion>[])
           if (!done.contains(s.key)) s.key,
     ];
-    final problem = assistant.error ?? status.error;
     final why = planRunning
         ? l10n.guideStopPlanFirst
-        : active
+        : cameraBusy
+        ? l10n.shellMainCameraBusy
+        : guiding
         ? l10n.guideStopGuidingFirst
+        : active
+        ? l10n.guideStopLoopFirst
         : null;
+    final canRun = connected && !planRunning && !cameraBusy && pending == null;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -566,19 +634,19 @@ class _SimpleGuiderTools extends ConsumerWidget {
       children: [
         FilledButton.tonal(
           key: const Key('simple-guider-recalibrate'),
-          onPressed: connected && !planRunning && !active
-              ? () => _recalibrate(context, ref)
-              : null,
+          onPressed: canRun && !active ? _recalibrate : null,
           child: Text(l10n.guideRecalibrateNow),
         ),
         if (why != null) Text(why, style: AraText.caption),
         FilledButton.tonal(
           key: const Key('simple-guider-assistant'),
-          onPressed: !connected || assistant.busy || (planRunning && !status.isRunning)
+          onPressed: assistant.busy
               ? null
               : status.isRunning
               ? notifier.stop
-              : () => notifier.start(measureBacklash: true),
+              : canRun && !guiding && !_preparing
+              ? _runAssistant
+              : null,
           child: Text(status.isRunning ? l10n.guideStopAssistant : l10n.guideRunAssistant),
         ),
         if (status.isRunning) Text(l10n.guideAssistantMeasuring, style: AraText.caption),
@@ -588,7 +656,6 @@ class _SimpleGuiderTools extends ConsumerWidget {
             onPressed: assistant.busy ? null : () => notifier.apply(suggestions),
             child: Text(l10n.guideAssistantApply(suggestions.length)),
           ),
-        if (problem != null) Text(problem, style: AraText.caption),
       ],
     );
   }

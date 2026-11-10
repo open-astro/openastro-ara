@@ -29,7 +29,10 @@ import 'guide_focus_card.dart' show GuideFocusHint, TurnAdvice, TurnHint;
 class BahtinovFocusCard extends ConsumerStatefulWidget {
   /// The Autofocus | Bahtinov mask picker, drawn in the title row.
   final Widget methodSelector;
-  const BahtinovFocusCard({super.key, required this.methodSelector});
+
+  /// #1542 — the nudge and Stop, so the readout can be watched while focusing.
+  final Widget? manualFocus;
+  const BahtinovFocusCard({super.key, required this.methodSelector, this.manualFocus});
 
   @override
   ConsumerState<BahtinovFocusCard> createState() => _BahtinovFocusCardState();
@@ -154,6 +157,10 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
       ),
       child: FitColumn(
         children: [
+          if (widget.manualFocus case final manual?) ...[
+            manual,
+            const SizedBox(height: 16),
+          ],
           if (live.error != null || status.error != null) ...[
             InlineNotice.error(live.error ?? status.error!),
             const SizedBox(height: 16),

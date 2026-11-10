@@ -75,13 +75,33 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
 
   Future<void> _resetCalibration() async {
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: Text(l10n.focusCalibrationResetAsk),
+        content: Text(l10n.focusCalibrationResetHint),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialog).pop(false),
+            child: Text(l10n.focusCalibrationResetCancel),
+          ),
+          FilledButton(
+            key: const Key('af-reset-calibration-confirm'),
+            onPressed: () => Navigator.of(dialog).pop(true),
+            child: Text(l10n.focusCalibrationResetConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     try {
       await ref.read(autofocusApiProvider)?.recalibrate();
       if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Focus calibration reset.')));
+      messenger.showSnackBar(SnackBar(content: Text(l10n.focusCalibrationResetDone)));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: 'reset the focus calibration'));
+      setState(() => _lastError = friendlyError(context.l10n, e, action: l10n.focusCalibrationResetAction));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -257,18 +277,18 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
           value: s.restorePositionOnFailure,
           onChanged: n.setRestorePositionOnFailure,
         ),
-        const SettingsSectionHeader('Calibration'),
+        SettingsSectionHeader(context.l10n.focusCalibrationSection),
         Align(
           alignment: Alignment.centerLeft,
           child: OutlinedButton(
             key: const Key('af-reset-calibration'),
             onPressed: ref.watch(autofocusApiProvider) == null ? null : _resetCalibration,
-            child: const Text('Reset focus calibration'),
+            child: Text(context.l10n.focusCalibrationReset),
           ),
         ),
         const SizedBox(height: 4),
         Text(
-          'The next autofocus runs a full sweep and calibrates again.',
+          context.l10n.focusCalibrationResetHint,
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 24),

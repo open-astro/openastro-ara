@@ -2672,7 +2672,75 @@ class AppLocalizationsEn extends AppLocalizations {
   String get guideStopPlanFirst => 'Stop the plan to use these.';
 
   @override
-  String get guideStopGuidingFirst => 'Stop guiding to recalibrate.';
+  String get guideStopGuidingFirst => 'Stop guiding to use these.';
+
+  @override
+  String get guideTabsGroup => 'Guider page';
+
+  @override
+  String get guideMinimumMoveName => 'Minimum move';
+
+  @override
+  String get guideStopLoopFirst => 'Stop the guide loop to recalibrate.';
+
+  @override
+  String get guideAssistantCalibrateFirst =>
+      'Calibrate first: press Recalibrate now, then run the Guiding Assistant.';
+
+  @override
+  String get guideAssistantNoStar =>
+      'The guider found no star to measure. Check the guide camera, then try again.';
+
+  @override
+  String get focusNudgeIn => 'Nudge in';
+
+  @override
+  String get focusNudgeOut => 'Nudge out';
+
+  @override
+  String get focusNudgeStop => 'Stop';
+
+  @override
+  String focusNudgeSteps(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count steps',
+      one: '1 step',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get focusMoveFailed => 'Couldn\'t move the focuser';
+
+  @override
+  String get focusStopFailed => 'Couldn\'t stop the focuser';
+
+  @override
+  String get focusCalibrationSection => 'Calibration';
+
+  @override
+  String get focusCalibrationReset => 'Reset focus calibration';
+
+  @override
+  String get focusCalibrationResetHint =>
+      'The next autofocus runs a full sweep and calibrates again.';
+
+  @override
+  String get focusCalibrationResetAsk => 'Reset the focus calibration?';
+
+  @override
+  String get focusCalibrationResetCancel => 'Keep it';
+
+  @override
+  String get focusCalibrationResetConfirm => 'Reset';
+
+  @override
+  String get focusCalibrationResetDone => 'Focus calibration reset.';
+
+  @override
+  String get focusCalibrationResetAction => 'reset the focus calibration';
 
   @override
   String get guideDecMode => 'Dec guide mode';

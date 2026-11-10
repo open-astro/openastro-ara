@@ -122,8 +122,8 @@ at the top. This happens in the same commit that pushes the release tag.
 ### Added
 
 - Simple Mode: a plan calibrates the guider at the night's first guiding start and after each meridian flip. If a calibration fails, the plan goes on with the earlier calibration and an amber pill says so; with no earlier calibration the run pauses, as it did before. Going on needs `openastro-guider` with `restore_calibration`; an older guider pauses the run (#1716).
-- Simple Mode: the Guider panel has three tabs. Guide holds what it held, except Dither by, which moved to Tuning. Tuning also holds minimum move (sent to the Guider at once) and the settle after a dither. Tools holds Recalibrate now and the Guiding Assistant, one tap each (#1722).
-- Focusing pane: nudge the focuser in or out by 10, 50 or 200 steps, and Stop a move. New `POST /api/v1/equipment/focuser/halt` (#1542).
+- Simple Mode: the Guider panel has three tabs. Guide holds what it held, except Dither by, which moved to Tuning. Tuning also holds minimum move (sent to the Guider at once) and the settle after a dither. Tools holds Recalibrate now and the Guiding Assistant, one tap each. The assistant picks its own star (#1722).
+- Focusing pane: nudge the focuser in or out by 10, 50 or 200 steps, and Stop a move, with autofocus or the Bahtinov mask. New `POST /api/v1/equipment/focuser/halt` (#1542).
 - Settings › Autofocus: Reset focus calibration, so the next autofocus runs a full sweep (#1543).
 - Simple Mode Guider panel: RA and Dec aggressiveness sliders and Dec guide mode, sent to the guider live so guiding continues.
 - Simple Mode Preview: a Camera field lists the connected cameras with their models, so Preview can loop the Guide Camera's frames through the guider. The Guide row locks while the main camera is capturing, a locked row says why, and on Guide the Info tiles, histogram and empty screen no longer show the main camera's frame. The Filter field shows only with a filter wheel connected.

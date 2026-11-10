@@ -11,6 +11,10 @@ import 'package:openastroara/services/guider_api.dart' show GuiderClient, GuideS
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/models/guiding_assistant.dart';
 import 'package:openastroara/state/guider/guider_live_state.dart';
+import 'package:openastroara/models/guider_calibration_view.dart';
+import 'package:openastroara/models/guider_live.dart';
+import 'package:openastroara/services/guider_live_api.dart' show GuiderLiveClient;
+import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegments;
 import 'package:openastroara/state/guider/guiding_assistant_state.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
@@ -114,11 +118,42 @@ Future<ProviderContainer> _pump(WidgetTester tester, Map<String, dynamic> wire,
   return c;
 }
 
+GuiderLiveState _liveState({String app = 'Stopped', bool lock = false, bool calibrated = true}) => GuiderLiveState(
+      live: GuiderLive(appState: app, lockX: lock ? 1 : null, lockY: lock ? 1 : null),
+      calibration: GuiderCalibrationView.fromJson({
+        'connected': true,
+        'data': {'calibrated': calibrated},
+      }),
+    );
+
 class _Live extends GuiderLiveNotifier {
+  _Live([this.initial]);
+  final GuiderLiveState? initial;
   @override
-  GuiderLiveState build() => const GuiderLiveState();
+  GuiderLiveState build() => initial ?? _liveState();
+  @override
+  Future<void> refresh() async {}
   @override
   Future<void> clearCalibration() async => _g.calls.add('clear');
+  @override
+  Future<void> findStar() async {
+    _g.calls.add('find');
+    state = _liveState(app: 'Selected', lock: true);
+  }
+}
+
+/// The rig refuses to forget its calibration: the real notifier reads this.
+class _RefusingLive implements GuiderLiveClient {
+  @override
+  Future<GuiderLive> getLive() async => GuiderLive.disconnected;
+  @override
+  Future<GuiderCalibrationView> getCalibration() async => GuiderCalibrationView.disconnected;
+  @override
+  Future<void> clearCalibration() async => throw Exception('refused');
+  @override
+  void close() {}
+  @override
+  dynamic noSuchMethod(Invocation i) => throw UnimplementedError('${i.memberName}');
 }
 
 class _Assistant extends GuidingAssistantNotifier {
@@ -136,6 +171,8 @@ class _Assistant extends GuidingAssistantNotifier {
 
   @override
   Future<void> apply(List<String> which) async => applied.add(which);
+
+  void fail(String error) => state = state.copyWith(error: error);
 }
 
 GuidingAssistantStatus _assistant(String state, {Map<String, dynamic>? recs}) =>
@@ -150,10 +187,11 @@ Future<void> _tab(WidgetTester tester, String name) async {
 
 void main() {
   group('the Guider tabs (#1722)', () {
-    List<Override> rig(_GuiderEquipment e, {_Assistant? assistant, SequenceRunState? run}) => [
+    List<Override> rig(_GuiderEquipment e, {_Assistant? assistant, SequenceRunState? run, GuiderLiveState? live}) => [
+          simpleModeActiveProvider.overrideWithValue(true),
           profileApiProvider.overrideWithValue(_Profile()),
           guiderEquipmentApiProvider.overrideWithValue(e),
-          guiderLiveProvider.overrideWith(_Live.new),
+          guiderLiveProvider.overrideWith(() => _Live(live)),
           guidingAssistantProvider.overrideWith(() => assistant ?? _Assistant(_idleAssistant)),
           if (run != null) sequenceRunStateProvider.overrideWith(() => _Run(run)),
         ];
@@ -215,7 +253,7 @@ void main() {
       await _pump(tester, _wire(), rig: rig(_GuiderEquipment()));
       await _tab(tester, 'tools');
       expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
-      expect(find.text('Stop guiding to recalibrate.'), findsOneWidget);
+      expect(find.text('Stop guiding to use these.'), findsOneWidget);
     });
 
     testWidgets('the Guiding Assistant is one action with no options', (tester) async {
@@ -224,7 +262,93 @@ void main() {
       await _tab(tester, 'tools');
       await tester.tap(find.byKey(const Key('simple-guider-assistant')));
       await tester.pump();
+      expect(_g.calls, ['find'], reason: 'it picks its own star');
       expect(a.started, [true]);
+    });
+
+    testWidgets('the tabs are the house segments, 44 pt tall', (tester) async {
+      await _pump(tester, _wire(), rig: rig(_GuiderEquipment()));
+      expect(find.byType(SimpleSegments<int>), findsOneWidget);
+      expect(tester.getSize(find.byKey(const Key('simple-guider-tab-tools'))).height, greaterThanOrEqualTo(44));
+    });
+
+    testWidgets('a clear the rig refuses says so and does not start guiding', (tester) async {
+      final c = await _pump(tester, _wire(runtime: 'stopped'), rig: [
+        simpleModeActiveProvider.overrideWithValue(true),
+        guiderLiveApiProvider.overrideWithValue(_RefusingLive()),
+        guidingAssistantProvider.overrideWith(() => _Assistant(_idleAssistant)),
+      ]);
+      await _tab(tester, 'tools');
+      await tester.tap(find.byKey(const Key('simple-guider-recalibrate')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(_g.calls, isEmpty);
+      expect(c.read(simpleMessagesProvider), hasLength(1));
+      await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('a main camera frame refuses both tools', (tester) async {
+      final c = await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment()));
+      c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
+      await _tab(tester, 'tools');
+      expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
+      expect(button(tester, 'simple-guider-assistant').onPressed, isNull);
+      c.read(captureProgressProvider.notifier).reset();
+      await tester.pump(const Duration(seconds: 11));
+    });
+
+    testWidgets('a start already asked for refuses Recalibrate now', (tester) async {
+      final c = await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment()));
+      c.read(simpleGuiderPendingProvider.notifier).set(true);
+      await _tab(tester, 'tools');
+      expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
+    });
+
+    testWidgets('guiding refuses the Guiding Assistant', (tester) async {
+      await _pump(tester, _wire(), rig: rig(_GuiderEquipment()));
+      await _tab(tester, 'tools');
+      expect(button(tester, 'simple-guider-assistant').onPressed, isNull);
+    });
+
+    testWidgets('with no calibration the Guiding Assistant says so and does not start', (tester) async {
+      final a = _Assistant(_idleAssistant);
+      final c = await _pump(tester, _wire(runtime: 'stopped'),
+          rig: rig(_GuiderEquipment(), assistant: a, live: _liveState(calibrated: false)));
+      await _tab(tester, 'tools');
+      await tester.tap(find.byKey(const Key('simple-guider-assistant')));
+      await tester.pump();
+      expect(a.started, isEmpty);
+      expect(c.read(simpleMessagesProvider).single.title, contains('Calibrate'));
+    });
+
+    testWidgets('a star already picked goes straight to measuring', (tester) async {
+      final a = _Assistant(_idleAssistant);
+      await _pump(tester, _wire(runtime: 'stopped'),
+          rig: rig(_GuiderEquipment(), assistant: a, live: _liveState(app: 'Selected', lock: true)));
+      await _tab(tester, 'tools');
+      await tester.tap(find.byKey(const Key('simple-guider-assistant')));
+      await tester.pump();
+      expect(_g.calls, isEmpty);
+      expect(a.started, [true]);
+    });
+
+    testWidgets('a Guiding Assistant error shows as a pill, not a caption', (tester) async {
+      final a = _Assistant(_idleAssistant);
+      final c = await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      a.fail('No star selected');
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider).single.title, contains('No star selected'));
+      expect(find.text('No star selected'), findsNothing);
+    });
+
+    testWidgets('each Tuning stepper is read with its full name', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await _pump(tester, _wire(), rig: rig(_GuiderEquipment()));
+      await _tab(tester, 'tuning');
+      expect(find.bySemanticsLabel(RegExp('Minimum move, RA')), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('Settle after each dither, For')), findsOneWidget);
+      semantics.dispose();
     });
 
     testWidgets('a finished Guiding Assistant applies every suggestion in one tap', (tester) async {

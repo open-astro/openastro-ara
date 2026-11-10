@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/screens/settings/panels/imaging_autofocus_panel.dart';
 import 'package:openastroara/services/autofocus_api.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
+import 'package:openastroara/settings/registry.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
@@ -64,9 +65,17 @@ void main() {
     await tester.pump();
 
     await tester.tap(find.byKey(const Key('af-reset-calibration')));
-    await tester.pump();
+    await tester.pumpAndSettle();
+    expect(api.recalibrates, 0, reason: 'it asks first');
 
+    await tester.tap(find.byKey(const Key('af-reset-calibration-confirm')));
+    await tester.pumpAndSettle();
     expect(api.recalibrates, 1);
+  });
+
+  test('settings search finds the reset (#1543)', () {
+    final hit = settingsRegistry.singleWhere((s) => s.id == 'img.autofocus.reset_calibration');
+    expect(hit.keywords, containsAll(['reset', 'calibration']));
   });
 
   testWidgets('with no rig the reset is off', (tester) async {
