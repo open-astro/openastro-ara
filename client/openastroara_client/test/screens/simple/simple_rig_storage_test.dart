@@ -337,7 +337,7 @@ void main() {
     expect(find.textContaining("while it isn't connected"), findsNothing);
   });
 
-  testWidgets('frames with no date read as a count, never "from ."', (tester) async {
+  testWidgets('frames with no date read as a count, never with an empty date', (tester) async {
     final (_, api) = await _pump(tester);
     api.contents_ = (_) async => const StorageContents(readable: true, frames: 3);
     await _tap(tester, find.byKey(const Key('simple-storage-choose')));
