@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/filter_wheel_status.dart';
@@ -9,6 +10,7 @@ import '../../state/equipment/filter_choices_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/equipment/filter_wheel_command_state.dart';
 import '../../theme/ara_metrics.dart';
+import '../../util/reduce_motion.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/settings/filter_wheel_labels_state.dart';
@@ -437,10 +439,19 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
     // Created here (not as a `late final` field) so dispose() can always
     // dispose it — a lazy creation on first use could otherwise fire during
     // teardown and crash the vsync lookup.
+    // The underline reads _flash.value: without a rebuild per tick it never
+    // blinked (one colour for the whole move).
     _flash = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
-    );
+    )..addListener(() {
+        // build() itself restarts it; the value it set is read there.
+        if (mounted &&
+            SchedulerBinding.instance.schedulerPhase !=
+                SchedulerPhase.persistentCallbacks) {
+          setState(() {});
+        }
+      });
   }
 
   @override
@@ -449,14 +460,12 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
     super.dispose();
   }
 
-  /// The underline color while busy: a red pulse during the move, a green
-  /// pulse on a confirmed landing; null restores the theme default.
+  /// The underline color while busy: green blinks while the wheel moves, as
+  /// in Simple Mode (DESIGN.md status rule; steady with reduce motion), and a
+  /// green flash confirms a landing; null restores the theme default.
   Color? _blinkColor(bool busy) {
-    if (_landed) {
+    if (_landed || busy) {
       return Color.lerp(AraColors.accentConnected, AraColors.border, _flash.value);
-    }
-    if (busy) {
-      return Color.lerp(AraColors.accentError, AraColors.border, _flash.value);
     }
     return null;
   }
@@ -541,7 +550,11 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
       filterWheelProvider.select((w) => w.value?.isMoving ?? false),
     );
     final busy = command.phase == DeviceCommandPhase.moving || wheelMoving;
-    if (busy && !_flash.isAnimating) {
+    if (busy && reduceMotionOf(context)) {
+      _flash
+        ..stop()
+        ..value = 0;
+    } else if (busy && !_flash.isAnimating) {
       _flash
         ..value = 0
         ..repeat(reverse: true);
