@@ -938,7 +938,7 @@
       "**Don't** let any state fall back to plain grey text without a designed look.",
       "**Don't** fill any control other than Emergency Stop and confirmed destructive actions with Fault Red.",
       "**Don't** copy NINA's icons, splash, imagery or wordmark (see PRODUCT.md).",
-      "**Don't** hard-code colours outside `lib/theme/`; name them in `AraColors`. A test (`test/theme/no_hard_coded_colours_test.dart`) fails on a `Color(0x…)` literal anywhere else in `lib/` (#1552)."
+      "**Don't** hard-code colours outside `lib/theme/`; name them in `AraColors`. A test (`test/theme/no_hard_coded_colours_test.dart`) fails on a `Color(0x…)` literal or a Material `Colors.*` constant (other than `Colors.transparent`) anywhere else in `lib/` (#1552)."
     ]
   }
 }

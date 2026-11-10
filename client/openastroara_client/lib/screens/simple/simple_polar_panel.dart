@@ -532,7 +532,7 @@ class SimplePolarFrame extends ConsumerWidget {
     final frame = ref.watch(polarAlignFrameProvider);
     final jpeg = coarse ? null : frame;
     return ColoredBox(
-      color: Colors.black,
+      color: AraColors.imageBackdrop,
       child: jpeg == null
           ? const SizedBox.expand()
           : Center(child: Image.memory(jpeg, gaplessPlayback: true)),

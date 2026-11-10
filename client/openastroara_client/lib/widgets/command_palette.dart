@@ -37,7 +37,7 @@ import 'sky_atlas/session_plan_dialog.dart';
 Future<void> showCommandPalette(BuildContext context) {
   return showDialog(
     context: context,
-    barrierColor: Colors.black54,
+    barrierColor: AraColors.barrierPalette,
     builder: (_) => const _CommandPaletteDialog(),
   );
 }

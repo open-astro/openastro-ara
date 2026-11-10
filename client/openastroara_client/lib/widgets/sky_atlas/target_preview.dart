@@ -116,7 +116,7 @@ class TargetPreview extends ConsumerWidget {
           child: AspectRatio(
             aspectRatio: TargetPreviewService.aspect,
             child: ColoredBox(
-              color: Colors.black,
+              color: AraColors.imageBackdrop,
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -140,9 +140,9 @@ class TargetPreview extends ConsumerWidget {
                       '${fieldDeg.toStringAsFixed(1)}° across · DSS2'
                       '${canAim ? ' · drag to aim' : ''}',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: Colors.white70,
+                            color: AraColors.onImageTextQuiet,
                             shadows: const [
-                              Shadow(color: Colors.black, blurRadius: 3)
+                              Shadow(color: AraColors.onImageShadow, blurRadius: 3)
                             ],
                           ),
                     ),
@@ -267,7 +267,7 @@ class _FramePainter extends CustomPainter {
       final o = size.center(Offset.zero);
       final cross = Paint()
         ..strokeWidth = 1.2
-        ..color = Colors.white.withValues(alpha: 0.7);
+        ..color = AraColors.previewOutline;
       canvas.drawLine(o.translate(-6, 0), o.translate(6, 0), cross);
       canvas.drawLine(o.translate(0, -6), o.translate(0, 6), cross);
     }
@@ -293,13 +293,13 @@ class _FramePainter extends CustomPainter {
         height: size.longestSide * 4);
     canvas.saveLayer(everything, Paint());
     canvas.drawRect(
-        everything, Paint()..color = Colors.black.withValues(alpha: 0.45));
+        everything, Paint()..color = AraColors.previewMask);
     canvas.drawPath(union, Paint()..blendMode = BlendMode.clear);
     canvas.restore();
     final shadow = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3
-      ..color = Colors.black.withValues(alpha: 0.6);
+      ..color = AraColors.previewMaskStrong;
     final edge = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5

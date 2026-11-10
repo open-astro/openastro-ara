@@ -173,4 +173,51 @@ class AraColors {
   static const instructionSwitch = Color(0xFFFF8A65);
   static const instructionCalibration = Color(0xFFA1887F);
   static const instructionUtility = Color(0xFF90A4AE);
+
+  // #1552 follow-up — the Material Colors.* constants used outside lib/theme.
+
+  /// White text and icons on a coloured fill (a red Remove or Stop button,
+  /// a selected tick, a badge).
+  static const onFill = Color(0xFFFFFFFF);
+
+  /// Black text on a bright green or amber fill (Start, a selected chip).
+  static const onBrightFill = Color(0xFF000000);
+
+  /// The black behind a frame or a sky preview, letterboxing included.
+  static const imageBackdrop = Color(0xFF000000);
+
+  /// Text over a frame or photo: full and quiet, with its shadow.
+  static const onImageText = Color(0xFFFFFFFF);
+  static const onImageTextQuiet = Color(0xB3FFFFFF);
+  static const onImageShadow = Color(0xFF000000);
+
+  /// A dark chip or bar laid over a frame (55 % black).
+  static const onImageChip = Color(0x8C000000);
+
+  /// The sky preview's mask outside the frame, its outline and the dim ring.
+  static const previewMask = Color(0x73000000);
+  static const previewMaskStrong = Color(0x99000000);
+  static const previewOutline = Color(0xB3FFFFFF);
+
+  /// Modal barriers: the command palette, a full-screen frame, a card sheet,
+  /// the notification centre.
+  static const barrierPalette = Color(0x8A000000);
+  static const barrierFrame = Color(0xDD000000);
+  static const barrierSheet = Color(0x61000000);
+  static const barrierLight = Color(0x1F000000);
+
+  /// A raised panel's or a dragged row's drop shadow.
+  static const dragShadow = Color(0x73000000);
+
+  /// A dim layer over a frame while a panel sits on it (26 % black).
+  static const frameDim = Color(0x42000000);
+
+  /// The Settings search hit's outline.
+  static const searchHighlight = Color(0xCCFFEB3B);
+
+  /// A poor frame-quality bar.
+  static const qualityPoor = Color(0xFFFF5252);
+
+  /// A star in the wallpaper and the Ara mark's bright star.
+  static const starlight = Color(0xFFFFFFFF);
 }

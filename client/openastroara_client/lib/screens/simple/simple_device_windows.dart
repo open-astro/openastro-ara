@@ -533,7 +533,7 @@ class _OnOff extends StatelessWidget {
               key: Key('$id-$key'),
               label: word,
               selected: known && on == v,
-              radius: 8,
+              radius: AraRadius.container,
               onTap: (known && on == v) || !enabled ? null : () => onChanged(v),
             ),
           ),
@@ -2742,7 +2742,7 @@ class _SimpleFilterWheelWindowState
                             label: _labelled(slot),
                             selected:
                                 (sentSlot ?? w.currentSlot) == slot.position,
-                            radius: 8,
+                            radius: AraRadius.container,
                             onTap:
                                 moving ||
                                     pending != null ||

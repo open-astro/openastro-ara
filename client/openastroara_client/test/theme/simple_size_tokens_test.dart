@@ -43,6 +43,8 @@ const _allowed = <String, String>{
   'lib/screens/simple/simple_plan_panel.dart:fontSize:16': "Plan sheet's heading, used once",
   'lib/screens/simple/simple_preflight.dart:fontSize:11': "a Preflight step's label under its icon, used once",
   'lib/screens/simple/simple_preview_panel.dart:radius:2': 'the histogram bars: a hairline clip',
+  'lib/screens/simple/simple_preview_panel.dart:radius:36': "an InkResponse's splash radius, not a corner",
+  'lib/screens/simple/simple_plan_panel.dart:radius:36': "an InkResponse's splash radius, not a corner",
   'lib/screens/simple/simple_rig_storage.dart:fontSize:20': "Storage's drive name: no documented role",
   'lib/screens/simple/simple_safety_alarm.dart:fontSize:26': "the alarm's title, sized for contrast on Fault Red",
   'lib/screens/simple/simple_safety_alarm.dart:fontSize:16': "the alarm's detail",
@@ -51,7 +53,8 @@ const _allowed = <String, String>{
   'lib/screens/simple/simple_shell.dart:fontSize:14': "kSimpleText's size on the Ara sheet's links",
 };
 
-final _radius = RegExp(r'Radius\.circular\(\s*(\d+(?:\.\d+)?)\s*[,)]');
+/// `Radius.circular(n)`, and a widget's own `radius: n` argument.
+final _radius = RegExp(r'(?:Radius\.circular\(|\bradius:)\s*(\d+(?:\.\d+)?)\s*[,)\n]');
 final _font = RegExp(r'fontSize:\s*(\d+(?:\.\d+)?)\s*[,)\n]');
 
 /// Comments blanked to spaces, so offsets still give the right line.
@@ -87,9 +90,11 @@ final a = BorderRadius.circular(
 // BorderRadius.circular(8) in a comment
 /* fontSize: 12 */
 final b = TextStyle(fontSize: 13,);
+final c = SimpleSegment(radius: 8, label: 'x');
 ''';
     expect(bareSizes('x.dart', fixture), [
       'x.dart:1: bare radius 10; use AraRadius.simplePanel',
+      'x.dart:6: bare radius 8; use AraRadius.container',
       'x.dart:5: bare fontSize 13; use kSimpleUnit',
     ]);
   });

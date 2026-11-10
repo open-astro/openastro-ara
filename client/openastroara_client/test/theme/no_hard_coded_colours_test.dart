@@ -3,8 +3,11 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 /// DESIGN.md: "Don't hard-code colours outside `lib/theme/`" (#1552). A colour
-/// literal anywhere else fails here with its file and line; name it in
-/// AraColors instead.
+/// literal or a Material `Colors.*` constant anywhere else fails here with its
+/// file and line; name its role in AraColors instead. `Colors.transparent` is
+/// no colour and stays allowed.
+final _hardCoded = RegExp(r'Color\(0x|(?<![A-Za-z])Colors\.(?!transparent\b)[a-z]');
+
 void main() {
   test('no Color(0x…) literal outside lib/theme', () {
     final found = <String>[];
@@ -14,7 +17,7 @@ void main() {
       final lines = file.readAsLinesSync();
       for (var i = 0; i < lines.length; i++) {
         final code = lines[i].split('//').first;
-        if (code.contains('Color(0x')) found.add('$path:${i + 1}: ${lines[i].trim()}');
+        if (_hardCoded.hasMatch(code)) found.add('$path:${i + 1}: ${lines[i].trim()}');
       }
     }
     expect(found, isEmpty, reason: 'name these colours in AraColors:\n${found.join('\n')}');

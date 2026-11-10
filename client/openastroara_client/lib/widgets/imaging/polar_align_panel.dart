@@ -1330,7 +1330,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             jpeg == null
                 ? DecoratedBox(
                     decoration: BoxDecoration(
-                      color: Colors.black26,
+                      color: AraColors.frameDim,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Center(

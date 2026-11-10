@@ -460,7 +460,7 @@ class AlbumCard extends StatelessWidget {
       context: context,
       barrierDismissible: true,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
-      barrierColor: Colors.black38,
+      barrierColor: AraColors.barrierSheet,
       transitionDuration: reduceMotionOf(context) ? Duration.zero : const Duration(milliseconds: 320),
       pageBuilder: (dialogContext, _, _) => const SizedBox.shrink(),
       transitionBuilder: (dialogContext, animation, _, _) {

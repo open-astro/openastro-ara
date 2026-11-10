@@ -217,7 +217,7 @@ class _LiveView extends StatelessWidget {
                     style: TextStyle(
                         // Pinned to black for legibility on the green badge,
                         // independent of the theme's default foreground.
-                        color: Colors.black,
+                        color: AraColors.imageBackdrop,
                         fontSize: 11,
                         fontWeight: FontWeight.bold)),
               ),

@@ -57,7 +57,7 @@ class _AraMarkPainter extends CustomPainter {
       Paint()
         ..shader = RadialGradient(
           colors: [
-            Colors.white.withValues(alpha: .55),
+            AraColors.starlight.withValues(alpha: .55),
             AraColors.brandGlow.withValues(alpha: 0),
           ],
         ).createShader(Rect.fromCircle(center: _bright, radius: 110)),
@@ -79,7 +79,7 @@ class _AraMarkPainter extends CustomPainter {
         ..drawCircle(c, r, hole)
         ..drawCircle(c, r, stroke);
     }
-    canvas.drawCircle(_bright, atLeast(30, 3), Paint()..color = Colors.white);
+    canvas.drawCircle(_bright, atLeast(30, 3), Paint()..color = AraColors.starlight);
   }
 
   @override

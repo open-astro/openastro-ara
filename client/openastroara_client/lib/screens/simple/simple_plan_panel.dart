@@ -1612,7 +1612,7 @@ class _QueueList extends ConsumerWidget {
                   child: Text(
                     context.l10n.planRemove,
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: AraColors.onFill,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

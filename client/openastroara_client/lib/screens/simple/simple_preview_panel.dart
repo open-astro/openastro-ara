@@ -491,7 +491,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
                       child: SimpleSegment(
                         label: label,
                         selected: shot == v,
-                        radius: 8,
+                        radius: AraRadius.container,
                         onTap: looping
                             ? null
                             : () =>

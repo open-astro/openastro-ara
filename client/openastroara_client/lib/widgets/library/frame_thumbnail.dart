@@ -121,7 +121,7 @@ class _FrameThumbnailState extends State<FrameThumbnail> {
                               style: Theme.of(context)
                                   .textTheme
                                   .labelSmall
-                                  ?.copyWith(color: Colors.white),
+                                  ?.copyWith(color: AraColors.onImageText),
                             ),
                           ),
                           // Defensive clamp — malformed payload could push
@@ -147,7 +147,7 @@ class _FrameThumbnailState extends State<FrameThumbnail> {
                           size: 13,
                           color: widget.synced!
                               ? AraColors.accentConnected
-                              : Colors.white70,
+                              : AraColors.onImageTextQuiet,
                         ),
                       ),
                     ),
@@ -172,11 +172,11 @@ class _FrameThumbnailState extends State<FrameThumbnail> {
                                 ? AraColors.selectionBg
                                 : AraColors.thumbnailTickShade,
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 1.5),
+                            border: Border.all(color: AraColors.onFill, width: 1.5),
                           ),
                           child: selected
                               ? const Icon(Icons.check,
-                                  size: 14, color: Colors.white)
+                                  size: 14, color: AraColors.onFill)
                               : null,
                         ),
                       ),

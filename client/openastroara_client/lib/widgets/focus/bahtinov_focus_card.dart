@@ -124,7 +124,7 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
                 onPressed: live.busy ? null : () => _finish(context),
                 style: FilledButton.styleFrom(
                   backgroundColor: AraColors.accentConnected,
-                  foregroundColor: Colors.black,
+                  foregroundColor: AraColors.onBrightFill,
                 ),
                 icon: const Icon(Icons.check_rounded, size: 18),
                 label: const Text('Finish'),
@@ -694,7 +694,7 @@ class BahtinovFrameView extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.55),
+                    color: AraColors.onImageChip,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: const Text('Tap a star to zoom in on it',
@@ -711,7 +711,7 @@ class BahtinovFrameView extends StatelessWidget {
                     if (crop != null && onZoom != null)
                       Container(
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.55),
+                          color: AraColors.onImageChip,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Row(
@@ -721,7 +721,7 @@ class BahtinovFrameView extends StatelessWidget {
                               TextButton(
                                 onPressed: () => onZoom!(z),
                                 style: TextButton.styleFrom(
-                                  foregroundColor: z == zoom ? Colors.white : AraColors.onFrameTextQuiet,
+                                  foregroundColor: z == zoom ? AraColors.onImageText : AraColors.onFrameTextQuiet,
                                   visualDensity: VisualDensity.compact,
                                   minimumSize: const Size(36, 32),
                                   padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -738,7 +738,7 @@ class BahtinovFrameView extends StatelessWidget {
                       TextButton.icon(
                         onPressed: onClearPick,
                         style: TextButton.styleFrom(
-                          backgroundColor: Colors.black.withValues(alpha: 0.55),
+                          backgroundColor: AraColors.onImageChip,
                           foregroundColor: AraColors.onFrameText,
                           visualDensity: VisualDensity.compact,
                         ),
@@ -786,7 +786,7 @@ class BahtinovFrameView extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.55),
+                    color: AraColors.onImageChip,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Row(
@@ -810,7 +810,7 @@ class BahtinovFrameView extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.55),
+                    color: AraColors.onImageChip,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(caption!, style: const TextStyle(fontSize: 12, color: AraColors.onFrameText)),

@@ -125,7 +125,7 @@ class _FrameQualityChartState extends ConsumerState<FrameQualityChart> {
               ? AraColors.selectionBg
               : mid >= 0.4
                   ? AraColors.accentBusy
-                  : Colors.redAccent,
+                  : AraColors.qualityPoor,
           width: 14,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
         ),

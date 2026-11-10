@@ -209,7 +209,7 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
                 key: const ValueKey('stop_mount_button'),
                 style: FilledButton.styleFrom(
                   backgroundColor: AraColors.accentError,
-                  foregroundColor: Colors.white,
+                  foregroundColor: AraColors.onFill,
                   textStyle: theme.textTheme.titleLarge
                       ?.copyWith(fontWeight: FontWeight.bold),
                 ),

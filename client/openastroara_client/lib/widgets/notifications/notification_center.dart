@@ -81,7 +81,7 @@ class NotificationBell extends ConsumerWidget {
                         fontSize: 9,
                         height: 1.3,
                         fontWeight: FontWeight.w600,
-                        color: Colors.white),
+                        color: AraColors.onFill),
                   ),
                 ),
               ),
@@ -101,7 +101,7 @@ Future<void> showNotificationCenter(BuildContext context) =>
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Close notifications',
-      barrierColor: Colors.black.withValues(alpha: 0.12),
+      barrierColor: AraColors.barrierLight,
       transitionDuration: _openDuration,
       pageBuilder: (_, _, _) => const _NotificationCenter(),
       transitionBuilder: (_, animation, _, child) {

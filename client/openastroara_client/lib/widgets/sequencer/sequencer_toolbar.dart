@@ -994,7 +994,7 @@ class _LifecycleButton extends StatelessWidget {
     if (compact) {
       final enabled = onPressed != null;
       final (Color fg, Color? bg) = switch (kind) {
-        _LifecycleKind.primary => (Colors.black, AraColors.accentConnected),
+        _LifecycleKind.primary => (AraColors.onBrightFill, AraColors.accentConnected),
         _LifecycleKind.caution => (AraColors.accentBusy, null),
         _LifecycleKind.destructive => (AraColors.accentError, null),
       };
@@ -1029,7 +1029,7 @@ class _LifecycleButton extends StatelessWidget {
             label: Text(label),
             style: FilledButton.styleFrom(
               backgroundColor: AraColors.accentConnected,
-              foregroundColor: Colors.black,
+              foregroundColor: AraColors.onBrightFill,
               disabledBackgroundColor: AraColors.bgInput,
               disabledForegroundColor: AraColors.textDisabled,
               visualDensity: VisualDensity.compact,

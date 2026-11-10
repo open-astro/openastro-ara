@@ -75,7 +75,7 @@ class FocusFrameView extends StatelessWidget {
                   child: Text(
                     badge!,
                     style: const TextStyle(
-                      color: Colors.black,
+                      color: AraColors.imageBackdrop,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                     ),
@@ -111,9 +111,9 @@ class FocusFrameView extends StatelessWidget {
   void _openZoom(BuildContext context, Uint8List jpeg) {
     showDialog<void>(
       context: context,
-      barrierColor: Colors.black87,
+      barrierColor: AraColors.barrierFrame,
       builder: (ctx) => Dialog.fullscreen(
-        backgroundColor: Colors.black,
+        backgroundColor: AraColors.imageBackdrop,
         child: Stack(
           children: [
             Positioned.fill(

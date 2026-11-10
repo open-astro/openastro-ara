@@ -2454,7 +2454,7 @@ class SimpleSegments<T> extends StatelessWidget {
               group: group,
               shrinkToFit: shrinkToFit,
               selected: value == selected,
-              radius: 8,
+              radius: AraRadius.container,
               onTap: onPick == null || value == selected
                   ? null
                   : () => onPick!(value),
@@ -3713,7 +3713,7 @@ class _ThisRig extends ConsumerWidget {
                       key: Key('simple-menu-language-$id'),
                       label: name,
                       selected: ref.watch(appLocaleProvider) == locale,
-                      radius: 8,
+                      radius: AraRadius.container,
                       onTap: () =>
                           ref.read(appLocaleProvider.notifier).set(locale),
                     ),
