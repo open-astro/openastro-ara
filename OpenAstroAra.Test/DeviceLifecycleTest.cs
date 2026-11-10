@@ -134,7 +134,9 @@ namespace OpenAstroAra.Test {
             await ConnectedAsync(l);
             Current.ReadFails = true;
             await WaitForAsync(() => _faults.Faults.Count > 0, "the degraded fault");
-            Assert.That(_faults.Faults.Single().Kind, Is.EqualTo(EquipmentFaultKind.Degraded));
+            var fault = _faults.Faults.Single();
+            Assert.That(fault.Kind, Is.EqualTo(EquipmentFaultKind.Degraded));
+            Assert.That(fault.Details, Does.Contain("failed 1 ticks in a row"), "degraded on the first failed read, not the third");
         }
 
         [Test]
