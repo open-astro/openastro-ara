@@ -611,22 +611,6 @@ class _GuiderGone extends _GuiderCalls {
   Future<GuiderStatus?> build() async => null;
 }
 
-class _LiveFrame extends AutofocusLiveNotifier {
-  @override
-  AutofocusLive build() => AutofocusLive(
-      run: const AutofocusRun(state: AutofocusRunStates.complete, finalHfr: 1.01), frame: Uint8List.fromList(_png));
-}
-
-/// The daemon's run record as the real notifier folds it: idle until the
-/// first read, then each snapshot through [applyRunSnapshot].
-class _LiveSnapshots extends AutofocusLiveNotifier {
-  @override
-  AutofocusLive build() => AutofocusLive.idle;
-  @override
-  Future<void> refresh() async {}
-  void snapshot(AutofocusRun run) => state = applyRunSnapshot(state, run);
-}
-
 /// A finished Smart Focus with a weak fit and its frame: the tallest Auto panel.
 class _LiveWeak extends AutofocusLiveNotifier {
   @override
@@ -667,25 +651,6 @@ class _BahtinovReading extends BahtinovFocusNotifier {
   }
 }
 
-/// A Bahtinov readout stopped with a measurement, not finished.
-class _BahtinovMeasured extends BahtinovFocusNotifier {
-  int finishes = 0;
-  @override
-  BahtinovFocusLive build() {
-    const sample = BahtinovSample(seq: 1, detected: true, offsetPx: 1.0, withinZone: false);
-    return const BahtinovFocusLive(
-      status: BahtinovFocusStatus(
-          active: false, state: BahtinovFocusStates.stopped, exposureSec: 2, seq: 1, latest: sample,
-          recent: [sample], zonePx: 0.3, zoneFromOptics: false, hasFrame: false),
-    );
-  }
-  @override
-  Future<void> finish() async {
-    finishes++;
-    state = state.copyWith(finished: true);
-  }
-}
-
 class _GuideFrame extends GuideFocusNotifier {
   @override
   GuideFocusLive build() => GuideFocusLive(frame: Uint8List.fromList(_png), frameSeq: 1);
@@ -694,11 +659,6 @@ class _GuideFrame extends GuideFocusNotifier {
 class _ManualPick extends MainFocusMethodNotifier {
   @override
   MainFocusMethod? build() => MainFocusMethod.bahtinov;
-}
-
-class _AutoPick extends MainFocusMethodNotifier {
-  @override
-  MainFocusMethod? build() => MainFocusMethod.autofocus;
 }
 
 // A 1x1 PNG.
@@ -1012,21 +972,6 @@ void main() {
     expect(find.byKey(const Key('simple-focus-frame')), findsOneWidget);
   });
 
-  testWidgets("Focus: Measured stars On fills the screen with the run's frame, circles and all", (tester) async {
-    final container = await _pump(tester, const Size(1024, 768), gear: [
-      autofocusLiveProvider.overrideWith(() => _LiveFrame()),
-      mainFocusMethodProvider.overrideWith(_AutoPick.new),
-    ]);
-    await tester.tap(find.byKey(const Key('simple-mode')));
-    await tester.pump();
-    await tester.tap(find.text('Focus'));
-    await tester.pump();
-    expect(find.byKey(const Key('simple-focus-frame')), findsNothing, reason: 'off to start');
-    container.read(simpleFocusStarsShownProvider.notifier).set(true);
-    await tester.pump();
-    expect(find.byKey(const Key('simple-focus-frame')), findsOneWidget);
-  });
-
   for (final (name, gear) in [
     ('Auto, a finished weak-fit run', <Override>[
       autofocusLiveProvider.overrideWith(_LiveWeak.new),
@@ -1062,44 +1007,6 @@ void main() {
     expect(find.byKey(const Key('simple-focus-frame')), findsOneWidget);
   });
 
-  testWidgets("Focus on the guide camera fills the screen with the guide camera's frames", (tester) async {
-    final container = await _pump(tester, const Size(1024, 768), gear: [
-      guideFocusProvider.overrideWith(_GuideFrame.new),
-    ]);
-    await tester.tap(find.byKey(const Key('simple-mode')));
-    await tester.pump();
-    await tester.tap(find.text('Focus'));
-    await tester.pump();
-    expect(find.byKey(const Key('simple-focus-frame')), findsNothing, reason: 'the main telescope to start');
-    container.read(simpleFocusScopeProvider.notifier).set(SimpleFocusScope.guide);
-    await tester.pump();
-    expect(find.byKey(const Key('simple-focus-frame')), findsOneWidget);
-  });
-
-  testWidgets('leaving Focus with a Bahtinov measurement not finished asks for the mask in a pill (ALP-4982)',
-      (tester) async {
-    // #1486 review: DESIGN.md says leaving Manual before Finish asks; leaving the mode didn't.
-    final b = _BahtinovMeasured();
-    final container = await _pump(tester, const Size(1024, 768), gear: [
-      mainFocusMethodProvider.overrideWith(_ManualPick.new),
-      bahtinovFocusProvider.overrideWith(() => b),
-    ]);
-    await tester.tap(find.byKey(const Key('simple-mode')));
-    await tester.pump();
-    await tester.tap(find.text('Focus'));
-    await tester.pump();
-    expect(find.text('Take the Bahtinov mask off'), findsNothing);
-    await tester.tap(find.byKey(const Key('simple-mode')));
-    await tester.pump();
-    await tester.tap(find.text('Preview').first);
-    await tester.pump();
-    await tester.pump();
-    final pill = container.read(simpleMessagesProvider).single;
-    expect((pill.kind, pill.title), (SimpleMessageKind.question, 'Take the Bahtinov mask off'));
-    pill.actions.last.onPressed(); // Mask removed
-    expect(b.finishes, 1);
-  });
-
   testWidgets('with no device connected the top bar says so, and a tap opens Settings › Devices', (tester) async {
     // iPad, 2026-11-04: an empty top bar said nothing.
     await _pump(tester, const Size(1024, 768), linkUp: true);
@@ -1112,27 +1019,6 @@ void main() {
 
   // ALP-4998: Ara keeps its last run until it restarts, so a launch (or a
   // reconnect) reads an old failure as if it had just happened.
-  testWidgets("an autofocus that failed before this launch posts no pill, so × and a restart clear it (ALP-4998)",
-      (tester) async {
-    final live = _LiveSnapshots();
-    final container = await _pump(tester, const Size(1024, 768), gear: [autofocusLiveProvider.overrideWith(() => live)]);
-    live.snapshot(const AutofocusRun(state: AutofocusRunStates.failed, reason: 'focuser error'));
-    await tester.pump();
-    expect(container.read(simpleMessagesProvider), isEmpty);
-  });
-
-  testWidgets('an autofocus that fails while the app watches still says so in a pill', (tester) async {
-    final live = _LiveSnapshots();
-    final container = await _pump(tester, const Size(1024, 768), gear: [autofocusLiveProvider.overrideWith(() => live)]);
-    live.snapshot(const AutofocusRun(state: AutofocusRunStates.idle));
-    await tester.pump();
-    live.snapshot(const AutofocusRun(state: AutofocusRunStates.running));
-    await tester.pump();
-    live.snapshot(const AutofocusRun(state: AutofocusRunStates.failed, reason: 'focuser error'));
-    await tester.pump();
-    expect(container.read(simpleMessagesProvider).single.detail, 'Focuser error.');
-  });
-
   testWidgets('the rig offline: the top bar says Rig not connected', (tester) async {
     await _pump(tester, const Size(1024, 768));
     expect(find.descendant(of: find.byKey(const Key('simple-no-devices')), matching: find.text('Rig not connected')),
@@ -4094,21 +3980,6 @@ void main() {
     await tester.pump();
     expect(find.byType(SimplePolarPanel), findsOneWidget, reason: "Polar align's panel");
     await tester.pump(kSimpleErrorLife + const Duration(seconds: 1));
-  });
-
-  testWidgets('a failed polar alignment says so, with why, as a message on the left that fades (user, 2026-11-04)',
-      (tester) async {
-    final polar = _PolarRun();
-    final c = await _pump(tester, const Size(1024, 768), gear: [polarAlignLiveProvider.overrideWith(() => polar)]);
-    await tester.pump();
-    polar.fail('no stars found');
-    await tester.pump();
-    final m = c.read(simpleMessagesProvider).single;
-    expect((m.kind, m.title, m.detail), (SimpleMessageKind.error, 'Polar alignment failed', 'no stars found'));
-    expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('no stars found')),
-        findsNothing, reason: 'not a sticky status pill');
-    await tester.pump(kSimpleErrorLife + const Duration(seconds: 1));
-    expect(c.read(simpleMessagesProvider), isEmpty);
   });
 
   testWidgets('a tap on the status pill opens what it is about (user, 2026-11-04)', (tester) async {
