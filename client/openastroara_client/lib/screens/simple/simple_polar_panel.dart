@@ -50,18 +50,16 @@ class SimplePolarShutter extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final api = ref.watch(polarAlignApiProvider);
     final active = simplePolarActive(ref.watch(polarAlignLiveProvider));
+    // Watched: the module keeps its busy and error state while the call runs.
+    ref.watch(polarAlignActionProvider);
     final notify = userNotifier(context, origin: SimpleStatusOrigin.polar);
     final l10n = context.l10n;
-    Future<void> run(String action, Future<void> Function() op) async {
-      try {
-        await op();
-      } catch (e) {
-        notify(
-          friendlyError(l10n, e, action: action),
-          error: true,
-          snackBarRed: false,
-        );
-      }
+    final action = ref.read(polarAlignActionProvider.notifier);
+    // #1764 — through the shared module (ADR 0013 rule 3); its failure also goes to a pill.
+    Future<void> run(String verb, Future<void> Function(PolarAlignClient api) op) async {
+      String? failure;
+      await action.run(op, describe: (e) => failure = friendlyError(l10n, e, action: verb));
+      if (failure != null) notify(failure!, error: true, snackBarRed: false);
     }
 
     return SimpleShutterButton(
@@ -73,8 +71,8 @@ class SimplePolarShutter extends ConsumerWidget {
       onPressed: api == null || (!active && ref.watch(mainCameraBusyProvider))
           ? null
           : active
-          ? () => run(l10n.polarActionStop, api.stop)
-          : () => run(l10n.polarActionStart, api.start),
+          ? () => run(l10n.polarActionStop, (api) => api.stop())
+          : () => run(l10n.polarActionStart, (api) => api.start()),
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
+import 'package:openastroara/state/polar_align/polar_align_routine_state.dart' show polarAlignActionProvider;
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
@@ -47,6 +49,16 @@ class _Api implements PolarAlignClient {
 class _FailingApi extends _Api {
   @override
   Future<void> start({String? stage}) async => throw StateError('no camera');
+}
+
+/// A start that waits for [gate]: the shutter's call in flight, then refused.
+class _SlowFailingApi extends _Api {
+  final gate = Completer<void>();
+  @override
+  Future<void> start({String? stage}) async {
+    await gate.future;
+    throw StateError('no camera');
+  }
 }
 
 class _SimplePrefs extends SimpleModePrefsService {
@@ -336,6 +348,27 @@ void main() {
       await tester.pump();
       expect(c.read(simpleMessagesProvider).single.kind, SimpleMessageKind.error);
       expect(find.byType(SnackBar), findsNothing);
+    });
+
+    testWidgets('a start runs through the shared module: busy while it runs, its failure in the module (#1764)', (tester) async {
+      final api = _SlowFailingApi();
+      final c = ProviderContainer(overrides: [
+        polarAlignApiProvider.overrideWithValue(api),
+        polarAlignLiveProvider.overrideWith(() => _Live(const PolarAlignLive())),
+      ]);
+      addTearDown(c.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarShutter()))),
+      ));
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pump();
+      expect(c.read(polarAlignActionProvider).busy, isTrue, reason: 'the module knows the start is in flight');
+      api.gate.complete();
+      await tester.pump();
+      await tester.pump();
+      expect(c.read(polarAlignActionProvider).busy, isFalse);
+      expect(c.read(polarAlignActionProvider).error, contains('no camera'));
     });
 
     testWidgets('idle: starts it', (tester) async {
