@@ -35,6 +35,10 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Fixed (Simple Mode focus)
+
+- Simple Mode's Focus shows a Bahtinov readout that is already running (started by another client, or still running after a reconnect), as the Full UI does. Before, with a focuser connected, it showed autofocus and hid the readout's frame (#1590).
+
 ### Changed
 
 - Emergency Stop stops the mount right after aborting runs, ahead of the slower steps, and stops it again if a polar alignment was running. The app now waits long enough for the whole stop to report back (#1739).

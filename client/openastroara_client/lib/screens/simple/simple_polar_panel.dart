@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/l10n.dart';
 import '../../models/polar_align.dart';
 import '../../services/polar_align_api.dart';
+import '../../state/imaging/main_camera_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../theme/ara_colors.dart';
@@ -20,8 +21,7 @@ import 'simple_preview_panel.dart'
         SimpleShutterButton,
         exposurePresets,
         formatExposure,
-        kSimpleText,
-        simpleMainCameraBusy;
+        kSimpleText;
 import 'simple_shell.dart'
     show SimplePanel, SimpleSegments, kSimpleGoStyle, simpleStackText;
 import '../../state/simple_messages_state.dart';
@@ -104,7 +104,7 @@ class SimplePolarShutter extends ConsumerWidget {
       label: active ? l10n.polarStop : l10n.polarStart,
       whyOff: api == null ? l10n.shellRigNotConnected : l10n.shellMainCameraBusy,
       // It turns the mount: never under the main camera's frame.
-      onPressed: api == null || (!active && simpleMainCameraBusy(ref))
+      onPressed: api == null || (!active && ref.watch(mainCameraBusyProvider))
           ? null
           : active
           ? () => run(l10n.polarActionStop, api.stop)

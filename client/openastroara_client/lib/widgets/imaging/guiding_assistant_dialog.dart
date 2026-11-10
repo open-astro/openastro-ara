@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/guider_status.dart';
 import '../../models/guiding_assistant.dart';
 import '../../state/guider/guider_live_state.dart';
 import '../../state/guider/guider_state.dart';
@@ -60,9 +59,8 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
     // The guider refuses the assistant while it guides (the star must drift
     // freely); Ara says so up front instead of letting a run's guiding be
     // interrupted by a Start that only fails (review of #1387).
-    final guiderState = ref.watch(guiderStatusProvider).asData?.value;
-    final guiding =
-        guiderState != null && guiderIsGuiding(guiderState.runtimeState);
+    final guiding = ref.watch(
+        guiderStatusProvider.select((s) => s.asData?.value?.stopEndsPhase ?? false));
     final liveState = ref.watch(guiderLiveProvider);
     final live = liveState.live;
     final liveNotifier = ref.read(guiderLiveProvider.notifier);

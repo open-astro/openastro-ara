@@ -250,6 +250,40 @@ void main() {
           reason: 'a post-dither settle is still guiding — the trend keeps sampling');
     });
 
+    test('calibrating statuses are not folded (the mount is being measured, not corrected)', () async {
+      final api = _FakeGuiderApi()
+        ..status = const GuiderStatus(
+          deviceId: 'phd2',
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.calibrating,
+          rmsTotal: 3.2,
+        );
+      final c = container(api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderStatusProvider.future);
+      final sub = c.listen(liveGuidingRmsProvider, (_, _) {});
+      addTearDown(sub.close);
+      expect(sub.read(), isEmpty);
+    });
+
+    test('a guider no longer connected is not folded, whatever phase it last reported', () async {
+      final api = _FakeGuiderApi()
+        ..status = const GuiderStatus(
+          deviceId: 'phd2',
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.disconnected,
+          runtimeState: GuiderRuntimeState.guiding,
+          rmsTotal: 0.7,
+        );
+      final c = container(api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderStatusProvider.future);
+      final sub = c.listen(liveGuidingRmsProvider, (_, _) {});
+      addTearDown(sub.close);
+      expect(sub.read(), isEmpty);
+    });
+
     test('looping and star-selected statuses are not folded', () async {
       final api = _FakeGuiderApi()
         ..status = const GuiderStatus(

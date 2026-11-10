@@ -15,6 +15,7 @@ import '../../widgets/focus/bahtinov_focus_card.dart'
 import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
 import '../../state/focus/guide_focus_state.dart';
 import '../../state/guider/guider_state.dart';
+import '../../state/imaging/main_camera_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../widgets/focus/guide_focus_card.dart'
     show GuideFocusCard, TurnAdvice, guideFocusBlocker, guideFocusHint;
@@ -23,7 +24,7 @@ import '../../state/setup/setup_readiness.dart';
 import 'simple_preflight.dart'
     show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
 import 'simple_preview_panel.dart'
-    show SimpleShutterButton, kSimpleText, simpleMainCameraBusy;
+    show SimpleShutterButton, kSimpleText;
 import 'simple_device_windows.dart' show simpleCelsius;
 import 'simple_shell.dart'
     show SimplePanel, SimpleSegments, kSimpleGoStyle, simpleStackText;
@@ -43,7 +44,7 @@ double? simpleFocusHfr(AutofocusRun run) {
 String simpleFocusSummary(WidgetRef ref) =>
     ref.watch(simpleFocusScopeProvider) == SimpleFocusScope.guide
     ? ref.context.l10n.focusGuide
-    : simpleFocusMethod(ref) == MainFocusMethod.autofocus
+    : ref.watch(effectiveFocusMethodProvider) == MainFocusMethod.autofocus
     ? ref.context.l10n.focusAuto
     : ref.context.l10n.focusManual;
 
@@ -86,16 +87,6 @@ class SimpleGuideExposure extends Notifier<double> {
 final simpleGuideExposureProvider =
     NotifierProvider<SimpleGuideExposure, double>(SimpleGuideExposure.new);
 
-/// Autofocus with the focuser connected, the Bahtinov mask without, unless
-/// one was picked.
-MainFocusMethod simpleFocusMethod(WidgetRef ref) {
-  final connected =
-      ref.watch(focuserProvider).asData?.value?.connectionState ==
-      EquipmentConnectionState.connected;
-  return ref.watch(mainFocusMethodProvider) ??
-      (connected ? MainFocusMethod.autofocus : MainFocusMethod.bahtinov);
-}
-
 /// Whether the focus run's frame, its measured stars circled, fills the screen
 /// behind Focus's panels (session only; off to start).
 class SimpleFocusStarsShown extends Notifier<bool> {
@@ -132,11 +123,11 @@ class SimpleFocusShutter extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cameraBusy = simpleMainCameraBusy(ref);
+    final cameraBusy = ref.watch(mainCameraBusyProvider);
     if (ref.watch(simpleFocusScopeProvider) == SimpleFocusScope.guide) {
       return const SimpleGuideLiveShutter();
     }
-    if (simpleFocusMethod(ref) != MainFocusMethod.autofocus) {
+    if (ref.watch(effectiveFocusMethodProvider) != MainFocusMethod.autofocus) {
       // Manual: starts and stops the Bahtinov readout.
       final bahtinov = ref.watch(bahtinovFocusProvider);
       final active = bahtinov.status.active;
@@ -264,7 +255,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
   Widget build(BuildContext context) {
     final live = ref.watch(autofocusLiveProvider);
     final bahtinov = ref.watch(bahtinovFocusProvider);
-    final method = simpleFocusMethod(ref);
+    final method = ref.watch(effectiveFocusMethodProvider);
     final guide = ref.watch(guideFocusProvider);
     final scope = ref.watch(simpleFocusScopeProvider);
     final locked =

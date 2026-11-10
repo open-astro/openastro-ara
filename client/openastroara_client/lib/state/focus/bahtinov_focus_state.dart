@@ -4,8 +4,10 @@ import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/bahtinov_focus.dart';
+import '../../models/equipment_device_status.dart';
 import '../../models/server.dart';
 import '../../services/bahtinov_focus_api.dart';
+import '../equipment/focuser_state.dart';
 import '../saved_server_state.dart';
 import 'autofocus_live_state.dart';
 
@@ -247,3 +249,14 @@ class BahtinovFocusNotifier extends Notifier<BahtinovFocusLive> {
 
 final bahtinovFocusProvider =
     NotifierProvider<BahtinovFocusNotifier, BahtinovFocusLive>(BahtinovFocusNotifier.new);
+
+/// The method both presentations show for the main telescope: a readout
+/// already running shows itself (another client, a reconnect), else the
+/// user's pick, else autofocus with a focuser to drive and the mask without.
+final effectiveFocusMethodProvider = Provider<MainFocusMethod>((ref) {
+  if (ref.watch(bahtinovFocusProvider.select((s) => s.status.active))) return MainFocusMethod.bahtinov;
+  final connected = ref.watch(
+    focuserProvider.select((f) => f.asData?.value?.connectionState == EquipmentConnectionState.connected),
+  );
+  return ref.watch(mainFocusMethodProvider) ?? (connected ? MainFocusMethod.autofocus : MainFocusMethod.bahtinov);
+});

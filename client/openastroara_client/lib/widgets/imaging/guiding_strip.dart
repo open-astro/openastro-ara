@@ -697,9 +697,7 @@ class _GraphArea extends StatelessWidget {
     if (status == null || !status!.isConnected) {
       empty = 'Guider not connected';
     } else if (model.visible.isEmpty) {
-      empty = status!.runtimeState == GuiderRuntimeState.guiding ||
-              status!.runtimeState == GuiderRuntimeState.settling ||
-              status!.runtimeState == GuiderRuntimeState.dithering
+      empty = status!.isCorrecting
           ? 'Waiting for guide frames…'
           : 'Not guiding';
     } else {
@@ -976,7 +974,7 @@ class _GuideButtonState extends ConsumerState<_GuideButton> {
 
   @override
   Widget build(BuildContext context) {
-    final guiding = guiderIsGuiding(widget.status.runtimeState);
+    final guiding = widget.status.stopEndsPhase;
     return TextButton.icon(
       key: const Key('guide-toggle-button'),
       style: TextButton.styleFrom(

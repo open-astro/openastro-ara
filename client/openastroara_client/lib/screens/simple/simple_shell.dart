@@ -103,13 +103,12 @@ import '../../state/focus/guide_focus_state.dart' show guideFocusProvider;
 import '../../state/settings/phd2_settings_state.dart'
     show phd2SettingsProvider;
 import '../../state/focus/bahtinov_focus_state.dart'
-    show MainFocusMethod, bahtinovFocusProvider;
+    show MainFocusMethod, bahtinovFocusProvider, effectiveFocusMethodProvider;
 import 'simple_message_pills.dart';
 import 'simple_guide_panel.dart'
     show
         SimpleGuidePanel,
         SimpleGuideShutter,
-        simpleGuideActive,
         simpleGuideSummary;
 import 'simple_polar_panel.dart';
 import '../album/sky_album_screen.dart';
@@ -898,7 +897,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final shown = ref.watch(simpleShowingProvider);
     _syncGuiderPoll(
       ref.watch(
-        guiderStatusProvider.select((s) => simpleGuideActive(s.value)),
+        guiderStatusProvider.select((s) => s.value?.isBusy ?? false),
       ),
     );
     // Leaving Focus takes its panel's mask question away: a pill asks.
@@ -922,7 +921,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         ? null
         : ref.watch(simpleFocusScopeProvider) == SimpleFocusScope.guide
         ? ref.watch(guideFocusProvider.select((l) => l.frame))
-        : simpleFocusMethod(ref) == MainFocusMethod.bahtinov
+        : ref.watch(effectiveFocusMethodProvider) == MainFocusMethod.bahtinov
         ? ref.watch(bahtinovFocusProvider.select((l) => l.frame))
         : ref.watch(simpleFocusStarsShownProvider)
         ? ref.watch(autofocusLiveProvider.select((l) => l.frame))
@@ -2387,7 +2386,7 @@ class _TracePainter extends CustomPainter {
 // The guiding graph shows while the guider runs, never once it is stopped,
 // whatever steps are left from before (user, 2026-11-04).
 bool _guidingShown(WidgetRef ref) => ref.watch(
-  guiderStatusProvider.select((s) => simpleGuideActive(s.asData?.value)),
+  guiderStatusProvider.select((s) => s.asData?.value?.isBusy ?? false),
 );
 
 // The histogram is for saved frames (the daemon analyses those).

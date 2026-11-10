@@ -1049,6 +1049,18 @@ void main() {
     });
   }
 
+  testWidgets('a Bahtinov readout already running fills Focus with its frame over a connected focuser', (tester) async {
+    await _pump(tester, const Size(1024, 768), gear: [
+      bahtinovFocusProvider.overrideWith(_BahtinovReading.new),
+      focuserProvider.overrideWith(() => _Focuser(EquipmentConnectionState.connected)),
+    ]);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.text('Focus'));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-focus-frame')), findsOneWidget);
+  });
+
   testWidgets("Focus on the guide camera fills the screen with the guide camera's frames", (tester) async {
     final container = await _pump(tester, const Size(1024, 768), gear: [
       guideFocusProvider.overrideWith(_GuideFrame.new),

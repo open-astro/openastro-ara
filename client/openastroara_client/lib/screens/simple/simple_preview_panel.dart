@@ -18,6 +18,7 @@ import '../../state/imaging/capture_progress_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
+import '../../state/imaging/main_camera_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_preflight_state.dart'
@@ -54,11 +55,7 @@ import '../../widgets/inline_choices.dart';
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../imaging_actions.dart';
 import 'simple_guide_panel.dart'
-    show
-        simpleGuideActive,
-        simpleGuiderColour,
-        simpleGuiderPendingProvider,
-        simpleGuiding;
+    show simpleGuiderColour, simpleGuiderPendingProvider;
 import 'simple_focus_panel.dart'
     show
         SimpleGuideLiveShutter,
@@ -523,7 +520,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
     // A guide loop already running keeps its row: its stop is reached there.
     final blocked =
         guideFocusBlocker(l10n, guider, active: guideActive) ??
-        (simpleMainCameraBusy(ref) && !guideActive
+        (ref.watch(mainCameraBusyProvider) && !guideActive
             ? l10n.shellMainCameraBusy
             : null);
     // Leaving Guide while its loop runs would strand it with no stop.
@@ -1080,22 +1077,6 @@ class SimpleShutterButton extends StatelessWidget {
   }
 }
 
-/// The main camera is taking frames: a shot, Preview's loop or a running
-/// plan. Routines that need it, or that move the mount under it (autofocus,
-/// the Bahtinov readout, polar alignment), wait (user, 2026-11-04).
-/// [pausedQueueBusy] false: a paused Queue is idle (the server enters those
-/// states only once the run has suspended), which Guiding needs to recover.
-bool simpleMainCameraBusy(WidgetRef ref, {bool pausedQueueBusy = true}) =>
-    ref.watch(captureProgressProvider.select((p) => p.isCapturing)) ||
-    ref.watch(liveViewControllerProvider) ||
-    ref.watch(
-      sequenceRunStateProvider.select((s) {
-        final state = s.value?.state;
-        return (state?.isActive ?? false) &&
-            (pausedQueueBusy || !state!.isAnyPaused);
-      }),
-    );
-
 /// A greyed shutter's reason, as a pill: once at a time, fading like a result.
 void simpleSayWhy(BuildContext context, String why) {
   final container = ProviderScope.containerOf(context, listen: false);
@@ -1461,8 +1442,8 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         : null;
     // The guider's routine, or Guiding with its RMS, when nothing else is on.
     final guider = ref.watch(guiderStatusProvider).value;
-    final guiding = simpleGuiding(guider);
-    final guiderOn = simpleGuideActive(guider);
+    final guiding = guider?.isCorrecting ?? false;
+    final guiderOn = guider?.isBusy ?? false;
     final guiderAsk = ref.watch(simpleGuiderPendingProvider);
     final planActive = run?.state?.isActive ?? false;
     final polar = ref.watch(polarAlignLiveProvider);

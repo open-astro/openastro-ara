@@ -265,12 +265,8 @@ class MainFocusCard extends ConsumerWidget {
         focuser?.connectionState == EquipmentConnectionState.connected;
     // #1299 — Autofocus or Bahtinov mask: the user's pick, else the rig's
     // (no focuser to drive means a sweep can't run). A readout already running
-    // (another client, a reconnect) shows itself.
-    final bahtinovActive = ref.watch(bahtinovFocusProvider.select((s) => s.status.active));
-    final method = bahtinovActive
-        ? MainFocusMethod.bahtinov
-        : ref.watch(mainFocusMethodProvider) ??
-            (focuserConnected ? MainFocusMethod.autofocus : MainFocusMethod.bahtinov);
+    // (another client, a reconnect) shows itself. Simple Mode reads the same.
+    final method = ref.watch(effectiveFocusMethodProvider);
     final selector = MainFocusMethodSelector(method: method);
     if (method == MainFocusMethod.bahtinov) {
       return BahtinovFocusCard(
