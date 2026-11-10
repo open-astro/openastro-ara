@@ -9,12 +9,19 @@ import '../../state/focus/bahtinov_focus_state.dart';
 import '../../state/focus/guide_focus_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
+import '../../state/simple_preflight_state.dart';
 import 'simple_focus_panel.dart';
 import 'simple_screen.dart';
 
 /// Focus: the focus panel, its shutter, Auto/Manual/Guide on the chip.
 class SimpleFocusScreen extends SimpleScreen {
   const SimpleFocusScreen();
+
+  @override
+  SimpleModeScreen get id => SimpleModeScreen.focus;
+
+  @override
+  SimpleStatusOrigin get origin => SimpleStatusOrigin.focus;
 
   @override
   Widget panel(SimpleScreenHost host) => const SimpleFocusPanel();

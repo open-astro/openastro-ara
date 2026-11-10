@@ -5,6 +5,7 @@ import '../../l10n/l10n.dart';
 import '../../models/polar_align.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../state/simple_messages_state.dart';
+import '../../state/simple_preflight_state.dart';
 import 'simple_polar_panel.dart';
 import 'simple_screen.dart';
 
@@ -12,6 +13,12 @@ import 'simple_screen.dart';
 /// on the chip.
 class SimplePolarScreen extends SimpleScreen {
   const SimplePolarScreen();
+
+  @override
+  SimpleModeScreen get id => SimpleModeScreen.polarAlign;
+
+  @override
+  SimpleStatusOrigin get origin => SimpleStatusOrigin.polar;
 
   @override
   Widget panel(SimpleScreenHost host) => const SimplePolarPanel();

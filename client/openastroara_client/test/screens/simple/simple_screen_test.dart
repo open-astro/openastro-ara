@@ -1,10 +1,13 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
 import 'package:openastroara/screens/simple/simple_guide_panel.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart';
+import 'package:openastroara/screens/simple/simple_queue_screen.dart';
 import 'package:openastroara/screens/simple/simple_screen.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_preflight_state.dart';
 
 void main() {
@@ -31,5 +34,27 @@ void main() {
     panel.onEdit(2);
     expect(added, 1);
     expect(edited, 2);
+  });
+
+  test('a status pill opens the Screen that posted it; anything else opens Preview', () {
+    expect(SimpleScreen.showing(SimpleStatusOrigin.plan), SimpleModeScreen.plan);
+    expect(SimpleScreen.showing(SimpleStatusOrigin.guide), SimpleModeScreen.guide);
+    expect(SimpleScreen.showing(SimpleStatusOrigin.focus), SimpleModeScreen.focus);
+    expect(SimpleScreen.showing(SimpleStatusOrigin.polar), SimpleModeScreen.polarAlign);
+    expect(SimpleScreen.showing(SimpleStatusOrigin.camera), SimpleModeScreen.preview);
+  });
+
+  test("Queue's sheet opens to add, and Image this over a run adds to the queue", () {
+    final c = ProviderContainer();
+    addTearDown(c.dispose);
+    final sheet = c.read(simpleQueueSheetProvider.notifier);
+    sheet.open();
+    expect(c.read(simpleQueueSheetProvider), (adding: true, editing: null));
+    sheet.close();
+    expect(c.read(simpleQueueSheetProvider).adding, isFalse);
+    sheet.pick(overRun: true);
+    expect(c.read(simpleQueueSheetProvider).adding, isTrue);
+    sheet.pick(overRun: false);
+    expect(c.read(simpleQueueSheetProvider).adding, isFalse);
   });
 }

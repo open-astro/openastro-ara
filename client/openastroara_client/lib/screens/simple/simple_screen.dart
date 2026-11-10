@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/simple_messages_state.dart';
 import '../../state/simple_preflight_state.dart';
 import 'simple_focus_screen.dart';
 import 'simple_guide_screen.dart';
@@ -25,6 +26,21 @@ abstract class SimpleScreen {
     SimpleModeScreen.preview || SimpleModeScreen.preflight =>
       const SimplePreviewScreen(),
   };
+
+  /// Which Screen this is.
+  SimpleModeScreen get id;
+
+  /// The pills this Screen posts: a tap on one opens this Screen's panel.
+  SimpleStatusOrigin get origin;
+
+  /// The Screen a status pill from [origin] is about; Preview for anything
+  /// that no Screen posts (a device pill opens its window instead).
+  static SimpleModeScreen showing(SimpleStatusOrigin origin) =>
+      all.where((s) => s.origin == origin).firstOrNull?.id ??
+      SimpleModeScreen.preview;
+
+  /// ⌘. / Ctrl+.: only the Screen that runs the plan acts on it.
+  void onStopShortcut(BuildContext context, WidgetRef ref) {}
 
   /// What the settings chip opens beside the rail.
   Widget panel(SimpleScreenHost host);

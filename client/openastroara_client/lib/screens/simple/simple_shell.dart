@@ -1,5 +1,6 @@
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
+import 'simple_queue_screen.dart' show simpleQueueSheetProvider;
 import 'simple_screen.dart';
 import 'simple_search.dart';
 
@@ -183,28 +184,18 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   bool _hadFrame = false;
   _Popover _popover = _Popover.none;
 
-  /// Plan's sheet open from the queue panel: to add a target (also over a
-  /// run in progress), or on queued target [_editing]'s rows.
-  bool _adding = false;
-  int? _editing;
+  /// Queue's sheet (its state is the Queue Screen's): open to add or edit.
+  bool get _adding => ref.read(simpleQueueSheetProvider).adding;
+  int? get _editing => ref.read(simpleQueueSheetProvider).editing;
 
   /// The queue panel's Add target and edit: the sheet over everything.
   void _openSheet({int? edit}) => setState(() {
-    if (edit != null) {
-      ref
-          .read(simpleRunPlanProvider.notifier)
-          .load(ref.read(simpleRunProvider).targets[edit].steps);
-    }
-    _editing = edit;
+    ref.read(simpleQueueSheetProvider.notifier).open(edit: edit);
     _popover = _Popover.none;
-    _adding = true;
   });
 
-  // Leaving an edit drops its rows: the sheet plans the next target afresh.
   void _closeSheet() {
-    if (_editing != null) ref.invalidate(simpleRunPlanProvider);
-    _editing = null;
-    _adding = false;
+    ref.read(simpleQueueSheetProvider.notifier).close();
     // A discard question can't outlive the edit it was about: its Discard
     // would replay a stale tap.
     if (_discardAsk case final id?) {
@@ -416,7 +407,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       if (dewPill != null) _messages.dismiss(dewPill);
       if (calibrationPill != null) _messages.dismiss(calibrationPill);
     });
-    _stopDisarm?.cancel();
     _focus.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _guiderPoll?.cancel();
@@ -468,43 +458,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// Set while a jump to the Settings tab is turned back (see build).
   bool _restoringTab = false;
 
-  /// The first ⌘. / Ctrl+. asks; a second within 3 s stops (the keyboard's
-  /// stand-in for the shutter's 2 s hold, as the Emergency Stop does).
-  int? _stopAsk;
-  Timer? _stopDisarm;
-
-  void _stopRun() {
-    if (ref.read(simpleShowingProvider) != SimpleModeScreen.plan) return;
-    final phase = simpleRunPhase(
-      ref.read(simpleRunProvider),
-      ref.read(sequenceRunStateProvider).value,
-    );
-    if (phase != SimpleRunPhase.imaging &&
-        phase != SimpleRunPhase.pausing &&
-        phase != SimpleRunPhase.paused) {
-      return;
-    }
-    final messages = ref.read(simpleMessagesProvider.notifier);
-    _stopDisarm?.cancel();
-    if (_stopAsk != null) {
-      messages.dismiss(_stopAsk!);
-      _stopAsk = null;
-      ref.read(simpleRunProvider.notifier).stop();
-      return;
-    }
-    final mac = const {
-      TargetPlatform.macOS,
-      TargetPlatform.iOS,
-    }.contains(Theme.of(context).platform);
-    _stopAsk = messages.show(
-      SimpleMessageKind.question,
-      context.l10n.shellStopAgain(mac ? '⌘.' : 'Ctrl+.'),
-    );
-    _stopDisarm = Timer(const Duration(seconds: 3), () {
-      if (_stopAsk != null) messages.dismiss(_stopAsk!);
-      _stopAsk = null;
-    });
-  }
+  /// ⌘. / Ctrl+.: the showing Screen decides (only Queue stops its run).
+  void _stopRun() =>
+      SimpleScreen.of(ref.read(simpleShowingProvider)).onStopShortcut(context, ref);
 
   SimpleModeScreen? _lastShown;
 
@@ -570,13 +526,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       });
       return;
     }
-    final mode = switch (origin) {
-      SimpleStatusOrigin.plan => SimpleModeScreen.plan,
-      SimpleStatusOrigin.guide => SimpleModeScreen.guide,
-      SimpleStatusOrigin.focus => SimpleModeScreen.focus,
-      SimpleStatusOrigin.polar => SimpleModeScreen.polarAlign,
-      _ => SimpleModeScreen.preview,
-    };
+    final mode = SimpleScreen.showing(origin);
     // A Preflight on that step keeps going; anything else switches mode.
     if (ref.read(simpleShowingProvider) != mode) _pickMode(mode);
     setState(() {
@@ -669,7 +619,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     _closeSheet();
     // Over a run, the sheet adds to its queue.
     _popover = runActive ? _Popover.none : _Popover.settings;
-    _adding = runActive;
+    ref.read(simpleQueueSheetProvider.notifier).pick(overRun: runActive);
     _sky = false;
   });
 
@@ -828,6 +778,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     for (final screen in SimpleScreen.all) {
       screen.listen(context, ref);
     }
+    // Queue's sheet opening or closing reshapes the layout.
+    ref.watch(simpleQueueSheetProvider);
     final pilot = ref.watch(simplePreflightProvider);
     final shown = ref.watch(simpleShowingProvider);
     _syncGuiderPoll(
