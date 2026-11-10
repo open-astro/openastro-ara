@@ -680,9 +680,10 @@ public sealed record GuidingAssistantApplyResultDto(IReadOnlyList<string> Applie
 /// corrects during the first minutes of each guided run (no extra setup step). Status is
 /// <c>measuring</c> (progress in <c>SampleSeconds</c> of <c>TargetSeconds</c>), <c>done</c> or
 /// <c>unavailable</c> (<c>Reason</c> says why: <c>lock_shift</c>, <c>ao</c>, <c>no_calibration</c>,
-/// <c>no_pixel_scale</c>, <c>no_fit</c>, <c>pulse_response_low</c>). <c>PaErrorMinArcmin</c> is a LOWER BOUND: Dec drift at one
+/// <c>no_pixel_scale</c>, <c>no_fit</c>). <c>PaErrorMinArcmin</c> is a LOWER BOUND: Dec drift at one
 /// hour angle sees one component of the error. <c>Reliable</c> is false when the 1σ
-/// <c>UncertaintyArcmin</c> exceeds max(1′, half the value). <c>AlignErrorArcmin</c> is the last
+/// <c>UncertaintyArcmin</c> exceeds max(1′, half the value), or when the value less twice that
+/// uncertainty is more than 2′ above <c>AlignErrorArcmin</c> (#1731). <c>AlignErrorArcmin</c> is the last
 /// Polar Align result in the 12 h before, for comparison. Hour angle / Dec are the mount's at the end.
 /// </summary>
 public sealed record PaResidualDto(

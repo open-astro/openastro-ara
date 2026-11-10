@@ -576,7 +576,7 @@ class PaResidualChip extends StatelessWidget {
         color = r.reliable ? zoneColor(error) : AraColors.textSecondary;
         label = r.reliable
             ? 'PA ≥ ${formatPoleOffset(error).$1} · ${rating.$1}'
-            : 'PA ≥ ${formatPoleOffset(error).$1} · noisy';
+            : 'PA ≥ ${formatPoleOffset(error).$1} · ${r.aboveAlign ? 'above Polar Align' : 'noisy'}';
         tooltip = paResidualDetail(r);
     }
     return Tooltip(

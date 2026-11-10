@@ -25,19 +25,6 @@ void main() {
   };
 
   group('PaResidual.fromJson', () {
-    test('a run refused for a low pulse response says the mount did not follow (#1731)', () {
-      final u = PaResidual.fromJson({
-        'id': 'x',
-        'status': 'unavailable',
-        'sample_seconds': 300.0,
-        'target_seconds': 300.0,
-        'frames': 150,
-        'reason': 'pulse_response_low',
-      })!;
-      expect(u.reason, 'pulse_response_low');
-      expect(PaResidual.reasonText(u.reason), contains('did not follow'));
-    });
-
     test('parses a finished measurement', () {
       final r = PaResidual.fromJson(done)!;
       expect(r.status, PaResidualStatus.done);
@@ -111,4 +98,17 @@ void main() {
       expect(paResidualDetail(noisy), contains('too noisy'));
     },
   );
+
+  test('a residual far above Polar Align says so, not that guiding was noisy (#1731)', () {
+    final far = PaResidual.fromJson({
+      ...done,
+      'pa_error_min_arcmin': 17.0,
+      'uncertainty_arcmin': 0.5,
+      'align_error_arcmin': 0.9,
+      'reliable': false,
+    })!;
+    final text = paResidualDetail(far);
+    expect(text, isNot(contains('too noisy')));
+    expect(text, contains('more than Polar Align measured'));
+  });
 }

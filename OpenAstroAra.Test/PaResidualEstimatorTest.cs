@@ -55,61 +55,6 @@ namespace OpenAstroAra.Test {
             public double Gaussian() => Math.Sqrt(-2.0 * Math.Log(1.0 - Next())) * Math.Cos(2.0 * Math.PI * (1.0 - Next()));
         }
 
-
-        // Deterministic jitter for a pulse length, independent of the centroid noise.
-        private static double Jitter(int k) => Math.Sin(k * 1.7) * 0.15;
-
-        /// <summary>
-        /// #1731 — Dec pulses of which only <paramref name="response"/> of each commanded move reaches the
-        /// star (Dec lost motion), and a true drift that exactly balances what did: the raw trace is flat.
-        /// </summary>
-        private static double GuideWithLostMotion(PaResidualEstimator estimator, double response, int frames = 150) {
-            const double meanMovePx = 0.3;
-            var trueDriftPxPerSec = response * meanMovePx / FrameSec;
-            var noise = new Noise(1731);
-            var star = 0.0;
-            for (var k = 0; k < frames; k++) {
-                var movePx = -(meanMovePx + Jitter(k)); // South only, as on 2026-11-07
-                estimator.Add(k * FrameSec, star + noise.Gaussian() * 0.01, movePx / (RatePxPerSec / 1000.0));
-                star += response * movePx + trueDriftPxPerSec * FrameSec;
-            }
-            return trueDriftPxPerSec;
-        }
-
-        [Test]
-        public void A_pulse_the_mount_only_partly_executed_does_not_inflate_the_drift() {
-            // #1731: 0.9′ measured by the three-point check read ≥45′ from guiding, with a flat raw Dec trace.
-            var estimator = new PaResidualEstimator();
-            var trueDrift = GuideWithLostMotion(estimator, response: 0.8);
-
-            var fit = estimator.Fit(RatePxPerSec, ScaleArcsec);
-
-            Assert.That(fit, Is.Not.Null);
-            Assert.That(Math.Abs(fit!.Value.DriftArcsecPerMin), Is.EqualTo(trueDrift * 60 * ScaleArcsec).Within(0.5));
-        }
-
-        [Test]
-        public void Pulses_the_mount_barely_executed_read_as_a_low_response() {
-            var estimator = new PaResidualEstimator();
-            GuideWithLostMotion(estimator, response: 0.36);
-
-            var fit = estimator.Fit(RatePxPerSec, ScaleArcsec);
-
-            Assert.That(fit!.Value.PulseResponse, Is.EqualTo(0.36).Within(0.03));
-            Assert.That(fit.Value.PulseResponse, Is.LessThan(PaResidualEstimator.MinPulseResponse));
-        }
-
-        [Test]
-        public void An_overshooting_response_is_capped_at_one() {
-            var estimator = new PaResidualEstimator();
-            var trueDrift = GuideWithLostMotion(estimator, response: 1.3);
-
-            var fit = estimator.Fit(RatePxPerSec, ScaleArcsec);
-
-            Assert.That(fit!.Value.PulseResponse, Is.EqualTo(1.0));
-            Assert.That(trueDrift, Is.GreaterThan(0));
-        }
-
         [Test]
         public void The_drift_to_error_factor_is_one_over_the_sidereal_rate() {
             // ε = v / ω: 1″/min of Dec drift is 3.809′ of polar axis error; PHD2's 3.8197 uses a solar day.

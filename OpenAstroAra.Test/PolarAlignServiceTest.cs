@@ -779,6 +779,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_zero_guide_frame_size_is_logged_as_unavailable_not_as_a_size() {
+            // #1730: a guider with no camera frame yet answers [0, 0] — the log said "guide camera frame 0×0".
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls, frameWidth: 0, frameHeight: 0);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            var logger = new CapturingLogger();
+            using var svc = NewService(guider, solver, logger: logger);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(logger.Entries.Select(e => e.EventId), Does.Contain(4525), "LogFrameSizeUnavailable");
+            Assert.That(solver.Binnings, Is.Not.Empty.And.All.EqualTo(1));
+        }
+
+        [Test]
         public async Task A_profile_binning_overrides_auto() {
             var paCalls = new ConcurrentQueue<bool>();
             await using var fake = StartFake(paCalls, frameWidth: 4144, frameHeight: 2822);

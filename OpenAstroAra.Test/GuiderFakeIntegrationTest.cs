@@ -3078,19 +3078,60 @@ namespace OpenAstroAra.Test {
             Assert.That(dto, Is.Not.Null, "a frame after SettleDone is real guiding and counts");
         }
 
+        // #1731 — the newest Polar Align result in the comparison window, at a fixed total error.
+        private sealed class FixedAlignLog(double errorArcmin) : IPolarAlignmentLog {
+            public Task InsertAsync(PolarAlignmentRecord record, CancellationToken ct) => Task.CompletedTask;
+            public Task<PolarAlignmentRecord?> GetLatestMeasuredAsync(DateTimeOffset since, CancellationToken ct) =>
+                Task.FromResult<PolarAlignmentRecord?>(new PolarAlignmentRecord(since, since, errorArcmin, null, null, 3, "checked"));
+        }
+
+        private static async Task<System.Text.Json.JsonElement> DoneAsync(PaRig rig) {
+            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("done")).ConfigureAwait(false), Is.True, string.Join(",", rig.Statuses));
+            return rig.Events.Single(e => e.GetProperty("status").GetString() == "done");
+        }
+
         [Test]
-        public async Task Pulses_the_mount_did_not_execute_make_the_run_unavailable_not_a_huge_error() {
-            // #1731: ≥45′ reported against a 0.9′ three-point check, from small Dec pulses eaten by lost motion.
+        public async Task A_residual_far_above_the_recent_polar_align_result_is_published_unreliable() {
+            // #1731: a lower bound cannot exceed the total error the three-point check just measured.
+            // The steady drift reads 17.1′ (see the run above) against a 0.9′ Polar Align.
             await using var rig = await StartPaRigAsync().ConfigureAwait(false);
+            rig.Svc.PolarAlignmentLog = new FixedAlignLog(0.9);
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 1, frames: 20).ConfigureAwait(false);
+
+            var done = await DoneAsync(rig).ConfigureAwait(false);
+            Assert.That(done.GetProperty("pa_error_min_arcmin").GetDouble(), Is.EqualTo(17.1).Within(0.1), "the value is still published");
+            Assert.That(done.GetProperty("reliable").GetBoolean(), Is.False);
+            Assert.That(await WaitUntilAsync(() => rig.Log.Rows.Count == 1).ConfigureAwait(false), Is.True);
+            Assert.That(rig.Log.Rows[0].Reliable, Is.False, "history matches the strip");
+        }
+
+        [Test]
+        public async Task A_residual_within_the_recent_polar_align_result_stays_reliable() {
+            await using var rig = await StartPaRigAsync().ConfigureAwait(false);
+            rig.Svc.PolarAlignmentLog = new FixedAlignLog(15.5); // 17.1′ is inside 15.5′ + the 2′ margin
+            await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
+            await rig.GuideAsync(firstFrame: 1, frames: 20).ConfigureAwait(false);
+
+            var done = await DoneAsync(rig).ConfigureAwait(false);
+            Assert.That(done.GetProperty("reliable").GetBoolean(), Is.True);
+            Assert.That(done.GetProperty("align_error_arcmin").GetDouble(), Is.EqualTo(15.5));
+        }
+
+        [Test]
+        public async Task Pulses_the_mount_did_not_execute_read_as_an_unreliable_residual_beside_a_small_polar_align() {
+            // #1731: ≥45′ reported against a 0.9′ three-point check, from small Dec pulses eaten by lost motion.
+            // Under closed-loop guiding the lost share cannot be measured, so the check against Polar Align decides.
+            await using var rig = await StartPaRigAsync().ConfigureAwait(false);
+            rig.Svc.PolarAlignmentLog = new FixedAlignLog(0.9);
             await rig.Fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
             for (var frame = 1; frame <= 40; frame++) {
                 var pulseMs = 75 + Math.Sin(frame * 1.7) * 40; // ~0.3 px South, none of it reaching the star
                 await rig.Fake.BroadcastAsync(PhdEvents.GuideStep(0, 0, frame: frame, decDurationMs: pulseMs, decDirection: "South")).ConfigureAwait(false);
             }
 
-            Assert.That(await WaitUntilAsync(() => rig.Statuses.Contains("unavailable")).ConfigureAwait(false), Is.True, string.Join(",", rig.Statuses));
-            Assert.That(rig.Events.Last().GetProperty("reason").GetString(), Is.EqualTo("pulse_response_low"));
-            Assert.That(rig.Log.Rows, Is.Empty, "not logged as a measurement");
+            var done = await DoneAsync(rig).ConfigureAwait(false);
+            Assert.That(done.GetProperty("reliable").GetBoolean(), Is.False);
         }
 
         private static async Task<GuiderDto?> PollAsync(GuiderService svc, Func<GuiderDto, bool> predicate) {
