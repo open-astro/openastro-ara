@@ -37,12 +37,13 @@ String failureReason(AppLocalizations l, Object error) {
 }
 
 /// The first line of the daemon's own sentence, on the statuses where it is
-/// written for people (400, 409, 422); null otherwise. A framework-shaped 400
+/// written for people (400, 409, 422, and 507: a full disk the user can free);
+/// null otherwise. A framework-shaped 400
 /// detail can carry a "(Parameter 'x')" tail that is not for people.
 String? daemonDetail(Object error) {
   if (error is! DioException) return null;
   final code = error.response?.statusCode;
-  if (code != 400 && code != 409 && code != 422) return null;
+  if (code != 400 && code != 409 && code != 422 && code != 507) return null;
   // application/problem+json may reach us undecoded, depending on Dio's
   // transformer.
   var data = error.response?.data;

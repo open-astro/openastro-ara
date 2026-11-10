@@ -29,6 +29,8 @@ void main() {
         "Your rig doesn't have that. It may be running an older version of Ara."),
     ('409 with no detail', _status(409, {'title': 'run_in_progress'}), 'Something else is using it right now.'),
     ('a bare 503', _status(503), 'Your rig hit an error. Support → Logs has the details.'),
+    ('507 says what space is missing, which the user can free', _status(507, {'detail': "Not enough disk space for 'x': it needs about 1.7 GB free and the volume has 0.3 GB."}),
+        "Not enough disk space for 'x': it needs about 1.7 GB free and the volume has 0.3 GB."),
   ];
   for (final (name, error, words) in table) {
     test('failureReason: $name', () => expect(failureReason(_en, error), words));
