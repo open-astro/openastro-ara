@@ -714,8 +714,9 @@ void main() {
       guider: GuiderRuntimeState.guiding,
       guiderConnection: GuiderConnectionState.disconnected,
     );
-    // The default live guider is looping on a calibrated star: ready, not refused.
-    expect(_text(t, const Key('guiding-assistant-headline')), 'Ready. Press Start.');
+    // Only the guiding refusal is pinned: the rest of this setup (assistant still
+    // connected, a live star) is not a state a dropped guider leaves behind.
+    expect(_text(t, const Key('guiding-assistant-headline')), isNot(startsWith('Stop guiding first')));
   });
 
   testWidgets('Start waits while the guider is guiding', (t) async {
