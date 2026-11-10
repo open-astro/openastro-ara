@@ -361,10 +361,14 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     // paused — the user chose to take the device away, so resuming would be wrong — and the
     // outcome is recorded and notified so the sequence state is not a mystery. Same convention
     // the linger has always used; the ladder and the terminal action now honour it too.
+    // #1539 — a service with the lifecycle module records the user's disconnect, and that answer
+    // comes first; the Disconnected state stays the signal for the services without it.
     private async Task<bool> ReleasedByUserAsync(EquipmentFaultEvent fault, string label, IReadOnlyList<Guid> pausedRuns) {
-        var state = await GetConnectionStateQuietlyAsync(fault.DeviceType).ConfigureAwait(false);
-        if (state != EquipmentConnectionState.Disconnected) {
-            return false;
+        if (_reconnector?.GetDesiredConnection(fault.DeviceType) != DesiredConnection.DisconnectedByUser) {
+            var state = await GetConnectionStateQuietlyAsync(fault.DeviceType).ConfigureAwait(false);
+            if (state != EquipmentConnectionState.Disconnected) {
+                return false;
+            }
         }
         await PublishActionAsync(fault, "released", persistAs: "released:user_disconnect", extra: p => {
             p["paused_runs"] = pausedRuns.Count;
@@ -458,9 +462,11 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             return false;
         }
         try {
-            var outcome = await _reconnector.ReconnectAsync(type, _cts.Token).ConfigureAwait(false);
+            // #1539 — RecoverAsync, not ReconnectAsync: a device the user disconnected is refused in
+            // the same step as the dispatch, so a disconnect after the release check is not undone.
+            var outcome = await _reconnector.RecoverAsync(type, _cts.Token).ConfigureAwait(false);
             if (outcome.Dispatched == 0) {
-                return false; // nothing remembered, or every dispatch failed on the spot
+                return false; // nothing remembered, the user let it go, or every dispatch failed on the spot
             }
             // The dispatch connects in the background — poll the service state to a verdict.
             var sw = Stopwatch.StartNew();

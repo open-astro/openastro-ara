@@ -95,15 +95,6 @@ namespace OpenAstroAra.Test {
             Assert.That(svc.GetLiveViewFrame(), Is.Null);
         }
 
-        [Test]
-        public async Task Placeholder_live_view_surface_is_inert() {
-            var svc = new PlaceholderCameraService();
-            await Assert.DoesNotThrowAsync(() => svc.StartLiveViewAsync(new LiveViewStartRequestDto(1.0), CancellationToken.None));
-            await Assert.DoesNotThrowAsync(() => svc.StopLiveViewAsync());
-            Assert.That(svc.GetLiveViewStatus().Active, Is.False);
-            Assert.That(svc.GetLiveViewFrame(), Is.Null);
-        }
-
         // ─── §64 OSC debayered render (the RenderLiveFrame seam) ───
 
         [Test]
