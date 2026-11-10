@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/filter_wheel_status.dart';
@@ -439,19 +438,10 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
     // Created here (not as a `late final` field) so dispose() can always
     // dispose it — a lazy creation on first use could otherwise fire during
     // teardown and crash the vsync lookup.
-    // The underline reads _flash.value: without a rebuild per tick it never
-    // blinked (one colour for the whole move).
     _flash = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
-    )..addListener(() {
-        // build() itself restarts it; the value it set is read there.
-        if (mounted &&
-            SchedulerBinding.instance.schedulerPhase !=
-                SchedulerPhase.persistentCallbacks) {
-          setState(() {});
-        }
-      });
+    );
   }
 
   @override
@@ -567,8 +557,9 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
     final names = [for (final c in ref.watch(filterChoicesProvider)) c.name];
     if (!names.contains(widget.value)) names.insert(0, widget.value);
 
-    final blink = _blinkColor(busy);
-    final decoration = InputDecoration(
+    InputDecoration decoration() {
+      final blink = _blinkColor(busy);
+      return InputDecoration(
       labelText: context.l10n.filterDropdownLabel,
       enabledBorder: blink == null
           ? null
@@ -582,7 +573,8 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
           ? null
           : UnderlineInputBorder(
               borderSide: BorderSide(color: blink, width: 2)),
-    );
+      );
+    }
 
     final ValueChanged<String?>? pick = busy
           ? null // keep it disabled (showing the picked slot) until it lands
@@ -647,14 +639,20 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
         ],
       );
     }
-    return DropdownButtonFormField<String>(
-      key: ValueKey(_resetToken),
-      initialValue: widget.value,
-      decoration: decoration,
-      items: [
-        for (final n in names) DropdownMenuItem(value: n, child: Text(n)),
-      ],
-      onChanged: pick,
+    final items = [
+      for (final n in names) DropdownMenuItem(value: n, child: Text(n)),
+    ];
+    // Only the field follows each tick of the blink (its underline reads
+    // _flash), not the whole picker's build.
+    return AnimatedBuilder(
+      animation: _flash,
+      builder: (context, _) => DropdownButtonFormField<String>(
+        key: ValueKey(_resetToken),
+        initialValue: widget.value,
+        decoration: decoration(),
+        items: items,
+        onChanged: pick,
+      ),
     );
   }
 
