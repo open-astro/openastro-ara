@@ -19,7 +19,8 @@ class PaResidual {
   final double? paErrorMinArcmin;
   final double? uncertaintyArcmin;
 
-  /// False when the 1σ uncertainty is more than max(1′, half the value).
+  /// False when the 1σ uncertainty is more than max(1′, half the value), or
+  /// when the value less 2σ is more than 2′ above [alignErrorArcmin] (#1731).
   final bool reliable;
   final double? hourAngleHours;
   final double? decDeg;
@@ -49,6 +50,19 @@ class PaResidual {
     this.completedUtc,
     this.reason,
   });
+
+  /// #1731 — unreliable because the lower bound sits past the total error
+  /// Polar Align measured, the daemon's second rule; Dec lost motion, not noise.
+  bool get aboveAlign {
+    final value = paErrorMinArcmin,
+        sigma = uncertaintyArcmin,
+        align = alignErrorArcmin;
+    return !reliable &&
+        value != null &&
+        sigma != null &&
+        align != null &&
+        value - 2 * sigma > align + 2;
+  }
 
   /// Null for `{status: "idle"}` (nothing measured) or an unreadable payload.
   static PaResidual? fromJson(Object? json) {

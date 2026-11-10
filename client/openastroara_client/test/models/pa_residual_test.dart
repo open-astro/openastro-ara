@@ -98,4 +98,17 @@ void main() {
       expect(paResidualDetail(noisy), contains('too noisy'));
     },
   );
+
+  test('a residual far above Polar Align says so, not that guiding was noisy (#1731)', () {
+    final far = PaResidual.fromJson({
+      ...done,
+      'pa_error_min_arcmin': 17.0,
+      'uncertainty_arcmin': 0.5,
+      'align_error_arcmin': 0.9,
+      'reliable': false,
+    })!;
+    final text = paResidualDetail(far);
+    expect(text, isNot(contains('too noisy')));
+    expect(text, contains('more than Polar Align measured'));
+  });
 }

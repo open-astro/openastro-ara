@@ -1081,6 +1081,29 @@ void main() {
       await _teardownPanel(tester, container);
     });
 
+    testWidgets('a fit far above Polar Align says so instead of noisy (#1731)', (tester) async {
+      final container = await _pump(tester,
+          status: const GuiderStatus(
+            name: 'OpenAstro Guider',
+            connectionState: GuiderConnectionState.connected,
+            runtimeState: GuiderRuntimeState.guiding,
+            paResidual: PaResidual(
+              id: 'r4',
+              status: PaResidualStatus.done,
+              sampleSeconds: 300,
+              paErrorMinArcmin: 17,
+              uncertaintyArcmin: 0.5,
+              reliable: false,
+              alignErrorArcmin: 0.9,
+            ),
+          ));
+      expect(find.text('PA ≥ 17′ · above Polar Align'), findsOneWidget);
+      final tip = tester.widget<Tooltip>(find.ancestor(
+          of: find.text('PA ≥ 17′ · above Polar Align'), matching: find.byType(Tooltip)));
+      expect(tip.message, isNot(contains('too noisy')));
+      await _teardownPanel(tester, container);
+    });
+
     testWidgets('hidden while the guider is not connected', (tester) async {
       final container = await _pump(tester,
           status: const GuiderStatus(

@@ -96,7 +96,11 @@ String paResidualDetail(PaResidual r) {
     ].join(' at '),
     'Guiding at one hour angle sees only part of the error, so the total can '
         'be larger.',
-    if (!r.reliable) 'Guiding was too noisy for a firm figure.',
+    if (r.aboveAlign)
+      'This is more than Polar Align measured, which a lower bound cannot be: '
+          'Dec backlash eating guide pulses is the likelier cause.'
+    else if (!r.reliable)
+      'Guiding was too noisy for a firm figure.',
     if (align != null)
       'Polar Align measured ${formatPoleOffset(align).$1}'
           '${r.alignEndedUtc == null ? '' : ' at ${_localTime(r.alignEndedUtc!)}'}.',

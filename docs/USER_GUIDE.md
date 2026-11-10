@@ -238,7 +238,8 @@ framing/focus loop when you need to point or focus by eye.
   can't see: refraction, flexure and the mount's own slop. It is a lower bound ("≥"): Dec drift at
   one hour angle shows only part of the error. The tooltip has the drift, the hour angle and
   tonight's Polar Align result to compare. "noisy" means the guiding was too rough for a firm
-  figure; "n/a" means it could not be measured (lock-position shift on, an adaptive-optics unit, or no calibration data).
+  figure; "above Polar Align" means it came out higher than tonight's Polar Align result, which a
+  lower bound can't be, so Dec backlash is the likelier cause; "n/a" means it could not be measured (lock-position shift on, an adaptive-optics unit, or no calibration data).
   Guiding that stops after 2 minutes still reports what it has.
 
 ## 7. Unattended safety (the 3 a.m. story)
