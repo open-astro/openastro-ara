@@ -280,6 +280,25 @@ void main() {
     await _teardownPanel(tester, container);
   });
 
+  testWidgets('a start that fails during calibration shows the same snackbar '
+      '(#1756)', (tester) async {
+    final container = await _pump(tester,
+        guider: _FakeGuiderApi(),
+        status: const GuiderStatus(
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.calibrating,
+        ));
+
+    container.read(guideStartLateFailureProvider.notifier)
+        .report(const GuideStartFailed('Calibration failed'));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text("Guiding didn't start: Calibration failed."), findsOneWidget);
+    await _teardownPanel(tester, container);
+  });
+
   testWidgets('a disconnected guider shows no Guide button', (tester) async {
     final container = await _pump(tester,
         status: const GuiderStatus(

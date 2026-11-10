@@ -413,4 +413,85 @@ void main() {
       await notifier.startGuiding();
     });
   });
+
+  // #1756 — a start that fails after the guider reached calibrating: the start has
+  // returned by then, so the outcome is kept as the last start's late failure.
+  group('a start that fails during calibration is still heard', () {
+    const server = AraServer(hostname: 'h', port: 5555);
+    const calibrating = GuiderStatus(
+      deviceId: 'phd2',
+      name: 'OpenAstro Guider',
+      connectionState: GuiderConnectionState.connected,
+      runtimeState: GuiderRuntimeState.calibrating,
+    );
+    WsEvent complete(String id, {required bool ok, String? error}) => WsEvent(
+          type: 'guider.operation_complete',
+          ts: DateTime.utc(2026, 11, 10),
+          seq: 1,
+          payload: {'operation': 'guider.start', 'operation_id': id, 'ok': ok, 'error': error},
+        );
+
+    /// The guider shows calibrating at once, so each start returns before its outcome.
+    Future<(ProviderContainer, _FakeGuiderApi, StreamController<WsEvent>)> calibratingRig() async {
+      final api = _FakeGuiderApi()..status = calibrating..startOperationId = 'op-1';
+      final ws = StreamController<WsEvent>.broadcast();
+      addTearDown(ws.close);
+      final c = _container(const [server], api, ws: ws.stream);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderStatusProvider.future);
+      return (c, api, ws);
+    }
+
+    Future<void> settle() => Future<void>.delayed(Duration.zero);
+
+    test("a failure after calibration began is kept with the guider's reason", () async {
+      final (c, _, ws) = await calibratingRig();
+      await c.read(guiderStatusProvider.notifier).startGuiding();
+      expect(c.read(guideStartLateFailureProvider), isNull, reason: 'calibrating: not failed yet');
+      ws.add(complete('op-1', ok: false, error: 'Calibration failed: star did not move enough'));
+      await settle();
+      expect(c.read(guideStartLateFailureProvider)?.reason, 'Calibration failed: star did not move enough');
+    });
+
+    test('a late success records no failure', () async {
+      final (c, _, ws) = await calibratingRig();
+      await c.read(guiderStatusProvider.notifier).startGuiding();
+      ws.add(complete('op-1', ok: true));
+      await settle();
+      expect(c.read(guideStartLateFailureProvider), isNull);
+    });
+
+    test('a Stop during calibration is not reported as a failed start', () async {
+      final (c, _, ws) = await calibratingRig();
+      final notifier = c.read(guiderStatusProvider.notifier);
+      await notifier.startGuiding();
+      await notifier.stopGuiding();
+      ws.add(complete('op-1', ok: false, error: 'Stopped by the user'));
+      await settle();
+      expect(c.read(guideStartLateFailureProvider), isNull);
+    });
+
+    test("only the newest start's outcome counts", () async {
+      final (c, api, ws) = await calibratingRig();
+      final notifier = c.read(guiderStatusProvider.notifier);
+      await notifier.startGuiding();
+      api.startOperationId = 'op-2';
+      await notifier.startGuiding();
+      ws.add(complete('op-1', ok: false, error: 'old failure'));
+      await settle();
+      expect(c.read(guideStartLateFailureProvider), isNull, reason: "the first start's outcome no longer counts");
+      ws.add(complete('op-2', ok: false, error: 'new failure'));
+      await settle();
+      expect(c.read(guideStartLateFailureProvider)?.reason, 'new failure');
+    });
+
+    test('a late refused answer is a failure with no reason, as a quick one is', () async {
+      final (c, _, ws) = await calibratingRig();
+      await c.read(guiderStatusProvider.notifier).startGuiding();
+      ws.add(complete('op-1', ok: false, error: 'refused'));
+      await settle();
+      expect(c.read(guideStartLateFailureProvider), isNotNull);
+      expect(c.read(guideStartLateFailureProvider)!.reason, isNull);
+    });
+  });
 }

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/polar_align.dart';
+import '../../services/polar_align_api.dart' show PolarAlignClient;
 import '../../state/night_mode_state.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
@@ -139,17 +140,17 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   }
 
   // [action] is a verb phrase completing "Couldn't <action>".
-  Future<void> _run(String action, Future<void> Function() op) {
+  Future<void> _run(String action, Future<void> Function(PolarAlignClient api) op) {
     final l10n = context.l10n;
     return ref
         .read(polarAlignActionProvider.notifier)
-        .run((_) => op(), describe: (e) => friendlyError(l10n, e, action: action));
+        .run(op, describe: (e) => friendlyError(l10n, e, action: action));
   }
 
   /// Persist [next] to the profile; the module rolls a failed save back.
   void _saveSettings(PolarAlignSettings next) => _run(
         'save the polar-align settings',
-        () => ref.read(polarAlignSettingsProvider.notifier).save(next),
+        (_) => ref.read(polarAlignSettingsProvider.notifier).save(next),
       );
 
   void _commitExposure() {
@@ -368,15 +369,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     }
   }
 
-  Future<void> _start({String? stage}) => _run('start polar alignment', () async {
-        final api = ref.read(polarAlignApiProvider);
-        if (api != null) await api.start(stage: stage);
-      });
+  Future<void> _start({String? stage}) => _run('start polar alignment', (api) => api.start(stage: stage));
 
-  Future<void> _next(String action) => _run(action, () async {
-        final api = ref.read(polarAlignApiProvider);
-        if (api != null) await api.next();
-      });
+  Future<void> _next(String action) => _run(action, (api) => api.next());
 
   /// Coarse/check: the mount is going Home, or waits for the user to put it there.
   Widget _homingBody(PolarAlignLive live) {
@@ -634,10 +629,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                 key: const Key('polar-align-check-done'),
                 onPressed: _busy
                     ? null
-                    : () => _run('complete polar alignment', () async {
-                          final api = ref.read(polarAlignApiProvider);
-                          if (api != null) await api.complete();
-                        }),
+                    : () => _run('complete polar alignment', (api) => api.complete()),
                 icon: const Icon(Icons.check),
                 label: const Text('Done'),
               ),
@@ -868,10 +860,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                     key: const Key('polar-align-take-frame'),
                     onPressed: _busy || live.frameInProgress
                         ? null
-                        : () => _run('take a frame', () async {
-                              final api = ref.read(polarAlignApiProvider);
-                              if (api != null) await api.requestCapture();
-                            }),
+                        : () => _run('take a frame', (api) => api.requestCapture()),
                     icon: const Icon(Icons.camera),
                     label: const Text('Take Frame'),
                   ),
@@ -893,10 +882,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                       key: const Key('polar-align-done'),
                       onPressed: _busy || !inTolerance
                           ? null
-                          : () => _run('complete polar alignment', () async {
-                                final api = ref.read(polarAlignApiProvider);
-                                if (api != null) await api.complete();
-                              }),
+                          : () => _run('complete polar alignment', (api) => api.complete()),
                       icon: const Icon(Icons.check),
                       label: const Text('Done'),
                     ),
@@ -1490,10 +1476,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     );
   }
 
-  void _abort() => _run('abort polar alignment', () async {
-        final api = ref.read(polarAlignApiProvider);
-        if (api != null) await api.stop();
-      });
+  void _abort() => _run('abort polar alignment', (api) => api.stop());
 }
 
 /// Header icon: a polar-scope reticle (three rings + crosshair) with a green

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-10T21:30:00+13:00",
+  "generatedAt": "2026-11-11T02:24:24+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -805,7 +805,7 @@
       "name": "Message Pill: Question (Simple Mode)",
       "kind": "custom",
       "refersTo": "message-pill-simple",
-      "description": "Top-left message pill (no popups): a question has an amber dot and outline, stays until answered, and fills its last action, the safe answer. A refused action uses the same amber dot and outline with no buttons, and fades after 10 s.",
+      "description": "Top-left message pill (no popups): a question has an amber dot and outline, stays until answered, and fills its last action, the safe answer. A refused action uses the same amber dot and outline with no buttons, and fades after 10 s. A warning (amber outline, stays until closed or cleared) puts its buttons under the words and they wrap; a failed device's warning offers Reconnect and Devices and clears once the device connects (#1559).",
       "html": "<div class=\"ds-msg-wrap\"><div class=\"ds-msg\" role=\"status\"><i></i><span>Discard changes to M31?</span><button class=\"ds-msg-t\">Discard</button><button class=\"ds-msg-f\">Keep editing</button></div></div>",
       "css": ".ds-msg{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;display:inline-flex;align-items:center;gap:8px;min-height:48px;max-width:420px;box-sizing:border-box;padding:0 4px 0 16px;background:rgba(26,26,26,.90);-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px);border:1px solid #FFB300;border-radius:10px;color:#E0E0E0;font-size:14px} .ds-msg-wrap{padding:24px;border-radius:10px;background:radial-gradient(ellipse at 50% 45%,#5a5a5a 0,#2a2a2a 45%,#0d0d0d 80%)} .ds-msg i{flex:none;width:10px;height:10px;border-radius:50%;background:#FFB300} .ds-msg button{font:inherit;min-height:44px;border-radius:10px;padding:0 14px;cursor:pointer;border:0} .ds-msg-t{background:transparent;color:#64B5F6} .ds-msg-f{background:#FFB300;color:#1A1A1A} .ds-msg button:hover{filter:brightness(1.1)} .ds-msg button:focus-visible{outline:2px solid #42A5F5;outline-offset:2px}"
     },
@@ -856,6 +856,12 @@
       "description": "Mode › Guider's Guide, Tuning and Tools tabs: Simple Mode segments on a tile, 44 px tall, the selected one in the selection blue with white words. A null pick locks them. The panel keeps Guide's height on every tab (#1722).",
       "html": "<div class=\"ds-sseg\" role=\"tablist\" aria-label=\"Guider page\"><button role=\"tab\" aria-selected=\"true\" class=\"on\">Guide</button><button role=\"tab\" aria-selected=\"false\">Tuning</button><button role=\"tab\" aria-selected=\"false\">Tools</button></div>",
       "css": ".ds-sseg{display:flex;gap:2px;padding:2px;background:rgba(56,56,56,0.55);border-radius:8px;width:300px} .ds-sseg button{flex:1;height:44px;border:0;border-radius:8px;background:transparent;color:#E0E0E0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-size:14px;cursor:pointer;transition:background .15s} .ds-sseg button.on{background:#1976D2;color:#FFFFFF} .ds-sseg button:hover:not(.on){background:rgba(255,255,255,0.06)} .ds-sseg button:focus-visible{outline:2px solid #42A5F5;outline-offset:-2px}"
+    },
+    {
+      "name": "Connect to Your Rig Card (Simple Mode)",
+      "kind": "custom",
+      "refersTo": "panel-simple",
+      "description": "#1559: centred over the wallpaper while the rig link is down. Title at the reading size (22 px semibold), one line on what happened, the session's rig with a filled Reconnect, then every other rig once (Found in Link Blue, Saved, not seen now in amber) with outlined Connect, then Add by address. A rig that does not answer gets a light-red line. One list, mock design/preview/simple-no-rig-card-mock.html B (user 2026-11-11). Found means seen in the last two rescans; an unreadable address gets the field's error text; the no-answer line is a live region; headings use the Section style. It keeps between the rails, under the strip and above Stop; a window too narrow for 288 px there folds it into a bar beside Stop (Rig not connected in amber, filled Connect) that opens it over the rails with a × to fold it back. Add by address's Connect says Connecting… while it runs. A row under 260 px (scaled with the text) puts its button under the words. Focus moves to × when the bar opens the card and back to the bar's Connect on ×; section headings are screen-reader headings."
     }
   ],
   "narrative": {

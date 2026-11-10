@@ -26,6 +26,9 @@ namespace OpenAstroAra.Server.Endpoints;
 /// </summary>
 public static class SystemEndpoints {
 
+    /// <summary>The storage browse and mkdir 404 (#1764): one sentence, whatever the service threw.</summary>
+    internal const string FolderGone = "That folder isn't on the rig, or it isn't storage. Pick another folder.";
+
     /// <summary>OpenNGC type codes for extended objects that legitimately carry no
     /// integrated magnitude (nebulae of all stripes) — the planning cull must not
     /// drop these for lacking a number that doesn't apply to them.</summary>
@@ -339,12 +342,12 @@ public static class SystemEndpoints {
             .WithSummary("Block devices that could hold ARA data (the running system's disk is flagged, never offered).");
 
         // Before an erase: what is on the drive. Reads only a drive that is mounted.
-        storage.MapGet("/contents", async (string uuid, IStorageDeviceService svc, CancellationToken ct) => {
+        storage.MapGet("/contents", async (string uuid, IStorageDeviceService svc, [FromServices] StorageEraseLog erased, CancellationToken ct) => {
                 var drives = await svc.ListAsync(ct).ConfigureAwait(false);
                 var drive = drives.FirstOrDefault(d => string.Equals(d.Uuid, uuid, StringComparison.OrdinalIgnoreCase));
                 // A store full of frames takes a while to walk: off the request thread, and
                 // stopped when the client goes away.
-                return Results.Ok(await Task.Run(() => StorageCopyService.ContentsOf(drive, ct), ct).ConfigureAwait(false));
+                return Results.Ok(await Task.Run(() => StorageCopyService.ContentsOf(drive, erased, ct), ct).ConfigureAwait(false));
             })
             .Produces<StorageContentsDto>()
             .WithName("GetStorageContents")
@@ -358,6 +361,8 @@ public static class SystemEndpoints {
                 ICameraService camera,
                 CaptureScanService scan,
                 IStorageCopyService copy,
+                // A class, not an interface: without the attribute a host that doesn't register it infers a body.
+                [FromServices] StorageEraseLog erased,
                 CancellationToken ct) => {
                 if (string.IsNullOrWhiteSpace(request.Uuid)) {
                     return Results.Problem("uuid is required", statusCode: StatusCodes.Status400BadRequest);
@@ -385,6 +390,17 @@ public static class SystemEndpoints {
                     return Results.Problem(
                         "a frame is still being saved — wait for it to finish before changing the storage drive (a frame held after a failed save is saved when the run resumes; stopping the run drops it)",
                         statusCode: StatusCodes.Status409Conflict);
+                }
+                // #1765 — recorded before the wipe starts, so a copy marker that names this drive
+                // stops vouching for frames even if the format fails partway. Not recorded: no erase.
+                if (request.Format) {
+                    try {
+                        erased.Record(request.Uuid, DateTime.UtcNow);
+                    } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                        return Results.Problem(
+                            $"the erase was not started: the rig could not note it for the copy check ({ex.Message})",
+                            statusCode: StatusCodes.Status500InternalServerError);
+                    }
                 }
                 // Exclusive with any capture scan: a reformat mid-scan would
                 // unmount the tree the scan is walking.
@@ -623,9 +639,10 @@ public static class SystemEndpoints {
         storage.MapGet("/browse", (string? path, IStorageBrowseService svc) => {
                 try {
                     return Results.Ok(svc.Browse(path));
-                } catch (DirectoryNotFoundException ex) {
+                } catch (DirectoryNotFoundException) {
+                    // #1764 — the client shows a 404's detail; the runtime's own message is not for people.
                     return Results.Problem(title: "Not a browsable directory",
-                        detail: ex.Message, statusCode: StatusCodes.Status404NotFound);
+                        detail: FolderGone, statusCode: StatusCodes.Status404NotFound);
                 } catch (UnauthorizedAccessException) {
                     return Results.Problem(title: "Permission denied",
                         detail: "The daemon user can't list that directory.",
@@ -645,9 +662,10 @@ public static class SystemEndpoints {
                 } catch (ArgumentException ex) {
                     return Results.Problem(title: "Invalid folder name",
                         detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
-                } catch (DirectoryNotFoundException ex) {
+                } catch (DirectoryNotFoundException) {
+                    // #1764 — the client shows a 404's detail; the runtime's own message is not for people.
                     return Results.Problem(title: "Not a browsable directory",
-                        detail: ex.Message, statusCode: StatusCodes.Status404NotFound);
+                        detail: FolderGone, statusCode: StatusCodes.Status404NotFound);
                 } catch (UnauthorizedAccessException) {
                     return Results.Problem(title: "Permission denied",
                         detail: "The daemon user can't create a folder there.",

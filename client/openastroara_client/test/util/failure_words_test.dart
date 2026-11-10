@@ -25,7 +25,8 @@ void main() {
     ('409 detail in a raw problem+json body', _status(409, '{"detail":"Busy slewing."}'), 'Busy slewing.'),
     ('500 detail is not for people', _status(500, {'detail': 'NullReferenceException at Foo'}),
         'Your rig hit an error. Support → Logs has the details.'),
-    ('404 detail is not for people', _status(404, {'detail': 'No route', 'title': 'not_found'}),
+    // #1764: a 404's detail is the daemon's sentence now; one without a detail keeps the generic words.
+    ('404 without a detail', _status(404, {'title': 'not_found'}),
         "Your rig doesn't have that. It may be running an older version of Ara."),
     ('409 with no detail', _status(409, {'title': 'run_in_progress'}), 'Something else is using it right now.'),
     ('a bare 503', _status(503), 'Your rig hit an error. Support → Logs has the details.'),

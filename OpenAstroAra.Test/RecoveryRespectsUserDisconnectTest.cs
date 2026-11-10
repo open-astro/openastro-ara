@@ -112,5 +112,49 @@ namespace OpenAstroAra.Test {
             Assert.That(seen, Does.Contain("released").And.Not.Contain("recovered"));
             lock (devices) { Assert.That(devices, Has.Count.EqualTo(1), "no reconnect reached the hardware"); }
         }
+
+        /// <summary>#1763 — Remove forgets the device in the service before the store, and the store
+        /// forget is best-effort. While the store still remembers the rotator, recovery must not
+        /// bring it back.</summary>
+        [Test]
+        public async Task Recovery_does_not_reconnect_a_device_the_user_removed() {
+            using var rotator = new RotatorService {
+                RefreshPeriod = TimeSpan.FromMilliseconds(20),
+                DeviceFactory = _ => new FakeRotatorDevice(),
+            };
+            await rotator.ConnectAsync(new ConnectRequestDto(Rotator), null, CancellationToken.None);
+            await WaitForAsync(() => rotator.GetAsync(CancellationToken.None).Result?.State == EquipmentConnectionState.Connected, "the connect");
+            await rotator.DisconnectAsync(null, CancellationToken.None);
+            Assert.That(await rotator.ForgetAsync(CancellationToken.None), Is.True);
+
+            var services = new Mock<IServiceProvider>();
+            services.Setup(s => s.GetService(typeof(IRotatorService))).Returns(rotator);
+            var store = new Mock<IEquipmentSelectionStore>();
+            store.Setup(s => s.GetAllAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<DiscoveredDeviceDto> { Rotator });
+            var reconnector = new EquipmentReconnector(services.Object, store.Object, NullLogger<EquipmentReconnector>.Instance);
+
+            await reconnector.RecoverAsync(DeviceType.Rotator, CancellationToken.None);
+            await Task.Delay(100); // a dispatched reconnect would land within a few refresh ticks
+
+            Assert.That(await rotator.GetAsync(CancellationToken.None), Is.Null, "the removed rotator stays removed");
+        }
+
+        /// <summary>#1763 — the removed marker clears on the user's next connect: recovery works again.</summary>
+        [Test]
+        public async Task A_user_connect_after_remove_lets_recovery_reconnect_again() {
+            using var rotator = new RotatorService {
+                RefreshPeriod = TimeSpan.FromMilliseconds(20),
+                DeviceFactory = _ => new FakeRotatorDevice(),
+            };
+            await rotator.ConnectAsync(new ConnectRequestDto(Rotator), null, CancellationToken.None);
+            await WaitForAsync(() => rotator.GetAsync(CancellationToken.None).Result?.State == EquipmentConnectionState.Connected, "the connect");
+            await rotator.DisconnectAsync(null, CancellationToken.None);
+            await rotator.ForgetAsync(CancellationToken.None);
+            await rotator.ConnectAsync(new ConnectRequestDto(Rotator), null, CancellationToken.None);
+
+            Assert.That(rotator.DesiredConnection, Is.EqualTo(DesiredConnection.ConnectedByUser));
+            Assert.That(rotator.TryRecover(Rotator), Is.True, "a device the user connected again is recoverable");
+        }
     }
 }

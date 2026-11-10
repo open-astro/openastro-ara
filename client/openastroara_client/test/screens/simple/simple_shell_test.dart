@@ -48,7 +48,7 @@ import 'package:openastroara/widgets/equipment/equipment_status_chip.dart' show 
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import 'package:openastroara/state/app_locale_state.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
-import 'package:openastroara/services/guider_api.dart' show GuiderClient;
+import 'package:openastroara/services/guider_api.dart' show GuideStartFailed, GuiderClient;
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
@@ -78,6 +78,7 @@ import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart';
 import 'package:openastroara/state/imaging/last_frame_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/server_state.dart' show discoveredServersProvider;
 import 'package:openastroara/models/profile_list.dart';
 import 'package:openastroara/models/profile_meta.dart';
 import 'package:openastroara/screens/settings/settings_shell.dart';
@@ -126,6 +127,14 @@ import 'package:openastroara/widgets/night_hotkey.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart' show planningSettingsBootstrapProvider;
 import 'package:openastroara/widgets/support/bug_report_card.dart';
+
+/// The session's rigs, without storage.
+class _SavedRigs extends SavedServersNotifier {
+  _SavedRigs(this.rigs);
+  final List<AraServer> rigs;
+  @override
+  Future<List<AraServer>> build() async => rigs;
+}
 
 class _MemPrefs extends SimpleModePrefsService {
   bool value = true;
@@ -180,6 +189,8 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     if (feature) simpleModeFeaturePrefsProvider.overrideWithValue(_MemPrefs()),
     if (pier) simplePermanentPierPrefsProvider.overrideWithValue(_MemPrefs()..value = false),
     if (linkUp) serverLinkUpProvider.overrideWithValue(true),
+    // The Connect to your rig card scans while the link is down: no network in a test.
+    discoveredServersProvider.overrideWith((ref) => const Stream<AraServer>.empty()),
     ...gear,
     if (versions != null) daemonVersionsProvider.overrideWith((ref) async => versions),
     if (starDatabases != null)
@@ -448,6 +459,12 @@ class _Mount extends MountNotifier with _Calls<MountStatus> {
   final EquipmentConnectionState state0;
   @override
   Future<MountStatus?> build() async => MountStatus.fromJson(_wire('AM5', state0));
+}
+
+/// A mount whose connection state the test moves (#1559).
+class _FlakyMount extends _Mount {
+  _FlakyMount() : super(EquipmentConnectionState.connecting);
+  void report(EquipmentConnectionState s) => state = AsyncData(MountStatus.fromJson(_wire('AM5', s)));
 }
 
 class _ChoosingMount extends _Mount {
@@ -890,7 +907,7 @@ void main() {
   });
 
   testWidgets('at rest only the essentials show: no mode list, no settings, no info', (tester) async {
-    await _pump(tester, const Size(1024, 768));
+    await _pump(tester, const Size(1024, 768), linkUp: true);
     for (final hidden in ['Focus', 'Polar align', 'Plan', 'Exposure', 'Gain', 'Loop', 'HFR', 'Guiding']) {
       expect(find.text(hidden), findsNothing, reason: '$hidden is one tap away, not out');
     }
@@ -1399,7 +1416,7 @@ void main() {
 
   testWidgets('the settings chip opens Exposure from a list, the Gain slider under it, Filter and Loop/Single',
       (tester) async {
-    final container = await _pump(tester, const Size(1024, 768),
+    final container = await _pump(tester, const Size(1024, 768), linkUp: true,
         gear: [filterWheelProvider.overrideWith(() => _FilterWheel(EquipmentConnectionState.connected))]);
     expect(find.text(_summary(container)), findsOneWidget, reason: 'the chip reads the settings');
     await tester.tap(find.byKey(const Key('simple-settings')));
@@ -2011,7 +2028,7 @@ void main() {
 
   testWidgets("Preview on Guide with no guide frame says so, and does not show the main camera's last frame or histogram",
       (tester) async {
-    final c = await _pump(tester, const Size(1024, 768), histogram: _histogram,
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, histogram: _histogram,
         gear: [guiderStatusProvider.overrideWith(() => _GuiderAt('stopped'))]);
     await _frame(tester, c);
     await tester.pump();
@@ -2025,7 +2042,7 @@ void main() {
   });
 
   testWidgets("Preview on Guide says Starting, not to tap the shutter, while the loop waits for its first frame", (tester) async {
-    final c = await _pump(tester, const Size(1024, 768), gear: [
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
       guideFocusProvider.overrideWith(_GuideStarting.new),
       guiderStatusProvider.overrideWith(() => _GuiderAt('stopped')),
     ]);
@@ -2331,7 +2348,7 @@ void main() {
   });
 
   testWidgets("no frame yet: the wallpaper, not the sky; the Sky button shows tonight's sky (#1602)", (tester) async {
-    await _pump(tester, const Size(1024, 768));
+    await _pump(tester, const Size(1024, 768), linkUp: true);
     expect(find.byKey(const Key('simple-wallpaper')), findsOneWidget);
     expect(find.byKey(const Key('sky')), findsNothing);
     expect(find.text('Tap the shutter to take a frame'), findsOneWidget);
@@ -2944,7 +2961,9 @@ void main() {
     ]);
     await _openSection(tester, 'Devices');
     final page = find.byKey(const Key('simple-gear'));
-    expect(find.text('Devices'), findsOneWidget, reason: 'only in the section list, no page title');
+    // The failed focuser's pill offers Devices too (#1559): count the Settings sheet only.
+    expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.text('Devices')), findsOneWidget,
+        reason: 'only in the section list, no page title');
     expect(find.descendant(of: page, matching: find.textContaining('ASI2600MM')), findsOneWidget);
     expect(find.byKey(const Key('simple-gear-filterwheel')), findsNothing, reason: 'never set up: no row of its own');
     await tester.tap(find.byKey(const Key('simple-gear-camera-disconnect')));
@@ -3866,7 +3885,7 @@ void main() {
   });
 
   testWidgets('screen readers can hide and show the controls over a frame', (tester) async {
-    final container = await _pump(tester, const Size(1024, 768));
+    final container = await _pump(tester, const Size(1024, 768), linkUp: true);
     // The label leads; the frame's own words may follow it.
     expect(find.bySemanticsLabel(RegExp('^Hide controls')), findsNothing, reason: 'no frame yet: nothing to clear');
     await _frame(tester, container);
@@ -3878,7 +3897,7 @@ void main() {
 
   testWidgets('a tap on the image hides everything (Stop too); the status stays and drops into the corner',
       (tester) async {
-    final container = await _pump(tester, const Size(1024, 768));
+    final container = await _pump(tester, const Size(1024, 768), linkUp: true);
     await _frame(tester, container);
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
@@ -4275,6 +4294,168 @@ void main() {
     wheel.report({'state': 'awaiting_user', 'current_slot': 1, 'pending_slot': 2}, manual: true);
     await tester.pump();
     expect(find.descendant(of: pill, matching: find.textContaining('Swap in F2, then confirm.')), findsOneWidget);
+  });
+
+  testWidgets('the Connect to your rig card shows over the wallpaper while the link is down (#1559)', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    expect(find.byKey(const Key('simple-rig-card')), findsOneWidget);
+    expect(find.text('Tap the shutter to take a frame'), findsNothing, reason: 'the card says what to do instead');
+  });
+
+  // A phone, a narrow window, a desktop: the rails, the strip and Stop never cover the card's buttons.
+  for (final size in const [Size(390, 844), Size(600, 900), Size(1024, 768)]) {
+    testWidgets('at ${size.width.toInt()}x${size.height.toInt()} every button on the Connect to your rig card takes its tap, and the rails keep theirs (#1559)', (tester) async {
+      final c = await _pump(tester, size, server: const AraServer(hostname: '192.0.2.24', port: 5555, mdnsName: 'Backyard rig'), gear: [
+        savedServersProvider.overrideWith(() => _SavedRigs(const [
+              AraServer(hostname: '198.51.100.7', port: 5555, mdnsName: 'Travel rig'),
+              AraServer(hostname: '192.0.2.61', port: 5555, mdnsName: 'Club observatory'),
+              AraServer(hostname: '192.0.2.24', port: 5555, mdnsName: 'Backyard rig'),
+            ])),
+      ]);
+      // The rails settle once measured.
+      await tester.pump();
+      await tester.pump();
+      if (size.width < 500) {
+        // Too narrow for the card between the rails: a bar beside Stop, and the rails still take taps.
+        expect(find.byKey(const Key('simple-rig-card')), findsNothing);
+        final mode = tester.getCenter(find.byKey(const Key('simple-mode')));
+        expect(tester.hitTestOnBinding(mode).path.any((h) => h.target == tester.renderObject(find.byKey(const Key('simple-mode')))), isTrue);
+        expect(tester.getRect(find.byKey(const Key('simple-rig-bar'))).overlaps(tester.getRect(find.byType(EmergencyStopButton))), isFalse);
+        await tester.tap(find.byKey(const Key('simple-rig-bar-connect')));
+        await tester.pump();
+      }
+      final card = find.byKey(const Key('simple-rig-card'));
+      final buttons = find.descendant(of: card, matching: find.byWidgetPredicate((w) => w is ButtonStyleButton));
+      expect(buttons, findsNWidgets(size.width < 500 ? 5 : 4), reason: 'Reconnect, two Connects, Add by address, and × on a narrow window');
+      for (final e in buttons.evaluate().toList()) {
+        // The card scrolls when its list outgrows the room.
+        await tester.ensureVisible(find.byWidget(e.widget));
+        await tester.pump();
+        final r = tester.getRect(find.byWidget(e.widget)).deflate(2);
+        for (final at in [r.topLeft, r.topRight, r.bottomLeft, r.bottomRight, r.center]) {
+          expect(tester.hitTestOnBinding(at).path.any((h) => h.target == e.renderObject), isTrue,
+              reason: '${e.widget.key ?? 'Add by address'} under something else at $at');
+        }
+      }
+      final rect = tester.getRect(card);
+      expect(rect.top, greaterThanOrEqualTo(kSimpleInset * 2 + kSimpleBarHeight), reason: 'below the strip');
+      expect(rect.overlaps(tester.getRect(find.byType(EmergencyStopButton))), isFalse, reason: 'clear of Stop');
+      if (size.width < 500) {
+        await tester.tap(find.byKey(const Key('simple-rig-card-close')));
+        await tester.pump();
+        expect(find.byKey(const Key('simple-rig-bar')), findsOneWidget, reason: '× folds it back into the bar');
+      } else {
+        expect(find.byKey(const Key('simple-rig-card-close')), findsNothing, reason: 'no bar to fold into');
+      }
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+      await tester.pump(const Duration(seconds: 5));
+    });
+  }
+
+  testWidgets('on a narrow window the bar takes no focus, its Connect moves focus into the card, and × gives it back to the bar (#1559)', (tester) async {
+    final c = await _pump(tester, const Size(390, 844), server: const AraServer(hostname: '192.0.2.24', port: 5555, mdnsName: 'Backyard rig'));
+    await tester.pump();
+    // Whether the focused control sits inside the widget keyed [key].
+    bool focusUnder(Key key) {
+      final focused = FocusManager.instance.primaryFocus?.context;
+      if (focused == null) return false;
+      var found = false;
+      focused.visitAncestorElements((e) => !(found = e.widget.key == key));
+      return found;
+    }
+    expect(focusUnder(const Key('simple-rig-bar')), isFalse, reason: 'a drop does not take focus from where the user is');
+    await tester.tap(find.byKey(const Key('simple-rig-bar-connect')));
+    await tester.pump();
+    await tester.pump();
+    expect(focusUnder(const Key('simple-rig-card')), isTrue, reason: 'the bar it was on is gone');
+    await tester.tap(find.byKey(const Key('simple-rig-card-close')));
+    await tester.pump();
+    await tester.pump();
+    expect(focusUnder(const Key('simple-rig-bar')), isTrue, reason: 'back where the user opened it');
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('with the rig link up there is no Connect to your rig card (#1559)', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true);
+    expect(find.byKey(const Key('simple-rig-card')), findsNothing);
+  });
+
+  testWidgets("a Guider start that fails during calibration shows the error pill with the Guider's reason, on Preview too (#1756)", (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true);
+    expect(c.read(simpleShowingProvider), SimpleModeScreen.preview);
+    c.read(guideStartLateFailureProvider.notifier).report(const GuideStartFailed('Calibration failed: star did not move enough'));
+    await tester.pump();
+    final pill = c.read(simpleMessagesProvider).single;
+    expect(pill.kind, SimpleMessageKind.error);
+    expect(pill.title, contains('Calibration failed: star did not move enough'));
+    expect(pill.origin, SimpleStatusOrigin.guide);
+  });
+
+  group('the failed-connect pill (#1559)', () {
+    final pill = find.textContaining("Mount didn't connect");
+
+    Future<(ProviderContainer, _FlakyMount)> shell(WidgetTester tester) async {
+      final mount = _FlakyMount();
+      final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [mountProvider.overrideWith(() => mount)]);
+      await tester.pump();
+      return (c, mount);
+    }
+
+    testWidgets('a device going into error shows one amber pill naming it; connected takes it away', (tester) async {
+      final (c, mount) = await shell(tester);
+      expect(pill, findsNothing);
+      mount.report(EquipmentConnectionState.error);
+      await tester.pump();
+      expect(pill, findsOneWidget);
+      expect(find.textContaining("Check it's powered and plugged in"), findsOneWidget);
+      expect(c.read(simpleMessagesProvider).single.kind, SimpleMessageKind.warning);
+      mount.report(EquipmentConnectionState.connected);
+      await tester.pump();
+      expect(pill, findsNothing);
+    });
+
+    testWidgets('a device that keeps failing still shows one pill', (tester) async {
+      final (c, mount) = await shell(tester);
+      mount.report(EquipmentConnectionState.error);
+      await tester.pump();
+      mount.report(EquipmentConnectionState.connecting);
+      await tester.pump();
+      mount.report(EquipmentConnectionState.error);
+      await tester.pump();
+      expect(pill, findsOneWidget);
+      expect(c.read(simpleMessagesProvider), hasLength(1));
+    });
+
+    testWidgets('closed by hand, it comes back the next time the device fails', (tester) async {
+      final (c, mount) = await shell(tester);
+      mount.report(EquipmentConnectionState.error);
+      await tester.pump();
+      c.read(simpleMessagesProvider.notifier).dismiss(c.read(simpleMessagesProvider).single.id);
+      await tester.pump();
+      expect(pill, findsNothing);
+      mount.report(EquipmentConnectionState.connecting);
+      await tester.pump();
+      mount.report(EquipmentConnectionState.error);
+      await tester.pump();
+      expect(pill, findsOneWidget);
+    });
+
+    testWidgets('Reconnect asks the rig again, and Devices opens Settings › Devices', (tester) async {
+      final (_, mount) = await shell(tester);
+      mount.report(EquipmentConnectionState.error);
+      await tester.pump();
+      await tester.tap(find.widgetWithText(TextButton, 'Reconnect'));
+      await tester.pump();
+      expect(mount.calls, ['reconnect']);
+      expect(pill, findsOneWidget, reason: 'it stays until the device connects');
+      await tester.tap(find.widgetWithText(TextButton, 'Devices'));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('simple-gear')), findsOneWidget);
+    });
   });
 
   group('the dew warning pill (#1564)', () {
@@ -5356,6 +5537,7 @@ void main() {
     final container = ProviderContainer(overrides: [
       simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
       selectedTabIndexProvider.overrideWith(_StartOnLive.new),
+      serverLinkUpProvider.overrideWithValue(true), // no Connect card scanning the network
     ]);
     addTearDown(container.dispose);
     await container.read(simpleModeProvider.future);

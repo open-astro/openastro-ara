@@ -23,6 +23,7 @@ using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -50,6 +51,9 @@ namespace OpenAstroAra.Test {
         private Mock<IStorageDeviceService> devices = null!;
         private ActiveRunSessionRegistry runs = null!;
         private Mock<ICameraService> camera = null!;
+        private string stateDir = null!;
+        private StorageEraseLog erased = null!;
+        private Mock<IStorageBrowseService> browse = null!;
 
         [OneTimeSetUp]
         public async Task StartKestrel() {
@@ -57,11 +61,15 @@ namespace OpenAstroAra.Test {
             devices = new Mock<IStorageDeviceService>(MockBehavior.Strict);
             runs = new ActiveRunSessionRegistry();
             camera = new Mock<ICameraService>();
+            browse = new Mock<IStorageBrowseService>();
+            stateDir = Path.Combine(Path.GetTempPath(), "ara-erase-" + Path.GetRandomFileName());
+            erased = new StorageEraseLog(stateDir);
             var builder = WebApplication.CreateSlimBuilder();
             builder.WebHost.UseUrls("http://127.0.0.1:0");
             builder.Services.AddSingleton(copy.Object);
             builder.Services.AddSingleton(devices.Object);
             builder.Services.AddSingleton(runs);
+            builder.Services.AddSingleton(erased);
             // The rest of the system endpoints' services: registered so the route table builds.
             builder.Services.AddSingleton(Mock.Of<IDataManagerService>());
             builder.Services.AddSingleton(Mock.Of<IBackupService>());
@@ -70,7 +78,7 @@ namespace OpenAstroAra.Test {
             builder.Services.AddSingleton(Mock.Of<IProfileShareService>());
             builder.Services.AddSingleton(Mock.Of<IProfileStore>());
             builder.Services.AddSingleton(Mock.Of<ISkyCatalogService>());
-            builder.Services.AddSingleton(Mock.Of<IStorageBrowseService>());
+            builder.Services.AddSingleton(browse.Object);
             builder.Services.AddSingleton(Mock.Of<ISolverRecommender>());
             builder.Services.AddSingleton(Mock.Of<IGuiderService>());
             builder.Services.AddSingleton(Mock.Of<IAraDatabase>());
@@ -91,6 +99,7 @@ namespace OpenAstroAra.Test {
             http.Dispose();
             await app.StopAsync();
             await app.DisposeAsync();
+            try { Directory.Delete(stateDir, recursive: true); } catch (DirectoryNotFoundException) { /* nothing erased */ }
         }
 
         [SetUp]
@@ -170,6 +179,80 @@ namespace OpenAstroAra.Test {
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
             Assert.That(await resp.Content.ReadAsStringAsync(), Does.Contain("still being saved"));
             // Strict mock: any helper call would have thrown.
+        }
+
+        [Test]
+        public async Task A_folder_that_is_gone_reads_as_a_sentence_not_the_system_message() {
+            // #1764 — a race (the drive pulled mid-listing) throws the runtime's own message.
+            browse.Setup(b => b.Browse("/media/gone")).Throws(new DirectoryNotFoundException("Could not find a part of the path '/media/gone'."));
+            browse.Setup(b => b.CreateFolder("/media/gone", "M31")).Throws(new DirectoryNotFoundException("Could not find a part of the path '/media/gone'."));
+
+            using var listed = await http.GetAsync(new Uri("/api/v1/storage/browse?path=/media/gone", UriKind.Relative));
+            using var made = await http.PostAsJsonAsync("/api/v1/storage/mkdir", new { path = "/media/gone", name = "M31" }, Json);
+
+            foreach (var resp in new[] { listed, made }) {
+                Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+                using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+                var detail = doc.RootElement.GetProperty("detail").GetString();
+                Assert.That(detail, Does.Not.Contain("Could not find a part of the path"));
+                Assert.That(detail, Is.EqualTo("That folder isn't on the rig, or it isn't storage. Pick another folder."));
+            }
+        }
+
+        [Test]
+        public async Task An_erase_is_noted_before_the_wipe_even_when_the_format_fails() {
+            camera.Setup(c => c.IsFreeToCapture(It.IsAny<object>())).Returns(true);
+            var before = DateTime.UtcNow;
+            devices.Setup(d => d.ConfigureAsync("A1B2-C3D4", true, "BACKUP", null, It.IsAny<CancellationToken>()))
+                .Callback(() => Assert.That(erased.ErasedSince("A1B2-C3D4", before), Is.True, "noted before the helper runs"))
+                .ReturnsAsync(new StorageConfigureResult(false, "format_failed", "mkfs died", null));
+            try {
+                using var resp = await http.PostAsJsonAsync("/api/v1/storage/configure",
+                    new { uuid = "A1B2-C3D4", format = true, confirm_label = "BACKUP" }, Json);
+
+                Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.UnprocessableEntity));
+                Assert.That(erased.ErasedSince("a1b2-c3d4", before), Is.True);
+                devices.Verify(d => d.ConfigureAsync("A1B2-C3D4", true, "BACKUP", null, It.IsAny<CancellationToken>()), Times.Once);
+            } finally {
+                devices.Reset();
+            }
+        }
+
+        [Test]
+        public async Task An_erase_that_cannot_be_noted_is_refused_and_never_reaches_the_drive() {
+            camera.Setup(c => c.IsFreeToCapture(It.IsAny<object>())).Returns(true);
+            // A file where the state directory should be: the append throws.
+            if (Directory.Exists(stateDir)) {
+                Directory.Delete(stateDir, recursive: true);
+            }
+            await File.WriteAllTextAsync(stateDir, "not a directory");
+            try {
+                using var resp = await http.PostAsJsonAsync("/api/v1/storage/configure",
+                    new { uuid = "C9D0-E1F2", format = true, confirm_label = "BACKUP" }, Json);
+
+                Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
+                Assert.That(await resp.Content.ReadAsStringAsync(), Does.Contain("could not note it"));
+                // Strict mock: a ConfigureAsync call would have thrown; verify it explicitly too.
+                devices.Verify(d => d.ConfigureAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            } finally {
+                File.Delete(stateDir);
+            }
+        }
+
+        [Test]
+        public async Task Using_a_drive_without_erasing_it_notes_nothing() {
+            camera.Setup(c => c.IsFreeToCapture(It.IsAny<object>())).Returns(true);
+            var before = DateTime.UtcNow;
+            devices.Setup(d => d.ConfigureAsync("E5F6-A7B8", false, null, null, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new StorageConfigureResult(false, "not_ext4", null, null));
+            try {
+                using var resp = await http.PostAsJsonAsync("/api/v1/storage/configure", new { uuid = "E5F6-A7B8" }, Json);
+
+                Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.UnprocessableEntity));
+                Assert.That(erased.ErasedSince("E5F6-A7B8", before), Is.False);
+            } finally {
+                devices.Reset();
+            }
         }
     }
 }

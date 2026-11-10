@@ -124,11 +124,11 @@ class PolarAlignActionNotifier extends Notifier<PolarAlignAction> {
   @override
   PolarAlignAction build() => (busy: false, error: null);
 
-  /// Run [op] against the rig; [describe] words a failure. True when the rig
-  /// took it.
+  /// Run [op] against the rig; [describe] words a failure, or returns null
+  /// when the caller says it elsewhere. True when the rig took it.
   Future<bool> run(
     Future<void> Function(PolarAlignClient api) op, {
-    required String Function(Object error) describe,
+    required String? Function(Object error) describe,
   }) async {
     final api = ref.read(polarAlignApiProvider);
     if (api == null) return false;

@@ -62,6 +62,31 @@ void main() {
         'this camera does not support cooling');
   });
 
+  DioException bad(int code, [Object? data]) => DioException(
+        requestOptions: RequestOptions(path: '/x'),
+        type: DioExceptionType.badResponse,
+        response: Response(requestOptions: RequestOptions(path: '/x'), statusCode: code, data: data),
+      );
+
+  test("a 404 with the daemon's sentence reads as that sentence (#1764)", () {
+    expect(friendlyError(_en, bad(404, {'detail': 'No guide camera is known.'}), action: 'start guiding'),
+        'No guide camera is known.');
+    expect(failureReason(_en, bad(404, {'detail': 'No switch \'box\' is known.'})), "No switch 'box' is known.");
+  });
+
+  test('a 404 with no detail still reads as the generic not-found sentence (#1764)', () {
+    final msg = friendlyError(_en, bad(404), action: 'load the library');
+    expect(msg, contains("Couldn't load the library"));
+    expect(msg, contains(_en.errorNotFound));
+  });
+
+  test('the 400, 409, 422 and 507 details are unchanged, and a 500 detail is not shown (#1764)', () {
+    for (final code in [400, 409, 422, 507]) {
+      expect(friendlyError(_en, bad(code, {'detail': 'the rig said why'})), 'the rig said why', reason: '$code');
+    }
+    expect(friendlyError(_en, bad(500, {'detail': 'NullReferenceException at Foo'})), isNot(contains('NullReference')));
+  });
+
   test('badResponse 500 maps to a check-the-logs sentence', () {
     final e = DioException(
       requestOptions: RequestOptions(path: '/x'),

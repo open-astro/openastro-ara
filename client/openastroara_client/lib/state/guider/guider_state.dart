@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/guider_status.dart';
 import '../../models/server.dart';
+import '../../models/ws_event.dart';
 import '../../services/guider_api.dart';
 import '../profile_management_state.dart';
 import '../saved_server_state.dart';
@@ -126,10 +127,31 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
 
   bool _guideActionInFlight = false;
 
+  /// #1756 — the running start's operation, heard after [startGuiding] has
+  /// returned (the Guider calibrates for minutes). A newer start or a Stop
+  /// drops it.
+  ProviderSubscription<AsyncValue<WsEvent>>? _lateStart;
+
+  void _dropLateStart() {
+    _lateStart?.close();
+    _lateStart = null;
+  }
+
+  /// The start's outcome from its `guider.operation_complete`, null on success.
+  /// The daemon says "refused" when the guider named no reason.
+  static GuideStartFailed? _failureOf(Map<String, dynamic> p) {
+    if (p['ok'] != false) return null;
+    final error = p['error'];
+    return GuideStartFailed(error is String && error.isNotEmpty && error != 'refused' ? error : null);
+  }
+
   /// Start guiding by hand — the way back after guiding was stopped, with or
   /// without a run. Throws when the daemon refuses, for the caller to show;
   /// throws [GuideStartFailed] when the guider gives up on the start (#1664).
+  /// A failure after the Guider reached calibrating goes to
+  /// [guideStartLateFailureProvider] instead (#1756).
   Future<void> startGuiding() => _guideAction((api) async {
+        _dropLateStart();
         // Listening before the ask: a guider that refuses at once can answer
         // before the 202 does.
         final done = <Object?, Map<String, dynamic>>{};
@@ -144,20 +166,27 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
           if (id == null) return;
           // A start that works can run long (calibration): stop waiting once the
           // guider is past picking a star, or after 10 s, as before (no false failure).
-          for (var i = 0; i < 40 && ref.mounted; i++) {
+          for (var i = 0; ref.mounted; i++) {
             final p = done[id];
             if (p != null) {
-              final error = p['error'];
-              if (p['ok'] == false) {
-                // The daemon says "refused" when the guider named no reason.
-                throw GuideStartFailed(error is String && error.isNotEmpty && error != 'refused' ? error : null);
-              }
+              final failed = _failureOf(p);
+              if (failed != null) throw failed;
               return;
             }
             final runtime = state.value?.runtimeState;
-            if (runtime == GuiderRuntimeState.calibrating ||
+            if (i >= 40 ||
+                runtime == GuiderRuntimeState.calibrating ||
                 runtime == GuiderRuntimeState.guiding ||
                 runtime == GuiderRuntimeState.settling) {
+              // Still running: keep listening for its outcome. No await since the
+              // check above, so no event falls between the two listeners.
+              final late = ref.read(guideStartLateFailureProvider.notifier);
+              _lateStart = ref.listen(wsEventsProvider, (_, next) {
+                final e = next.asData?.value;
+                if (e == null || e.type != 'guider.operation_complete' || e.payload['operation_id'] != id) return;
+                _dropLateStart();
+                if (_failureOf(e.payload) case final failed?) late.report(failed);
+              });
               return;
             }
             await Future<void>.delayed(settleInterval);
@@ -168,8 +197,12 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
         }
       });
 
-  /// Stop guiding by hand. Throws when the daemon refuses.
-  Future<void> stopGuiding() => _guideAction((api) => api.stopGuiding());
+  /// Stop guiding by hand. Throws when the daemon refuses. A start still
+  /// calibrating ends here, and its outcome is not a failure to report.
+  Future<void> stopGuiding() => _guideAction((api) {
+        _dropLateStart();
+        return api.stopGuiding();
+      });
 
   // Unlike connect, keeps the current status on screen (no loading state):
   // the strip must not blank while a start settles.
@@ -229,3 +262,19 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
 final guiderStatusProvider =
     AsyncNotifierProvider<GuiderStatusNotifier, GuiderStatus?>(
         GuiderStatusNotifier.new);
+
+/// #1756 — the last Guider start's failure that came after the start returned
+/// (the Guider had reached calibrating): null until one comes. Each failure is
+/// a new value, so a listener hears every one.
+class GuideStartLateFailureNotifier extends Notifier<GuideStartFailed?> {
+  @override
+  GuideStartFailed? build() => null;
+
+  void report(GuideStartFailed failure) => state = failure;
+
+  void clear() => state = null;
+}
+
+final guideStartLateFailureProvider =
+    NotifierProvider<GuideStartLateFailureNotifier, GuideStartFailed?>(
+        GuideStartLateFailureNotifier.new);

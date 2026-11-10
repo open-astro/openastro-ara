@@ -6,6 +6,8 @@ import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/server.dart';
+import 'package:openastroara/state/server_state.dart' show discoveredServersProvider;
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/screens/simple/simple_guide_panel.dart' show SimpleGuidePanel;
@@ -154,6 +156,8 @@ void main() {
         final c = ProviderContainer(overrides: [
           simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
           selectedTabIndexProvider.overrideWith(_StartOnLive.new),
+          // The Connect to your rig card (no rig link here) scans: no network in a test.
+          discoveredServersProvider.overrideWith((ref) => const Stream<AraServer>.empty()),
           // Plan with real content: Tonight's best (one picked) and a queue.
           if (open == 'Camera') cameraStatusProvider.overrideWith(_Camera.new),
           if (open == 'Settings Focuser') focuserProvider.overrideWith(_Focuser.new),
@@ -450,6 +454,7 @@ void main() {
       final c = ProviderContainer(overrides: [
         simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
         selectedTabIndexProvider.overrideWith(_StartOnLive.new),
+        discoveredServersProvider.overrideWith((ref) => const Stream<AraServer>.empty()),
         sequenceRunStateProvider.overrideWith(() => _SkippedRun()),
       ]);
       addTearDown(c.dispose);

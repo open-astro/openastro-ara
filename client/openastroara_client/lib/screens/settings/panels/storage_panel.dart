@@ -730,7 +730,12 @@ class _CheckDiskButtonState extends ConsumerState<StorageCheckDiskButton> {
                         ? l10n.storageCheckRepairedSimple
                         : l10n.storageCheckRepaired
                   : l10n.storageCheckClean)
-            : l10n.storageCheckFailed(outcome.detail ?? outcome.code),
+            : l10n.storageCheckFailed(
+                // #1764 — the helper's code, in words, as the drive and copy dialogs say it.
+                outcome.code == 'exfat_unsupported'
+                    ? l10n.storageConfigureExfatUnsupported
+                    : outcome.detail ?? outcome.code,
+              ),
         error: !outcome.success,
         snackBarRed: false,
       );

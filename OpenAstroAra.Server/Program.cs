@@ -583,6 +583,8 @@ public partial class Program {
         //   2. /var/lib/openastroara (matches §13 systemd unit StateDirectory=)
         //   3. ~/.local/share/openastroara as a per-user fallback
         var profileDir = ResolveProfileDir();
+        // #1765 — drives erased through ARA; a copy marker naming one erased since vouches for nothing.
+        builder.Services.AddSingleton(new StorageEraseLog(profileDir));
         // #1298 — the manual filter wheel remembers the installed filter under the profile dir.
         builder.Services.AddSingleton(sp => new ManualFilterWheelService(
             sp.GetService<ILogger<ManualFilterWheelService>>(),

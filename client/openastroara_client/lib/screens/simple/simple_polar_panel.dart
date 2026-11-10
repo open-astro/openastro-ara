@@ -50,18 +50,20 @@ class SimplePolarShutter extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final api = ref.watch(polarAlignApiProvider);
     final active = simplePolarActive(ref.watch(polarAlignLiveProvider));
+    // Busy while any panel's call runs: a second press would send it twice.
+    final busy = ref.watch(polarAlignActionProvider).busy;
     final notify = userNotifier(context, origin: SimpleStatusOrigin.polar);
     final l10n = context.l10n;
-    Future<void> run(String action, Future<void> Function() op) async {
-      try {
-        await op();
-      } catch (e) {
-        notify(
-          friendlyError(l10n, e, action: action),
-          error: true,
-          snackBarRed: false,
-        );
-      }
+    final action = ref.read(polarAlignActionProvider.notifier);
+    // #1764 — through the shared module (ADR 0013 rule 3). Its failure goes to
+    // a pill only: the panel's line would say it a second time.
+    Future<void> run(String verb, Future<void> Function(PolarAlignClient api) op) async {
+      String? failure;
+      await action.run(op, describe: (e) {
+        failure = friendlyError(l10n, e, action: verb);
+        return null;
+      });
+      if (failure != null) notify(failure!, error: true, snackBarRed: false);
     }
 
     return SimpleShutterButton(
@@ -70,11 +72,11 @@ class SimplePolarShutter extends ConsumerWidget {
       label: active ? l10n.polarStop : l10n.polarStart,
       whyOff: api == null ? l10n.shellRigNotConnected : l10n.shellMainCameraBusy,
       // It turns the mount: never under the main camera's frame.
-      onPressed: api == null || (!active && ref.watch(mainCameraBusyProvider))
+      onPressed: api == null || busy || (!active && ref.watch(mainCameraBusyProvider))
           ? null
           : active
-          ? () => run(l10n.polarActionStop, api.stop)
-          : () => run(l10n.polarActionStart, api.start),
+          ? () => run(l10n.polarActionStop, (api) => api.stop())
+          : () => run(l10n.polarActionStart, (api) => api.start()),
     );
   }
 }

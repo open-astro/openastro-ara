@@ -102,6 +102,7 @@ import 'simple_message_pills.dart';
 import '../album/sky_album_screen.dart';
 import 'simple_plan_panel.dart';
 import 'simple_preview_panel.dart';
+import 'simple_rig_card.dart';
 import 'simple_wallpaper.dart';
 
 /// Inset from the frame edge and between panels.
@@ -124,6 +125,10 @@ const double kSimpleStatusMaxWidth = 300;
 
 /// The message pills' widest (they share the top row with the status pill).
 const double kSimpleMessagesMaxWidth = 420;
+
+/// The Connect to your rig card's narrowest between the rails: its width in a
+/// 320 px window, where its longest words were checked (#1559).
+const double kSimpleRigCardMinWidth = 288;
 
 /// The Preflight strip's or offer's row before it is measured.
 const double kSimplePreflightRowHeight = 56;
@@ -352,6 +357,66 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         _opticsFromMount(caps);
       }
     }, fireImmediately: true);
+    _watchDeviceFailures();
+    // #1756 — a Guider start that failed after calibration began: the pill a quick failure shows.
+    ref.listenManual(guideStartLateFailureProvider, (_, failed) {
+      if (failed != null && mounted) {
+        _messages.show(SimpleMessageKind.error, friendlyError(context.l10n, failed), origin: SimpleStatusOrigin.guide);
+      }
+    });
+  }
+
+  /// #1559 — on a narrow window, the rig card opened from its bar.
+  bool _rigCardOpen = false;
+
+  /// #1559 — the bar's Connect, which takes focus back when × closes the card.
+  final _rigBarConnect = FocusNode();
+
+  /// #1559 — the device pill showing, by device; one per device, however often it fails.
+  final _devicePills = <String, int>{};
+
+  /// #1559 — the profile's devices (Settings › Devices) going into error.
+  void _watchDeviceFailures() {
+    void watch<T extends EquipmentDeviceStatus>(
+      String key,
+      AsyncNotifierProvider<EquipmentDeviceNotifier<T>, T?> provider,
+      String Function(AppLocalizations l10n) type,
+    ) {
+      ref.listenManual(provider, (previous, next) {
+        final was = previous?.value?.connectionState;
+        final now = next.value?.connectionState;
+        // A pill closed with × no longer counts: the next failure shows a new one.
+        final showing = _devicePills[key];
+        final stillShown = showing != null && ref.read(simpleMessagesProvider).any((m) => m.id == showing);
+        if (now == EquipmentConnectionState.error && was != now && !stillShown) {
+          if (!mounted) return;
+          final l10n = context.l10n;
+          _devicePills[key] = _messages.show(
+            SimpleMessageKind.warning,
+            l10n.simpleDeviceDidNotConnect(type(l10n)),
+            actions: [
+              SimpleMessageAction(l10n.shellReconnect, () {
+                unawaited(ref.read(provider.notifier).reconnect().catchError((Object _) => false));
+              }),
+              SimpleMessageAction(l10n.shellSectionDevices, () => _openMenu(section: 'Devices')),
+            ],
+          );
+        } else if (now == EquipmentConnectionState.connected) {
+          final id = _devicePills.remove(key);
+          if (id != null) _messages.dismiss(id);
+        }
+      });
+    }
+
+    watch('camera', cameraStatusProvider, (l) => l.shellSectionCamera);
+    watch('mount', mountProvider, (l) => l.shellSectionMount);
+    watch('focuser', focuserProvider, (l) => l.shellSectionFocuser);
+    watch('filterwheel', filterWheelProvider, (l) => l.shellFilterWheel);
+    watch('rotator', rotatorProvider, (l) => l.shellRotator);
+    watch('flat', flatPanelProvider, (l) => l.shellFlatPanel);
+    watch('dome', domeProvider, (l) => l.shellDome);
+    watch('weather', weatherProvider, (l) => l.shellWeather);
+    watch('safety', safetyMonitorProvider, (l) => l.shellSafetyMonitor);
   }
 
   /// The profile owns the telescope; a value it doesn't know (0) is filled
@@ -400,13 +465,16 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     _publishOnTop(false);
     final dewPill = _dewPill;
     final calibrationPill = _calibrationPill;
+    final devicePills = [..._devicePills.values];
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      devicePills.forEach(_messages.dismiss);
       _messages.dismissQuestions();
       // Its button belongs to this shell too, and the next one shows its own.
       if (dewPill != null) _messages.dismiss(dewPill);
       if (calibrationPill != null) _messages.dismiss(calibrationPill);
     });
     _focus.dispose();
+    _rigBarConnect.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _guiderPoll?.cancel();
     super.dispose();
@@ -809,6 +877,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final showSky = _sky || !hasFrame;
     // No frame and no sky asked for: the wallpaper (#1602).
     final wallpaper = !_sky && !hasFrame;
+    final linkUp = ref.watch(serverLinkUpProvider);
+    // #1559 — the next drop starts with the bar again.
+    ref.listen(serverLinkUpProvider, (_, up) {
+      if (up) _rigCardOpen = false;
+    });
     final panels = !_clean || showSky;
     // Every mode reads the sequencer (the plan squares, the status pill), so
     // opening Simple Mode adopts a run in progress; only Plan acts on it.
@@ -945,6 +1018,37 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         : const Duration(milliseconds: 220);
     // Both slots stay filled, and with one type, or the pills moving between
     // them would shift their siblings and rebuild them from scratch.
+    // #1559 — the rig card keeps clear of the strip, the rails and Stop. On a
+    // window too narrow to leave it a readable width between the rails (a
+    // phone, a one-third Split View) it folds into a bar beside Stop, so the
+    // rails stay usable; the bar's Connect opens it over them, never over an
+    // open window or popover.
+    final cardSide = kSimpleInset * 2 + railWidth;
+    final cardNarrow = panels && width - cardSide * 2 < kSimpleRigCardMinWidth;
+    final cardOpen = _rigCardOpen && _device == null && _popover == _Popover.none && !_adding;
+    final rigCard = Positioned(
+      left: panels && !cardNarrow ? cardSide : kSimpleInset,
+      right: panels && !cardNarrow ? cardSide : kSimpleInset,
+      top: panels ? railTop : kSimpleInset,
+      bottom: panels ? aboveStop : kSimpleInset,
+      child: Center(
+        child: SimpleRigCard(
+          onClose: cardNarrow
+              ? () {
+                  setState(() => _rigCardOpen = false);
+                  // Back where the user opened it; a drop alone never takes focus.
+                  WidgetsBinding.instance.addPostFrameCallback((_) => _rigBarConnect.requestFocus());
+                }
+              : null,
+        ),
+      ),
+    );
+    final rigBar = Positioned(
+      left: kSimpleInset,
+      right: kSimpleInset * 2 + (railWidth + stopSize) / 2,
+      bottom: kSimpleInset,
+      child: SimpleRigBar(focusNode: _rigBarConnect, onOpen: () => setState(() => _rigCardOpen = true)),
+    );
     final pillsLeft = kSimpleInset + (pillsBesideRail ? railShift : 0);
     final pillsTop = panels ? messagesTop : kSimpleInset + statusRow;
     // At the pills' own place: the slot they move into animates from here.
@@ -1071,7 +1175,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               child: const ColoredBox(color: AraColors.unseenPaint),
                             ),
                           ),
-                        if (!hasFrame)
+                        // #1559 — no rig link: the card offers one, over the wallpaper.
+                        if (!linkUp) ...[
+                          if (!cardNarrow) rigCard,
+                        ] else if (!hasFrame)
                           Positioned.fill(
                             child: IgnorePointer(
                               child: Center(
@@ -1439,6 +1546,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                             ],
                           ),
                         ),
+                        // #1559 — a narrow window's bar, or the card it opens over the rails.
+                        if (!linkUp && cardNarrow) cardOpen ? rigCard : rigBar,
                         // Above the rail only when it would cover them, and
                         // never above an open window or popover.
                         pillsOverRail ? messagePills : emptyPillSlot,
