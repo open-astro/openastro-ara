@@ -273,7 +273,7 @@ The app icon's palette, kept apart from the status colours. Only the Ara mark an
 - **Star Socket** (`brand-star-hole`): the dark centre inside each ringed star.
 
 ### Illustration greys
-The device windows' drawings (the Dome window's clamshell and dial, the Flat panel window's face) are painted in their own grey ramp, outside the UI tokens on purpose: they picture hardware, so they never mark a state, and Night mode's red filter covers them like everything else (#1690 audit, 2026-11-08). State on a drawing comes only from the status tokens (a moving shell's edge in Info Blue, a target in Connected Green).
+The device windows' drawings (the Dome window's clamshell and dial, the Flat panel window's face) are painted in their own grey ramp (`AraColors.dome*`, `AraColors.flatPanel*`), apart from the UI tokens on purpose: they picture hardware, so they never mark a state, and Night mode's red filter covers them like everything else (#1690 audit, 2026-11-08). State on a drawing comes only from the status tokens (a moving shell's edge in Info Blue, a target in Connected Green).
 - **Dome body** `#808080` to `#4A4A4A` (top-left to bottom-right): the fixed lower half, the base and the door.
 - **Dome shells** `#A8A8A8` to `#6A6A6A`: the moving shells, one step lighter than the body so they read on top of it.
 - **Plinth** `#8A8A8A`; **hinge bolt** `#D0D0D0`, the brightest point, where the shells turn.
@@ -510,4 +510,4 @@ An inline warning built from three parts: an amber or red icon, a coloured outli
 - **Don't** let any state fall back to plain grey text without a designed look.
 - **Don't** fill any control other than Emergency Stop and confirmed destructive actions with Fault Red.
 - **Don't** copy NINA's icons, splash, imagery or wordmark (see PRODUCT.md).
-- **Don't** hard-code colours outside `lib/theme/`. A few widgets still do, and they should migrate to tokens.
+- **Don't** hard-code colours outside `lib/theme/`; name them in `AraColors`. A test (`test/theme/no_hard_coded_colours_test.dart`) fails on a `Color(0x…)` literal anywhere else in `lib/` (#1552).
