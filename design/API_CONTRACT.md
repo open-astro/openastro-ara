@@ -26,6 +26,18 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-11 — #1765 a copy marker names its drive, and an erase through ARA voids it
+
+**Endpoint(s) or area:** `GET /api/v1/storage/contents` (`frames_not_copied`); `POST /api/v1/storage/configure` with `format: true`; the `.ara-last-copy` marker the disk-to-disk copy leaves on the store.
+
+**Decision:** the marker's content is the filesystem UUID of the drive that received the copy; its modification time still dates the copy. Before an erase starts, `POST /storage/configure` with `format: true` appends the drive's UUID and the time to `{profileDir}/erased-drives.log`; when that write fails, the erase is refused with 500 and the drive is not touched. `frames_not_copied` treats a marker as valid only when it names a drive and that drive has no erase logged at or after the marker's time. A missing, unreadable or empty marker (the format before this entry) counts every frame as not copied; so does a log that cannot be read. The response shape is unchanged.
+
+**Reasoning:** the 2026-11-10 entry promised a count that may over-report and never under-reports, and a marker that outlived the drive it vouched for broke that promise. The log lives on the rig, not on a drive, so it also voids markers on stores that were unplugged during the erase. It is written before the wipe so a format that fails partway still counts. Not covered: a target drive lost, or erased or changed outside ARA; the marker cannot see that (#1764 item 6 tracks copies by content).
+
+**Spec ref:** `Services/StorageEraseLog.cs`; `Services/StorageCopyService.cs` (`CopiedUntil`, `MarkCopied`); `Endpoints/SystemEndpoints.cs` (`GetStorageContents`, `ConfigureStorageDevice`).
+
+---
+
 ## 2026-11-10 — #1579 what erasing a drive would lose: `GET /api/v1/storage/contents`
 
 **Endpoint(s) or area:** `GET /api/v1/storage/contents?uuid=` → `StorageContentsDto { readable, frames, newest_frame_utc, frames_not_copied }`; the disk-to-disk copy (`POST /api/v1/storage/copy`) now leaves a hidden `.ara-last-copy` marker on the store.

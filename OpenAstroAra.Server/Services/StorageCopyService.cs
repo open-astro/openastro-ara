@@ -253,7 +253,7 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
             }
             outcome = ("done", null, null);
             if (current.Folders.Count == 0 && current.FilesFailed == 0 && current.FilesConflicting == 0) {
-                MarkCopied(sourceRoot, plannedAt);
+                MarkCopied(sourceRoot, current.TargetUuid, plannedAt);
             }
         } catch (OperationCanceledException) {
             outcome = ("cancelled", null, null);
@@ -352,14 +352,13 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
 
     /// <summary>What erasing <paramref name="device"/> would lose. A drive that is not
     /// mounted cannot be read, and says so rather than reporting no frames.</summary>
-    public static StorageContentsDto ContentsOf(StorageDeviceDto? device, CancellationToken ct = default) =>
+    public static StorageContentsDto ContentsOf(StorageDeviceDto? device, StorageEraseLog erased, CancellationToken ct = default) =>
         device?.MountPoint is { } mount && Directory.Exists(mount)
-            ? Summarize(mount, ct)
+            ? Summarize(mount, erased, ct)
             : new StorageContentsDto(false, 0, null, 0);
 
-    internal static StorageContentsDto Summarize(string root, CancellationToken ct = default) {
-        var marker = new FileInfo(Path.Combine(root, LastCopyMarker));
-        DateTime? copiedUntil = marker.Exists ? marker.LastWriteTimeUtc : null;
+    internal static StorageContentsDto Summarize(string root, StorageEraseLog? erased = null, CancellationToken ct = default) {
+        var copiedUntil = CopiedUntil(root, erased);
         int frames = 0, notCopied = 0;
         DateTime? newest = null;
         foreach (var file in Walk(new DirectoryInfo(root), ct)) {
@@ -379,12 +378,30 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
             newest is { } n ? new DateTimeOffset(n, TimeSpan.Zero) : null, notCopied);
     }
 
+    /// <summary>#1765 — the marker's time, while the drive it names has not been erased since.
+    /// A missing, unreadable or unnamed (pre-#1765, empty) marker vouches for nothing.</summary>
+    private static DateTime? CopiedUntil(string root, StorageEraseLog? erased) {
+        var marker = new FileInfo(Path.Combine(root, LastCopyMarker));
+        if (!marker.Exists) {
+            return null;
+        }
+        string target;
+        try {
+            target = File.ReadAllText(marker.FullName).Trim();
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            return null;
+        }
+        var at = marker.LastWriteTimeUtc;
+        return target.Length == 0 || erased?.ErasedSince(target, at) == true ? null : at;
+    }
+
     /// <summary>Stamps the marker at <paramref name="plannedAt"/>, less exFAT's 2 s mtime
-    /// granularity, so a frame saved just after the walk never reads as older than it.</summary>
-    private void MarkCopied(string root, DateTime plannedAt) {
+    /// granularity, so a frame saved just after the walk never reads as older than it.
+    /// Its content names the drive that received the copy (#1765).</summary>
+    private void MarkCopied(string root, string targetUuid, DateTime plannedAt) {
         try {
             var path = Path.Combine(root, LastCopyMarker);
-            File.WriteAllBytes(path, []);
+            File.WriteAllText(path, targetUuid);
             File.SetLastWriteTimeUtc(path, plannedAt - TimeSpan.FromSeconds(2));
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             // The copy itself worked; the erase warning just stays on the safe side.

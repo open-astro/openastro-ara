@@ -23,6 +23,7 @@ using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -50,6 +51,8 @@ namespace OpenAstroAra.Test {
         private Mock<IStorageDeviceService> devices = null!;
         private ActiveRunSessionRegistry runs = null!;
         private Mock<ICameraService> camera = null!;
+        private string stateDir = null!;
+        private StorageEraseLog erased = null!;
 
         [OneTimeSetUp]
         public async Task StartKestrel() {
@@ -57,11 +60,14 @@ namespace OpenAstroAra.Test {
             devices = new Mock<IStorageDeviceService>(MockBehavior.Strict);
             runs = new ActiveRunSessionRegistry();
             camera = new Mock<ICameraService>();
+            stateDir = Path.Combine(Path.GetTempPath(), "ara-erase-" + Path.GetRandomFileName());
+            erased = new StorageEraseLog(stateDir);
             var builder = WebApplication.CreateSlimBuilder();
             builder.WebHost.UseUrls("http://127.0.0.1:0");
             builder.Services.AddSingleton(copy.Object);
             builder.Services.AddSingleton(devices.Object);
             builder.Services.AddSingleton(runs);
+            builder.Services.AddSingleton(erased);
             // The rest of the system endpoints' services: registered so the route table builds.
             builder.Services.AddSingleton(Mock.Of<IDataManagerService>());
             builder.Services.AddSingleton(Mock.Of<IBackupService>());
@@ -91,6 +97,7 @@ namespace OpenAstroAra.Test {
             http.Dispose();
             await app.StopAsync();
             await app.DisposeAsync();
+            try { Directory.Delete(stateDir, recursive: true); } catch (DirectoryNotFoundException) { /* nothing erased */ }
         }
 
         [SetUp]
@@ -170,6 +177,41 @@ namespace OpenAstroAra.Test {
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
             Assert.That(await resp.Content.ReadAsStringAsync(), Does.Contain("still being saved"));
             // Strict mock: any helper call would have thrown.
+        }
+
+        [Test]
+        public async Task An_erase_is_noted_before_the_wipe_even_when_the_format_fails() {
+            camera.Setup(c => c.IsFreeToCapture(It.IsAny<object>())).Returns(true);
+            var before = DateTime.UtcNow;
+            devices.Setup(d => d.ConfigureAsync("A1B2-C3D4", true, "BACKUP", null, It.IsAny<CancellationToken>()))
+                .Callback(() => Assert.That(erased.ErasedSince("A1B2-C3D4", before), Is.True, "noted before the helper runs"))
+                .ReturnsAsync(new StorageConfigureResult(false, "format_failed", "mkfs died", null));
+            try {
+                using var resp = await http.PostAsJsonAsync("/api/v1/storage/configure",
+                    new { uuid = "A1B2-C3D4", format = true, confirm_label = "BACKUP" }, Json);
+
+                Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.UnprocessableEntity));
+                Assert.That(erased.ErasedSince("a1b2-c3d4", before), Is.True);
+                devices.Verify(d => d.ConfigureAsync("A1B2-C3D4", true, "BACKUP", null, It.IsAny<CancellationToken>()), Times.Once);
+            } finally {
+                devices.Reset();
+            }
+        }
+
+        [Test]
+        public async Task Using_a_drive_without_erasing_it_notes_nothing() {
+            camera.Setup(c => c.IsFreeToCapture(It.IsAny<object>())).Returns(true);
+            var before = DateTime.UtcNow;
+            devices.Setup(d => d.ConfigureAsync("E5F6-A7B8", false, null, null, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new StorageConfigureResult(false, "not_ext4", null, null));
+            try {
+                using var resp = await http.PostAsJsonAsync("/api/v1/storage/configure", new { uuid = "E5F6-A7B8" }, Json);
+
+                Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.UnprocessableEntity));
+                Assert.That(erased.ErasedSince("E5F6-A7B8", before), Is.False);
+            } finally {
+                devices.Reset();
+            }
         }
     }
 }

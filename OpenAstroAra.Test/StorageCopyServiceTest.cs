@@ -139,6 +139,31 @@ public class StorageCopyServiceTest {
     }
 
     [Test]
+    public async Task A_copy_to_a_drive_erased_since_counts_its_frames_as_not_copied_again() {
+        PutAt("night/a.fits", DateTime.UtcNow.AddHours(-2));
+        var erased = new StorageEraseLog(Path.GetDirectoryName(store)!);
+
+        var status = await RunToEnd(Svc, "6EF6-FD21").ConfigureAwait(false);
+        Assert.That(status.State, Is.EqualTo("done"), status.ErrorDetail);
+        Assert.That(StorageCopyService.Summarize(store, erased: erased).FramesNotCopied, Is.Zero, "drive A untouched");
+
+        erased.Record("6ef6-fd21", DateTime.UtcNow);
+
+        Assert.That(StorageCopyService.Summarize(store, erased: erased).FramesNotCopied, Is.EqualTo(1),
+            "the only copy was on the drive that was erased");
+    }
+
+    [Test]
+    public void A_marker_from_before_it_named_its_drive_counts_nothing_as_copied() {
+        PutAt("night/a.fits", DateTime.UtcNow.AddHours(-2));
+        var marker = Path.Combine(store, StorageCopyService.LastCopyMarker);
+        File.WriteAllBytes(marker, []);
+        File.SetLastWriteTimeUtc(marker, DateTime.UtcNow);
+
+        Assert.That(StorageCopyService.Summarize(store).FramesNotCopied, Is.EqualTo(1));
+    }
+
+    [Test]
     public async Task A_frame_saved_while_the_copy_runs_still_counts_as_not_copied() {
         PutAt("night/a.fits", DateTime.UtcNow.AddHours(-2));
         // freeBytes runs after the walk and before the files go across: a plan saving
@@ -171,9 +196,9 @@ public class StorageCopyServiceTest {
         var unmounted = new Server.Contracts.StorageDeviceDto("/dev/sdb1", "6EF6-FD21", "ARA-DISK", null, "exfat",
             1L << 30, null, true, "usb", false, false);
 
-        Assert.That(StorageCopyService.ContentsOf(unmounted).Readable, Is.False);
-        Assert.That(StorageCopyService.ContentsOf(null).Readable, Is.False);
-        Assert.That(StorageCopyService.ContentsOf(unmounted with { MountPoint = store }).Readable, Is.True);
+        Assert.That(StorageCopyService.ContentsOf(unmounted, new StorageEraseLog(Path.GetDirectoryName(store)!)).Readable, Is.False);
+        Assert.That(StorageCopyService.ContentsOf(null, new StorageEraseLog(Path.GetDirectoryName(store)!)).Readable, Is.False);
+        Assert.That(StorageCopyService.ContentsOf(unmounted with { MountPoint = store }, new StorageEraseLog(Path.GetDirectoryName(store)!)).Readable, Is.True);
     }
 
     [Test]
