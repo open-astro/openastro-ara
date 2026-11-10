@@ -19,6 +19,7 @@ import '../../theme/ara_metrics.dart';
 import '../fit_pane.dart';
 import 'focus_section.dart';
 import 'guide_focus_card.dart' show GuideFocusHint, TurnAdvice, TurnHint;
+import '../../util/friendly_error.dart';
 
 /// Setup → Smart Focus → Main telescope with "Bahtinov mask" picked (#1299):
 /// the user fits the mask, points at a bright star and turns the focuser while
@@ -162,7 +163,8 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
             const SizedBox(height: 16),
           ],
           if (live.error != null || status.error != null) ...[
-            InlineNotice.error(live.error ?? status.error!),
+            InlineNotice.error(
+                live.error == null ? status.error! : failureReason(context.l10n, live.error!)),
             const SizedBox(height: 16),
           ],
           if (autofocusRunning && !active) ...[

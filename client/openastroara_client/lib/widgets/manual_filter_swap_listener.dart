@@ -4,13 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/l10n.dart';
-import '../services/equipment_device_api.dart';
 import '../state/equipment/filter_wheel_state.dart';
 import '../state/simple_messages_state.dart';
 import '../state/simple_mode_state.dart';
 import '../state/ws/ws_providers.dart';
 import '../theme/ara_colors.dart';
 import 'equipment/manual_filter_wheel_body.dart';
+import '../util/friendly_error.dart';
 
 /// #1298 — the app-wide "install the X filter" prompt for the manual filter
 /// wheel. Wraps the app shell's body, so the prompt appears on whatever screen
@@ -187,6 +187,7 @@ class _ManualFilterSwapListenerState
   ) async {
     _dismiss?.call();
     String? problem;
+    final l10n = context.l10n;
     try {
       final performed = await action(ref.read(filterWheelProvider.notifier));
       // Dropped by the notifier's one-action-at-a-time guard: nothing was sent.
@@ -194,7 +195,7 @@ class _ManualFilterSwapListenerState
         problem = '$failure: another filter wheel action is still running';
       }
     } catch (e) {
-      problem = '$failure: ${describeEquipmentError(e)}';
+      problem = '$failure: ${failureReason(l10n, e)}';
     }
     if (problem == null || !mounted) return;
     // Nothing reached the daemon, so the swap still stands: reopen it.

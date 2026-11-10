@@ -2996,6 +2996,13 @@
       }
     }
   },
+  "guideFindStarFailed": "Couldn't find a star: {reason}",
+  "@guideFindStarFailed": {
+    "description": "Find star failed; reason is a full sentence",
+    "placeholders": {
+      "reason": {"type": "String"}
+    }
+  },
   "errorCouldnt": "Couldn't {action}",
   "@errorCouldnt": {
     "description": "Error message lead (every screen); action is a lower-case phrase like \"save that\"",

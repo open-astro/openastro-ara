@@ -37,7 +37,7 @@ class BahtinovFocusLive {
   /// belongs to, null when it is a whole frame (nothing measured).
   final BahtinovOverlay? overlay;
   final bool busy;
-  final String? error;
+  final Object? error;
   final bool finished;
 
   const BahtinovFocusLive({
@@ -58,7 +58,7 @@ class BahtinovFocusLive {
     int? frameSeq,
     BahtinovOverlay? overlay,
     bool? busy,
-    String? error,
+    Object? error,
     bool? finished,
     bool clearError = false,
     bool clearFrame = false,
@@ -145,7 +145,7 @@ class BahtinovFocusNotifier extends Notifier<BahtinovFocusLive> {
     } catch (e) {
       if (!ref.mounted || gen != _generation) return;
       _consecutiveErrors++;
-      state = state.copyWith(error: describeRequestError(e));
+      state = state.copyWith(error: e);
     }
     _schedule();
   }
@@ -175,7 +175,7 @@ class BahtinovFocusNotifier extends Notifier<BahtinovFocusLive> {
       await refresh();
     } catch (e) {
       if (!ref.mounted) return;
-      state = state.copyWith(busy: false, error: describeRequestError(e));
+      state = state.copyWith(busy: false, error: e);
     }
   }
 
@@ -188,7 +188,7 @@ class BahtinovFocusNotifier extends Notifier<BahtinovFocusLive> {
       await api.stop();
     } catch (e) {
       if (!ref.mounted) return;
-      state = state.copyWith(error: describeRequestError(e));
+      state = state.copyWith(error: e);
     }
     if (!ref.mounted) return;
     state = state.copyWith(busy: false);
@@ -207,7 +207,7 @@ class BahtinovFocusNotifier extends Notifier<BahtinovFocusLive> {
       await refresh();
     } catch (e) {
       if (!ref.mounted) return;
-      state = state.copyWith(error: describeRequestError(e));
+      state = state.copyWith(error: e);
     }
   }
 
@@ -222,7 +222,7 @@ class BahtinovFocusNotifier extends Notifier<BahtinovFocusLive> {
       await refresh();
     } catch (e) {
       if (!ref.mounted) return;
-      state = state.copyWith(error: describeRequestError(e));
+      state = state.copyWith(error: e);
     }
   }
 

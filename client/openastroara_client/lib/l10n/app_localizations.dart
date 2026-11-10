@@ -3711,6 +3711,12 @@ abstract class AppLocalizations {
   /// **'{direction} step {step}'**
   String guiderStateCalibrationStep(String direction, String step);
 
+  /// Find star failed; reason is a full sentence
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t find a star: {reason}'**
+  String guideFindStarFailed(String reason);
+
   /// Error message lead (every screen); action is a lower-case phrase like "save that"
   ///
   /// In en, this message translates to:

@@ -4,10 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/guider_advanced_settings.dart';
 import '../../models/server.dart';
 import '../../services/guider_advanced_api.dart';
-import '../../state/focus/autofocus_live_state.dart' show describeRequestError;
 import '../../state/saved_server_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 
 /// Builds a [GuiderAdvancedClient] for a server. Overridable in tests.
 final guiderAdvancedApiFactoryProvider =
@@ -174,7 +175,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _status = describeRequestError(e);
+        _status = failureReason(context.l10n, e);
         _statusIsError = true;
       });
     }
@@ -286,7 +287,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
     try {
       final saved = await api.putProfile(_draft);
       var pushed = false;
-      String? multiStarProblem;
+      Object? multiStarProblem;
       if (_guider.connected) {
         await api.pushTuning();
         pushed = true;
@@ -297,7 +298,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
           try {
             await api.applyMultiStar();
           } catch (e) {
-            multiStarProblem = describeRequestError(e);
+            multiStarProblem = e;
           }
         }
       }
@@ -312,7 +313,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
         _guider = fresh ?? _guider;
         _statusIsError = multiStarProblem != null;
         _status = multiStarProblem != null
-            ? 'Saved, but multi-star was not applied: $multiStarProblem'
+            ? 'Saved, but multi-star was not applied: ${failureReason(context.l10n, multiStarProblem)}'
             : pushed && fresh != null && fresh.notApplied.isNotEmpty
             ? 'Saved. The guider did not apply everything: see the list at the top.'
             : pushed
@@ -324,7 +325,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
       setState(() {
         _applying = false;
         _statusIsError = true;
-        _status = describeRequestError(e);
+        _status = failureReason(context.l10n, e);
       });
     }
   }

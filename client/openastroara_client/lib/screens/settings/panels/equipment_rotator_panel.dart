@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/equipment_device_status.dart';
 import '../../../models/rotator_status.dart';
-import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/rotator_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
@@ -13,6 +12,8 @@ import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
+import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 
 /// §37.4 Rotator panel. Shows the connected rotator's live sky/mechanical angle
 /// with move, reverse, and sky-angle sync controls, via the shared connection
@@ -241,6 +242,7 @@ class _RotatorBodyState extends ConsumerState<_RotatorBody> {
     String verb,
     Future<bool> Function() action,
   ) async {
+    final l10n = context.l10n;
     try {
       final performed = await action();
       if (!performed) {
@@ -251,7 +253,7 @@ class _RotatorBodyState extends ConsumerState<_RotatorBody> {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text("Couldn't $verb: ${describeEquipmentError(e)}"),
+          content: Text("Couldn't $verb: ${failureReason(l10n, e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );

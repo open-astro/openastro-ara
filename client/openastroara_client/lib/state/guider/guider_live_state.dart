@@ -3,11 +3,12 @@ import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../models/guider_calibration_view.dart';
 import '../../models/guider_live.dart';
 import '../../models/server.dart';
 import '../../services/guider_live_api.dart';
-import '../focus/autofocus_live_state.dart' show describeRequestError;
+import '../../util/friendly_error.dart';
 import '../saved_server_state.dart';
 import 'guider_state.dart';
 
@@ -31,13 +32,17 @@ class GuiderLiveState {
   final Uint8List? frame;
   final GuiderCalibrationView calibration;
   final bool busy;
-  final String? error;
+  final Object? error;
+
+  /// [error] came from Find star: it reads as "Couldn't find a star: …".
+  final bool findStarFailed;
   const GuiderLiveState({
     this.live = GuiderLive.disconnected,
     this.frame,
     this.calibration = GuiderCalibrationView.disconnected,
     this.busy = false,
     this.error,
+    this.findStarFailed = false,
   });
 
   GuiderLiveState copyWith({
@@ -45,7 +50,8 @@ class GuiderLiveState {
     Uint8List? frame,
     GuiderCalibrationView? calibration,
     bool? busy,
-    String? error,
+    Object? error,
+    bool findStarFailed = false,
     bool clearError = false,
     bool clearFrame = false,
   }) => GuiderLiveState(
@@ -54,7 +60,16 @@ class GuiderLiveState {
     calibration: calibration ?? this.calibration,
     busy: busy ?? this.busy,
     error: clearError ? null : (error ?? this.error),
+    findStarFailed: clearError ? false : (error != null ? findStarFailed : this.findStarFailed),
   );
+}
+
+/// [s]'s failure in words (#1699); null without one.
+String? guiderLiveFailure(AppLocalizations l, GuiderLiveState s) {
+  final error = s.error;
+  if (error == null) return null;
+  final why = failureReason(l, error);
+  return s.findStarFailed ? l.guideFindStarFailed(why) : why;
 }
 
 /// Polls the live view and its picture about once a second while the panel is
@@ -108,7 +123,7 @@ class GuiderLiveNotifier extends Notifier<GuiderLiveState> {
       );
     } catch (e) {
       if (!ref.mounted || gen != _generation) return;
-      state = state.copyWith(error: describeRequestError(e));
+      state = state.copyWith(error: e);
     }
     _schedule();
   }
@@ -124,7 +139,7 @@ class GuiderLiveNotifier extends Notifier<GuiderLiveState> {
   // poll chain survives.
   Future<void> _act(
     Future<void> Function(GuiderLiveClient api) op, {
-    String Function(Object e)? describe,
+    bool findingStar = false,
   }) async {
     final api = ref.read(guiderLiveApiProvider);
     if (api == null || state.busy) return;
@@ -138,7 +153,8 @@ class GuiderLiveNotifier extends Notifier<GuiderLiveState> {
       if (!ref.mounted) return;
       state = state.copyWith(
         busy: false,
-        error: (describe ?? describeRequestError)(e),
+        error: e,
+        findStarFailed: findingStar,
       );
     }
   }
@@ -163,7 +179,7 @@ class GuiderLiveNotifier extends Notifier<GuiderLiveState> {
       await Future<void>.delayed(const Duration(seconds: 1));
     }
     await api.findStar();
-  }, describe: (e) => 'Could not find a star: ${describeRequestError(e)}');
+  }, findingStar: true);
 
   Future<void> deselectStar() => _act((api) => api.deselectStar());
   Future<void> clearCalibration() => _act((api) => api.clearCalibration());

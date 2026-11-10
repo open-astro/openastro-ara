@@ -11,6 +11,8 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../help_icon.dart';
 import 'rotation_overlay.dart';
+import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 
 /// The by-hand rotation readout, docked beside the planetarium on the Plan
 /// screen. The planned angle is the framing dial's; the daemon plate-solves
@@ -559,7 +561,8 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
     };
     String deg(double? v, [int d = 1]) =>
         v == null ? '—' : '${v.toStringAsFixed(d)}°';
-    final error = live.error ?? status.error;
+    final error =
+        live.error == null ? status.error : failureReason(context.l10n, live.error!);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

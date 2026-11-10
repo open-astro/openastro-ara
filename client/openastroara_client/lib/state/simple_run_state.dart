@@ -929,14 +929,8 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         .show(SimpleMessageKind.error, why, origin: SimpleStatusOrigin.plan);
   }
 
-  // The daemon's own words when it sent them.
   // [action] is picked from the app's locale, so the whole line reads in it.
   String _why(Object e, String Function(AppLocalizations l) action) {
-    if (e is DioException) {
-      final data = e.response?.data;
-      final detail = data is Map ? data['detail'] : null;
-      if (detail is String && detail.trim().isNotEmpty) return detail.trim();
-    }
     final l = l10nFor(ref.read(appLocaleProvider));
     return friendlyError(l, e, action: action(l));
   }

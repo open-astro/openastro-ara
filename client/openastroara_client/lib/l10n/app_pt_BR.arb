@@ -602,6 +602,7 @@
   "guiderStateUnknown": "Desconhecido",
   "guiderStateNotConnected": "Não conectado",
   "guiderStateCalibrationStep": "{direction} passo {step}",
+  "guideFindStarFailed": "Não foi possível encontrar uma estrela: {reason}",
   "errorCouldnt": "Não foi possível {action}",
   "errorActionDefault": "fazer isso",
   "errorNoAnswer": "seu setup não respondeu. Verifique se ele está ligado e na mesma rede que {device}.",

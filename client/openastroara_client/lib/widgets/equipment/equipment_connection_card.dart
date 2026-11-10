@@ -9,6 +9,8 @@ import '../../state/ws/ws_providers.dart';
 import '../../theme/ara_colors.dart';
 import 'alpaca_chooser_dialog.dart';
 import 'equipment_state_chip.dart';
+import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 
 /// Shared connection card for the single-instance equipment panels (everything on
 /// the generic [EquipmentDeviceNotifier] core — i.e. all but the multi-instance
@@ -87,7 +89,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
               icon: Icons.error_outline,
               color: AraColors.accentError,
               text: "Couldn't read the $deviceTypeLabel: "
-                  '${describeEquipmentError(error)}',
+                  '${failureReason(context.l10n, error)}',
               onRetry: onRetry,
             ),
           _ => const Padding(
@@ -141,6 +143,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
 
   Future<void> _reconnect(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
     try {
       final performed = await onReconnect!();
       if (!performed) {
@@ -153,7 +156,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
       // remembered device to reconnect — point the user at Connect… instead.
       final text = isNotFoundEquipmentError(e)
           ? 'No previous $deviceTypeLabel to reconnect — use Connect… first.'
-          : "Couldn't reconnect: ${describeEquipmentError(e)}";
+          : "Couldn't reconnect: ${failureReason(l10n, e)}";
       messenger.showSnackBar(SnackBar(
         content: Text(text),
         backgroundColor: AraColors.accentError,
@@ -257,6 +260,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
       ),
     );
     if (ok != true || !context.mounted) return;
+    final l10n = context.l10n;
     try {
       final performed = await onForget!();
       if (!performed) {
@@ -270,7 +274,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
       final text = isNotFoundEquipmentError(e)
           ? 'The server could not remove this $deviceTypeLabel — it may need '
               'updating.'
-          : "Couldn't remove: ${describeEquipmentError(e)}";
+          : "Couldn't remove: ${failureReason(l10n, e)}";
       messenger.showSnackBar(SnackBar(
         content: Text(text),
         backgroundColor: AraColors.accentError,
@@ -292,6 +296,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
       deviceType,
       deviceTypeLabel: deviceTypeLabel,
       onPick: (device) async {
+        final l10n = context.l10n;
         try {
           final performed = await onConnect(device);
           if (!performed) {
@@ -302,7 +307,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
         } catch (e) {
           messenger.showSnackBar(SnackBar(
             content:
-                Text("Couldn't connect ${device.name}: ${describeEquipmentError(e)}"),
+                Text("Couldn't connect ${device.name}: ${failureReason(l10n, e)}"),
             backgroundColor: AraColors.accentError,
           ));
         }
@@ -312,6 +317,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
 
   Future<void> _disconnect(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
     try {
       final performed = await onDisconnect();
       if (!performed) {
@@ -321,7 +327,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
       }
     } catch (e) {
       messenger.showSnackBar(SnackBar(
-        content: Text("Couldn't disconnect: ${describeEquipmentError(e)}"),
+        content: Text("Couldn't disconnect: ${failureReason(l10n, e)}"),
         backgroundColor: AraColors.accentError,
       ));
     }

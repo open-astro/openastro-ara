@@ -531,10 +531,11 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
     // Held across the await: nothing else watches it here, so autoDispose would lose the error.
     final keep = container.listen(guiderLiveProvider, (_, _) {});
     setState(() => _preparing = true);
+    final l10n = context.l10n;
     try {
       await container.read(guiderLiveProvider.notifier).clearCalibration();
       if (container.read(guiderLiveProvider).error case final error?) {
-        notify(error, error: true, snackBarRed: false);
+        notify(failureReason(l10n, error), error: true, snackBarRed: false);
         return;
       }
     } finally {
@@ -566,7 +567,8 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
         await notifier.refresh();
       }
       if (!starHeld()) {
-        notify(live().error ?? l10n.guideAssistantNoStar, error: true, snackBarRed: false);
+        notify(guiderLiveFailure(l10n, live()) ?? l10n.guideAssistantNoStar,
+            error: true, snackBarRed: false);
         return;
       }
       await container.read(guidingAssistantProvider.notifier).start(measureBacklash: true);
@@ -583,7 +585,7 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
       // A run failing now, not the last run's result found on opening this tab.
       final runFailed = previous != null && previous.status.isRunning && next.status.isFailed;
       final problem = next.error != null && next.error != previous?.error
-          ? next.error
+          ? failureReason(l10n, next.error!)
           : runFailed
           ? next.status.error
           : null;

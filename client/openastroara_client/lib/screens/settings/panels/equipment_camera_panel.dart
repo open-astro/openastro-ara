@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/camera_status.dart';
 import '../../../models/equipment_device_status.dart';
-import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/camera_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
@@ -17,6 +16,8 @@ import '../../../widgets/equipment/cooling_fan_picker.dart';
 import '../../../widgets/equipment/fan_switch_row.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
+import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 
 /// §37.4 + §52 Camera panel. Shows the connected camera's live CCD temperature
 /// and cooler with on/off + set-point control, plus the sensor/gain/offset/bin
@@ -209,6 +210,7 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
 
   Future<void> _run(Future<bool> Function() action) async {
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
     try {
       final performed = await action();
       if (!performed) {
@@ -219,7 +221,7 @@ class _CameraBodyState extends ConsumerState<_CameraBody> {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text("Couldn't change that: ${describeEquipmentError(e)}"),
+          content: Text("Couldn't change that: ${failureReason(l10n, e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );

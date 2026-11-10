@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/equipment_device_status.dart';
 import '../../../models/filter_wheel_status.dart';
-import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/filter_wheel_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/filter_wheel_labels_state.dart';
@@ -314,6 +313,7 @@ class _FilterWheelBodyState extends ConsumerState<_FilterWheelBody> {
     });
     _startReconcile();
     _startStall();
+    final l10n = context.l10n;
     try {
       final performed = await ref
           .read(filterWheelProvider.notifier)
@@ -329,7 +329,7 @@ class _FilterWheelBodyState extends ConsumerState<_FilterWheelBody> {
       if (mounted) setState(_clearPending);
       messenger.showSnackBar(
         SnackBar(
-          content: Text("Couldn't change filter: ${describeEquipmentError(e)}"),
+          content: Text("Couldn't change filter: ${failureReason(l10n, e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );

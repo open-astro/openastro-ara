@@ -2138,6 +2138,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String guideFindStarFailed(String reason) {
+    return 'Couldn\'t find a star: $reason';
+  }
+
+  @override
   String errorCouldnt(String action) {
     return 'Couldn\'t $action';
   }
@@ -5758,6 +5763,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String guiderStateCalibrationStep(String direction, String step) {
     return '$direction passo $step';
+  }
+
+  @override
+  String guideFindStarFailed(String reason) {
+    return 'Não foi possível encontrar uma estrela: $reason';
   }
 
   @override

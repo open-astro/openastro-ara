@@ -15,6 +15,8 @@ import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
+import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 
 /// §37.5 Mount panel. Shows the connected mount's live RA/Dec + tracking/park
 /// state with tracking, park/unpark, and abort-slew controls (each gated on the
@@ -255,6 +257,7 @@ class _MountBody extends ConsumerWidget {
     Future<bool> Function() action,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
     try {
       final performed = await action();
       if (!performed) {
@@ -265,7 +268,7 @@ class _MountBody extends ConsumerWidget {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text("Couldn't $verb: ${describeEquipmentError(e)}"),
+          content: Text("Couldn't $verb: ${failureReason(l10n, e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );
@@ -361,6 +364,7 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
       );
       return;
     }
+    final l10n = context.l10n;
     try {
       final performed = await _slew(ra, dec);
       if (!performed) {
@@ -371,7 +375,7 @@ class _ManualControlState extends ConsumerState<_ManualControl> {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text("Couldn't slew: ${describeEquipmentError(e)}"),
+          content: Text("Couldn't slew: ${failureReason(l10n, e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );
@@ -631,7 +635,7 @@ class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
   // an identical message while one is showing is dropped.
   String? _shownRefusal;
   void _showNudgeRefusal(Object e) {
-    final text = "Couldn't nudge the mount: ${describeEquipmentError(e)}";
+    final text = "Couldn't nudge the mount: ${failureReason(context.l10n, e)}";
     if (_shownRefusal == text) return;
     _shownRefusal = text;
     ScaffoldMessenger.of(context)

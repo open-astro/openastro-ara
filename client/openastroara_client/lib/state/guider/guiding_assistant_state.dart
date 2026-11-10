@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/guiding_assistant.dart';
 import '../../models/server.dart';
 import '../../services/guiding_assistant_api.dart';
-import '../focus/autofocus_live_state.dart' show describeRequestError;
 import '../profile_management_state.dart' show profileApiProvider;
 import '../saved_server_state.dart';
 import '../settings/phd2_settings_state.dart';
@@ -60,7 +59,7 @@ class GuidingAssistantState {
   final GuidingAssistantStatus status;
   final bool loaded;
   final bool busy;
-  final String? error;
+  final Object? error;
   const GuidingAssistantState({
     this.status = GuidingAssistantStatus.disconnected,
     this.loaded = false,
@@ -72,7 +71,7 @@ class GuidingAssistantState {
     GuidingAssistantStatus? status,
     bool? loaded,
     bool? busy,
-    String? error,
+    Object? error,
     bool clearError = false,
   }) => GuidingAssistantState(
     status: status ?? this.status,
@@ -118,7 +117,7 @@ class GuidingAssistantNotifier extends Notifier<GuidingAssistantState> {
       state = state.copyWith(status: status, loaded: true, clearError: true);
     } catch (e) {
       if (!ref.mounted || gen != _generation) return;
-      state = state.copyWith(loaded: true, error: describeRequestError(e));
+      state = state.copyWith(loaded: true, error: e);
     }
     _schedule();
   }
@@ -148,7 +147,7 @@ class GuidingAssistantNotifier extends Notifier<GuidingAssistantState> {
       await refresh();
     } catch (e) {
       if (!ref.mounted) return;
-      state = state.copyWith(busy: false, error: describeRequestError(e));
+      state = state.copyWith(busy: false, error: e);
       // The timer was cancelled above; a refused action (Stop on a run that
       // just finished, a Start that timed out client-side) must not end the
       // polling, or the guider's real state never reaches the screen.

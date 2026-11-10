@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../widgets/status_indicator.dart' show StatusBlink;
 import '../../../models/dome_status.dart';
 import '../../../models/equipment_device_status.dart';
-import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/dome_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
@@ -13,6 +12,8 @@ import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
+import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 
 /// §37.4 Dome panel. Shows the connected dome's live shutter / azimuth / park
 /// state with shutter, slew, and park controls (each gated on the device's
@@ -285,6 +286,7 @@ class _DomeBodyState extends ConsumerState<_DomeBody> {
 
   Future<void> _run(String verb, Future<bool> Function() action) async {
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
     try {
       final performed = await action();
       if (!performed) {
@@ -295,7 +297,7 @@ class _DomeBodyState extends ConsumerState<_DomeBody> {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text("Couldn't $verb: ${describeEquipmentError(e)}"),
+          content: Text("Couldn't $verb: ${failureReason(l10n, e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );

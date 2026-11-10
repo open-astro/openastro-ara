@@ -7,7 +7,6 @@ import '../../models/guide_focus.dart';
 import '../../models/server.dart';
 import '../../services/guide_focus_api.dart';
 import '../saved_server_state.dart';
-import 'autofocus_live_state.dart';
 
 /// What the guide-camera card renders: the loop's status, the latest frame,
 /// a start/stop in flight and the last request error.
@@ -16,7 +15,7 @@ class GuideFocusLive {
   final Uint8List? frame;
   final int frameSeq;
   final bool busy;
-  final String? error;
+  final Object? error;
 
   const GuideFocusLive({
     this.status = GuideFocusStatus.idle,
@@ -33,7 +32,7 @@ class GuideFocusLive {
     Uint8List? frame,
     int? frameSeq,
     bool? busy,
-    String? error,
+    Object? error,
     bool clearError = false,
     bool clearFrame = false,
   }) =>
@@ -101,7 +100,7 @@ class GuideFocusNotifier extends Notifier<GuideFocusLive> {
     } catch (e) {
       if (!ref.mounted || gen != _generation) return;
       _consecutiveErrors++;
-      state = state.copyWith(error: describeRequestError(e));
+      state = state.copyWith(error: e);
     }
     _schedule();
   }
@@ -130,7 +129,7 @@ class GuideFocusNotifier extends Notifier<GuideFocusLive> {
       await refresh();
     } catch (e) {
       if (!ref.mounted) return;
-      state = state.copyWith(busy: false, error: describeRequestError(e));
+      state = state.copyWith(busy: false, error: e);
     }
   }
 
@@ -143,7 +142,7 @@ class GuideFocusNotifier extends Notifier<GuideFocusLive> {
       await api.stop();
     } catch (e) {
       if (!ref.mounted) return;
-      state = state.copyWith(error: describeRequestError(e));
+      state = state.copyWith(error: e);
     }
     if (!ref.mounted) return;
     state = state.copyWith(busy: false);

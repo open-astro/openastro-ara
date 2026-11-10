@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../models/filter_wheel_status.dart';
-import '../../services/equipment_device_api.dart';
 import '../../state/equipment/filter_wheel_state.dart';
 import '../../theme/ara_colors.dart';
+import '../../util/friendly_error.dart';
 
 /// #1298 — the Equipment card body for the driverless manual filter wheel.
 ///
@@ -32,12 +32,13 @@ class _ManualFilterWheelBodyState extends ConsumerState<ManualFilterWheelBody> {
   ) async {
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
+    final l10n = context.l10n;
     try {
       await action(ref.read(filterWheelProvider.notifier));
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text('$failure: ${describeEquipmentError(e)}'),
+          content: Text('$failure: ${failureReason(l10n, e)}'),
           backgroundColor: AraColors.accentError,
         ),
       );

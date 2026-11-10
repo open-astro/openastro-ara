@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
@@ -81,31 +80,6 @@ void main() {
     });
     test('a manual "already in focus" wins over an old failure', () {
       expect(focusStepState(const AutofocusLive(focusedThisSession: true, run: AutofocusRun(state: AutofocusRunStates.failed))), SetupStepState.done);
-    });
-  });
-
-  group('describeRequestError', () {
-    test('prefers the daemon Problem detail', () {
-      final e = DioException(
-        requestOptions: RequestOptions(path: '/x'),
-        response: Response(requestOptions: RequestOptions(path: '/x'), statusCode: 409, data: {'title': 'guide_camera_in_use', 'detail': 'Stop guiding first.'}),
-      );
-      expect(describeRequestError(e), 'Stop guiding first.');
-    });
-    test('falls back to the title, then the status code', () {
-      final titled = DioException(
-        requestOptions: RequestOptions(path: '/x'),
-        response: Response(requestOptions: RequestOptions(path: '/x'), statusCode: 409, data: {'title': 'not_running'}),
-      );
-      expect(describeRequestError(titled), 'not_running');
-      final bare = DioException(
-        requestOptions: RequestOptions(path: '/x'),
-        response: Response(requestOptions: RequestOptions(path: '/x'), statusCode: 500),
-      );
-      expect(describeRequestError(bare), 'server returned 500');
-    });
-    test('non-Dio errors are stringified', () {
-      expect(describeRequestError(StateError('boom')), contains('boom'));
     });
   });
 }

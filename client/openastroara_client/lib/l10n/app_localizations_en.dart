@@ -2138,6 +2138,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String guideFindStarFailed(String reason) {
+    return 'Couldn\'t find a star: $reason';
+  }
+
+  @override
   String errorCouldnt(String action) {
     return 'Couldn\'t $action';
   }

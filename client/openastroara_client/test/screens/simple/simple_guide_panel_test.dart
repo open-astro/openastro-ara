@@ -184,7 +184,7 @@ class _Assistant extends GuidingAssistantNotifier {
   @override
   Future<void> apply(List<String> which) async => applied.add(which);
 
-  void fail(String error) => state = state.copyWith(error: error);
+  void fail(String error) => state = state.copyWith(error: StateError(error));
   void report(GuidingAssistantStatus status) => state = state.copyWith(status: status);
 }
 

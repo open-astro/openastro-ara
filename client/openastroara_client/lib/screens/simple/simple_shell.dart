@@ -21,7 +21,6 @@ import '../../state/sky_atlas/tonight_sky_state.dart'
 import '../../models/frame_histogram.dart';
 import '../../models/guider_status.dart';
 import '../../models/discovered_device.dart';
-import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../state/settings/equipment_connection_state.dart'
     show EquipmentDeviceType;
 import '../../widgets/equipment/alpaca_chooser_dialog.dart';
@@ -3131,7 +3130,7 @@ _GearChooser _deviceChooser(
     } catch (e) {
       notify(
         l10n.shellGearActionFailed(l10n.shellConnect, device.name),
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -3297,7 +3296,7 @@ Widget _gearRow({
                 } catch (e) {
                   notify(
                     l10n.shellGearActionFailed(label, title),
-                    detail: describeEquipmentError(e),
+                    detail: failureReason(l10n, e),
                     error: true,
                   );
                 }

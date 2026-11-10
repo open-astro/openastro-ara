@@ -18,6 +18,7 @@ import '../imaging/guiding_assistant_dialog.dart';
 import 'focus_frame_view.dart';
 import 'focus_section.dart';
 import 'hfr_trend_chart.dart';
+import '../../util/friendly_error.dart';
 
 /// Guide camera: a live readout for the hand-turned helical focuser on a guide
 /// scope or off-axis guider. Frames come through the guider (Ara never opens
@@ -155,7 +156,8 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
               ),
             ),
           if (live.error != null || status.error != null) ...[
-            InlineNotice.error(live.error ?? status.error!),
+            InlineNotice.error(
+                live.error == null ? status.error! : failureReason(context.l10n, live.error!)),
             const SizedBox(height: 16),
           ],
           if (!hasData)

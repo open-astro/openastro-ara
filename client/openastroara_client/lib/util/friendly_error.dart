@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -10,73 +11,98 @@ import 'gps_site_fill.dart' show clientPlatform, thisDeviceLabel;
 /// Raw exception text ("DioException [connection timeout]: The request
 /// connection took longer than 0:00:03.000000") tells an astrophotographer
 /// standing in the dark exactly nothing. Every screen that catches an error
-/// should render this instead — the server's own message when it sent one
-/// (those are already written for people), otherwise a plain description of
-/// what failed and what to check.
+/// should render this instead — the daemon's own sentence on a 400, 409 or
+/// 422 ([daemonDetail]), otherwise a plain description of what failed and
+/// what to check, in [l]'s language and never a status code (#1699).
 ///
 /// [action] names what was being attempted, lower-case and without a period:
 /// "save your settings", "load the library". It appears as `Couldn't <action>`
 /// in [l]'s language (the action should be in it too).
 String friendlyError(AppLocalizations l, Object error, {String? action}) {
+  final own = _ownWords(l, error);
+  if (own != null) return own;
   final prefix = l.errorCouldnt(action ?? l.errorActionDefault);
+  final why = _why(l, error);
+  return why == null ? '$prefix.' : '$prefix — $why';
+}
 
-  if (error is DioException) {
-    // The server speaks human in its Problem responses — prefer its words.
-    final data = error.response?.data;
-    if (data is Map && data['detail'] is String) {
-      final detail = (data['detail'] as String).trim();
-      if (detail.isNotEmpty) {
-        return detail;
-      }
-    }
-    if (data is Map && data['title'] is String) {
-      final title = (data['title'] as String).trim();
-      if (title.isNotEmpty) {
-        return title;
-      }
-    }
+/// Why [error] happened as a sentence of its own: a pill's detail under a
+/// title that already says what failed.
+String failureReason(AppLocalizations l, Object error) {
+  final own = _ownWords(l, error);
+  if (own != null) return own;
+  final why = _why(l, error);
+  if (why == null) return '${l.errorCouldnt(l.errorActionDefault)}.';
+  return why[0].toUpperCase() + why.substring(1);
+}
 
-    return switch (error.type) {
-      DioExceptionType.connectionTimeout ||
-      DioExceptionType.connectionError =>
-        '$prefix — ${l.errorNoAnswer(thisDeviceLabel(clientPlatform))}',
-      DioExceptionType.sendTimeout ||
-      DioExceptionType.receiveTimeout =>
-        '$prefix — ${l.errorTooSlow}',
-      DioExceptionType.badCertificate =>
-        '$prefix — ${l.errorUntrusted}',
-      DioExceptionType.cancel => '$prefix — ${l.errorCancelled}',
-      DioExceptionType.badResponse => switch (error.response?.statusCode ?? 0) {
-          404 => '$prefix — ${l.errorNotFound}',
-          409 => '$prefix — ${l.errorBusy}',
-          422 => '$prefix — ${l.errorRefusedValues}',
-          >= 500 => '$prefix — ${l.errorServer}',
-          _ => '$prefix — ${l.errorRefused}',
-        },
-      _ => '$prefix — ${l.errorConnectionFailed}',
-    };
+/// The first line of the daemon's own sentence, on the statuses where it is
+/// written for people (400, 409, 422); null otherwise. A framework-shaped 400
+/// detail can carry a "(Parameter 'x')" tail that is not for people.
+String? daemonDetail(Object error) {
+  if (error is! DioException) return null;
+  final code = error.response?.statusCode;
+  if (code != 400 && code != 409 && code != 422) return null;
+  // application/problem+json may reach us undecoded, depending on Dio's
+  // transformer.
+  var data = error.response?.data;
+  if (data is String) {
+    try {
+      data = jsonDecode(data);
+    } on FormatException {
+      return null;
+    }
   }
+  final detail = data is Map ? data['detail'] : null;
+  if (detail is! String) return null;
+  final line = detail.trim().split('\n').first.trim();
+  return line.isEmpty ? null : line;
+}
 
+/// Words already written for people: the daemon's, the guider's, ours.
+String? _ownWords(AppLocalizations l, Object error) {
+  final detail = daemonDetail(error);
+  if (detail != null) return detail;
   // #1664 — the guider's own reason, not "Couldn't start guiding."
   if (error is GuideStartFailed) {
     final reason = error.reason;
     return reason == null ? l.guideStartFailedNoReason : l.guideStartFailed(reason);
   }
+  // StateError carries our own written-for-people messages (e.g. "Connect to
+  // your rig first.") — pass those straight through.
+  if (error is StateError) return error.message;
+  return null;
+}
+
+/// The reason after "Couldn't … —", lower-case; null when nothing is known.
+String? _why(AppLocalizations l, Object error) {
+  if (error is DioException) {
+    return switch (error.type) {
+      DioExceptionType.connectionTimeout ||
+      DioExceptionType.connectionError =>
+        l.errorNoAnswer(thisDeviceLabel(clientPlatform)),
+      DioExceptionType.sendTimeout ||
+      DioExceptionType.receiveTimeout =>
+        l.errorTooSlow,
+      DioExceptionType.badCertificate => l.errorUntrusted,
+      DioExceptionType.cancel => l.errorCancelled,
+      DioExceptionType.badResponse => switch (error.response?.statusCode ?? 0) {
+          404 => l.errorNotFound,
+          409 => l.errorBusy,
+          422 => l.errorRefusedValues,
+          >= 500 => l.errorServer,
+          _ => l.errorRefused,
+        },
+      _ => l.errorConnectionFailed,
+    };
+  }
   if (error is SocketException) {
-    return '$prefix — ${l.errorNoAnswer(thisDeviceLabel(clientPlatform))}';
+    return l.errorNoAnswer(thisDeviceLabel(clientPlatform));
   }
   if (error is FileSystemException) {
     final reason = error.osError?.message;
-    return '$prefix — ${l.errorFile}'
-        '${reason == null ? '.' : ': $reason.'}';
+    return '${l.errorFile}${reason == null ? '.' : ': $reason.'}';
   }
-  if (error is FormatException) {
-    return '$prefix — ${l.errorUnreadable}';
-  }
-  // StateError carries our own written-for-people messages (e.g. "Connect to
-  // your rig first.") — pass those straight through.
-  if (error is StateError) {
-    return error.message;
-  }
-  return '$prefix.';
+  if (error is FormatException) return l.errorUnreadable;
+  return null;
 }

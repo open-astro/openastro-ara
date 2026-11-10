@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/guider_live.dart';
-import '../../state/focus/autofocus_live_state.dart' show describeRequestError;
 import '../../state/guider/guider_live_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
@@ -13,6 +12,8 @@ import '../focus/bahtinov_focus_card.dart' show BahtinovFrameView;
 import 'guide_calibration_panel.dart';
 import 'guider_advanced_dialog.dart';
 import 'guiding_assistant_dialog.dart';
+import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 
 /// #1364 (epic item 1) — the guide camera's own picture from Ara: what the
 /// guider is looping on, the star it locked (cross + search box), the other
@@ -35,10 +36,11 @@ Future<void> _toggleMultiStar(
   final api = ref.read(guiderAdvancedApiProvider);
   if (api == null) return;
   final messenger = ScaffoldMessenger.maybeOf(context);
+  final l10n = context.l10n;
   try {
     await setMultiStar(api, on);
   } catch (e) {
-    messenger?.showSnackBar(SnackBar(content: Text(describeRequestError(e))));
+    messenger?.showSnackBar(SnackBar(content: Text(failureReason(l10n, e))));
   }
   await ref.read(guiderLiveProvider.notifier).refresh();
 }
@@ -208,7 +210,7 @@ class GuideCameraPanel extends ConsumerWidget {
               const Spacer(),
               Flexible(
                 child: Text(
-                  state.error ??
+                  (state.error == null ? null : failureReason(context.l10n, state.error!)) ??
                       (live.connected
                           ? (live.hasFrame
                                 ? 'Tap a star to guide on it.'

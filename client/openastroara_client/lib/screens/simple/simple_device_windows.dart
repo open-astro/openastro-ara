@@ -11,7 +11,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../models/equipment_device_status.dart';
-import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../services/equipment_driver_api.dart';
 import '../../models/filter_wheel_status.dart';
 import '../../models/focuser_status.dart';
@@ -64,6 +63,7 @@ import '../../widgets/equipment/equipment_glyphs.dart' show EquipmentGlyph;
 import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot;
 import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment, SimpleSegments, simpleRailScale;
+import '../../util/friendly_error.dart';
 
 /// One window per device in Simple Mode (design/briefs/simple-mode-settings.md):
 /// the same widget opens from the device's dot in the top bar and as its page
@@ -265,7 +265,7 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
       } catch (e) {
         notify(
           l10n.deviceCouldntSaveTarget,
-          detail: describeEquipmentError(e),
+          detail: failureReason(l10n, e),
           error: true,
         );
       }
@@ -292,7 +292,7 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntChangeCooler,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -865,7 +865,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntSaveMeridianFlip,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -885,7 +885,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntMoveMount,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
       return false;
@@ -1041,7 +1041,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntMoveFocuser,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -1093,7 +1093,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntSaveThat,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -1992,7 +1992,7 @@ Future<void> simpleSaveGuider(
   } catch (e) {
     notify(
       l10n.deviceCouldntSaveThat,
-      detail: describeEquipmentError(e),
+      detail: failureReason(l10n, e),
       error: true,
     );
   }
@@ -2212,7 +2212,7 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntSyncRotator,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -2230,7 +2230,7 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntMoveRotator,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -2244,7 +2244,7 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntStopRotator,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -2604,7 +2604,7 @@ class _SimpleFilterWheelWindowState
         case DeviceCommandRefusal.failed:
           userNotifier(context, origin: SimpleStatusOrigin.filterWheel)(
             l10n.deviceCouldntChangeFilter,
-            detail: describeEquipmentError(next.error!),
+            detail: failureReason(context.l10n, next.error!),
             error: true,
           );
         case DeviceCommandRefusal.didntMove:
@@ -2789,7 +2789,7 @@ class _SimpleFilterWheelWindowState
     } catch (e) {
       notify(
         l10n.deviceCouldntChangeFilter,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
       return false;
@@ -3194,7 +3194,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntSetPort(p.label),
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     } finally {
@@ -3491,7 +3491,7 @@ class _SimpleFlatPanelWindowState extends ConsumerState<SimpleFlatPanelWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntChangeFlatPanel,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     } finally {
@@ -4532,7 +4532,7 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
       asks.clear();
       notify(
         l10n.deviceCouldntMoveDome,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -4573,7 +4573,7 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
       ref.read(domeShutterProvider.notifier).cancelAsk();
       notify(
         l10n.deviceCouldntMoveDome,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -4589,7 +4589,7 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntStopDome,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
