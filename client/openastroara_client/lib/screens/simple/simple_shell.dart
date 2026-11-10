@@ -354,6 +354,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       }
     }, fireImmediately: true);
     _watchDeviceFailures();
+    // #1756 — a Guider start that failed after calibration began: the pill a quick failure shows.
+    ref.listenManual(guideStartLateFailureProvider, (_, failed) {
+      if (failed != null && mounted) {
+        _messages.show(SimpleMessageKind.error, friendlyError(context.l10n, failed), origin: SimpleStatusOrigin.guide);
+      }
+    });
   }
 
   /// #1559 — the device pill showing, by device; one per device, however often it fails.

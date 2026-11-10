@@ -48,7 +48,7 @@ import 'package:openastroara/widgets/equipment/equipment_status_chip.dart' show 
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import 'package:openastroara/state/app_locale_state.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
-import 'package:openastroara/services/guider_api.dart' show GuiderClient;
+import 'package:openastroara/services/guider_api.dart' show GuideStartFailed, GuiderClient;
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
@@ -4297,6 +4297,17 @@ void main() {
   testWidgets('with the rig link up there is no Connect to your rig card (#1559)', (tester) async {
     await _pump(tester, const Size(1024, 768), linkUp: true);
     expect(find.byKey(const Key('simple-rig-card')), findsNothing);
+  });
+
+  testWidgets("a Guider start that fails during calibration shows the error pill with the Guider's reason, on Preview too (#1756)", (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true);
+    expect(c.read(simpleShowingProvider), SimpleModeScreen.preview);
+    c.read(guideStartLateFailureProvider.notifier).report(const GuideStartFailed('Calibration failed: star did not move enough'));
+    await tester.pump();
+    final pill = c.read(simpleMessagesProvider).single;
+    expect(pill.kind, SimpleMessageKind.error);
+    expect(pill.title, contains('Calibration failed: star did not move enough'));
+    expect(pill.origin, SimpleStatusOrigin.guide);
   });
 
   group('the failed-connect pill (#1559)', () {

@@ -47,6 +47,9 @@ at the top. This happens in the same commit that pushes the release tag.
 ### Fixed (rig link)
 
 - Fault recovery no longer reconnects a device you removed when the rig still remembered it (#1763).
+- A Guider start that fails after calibration began now says so: an error pill in Simple Mode and the guiding strip's message in the Full UI, with the Guider's reason. A Stop during calibration is not reported (#1756).
+- Check disk on a server whose kernel can't read exFAT says so in words instead of showing `exfat_unsupported` (#1764).
+- A rig answer of "not found" now shows the rig's own sentence when it sent one, such as "No guide camera is known." Storage browse and New folder say a folder that is gone in one plain sentence (#1764).
 - Erasing a disk through ARA voids any copy that disk held: the erase warning on the disk the frames came from counts them as not copied again. A copy made before this version counts nothing as copied (#1765).
 
 ### Added (storage)

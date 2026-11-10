@@ -973,6 +973,11 @@ class _GuideButtonState extends ConsumerState<_GuideButton> {
 
   @override
   Widget build(BuildContext context) {
+    // #1756 — a start that failed after calibration began: the snackbar a quick failure shows.
+    ref.listen(guideStartLateFailureProvider, (_, failed) {
+      if (failed == null) return;
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, failed))));
+    });
     final guiding = widget.status.stopEndsPhase;
     return TextButton.icon(
       key: const Key('guide-toggle-button'),
