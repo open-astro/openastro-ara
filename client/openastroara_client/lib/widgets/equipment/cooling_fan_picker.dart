@@ -3,11 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../models/switch_device.dart';
-import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../state/equipment/switch_state.dart';
 import '../../state/settings/cooling_fan_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_metrics.dart';
+import '../../util/friendly_error.dart';
 
 /// The Cooling fan choice (#1700): None, then each writable port of the
 /// connected switches as "Device › Port", with what the choice does under it.
@@ -111,10 +111,11 @@ class ProfileCoolingFanPicker extends ConsumerWidget {
   ) async {
     final notify = userNotifier(context, origin: SimpleStatusOrigin.camera);
     final title = context.l10n.coolingFanCouldntSave;
+    final l10n = context.l10n;
     try {
       await ref.read(coolingFanProvider.notifier).choose(fan);
     } catch (e) {
-      notify(title, detail: describeEquipmentError(e), error: true);
+      notify(title, detail: failureReason(l10n, e), error: true);
     }
   }
 }

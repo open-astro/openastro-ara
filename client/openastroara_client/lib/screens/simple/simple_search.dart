@@ -152,7 +152,7 @@ class _SimpleSearchPanelState extends ConsumerState<SimpleSearchPanel> {
     child: Text(
       title,
       style: kSimpleText.copyWith(
-        fontSize: 12,
+        fontSize: AraFontSize.simpleCaption,
         color: AraColors.textSecondary,
         fontWeight: FontWeight.w600,
       ),
@@ -167,7 +167,7 @@ class _SimpleSearchPanelState extends ConsumerState<SimpleSearchPanel> {
     SimpleSearchHit hit,
   ) => InkWell(
     key: Key(key),
-    borderRadius: BorderRadius.circular(8),
+    borderRadius: BorderRadius.circular(AraRadius.container),
     onTap: () => widget.onHit(hit),
     child: ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 44),

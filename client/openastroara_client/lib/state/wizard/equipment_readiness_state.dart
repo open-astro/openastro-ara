@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/equipment_readiness.dart';
@@ -8,6 +7,9 @@ import '../../models/profile_draft.dart' show EquipmentSlots;
 import '../../models/server.dart';
 import '../../services/device_facts_source.dart';
 import '../settings/equipment_connection_state.dart';
+import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
+import '../app_locale_state.dart';
 
 /// Seam for tests: the readiness notifier builds its [DeviceFactsSource]
 /// through this factory, so fakes drop in without touching the notifier.
@@ -180,7 +182,8 @@ class WizardEquipmentReadiness
         state: ReadinessState.unreachable,
         gaps: [
           DeviceGap('Connection', FactNeed.required,
-              'Reading the device failed (${describeReadinessError(e)}). Recheck to retry.'),
+              'Reading the device failed: '
+              '${failureReason(l10nFor(ref.read(appLocaleProvider)), e)} Recheck to retry.'),
         ],
       );
     }
@@ -214,20 +217,3 @@ class WizardEquipmentReadiness
   }
 }
 
-/// Short user-facing gist of a read failure — never a raw DioException dump
-/// (request URL / internal addresses / the browser's XHR onError text).
-String describeReadinessError(Object e) {
-  if (e is DioException) {
-    return switch (e.type) {
-      DioExceptionType.connectionTimeout ||
-      DioExceptionType.connectionError =>
-        "your rig didn't answer — check it's powered on and reachable",
-      DioExceptionType.sendTimeout ||
-      DioExceptionType.receiveTimeout =>
-        'your rig took too long to answer — try again in a moment',
-      _ => 'the connection failed — check your rig is reachable',
-    };
-  }
-  final s = e.toString();
-  return s.replaceFirst('Exception: ', '').split('\n').first;
-}

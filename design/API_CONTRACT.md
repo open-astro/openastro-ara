@@ -26,6 +26,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-10 — #1579 what erasing a drive would lose: `GET /api/v1/storage/contents`
+
+**Endpoint(s) or area:** `GET /api/v1/storage/contents?uuid=` → `StorageContentsDto { readable, frames, newest_frame_utc, frames_not_copied }`; the disk-to-disk copy (`POST /api/v1/storage/copy`) now leaves a hidden `.ara-last-copy` marker on the store.
+
+**Decision:** the route reads only a drive that is mounted (the store, or a drive mounted elsewhere); any other drive answers `readable: false`, never `frames: 0`, so the client can say it cannot see the drive instead of claiming it is empty. Frames are the files the capture scan counts as frames (FITS and XISF), walked as the copy walks (hidden entries and symlinks skipped). `frames_not_copied` counts frames modified after the marker; with no marker, every frame. A whole-store copy that finishes with no failed and no conflicting file stamps the marker with the time it listed its files, less 2 s for exFAT's mtime granularity, so a frame saved while the copy runs still counts as not copied. A copy of chosen folders never stamps it. The walk runs off the request thread and stops when the client goes away.
+
+**Reasoning:** the frame database records no drive per frame, so only a walk of a mounted drive can answer; mounting a drive just to look would need a new root helper mode. Stamping at plan time, not at the end, keeps the count on the safe side: it can over-report frames copied another way (a laptop, a folder copy), and it never hides a frame that exists on no other drive.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml#/paths/~1api~1v1~1storage~1contents`; `Services/StorageCopyService.cs` (`ContentsOf`, `Summarize`, `MarkCopied`), `Endpoints/SystemEndpoints.cs` (`GetStorageContents`), `Contracts/StorageCopyDtos.cs` (`StorageContentsDto`).
+
+**Related:** #1579, #1760; tests `StorageCopyServiceTest` (`Contents_count_the_frames_and_date_the_newest`, `A_clean_copy_of_the_whole_store_counts_its_frames_as_copied`, `A_frame_saved_while_the_copy_runs_still_counts_as_not_copied`, `A_copy_of_chosen_folders_leaves_the_store_not_copied`, `A_drive_that_is_not_mounted_cannot_be_read`).
+
+---
+
 ## 2026-11-09 — #1597 the next meridian flip in the run status; #1723 clipped stars on the frame histogram
 
 **Endpoint(s) or area:** `GET /api/v1/sequences/{id}/state` and WS `sequence.progress` gain `meridian_flip`; the frame histogram response gains `clipped_stars`.

@@ -11,8 +11,8 @@ the one production-code mutation that makes it fail:
 Grammar: `- "<case name>": <path>:<line> <change>`. `<path>` must exist in the
 checkout and be production code: `client/openastroara_client/lib/`, a daemon
 project directory (`OpenAstroAra.*` whose name does not end in `.Test`,
-`.Tests` or `.TestHarness`), `scripts/` outside `scripts/tests/`, or
-`.github/workflows/`. A test-helper path (the client `test/` tree, the C# test
+`.Tests` or `.TestHarness`), `scripts/` outside `scripts/tests/`,
+`.github/workflows/`, or `packaging/` (the .deb installs it). A test-helper path (the client `test/` tree, the C# test
 projects and the harness, `scripts/tests/`) is accepted only when the case
 name says the helper is the subject (`Fake*`, `Mock*`, `TestHarness`).
 `<change>` has at least 3 words.
@@ -257,7 +257,7 @@ def parse_body(body):
 
 
 def is_production(path):
-    if path.startswith((CLIENT_LIB, ".github/workflows/")):
+    if path.startswith((CLIENT_LIB, ".github/workflows/", "packaging/")):
         return True
     if path.startswith("scripts/") and not path.startswith(PY_DIR):
         return True
@@ -278,7 +278,7 @@ def path_error(name, path, exists):
             return None
         return "%r: %s is a test helper and the case name does not say the helper is its subject" % (name, path)
     return ("%r: %s is not production code (the client lib, a daemon project, scripts/ outside scripts/tests/, "
-            ".github/workflows/)" % (name, path))
+            ".github/workflows/, packaging/)" % (name, path))
 
 
 def evaluate(new_cases, entries, body_errors, exists, head_cases=frozenset()):

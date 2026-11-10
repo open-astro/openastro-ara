@@ -22,6 +22,8 @@ import '../wizard_form_kit.dart';
 import '../wizard_save.dart' show seedReducerFromBaseProfile;
 import 'screen_equipment_discovery.dart'
     show DeviceChoice, DiscoverySheet, equipmentDiscoveryApiFactoryProvider;
+import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 
 // ── shared parse helpers (same guards as the other wizard screens) ──────────
 
@@ -192,7 +194,7 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
     } catch (e) {
       if (mounted) {
         setState(() => _prepareError =
-            'Discovery failed (${describeReadinessError(e)}). '
+            'Discovery failed: ${failureReason(context.l10n, e)} '
             'Check the bridge, then Re-scan.');
       }
     } finally {

@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/rotation_assist.dart';
 import '../../models/server.dart';
 import '../../services/rotation_assist_api.dart';
-import '../focus/autofocus_live_state.dart';
 import '../saved_server_state.dart';
 
 /// What the rotation card renders: the readout's status, a start/stop in
@@ -16,7 +15,7 @@ class RotationAssistLive {
   final Uint8List? frame;
   final int frameSeq;
   final bool busy;
-  final String? error;
+  final Object? error;
 
   const RotationAssistLive({
     this.status = RotationAssistStatus.idle,
@@ -33,7 +32,7 @@ class RotationAssistLive {
     Uint8List? frame,
     int? frameSeq,
     bool? busy,
-    String? error,
+    Object? error,
     bool clearError = false,
     bool clearFrame = false,
   }) => RotationAssistLive(
@@ -101,7 +100,7 @@ class RotationAssistNotifier extends Notifier<RotationAssistLive> {
     } catch (e) {
       if (!ref.mounted || gen != _generation) return;
       _consecutiveErrors++;
-      state = state.copyWith(error: describeRequestError(e));
+      state = state.copyWith(error: e);
     }
     _schedule();
   }
@@ -143,7 +142,7 @@ class RotationAssistNotifier extends Notifier<RotationAssistLive> {
       await refresh();
     } catch (e) {
       if (!ref.mounted) return;
-      state = state.copyWith(busy: false, error: describeRequestError(e));
+      state = state.copyWith(busy: false, error: e);
     }
   }
 
@@ -161,7 +160,7 @@ class RotationAssistNotifier extends Notifier<RotationAssistLive> {
       await refresh();
     } catch (e) {
       if (!ref.mounted) return;
-      state = state.copyWith(busy: false, error: describeRequestError(e));
+      state = state.copyWith(busy: false, error: e);
     }
   }
 
@@ -176,7 +175,7 @@ class RotationAssistNotifier extends Notifier<RotationAssistLive> {
       await refresh();
     } catch (e) {
       if (!ref.mounted) return;
-      state = state.copyWith(busy: false, error: describeRequestError(e));
+      state = state.copyWith(busy: false, error: e);
     }
   }
 }

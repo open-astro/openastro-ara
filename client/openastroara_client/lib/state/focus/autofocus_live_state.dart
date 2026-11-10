@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/autofocus_run.dart';
@@ -32,7 +31,7 @@ class AutofocusLive {
   final Uint8List? frame;
   final int frameSeq;
   final bool busy;
-  final String? error;
+  final Object? error;
 
   /// True once a run has completed in this app session — the OAG gate for the
   /// guide-camera card. A failed/cancelled run does not count.
@@ -70,7 +69,7 @@ class AutofocusLive {
     Uint8List? frame,
     int? frameSeq,
     bool? busy,
-    String? error,
+    Object? error,
     bool clearError = false,
     bool clearFrame = false,
     bool? focusedThisSession,
@@ -192,7 +191,7 @@ class AutofocusLiveNotifier extends Notifier<AutofocusLive> {
       _armPoll(run.isRunning);
     } catch (e) {
       if (!ref.mounted || gen != _generation) return;
-      state = state.copyWith(error: describeRequestError(e));
+      state = state.copyWith(error: e);
       _armPoll(state.run.isRunning);
     } finally {
       _refreshing = false;
@@ -219,7 +218,7 @@ class AutofocusLiveNotifier extends Notifier<AutofocusLive> {
       await refresh();
     } catch (e) {
       if (!ref.mounted) return;
-      state = state.copyWith(busy: false, error: describeRequestError(e));
+      state = state.copyWith(busy: false, error: e);
     }
   }
 
@@ -235,7 +234,7 @@ class AutofocusLiveNotifier extends Notifier<AutofocusLive> {
       await refresh();
     } catch (e) {
       if (!ref.mounted) return;
-      state = state.copyWith(busy: false, error: describeRequestError(e));
+      state = state.copyWith(busy: false, error: e);
     }
   }
 
@@ -244,24 +243,6 @@ class AutofocusLiveNotifier extends Notifier<AutofocusLive> {
   void markFocusedManually() {
     state = state.copyWith(focusedThisSession: true);
   }
-}
-
-/// A short, user-facing message for a failed request — the daemon's Problem
-/// `detail`/`title` when it sent one, never the DioException dump.
-String describeRequestError(Object e) {
-  if (e is DioException) {
-    final data = e.response?.data;
-    if (data is Map) {
-      final detail = data['detail'];
-      if (detail is String && detail.isNotEmpty) return detail;
-      final title = data['title'];
-      if (title is String && title.isNotEmpty) return title;
-    }
-    final code = e.response?.statusCode;
-    if (code != null) return 'server returned $code';
-    return e.message ?? 'network error';
-  }
-  return e.toString();
 }
 
 final autofocusLiveProvider =

@@ -108,7 +108,7 @@ class _FrameThumbnailState extends State<FrameThumbnail> {
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
-                          colors: [Colors.transparent, Color(0xB3000000)],
+                          colors: [Colors.transparent, AraColors.thumbnailCaptionShade],
                         ),
                       ),
                       child: Row(
@@ -121,7 +121,7 @@ class _FrameThumbnailState extends State<FrameThumbnail> {
                               style: Theme.of(context)
                                   .textTheme
                                   .labelSmall
-                                  ?.copyWith(color: Colors.white),
+                                  ?.copyWith(color: AraColors.onImageText),
                             ),
                           ),
                           // Defensive clamp — malformed payload could push
@@ -147,7 +147,7 @@ class _FrameThumbnailState extends State<FrameThumbnail> {
                           size: 13,
                           color: widget.synced!
                               ? AraColors.accentConnected
-                              : Colors.white70,
+                              : AraColors.onImageTextQuiet,
                         ),
                       ),
                     ),
@@ -170,19 +170,19 @@ class _FrameThumbnailState extends State<FrameThumbnail> {
                           decoration: BoxDecoration(
                             color: selected
                                 ? AraColors.selectionBg
-                                : const Color(0x66000000),
+                                : AraColors.thumbnailTickShade,
                             shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 1.5),
+                            border: Border.all(color: AraColors.onFill, width: 1.5),
                           ),
                           child: selected
                               ? const Icon(Icons.check,
-                                  size: 14, color: Colors.white)
+                                  size: 14, color: AraColors.onFill)
                               : null,
                         ),
                       ),
                     ),
                   if (_hovered && !selected)
-                    const ColoredBox(color: Color(0x14FFFFFF)),
+                    const ColoredBox(color: AraColors.thumbnailHover),
                 ],
               ),
             ),

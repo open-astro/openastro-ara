@@ -24,6 +24,17 @@ public sealed record StorageCopyRequestDto(
     string TargetUuid,
     IReadOnlyList<string>? Folders = null);
 
+/// <summary><c>GET /api/v1/storage/contents?uuid=</c> — what erasing a drive would lose.
+/// Only a mounted drive can be read; any other answers <c>Readable</c> false, never zero
+/// frames. <c>FramesNotCopied</c> counts frames saved after the last disk-to-disk copy
+/// of the whole drive that finished with every file in place, dated from when that copy
+/// listed its files (all of them when none has).</summary>
+public sealed record StorageContentsDto(
+    bool Readable,
+    int Frames,
+    DateTimeOffset? NewestFrameUtc,
+    int FramesNotCopied);
+
 /// <summary><c>GET /api/v1/storage/copy</c> — the current (or last) disk-to-disk copy.
 /// <c>State</c>: idle · preparing (mounting the target, listing files) · copying ·
 /// done · cancelled · failed. A file already on the target with the same size is

@@ -28,6 +28,7 @@ import 'simple_preview_panel.dart'
 import 'simple_device_windows.dart' show simpleCelsius;
 import 'simple_shell.dart'
     show SimplePanel, SimpleSegments, kSimpleGoStyle, simpleStackText;
+import '../../util/friendly_error.dart';
 
 /// The HFR to show big: the confirmed one after a run, the latest kept probe
 /// while one runs, else nothing. Pure — unit-tested.
@@ -279,9 +280,9 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
         ? null
         : l10n.focusWeakFitShort(fit!.rSquared.toStringAsFixed(2));
     final starsShown = ref.watch(simpleFocusStarsShownProvider);
-    final error =
-        live.error ??
-        (run.isFailed ? MainFocusCard.failureText(context.l10n, run) : null);
+    final error = live.error != null
+        ? failureReason(l10n, live.error!)
+        : (run.isFailed ? MainFocusCard.failureText(context.l10n, run) : null);
     // Measured stars On / Off: the run's frame, stars circled, full screen.
     final stars = SimpleSegments<bool>(
       keyPrefix: 'simple-focus-stars',
@@ -417,7 +418,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   Text(
                     context.l10n.focusHfr(hfr?.toStringAsFixed(2) ?? '—'),
                     style: kSimpleText.copyWith(
-                      fontSize: 30,
+                      fontSize: AraFontSize.simpleReadingLarge,
                       fontWeight: FontWeight.w300,
                     ),
                   ),
@@ -460,7 +461,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                         padding: const EdgeInsets.all(AraSpace.s8),
                         decoration: BoxDecoration(
                           color: AraColors.accentWarning.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(AraRadius.simplePanel),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -628,7 +629,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
       ],
       if (live.error != null)
         Text(
-          live.error!,
+          failureReason(context.l10n, live.error!),
           style: kSimpleText.copyWith(color: AraColors.errorText),
           maxLines: 3,
         ),
@@ -731,7 +732,8 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
         ),
         Text(hint.detail, textAlign: TextAlign.center, style: AraText.caption),
       ],
-      if (live.error ?? status.error case final error?)
+      if ((live.error == null ? status.error : failureReason(context.l10n, live.error!))
+          case final error?)
         Text(
           error,
           style: kSimpleText.copyWith(color: AraColors.errorText),
@@ -811,7 +813,7 @@ Widget _figure(String label, String value) => Expanded(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
     decoration: BoxDecoration(
       color: AraColors.tileFill,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(AraRadius.simplePanel),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,

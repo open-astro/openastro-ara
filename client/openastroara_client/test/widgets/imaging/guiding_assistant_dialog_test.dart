@@ -356,7 +356,7 @@ void main() {
     await t.pump();
     await t.pump();
     final msg = _text(t, const Key('guiding-assistant-error'));
-    expect(msg, contains('Could not find a star'));
+    expect(msg, contains("Couldn't find a star"));
     expect(msg, contains('exposure too short'));
   });
 

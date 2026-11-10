@@ -338,6 +338,18 @@ public static class SystemEndpoints {
             .WithName("ListStorageDevices")
             .WithSummary("Block devices that could hold ARA data (the running system's disk is flagged, never offered).");
 
+        // Before an erase: what is on the drive. Reads only a drive that is mounted.
+        storage.MapGet("/contents", async (string uuid, IStorageDeviceService svc, CancellationToken ct) => {
+                var drives = await svc.ListAsync(ct).ConfigureAwait(false);
+                var drive = drives.FirstOrDefault(d => string.Equals(d.Uuid, uuid, StringComparison.OrdinalIgnoreCase));
+                // A store full of frames takes a while to walk: off the request thread, and
+                // stopped when the client goes away.
+                return Results.Ok(await Task.Run(() => StorageCopyService.ContentsOf(drive, ct), ct).ConfigureAwait(false));
+            })
+            .Produces<StorageContentsDto>()
+            .WithName("GetStorageContents")
+            .WithSummary("How many frames a drive holds, the newest one's date and how many were never copied; Readable is false for a drive that is not mounted.");
+
         storage.MapPost("/configure", async (
                 StorageConfigureRequestDto request,
                 IStorageDeviceService svc,

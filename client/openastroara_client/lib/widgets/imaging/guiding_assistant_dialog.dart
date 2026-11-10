@@ -9,6 +9,8 @@ import '../../state/guider/guider_state.dart';
 import '../../state/guider/guiding_assistant_state.dart';
 import '../../theme/ara_colors.dart';
 import 'guide_camera_panel.dart' show GuideCameraView;
+import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 
 Future<void> showGuidingAssistantDialog(BuildContext context) =>
     showDialog<void>(
@@ -282,8 +284,8 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
               padding: const EdgeInsets.only(top: 8),
               child: Text(
                 state.error != null
-                    ? _plainError(state.error!)
-                    : liveState.error!,
+                    ? _plainError(failureReason(context.l10n, state.error!))
+                    : guiderLiveFailure(context.l10n, liveState)!,
                 key: const Key('guiding-assistant-error'),
                 style: text.bodySmall?.copyWith(color: AraColors.accentError),
               ),

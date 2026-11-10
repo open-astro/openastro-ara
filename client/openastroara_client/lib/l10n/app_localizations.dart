@@ -3711,6 +3711,12 @@ abstract class AppLocalizations {
   /// **'{direction} step {step}'**
   String guiderStateCalibrationStep(String direction, String step);
 
+  /// Find star failed; reason is a full sentence
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t find a star: {reason}'**
+  String guideFindStarFailed(String reason);
+
   /// Error message lead (every screen); action is a lower-case phrase like "save that"
   ///
   /// In en, this message translates to:
@@ -5438,6 +5444,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The disk was prepared but could not be connected.'**
   String get storageConfigureMountFailed;
+
+  /// Erase step: the frame count is loading
+  ///
+  /// In en, this message translates to:
+  /// **'Checking what is on this disk…'**
+  String get storageDiskContentsChecking;
+
+  /// Erase step: what erasing would lose
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{This disk holds 1 frame, from {date}.} other{This disk holds {count} frames. The newest is from {date}.}}'**
+  String storageDiskContentsFrames(int count, String date);
+
+  /// Erase step: frames whose date the rig did not give
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{This disk holds 1 frame.} other{This disk holds {count} frames.}}'**
+  String storageDiskContentsFramesUndated(int count);
+
+  /// Erase step: the request for the disk's contents failed
+  ///
+  /// In en, this message translates to:
+  /// **'ARA couldn\'t read what is on this disk. Erasing it loses everything on it.'**
+  String get storageDiskContentsReadFailed;
+
+  /// Erase step: a readable disk with no frames
+  ///
+  /// In en, this message translates to:
+  /// **'There are no frames on this disk.'**
+  String get storageDiskContentsNone;
+
+  /// Erase step warning
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 frame has not been copied to another disk by ARA.} other{{count} frames have not been copied to another disk by ARA.}}'**
+  String storageDiskContentsNotCopied(int count);
+
+  /// Erase step: the disk's contents can't be read
+  ///
+  /// In en, this message translates to:
+  /// **'ARA can\'t see what is on this disk while it isn\'t connected. Erasing it loses everything on it.'**
+  String get storageDiskContentsUnknown;
+
+  /// Use Disk or Erase failed: the server's kernel cannot mount exFAT
+  ///
+  /// In en, this message translates to:
+  /// **'This server can\'t read exFAT drives. Erase the drive as ext4 and ARA can use it.'**
+  String get storageConfigureExfatUnsupported;
 
   /// Use Disk failed
   ///

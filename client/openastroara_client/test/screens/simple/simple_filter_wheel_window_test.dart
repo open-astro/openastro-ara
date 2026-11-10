@@ -10,6 +10,7 @@ import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 
 /// A filter wheel that records what it was asked to do.
 class _Wheel extends FilterWheelNotifier {
@@ -27,6 +28,10 @@ class _Wheel extends FilterWheelNotifier {
   Future<FilterWheelStatus?> build() async => FilterWheelStatus.fromJson(json);
 
   void set(Map<String, dynamic> next) => state = AsyncData(FilterWheelStatus.fromJson(next));
+
+  /// No rig behind it: a re-read keeps what the test set.
+  @override
+  Future<void> refresh([client]) async {}
 
   @override
   Future<bool> changeFilter(int position) async {
@@ -76,7 +81,7 @@ class _Running extends SequenceRunStateNotifier {
 }
 
 Future<(ProviderContainer, _Wheel)> _pump(WidgetTester tester, Map<String, dynamic> wire,
-    {bool inSettings = false, DeviceDriver? driver, bool planRunning = false, double? width}) async {
+    {bool inSettings = false, DeviceDriver? driver, bool planRunning = false, double? width, bool alsoPicker = false}) async {
   await tester.pumpWidget(const SizedBox());
   await tester.pump();
   final wheel = _Wheel(wire);
@@ -93,7 +98,16 @@ Future<(ProviderContainer, _Wheel)> _pump(WidgetTester tester, Map<String, dynam
       home: Scaffold(
         body: Align(
           alignment: Alignment.topLeft,
-          child: SizedBox(width: width, child: SimpleFilterWheelWindow(inSettings: inSettings)),
+          child: SizedBox(
+            width: width,
+            child: alsoPicker
+                // Preview's inline filter picker on screen beside the window.
+                ? Column(mainAxisSize: MainAxisSize.min, children: [
+                    SimpleFilterWheelWindow(inSettings: inSettings),
+                    FilterDropdown(value: 'L', onChanged: (_) {}, inline: (names, value, pick) => Text('picker $value')),
+                  ])
+                : SimpleFilterWheelWindow(inSettings: inSettings),
+          ),
         ),
       ),
     ),
@@ -180,6 +194,19 @@ void main() {
     await tester.tap(find.text('Change anyway'));
     await tester.pump();
     expect(wheel.calls, ['change 1']);
+  });
+
+  testWidgets('with the inline picker on screen too, a window tap asks once and a refusal says so once', (tester) async {
+    final (c, wheel) = await _pump(tester, _wire(), planRunning: true, alsoPicker: true);
+    await tester.pump();
+    await tester.tap(_slot(1));
+    await tester.pump();
+    expect(find.textContaining('A plan is running'), findsOneWidget, reason: 'only the window that asked shows it');
+    wheel.busy = true;
+    await tester.tap(find.text('Change anyway'));
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider), hasLength(1), reason: 'one pill, from the window that asked');
+    await tester.pump(const Duration(seconds: 15)); // the pill fades
   });
 
   testWidgets('a manual wheel asks for the swap; confirming reports it installed, Cancel drops it', (tester) async {

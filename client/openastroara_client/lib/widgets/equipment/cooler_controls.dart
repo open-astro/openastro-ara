@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../services/equipment_device_api.dart';
 import '../../state/equipment/camera_state.dart';
 import '../help_icon.dart';
 import '../../theme/ara_colors.dart';
 import '../settings/settings_row.dart';
+import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 
 /// Reusable cooler control block for both the Settings → Camera panel and the
 /// Imaging tab — the on/off switch, quick target presets (−10/−5/0/+5/+10 °C), a
@@ -303,13 +304,14 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
   /// cooler or fan-sync rejection) — so the try/catch here turns it into a
   /// friendly message instead of an unhandled exception.
   Future<void> _run(Future<bool> Function() action) async {
+    final l10n = context.l10n;
     try {
       final ok = await action();
       if (!ok) {
         _toast('Another action is still in progress.');
       }
     } catch (e) {
-      _toast("Couldn't change that: ${describeEquipmentError(e)}");
+      _toast("Couldn't change that: ${failureReason(l10n, e)}");
     }
   }
 

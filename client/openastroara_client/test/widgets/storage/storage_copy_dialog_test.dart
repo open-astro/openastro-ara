@@ -4,6 +4,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/storage_copy_api.dart';
 import 'package:openastroara/services/storage_devices_api.dart';
 import 'package:openastroara/widgets/storage/storage_copy_dialog.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
+
+final _en = lookupAppLocalizations(const Locale('en'));
+final _pt = lookupAppLocalizations(const Locale('pt', 'BR'));
 
 const _store = StorageDevice(
   path: '/dev/sdc1',
@@ -70,7 +74,7 @@ void main() {
   });
 
   test('a finished copy says what was copied, skipped and left alone', () {
-    final lines = copySummary(const StorageCopyStatus(
+    final lines = copySummary(_en, const StorageCopyStatus(
       state: 'done',
       filesCopied: 3,
       bytesCopied: 2600000000,
@@ -88,26 +92,33 @@ void main() {
 
   test('a re-run with nothing new says so', () {
     expect(
-        copySummary(const StorageCopyStatus(
+        copySummary(_en, const StorageCopyStatus(
                 state: 'done', filesSkipped: 5, targetReleased: true))
             .first,
         'Nothing new to copy.');
   });
 
   test('a drive left mounted asks for an eject', () {
-    final lines = copySummary(const StorageCopyStatus(
+    final lines = copySummary(_en, const StorageCopyStatus(
         state: 'done', filesCopied: 1, errorCode: 'release_failed'));
     expect(lines.last, contains('Eject it before unplugging'));
   });
 
   test('failures read in the user\'s terms', () {
-    expect(copyFailureMessage('not_enough_space', null, bytesToCopy: 5000000000),
+    expect(copyFailureMessage(_en, 'not_enough_space', null, bytesToCopy: 5000000000),
         'The drive doesn\'t have room for 5.0 GB.');
-    expect(copyFailureMessage('refused', 'is_store'),
+    expect(copyFailureMessage(_en, 'refused', 'is_store'),
         'That drive is the one frames are saved to.');
-    expect(copyFailureMessage('device_busy', 'mounted_elsewhere'),
+    expect(copyFailureMessage(_en, 'device_busy', 'mounted_elsewhere'),
         contains('somewhere else'));
-    expect(copyFailureMessage('weird', 'helper said so'), 'helper said so');
+    expect(copyFailureMessage(_en, 'exfat_unsupported', null),
+        'This server can\'t read exFAT drives. Erase the drive as ext4 and ARA can use it.');
+    expect(copyFailureMessage(_en, 'weird', 'helper said so'), 'helper said so');
+  });
+
+  test('the exFAT refusal reads in the app language, as the disk chooser does', () {
+    expect(copyFailureMessage(_pt, 'exfat_unsupported', null), _pt.storageConfigureExfatUnsupported);
+    expect(_pt.storageConfigureExfatUnsupported, isNot(_en.storageConfigureExfatUnsupported));
   });
 
   Future<void> pump(WidgetTester tester, List<StorageDevice> devices) async {

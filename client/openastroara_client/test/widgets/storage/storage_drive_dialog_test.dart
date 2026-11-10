@@ -30,6 +30,11 @@ void main() {
         'The disk is in use. Close anything reading it, then try again.');
   });
 
+  test('a server without exFAT support names ext4 as the way forward', () {
+    expect(storageConfigureMessage(en, failure('exfat_unsupported'), disk),
+        'This server can\'t read exFAT drives. Erase the drive as ext4 and ARA can use it.');
+  });
+
   test('an unknown code falls back to the helper detail, then the disk name', () {
     expect(storageConfigureMessage(en, failure('odd', 'helper said so'), disk),
         'helper said so');

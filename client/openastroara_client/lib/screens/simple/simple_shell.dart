@@ -1,5 +1,7 @@
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
+import 'simple_queue_screen.dart' show simpleQueueSheetProvider;
+import 'simple_screen.dart';
 import 'simple_search.dart';
 
 import 'package:flutter/cupertino.dart';
@@ -19,12 +21,10 @@ import '../../state/sky_atlas/tonight_sky_state.dart'
 import '../../models/frame_histogram.dart';
 import '../../models/guider_status.dart';
 import '../../models/discovered_device.dart';
-import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../state/settings/equipment_connection_state.dart'
     show EquipmentDeviceType;
 import '../../widgets/equipment/alpaca_chooser_dialog.dart';
 import '../../services/equipment_driver_api.dart';
-import '../../models/polar_align.dart';
 import '../../state/app_shell_state.dart';
 import '../../state/launch_gate_state.dart';
 import '../../state/profile_management_state.dart';
@@ -35,7 +35,6 @@ import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../state/night_mode_state.dart';
-import '../../state/polar_align/polar_align_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/settings/cooling_fan_state.dart';
@@ -96,21 +95,10 @@ import '../shell_listeners.dart';
 import 'simple_preflight.dart';
 import 'simple_device_windows.dart';
 import 'simple_rig_storage.dart';
-import 'simple_focus_panel.dart';
-import '../../state/focus/autofocus_live_state.dart' show autofocusLiveProvider;
-import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
 import '../../state/focus/guide_focus_state.dart' show guideFocusProvider;
 import '../../state/settings/phd2_settings_state.dart'
     show phd2SettingsProvider;
-import '../../state/focus/bahtinov_focus_state.dart'
-    show MainFocusMethod, bahtinovFocusProvider, effectiveFocusMethodProvider;
 import 'simple_message_pills.dart';
-import 'simple_guide_panel.dart'
-    show
-        SimpleGuidePanel,
-        SimpleGuideShutter,
-        simpleGuideSummary;
-import 'simple_polar_panel.dart';
 import '../album/sky_album_screen.dart';
 import 'simple_plan_panel.dart';
 import 'simple_preview_panel.dart';
@@ -195,28 +183,18 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   bool _hadFrame = false;
   _Popover _popover = _Popover.none;
 
-  /// Plan's sheet open from the queue panel: to add a target (also over a
-  /// run in progress), or on queued target [_editing]'s rows.
-  bool _adding = false;
-  int? _editing;
+  /// Queue's sheet (its state is the Queue Screen's): open to add or edit.
+  bool get _adding => ref.read(simpleQueueSheetProvider).adding;
+  int? get _editing => ref.read(simpleQueueSheetProvider).editing;
 
   /// The queue panel's Add target and edit: the sheet over everything.
   void _openSheet({int? edit}) => setState(() {
-    if (edit != null) {
-      ref
-          .read(simpleRunPlanProvider.notifier)
-          .load(ref.read(simpleRunProvider).targets[edit].steps);
-    }
-    _editing = edit;
+    ref.read(simpleQueueSheetProvider.notifier).open(edit: edit);
     _popover = _Popover.none;
-    _adding = true;
   });
 
-  // Leaving an edit drops its rows: the sheet plans the next target afresh.
   void _closeSheet() {
-    if (_editing != null) ref.invalidate(simpleRunPlanProvider);
-    _editing = null;
-    _adding = false;
+    ref.read(simpleQueueSheetProvider.notifier).close();
     // A discard question can't outlive the edit it was about: its Discard
     // would replay a stale tap.
     if (_discardAsk case final id?) {
@@ -428,7 +406,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       if (dewPill != null) _messages.dismiss(dewPill);
       if (calibrationPill != null) _messages.dismiss(calibrationPill);
     });
-    _stopDisarm?.cancel();
     _focus.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _guiderPoll?.cancel();
@@ -480,43 +457,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// Set while a jump to the Settings tab is turned back (see build).
   bool _restoringTab = false;
 
-  /// The first ⌘. / Ctrl+. asks; a second within 3 s stops (the keyboard's
-  /// stand-in for the shutter's 2 s hold, as the Emergency Stop does).
-  int? _stopAsk;
-  Timer? _stopDisarm;
-
-  void _stopRun() {
-    if (ref.read(simpleShowingProvider) != SimpleModeScreen.plan) return;
-    final phase = simpleRunPhase(
-      ref.read(simpleRunProvider),
-      ref.read(sequenceRunStateProvider).value,
-    );
-    if (phase != SimpleRunPhase.imaging &&
-        phase != SimpleRunPhase.pausing &&
-        phase != SimpleRunPhase.paused) {
-      return;
-    }
-    final messages = ref.read(simpleMessagesProvider.notifier);
-    _stopDisarm?.cancel();
-    if (_stopAsk != null) {
-      messages.dismiss(_stopAsk!);
-      _stopAsk = null;
-      ref.read(simpleRunProvider.notifier).stop();
-      return;
-    }
-    final mac = const {
-      TargetPlatform.macOS,
-      TargetPlatform.iOS,
-    }.contains(Theme.of(context).platform);
-    _stopAsk = messages.show(
-      SimpleMessageKind.question,
-      context.l10n.shellStopAgain(mac ? '⌘.' : 'Ctrl+.'),
-    );
-    _stopDisarm = Timer(const Duration(seconds: 3), () {
-      if (_stopAsk != null) messages.dismiss(_stopAsk!);
-      _stopAsk = null;
-    });
-  }
+  /// ⌘. / Ctrl+.: the showing Screen decides (only Queue stops its run).
+  void _stopRun() =>
+      SimpleScreen.of(ref.read(simpleShowingProvider)).onStopShortcut(context, ref);
 
   SimpleModeScreen? _lastShown;
 
@@ -535,30 +478,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       _guiderPoll?.cancel();
       _guiderPoll = null;
     }
-  }
-
-  /// Leaving Manual before Finish asks for the mask to come off (DESIGN.md
-  /// Focus; ALP-4982), here once Focus has gone.
-  void _askMaskOff() {
-    if (!mounted) return;
-    final bahtinov = ref.read(bahtinovFocusProvider);
-    if (!bahtinov.status.hasMeasurement || bahtinov.finished) return;
-    final l10n = context.l10n;
-    ref
-        .read(simpleMessagesProvider.notifier)
-        .show(
-          SimpleMessageKind.question,
-          l10n.bahtinovMaskQuestion,
-          detail: l10n.bahtinovMaskQuestionDetail,
-          actions: [
-            SimpleMessageAction(l10n.bahtinovNotYet, () {}),
-            SimpleMessageAction(
-              l10n.bahtinovMaskRemoved,
-              () =>
-                  unawaited(ref.read(bahtinovFocusProvider.notifier).finish()),
-            ),
-          ],
-        );
   }
 
   /// #1700 — a cooling camera and a switch, no fan chosen: a pill asks once.
@@ -606,13 +525,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       });
       return;
     }
-    final mode = switch (origin) {
-      SimpleStatusOrigin.plan => SimpleModeScreen.plan,
-      SimpleStatusOrigin.guide => SimpleModeScreen.guide,
-      SimpleStatusOrigin.focus => SimpleModeScreen.focus,
-      SimpleStatusOrigin.polar => SimpleModeScreen.polarAlign,
-      _ => SimpleModeScreen.preview,
-    };
+    final mode = SimpleScreen.showing(origin);
     // A Preflight on that step keeps going; anything else switches mode.
     if (ref.read(simpleShowingProvider) != mode) _pickMode(mode);
     setState(() {
@@ -705,7 +618,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     _closeSheet();
     // Over a run, the sheet adds to its queue.
     _popover = runActive ? _Popover.none : _Popover.settings;
-    _adding = runActive;
+    ref.read(simpleQueueSheetProvider.notifier).pick(overRun: runActive);
     _sky = false;
   });
 
@@ -861,38 +774,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         _popover = next == null ? _Popover.none : _Popover.settings;
       });
     });
-    // A routine that fails says why on the left, fading like any error
-    // (user, 2026-11-04: not a sticky status pill).
-    ref.listen(polarAlignLiveProvider, (prev, next) {
-      if (prev?.phase == PolarAlignStates.failed ||
-          next.phase != PolarAlignStates.failed) {
-        return;
-      }
-      ref
-          .read(simpleMessagesProvider.notifier)
-          .show(
-            SimpleMessageKind.error,
-            context.l10n.polarPhaseFailed,
-            detail: next.errorMessage ?? next.errorReason,
-            origin: SimpleStatusOrigin.polar,
-          );
-    });
-    // Only a failure seen happening: Ara keeps its last run until it restarts,
-    // so the first read after a launch or reconnect is old news (ALP-4998).
-    ref.listen(autofocusLiveProvider.select((l) => (hydrated: l.hydrated, run: l.run)), (prev, live) {
-      final next = live.run;
-      if (prev == null || !prev.hydrated || prev.run.isFailed || !next.isFailed) {
-        return;
-      }
-      ref
-          .read(simpleMessagesProvider.notifier)
-          .show(
-            SimpleMessageKind.error,
-            context.l10n.focusCardFailed,
-            detail: MainFocusCard.failureText(context.l10n, next),
-            origin: SimpleStatusOrigin.focus,
-          );
-    });
+    for (final screen in SimpleScreen.all) {
+      screen.listen(context, ref);
+    }
+    // Queue's sheet opening or closing reshapes the layout.
+    ref.watch(simpleQueueSheetProvider);
     final pilot = ref.watch(simplePreflightProvider);
     final shown = ref.watch(simpleShowingProvider);
     _syncGuiderPoll(
@@ -900,38 +786,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         guiderStatusProvider.select((s) => s.value?.isBusy ?? false),
       ),
     );
-    // Leaving Focus takes its panel's mask question away: a pill asks.
-    if (_lastShown == SimpleModeScreen.focus &&
-        shown != SimpleModeScreen.focus) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _askMaskOff());
+    // The Screen that stopped showing tidies up (Focus: a pill asks for the mask).
+    final left = _lastShown;
+    if (left != null && SimpleScreen.of(left) != SimpleScreen.of(shown)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) SimpleScreen.of(left).onLeave(context, ref);
+      });
     }
     _lastShown = shown;
-    // Polar align shows its own camera's frames while the routine runs.
-    final polarFrame =
-        shown == SimpleModeScreen.polarAlign &&
-        simplePolarActive(ref.watch(polarAlignLiveProvider));
-    // Focus can show its run's frame, measured stars circled, when asked.
-    // Manual shows the Bahtinov readout's crop, spikes and all, there.
-    // Preview on the guide camera shows the frames the guider gives it.
-    final focusFrame = shown == SimpleModeScreen.preview
-        ? (simplePreviewGuide(ref)
-              ? ref.watch(guideFocusProvider.select((l) => l.frame))
-              : null)
-        : shown != SimpleModeScreen.focus
-        ? null
-        : ref.watch(simpleFocusScopeProvider) == SimpleFocusScope.guide
-        ? ref.watch(guideFocusProvider.select((l) => l.frame))
-        : ref.watch(effectiveFocusMethodProvider) == MainFocusMethod.bahtinov
-        ? ref.watch(bahtinovFocusProvider.select((l) => l.frame))
-        : ref.watch(simpleFocusStarsShownProvider)
-        ? ref.watch(autofocusLiveProvider.select((l) => l.frame))
-        : null;
+    final screenFrame = SimpleScreen.of(shown).frame(ref);
     // On the guide camera only its own frames count: the main camera's last
     // one would read as the guide camera's.
     final guidePreview = simpleShowsGuidePreview(ref);
     final hasFrame =
-        polarFrame ||
-        focusFrame != null ||
+        screenFrame != null ||
         (!guidePreview &&
             (ref.watch(lastCapturedFrameIdProvider) != null ||
                 ref.watch(liveViewControllerProvider)));
@@ -946,8 +814,27 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // opening Simple Mode adopts a run in progress; only Plan acts on it.
     // Selects, not the whole run state: progress frames arrive every few
     // seconds and would rebuild the whole screen.
+    final screen = SimpleScreen.of(shown);
+    final screenHost = SimpleScreenHost(
+      onAddTarget: () => _openSheet(),
+      onEditTarget: (i) => _openSheet(edit: i),
+      editing: _editing,
+      onShowSky: () => setState(() => _sky = true),
+      onPickInSky: () => setState(() {
+        _sky = true;
+        _popover = _Popover.none;
+        _closeSheet();
+      }),
+      onSheetDone: () => setState(() {
+        _popover = _Popover.none;
+        _closeSheet();
+      }),
+      onTrackerTap: () => _toggle(_Popover.queue),
+    );
+    final sheet = screen.overlay(screenHost);
+    final tracker = screen.tracker(screenHost);
     final runActive =
-        shown == SimpleModeScreen.plan &&
+        sheet != null &&
         ref.watch(
           sequenceRunStateProvider.select(
             (s) => s.value?.state?.isActive ?? false,
@@ -1048,26 +935,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
               kSimplePlanSquareHeight * simpleRailScale(context) +
               kSimpleInset
         : kSimpleInset;
-    final queuePanel = SimpleRunPanel(
-      onAdd: () => _openSheet(),
-      onEdit: (i) => _openSheet(edit: i),
-    );
+    final queuePanel = SimpleScreen.of(SimpleModeScreen.plan).panel(screenHost);
     final runSheet =
-        shown == SimpleModeScreen.plan &&
+        sheet != null &&
         ((_popover == _Popover.settings && !runActive) || _adding);
-    final sheet = SimpleRunSheet(
-      editing: _editing,
-      onShowSky: () => setState(() => _sky = true),
-      onPickInSky: () => setState(() {
-        _sky = true;
-        _popover = _Popover.none;
-        _closeSheet();
-      }),
-      onCreated: () => setState(() {
-        _popover = _Popover.none;
-        _closeSheet();
-      }),
-    );
     final sel = ref.watch(planetariumSelectionProvider);
     final motion = reduceMotionOf(context)
         ? Duration.zero
@@ -1172,18 +1043,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               behavior: HitTestBehavior.opaque,
                               onTap: () => _tapImage(!showSky),
                               child: !showSky
-                                  ? (focusFrame != null
-                                        ? Image.memory(
-                                            focusFrame,
-                                            key: const Key(
-                                              'simple-focus-frame',
-                                            ),
-                                            fit: BoxFit.contain,
-                                            gaplessPlayback: true,
-                                          )
-                                        : polarFrame
-                                        ? const SimplePolarFrame()
-                                        : const FrameViewer())
+                                  ? (screenFrame ?? const FrameViewer())
                                   : wallpaper
                                   ? const SimpleWallpaper(
                                       key: Key('simple-wallpaper'),
@@ -1208,7 +1068,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               key: const Key('simple-background-close'),
                               behavior: HitTestBehavior.opaque,
                               onTap: () => _tapImage(!showSky),
-                              child: const ColoredBox(color: Color(0x01000000)),
+                              child: const ColoredBox(color: AraColors.unseenPaint),
                             ),
                           ),
                         if (!hasFrame)
@@ -1414,21 +1274,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                                 // chip opens its panel (user, 2026-11-02).
                                                 onPicked: _pickMode,
                                               )
-                                            : switch (shown) {
-                                                SimpleModeScreen.focus =>
-                                                  const SimpleFocusPanel(),
-                                                SimpleModeScreen.polarAlign =>
-                                                  const SimplePolarPanel(),
-                                                SimpleModeScreen.guide =>
-                                                  const SimpleGuidePanel(),
-                                                SimpleModeScreen.plan =>
-                                                  queuePanel,
-                                                _ => const SizedBox(
-                                                  width: 280,
-                                                  child:
-                                                      SimpleSettingsPopover(),
-                                                ),
-                                              },
+                                            : SimpleScreen.of(shown)
+                                                  .panel(screenHost),
                                     ),
                                   ),
                                 ),
@@ -1449,7 +1296,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // The plan squares hug the bottom-right corner, just
                               // above the bottom row, growing left over the right
                               // half (the Info tiles have the left).
-                              if (shown == SimpleModeScreen.plan && !runSheet)
+                              if (tracker != null && !runSheet)
                                 AnimatedPositioned(
                                   key: const ValueKey('plan-squares'),
                                   left: width / 2,
@@ -1459,9 +1306,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   curve: Curves.easeOut,
                                   child: Align(
                                     alignment: Alignment.bottomRight,
-                                    child: SimpleRunTracker(
-                                      onTap: () => _toggle(_Popover.queue),
-                                    ),
+                                    child: tracker,
                                   ),
                                 ),
                               // The sky's pick, offered to Plan.
@@ -1546,7 +1391,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       () => _popover = _Popover.none,
                                     ),
                                     child: const ColoredBox(
-                                      color: Color(0x59000000), // 35 %
+                                      color: AraColors.popoverShade,
                                     ),
                                   ),
                                 ),
@@ -1643,7 +1488,7 @@ class _SkyPick extends StatelessWidget {
                   simpleTargetStatus(selection, context.l10n),
                 ].join(' · '),
                 style: kSimpleText.copyWith(
-                  fontSize: 12,
+                  fontSize: AraFontSize.simpleCaption,
                   color: selection.belowHorizon
                       ? AraColors.accentBusy
                       : AraColors.textSecondary,
@@ -1706,7 +1551,7 @@ class SimplePanel extends StatelessWidget {
       // On top, not a border, so the contour takes no room from the content.
       foregroundDecoration: BoxDecoration(
         border: Border.all(color: AraColors.border),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AraRadius.simplePanel),
       ),
       child: child,
     ),
@@ -1717,7 +1562,7 @@ class SimplePanel extends StatelessWidget {
 /// the surfaces that draw their own scrim (pills, tiles, plan squares).
 /// Grouped: the shell's [BackdropGroup] blurs the image once for all of them.
 Widget simpleFrost(Widget child) => ClipRRect(
-  borderRadius: BorderRadius.circular(10),
+  borderRadius: BorderRadius.circular(AraRadius.simplePanel),
   child: AraBlur.panel == 0
       ? child
       : BackdropFilter.grouped(
@@ -1934,10 +1779,10 @@ class _RailButton extends StatelessWidget {
     label: label,
     child: Material(
       color: selected ? AraColors.selectionTint : Colors.transparent,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AraRadius.container),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AraRadius.container),
         child: SizedBox(
           width: 60 * simpleRailScale(context),
           height: (tall ? 72 : 56) * simpleRailScale(context),
@@ -2102,7 +1947,7 @@ class _RightRail extends ConsumerWidget {
             child: InkWell(
               key: const Key('simple-mode'),
               onTap: onModes,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(AraRadius.container),
               child: SizedBox(
                 width: 60 * simpleRailScale(context),
                 height: 48 * simpleRailScale(context),
@@ -2133,13 +1978,7 @@ class _RightRail extends ConsumerWidget {
               ),
             ),
           ),
-          switch (mode) {
-            SimpleModeScreen.focus => const SimpleFocusShutter(),
-            SimpleModeScreen.polarAlign => const SimplePolarShutter(),
-            SimpleModeScreen.guide => const SimpleGuideShutter(),
-            SimpleModeScreen.plan => const SimpleRunShutter(),
-            _ => const SimpleShutter(),
-          },
+          SimpleScreen.of(mode).shutter,
           _RailButton(
             key: const Key('simple-settings'),
             icon: Icons.tune,
@@ -2156,20 +1995,7 @@ class _RightRail extends ConsumerWidget {
   // In Preflight the chip names the step whose settings it shows ("Focus"
   // over "Auto"), so they don't read as random.
   String _chipLabel(BuildContext context, WidgetRef ref) {
-    final label = switch (mode) {
-      SimpleModeScreen.focus => simpleFocusSummary(ref),
-      SimpleModeScreen.guide => simpleGuideSummary(ref),
-      SimpleModeScreen.plan => simpleRunChip(
-        ref.watch(simpleRunProvider),
-        ref.watch(simpleRunPlanProvider),
-      ),
-      SimpleModeScreen.polarAlign => simplePolarSummary(
-        ref.watch(simplePolarSettingsProvider).value ??
-            const PolarAlignSettings(),
-        ref.context.l10n,
-      ),
-      _ => simpleSettingsSummary(context, ref),
-    };
+    final label = SimpleScreen.of(mode).caption(context, ref);
     return named == null
         ? label
         : '${mode.railLabelOf(context.l10n)}\n${label.split('\n').first}';
@@ -2205,10 +2031,10 @@ class _ModeGrid extends ConsumerWidget {
                   color: m == current
                       ? AraColors.selectionBg
                       : AraColors.tileFill,
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(AraRadius.simplePanel),
                   child: InkWell(
                     key: Key('simple-mode-${m.name}'),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(AraRadius.simplePanel),
                     onTap: () => onPicked(m),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -2615,7 +2441,7 @@ class SimpleSegments<T> extends StatelessWidget {
   Widget build(BuildContext context) => DecoratedBox(
     decoration: BoxDecoration(
       color: AraColors.tileFill,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AraRadius.container),
     ),
     child: Row(
       mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
@@ -2628,7 +2454,7 @@ class SimpleSegments<T> extends StatelessWidget {
               group: group,
               shrinkToFit: shrinkToFit,
               selected: value == selected,
-              radius: 8,
+              radius: AraRadius.container,
               onTap: onPick == null || value == selected
                   ? null
                   : () => onPick!(value),
@@ -2652,7 +2478,7 @@ final kSimpleGoStyle = FilledButton.styleFrom(
 
 ThemeData simpleTheme(ThemeData base) {
   const shape = RoundedRectangleBorder(
-    borderRadius: BorderRadius.all(Radius.circular(10)),
+    borderRadius: BorderRadius.all(Radius.circular(AraRadius.simplePanel)),
   );
   final buttons = ButtonStyle(
     shape: const WidgetStatePropertyAll(shape),
@@ -2661,7 +2487,7 @@ ThemeData simpleTheme(ThemeData base) {
   // Underline-style (not outline) so the label sits inside the tile instead
   // of straddling its top edge.
   const tile = UnderlineInputBorder(
-    borderRadius: BorderRadius.all(Radius.circular(10)),
+    borderRadius: BorderRadius.all(Radius.circular(AraRadius.simplePanel)),
     borderSide: BorderSide.none,
   );
   return base.copyWith(
@@ -2844,10 +2670,10 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                       color: _section == name
                           ? AraColors.selectionTint
                           : Colors.transparent,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(AraRadius.container),
                       child: InkWell(
                         key: Key('simple-menu-nav-$name'),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(AraRadius.container),
                         onTap: () => setState(() => _section = name),
                         child: Semantics(
                           selected: _section == name,
@@ -3304,7 +3130,7 @@ _GearChooser _deviceChooser(
     } catch (e) {
       notify(
         l10n.shellGearActionFailed(l10n.shellConnect, device.name),
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -3440,7 +3266,7 @@ Widget _gearRow({
     ),
     decoration: BoxDecoration(
       color: AraColors.tileFill,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(AraRadius.simplePanel),
     ),
     child: Row(
       spacing: AraSpace.s12,
@@ -3470,7 +3296,7 @@ Widget _gearRow({
                 } catch (e) {
                   notify(
                     l10n.shellGearActionFailed(label, title),
-                    detail: describeEquipmentError(e),
+                    detail: failureReason(l10n, e),
                     error: true,
                   );
                 }
@@ -3503,7 +3329,7 @@ Widget _gearRow({
             // Focusable, so a keyboard opens the window too.
             child: InkWell(
               key: Key('simple-gear-$id'),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AraRadius.simplePanel),
               onTap: onOpen,
               child: row,
             ),
@@ -3873,7 +3699,7 @@ class _ThisRig extends ConsumerWidget {
             DecoratedBox(
               decoration: BoxDecoration(
                 color: AraColors.tileFill,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AraRadius.container),
               ),
               // Wraps at large text sizes rather than overflow.
               child: Wrap(
@@ -3887,7 +3713,7 @@ class _ThisRig extends ConsumerWidget {
                       key: Key('simple-menu-language-$id'),
                       label: name,
                       selected: ref.watch(appLocaleProvider) == locale,
-                      radius: 8,
+                      radius: AraRadius.container,
                       onTap: () =>
                           ref.read(appLocaleProvider.notifier).set(locale),
                     ),
@@ -4344,7 +4170,7 @@ class _RigStepperState extends State<_RigStepper> {
           width: kSimpleRigControlWidth,
           decoration: BoxDecoration(
             color: AraColors.tileFill,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(AraRadius.container),
           ),
           child: Row(
             children: [
@@ -4487,7 +4313,7 @@ ButtonStyle _linkStyle({Alignment alignment = Alignment.center}) {
               key: const Key('simple-link-highlight'),
               decoration: BoxDecoration(
                 color: lit ? tint : null,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(AraRadius.card),
               ),
             ),
           ),

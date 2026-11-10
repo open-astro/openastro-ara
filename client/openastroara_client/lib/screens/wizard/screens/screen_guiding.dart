@@ -12,14 +12,7 @@ import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../util/guide_optics.dart';
 import '../../../util/host_port.dart';
-import '../../../widgets/guider/guider_setup_wizard.dart'
-    show
-        alpacaDeviceNamesApiProvider,
-        friendlyAlpacaChoiceLabel,
-        guideCameraIsMainCamera,
-        kNoGuideCameraWarning,
-        mergedAlpacaOptions,
-        parseAlpacaChoiceEndpoint;
+import '../../../state/guider/guider_choice_state.dart';
 import '../../../widgets/profile/profile_import_flow.dart'
     show friendlyDaemonError;
 import '../wizard_form_kit.dart';
@@ -140,59 +133,26 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
     unawaited(_sweepAlpaca());
   }
 
-  // Real device names from the Alpaca management API, keyed
-  // "host:port|type/N" — same overlay the §63.17 setup wizard uses.
-  final Map<String, String> _alpacaNames = {};
+  // Real device names, keyed "host:port|type/N": the guider choice module's,
+  // shared with the §63.17 setup wizard (ADR 0013 rule 4).
+  Map<String, String> get _alpacaNames =>
+      ref.watch(guiderAlpacaDevicesProvider).names;
   bool _sweeping = false;
 
-  /// Resolve real device names behind every Alpaca server we know about: the
-  /// endpoints named in the daemon's choice strings PLUS a daemon-side UDP
-  /// discovery sweep (§63.20) so cameras on servers the guider isn't pointed
-  /// at yet are still pickable. Best-effort — failures leave generic labels.
+  /// Name the devices behind every Alpaca server known: the ones the daemon's
+  /// choice strings name, plus a daemon-side discovery sweep (§63.20) so
+  /// cameras on servers the guider isn't pointed at yet are pickable.
+  /// Best-effort: failures leave generic labels.
   Future<void> _sweepAlpaca() async {
-    final namesApi = ref.read(alpacaDeviceNamesApiProvider);
-    final endpoints = <String, ({String host, int port})>{};
-    final c = ref.read(guiderEquipmentProvider).value?.choices;
-    for (final choice in [
-      ...?c?.cameras,
-      ...?c?.mounts,
-      ...?c?.auxMounts,
-      ...?c?.rotators,
-    ]) {
-      final e = parseAlpacaChoiceEndpoint(choice);
-      if (e != null) {
-        endpoints['${e.host}:${e.port}'] = (host: e.host, port: e.port);
-      }
-    }
+    final devices = ref.read(guiderAlpacaDevicesProvider.notifier);
+    await devices.resolve(
+        choiceEndpoints(ref.read(guiderEquipmentProvider).value?.choices),
+        fresh: true);
     try {
-      final servers =
-          await ref.read(guiderEquipmentProvider.notifier).discoverAlpaca();
-      for (final server in servers) {
-        final sep = server.lastIndexOf(':');
-        if (sep <= 0) continue;
-        final port = int.tryParse(server.substring(sep + 1));
-        if (port == null) continue;
-        endpoints[server] = (host: server.substring(0, sep), port: port);
-      }
+      await devices.discover();
     } catch (_) {
-      // No daemon / discovery unavailable — choice-string endpoints remain.
+      // No daemon / discovery unavailable: choice-string endpoints remain.
     }
-    if (endpoints.isEmpty) return;
-    // Parallel: an unreachable server costs its own timeout, not everyone's.
-    final fetched = await Future.wait([
-      for (final entry in endpoints.entries)
-        namesApi
-            .fetchNames(entry.value.host, entry.value.port)
-            .then((names) => (endpoint: entry.key, names: names)),
-    ]);
-    if (!mounted) return;
-    setState(() {
-      for (final result in fetched) {
-        result.names.forEach((typeSlot, name) {
-          _alpacaNames['${result.endpoint}|$typeSlot'] = name;
-        });
-      }
-    });
   }
 
   /// Refresh-choices button action: re-read the daemon's lists AND re-sweep
@@ -474,6 +434,12 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
                   final sel = v.isEmpty ? null : v;
                   setState(() {
                     _g.guiderCamera = sel;
+                    // #1308 — pinned by UniqueID, as the other surfaces do.
+                    _g.guiderCameraAlpacaUniqueId = sel == null
+                        ? null
+                        : ref
+                            .read(guiderAlpacaDevicesProvider.notifier)
+                            .uniqueIdFor(sel);
                     _pixelSizeFromDriver = false;
                   });
                   _publishValid();

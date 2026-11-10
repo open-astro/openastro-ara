@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/switch_device.dart';
-import '../../services/equipment_device_api.dart';
 import '../../theme/ara_colors.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/switch_state.dart';
 import '../../state/settings/cooling_fan_state.dart';
+import '../../util/friendly_error.dart';
+import '../../l10n/l10n.dart';
 
 /// Cooling-fan control for the switch port the profile designates as the
 /// camera's cooling fan (#1700).
@@ -88,7 +89,7 @@ class FanSwitchRow extends ConsumerWidget {
       if (!context.mounted) return;
       messenger.showSnackBar(
         SnackBar(
-          content: Text("Couldn't set the fan: ${describeEquipmentError(e)}"),
+          content: Text("Couldn't set the fan: ${failureReason(context.l10n, e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );

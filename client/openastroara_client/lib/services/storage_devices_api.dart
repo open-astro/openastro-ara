@@ -92,6 +92,35 @@ class StorageDevice {
       );
 }
 
+/// What erasing a drive would lose (`GET /storage/contents`). Only a mounted
+/// drive can be read; [readable] false means unknown, never zero frames.
+class StorageContents {
+  const StorageContents({
+    required this.readable,
+    this.frames = 0,
+    this.newestFrameUtc,
+    this.framesNotCopied = 0,
+  });
+
+  final bool readable;
+  final int frames;
+  final DateTime? newestFrameUtc;
+
+  /// Saved after the last copy of the whole drive that ARA finished cleanly.
+  final int framesNotCopied;
+
+  static const unknown = StorageContents(readable: false);
+
+  factory StorageContents.fromJson(Map<String, dynamic> json) =>
+      StorageContents(
+        readable: json['readable'] as bool? ?? false,
+        frames: (json['frames'] as num?)?.toInt() ?? 0,
+        newestFrameUtc:
+            DateTime.tryParse(json['newest_frame_utc'] as String? ?? ''),
+        framesNotCopied: (json['frames_not_copied'] as num?)?.toInt() ?? 0,
+      );
+}
+
 /// Outcome of a configure attempt. [code] is the helper's machine-readable
 /// reason (`not_ext4`, `label_mismatch`, `device_busy`, `system_disk`, …) so
 /// the UI can offer the right next step.
@@ -172,6 +201,12 @@ class StorageDevicesApi {
         .map(StorageDevice.fromJson)
         .where((d) => d.path.isNotEmpty)
         .toList();
+  }
+
+  Future<StorageContents> contents(String uuid) async {
+    final res = await _dio.get<Map<String, dynamic>>('/api/v1/storage/contents',
+        queryParameters: {'uuid': uuid});
+    return StorageContents.fromJson(res.data ?? const {});
   }
 
   /// Mount [uuid] as the ARA store. With [format] true the drive is
@@ -298,6 +333,18 @@ final storageDevicesApiFactoryProvider =
     Provider<StorageDevicesApi Function(AraServer)>(
   (ref) => StorageDevicesApi.new,
 );
+
+/// What is on the drive [uuid], read before the chooser lets it be erased.
+final storageContentsProvider = FutureProvider.autoDispose
+    .family<StorageContents, String>((ref, uuid) async {
+  final server = ref.watch(activeServerProvider);
+  if (server == null) {
+    return StorageContents.unknown;
+  }
+  final api = ref.watch(storageDevicesApiFactoryProvider)(server);
+  ref.onDispose(api.close);
+  return api.contents(uuid);
+});
 
 final storageDevicesProvider =
     FutureProvider.autoDispose<List<StorageDevice>>((ref) async {

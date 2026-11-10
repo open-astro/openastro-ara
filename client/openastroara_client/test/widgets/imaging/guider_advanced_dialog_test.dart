@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -206,7 +207,14 @@ void main() {
       t,
       profile: const GuiderAdvancedSettings({'multi_star_enabled': false}),
     );
-    fake.applyError = Exception('stop guiding first');
+    fake.applyError = DioException(
+      requestOptions: RequestOptions(path: '/x'),
+      response: Response(
+        requestOptions: RequestOptions(path: '/x'),
+        statusCode: 409,
+        data: {'detail': 'stop guiding first'},
+      ),
+    );
     await t.tap(find.widgetWithText(FilledButton, 'Apply'));
     await t.pumpAndSettle();
     final status = t.widget<Text>(find.byKey(const Key('guider-advanced-status'))).data!;

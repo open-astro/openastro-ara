@@ -30,18 +30,21 @@
 # Exit codes: 0 ok · 2 uuid_not_found · 3 not_ext4 (unsupported fs) ·
 #             4 label_mismatch · 5 device_busy · 6 refused (root/boot disk,
 #             or the store itself as a copy target) · 7 mkfs_failed ·
-#             8 mount_failed · 9 usage · 10 chown_failed · 11 fsck_failed
+#             8 mount_failed · 9 usage · 10 chown_failed · 11 fsck_failed ·
+#             12 exfat_unsupported (this kernel cannot mount exFAT)
 #
 # Bench overrides (#1248): FSTAB and FSTAB_LOCK point the fstab rebuild at scratch
 # files, and --fstab-entry runs ONLY that rebuild (no device lookup, no mount), so
 # scripts/tests can race six rebuilds against one scratch fstab. ARA_MOUNT_POINT
 # moves the store path so scripts/tests can drive a drive switch against stand-in
-# mount tools, and ARA_COPY_POINT does the same for the copy target. sudoers keeps env_reset (and the unit passes no environment), so the
+# mount tools, and ARA_COPY_POINT does the same for the copy target. ARA_PROC_FILESYSTEMS
+# stands in for the kernel's filesystem table. sudoers keeps env_reset (and the unit passes no environment), so the
 # daemon user cannot steer root's run with any of these variables.
 set -eu
 
 MOUNT_POINT=${ARA_MOUNT_POINT:-/media/openastroara}
 COPY_POINT=${ARA_COPY_POINT:-/media/openastroara-copy}
+PROC_FILESYSTEMS=${ARA_PROC_FILESYSTEMS:-/proc/filesystems}
 FSTAB=${FSTAB:-/etc/fstab}
 OWNER=${ARA_STORAGE_OWNER:-openastroara}
 # Dev rigs run the daemon as a regular user without the .deb's service
@@ -69,6 +72,21 @@ device_for_uuid() {
 
 value_for() { # $1=device $2=tag (TYPE|LABEL|UUID)
     blkid -o value -s "$2" "$1" 2>/dev/null || true
+}
+
+# exFAT works when the kernel lists it, when loading its module makes the kernel list
+# it, or when a userspace mount.exfat (FUSE) is installed. ZWO's 4.19 kernel on an
+# rk-flashtool image has none of these (#1753): every exFAT mount there fails.
+kernel_lists_exfat() {
+    awk '$NF == "exfat" { found = 1 } END { exit !found }' "$PROC_FILESYSTEMS" 2>/dev/null
+}
+
+refuse_if_exfat_unsupported() {
+    kernel_lists_exfat && return 0
+    modprobe exfat >/dev/null 2>&1 && kernel_lists_exfat && return 0
+    command -v mount.exfat >/dev/null 2>&1 && return 0
+    echo "ERROR: exfat_unsupported"
+    exit 12
 }
 
 # Refuse anything that carries the running system: the disk holding / or
@@ -233,6 +251,7 @@ mount_and_own() { # $1=uuid $2=fstype $3=deep-chown (1 after mkfs, else top-leve
     fstype=$2
     deep=${3:-0}
     device=$(canon "$4")
+    [ "$fstype" != "exfat" ] || refuse_if_exfat_unsupported
     mkdir -p "$MOUNT_POINT"
     release_previous_store "$device"
     ensure_fstab_entry "$uuid" "$fstype"
@@ -362,6 +381,7 @@ if [ "$MOUNT_COPY" -eq 1 ]; then
     fi
     FS=$(value_for "$DEVICE" TYPE)
     case "$FS" in exfat|ext4) ;; *) echo "ERROR: not_ext4 ${FS:-unknown}"; exit 3 ;; esac
+    [ "$FS" != "exfat" ] || refuse_if_exfat_unsupported
     held=$(copy_holder)
     if [ "$held" = "$(canon "$DEVICE")" ]; then
         echo "OK $COPY_POINT"
@@ -483,6 +503,8 @@ if [ "$FORMAT" -eq 1 ]; then
         echo "ERROR: label_mismatch ${ACTUAL_LABEL:-<none>}"
         exit 4
     fi
+    # Before anything is released, unmounted or wiped: the drive keeps its data.
+    [ "$NEW_FS" != "exfat" ] || refuse_if_exfat_unsupported
     # Erasing means the WHOLE DISK: a UUID that resolved to a partition
     # (the normal case — the store lives in one) promotes to its parent so
     # the partition table itself is rebuilt, not just the filesystem inside

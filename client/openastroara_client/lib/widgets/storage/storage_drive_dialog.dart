@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../services/storage_devices_api.dart';
 import '../../services/storage_space_api.dart';
@@ -46,6 +47,7 @@ String storageConfigureMessage(AppLocalizations l,
       'helper_missing' => l.storageConfigureHelperMissing,
       'mkfs_failed' => l.storageConfigureMkfsFailed,
       'mount_failed' => l.storageConfigureMountFailed,
+      'exfat_unsupported' => l.storageConfigureExfatUnsupported,
       _ => outcome.detail ?? l.storageConfigureFailed(device.friendlyName),
     };
 
@@ -94,6 +96,15 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
   /// ext4 is the rig-resident choice.
   String _newFilesystem = 'exfat';
 
+  /// What erasing the picked disk would lose. A blank disk (no filesystem, no
+  /// UUID) holds nothing to read.
+  AsyncValue<StorageContents>? get _contents {
+    final uuid = _selected?.uuid;
+    return _needsErase && uuid != null
+        ? ref.watch(storageContentsProvider(uuid))
+        : null;
+  }
+
   /// A labelled disk asks the user to type its name — the standard guard
   /// against erasing the wrong one. An unlabelled disk still holds someone's
   /// data (stock USB sticks ship label-less), so it demands typing ERASE:
@@ -101,6 +112,10 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
   bool get _confirmSatisfied {
     if (!_needsErase) {
       return true;
+    }
+    // The user sees what is on the disk before the erase is offered.
+    if (_contents?.isLoading ?? false) {
+      return false;
     }
     final label = _selected!.label ?? '';
     return label.isEmpty ? _confirm.text == 'ERASE' : _confirm.text == label;
@@ -158,6 +173,49 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
         setState(() => _busy = false);
       }
     }
+  }
+
+  List<Widget> _contentsLines(AsyncValue<StorageContents> contents,
+      AppLocalizations l10n, ThemeData theme) {
+    final body = theme.textTheme.bodySmall;
+    final c = contents.asData?.value;
+    if (contents.isLoading) {
+      return [Text(l10n.storageDiskContentsChecking, style: body)];
+    }
+    // A request that failed is not a disk that isn't connected.
+    if (contents.hasError) {
+      return [Text(l10n.storageDiskContentsReadFailed, style: body)];
+    }
+    if (c == null || !c.readable) {
+      return [Text(l10n.storageDiskContentsUnknown, style: body)];
+    }
+    if (c.frames == 0) {
+      return [Text(l10n.storageDiskContentsNone, style: body)];
+    }
+    final newest = c.newestFrameUtc;
+    return [
+      Text(
+          newest == null
+              ? l10n.storageDiskContentsFramesUndated(c.frames)
+              : l10n.storageDiskContentsFrames(c.frames,
+                  DateFormat.yMMMd(l10n.localeName).format(newest.toLocal())),
+          style: body),
+      // What #1579 is for: as loud as the erase heading, never a footnote.
+      if (c.framesNotCopied > 0)
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: 6,
+          children: [
+            const Icon(Icons.warning_amber_rounded,
+                size: 20, color: AraColors.accentBusy),
+            Expanded(
+              child: Text(l10n.storageDiskContentsNotCopied(c.framesNotCopied),
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(color: AraColors.accentBusy)),
+            ),
+          ],
+        ),
+    ];
   }
 
   @override
@@ -269,6 +327,11 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                   ),
                 ],
                 if (_needsErase) ...[
+                  // What would be lost comes first, before how to erase.
+                  if (_contents case final contents?) ...[
+                    const SizedBox(height: 10),
+                    ..._contentsLines(contents, l10n, theme),
+                  ],
                   if (_mustErase) ...[
                     const Divider(height: 24),
                     Text(l10n.storageDiskMustErase,

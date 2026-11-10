@@ -273,7 +273,7 @@ The app icon's palette, kept apart from the status colours. Only the Ara mark an
 - **Star Socket** (`brand-star-hole`): the dark centre inside each ringed star.
 
 ### Illustration greys
-The device windows' drawings (the Dome window's clamshell and dial, the Flat panel window's face) are painted in their own grey ramp, outside the UI tokens on purpose: they picture hardware, so they never mark a state, and Night mode's red filter covers them like everything else (#1690 audit, 2026-11-08). State on a drawing comes only from the status tokens (a moving shell's edge in Info Blue, a target in Connected Green).
+The device windows' drawings (the Dome window's clamshell and dial, the Flat panel window's face) are painted in their own grey ramp (`AraColors.dome*`, `AraColors.flatPanel*`), apart from the UI tokens on purpose: they picture hardware, so they never mark a state, and Night mode's red filter covers them like everything else (#1690 audit, 2026-11-08). State on a drawing comes only from the status tokens (a moving shell's edge in Info Blue, a target in Connected Green).
 - **Dome body** `#808080` to `#4A4A4A` (top-left to bottom-right): the fixed lower half, the base and the door.
 - **Dome shells** `#A8A8A8` to `#6A6A6A`: the moving shells, one step lighter than the body so they read on top of it.
 - **Plinth** `#8A8A8A`; **hinge bolt** `#D0D0D0`, the brightest point, where the shells turn.
@@ -313,13 +313,17 @@ The device windows' drawings (the Dome window's clamshell and dial, the Flat pan
 - **Label** (500, 11px, 0.5px tracking, Material label-small): device names under the equipment-button icons, in plain case ("Filter Wheel"), scaled down to fit rather than widening the button.
 
 **Simple Mode's ramp** (all of it follows the user's text size, WCAG 1.4.4):
-- **Readout** (300, 30px, tabular figures): the one number a mode is about: HFR in Focus, the polar error, Night done's frame count.
+- **Readout** (300, 30px, tabular figures, `AraFontSize.simpleReadingLarge`): the one number a mode is about: HFR in Focus, the polar error, Night done's frame count.
+- **Large reading** (600, 30px, tabular, `kSimpleReadingLarge`): a device window's one big reading, the Focuser's steps and the Rotator's angle.
+- **Reading** (600, 22px, tabular, `kSimpleReading`) with its **unit** (400, 13px, Dim Text, `kSimpleUnit`): a Weather tile's value and unit.
 - **Alarm** (26px title, 20px button, 16px reason): the full-screen safety alarm only.
 - **Hint** (400, 20px, 2px tracking): the "Tap the shutter to take a frame" line over the empty sky.
 - **Heading** (600, 16px): the sheet's and panels' titles ("Edit M42", "Night done").
 - **Body** (`body-simple`, 400, 14px): everything a user reads or taps; the minimum for running text.
-- **Fact value** (600, 13px, tabular): the value in an Info or System tile.
-- **Secondary line** (400, 11.5–12px, Dim Text): the line under a name in a tile, a plan square or the picked target ("Galaxy · up 62°", "L · 5 s"), and the rail captions (11px).
+- **Fact value** (600, 13px, tabular, `AraFontSize.simpleUnit`): the value in an Info or System tile.
+- **Secondary line** (400, 11.5–12px, Dim Text; the 12px caption is `kSimpleCaption`, its size `AraFontSize.simpleCaption`): the line under a name in a tile, a plan square or the picked target ("Galaxy · up 62°", "L · 5 s"), and the rail captions (11px).
+
+Simple Mode's code names these sizes (`lib/theme/ara_metrics.dart`), and a test (`test/theme/simple_size_tokens_test.dart`) fails on a bare font size in Simple Mode or the Sky Album. A size with no role here is listed in that test's allow-list with its reason.
 
 ### Named Rules
 **The Steady Digits Rule.** Every number that updates live uses tabular figures. A countdown never shifts its neighbours.
@@ -364,11 +368,14 @@ Flat. Depth comes from tonal layering: Night Floor, then Panel Grey, then Panel 
 
 ## Shapes
 
-Gently rounded and small, matching the dense layout:
-- 4 px on fields and small controls;
-- 6 px on cards, equipment chips and ink highlights (the most common radius);
-- 8 px on larger containers;
-- a 12 px pill on status indicators and state chips.
+Gently rounded and small, matching the dense layout. Each role is a token in `AraRadius` (`lib/theme/ara_metrics.dart`):
+- 4 px on fields and small controls (`AraRadius.field`);
+- 6 px on cards, equipment chips and ink highlights, the most common radius (`AraRadius.card`);
+- 8 px on larger containers (`AraRadius.container`);
+- 10 px on Simple Mode's panels and device windows (`AraRadius.simplePanel`);
+- a 12 px pill on status indicators and state chips (`AraRadius.pill`).
+
+Simple Mode and the Sky Album use these tokens; a test (`test/theme/simple_size_tokens_test.dart`) fails on a bare radius there. The Full UI keeps its bare numbers for now.
 
 Status dots are 10 px circles. On an equipment chip the dot carries a 2 px ring in the panel colour, so it reads as a badge sitting on the icon.
 
@@ -503,4 +510,4 @@ An inline warning built from three parts: an amber or red icon, a coloured outli
 - **Don't** let any state fall back to plain grey text without a designed look.
 - **Don't** fill any control other than Emergency Stop and confirmed destructive actions with Fault Red.
 - **Don't** copy NINA's icons, splash, imagery or wordmark (see PRODUCT.md).
-- **Don't** hard-code colours outside `lib/theme/`. A few widgets still do, and they should migrate to tokens.
+- **Don't** hard-code colours outside `lib/theme/`; name them in `AraColors`. A test (`test/theme/no_hard_coded_colours_test.dart`) fails on a `Color(0x…)` literal or a Material `Colors.*` constant (other than `Colors.transparent`) anywhere else in `lib/` (#1552).

@@ -12,9 +12,9 @@ We decided (2026-11-02, [`design/briefs/simple-mode.md`](../../design/briefs/sim
 
 ## Rules
 
-1. Add to queue creates the run without starting it, and each later pick appends a block to that same sequence. Scope: `client/openastroara_client/lib/screens/simple/simple_plan_panel.dart`. Checked by: the Simple plan panel test "Add to queue creates the run without starting it and keeps the sheet up for the next pick; again it appends".
-2. A target has one block in the queue; picking a queued target again moves its block to the front rather than adding a second one. Scope: `client/openastroara_client/lib/screens/simple/simple_plan_panel.dart`. Checked by: the Simple plan panel test "a target already in the queue is not queued twice; Start now moves it to the front instead".
-3. The move from one queued target to the next is made by the daemon's sequencer, with no client call between targets. Scope: `client/openastroara_client/lib/screens/simple/simple_plan_panel.dart`. Checked by: review (a client timer, listener or call that starts the next queued target).
+1. Add to queue creates the run without starting it, and each later pick appends a block to that same sequence. Scope: `client/openastroara_client/lib/screens/simple/simple_plan_panel.dart`, `client/openastroara_client/lib/state/simple_run_state.dart`. Checked by: the Simple plan panel test "Add to queue creates the run without starting it and keeps the sheet up for the next pick; again it appends".
+2. A target has one block in the queue; picking a queued target again moves its block to the front rather than adding a second one. Scope: `client/openastroara_client/lib/screens/simple/simple_plan_panel.dart`, `client/openastroara_client/lib/state/simple_run_state.dart`. Checked by: the Simple plan panel test "a target already in the queue is not queued twice; Start now moves it to the front instead".
+3. The move from one queued target to the next is made by the daemon's sequencer, with no client call between targets. Scope: `client/openastroara_client/lib/screens/simple/simple_plan_panel.dart`, `client/openastroara_client/lib/state/simple_run_state.dart`. Checked by: review (a client timer, listener or call that starts the next queued target).
 
 ## Alternatives rejected
 

@@ -308,14 +308,14 @@ class SimpleFactTiles extends StatelessWidget {
   final bool expand;
 
   static final _value = kSimpleText.copyWith(
-    fontSize: 13,
+    fontSize: AraFontSize.simpleUnit,
     fontWeight: FontWeight.w600,
   );
 
   static final _box = BoxDecoration(
     color: AraColors.overlayScrim,
     border: Border.all(color: AraColors.border),
-    borderRadius: BorderRadius.circular(10),
+    borderRadius: BorderRadius.circular(AraRadius.simplePanel),
   );
 
   // On the image, the panel blur; in Settings › Rig the sheet already has it.
@@ -479,7 +479,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
             Container(
               decoration: BoxDecoration(
                 color: AraColors.tileFill,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AraRadius.container),
               ),
               child: Row(
                 children: [
@@ -491,7 +491,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
                       child: SimpleSegment(
                         label: label,
                         selected: shot == v,
-                        radius: 8,
+                        radius: AraRadius.container,
                         onTap: looping
                             ? null
                             : () =>
@@ -540,10 +540,10 @@ class SimpleSettingsPopover extends ConsumerWidget {
         enabled: on,
         child: Material(
           color: selected ? AraColors.selectionTint : AraColors.tileFill,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AraRadius.container),
           child: InkWell(
             key: Key('simple-preview-camera-$id'),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(AraRadius.container),
             onTap: on
                 ? () => ref.read(previewCameraProvider.notifier).set(value)
                 : () => simpleSayWhy(context, why),
@@ -773,7 +773,7 @@ class _SimpleWheelKeysState extends State<SimpleWheelKeys> {
         border: _ring
             ? Border.all(color: AraColors.accentInfo, width: 2)
             : null,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AraRadius.container),
       ),
       child: widget.child,
     ),
@@ -817,7 +817,7 @@ class _SimpleTapTargetState extends State<SimpleTapTarget> {
           border: _ring
               ? Border.all(color: AraColors.accentInfo, width: 2)
               : null,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AraRadius.simplePanel),
         ),
         child: widget.child,
       ),
@@ -911,7 +911,7 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: AraColors.tileFill,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AraRadius.simplePanel),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -951,7 +951,7 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
             enabled: enabled,
             // An InkWell, not a bare tap: Tab reaches it and Enter opens it.
             child: InkWell(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AraRadius.simplePanel),
               onTap: enabled ? _toggle : null,
               // The label and value above say it once.
               child: ExcludeSemantics(child: tile),
@@ -1109,7 +1109,7 @@ class SimpleStopSquare extends StatelessWidget {
     height: kSimpleStopSquare,
     decoration: BoxDecoration(
       color: color,
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(AraRadius.field),
     ),
   );
 }

@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/equipment_device_status.dart';
 import '../../../models/focuser_status.dart';
 import '../../../services/autofocus_api.dart';
-import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/focuser_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/settings_nav.dart';
@@ -15,6 +14,8 @@ import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
+import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 
 /// §37.4 Focuser panel. Shows the connected focuser's live position / temperature
 /// and a move control via the shared connection card. The §37.11 autofocus
@@ -222,6 +223,7 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
         ? raw.clamp(caps.minPosition, caps.maxPosition)
         : raw;
     if (mounted && target != raw) _target.text = target.toString();
+    final l10n = context.l10n;
     try {
       final performed = await ref
           .read(focuserProvider.notifier)
@@ -234,7 +236,7 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text("Couldn't move: ${describeEquipmentError(e)}"),
+          content: Text("Couldn't move: ${failureReason(l10n, e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );

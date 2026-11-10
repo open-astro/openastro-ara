@@ -2138,6 +2138,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String guideFindStarFailed(String reason) {
+    return 'Couldn\'t find a star: $reason';
+  }
+
+  @override
   String errorCouldnt(String action) {
     return 'Couldn\'t $action';
   }
@@ -3178,6 +3183,57 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get storageConfigureMountFailed =>
       'The disk was prepared but could not be connected.';
+
+  @override
+  String get storageDiskContentsChecking => 'Checking what is on this disk…';
+
+  @override
+  String storageDiskContentsFrames(int count, String date) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'This disk holds $count frames. The newest is from $date.',
+      one: 'This disk holds 1 frame, from $date.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String storageDiskContentsFramesUndated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'This disk holds $count frames.',
+      one: 'This disk holds 1 frame.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get storageDiskContentsReadFailed =>
+      'ARA couldn\'t read what is on this disk. Erasing it loses everything on it.';
+
+  @override
+  String get storageDiskContentsNone => 'There are no frames on this disk.';
+
+  @override
+  String storageDiskContentsNotCopied(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count frames have not been copied to another disk by ARA.',
+      one: '1 frame has not been copied to another disk by ARA.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get storageDiskContentsUnknown =>
+      'ARA can\'t see what is on this disk while it isn\'t connected. Erasing it loses everything on it.';
+
+  @override
+  String get storageConfigureExfatUnsupported =>
+      'This server can\'t read exFAT drives. Erase the drive as ext4 and ARA can use it.';
 
   @override
   String storageConfigureFailed(String name) {

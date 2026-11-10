@@ -587,7 +587,7 @@ class SequenceDragChip extends StatelessWidget {
             // S13 — the dragged chip floats above the tree.
             boxShadow: const [
               BoxShadow(
-                  color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
+                  color: AraColors.dragShadow, blurRadius: 10, offset: Offset(0, 4)),
             ],
           ),
           child: Text(label,

@@ -109,11 +109,11 @@ class _SimpleMessagePillsState extends ConsumerState<SimpleMessagePills> {
               color: AraColors.overlayScrim,
               shape: RoundedRectangleBorder(
                 side: const BorderSide(color: AraColors.border),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AraRadius.simplePanel),
               ),
               child: InkWell(
                 key: const Key('simple-messages-more'),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(AraRadius.simplePanel),
                 onTap: toggle,
                 child: Container(
                   constraints: const BoxConstraints(minHeight: 44),
@@ -205,7 +205,7 @@ class _Pill extends ConsumerWidget {
         padding: const EdgeInsets.only(left: 14, right: 4),
         decoration: BoxDecoration(
           color: AraColors.overlayScrim,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AraRadius.simplePanel),
           border: Border.all(color: outline ?? AraColors.border),
         ),
         child: Stack(

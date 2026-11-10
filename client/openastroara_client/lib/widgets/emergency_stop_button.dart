@@ -369,7 +369,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
                         alignment: Alignment.centerLeft,
                         widthFactor: _hold.value,
                         // Darkens, keeping HOLD at 7.7:1.
-                        child: const ColoredBox(color: Color(0x40000000)),
+                        child: const ColoredBox(color: AraColors.holdFill),
                       ),
                     ),
                   ),

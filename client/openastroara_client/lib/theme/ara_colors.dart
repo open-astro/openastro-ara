@@ -107,4 +107,117 @@ class AraColors {
   static const brandLineEnd = Color(0xFF7C8CF8);
   static const brandGlow = Color(0xFF8FA8FF);
   static const brandStarHole = Color(0xFF0B0F24);
+
+  // #1552 — colours that lived as literals outside lib/theme.
+
+  /// Paints, unseen (1/255), so a full-screen tap layer takes clicks over a
+  /// native view on macOS.
+  static const unseenPaint = Color(0x01000000);
+
+  /// A 35 % shade behind an open popover; taps on it close the popover.
+  static const popoverShade = Color(0x59000000);
+
+  /// Emergency Stop's hold fill: darkens the button, keeping HOLD at 7.7:1.
+  static const holdFill = Color(0x40000000);
+
+  /// The near-black behind a camera frame in focus and guide cards.
+  static const frameBackdrop = Color(0xFF07080B);
+
+  /// A hairline divider drawn over a frame or a dark card (12 % white).
+  static const frameDivider = Color(0x1FFFFFFF);
+
+  /// Captions and quiet buttons drawn over a camera frame.
+  static const onFrameText = Color(0xFFC8C8C8);
+  static const onFrameTextQuiet = Color(0xFF9A9A9A);
+
+  /// The Bahtinov readout's chart line and points.
+  static const bahtinovChart = Color(0xFF90CAF9);
+
+  /// A thumbnail's caption gradient, its unselected tick and its hover wash.
+  static const thumbnailCaptionShade = Color(0xB3000000);
+  static const thumbnailTickShade = Color(0x66000000);
+  static const thumbnailHover = Color(0x14FFFFFF);
+
+  /// The notification centre's drop shadow.
+  static const panelShadow = Color(0x66000000);
+
+  /// The crash screen, drawn without the theme.
+  static const errorFallbackBg = Color(0xFF1E1E22);
+  static const errorFallbackText = Color(0xFFB0B0B8);
+
+  /// The flat panel drawing: its face, its light and its cover.
+  static const flatPanelFace = Color(0xFF111111);
+  static const flatPanelLightCentre = Color(0xFFFFFBE8);
+  static const flatPanelLightEdge = Color(0xFFB8B29A);
+  static const flatPanelLid = Color(0xFF303030);
+  static const flatPanelSeam = Color(0xFF242424);
+
+  /// The all-sky dome drawing: its lower ring, its shells, plinth and bolt.
+  static const domeLowerLight = Color(0xFF808080);
+  static const domeLowerDark = Color(0xFF4A4A4A);
+  static const domeShellLight = Color(0xFFA8A8A8);
+  static const domeShellDark = Color(0xFF6A6A6A);
+  static const domePlinth = Color(0xFF8A8A8A);
+  static const domeBolt = Color(0xFFD0D0D0);
+
+  /// The dome drawing's slit where it is now.
+  static const domeSlit = Color(0xF26E6E6E);
+
+  /// A sequence instruction's category colour in the sequencer.
+  static const instructionCamera = Color(0xFF64B5F6);
+  static const instructionFilterWheel = Color(0xFFBA68C8);
+  static const instructionFocuser = Color(0xFF4DB6AC);
+  static const instructionRotator = Color(0xFF7986CB);
+  static const instructionTelescope = Color(0xFFFFD54F);
+  static const instructionGuider = Color(0xFF81C784);
+  static const instructionSwitch = Color(0xFFFF8A65);
+  static const instructionCalibration = Color(0xFFA1887F);
+  static const instructionUtility = Color(0xFF90A4AE);
+
+  // #1552 follow-up — the Material Colors.* constants used outside lib/theme.
+
+  /// White text and icons on a coloured fill (a red Remove or Stop button,
+  /// a selected tick, a badge).
+  static const onFill = Color(0xFFFFFFFF);
+
+  /// Black text on a bright green or amber fill (Start, a selected chip).
+  static const onBrightFill = Color(0xFF000000);
+
+  /// The black behind a frame or a sky preview, letterboxing included.
+  static const imageBackdrop = Color(0xFF000000);
+
+  /// Text over a frame or photo: full and quiet, with its shadow.
+  static const onImageText = Color(0xFFFFFFFF);
+  static const onImageTextQuiet = Color(0xB3FFFFFF);
+  static const onImageShadow = Color(0xFF000000);
+
+  /// A dark chip or bar laid over a frame (55 % black).
+  static const onImageChip = Color(0x8C000000);
+
+  /// The sky preview's mask outside the frame, its outline and the dim ring.
+  static const previewMask = Color(0x73000000);
+  static const previewMaskStrong = Color(0x99000000);
+  static const previewOutline = Color(0xB3FFFFFF);
+
+  /// Modal barriers: the command palette, a full-screen frame, a card sheet,
+  /// the notification centre.
+  static const barrierPalette = Color(0x8A000000);
+  static const barrierFrame = Color(0xDD000000);
+  static const barrierSheet = Color(0x61000000);
+  static const barrierLight = Color(0x1F000000);
+
+  /// A raised panel's or a dragged row's drop shadow.
+  static const dragShadow = Color(0x73000000);
+
+  /// A dim layer over a frame while a panel sits on it (26 % black).
+  static const frameDim = Color(0x42000000);
+
+  /// The Settings search hit's outline.
+  static const searchHighlight = Color(0xCCFFEB3B);
+
+  /// A poor frame-quality bar.
+  static const qualityPoor = Color(0xFFFF5252);
+
+  /// A star in the wallpaper and the Ara mark's bright star.
+  static const starlight = Color(0xFFFFFFFF);
 }

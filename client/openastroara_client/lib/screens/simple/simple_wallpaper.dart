@@ -220,7 +220,7 @@ class _Stars extends CustomPainter {
     final r = math.Random(7 + layer);
     final paint = Paint();
     for (var n = 0; n < const [260, 90, 28][layer]; n++) {
-      paint.color = Colors.white.withValues(
+      paint.color = AraColors.starlight.withValues(
         alpha: const [.35, .6, .9][layer] * (.6 + r.nextDouble() * .4),
       );
       canvas.drawCircle(

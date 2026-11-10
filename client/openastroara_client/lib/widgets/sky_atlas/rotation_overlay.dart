@@ -193,7 +193,7 @@ class RotationOverlayPainter extends CustomPainter {
           color: colour,
           fontSize: 12,
           fontWeight: FontWeight.w700,
-          shadows: const [Shadow(color: Colors.black, blurRadius: 3)],
+          shadows: const [Shadow(color: AraColors.onImageShadow, blurRadius: 3)],
         ),
       ),
       textDirection: TextDirection.ltr,

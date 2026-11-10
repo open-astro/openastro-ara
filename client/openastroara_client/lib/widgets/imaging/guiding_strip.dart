@@ -9,7 +9,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/guider_status.dart';
 import '../../models/pa_residual.dart';
-import '../../state/focus/autofocus_live_state.dart' show describeRequestError;
 import '../../state/guider/guide_graph_settings.dart';
 import '../../state/guider/guide_replay_state.dart';
 import '../../state/guider/guide_step_state.dart';
@@ -966,7 +965,7 @@ class _GuideButtonState extends ConsumerState<_GuideButton> {
       ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
           content: Text(e is GuideStartFailed
               ? friendlyError(context.l10n, e)
-              : '${guiding ? 'Stop guiding' : 'Guide'} failed: ${describeRequestError(e)}')));
+              : '${guiding ? 'Stop guiding' : 'Guide'} failed: ${failureReason(context.l10n, e)}')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

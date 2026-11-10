@@ -7,7 +7,6 @@ import '../../l10n/l10n.dart';
 import '../../models/autofocus_run.dart';
 import '../../models/equipment_device_status.dart';
 import '../../models/focuser_status.dart';
-import '../../services/equipment_device_api.dart';
 import '../../models/guide_focus.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/focus/autofocus_live_state.dart';
@@ -24,6 +23,7 @@ import 'focus_frame_view.dart';
 import 'focus_section.dart';
 import 'guide_focus_card.dart';
 import 'v_curve_chart.dart';
+import '../../util/friendly_error.dart';
 
 /// Setup → Smart Focus: two tabs, Main telescope then Guide camera — the order is
 /// the order of work (an OAG only focuses once the main scope has), and each
@@ -189,10 +189,11 @@ class _ManualFocusControlState extends ConsumerState<ManualFocusControl> {
 
   Future<void> _command(Future<bool> Function(FocuserNotifier) send, String failure) async {
     final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
     try {
       await send(ref.read(focuserProvider.notifier));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('$failure: ${describeEquipmentError(e)}')));
+      messenger.showSnackBar(SnackBar(content: Text('$failure: ${failureReason(l10n, e)}')));
     }
   }
 
@@ -327,7 +328,7 @@ class MainFocusCard extends ConsumerWidget {
       child: FitColumn(
         children: [
           if (live.error != null) ...[
-            InlineNotice.error(live.error!),
+            InlineNotice.error(failureReason(context.l10n, live.error!)),
             const SizedBox(height: 16),
           ],
           if (run.isFailed) ...[

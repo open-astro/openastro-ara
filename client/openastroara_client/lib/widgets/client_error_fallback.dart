@@ -1,5 +1,7 @@
 import 'package:flutter/widgets.dart';
 
+import '../theme/ara_colors.dart';
+
 /// What a failed build shows in a release build instead of Flutter's grey
 /// box (#1111). Compact, not red, and — the point — built from nothing that
 /// looks up an inherited widget: no `Theme.of`, no `MediaQuery.of`, no
@@ -22,7 +24,7 @@ class ClientErrorFallback extends StatelessWidget {
     return Directionality(
       textDirection: TextDirection.ltr,
       child: ColoredBox(
-        color: const Color(0xFF1E1E22),
+        color: AraColors.errorFallbackBg,
         child: Center(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -30,7 +32,7 @@ class ClientErrorFallback extends StatelessWidget {
               message,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                color: Color(0xFFB0B0B8),
+                color: AraColors.errorFallbackText,
                 fontSize: 13,
                 decoration: TextDecoration.none,
               ),

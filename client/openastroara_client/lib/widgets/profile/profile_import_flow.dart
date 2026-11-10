@@ -269,12 +269,7 @@ Future<bool> _confirmImport(
 /// `"Couldn't <action>"` wording becomes friendlyError's action.
 String friendlyDaemonError(Object e, {String fallback = 'Something went wrong'}) {
   if (e is DioException) {
-    final data = e.response?.data;
-    // Checked here first (and again inside friendlyError) so the server's own
-    // words win verbatim without friendlyError's "Couldn't …" prefix wrapping
-    // them; the re-check inside friendlyError only serves as a belt-and-braces
-    // fallback and picks up the ProblemDetails `title` as well.
-    if (data is Map && data['detail'] is String) return data['detail'] as String;
+    // friendlyError gives the daemon's own words on a 400, 409 or 422 (#1699).
     return friendlyError(lookupAppLocalizations(const Locale('en')), e, action: _actionFromFallback(fallback));
   }
   if (e is StateError) return e.message;

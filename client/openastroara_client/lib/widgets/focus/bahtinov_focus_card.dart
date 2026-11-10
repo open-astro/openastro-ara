@@ -19,6 +19,7 @@ import '../../theme/ara_metrics.dart';
 import '../fit_pane.dart';
 import 'focus_section.dart';
 import 'guide_focus_card.dart' show GuideFocusHint, TurnAdvice, TurnHint;
+import '../../util/friendly_error.dart';
 
 /// Setup → Smart Focus → Main telescope with "Bahtinov mask" picked (#1299):
 /// the user fits the mask, points at a bright star and turns the focuser while
@@ -123,7 +124,7 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
                 onPressed: live.busy ? null : () => _finish(context),
                 style: FilledButton.styleFrom(
                   backgroundColor: AraColors.accentConnected,
-                  foregroundColor: Colors.black,
+                  foregroundColor: AraColors.onBrightFill,
                 ),
                 icon: const Icon(Icons.check_rounded, size: 18),
                 label: const Text('Finish'),
@@ -162,7 +163,8 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
             const SizedBox(height: 16),
           ],
           if (live.error != null || status.error != null) ...[
-            InlineNotice.error(live.error ?? status.error!),
+            InlineNotice.error(
+                live.error == null ? status.error! : failureReason(context.l10n, live.error!)),
             const SizedBox(height: 16),
           ],
           if (autofocusRunning && !active) ...[
@@ -518,7 +520,7 @@ class _Hero extends StatelessWidget {
                   TurnHint(hint: bahtinovHint(context.l10n, status)),
                 ],
                 SizedBox(height: short ? 10 : 18),
-                const Divider(height: 1, color: Color(0x1FFFFFFF)),
+                const Divider(height: 1, color: AraColors.frameDivider),
                 SizedBox(height: short ? 8 : 14),
                 Row(
                   children: [
@@ -653,7 +655,7 @@ class BahtinovFrameView extends StatelessWidget {
       child: Container(
         height: height,
         width: double.infinity,
-        color: const Color(0xFF07080B),
+        color: AraColors.frameBackdrop,
         child: Stack(
           children: [
             Positioned.fill(
@@ -692,11 +694,11 @@ class BahtinovFrameView extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.55),
+                    color: AraColors.onImageChip,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: const Text('Tap a star to zoom in on it',
-                      style: TextStyle(fontSize: 12, color: Color(0xFFC8C8C8))),
+                      style: TextStyle(fontSize: 12, color: AraColors.onFrameText)),
                 ),
               ),
             if (jpeg != null && (crop != null || picked))
@@ -709,7 +711,7 @@ class BahtinovFrameView extends StatelessWidget {
                     if (crop != null && onZoom != null)
                       Container(
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.55),
+                          color: AraColors.onImageChip,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Row(
@@ -719,7 +721,7 @@ class BahtinovFrameView extends StatelessWidget {
                               TextButton(
                                 onPressed: () => onZoom!(z),
                                 style: TextButton.styleFrom(
-                                  foregroundColor: z == zoom ? Colors.white : const Color(0xFF9A9A9A),
+                                  foregroundColor: z == zoom ? AraColors.onImageText : AraColors.onFrameTextQuiet,
                                   visualDensity: VisualDensity.compact,
                                   minimumSize: const Size(36, 32),
                                   padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -736,8 +738,8 @@ class BahtinovFrameView extends StatelessWidget {
                       TextButton.icon(
                         onPressed: onClearPick,
                         style: TextButton.styleFrom(
-                          backgroundColor: Colors.black.withValues(alpha: 0.55),
-                          foregroundColor: const Color(0xFFC8C8C8),
+                          backgroundColor: AraColors.onImageChip,
+                          foregroundColor: AraColors.onFrameText,
                           visualDensity: VisualDensity.compact,
                         ),
                         icon: const Icon(Icons.zoom_out_map, size: 16),
@@ -784,7 +786,7 @@ class BahtinovFrameView extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.55),
+                    color: AraColors.onImageChip,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: const Row(
@@ -792,11 +794,11 @@ class BahtinovFrameView extends StatelessWidget {
                     children: [
                       _LegendSwatch(color: AraColors.accentBusy, dashed: true),
                       SizedBox(width: 6),
-                      Text('X spikes', style: TextStyle(fontSize: 12, color: Color(0xFFC8C8C8))),
+                      Text('X spikes', style: TextStyle(fontSize: 12, color: AraColors.onFrameText)),
                       SizedBox(width: 12),
                       _LegendSwatch(color: AraColors.accentInfo),
                       SizedBox(width: 6),
-                      Text('Centre spike', style: TextStyle(fontSize: 12, color: Color(0xFFC8C8C8))),
+                      Text('Centre spike', style: TextStyle(fontSize: 12, color: AraColors.onFrameText)),
                     ],
                   ),
                 ),
@@ -808,10 +810,10 @@ class BahtinovFrameView extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.55),
+                    color: AraColors.onImageChip,
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Text(caption!, style: const TextStyle(fontSize: 12, color: Color(0xFFC8C8C8))),
+                  child: Text(caption!, style: const TextStyle(fontSize: 12, color: AraColors.onFrameText)),
                 ),
               ),
           ],
@@ -993,13 +995,13 @@ class BahtinovTrendChart extends StatelessWidget {
           lineBarsData: [
             LineChartBarData(
               spots: spots,
-              color: const Color(0xFF90CAF9),
+              color: AraColors.bahtinovChart,
               barWidth: 2,
               dotData: FlDotData(
                 show: true,
                 getDotPainter: (spot, _, _, index) => FlDotCirclePainter(
                   radius: index == spots.length - 1 ? 5 : 3,
-                  color: index == spots.length - 1 ? AraColors.accentBusy : const Color(0xFF90CAF9),
+                  color: index == spots.length - 1 ? AraColors.accentBusy : AraColors.bahtinovChart,
                   strokeWidth: 0,
                 ),
               ),

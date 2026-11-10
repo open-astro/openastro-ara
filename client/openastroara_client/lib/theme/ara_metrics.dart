@@ -14,6 +14,21 @@ class AraSpace {
   static const double s24 = 24;
 }
 
+/// Corner radius by role (DESIGN.md Shapes). Widgets build their own
+/// `BorderRadius` from these, as they do with [AraSpace].
+class AraRadius {
+  /// Fields and small controls.
+  static const double field = 4;
+  static const double card = 6;
+
+  /// Larger containers.
+  static const double container = 8;
+
+  /// Simple Mode's panels and device windows.
+  static const double simplePanel = 10;
+  static const double pill = 12;
+}
+
 /// A locked control's dim (DESIGN.md, the Switches window): Material's
 /// disabled opacity.
 class AraOpacity {
@@ -59,6 +74,44 @@ class AraText {
 /// Sky Album shares it, since it follows Simple Mode's density.
 const kSimpleText = TextStyle(
   fontSize: 14,
+  color: AraColors.textPrimary,
+  fontFeatures: [FontFeature.tabularFigures()],
+);
+
+/// Simple Mode's type sizes by role (DESIGN.md Typography), for a style
+/// that is not one of the named ones below.
+class AraFontSize {
+  static const double simpleCaption = 12;
+  static const double simpleUnit = 13;
+  static const double simpleReading = 22;
+  static const double simpleReadingLarge = 30;
+}
+
+/// Simple Mode's caption: a tile's label, a window's secondary line.
+const kSimpleCaption = TextStyle(
+  fontSize: AraFontSize.simpleCaption,
+  color: AraColors.textSecondary,
+);
+
+/// A reading's unit beside its number ("°C", "%").
+const kSimpleUnit = TextStyle(
+  fontSize: AraFontSize.simpleUnit,
+  color: AraColors.textSecondary,
+  fontFeatures: [FontFeature.tabularFigures()],
+);
+
+/// A tile's reading (the Weather window).
+const kSimpleReading = TextStyle(
+  fontSize: AraFontSize.simpleReading,
+  fontWeight: FontWeight.w600,
+  color: AraColors.textPrimary,
+  fontFeatures: [FontFeature.tabularFigures()],
+);
+
+/// A window's one big reading (the Focuser and Rotator windows).
+const kSimpleReadingLarge = TextStyle(
+  fontSize: AraFontSize.simpleReadingLarge,
+  fontWeight: FontWeight.w600,
   color: AraColors.textPrimary,
   fontFeatures: [FontFeature.tabularFigures()],
 );

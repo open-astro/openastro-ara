@@ -35,6 +35,20 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Added (storage)
+
+- Before you erase a disk, the disk chooser says how many frames the disk holds and the date of the newest one, and warns when some were never copied to another disk by ARA. A disk that isn't connected says ARA can't see what is on it. Erase stays off until this is read (#1579).
+
+### Fixed (storage)
+
+- On a server whose kernel can't mount exFAT (an ASIAIR Plus on an rk-flashtool image), Erase as exFAT is refused before the drive is touched, so the drive keeps its data. Use Disk and disk-to-disk copy onto an exFAT drive say the server can't read exFAT and that erasing as ext4 lets ARA use it. Before, the erase wiped the drive and then failed with "could not be connected" (#1753).
+
+### Changed (client modules)
+
+- The Full UI's filter picker asks before it changes the filter while a plan runs, as Simple Mode's Filter wheel window does. A filter change that the wheel accepts but never makes now says so in both presentations, and a wheel seen turning gets 45 s to land before it counts as failed (#1698).
+- Simple Mode's polar alignment loads its frames one at a time, as the Full UI does: a frame that finishes while one is loading is fetched once after it (#1698).
+- First-run setup pins the guide camera by its Alpaca UniqueID, as Settings › Equipment › Guider does, so a new pick no longer keeps the UniqueID of the camera it replaced (#1698, #1308).
+
 ### Fixed (capture)
 
 - Frames whose values all fit in 0-255 (for example a short bias from a camera with a low black level) are saved with their real values. Before, when the camera server sent such a frame in the narrow Alpaca ImageBytes Byte format, Ara multiplied every pixel by 256. Frames already saved this way are exact: divide each value by 256.

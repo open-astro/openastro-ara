@@ -11,7 +11,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../models/equipment_device_status.dart';
-import '../../services/equipment_device_api.dart' show describeEquipmentError;
 import '../../services/equipment_driver_api.dart';
 import '../../models/filter_wheel_status.dart';
 import '../../models/focuser_status.dart';
@@ -21,6 +20,7 @@ import '../../widgets/equipment/cooling_fan_picker.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../models/guider_status.dart';
 import '../../state/equipment/filter_wheel_state.dart';
+import '../../state/equipment/filter_wheel_command_state.dart';
 import '../../state/equipment/dome_state.dart';
 import '../../state/equipment/dome_shutter_state.dart';
 import '../../state/equipment/flat_panel_state.dart';
@@ -63,6 +63,7 @@ import '../../widgets/equipment/equipment_glyphs.dart' show EquipmentGlyph;
 import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot;
 import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment, SimpleSegments, simpleRailScale;
+import '../../util/friendly_error.dart';
 
 /// One window per device in Simple Mode (design/briefs/simple-mode-settings.md):
 /// the same widget opens from the device's dot in the top bar and as its page
@@ -264,7 +265,7 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
       } catch (e) {
         notify(
           l10n.deviceCouldntSaveTarget,
-          detail: describeEquipmentError(e),
+          detail: failureReason(l10n, e),
           error: true,
         );
       }
@@ -291,7 +292,7 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntChangeCooler,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -362,7 +363,7 @@ Widget simpleWindowStepper({
   return DecoratedBox(
     decoration: BoxDecoration(
       color: AraColors.tileFill,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AraRadius.container),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
@@ -517,7 +518,7 @@ class _OnOff extends StatelessWidget {
   Widget build(BuildContext context) => DecoratedBox(
     decoration: BoxDecoration(
       color: AraColors.tileFill,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AraRadius.container),
     ),
     child: Row(
       mainAxisSize: fill ? MainAxisSize.max : MainAxisSize.min,
@@ -532,7 +533,7 @@ class _OnOff extends StatelessWidget {
               key: Key('$id-$key'),
               label: word,
               selected: known && on == v,
-              radius: 8,
+              radius: AraRadius.container,
               onTap: (known && on == v) || !enabled ? null : () => onChanged(v),
             ),
           ),
@@ -864,7 +865,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntSaveMeridianFlip,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -884,7 +885,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntMoveMount,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
       return false;
@@ -1040,7 +1041,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntMoveFocuser,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -1092,7 +1093,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntSaveThat,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -1215,11 +1216,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
                   Text(l10n.devicePosition, style: AraText.caption),
                   Text(
                     simpleSteps(pos),
-                    style: kSimpleText.copyWith(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w600,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
+                    style: kSimpleReadingLarge,
                   ),
                   // Moving is working: blinking green (DESIGN.md status rule).
                   StatusBlink(
@@ -1699,7 +1696,7 @@ class _ThumbwheelPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final body = RRect.fromRectAndRadius(
       Rect.fromLTWH(6, 0, size.width - 12, size.height),
-      const Radius.circular(12),
+      const Radius.circular(AraRadius.pill),
     );
     canvas.drawRRect(
       body,
@@ -1865,7 +1862,7 @@ class _AutofocusButton extends ConsumerWidget {
     final fg = running ? AraColors.selectionFg : AraColors.bgPrimary;
     return Material(
       color: running ? AraColors.emergencyStop : AraColors.accentConnected,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(AraRadius.simplePanel),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         key: const Key('simple-focuser-autofocus'),
@@ -1995,7 +1992,7 @@ Future<void> simpleSaveGuider(
   } catch (e) {
     notify(
       l10n.deviceCouldntSaveThat,
-      detail: describeEquipmentError(e),
+      detail: failureReason(l10n, e),
       error: true,
     );
   }
@@ -2215,7 +2212,7 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntSyncRotator,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -2233,7 +2230,7 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntMoveRotator,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -2247,7 +2244,7 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntStopRotator,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -2306,11 +2303,7 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
                         child: Text(
                           sky == null ? '—' : simpleDegrees(sky),
                           maxLines: 1,
-                          style: kSimpleText.copyWith(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w600,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
+                          style: kSimpleReadingLarge,
                         ),
                       ),
                       // Moving is working: blinking green (DESIGN.md status rule).
@@ -2498,7 +2491,7 @@ class _RotatorButton extends StatelessWidget {
       opacity: onTap == null ? 0.4 : 1,
       child: Material(
         color: AraColors.tileFill,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AraRadius.simplePanel),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
@@ -2584,31 +2577,6 @@ class SimpleFilterWheelWindow extends ConsumerStatefulWidget {
 
 class _SimpleFilterWheelWindowState
     extends ConsumerState<SimpleFilterWheelWindow> {
-  /// The slot asked for, until the wheel lands: it reads Moving to … at once,
-  /// before the poll sees the wheel turn.
-  int? _sent;
-  bool _sawMove = false;
-
-  /// A change the wheel accepted but never seen turning (it failed on the
-  /// rig, or turned and landed between two polls) stops reading Moving to …
-  /// after this, so the filters never stay locked.
-  static const _settle = Duration(seconds: 10);
-  Timer? _settleTimer;
-
-  /// A filter tapped while a plan runs: the window asks first.
-  int? _asking;
-
-  @override
-  void dispose() {
-    _settleTimer?.cancel();
-    super.dispose();
-  }
-
-  void _clearSent() {
-    _settleTimer?.cancel();
-    if (mounted) setState(() => _sent = null);
-  }
-
   String _name(FilterSlot slot) =>
       slot.name.isEmpty ? context.l10n.deviceSlot(slot.position) : slot.name;
 
@@ -2625,19 +2593,30 @@ class _SimpleFilterWheelWindowState
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(filterWheelProvider, (_, next) {
-      final w = next.value;
-      if (_sent == null) return;
-      if (w != null && w.isMoving) {
-        _sawMove = true;
-      } else if (w == null ||
-          !w.isConnected ||
-          w.isAwaitingUser ||
-          w.currentSlot == _sent ||
-          _sawMove) {
-        _clearSent();
+    // The change itself is the shared device command's (ADR 0013); a refused
+    // one says why in a pill.
+    ref.listen(filterWheelCommandProvider, (prev, next) {
+      if (next.outcomes == prev?.outcomes || next.by != this) return;
+      final l10n = context.l10n;
+      switch (next.refusal) {
+        case DeviceCommandRefusal.busy:
+          _sayBusy(ref, l10n);
+        case DeviceCommandRefusal.failed:
+          userNotifier(context, origin: SimpleStatusOrigin.filterWheel)(
+            l10n.deviceCouldntChangeFilter,
+            detail: failureReason(context.l10n, next.error!),
+            error: true,
+          );
+        case DeviceCommandRefusal.didntMove:
+          userNotifier(context, origin: SimpleStatusOrigin.filterWheel)(
+            l10n.filterDropdownDidntMove,
+            error: true,
+          );
+        case null:
+          break;
       }
     });
+    final command = ref.watch(filterWheelCommandProvider);
     final l10n = context.l10n;
     final w = ref.watch(filterWheelProvider).value;
     final children = <Widget>[
@@ -2653,12 +2632,12 @@ class _SimpleFilterWheelWindowState
         ),
       );
     } else {
-      // Watched, so it's known by the time a filter is tapped.
-      final planRunning =
-          ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
-      final sent = _sent == null
+      final sentSlot = command.phase == DeviceCommandPhase.moving
+          ? command.target
+          : null;
+      final sent = sentSlot == null
           ? null
-          : w.slots.where((s) => s.position == _sent).firstOrNull;
+          : w.slots.where((s) => s.position == sentSlot).firstOrNull;
       final moving = sent != null || w.isMoving;
       final pending = w.isAwaitingUser ? w.pending : null;
       children.add(
@@ -2683,17 +2662,14 @@ class _SimpleFilterWheelWindowState
           ),
         ),
       );
-      if (_asking != null) {
-        final slot = _asking!;
+      if (command.phase == DeviceCommandPhase.asking && command.by == this) {
+        final cmd = ref.read(filterWheelCommandProvider.notifier);
         children.add(
           simpleWindowConfirm(
             question: l10n.devicePlanRunningChangeFilter,
             confirm: l10n.deviceChangeAnyway,
-            onCancel: () => setState(() => _asking = null),
-            onConfirm: () {
-              setState(() => _asking = null);
-              _change(slot);
-            },
+            onCancel: cmd.cancel,
+            onConfirm: cmd.confirm,
           ),
         );
       }
@@ -2748,7 +2724,7 @@ class _SimpleFilterWheelWindowState
                   return DecoratedBox(
                     decoration: BoxDecoration(
                       color: AraColors.tileFill,
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(AraRadius.container),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2764,16 +2740,17 @@ class _SimpleFilterWheelWindowState
                               end: 14,
                             ),
                             label: _labelled(slot),
-                            selected: (_sent ?? w.currentSlot) == slot.position,
-                            radius: 8,
+                            selected:
+                                (sentSlot ?? w.currentSlot) == slot.position,
+                            radius: AraRadius.container,
                             onTap:
                                 moving ||
                                     pending != null ||
                                     slot.position == w.currentSlot
                                 ? null
-                                : () => planRunning
-                                      ? setState(() => _asking = slot.position)
-                                      : _change(slot.position),
+                                : () => ref
+                                      .read(filterWheelCommandProvider.notifier)
+                                      .request(slot.position, by: this),
                           ),
                       ],
                     ),
@@ -2798,18 +2775,6 @@ class _SimpleFilterWheelWindowState
     );
   }
 
-  Future<void> _change(int position) async {
-    setState(() {
-      _sent = position;
-      _sawMove = false;
-    });
-    _settleTimer?.cancel();
-    _settleTimer = Timer(_settle, () {
-      if (!_sawMove) _clearSent();
-    });
-    if (!await _run((n) => n.changeFilter(position))) _clearSent();
-  }
-
   /// False when the wheel refused or dropped it (a pill says why).
   Future<bool> _run(Future<bool> Function(FilterWheelNotifier) action) async {
     final notify = userNotifier(
@@ -2824,7 +2789,7 @@ class _SimpleFilterWheelWindowState
     } catch (e) {
       notify(
         l10n.deviceCouldntChangeFilter,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
       return false;
@@ -3229,7 +3194,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntSetPort(p.label),
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     } finally {
@@ -3526,7 +3491,7 @@ class _SimpleFlatPanelWindowState extends ConsumerState<SimpleFlatPanelWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntChangeFlatPanel,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     } finally {
@@ -3593,7 +3558,7 @@ class _FlatPanelFacePainter extends CustomPainter {
     final c = size.center(Offset.zero);
     final r = size.shortestSide / 2;
     final face = Rect.fromCircle(center: c, radius: r - 5);
-    canvas.drawCircle(c, r - 5, Paint()..color = const Color(0xFF111111));
+    canvas.drawCircle(c, r - 5, Paint()..color = AraColors.flatPanelFace);
     if (glow > 0) {
       canvas.drawCircle(
         c,
@@ -3601,8 +3566,8 @@ class _FlatPanelFacePainter extends CustomPainter {
         Paint()
           ..shader = RadialGradient(
             colors: [
-              const Color(0xFFFFFBE8).withValues(alpha: glow),
-              const Color(0xFFB8B29A).withValues(alpha: glow),
+              AraColors.flatPanelLightCentre.withValues(alpha: glow),
+              AraColors.flatPanelLightEdge.withValues(alpha: glow),
             ],
           ).createShader(face),
       );
@@ -3610,9 +3575,9 @@ class _FlatPanelFacePainter extends CustomPainter {
     if (hasCover && open < 1) {
       canvas.save();
       canvas.clipPath(Path()..addOval(face));
-      final lid = Paint()..color = const Color(0xFF303030);
+      final lid = Paint()..color = AraColors.flatPanelLid;
       final seam = Paint()
-        ..color = const Color(0xFF242424)
+        ..color = AraColors.flatPanelSeam
         ..strokeWidth = 1;
       final shift = face.width / 2 * open;
       for (final (left, dir) in [(face.left, -1.0), (face.center.dx, 1.0)]) {
@@ -3714,8 +3679,7 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
         children.add(
           Text(
             l10n.deviceSafetyLimitsNotLoaded,
-            style: AraText.caption.copyWith(
-              fontSize: 12,
+            style: kSimpleCaption.copyWith(
               color: AraColors.accentWarning,
             ),
           ),
@@ -3965,8 +3929,7 @@ class _WeatherAgeState extends State<_WeatherAge> {
           ? l10n.deviceLastReadingAgo(_age(age))
           : l10n.deviceUpdatedAgo(_age(age)),
       key: const Key('simple-weather-age'),
-      style: AraText.caption.copyWith(
-        fontSize: 12,
+      style: kSimpleCaption.copyWith(
         color: stale ? AraColors.accentWarning : null,
       ),
     );
@@ -4014,7 +3977,7 @@ class _WeatherTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final warn = past != null;
-    final caption = AraText.caption.copyWith(fontSize: 12);
+    final caption = kSimpleCaption;
     final amber = caption.copyWith(color: AraColors.accentWarning);
     // A detail past the limit is all the caption shows after the name, so its
     // one line under a warning can't cut it off (screen readers hear them all).
@@ -4045,7 +4008,7 @@ class _WeatherTile extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: AraColors.tileFill,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AraRadius.simplePanel),
           border: warn
               ? Border.all(color: AraColors.accentWarning, width: 1.5)
               : null,
@@ -4068,16 +4031,11 @@ class _WeatherTile extends StatelessWidget {
                         if (unitBeside && unit.isNotEmpty)
                           TextSpan(
                             text: ' $unit',
-                            style: kSimpleText.copyWith(
-                              fontSize: 13,
-                              color: AraColors.textSecondary,
-                            ),
+                            style: kSimpleUnit,
                           ),
                       ],
                     ),
-                    style: kSimpleText.copyWith(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w600,
+                    style: kSimpleReading.copyWith(
                       height: 1.2,
                       color: numberPast ? AraColors.accentWarning : null,
                     ),
@@ -4390,7 +4348,7 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
                 where == null
                     ? l10n.deviceAzimuth
                     : '${l10n.deviceAzimuth} · $where',
-                style: AraText.caption.copyWith(fontSize: 12),
+                style: kSimpleCaption,
               ),
               moving,
             ],
@@ -4574,7 +4532,7 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
       asks.clear();
       notify(
         l10n.deviceCouldntMoveDome,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -4615,7 +4573,7 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
       ref.read(domeShutterProvider.notifier).cancelAsk();
       notify(
         l10n.deviceCouldntMoveDome,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -4631,7 +4589,7 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
     } catch (e) {
       notify(
         l10n.deviceCouldntStopDome,
-        detail: describeEquipmentError(e),
+        detail: failureReason(l10n, e),
         error: true,
       );
     }
@@ -4727,8 +4685,8 @@ class _AllSkyDomePainter extends CustomPainter {
   final double open;
   final bool moving;
 
-  static const _lower = [Color(0xFF808080), Color(0xFF4A4A4A)];
-  static const _shell = [Color(0xFFA8A8A8), Color(0xFF6A6A6A)];
+  static const _lower = [AraColors.domeLowerLight, AraColors.domeLowerDark];
+  static const _shell = [AraColors.domeShellLight, AraColors.domeShellDark];
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -4775,7 +4733,7 @@ class _AllSkyDomePainter extends CustomPainter {
       Rect.fromLTWH(cx - r * 1.04, by, r * 2.08, 4 * k),
       Radius.circular(2 * k),
     );
-    canvas.drawRRect(plinth, Paint()..color = const Color(0xFF8A8A8A));
+    canvas.drawRRect(plinth, Paint()..color = AraColors.domePlinth);
     canvas.drawRRect(plinth, line);
     // The door, its top cut like a hexagon.
     final dy = cy + 14 * k;
@@ -4818,7 +4776,7 @@ class _AllSkyDomePainter extends CustomPainter {
     }
     // The hinge bolt, over all four shells.
     final bolt = Offset(cx, cy);
-    canvas.drawCircle(bolt, 3 * k, Paint()..color = const Color(0xFFD0D0D0));
+    canvas.drawCircle(bolt, 3 * k, Paint()..color = AraColors.domeBolt);
     canvas.drawCircle(bolt, 3 * k, line);
   }
 
@@ -5101,7 +5059,7 @@ class _DomeDialPainter extends CustomPainter {
       );
     }
     final now = slit(azimuth);
-    canvas.drawPath(now, Paint()..color = const Color(0xF26E6E6E));
+    canvas.drawPath(now, Paint()..color = AraColors.domeSlit);
     canvas.drawPath(
       now,
       Paint()
@@ -5238,7 +5196,7 @@ class _SimpleSafetyMonitorWindowState
             ),
             decoration: BoxDecoration(
               color: AraColors.tileFill,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AraRadius.simplePanel),
               border: safe ? null : Border.all(color: colour, width: 1.5),
             ),
             child: Row(
@@ -5266,8 +5224,7 @@ class _SimpleSafetyMonitorWindowState
                       if (since != null)
                         Text(
                           since,
-                          style: AraText.caption.copyWith(
-                            fontSize: 12,
+                          style: kSimpleCaption.copyWith(
                             fontFeatures: const [FontFeature.tabularFigures()],
                           ),
                         ),
@@ -5282,7 +5239,7 @@ class _SimpleSafetyMonitorWindowState
       if (!safe || breaches.isNotEmpty) {
         Widget heading(String text) => Padding(
           padding: const EdgeInsets.only(top: AraSpace.s8),
-          child: Text(text, style: AraText.caption.copyWith(fontSize: 12)),
+          child: Text(text, style: kSimpleCaption),
         );
         Widget row(IconData icon, String text, {bool warn = false}) => Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -5297,7 +5254,7 @@ class _SimpleSafetyMonitorWindowState
               child: Text(
                 text,
                 style: kSimpleText.copyWith(
-                  fontSize: 13,
+                  fontSize: AraFontSize.simpleUnit,
                   color: warn ? AraColors.accentWarning : null,
                 ),
               ),
@@ -5334,7 +5291,7 @@ class _SimpleSafetyMonitorWindowState
                   p.autoResumeWhenSafe
                       ? l10n.deviceResumesAfterSafe(p.resumeDelayMin)
                       : l10n.deviceStaysPaused,
-                  style: AraText.caption.copyWith(fontSize: 12),
+                  style: kSimpleCaption,
                 ),
               ),
           ]);

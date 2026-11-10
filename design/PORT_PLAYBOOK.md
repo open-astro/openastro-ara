@@ -2929,6 +2929,7 @@ On a packaged install neither line is reachable (NoNewPrivileges, above); the st
 | 9 | Usage error — bad or conflicting arguments (`usage`) |
 | 10 | chown failed / no resolvable owner (`chown_failed`) |
 | 11 | fsck failed on `--check` (`fsck_failed`) |
+| 12 | This kernel cannot mount exFAT: not listed, the module does not load, and no `mount.exfat` (`exfat_unsupported`). Erase as exFAT is refused before anything is unmounted or wiped |
 
 The table mirrors the header of `configure-storage.sh`; the script is the source of truth (#1248 reconciled the two — 9 had been listed as the fstab write failure).
 

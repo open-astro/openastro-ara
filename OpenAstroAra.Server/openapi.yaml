@@ -5331,6 +5331,25 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/StorageDeviceDto'
+  /api/v1/storage/contents:
+    get:
+      tags:
+        - Storage
+      summary: 'How many frames a drive holds, the newest one''s date and how many were never copied; Readable is false for a drive that is not mounted.'
+      operationId: GetStorageContents
+      parameters:
+        - name: uuid
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageContentsDto'
   /api/v1/storage/configure:
     post:
       tags:
@@ -15615,6 +15634,33 @@ components:
           type:
             - 'null'
             - string
+    StorageContentsDto:
+      required:
+        - readable
+        - frames
+        - newest_frame_utc
+        - frames_not_copied
+      type: object
+      properties:
+        readable:
+          type: boolean
+        frames:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        newest_frame_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        frames_not_copied:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
     StorageCopyRequestDto:
       required:
         - target_uuid

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/equipment_device_status.dart';
-import '../../../services/equipment_device_api.dart';
 import '../../../models/flat_panel_status.dart';
 import '../../../state/equipment/flat_panel_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
@@ -12,6 +11,8 @@ import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
+import '../../../util/friendly_error.dart';
+import '../../../l10n/l10n.dart';
 
 /// §37.4 Flat Panel (CoverCalibrator under Alpaca). Connect/disconnect/reconnect
 /// run through the shared [EquipmentConnectionCard] on the live [flatPanelProvider]
@@ -270,6 +271,7 @@ class _FlatControlsState extends ConsumerState<_FlatControls> {
     // reading "off" until the next poll, contradicting the light itself.
     final impliedLight = lightOn ?? (brightness == null ? null : brightness > 0);
     if (impliedLight != null) setState(() => _pendingLight = impliedLight);
+    final l10n = context.l10n;
     try {
       final notifier = ref.read(flatPanelProvider.notifier);
       final performed = await notifier.apply(
@@ -297,7 +299,7 @@ class _FlatControlsState extends ConsumerState<_FlatControls> {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text("Couldn't drive the flat panel: ${describeEquipmentError(e)}"),
+          content: Text("Couldn't drive the flat panel: ${failureReason(l10n, e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );

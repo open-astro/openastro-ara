@@ -12,6 +12,9 @@ import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 import 'package:openastroara/widgets/imaging/exposure_controls_panel.dart';
+import 'package:openastroara/theme/ara_colors.dart';
+import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 
 class _FakeWheelNotifier extends FilterWheelNotifier {
   final List<int> changeCalls = [];
@@ -377,6 +380,53 @@ void main() {
     expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
   });
 
+  for (final reduce in [false, true]) {
+    testWidgets('a moving wheel blinks the underline green, as Simple Mode does; steady with reduce motion: $reduce',
+        (tester) async {
+      final container = ProviderContainer(overrides: [
+        filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+        filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+      ]);
+      _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(disableAnimations: reduce),
+            child: const Scaffold(body: ExposureControlsPanel()),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+      final wheel = container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
+      wheel.park(FilterWheelStatus(
+        deviceId: 'fw',
+        name: 'FILTERWHEEL',
+        connectionState: EquipmentConnectionState.connected,
+        runtimeState: 'moving',
+        currentSlot: null,
+        slots: const [FilterSlot(position: 0, name: 'L', focusOffset: 0)],
+      ));
+      await tester.pump();
+      Color underline() => (tester
+              .widget<DropdownButtonFormField<String>>(find.byType(DropdownButtonFormField<String>))
+              .decoration
+              .disabledBorder as UnderlineInputBorder)
+          .borderSide
+          .color;
+      expect(underline(), AraColors.accentConnected, reason: 'green, never the fault red');
+      await tester.pump(const Duration(milliseconds: 300));
+      if (reduce) {
+        expect(underline(), AraColors.accentConnected, reason: 'reduce motion: no blink');
+      } else {
+        expect(underline(), isNot(AraColors.accentConnected), reason: 'it blinks');
+      }
+      wheel.park(_wheelAt(0));
+      await tester.pumpAndSettle();
+    });
+  }
+
   testWidgets('picking a filter also moves the connected wheel to that slot',
       (tester) async {
     final container = ProviderContainer(overrides: [
@@ -414,6 +464,44 @@ void main() {
       findsOneWidget,
       reason: 'the picker shows the wheel\'s new filter after a successful move',
     );
+  });
+
+  testWidgets('while a plan runs, a filter change asks first; Cancel leaves the wheel alone (ADR 0013)',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+      sequenceRunStateProvider.overrideWith(_PlanRunning.new),
+    ]);
+    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+    ));
+    await tester.pumpAndSettle();
+    final wheel = container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
+    wheel.park(_wheelAt(0));
+    await tester.pump();
+
+    await tester.tap(find.text('L').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ha').last);
+    await tester.pumpAndSettle();
+    expect(find.text('A plan is running. Change the filter anyway?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(wheel.changeCalls, isEmpty);
+
+    await tester.tap(find.text('L').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ha').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Change anyway'));
+    await tester.pump();
+    expect(wheel.changeCalls, [1]);
+    wheel.park(_wheelAt(1));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('picking the already-current slot does not re-move the wheel',
@@ -989,4 +1077,10 @@ void main() {
           const TextInputType.numberWithOptions(decimal: true));
     });
   });
+}
+
+class _PlanRunning extends SequenceRunStateNotifier {
+  @override
+  Future<SequenceRunStateInfo?> build() async =>
+      const SequenceRunStateInfo(sequenceId: 'seq-1', state: SequenceRunState.running);
 }

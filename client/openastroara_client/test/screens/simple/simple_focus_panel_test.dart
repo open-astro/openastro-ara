@@ -285,7 +285,7 @@ void main() {
     testWidgets('is never cut, and the panel keeps its height', (tester) async {
       final (_, live) = await _pump(tester, focuser: _focuser());
       final start = tester.getSize(find.byType(SimpleFocusPanel)).height;
-      live.state = AutofocusLive(run: AutofocusRun.idle, error: long);
+      live.state = AutofocusLive(run: AutofocusRun.idle, error: StateError(long));
       await tester.pump();
       expect(tester.renderObject<RenderParagraph>(find.text(long)).didExceedMaxLines, isFalse);
       expect(tester.takeException(), isNull);
@@ -295,7 +295,7 @@ void main() {
 
     testWidgets('over a weak fit takes the warning\'s room, so nothing overflows', (tester) async {
       final (_, live) = await _pump(tester, focuser: _focuser());
-      live.state = AutofocusLive(run: weak, error: long);
+      live.state = AutofocusLive(run: weak, error: StateError(long));
       await tester.pump();
       expect(tester.takeException(), isNull);
       expect(find.byKey(const Key('simple-focus-weak-fit')), findsNothing);

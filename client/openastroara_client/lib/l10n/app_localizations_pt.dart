@@ -2138,6 +2138,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String guideFindStarFailed(String reason) {
+    return 'Couldn\'t find a star: $reason';
+  }
+
+  @override
   String errorCouldnt(String action) {
     return 'Couldn\'t $action';
   }
@@ -3178,6 +3183,57 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get storageConfigureMountFailed =>
       'The disk was prepared but could not be connected.';
+
+  @override
+  String get storageDiskContentsChecking => 'Checking what is on this disk…';
+
+  @override
+  String storageDiskContentsFrames(int count, String date) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'This disk holds $count frames. The newest is from $date.',
+      one: 'This disk holds 1 frame, from $date.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String storageDiskContentsFramesUndated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'This disk holds $count frames.',
+      one: 'This disk holds 1 frame.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get storageDiskContentsReadFailed =>
+      'ARA couldn\'t read what is on this disk. Erasing it loses everything on it.';
+
+  @override
+  String get storageDiskContentsNone => 'There are no frames on this disk.';
+
+  @override
+  String storageDiskContentsNotCopied(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count frames have not been copied to another disk by ARA.',
+      one: '1 frame has not been copied to another disk by ARA.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get storageDiskContentsUnknown =>
+      'ARA can\'t see what is on this disk while it isn\'t connected. Erasing it loses everything on it.';
+
+  @override
+  String get storageConfigureExfatUnsupported =>
+      'This server can\'t read exFAT drives. Erase the drive as ext4 and ARA can use it.';
 
   @override
   String storageConfigureFailed(String name) {
@@ -5725,6 +5781,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String guideFindStarFailed(String reason) {
+    return 'Não foi possível encontrar uma estrela: $reason';
+  }
+
+  @override
   String errorCouldnt(String action) {
     return 'Não foi possível $action';
   }
@@ -6770,6 +6831,57 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get storageConfigureMountFailed =>
       'O disco foi preparado, mas não pôde ser conectado.';
+
+  @override
+  String get storageDiskContentsChecking => 'Verificando o que há neste disco…';
+
+  @override
+  String storageDiskContentsFrames(int count, String date) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Este disco tem $count quadros. O mais recente é de $date.',
+      one: 'Este disco tem 1 quadro, de $date.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String storageDiskContentsFramesUndated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Este disco tem $count quadros.',
+      one: 'Este disco tem 1 quadro.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get storageDiskContentsReadFailed =>
+      'O ARA não conseguiu ler o que há neste disco. Apagar o disco perde tudo o que há nele.';
+
+  @override
+  String get storageDiskContentsNone => 'Não há quadros neste disco.';
+
+  @override
+  String storageDiskContentsNotCopied(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count quadros não foram copiados para outro disco pelo ARA.',
+      one: '1 quadro não foi copiado para outro disco pelo ARA.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get storageDiskContentsUnknown =>
+      'O ARA não consegue ver o que há neste disco enquanto ele não está conectado. Apagar o disco perde tudo o que há nele.';
+
+  @override
+  String get storageConfigureExfatUnsupported =>
+      'Este servidor não consegue ler discos exFAT. Apague o disco como ext4 para o ARA poder usá-lo.';
 
   @override
   String storageConfigureFailed(String name) {
