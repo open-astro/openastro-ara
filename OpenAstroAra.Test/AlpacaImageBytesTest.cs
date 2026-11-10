@@ -63,6 +63,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Byte_payload_keeps_values_unscaled() {
+            // A server narrows Int32 to Byte when every value fits (AlpacaBridge does for
+            // short biases); the values are the real ADU, not an 8-bit image to stretch.
+            byte[] payload = [51, 0, 255, 13];
+            var (pixels, _, _) = AlpacaImageBytes.Decode(Body(2, 2, 6, payload));
+            Assert.That(pixels, Is.EqualTo(new ushort[] { 51, 255, 0, 13 }));
+        }
+
+        [Test]
         public void Refusals_are_loud() {
             Assert.Throws<InvalidOperationException>(() => AlpacaImageBytes.Decode(new byte[10]),
                 "truncated metadata");

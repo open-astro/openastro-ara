@@ -35,6 +35,10 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Fixed (capture)
+
+- Frames whose values all fit in 0-255 (for example a short bias from a camera with a low black level) are saved with their real values. Before, when the camera server sent such a frame in the narrow Alpaca ImageBytes Byte format, Ara multiplied every pixel by 256. Frames already saved this way are exact: divide each value by 256.
+
 ### Fixed (Simple Mode focus)
 
 - Simple Mode's Focus shows a Bahtinov readout that is already running (started by another client, or still running after a reconnect), as the Full UI does. Before, with a focuser connected, it showed autofocus and hid the readout's frame (#1590).
