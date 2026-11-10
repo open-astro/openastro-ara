@@ -19,19 +19,21 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>
 /// The per-service half of the §42.3 second channel: a <see cref="DeviceHealthTracker"/> plus the
-/// standing <c>degraded</c> fault it published, so the four polling services (filter wheel, camera,
-/// focuser, rotator) share one piece of code instead of four copies. Not synchronized — the owning
+/// standing <c>degraded</c> fault it published, so the polling services share one piece of code
+/// instead of a copy each. Not synchronized — the owning
 /// service calls it under its connection gate, like the probe.
 /// </summary>
 internal sealed class DeviceHealthWatch {
     private readonly DeviceType _deviceType;
     private readonly IEquipmentFaultSink? _faults;
-    private readonly DeviceHealthTracker _tracker = new();
+    private readonly DeviceHealthTracker _tracker;
     private EquipmentFaultEvent? _degradedFault; // the standing fault to resolve when the reads come back
 
-    public DeviceHealthWatch(DeviceType deviceType, IEquipmentFaultSink? faults) {
+    public DeviceHealthWatch(DeviceType deviceType, IEquipmentFaultSink? faults,
+            int threshold = DeviceHealthTracker.DefaultThreshold) {
         _deviceType = deviceType;
         _faults = faults;
+        _tracker = new DeviceHealthTracker(threshold);
     }
 
     /// <summary>One call per refresh tick with the essential read's outcome. Publishes the
