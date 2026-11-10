@@ -518,7 +518,7 @@ class _Hero extends StatelessWidget {
                   TurnHint(hint: bahtinovHint(context.l10n, status)),
                 ],
                 SizedBox(height: short ? 10 : 18),
-                const Divider(height: 1, color: Color(0x1FFFFFFF)),
+                const Divider(height: 1, color: AraColors.frameDivider),
                 SizedBox(height: short ? 8 : 14),
                 Row(
                   children: [
@@ -653,7 +653,7 @@ class BahtinovFrameView extends StatelessWidget {
       child: Container(
         height: height,
         width: double.infinity,
-        color: const Color(0xFF07080B),
+        color: AraColors.frameBackdrop,
         child: Stack(
           children: [
             Positioned.fill(
@@ -696,7 +696,7 @@ class BahtinovFrameView extends StatelessWidget {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: const Text('Tap a star to zoom in on it',
-                      style: TextStyle(fontSize: 12, color: Color(0xFFC8C8C8))),
+                      style: TextStyle(fontSize: 12, color: AraColors.onFrameText)),
                 ),
               ),
             if (jpeg != null && (crop != null || picked))
@@ -719,7 +719,7 @@ class BahtinovFrameView extends StatelessWidget {
                               TextButton(
                                 onPressed: () => onZoom!(z),
                                 style: TextButton.styleFrom(
-                                  foregroundColor: z == zoom ? Colors.white : const Color(0xFF9A9A9A),
+                                  foregroundColor: z == zoom ? Colors.white : AraColors.onFrameTextQuiet,
                                   visualDensity: VisualDensity.compact,
                                   minimumSize: const Size(36, 32),
                                   padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -737,7 +737,7 @@ class BahtinovFrameView extends StatelessWidget {
                         onPressed: onClearPick,
                         style: TextButton.styleFrom(
                           backgroundColor: Colors.black.withValues(alpha: 0.55),
-                          foregroundColor: const Color(0xFFC8C8C8),
+                          foregroundColor: AraColors.onFrameText,
                           visualDensity: VisualDensity.compact,
                         ),
                         icon: const Icon(Icons.zoom_out_map, size: 16),
@@ -792,11 +792,11 @@ class BahtinovFrameView extends StatelessWidget {
                     children: [
                       _LegendSwatch(color: AraColors.accentBusy, dashed: true),
                       SizedBox(width: 6),
-                      Text('X spikes', style: TextStyle(fontSize: 12, color: Color(0xFFC8C8C8))),
+                      Text('X spikes', style: TextStyle(fontSize: 12, color: AraColors.onFrameText)),
                       SizedBox(width: 12),
                       _LegendSwatch(color: AraColors.accentInfo),
                       SizedBox(width: 6),
-                      Text('Centre spike', style: TextStyle(fontSize: 12, color: Color(0xFFC8C8C8))),
+                      Text('Centre spike', style: TextStyle(fontSize: 12, color: AraColors.onFrameText)),
                     ],
                   ),
                 ),
@@ -811,7 +811,7 @@ class BahtinovFrameView extends StatelessWidget {
                     color: Colors.black.withValues(alpha: 0.55),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Text(caption!, style: const TextStyle(fontSize: 12, color: Color(0xFFC8C8C8))),
+                  child: Text(caption!, style: const TextStyle(fontSize: 12, color: AraColors.onFrameText)),
                 ),
               ),
           ],
@@ -993,13 +993,13 @@ class BahtinovTrendChart extends StatelessWidget {
           lineBarsData: [
             LineChartBarData(
               spots: spots,
-              color: const Color(0xFF90CAF9),
+              color: AraColors.bahtinovChart,
               barWidth: 2,
               dotData: FlDotData(
                 show: true,
                 getDotPainter: (spot, _, _, index) => FlDotCirclePainter(
                   radius: index == spots.length - 1 ? 5 : 3,
-                  color: index == spots.length - 1 ? AraColors.accentBusy : const Color(0xFF90CAF9),
+                  color: index == spots.length - 1 ? AraColors.accentBusy : AraColors.bahtinovChart,
                   strokeWidth: 0,
                 ),
               ),

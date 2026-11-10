@@ -3566,7 +3566,7 @@ class _FlatPanelFacePainter extends CustomPainter {
     final c = size.center(Offset.zero);
     final r = size.shortestSide / 2;
     final face = Rect.fromCircle(center: c, radius: r - 5);
-    canvas.drawCircle(c, r - 5, Paint()..color = const Color(0xFF111111));
+    canvas.drawCircle(c, r - 5, Paint()..color = AraColors.flatPanelFace);
     if (glow > 0) {
       canvas.drawCircle(
         c,
@@ -3574,8 +3574,8 @@ class _FlatPanelFacePainter extends CustomPainter {
         Paint()
           ..shader = RadialGradient(
             colors: [
-              const Color(0xFFFFFBE8).withValues(alpha: glow),
-              const Color(0xFFB8B29A).withValues(alpha: glow),
+              AraColors.flatPanelLightCentre.withValues(alpha: glow),
+              AraColors.flatPanelLightEdge.withValues(alpha: glow),
             ],
           ).createShader(face),
       );
@@ -3583,9 +3583,9 @@ class _FlatPanelFacePainter extends CustomPainter {
     if (hasCover && open < 1) {
       canvas.save();
       canvas.clipPath(Path()..addOval(face));
-      final lid = Paint()..color = const Color(0xFF303030);
+      final lid = Paint()..color = AraColors.flatPanelLid;
       final seam = Paint()
-        ..color = const Color(0xFF242424)
+        ..color = AraColors.flatPanelSeam
         ..strokeWidth = 1;
       final shift = face.width / 2 * open;
       for (final (left, dir) in [(face.left, -1.0), (face.center.dx, 1.0)]) {
@@ -4700,8 +4700,8 @@ class _AllSkyDomePainter extends CustomPainter {
   final double open;
   final bool moving;
 
-  static const _lower = [Color(0xFF808080), Color(0xFF4A4A4A)];
-  static const _shell = [Color(0xFFA8A8A8), Color(0xFF6A6A6A)];
+  static const _lower = [AraColors.domeLowerLight, AraColors.domeLowerDark];
+  static const _shell = [AraColors.domeShellLight, AraColors.domeShellDark];
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -4748,7 +4748,7 @@ class _AllSkyDomePainter extends CustomPainter {
       Rect.fromLTWH(cx - r * 1.04, by, r * 2.08, 4 * k),
       Radius.circular(2 * k),
     );
-    canvas.drawRRect(plinth, Paint()..color = const Color(0xFF8A8A8A));
+    canvas.drawRRect(plinth, Paint()..color = AraColors.domePlinth);
     canvas.drawRRect(plinth, line);
     // The door, its top cut like a hexagon.
     final dy = cy + 14 * k;
@@ -4791,7 +4791,7 @@ class _AllSkyDomePainter extends CustomPainter {
     }
     // The hinge bolt, over all four shells.
     final bolt = Offset(cx, cy);
-    canvas.drawCircle(bolt, 3 * k, Paint()..color = const Color(0xFFD0D0D0));
+    canvas.drawCircle(bolt, 3 * k, Paint()..color = AraColors.domeBolt);
     canvas.drawCircle(bolt, 3 * k, line);
   }
 
@@ -5074,7 +5074,7 @@ class _DomeDialPainter extends CustomPainter {
       );
     }
     final now = slit(azimuth);
-    canvas.drawPath(now, Paint()..color = const Color(0xF26E6E6E));
+    canvas.drawPath(now, Paint()..color = AraColors.domeSlit);
     canvas.drawPath(
       now,
       Paint()

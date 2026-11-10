@@ -49,7 +49,7 @@ class GuideCalibrationPanel extends StatelessWidget {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: Container(
-              color: const Color(0xFF07080B),
+              color: AraColors.frameBackdrop,
               child: view.hasSteps
                   ? CustomPaint(painter: CalibrationStepsPainter(view.steps))
                   : Center(

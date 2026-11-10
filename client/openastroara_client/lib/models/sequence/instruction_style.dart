@@ -13,15 +13,15 @@ import 'instruction_catalog.dart';
 /// meanings and are NOT reused here except blue-adjacent info tones.
 Color instructionCategoryColor(InstructionCategory category) =>
     switch (category) {
-      InstructionCategory.camera => const Color(0xFF64B5F6), // sky blue
-      InstructionCategory.filterWheel => const Color(0xFFBA68C8), // violet
-      InstructionCategory.focuser => const Color(0xFF4DB6AC), // teal
-      InstructionCategory.rotator => const Color(0xFF7986CB), // indigo
-      InstructionCategory.telescope => const Color(0xFFFFD54F), // gold
-      InstructionCategory.guider => const Color(0xFF81C784), // soft green
-      InstructionCategory.switchDevice => const Color(0xFFFF8A65), // coral
-      InstructionCategory.calibration => const Color(0xFFA1887F), // warm grey
-      InstructionCategory.utility => const Color(0xFF90A4AE), // blue-grey
+      InstructionCategory.camera => AraColors.instructionCamera, // sky blue
+      InstructionCategory.filterWheel => AraColors.instructionFilterWheel, // violet
+      InstructionCategory.focuser => AraColors.instructionFocuser, // teal
+      InstructionCategory.rotator => AraColors.instructionRotator, // indigo
+      InstructionCategory.telescope => AraColors.instructionTelescope, // gold
+      InstructionCategory.guider => AraColors.instructionGuider, // soft green
+      InstructionCategory.switchDevice => AraColors.instructionSwitch, // coral
+      InstructionCategory.calibration => AraColors.instructionCalibration, // warm grey
+      InstructionCategory.utility => AraColors.instructionUtility, // blue-grey
       InstructionCategory.container => AraColors.textSecondary,
     };
 

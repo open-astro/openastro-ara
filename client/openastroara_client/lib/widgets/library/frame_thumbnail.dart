@@ -108,7 +108,7 @@ class _FrameThumbnailState extends State<FrameThumbnail> {
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
-                          colors: [Colors.transparent, Color(0xB3000000)],
+                          colors: [Colors.transparent, AraColors.thumbnailCaptionShade],
                         ),
                       ),
                       child: Row(
@@ -170,7 +170,7 @@ class _FrameThumbnailState extends State<FrameThumbnail> {
                           decoration: BoxDecoration(
                             color: selected
                                 ? AraColors.selectionBg
-                                : const Color(0x66000000),
+                                : AraColors.thumbnailTickShade,
                             shape: BoxShape.circle,
                             border: Border.all(color: Colors.white, width: 1.5),
                           ),
@@ -182,7 +182,7 @@ class _FrameThumbnailState extends State<FrameThumbnail> {
                       ),
                     ),
                   if (_hovered && !selected)
-                    const ColoredBox(color: Color(0x14FFFFFF)),
+                    const ColoredBox(color: AraColors.thumbnailHover),
                 ],
               ),
             ),

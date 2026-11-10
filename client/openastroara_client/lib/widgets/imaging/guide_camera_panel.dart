@@ -264,7 +264,7 @@ class GuideCameraView extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: Container(
-        color: const Color(0xFF07080B),
+        color: AraColors.frameBackdrop,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final box = constraints.biggest;

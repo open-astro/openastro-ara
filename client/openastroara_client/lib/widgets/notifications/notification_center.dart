@@ -145,7 +145,7 @@ class _NotificationCenter extends ConsumerWidget {
                     color: AraColors.border.withValues(alpha: 0.8), width: 0.5),
                 boxShadow: const [
                   BoxShadow(
-                      color: Color(0x66000000), blurRadius: 28, offset: Offset(0, 8)),
+                      color: AraColors.panelShadow, blurRadius: 28, offset: Offset(0, 8)),
                 ],
               ),
               child: Material(

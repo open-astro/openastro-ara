@@ -321,7 +321,7 @@ class _Hero extends StatelessWidget {
             TurnHint(hint: hint),
           ],
           SizedBox(height: short ? 10 : 18),
-          const Divider(height: 1, color: Color(0x1FFFFFFF)),
+          const Divider(height: 1, color: AraColors.frameDivider),
           SizedBox(height: short ? 8 : 14),
           Row(
             children: [

@@ -257,7 +257,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
       key: const Key('polar-align-stages'),
       children: [
         for (var i = 0; i < labels.length; i++) ...[
-          if (i > 0) const Expanded(child: Divider(height: 1, color: Color(0x1FFFFFFF))),
+          if (i > 0) const Expanded(child: Divider(height: 1, color: AraColors.frameDivider)),
           Builder(builder: (context) {
             final done = i < current || (checkedDone && i == current);
             final active = i == current && !checkedDone;
@@ -565,13 +565,13 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                   Text(rating.$2, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500)),
                 ],
                 const SizedBox(height: 18),
-                const Divider(height: 1, color: Color(0x1FFFFFFF)),
+                const Divider(height: 1, color: AraColors.frameDivider),
                 const SizedBox(height: 16),
                 IntrinsicHeight(
                   child: Row(
                     children: [
                       Expanded(child: _axisStat('Altitude', alt, polarAltHint(context.l10n, alt), color)),
-                      const VerticalDivider(width: 1, color: Color(0x1FFFFFFF)),
+                      const VerticalDivider(width: 1, color: AraColors.frameDivider),
                       Expanded(child: _axisStat('Azimuth', az, polarAzHint(context.l10n, az, southern: _southern), color)),
                     ],
                   ),
@@ -997,13 +997,13 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                 ),
               ),
               const SizedBox(height: 20),
-              const Divider(height: 1, color: Color(0x1FFFFFFF)),
+              const Divider(height: 1, color: AraColors.frameDivider),
               const SizedBox(height: 18),
               IntrinsicHeight(
                 child: Row(
                   children: [
                     Expanded(child: _axisStat('Altitude', live.altErrorArcmin, polarAltHint(context.l10n, live.altErrorArcmin), color)),
-                    const VerticalDivider(width: 1, color: Color(0x1FFFFFFF)),
+                    const VerticalDivider(width: 1, color: AraColors.frameDivider),
                     Expanded(child: _axisStat('Azimuth', live.azErrorArcmin, polarAzHint(context.l10n, live.azErrorArcmin, southern: _southern), color)),
                   ],
                 ),
@@ -1165,7 +1165,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             Text(rating.$2, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w500)),
           ],
           const SizedBox(height: 18),
-          const Divider(height: 1, color: Color(0x1FFFFFFF)),
+          const Divider(height: 1, color: AraColors.frameDivider),
           const SizedBox(height: 16),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,

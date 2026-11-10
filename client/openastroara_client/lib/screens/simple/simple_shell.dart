@@ -1067,7 +1067,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               key: const Key('simple-background-close'),
                               behavior: HitTestBehavior.opaque,
                               onTap: () => _tapImage(!showSky),
-                              child: const ColoredBox(color: Color(0x01000000)),
+                              child: const ColoredBox(color: AraColors.unseenPaint),
                             ),
                           ),
                         if (!hasFrame)
@@ -1392,7 +1392,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       () => _popover = _Popover.none,
                                     ),
                                     child: const ColoredBox(
-                                      color: Color(0x59000000), // 35 %
+                                      color: AraColors.popoverShade,
                                     ),
                                   ),
                                 ),
