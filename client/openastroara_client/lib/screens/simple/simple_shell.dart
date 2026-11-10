@@ -25,7 +25,6 @@ import '../../state/settings/equipment_connection_state.dart'
     show EquipmentDeviceType;
 import '../../widgets/equipment/alpaca_chooser_dialog.dart';
 import '../../services/equipment_driver_api.dart';
-import '../../models/polar_align.dart';
 import '../../state/app_shell_state.dart';
 import '../../state/launch_gate_state.dart';
 import '../../state/profile_management_state.dart';
@@ -36,7 +35,6 @@ import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../state/night_mode_state.dart';
-import '../../state/polar_align/polar_align_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/settings/cooling_fan_state.dart';
@@ -97,16 +95,10 @@ import '../shell_listeners.dart';
 import 'simple_preflight.dart';
 import 'simple_device_windows.dart';
 import 'simple_rig_storage.dart';
-import 'simple_focus_panel.dart';
-import '../../state/focus/autofocus_live_state.dart' show autofocusLiveProvider;
-import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
 import '../../state/focus/guide_focus_state.dart' show guideFocusProvider;
 import '../../state/settings/phd2_settings_state.dart'
     show phd2SettingsProvider;
-import '../../state/focus/bahtinov_focus_state.dart'
-    show MainFocusMethod, bahtinovFocusProvider, effectiveFocusMethodProvider;
 import 'simple_message_pills.dart';
-import 'simple_polar_panel.dart';
 import '../album/sky_album_screen.dart';
 import 'simple_plan_panel.dart';
 import 'simple_preview_panel.dart';
@@ -533,30 +525,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
   }
 
-  /// Leaving Manual before Finish asks for the mask to come off (DESIGN.md
-  /// Focus; ALP-4982), here once Focus has gone.
-  void _askMaskOff() {
-    if (!mounted) return;
-    final bahtinov = ref.read(bahtinovFocusProvider);
-    if (!bahtinov.status.hasMeasurement || bahtinov.finished) return;
-    final l10n = context.l10n;
-    ref
-        .read(simpleMessagesProvider.notifier)
-        .show(
-          SimpleMessageKind.question,
-          l10n.bahtinovMaskQuestion,
-          detail: l10n.bahtinovMaskQuestionDetail,
-          actions: [
-            SimpleMessageAction(l10n.bahtinovNotYet, () {}),
-            SimpleMessageAction(
-              l10n.bahtinovMaskRemoved,
-              () =>
-                  unawaited(ref.read(bahtinovFocusProvider.notifier).finish()),
-            ),
-          ],
-        );
-  }
-
   /// #1700 — a cooling camera and a switch, no fan chosen: a pill asks once.
   Future<void> _askCoolingFan() async {
     if (!await claimCoolingFanAsk(ref.read) || !mounted) return;
@@ -857,38 +825,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         _popover = next == null ? _Popover.none : _Popover.settings;
       });
     });
-    // A routine that fails says why on the left, fading like any error
-    // (user, 2026-11-04: not a sticky status pill).
-    ref.listen(polarAlignLiveProvider, (prev, next) {
-      if (prev?.phase == PolarAlignStates.failed ||
-          next.phase != PolarAlignStates.failed) {
-        return;
-      }
-      ref
-          .read(simpleMessagesProvider.notifier)
-          .show(
-            SimpleMessageKind.error,
-            context.l10n.polarPhaseFailed,
-            detail: next.errorMessage ?? next.errorReason,
-            origin: SimpleStatusOrigin.polar,
-          );
-    });
-    // Only a failure seen happening: Ara keeps its last run until it restarts,
-    // so the first read after a launch or reconnect is old news (ALP-4998).
-    ref.listen(autofocusLiveProvider.select((l) => (hydrated: l.hydrated, run: l.run)), (prev, live) {
-      final next = live.run;
-      if (prev == null || !prev.hydrated || prev.run.isFailed || !next.isFailed) {
-        return;
-      }
-      ref
-          .read(simpleMessagesProvider.notifier)
-          .show(
-            SimpleMessageKind.error,
-            context.l10n.focusCardFailed,
-            detail: MainFocusCard.failureText(context.l10n, next),
-            origin: SimpleStatusOrigin.focus,
-          );
-    });
+    for (final screen in SimpleScreen.all) {
+      screen.listen(context, ref);
+    }
     final pilot = ref.watch(simplePreflightProvider);
     final shown = ref.watch(simpleShowingProvider);
     _syncGuiderPoll(
@@ -896,38 +835,20 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         guiderStatusProvider.select((s) => s.value?.isBusy ?? false),
       ),
     );
-    // Leaving Focus takes its panel's mask question away: a pill asks.
-    if (_lastShown == SimpleModeScreen.focus &&
-        shown != SimpleModeScreen.focus) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _askMaskOff());
+    // The Screen that stopped showing tidies up (Focus: a pill asks for the mask).
+    final left = _lastShown;
+    if (left != null && SimpleScreen.of(left) != SimpleScreen.of(shown)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) SimpleScreen.of(left).onLeave(context, ref);
+      });
     }
     _lastShown = shown;
-    // Polar align shows its own camera's frames while the routine runs.
-    final polarFrame =
-        shown == SimpleModeScreen.polarAlign &&
-        simplePolarActive(ref.watch(polarAlignLiveProvider));
-    // Focus can show its run's frame, measured stars circled, when asked.
-    // Manual shows the Bahtinov readout's crop, spikes and all, there.
-    // Preview on the guide camera shows the frames the guider gives it.
-    final focusFrame = shown == SimpleModeScreen.preview
-        ? (simplePreviewGuide(ref)
-              ? ref.watch(guideFocusProvider.select((l) => l.frame))
-              : null)
-        : shown != SimpleModeScreen.focus
-        ? null
-        : ref.watch(simpleFocusScopeProvider) == SimpleFocusScope.guide
-        ? ref.watch(guideFocusProvider.select((l) => l.frame))
-        : ref.watch(effectiveFocusMethodProvider) == MainFocusMethod.bahtinov
-        ? ref.watch(bahtinovFocusProvider.select((l) => l.frame))
-        : ref.watch(simpleFocusStarsShownProvider)
-        ? ref.watch(autofocusLiveProvider.select((l) => l.frame))
-        : null;
+    final screenFrame = SimpleScreen.of(shown).frame(ref);
     // On the guide camera only its own frames count: the main camera's last
     // one would read as the guide camera's.
     final guidePreview = simpleShowsGuidePreview(ref);
     final hasFrame =
-        polarFrame ||
-        focusFrame != null ||
+        screenFrame != null ||
         (!guidePreview &&
             (ref.watch(lastCapturedFrameIdProvider) != null ||
                 ref.watch(liveViewControllerProvider)));
@@ -1169,18 +1090,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               behavior: HitTestBehavior.opaque,
                               onTap: () => _tapImage(!showSky),
                               child: !showSky
-                                  ? (focusFrame != null
-                                        ? Image.memory(
-                                            focusFrame,
-                                            key: const Key(
-                                              'simple-focus-frame',
-                                            ),
-                                            fit: BoxFit.contain,
-                                            gaplessPlayback: true,
-                                          )
-                                        : polarFrame
-                                        ? const SimplePolarFrame()
-                                        : const FrameViewer())
+                                  ? (screenFrame ?? const FrameViewer())
                                   : wallpaper
                                   ? const SimpleWallpaper(
                                       key: Key('simple-wallpaper'),

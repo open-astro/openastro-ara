@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -32,7 +34,35 @@ abstract class SimpleScreen {
 
   /// The settings chip's caption on the rail.
   String caption(BuildContext context, WidgetRef ref);
+
+  /// What fills the screen behind the panels instead of the last frame; null
+  /// for the last frame (or the sky, when there is none).
+  Widget? frame(WidgetRef ref) => null;
+
+  /// Called once this Screen stops showing.
+  void onLeave(BuildContext context, WidgetRef ref) {}
+
+  /// Called for every Screen on every shell build, so a Screen's failure
+  /// listener posts its pill while another Screen shows.
+  void listen(BuildContext context, WidgetRef ref) {}
+
+  /// Every Screen once, for [listen].
+  static const all = <SimpleScreen>[
+    SimplePreviewScreen(),
+    SimpleFocusScreen(),
+    SimplePolarScreen(),
+    SimpleGuideScreen(),
+    SimpleQueueScreen(),
+  ];
 }
+
+/// The screen-filling frame a Screen shows from its own camera.
+Widget simpleScreenFrame(Uint8List bytes) => Image.memory(
+  bytes,
+  key: const Key('simple-focus-frame'),
+  fit: BoxFit.contain,
+  gaplessPlayback: true,
+);
 
 /// What a Screen's parts call back into the shell for.
 class SimpleScreenHost {
