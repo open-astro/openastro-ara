@@ -242,9 +242,29 @@ void main() {
     });
 
     test('a profile device that dropped names it, in red, above everything else', () async {
-      final r = await _rig(run: _running(), guiderStatus: _guider(state: 'disconnected'), safe: false);
+      final r = await _rig(run: _running(), guiderStatus: _guider(state: 'error'), safe: false);
       final v = r.read().verdict;
       expect((v.kind, v.device, v.status), (MonitorVerdictKind.deviceDropped, MonitorDevice.guider, MonitorStatus.fault));
+    });
+
+    test('a device not connected yet tonight has not dropped; one that was connected and is lost has', () async {
+      final r = await _rig(run: _running(), guiderStatus: _guider(state: 'disconnected', runtime: 'stopped'));
+      expect(r.read().verdict.kind, MonitorVerdictKind.allGood, reason: 'never connected this session');
+      expect(r.read().guider!.status, MonitorStatus.off, reason: 'its tile stays, grey');
+      r.guider.set(_guider());
+      await Future<void>.delayed(Duration.zero);
+      r.read();
+      r.guider.set(_guider(state: 'disconnected', runtime: 'stopped'));
+      await Future<void>.delayed(Duration.zero);
+      expect(r.read().verdict.device, MonitorDevice.guider);
+      final err = await _rig(run: _running(), guiderStatus: _guider(state: 'error'));
+      expect(err.read().verdict.device, MonitorDevice.guider, reason: 'an error is a fault however it began');
+    });
+
+    test('a Target with no rows reads without failing', () async {
+      final r = await _rig(run: _running(), plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [SimpleTarget(name: 'M 1')]));
+      expect(r.read().now.target, 'M 1');
+      expect(r.read().now.filter, isNull);
     });
 
     test('Unsafe beats a question; the safety monitor or weather past its limit', () async {
@@ -328,6 +348,7 @@ void main() {
 
     test('a profile device that disconnects keeps its tile, in red', () async {
       final r = await _rig(run: _running());
+      r.read();
       r.guider.set(_guider(state: 'disconnected'));
       await Future<void>.delayed(Duration.zero);
       final g = r.read().guider!;

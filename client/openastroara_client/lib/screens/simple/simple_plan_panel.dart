@@ -634,6 +634,9 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
       // White like every mode's ring; the paused colour while paused.
       SimpleRunPhase.ready || SimpleRunPhase.none => AraColors.textPrimary,
       SimpleRunPhase.paused => simplePausedColour(ref),
+      // Greyed out once the pause is asked: the frame in hand finishes first
+      // (user, 2026-11-11).
+      SimpleRunPhase.pausing => AraColors.textDisabled,
       _ => AraColors.textPrimary.withValues(alpha: 0.25),
     };
     final pauseBars =
@@ -683,10 +686,12 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
           _hold.value = 0;
           if (!_held && (quick || !holdable)) {
             // Greyed out: a tap says why (user, 2026-11-04).
-            tap == null && (idle || waiting)
+            tap == null && (idle || waiting || phase == SimpleRunPhase.pausing)
                 ? simpleSayWhy(
                     context,
-                    waiting
+                    phase == SimpleRunPhase.pausing
+                        ? context.l10n.planPausingAfterFrame
+                        : waiting
                         ? context.l10n.planRisesAtCap(
                             _hhmm(run.targets.first.rise!.toLocal()),
                           )
@@ -721,7 +726,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
                 child: Icon(
                   pauseBars ? Icons.pause : Icons.play_arrow,
                   size: 40,
-                  color: idle ? AraColors.textDisabled : AraColors.textPrimary,
+                  color: idle || phase == SimpleRunPhase.pausing ? AraColors.textDisabled : AraColors.textPrimary,
                 ),
               ),
               // The frame exposing, or the hold to stop over it.

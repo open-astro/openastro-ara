@@ -796,6 +796,15 @@ class _ManualAlarm extends SafetyAlarmController {
   void silence() => state = state.copyWith(pending: false, ringing: false);
 }
 
+class _WeatherAll extends WeatherNotifier {
+  @override
+  Future<WeatherStatus?> build() async => WeatherStatus.fromJson({
+        ..._wire('Station', EquipmentConnectionState.connected),
+        'cloud_cover_pct': 1, 'sky_quality_mag_arcsec2': 19.2, 'temperature_c': 6.0, 'dew_point_c': -2.9,
+        'humidity_pct': 53, 'rain_rate': 0.0, 'wind_speed_ms': 0.6, 'wind_gust_ms': 4.2, 'wind_direction_deg': 180,
+      });
+}
+
 class _Awake extends KeepAwake {
   final calls = <bool>[];
   @override
@@ -2355,6 +2364,26 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     c.dispose();
     await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets("the running-plan warning wraps to the Ara sheet's width instead of widening it (user, 2026-11-11)",
+      (tester) async {
+    Future<double> width(SequenceRunStateInfo? run) async {
+      final c = await _pump(tester, const Size(1024, 768),
+          server: const AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro'), runState: run);
+      await tester.tap(find.byKey(const Key('simple-ara-mark')));
+      await tester.pump();
+      await tester.pump();
+      final w = tester.getSize(find.byKey(const Key('simple-ara-sheet'))).width;
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+      await tester.pump(const Duration(seconds: 5));
+      return w;
+    }
+
+    final idle = await width(null);
+    final running = await width(const SequenceRunStateInfo(sequenceId: 'seq-1', runId: 'r1', state: SequenceRunState.running));
+    expect(running, idle);
   });
 
   testWidgets('the Ara sheet grows with a long rig name up to 420 px, then wraps it (#1602)', (tester) async {
@@ -4248,6 +4277,18 @@ void main() {
       expect(pill(), isNot(contains('Waiting for the meridian flip')));
     });
 
+    testWidgets('a pause on its way: the Plan pill says the plan is being paused, in a blue ring (user, 2026-11-11)',
+        (tester) async {
+      await _pump(tester, const Size(1024, 768),
+          plan: SimpleRun(sequenceId: 'seq-1', started: true, pausing: true, targets: plan.targets),
+          runState: const SequenceRunStateInfo(
+              sequenceId: 'seq-1', state: SequenceRunState.running, currentInstructionDescription: 'Taking frames'));
+      await tester.pump();
+      expect(pill(), contains('Pausing after this frame'));
+      final dot = tester.widget<StatusDot>(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(StatusDot)).first);
+      expect((dot.color, dot.ring), (AraColors.accentInfo, true));
+    });
+
     testWidgets('an older daemon (the code, no seconds) keeps its reason text', (tester) async {
       await _pump(tester, const Size(1024, 768), plan: plan,
           runState: const SequenceRunStateInfo(
@@ -5677,6 +5718,34 @@ void main() {
       expect(find.byKey(const Key('simple-safety-alarm')).hitTestable(), findsOneWidget);
       await tester.tap(find.byKey(const Key('simple-safety-silence')));
       await tester.pump();
+      await close(tester);
+    });
+
+    testWidgets("the Weather tile's readings carry the Weather window's icons (user, 2026-11-11)", (tester) async {
+      await openMonitor(tester, gear: [weatherProvider.overrideWith(() => _WeatherAll())]);
+      final tile = find.byKey(const Key('simple-monitor-weather'));
+      expect(find.descendant(of: tile, matching: find.byIcon(Icons.cloud_outlined)), findsNWidgets(2), reason: 'the header and Cloud');
+      for (final icon in [Icons.auto_awesome_outlined, Icons.thermostat, Icons.water_drop_outlined, CupertinoIcons.cloud_rain, Icons.air]) {
+        expect(find.descendant(of: tile, matching: find.byIcon(icon)), findsOneWidget, reason: '$icon');
+      }
+      expect(find.descendant(of: tile, matching: find.byType(EquipmentGlyph)), findsOneWidget, reason: 'the dew mark');
+      await close(tester);
+    });
+
+    testWidgets("the daemon's own step text stays small; the big words are Monitor's own", (tester) async {
+      const solver = '46 stars, 167 quads selected in the image. 103 database stars, 376 database quads required '
+          'for the 0.27d square search window. Step size 0.15d. Oversize 1.74';
+      await openMonitor(tester,
+          plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+            SimpleTarget(name: 'M 5', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 5, frameCount: 60)]),
+          ]),
+          runState: const SequenceRunStateInfo(
+              sequenceId: 'seq-1', runId: 'r1', state: SequenceRunState.running, currentInstructionDescription: solver));
+      final now = find.byKey(const Key('simple-monitor-now'));
+      final step = tester.widget<Text>(find.descendant(of: now, matching: find.text(solver)));
+      expect(step.style!.fontSize, lessThanOrEqualTo(kSimpleText.fontSize!), reason: 'a solver line at 44 pt fills the tile (user, 2026-11-11)');
+      expect(step.maxLines, 2);
+      expect(find.descendant(of: now, matching: find.text('Running')), findsWidgets);
       await close(tester);
     });
 

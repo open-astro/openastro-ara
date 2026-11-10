@@ -1392,6 +1392,11 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         ? l10n.previewWaitingForFlip(simpleCountdown(run!.meridianWaitLeft!))
         : run?.reasonText ?? run?.currentInstructionDescription;
     final flipWait = run?.meridianWaitLeft != null;
+    // A pause asked here, until the frame in hand lands (user, 2026-11-11).
+    final pausing =
+        ref.watch(simpleRunProvider.select((r) => r.pausing)) &&
+        (run?.state?.isActive ?? false) &&
+        !(run?.state?.isAnyPaused ?? false);
     final paused =
         run?.state == SequenceRunState.paused ||
         run?.state == SequenceRunState.pausedAwaitingUser;
@@ -1561,7 +1566,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         _PillData(
           SimpleStatusOrigin.plan,
           paused ? l10n.previewPlanPaused : l10n.previewPlan,
-          step,
+          pausing ? l10n.planPausingAfterFrame : step,
           // DESIGN.md status rule: running is working (green); paused by Ara
           // is on its way back (blue); paused waiting for the user needs a
           // look (amber).
@@ -1569,13 +1574,13 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           // blue ring, not imaging (#1747).
           run!.state == SequenceRunState.pausedAwaitingUser || !planActive
               ? AraColors.accentBusy
-              : paused || flipWait
+              : paused || flipWait || pausing
               ? AraColors.accentInfo
               : AraColors.accentConnected,
           ring:
               (paused && run.state != SequenceRunState.pausedAwaitingUser) ||
-              (flipWait && planActive),
-          working: planActive && !paused && !flipWait,
+              ((flipWait || pausing) && planActive),
+          working: planActive && !paused && !flipWait && !pausing,
           // A step that reports none (an exposure) follows the camera's
           // own frame; a paused plan shows no frame (#1755).
           footProgress:

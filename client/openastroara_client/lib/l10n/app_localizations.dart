@@ -2805,6 +2805,12 @@ abstract class AppLocalizations {
   /// **'Pausing'**
   String get planPausingLabel;
 
+  /// Plan pill and the greyed shutter's tap while a pause waits for the frame in hand to finish
+  ///
+  /// In en, this message translates to:
+  /// **'Pausing after this frame'**
+  String get planPausingAfterFrame;
+
   /// Shutter screen-reader label while the plan waits out the meridian before the flip (#1747)
   ///
   /// In en, this message translates to:

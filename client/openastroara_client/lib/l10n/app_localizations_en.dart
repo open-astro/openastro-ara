@@ -1583,6 +1583,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planPausingLabel => 'Pausing';
 
   @override
+  String get planPausingAfterFrame => 'Pausing after this frame';
+
+  @override
   String get planPauseAfterFlip => 'Pause after the flip';
 
   @override

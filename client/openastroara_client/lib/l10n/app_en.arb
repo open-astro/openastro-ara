@@ -2204,6 +2204,10 @@
   "@planPausingLabel": {
     "description": "Shutter screen-reader label while pausing"
   },
+  "planPausingAfterFrame": "Pausing after this frame",
+  "@planPausingAfterFrame": {
+    "description": "Plan pill and the greyed shutter's tap while a pause waits for the frame in hand to finish"
+  },
   "planPauseAfterFlip": "Pause after the flip",
   "@planPauseAfterFlip": {
     "description": "Shutter screen-reader label while the plan waits out the meridian before the flip (#1747)"

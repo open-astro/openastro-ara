@@ -382,6 +382,28 @@ class MonitorLinkDown extends Notifier<DateTime?> {
 
 final monitorLinkDownProvider = NotifierProvider<MonitorLinkDown, DateTime?>(MonitorLinkDown.new);
 
+/// The gear seen connected since Simple Mode opened: only these count as
+/// dropped when they disconnect. The shell keeps it alive.
+class MonitorSeenConnected extends Notifier<Set<MonitorDevice>> {
+  @override
+  Set<MonitorDevice> build() {
+    bool up(EquipmentDeviceStatus? d) => d?.connectionState == EquipmentConnectionState.connected;
+    final now = {
+      if (up(ref.watch(mountProvider).value)) MonitorDevice.mount,
+      if (up(ref.watch(cameraStatusProvider).value)) MonitorDevice.camera,
+      if (ref.watch(guiderStatusProvider).value?.isConnected ?? false) MonitorDevice.guider,
+      if (up(ref.watch(focuserProvider).value)) MonitorDevice.focuser,
+      if (up(ref.watch(safetyMonitorProvider).value)) MonitorDevice.safetyMonitor,
+      if (up(ref.watch(weatherProvider).value)) MonitorDevice.weather,
+    };
+    final before = stateOrNull ?? const {};
+    return before.containsAll(now) ? before : {...before, ...now};
+  }
+}
+
+final monitorSeenConnectedProvider =
+    NotifierProvider<MonitorSeenConnected, Set<MonitorDevice>>(MonitorSeenConnected.new);
+
 /// Since when, during a run, the sensor has been more than
 /// [kMonitorCoolerMarginC] from its target; null while it holds.
 class MonitorCoolerOff extends Notifier<DateTime?> {
@@ -473,6 +495,11 @@ double? monitorClippedShare(int? stars, int? clipped) {
 /// The snapshot Monitor renders. While the link is lost it keeps the last
 /// live one, frozen, with the age on the top line.
 class MonitorState extends Notifier<MonitorSnapshot> {
+  Object? _darkKey;
+  (DateTime?, DateTime?)? _dark;
+  Object? _curveKey;
+  ({List<double> curve, double? max, DateTime? transit})? _curve;
+
   @override
   MonitorSnapshot build() {
     final now = ref.watch(monitorClockProvider);
@@ -549,24 +576,27 @@ class MonitorState extends Notifier<MonitorSnapshot> {
 
     // Gear: a tile for what the profile has (the daemon reports a device
     // only when its slot is filled), red when it has dropped.
-    bool dropped(EquipmentDeviceStatus? d) =>
+    // Dropped: in error, or disconnected after it was connected this
+    // session. Not yet connected tonight is off, not a fault.
+    final seen = ref.watch(monitorSeenConnectedProvider);
+    bool dropped(MonitorDevice which, EquipmentDeviceStatus? d) =>
         d != null &&
-        (d.connectionState == EquipmentConnectionState.disconnected ||
-            d.connectionState == EquipmentConnectionState.error);
+        (d.connectionState == EquipmentConnectionState.error ||
+            (d.connectionState == EquipmentConnectionState.disconnected && seen.contains(which)));
     final guiderDropped = guider != null &&
-        (guider.connectionState == GuiderConnectionState.disconnected ||
-            guider.connectionState == GuiderConnectionState.error);
-    final droppedDevice = dropped(mount)
+        (guider.connectionState == GuiderConnectionState.error ||
+            (guider.connectionState == GuiderConnectionState.disconnected && seen.contains(MonitorDevice.guider)));
+    final droppedDevice = dropped(MonitorDevice.mount, mount)
         ? MonitorDevice.mount
-        : dropped(cam)
+        : dropped(MonitorDevice.camera, cam)
         ? MonitorDevice.camera
         : guiderDropped
         ? MonitorDevice.guider
-        : dropped(focuser)
+        : dropped(MonitorDevice.focuser, focuser)
         ? MonitorDevice.focuser
-        : dropped(safetyMon)
+        : dropped(MonitorDevice.safetyMonitor, safetyMon)
         ? MonitorDevice.safetyMonitor
-        : dropped(weatherSt)
+        : dropped(MonitorDevice.weather, weatherSt)
         ? MonitorDevice.weather
         : null;
 
@@ -670,8 +700,10 @@ class MonitorState extends Notifier<MonitorSnapshot> {
         final nextStep = _currentStep(target, [
           for (var r = 0; r < done.length; r++) r == step ? done[r] + 1 : done[r],
         ]);
-        upNext.add(MonitorUpNext(MonitorUpKind.nextFrame,
-            at: frameEndsAt, frame: nextFrame, name: target.steps[nextStep].filterName));
+        if (nextStep >= 0) {
+          upNext.add(MonitorUpNext(MonitorUpKind.nextFrame,
+              at: frameEndsAt, frame: nextFrame, name: target.steps[nextStep].filterName));
+        }
       }
       if (flipAt != null) upNext.add(MonitorUpNext(MonitorUpKind.meridianFlip, at: flipAt));
       if (cur + 1 < targets.length) {
@@ -680,8 +712,14 @@ class MonitorState extends Notifier<MonitorSnapshot> {
             name: next.tag ?? next.name, at: now.add(Duration(seconds: leftOn(cur).round()))));
       }
       if (ours) upNext.add(MonitorUpNext(MonitorUpKind.park, at: parkAt));
-      // Known times in order; "then" rows keep their place after the row before.
-      upNext.sort((a, b) => a.at == null || b.at == null ? 0 : a.at!.compareTo(b.at!));
+      // Known times in order; a "then" row stays right after the row before it.
+      final timed = upNext.where((u) => u.at != null).toList()..sort((a, b) => a.at!.compareTo(b.at!));
+      for (var i = 0; i < upNext.length; i++) {
+        if (upNext[i].at == null) timed.insert(i == 0 ? 0 : timed.indexOf(upNext[i - 1]) + 1, upNext[i]);
+      }
+      upNext
+        ..clear()
+        ..addAll(timed);
     } else if (!active && startAt == null) {
       best = true;
       final sky = ref.watch(tonightSkyProvider).value ?? const [];
@@ -691,28 +729,42 @@ class MonitorState extends Notifier<MonitorSnapshot> {
     }
 
     // Tonight's dark, for the timeline and the altitude curve.
-    final (darkStart, darkEnd) = monitorDarkSpan(site, now.toUtc());
+    // Worked out once a minute, not on every 1 s tick (a minute-by-minute
+    // sun scan).
+    final darkKey = (site, now.millisecondsSinceEpoch ~/ 60000);
+    if (darkKey != _darkKey) {
+      _darkKey = darkKey;
+      _dark = monitorDarkSpan(site, now.toUtc());
+    }
+    final (darkStart, darkEnd) = _dark!;
 
     // Target.
     MonitorTarget? targetTile;
     if (target != null) {
-      final curve = <double>[];
-      double? maxAlt;
-      DateTime? transit;
-      if (darkStart != null && darkEnd != null && (site.latitudeDeg != 0 || site.longitudeDeg != 0)) {
-        const n = 48;
-        final span = darkEnd.difference(darkStart);
-        for (var i = 0; i <= n; i++) {
-          final t = darkStart.add(span * (i / n));
-          final a = altitudeDegAt(target.raDeg, target.decDeg,
-              latitudeDeg: site.latitudeDeg, longitudeDeg: site.longitudeDeg, utc: t.toUtc());
-          curve.add(a);
-          if (maxAlt == null || a > maxAlt) {
-            maxAlt = a;
-            transit = t;
+      // The curve changes only with the Target or the night.
+      final curveKey = (target.raDeg, target.decDeg, site.latitudeDeg, site.longitudeDeg, darkStart, darkEnd);
+      if (curveKey != _curveKey) {
+        _curveKey = curveKey;
+        final points = <double>[];
+        double? top;
+        DateTime? at;
+        if (darkStart != null && darkEnd != null && (site.latitudeDeg != 0 || site.longitudeDeg != 0)) {
+          const n = 48;
+          final span = darkEnd.difference(darkStart);
+          for (var i = 0; i <= n; i++) {
+            final t = darkStart.add(span * (i / n));
+            final alt = altitudeDegAt(target.raDeg, target.decDeg,
+                latitudeDeg: site.latitudeDeg, longitudeDeg: site.longitudeDeg, utc: t.toUtc());
+            points.add(alt);
+            if (top == null || alt > top) {
+              top = alt;
+              at = t;
+            }
           }
         }
+        _curve = (curve: points, max: top, transit: at);
       }
+      final (:curve, max: maxAlt, :transit) = _curve!;
       final spent = doneOn(cur);
       targetTile = MonitorTarget(
         name: target.tag ?? target.name,
@@ -742,7 +794,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
         ? null
         : MonitorSafety(
             status: !safetyMon.isConnected
-                ? MonitorStatus.fault
+                ? (dropped(MonitorDevice.safetyMonitor, safetyMon) ? MonitorStatus.fault : MonitorStatus.off)
                 : safetyMon.safe
                 ? MonitorStatus.normal
                 : MonitorStatus.warning,
@@ -758,7 +810,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       bool ok(double? v) => v != null && v.isFinite;
       weather = MonitorWeather(
         status: !w.isConnected
-            ? MonitorStatus.fault
+            ? (dropped(MonitorDevice.weather, w) ? MonitorStatus.fault : MonitorStatus.off)
             : breaches.isNotEmpty
             ? MonitorStatus.warning
             : MonitorStatus.normal,
@@ -784,6 +836,8 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       final markers = ref.watch(guideMarkersProvider);
       final (gWord, gStatus) = guiderDropped
           ? (MonitorGuiderWord.disconnected, MonitorStatus.fault)
+          : !guider.isConnected
+          ? (MonitorGuiderWord.disconnected, MonitorStatus.off)
           : starLost
           ? (MonitorGuiderWord.starLost, MonitorStatus.warning)
           : guider.isCorrecting
@@ -866,6 +920,7 @@ final monitorProvider = NotifierProvider.autoDispose<MonitorState, MonitorSnapsh
 
 /// The row of [t]'s plan the next frame comes from: the first not yet full.
 int _currentStep(SimpleTarget t, List<int> done) {
+  if (t.steps.isEmpty) return -1;
   for (var r = 0; r < t.steps.length; r++) {
     if (done[r] < t.steps[r].frameCount) return r;
   }

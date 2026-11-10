@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,6 +12,7 @@ import '../../state/simple_monitor_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../widgets/emergency_stop_button.dart';
+import '../../widgets/equipment/equipment_glyphs.dart' show EquipmentGlyph;
 import '../../widgets/status_indicator.dart';
 import 'simple_device_windows.dart' show simpleClockTime, simpleWeatherBreachText;
 import 'simple_plan_panel.dart' show simpleRunDuration;
@@ -533,10 +535,18 @@ class _NowTile extends StatelessWidget {
               ),
             ],
           ])
-        : Text(
-            n.word == MonitorNowWord.idle ? l10n.monitorNoPlanBig : (n.instruction ?? word),
-            style: kSimpleText.copyWith(fontSize: AraFontSize.monitorWord, fontWeight: FontWeight.w300),
-          );
+        // The state in Monitor's own words, big; the daemon's step under it,
+        // small: its text can be a solver's whole log line (user, 2026-11-11).
+        : Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            Text(
+              n.word == MonitorNowWord.idle ? l10n.monitorNoPlanBig : word,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: kSimpleText.copyWith(fontSize: AraFontSize.monitorWord, fontWeight: FontWeight.w300),
+            ),
+            if (n.word != MonitorNowWord.idle && n.instruction != null && n.instruction!.isNotEmpty)
+              Text(n.instruction!, maxLines: 2, overflow: TextOverflow.ellipsis, style: _dim),
+          ]);
     final sub = n.frame != null && n.frames != null
         ? l10n.monitorFrameOf(n.frame!.clamp(0, n.frames!), n.frames!,
             simpleRunDuration(n.targetSecondsLeft ?? 0), n.target ?? '')
@@ -855,11 +865,22 @@ class _WeatherTile extends StatelessWidget {
               for (final c in row)
                 Expanded(
                   child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text.rich(TextSpan(
-                      text: cell(c).$1,
-                      style: kSimpleReading.copyWith(color: c.overLimit != null ? AraColors.accentWarning : null),
-                      children: [TextSpan(text: ' ${cell(c).$2}', style: kSimpleUnit)],
-                    )),
+                    // The Weather window's icon in front of each reading.
+                    Row(children: [
+                      _weatherIcon(c.cell, c.overLimit != null ? AraColors.accentWarning : AraColors.textSecondary),
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text.rich(
+                          TextSpan(
+                            text: cell(c).$1,
+                            style: kSimpleReading.copyWith(color: c.overLimit != null ? AraColors.accentWarning : null),
+                            children: [TextSpan(text: ' ${cell(c).$2}', style: kSimpleUnit)],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ]),
                     Text(cell(c).$3,
                         style: kSimpleUnit.copyWith(color: c.overLimit != null ? AraColors.accentWarning : null)),
                   ]),
@@ -870,6 +891,17 @@ class _WeatherTile extends StatelessWidget {
     );
   }
 }
+
+/// The icon the Weather window shows for a reading (simple_device_windows).
+Widget _weatherIcon(MonitorWeatherCell cell, Color color) => switch (cell) {
+      MonitorWeatherCell.cloud => Icon(Icons.cloud_outlined, size: 22, color: color),
+      MonitorWeatherCell.skyQuality => Icon(Icons.auto_awesome_outlined, size: 22, color: color),
+      MonitorWeatherCell.air => Icon(Icons.thermostat, size: 22, color: color),
+      MonitorWeatherCell.dewMargin => EquipmentGlyph.dewPoint(size: 22, color: color),
+      MonitorWeatherCell.humidity => Icon(Icons.water_drop_outlined, size: 22, color: color),
+      MonitorWeatherCell.rain => Icon(CupertinoIcons.cloud_rain, size: 22, color: color),
+      MonitorWeatherCell.wind => Icon(Icons.air, size: 22, color: color),
+    };
 
 /// Two readings a row; the wind, with its direction and gusts, takes a row
 /// of its own, and so does a last odd reading.

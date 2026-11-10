@@ -1583,6 +1583,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get planPausingLabel => 'Pausing';
 
   @override
+  String get planPausingAfterFrame => 'Pausing after this frame';
+
+  @override
   String get planPauseAfterFlip => 'Pause after the flip';
 
   @override
@@ -5601,6 +5604,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get planPausingLabel => 'Pausando';
 
   @override
+  String get planPausingAfterFrame => 'Pausando após este quadro';
+
+  @override
   String get planPauseAfterFlip => 'Pausar após a virada';
 
   @override
@@ -7745,12 +7751,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String monitorLinkLost(String age) {
-    return 'Sem contato com o equipamento · há $age';
+    return 'Sem contato com o setup · há $age';
   }
 
   @override
   String get monitorLinkLostReason =>
-      'Um plano em andamento continua sozinho no equipamento.';
+      'Um plano em andamento continua sozinho no setup.';
 
   @override
   String monitorDeviceDropped(String device) {
@@ -7763,7 +7769,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get monitorUnsafeReason =>
-      'O equipamento reage conforme suas configurações de segurança.';
+      'O setup reage conforme suas configurações de segurança.';
 
   @override
   String get monitorStarLost => 'Estrela-guia perdida';
@@ -7822,7 +7828,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get monitorWaitingForDarkReason => 'A captura começa sozinha.';
 
   @override
-  String get monitorNoPlan => 'Equipamento pronto · nenhum plano em andamento';
+  String get monitorNoPlan => 'Setup pronto · nenhum plano em andamento';
 
   @override
   String get monitorNoPlanReason => 'Inicie um plano e esta tela se preenche.';

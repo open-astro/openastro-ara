@@ -7,6 +7,7 @@ import 'simple_search.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderProxyBox;
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -916,6 +917,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // Monitor's trends and link age run from when Simple Mode opens (#1724).
     ref.listen(monitorTrendsProvider, (_, _) {});
     ref.listen(monitorLinkDownProvider, (_, _) {});
+    ref.listen(monitorSeenConnectedProvider, (_, _) {});
     // #1559 — the next drop starts with the bar again.
     ref.listen(serverLinkUpProvider, (_, up) {
       if (up) _rigCardOpen = false;
@@ -4595,9 +4597,13 @@ class _AraSheet extends ConsumerWidget {
             if (running)
               Padding(
                 padding: const EdgeInsets.only(bottom: AraSpace.s16),
-                child: Text(
-                  l10n.shellPlanRunning,
-                  style: AraText.caption.copyWith(color: AraColors.accentBusy),
+                // Wraps to the sheet's width rather than widening it (user,
+                // 2026-11-11).
+                child: _NoIntrinsicWidth(
+                  child: Text(
+                    l10n.shellPlanRunning,
+                    style: AraText.caption.copyWith(color: AraColors.accentBusy),
+                  ),
                 ),
               ),
           ],
@@ -4606,4 +4612,22 @@ class _AraSheet extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Lays its child out at the width it is given, but asks for none when an
+/// [IntrinsicWidth] above sizes itself: a long line wraps to its siblings'
+/// width instead of setting it.
+class _NoIntrinsicWidth extends SingleChildRenderObjectWidget {
+  const _NoIntrinsicWidth({required super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderNoIntrinsicWidth();
+}
+
+class _RenderNoIntrinsicWidth extends RenderProxyBox {
+  @override
+  double computeMinIntrinsicWidth(double height) => 0;
+
+  @override
+  double computeMaxIntrinsicWidth(double height) => 0;
 }
