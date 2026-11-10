@@ -22,6 +22,7 @@ class _FakeApi extends StorageDevicesApi {
   _FakeApi() : super(_server);
   final calls = <String>[];
   String checkCode = 'clean';
+  bool checkFails = false;
   StorageConfigureOutcome eject_ = const StorageConfigureOutcome(
     success: true,
     code: 'ejected',
@@ -30,7 +31,7 @@ class _FakeApi extends StorageDevicesApi {
   @override
   Future<StorageConfigureOutcome> check({required String uuid}) async {
     calls.add('check $uuid');
-    return StorageConfigureOutcome(success: true, code: checkCode);
+    return StorageConfigureOutcome(success: !checkFails, code: checkCode);
   }
 
   @override
@@ -179,6 +180,19 @@ void main() {
       await tester.pump(kSimpleResultLife); // the pill's timer
     },
   );
+
+  testWidgets('a check that fails on a kernel without exFAT says so in words, not its code (#1764)', (tester) async {
+    final (c, api) = await _pump(tester);
+    api
+      ..checkFails = true
+      ..checkCode = 'exfat_unsupported';
+    await _tap(tester, find.byKey(const Key('simple-storage-check')));
+    await _tap(tester, find.byKey(const Key('simple-storage-check-ask-confirm')));
+    final pill = c.read(simpleMessagesProvider).single;
+    expect(pill.title, "Check failed: This server can't read exFAT drives. Erase the drive as ext4 and ARA can use it.");
+    expect(pill.title, isNot(contains('exfat_unsupported')));
+    expect(pill.kind, SimpleMessageKind.error);
+  });
 
   testWidgets('Cancelling the inline Check disk sends nothing', (tester) async {
     final (c, api) = await _pump(tester);
