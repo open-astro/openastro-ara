@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../models/polar_align.dart';
+import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_preflight_state.dart';
@@ -28,7 +29,7 @@ class SimplePolarScreen extends SimpleScreen {
 
   @override
   String caption(BuildContext context, WidgetRef ref) => simplePolarSummary(
-    ref.watch(simplePolarSettingsProvider).value ?? const PolarAlignSettings(),
+    ref.watch(polarAlignSettingsProvider).value ?? const PolarAlignSettings(),
     context.l10n,
   );
 

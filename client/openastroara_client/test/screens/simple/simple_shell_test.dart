@@ -62,6 +62,7 @@ import 'package:openastroara/services/storage_devices_api.dart';
 import 'package:openastroara/state/stats/server_internal_state_state.dart';
 import 'package:openastroara/screens/app_shell.dart';
 import 'package:openastroara/models/polar_align.dart';
+import 'package:openastroara/state/polar_align/polar_align_routine_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
 import 'package:openastroara/screens/simple/simple_guide_panel.dart';
@@ -1403,8 +1404,8 @@ void main() {
     tester.platformDispatcher.textScaleFactorTestValue = 0.5;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     final container = await _pump(tester, const Size(1024, 768));
-    await container.read(simplePolarSettingsProvider.future);
-    await container.read(simplePolarSettingsProvider.notifier)
+    await container.read(polarAlignSettingsProvider.future);
+    await container.read(polarAlignSettingsProvider.notifier)
         .save(const PolarAlignSettings(exposureSeconds: 45, loopMode: PolarAlignLoopModes.single));
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();

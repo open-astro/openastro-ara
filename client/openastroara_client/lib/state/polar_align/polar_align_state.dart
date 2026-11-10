@@ -270,6 +270,21 @@ class PolarAlignLiveNotifier extends Notifier<PolarAlignLive> {
     return const PolarAlignLive();
   }
 
+  /// Seed the live view from REST when a panel opens: the WS stream may have
+  /// skipped past routine events fired before this client connected. Best
+  /// effort; the panel still follows the WS stream. Returns the snapshot.
+  Future<PolarAlignStatus?> hydrate() async {
+    final api = ref.read(polarAlignApiProvider);
+    if (api == null) return null;
+    try {
+      final status = await api.getStatus();
+      if (status != null && ref.mounted) hydrateFromStatus(status);
+      return status;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Hydrate [state] from a REST status snapshot (on panel open / reconnect,
   /// where the WS resume may have skipped past routine events).
   void hydrateFromStatus(PolarAlignStatus status) {

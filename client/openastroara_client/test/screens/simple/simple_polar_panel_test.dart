@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/widgets/imaging/polar_align_panel.dart' show BullseyePainter;
+import 'package:openastroara/widgets/imaging/polar_align_readout.dart' show BullseyePainter;
 import 'package:openastroara/screens/simple/simple_preflight.dart';
 import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/polar_align.dart';

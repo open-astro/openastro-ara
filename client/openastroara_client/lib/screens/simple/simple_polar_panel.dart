@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,7 +10,8 @@ import '../../state/settings/site_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
-import '../../widgets/imaging/polar_align_panel.dart';
+import '../../state/polar_align/polar_align_routine_state.dart';
+import '../../widgets/imaging/polar_align_readout.dart';
 import 'simple_preflight.dart'
     show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
 import 'simple_preview_panel.dart'
@@ -41,39 +40,6 @@ String simplePolarSummary(PolarAlignSettings s, AppLocalizations l10n) {
   return '${formatExposure(_exposure(s))}\n'
       '${_single(s) ? l10n.polarSingle : l10n.polarLoop}';
 }
-
-/// The profile's polar-align settings (exposure, Loop/Single, tolerance). A
-/// save applies to the routine's next frame; a failed save rolls back.
-class SimplePolarSettings extends AsyncNotifier<PolarAlignSettings> {
-  @override
-  Future<PolarAlignSettings> build() async {
-    final api = ref.watch(polarAlignApiProvider);
-    if (api == null) return const PolarAlignSettings();
-    try {
-      return await api.getSettings();
-    } catch (_) {
-      return const PolarAlignSettings();
-    }
-  }
-
-  Future<void> save(PolarAlignSettings next) async {
-    final api = ref.read(polarAlignApiProvider);
-    final previous = state.value ?? const PolarAlignSettings();
-    state = AsyncData(next);
-    if (api == null) return;
-    try {
-      state = AsyncData(await api.putSettings(next));
-    } catch (_) {
-      state = AsyncData(previous);
-      rethrow;
-    }
-  }
-}
-
-final simplePolarSettingsProvider =
-    AsyncNotifierProvider<SimplePolarSettings, PolarAlignSettings>(
-      SimplePolarSettings.new,
-    );
 
 /// The rail's shutter in Polar align: starts the routine; while it runs, its
 /// square stops it.
@@ -147,22 +113,6 @@ String simplePolarVerdictLabel(PolarAlignCheckResult r, AppLocalizations l10n) {
   };
 }
 
-/// The polar-align camera's latest frame, refetched after each finished
-/// frame; null until there is one. Keeps the previous picture while the next
-/// loads (read `.value`).
-final simplePolarFrameProvider = FutureProvider.autoDispose<Uint8List?>((
-  ref,
-) async {
-  // The rough stage's frames are the main camera's: the guider has no picture.
-  final coarse = ref.watch(
-    polarAlignLiveProvider.select((l) => l.stage == PolarAlignStages.coarse),
-  );
-  ref.watch(polarAlignLiveProvider.select((l) => l.lastFrame));
-  if (coarse) return null;
-  final api = ref.watch(polarAlignApiProvider);
-  return api?.getLiveFrame();
-});
-
 /// Polar align's panel beside the right rail: the routine's settings
 /// (exposure, Loop/Single); while it runs, the phase, the total error with its
 /// zone, the bullseye, the altitude and azimuth turns, Take frame (Single) and
@@ -176,8 +126,6 @@ class SimplePolarPanel extends ConsumerStatefulWidget {
 }
 
 class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
-  bool _busy = false;
-  String? _error;
   final _bolt = BoltNudgeTracker();
 
   @override
@@ -191,47 +139,24 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
 
   /// The WS stream may have skipped past routine events fired before this
   /// panel opened: seed from REST.
-  Future<void> _hydrate() async {
-    final api = ref.read(polarAlignApiProvider);
-    if (api == null) return;
-    try {
-      final status = await api.getStatus();
-      if (status != null && mounted) {
-        ref.read(polarAlignLiveProvider.notifier).hydrateFromStatus(status);
-      }
-    } catch (_) {
-      // Best effort: the panel still follows the WS stream.
-    }
-  }
+  Future<void> _hydrate() =>
+      ref.read(polarAlignFrameProvider.notifier).hydrate();
 
   // [action] completes "Couldn't <action>".
   /// True when the rig took it.
   Future<bool> _run(
     String action,
     Future<void> Function(PolarAlignClient api) op,
-  ) async {
-    final api = ref.read(polarAlignApiProvider);
-    if (api == null) return false;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await op(api);
-      return true;
-    } catch (e) {
-      if (mounted) {
-        setState(() => _error = friendlyError(context.l10n, e, action: action));
-      }
-      return false;
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+  ) {
+    final l10n = context.l10n;
+    return ref
+        .read(polarAlignActionProvider.notifier)
+        .run(op, describe: (e) => friendlyError(l10n, e, action: action));
   }
 
   void _save(PolarAlignSettings next) => _run(
     context.l10n.polarActionSave,
-    (_) => ref.read(simplePolarSettingsProvider.notifier).save(next),
+    (_) => ref.read(polarAlignSettingsProvider.notifier).save(next),
   );
 
   @override
@@ -244,14 +169,16 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
       (_, next) => setState(() => _bolt.track(next)),
     );
     final settings =
-        ref.watch(simplePolarSettingsProvider).value ??
+        ref.watch(polarAlignSettingsProvider).value ??
         const PolarAlignSettings();
+    final command = ref.watch(polarAlignActionProvider);
+    final busy = command.busy;
     final southern = ref.watch(siteSettingsProvider).latitudeDeg < 0;
     final active = simplePolarActive(live);
     final total = live.totalErrorArcmin;
     final color = zoneColor(total);
     final error =
-        _error ??
+        command.error ??
         (live.phase == PolarAlignStates.failed
             ? live.errorMessage ?? live.errorReason
             : null);
@@ -475,7 +402,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               FilledButton(
                 key: const Key('simple-polar-continue'),
                 style: kSimpleGoStyle,
-                onPressed: _busy
+                onPressed: busy
                     ? null
                     : () => _run(l10n.polarActionContinue, (api) => api.next()),
                 child: Text(l10n.polarContinue),
@@ -484,7 +411,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               FilledButton(
                 key: const Key('simple-polar-next-fine'),
                 style: kSimpleGoStyle,
-                onPressed: _busy || total == null
+                onPressed: busy || total == null
                     ? null
                     : () => _run(l10n.polarActionNextFine, (api) => api.next()),
                 child: Text(l10n.polarNextFine),
@@ -493,7 +420,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               FilledButton(
                 key: const Key('simple-polar-done'),
                 style: kSimpleGoStyle,
-                onPressed: _busy
+                onPressed: busy
                     ? null
                     : () async {
                         final pilot = ref.read(simplePreflightProvider.notifier);
@@ -525,7 +452,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                     Expanded(
                       child: FilledButton.tonal(
                         key: const Key('simple-polar-capture'),
-                        onPressed: _busy
+                        onPressed: busy
                             ? null
                             : () => _run(
                                 l10n.polarActionCapture,
@@ -538,7 +465,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                     child: FilledButton.tonal(
                       key: const Key('simple-polar-check'),
                       onPressed:
-                          !_busy &&
+                          !busy &&
                               total != null &&
                               total <= settings.targetToleranceArcmin
                           ? () => _run(l10n.polarActionCheck, (api) => api.next())
@@ -551,7 +478,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                       key: const Key('simple-polar-done'),
                       style: kSimpleGoStyle,
                       onPressed:
-                          !_busy &&
+                          !busy &&
                               total != null &&
                               total <= settings.targetToleranceArcmin
                           ? () async {
@@ -598,7 +525,12 @@ class SimplePolarFrame extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final jpeg = ref.watch(simplePolarFrameProvider).value;
+    // The rough stage's frames are the main camera's: the guider has no picture.
+    final coarse = ref.watch(
+      polarAlignLiveProvider.select((l) => l.stage == PolarAlignStages.coarse),
+    );
+    final frame = ref.watch(polarAlignFrameProvider);
+    final jpeg = coarse ? null : frame;
     return ColoredBox(
       color: Colors.black,
       child: jpeg == null
