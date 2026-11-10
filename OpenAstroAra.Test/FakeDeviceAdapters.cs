@@ -21,17 +21,22 @@ namespace OpenAstroAra.Test {
 
     /// <summary>ADR 0011 rule 4 — the test adapter a device lifecycle runs against instead of a port.
     /// <see cref="Answers"/> drives the §42.3 probe; <see cref="ReadFails"/> makes the essential read throw;
-    /// <see cref="HoldReads"/> holds it.</summary>
+    /// <see cref="HoldReads"/> holds it; <see cref="HoldConnect"/> holds the connect.</summary>
     internal class FakeDeviceAdapter : IDeviceAdapter {
         private int _connects;
         public volatile bool Answers = true;
         public volatile bool ReadFails;
         // When set, the essential read waits for it: a refresh tick stays in flight.
         public ManualResetEventSlim? HoldReads;
+        // When set, Connect waits for it: a newer connect can supersede this one meanwhile.
+        public ManualResetEventSlim? HoldConnect;
         public int Connects => Volatile.Read(ref _connects);
         public bool Disposed { get; private set; }
 
-        public void Connect() => Interlocked.Increment(ref _connects);
+        public void Connect() {
+            HoldConnect?.Wait(TimeSpan.FromSeconds(10));
+            Interlocked.Increment(ref _connects);
+        }
         public bool Connected => Answers;
         public void Stop() { }
         public void Disconnect() { }

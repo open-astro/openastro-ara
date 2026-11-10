@@ -319,7 +319,12 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
         try {
             client = _createDevice(device);
             client.Connect();
-            var commitPrepared = _prepareSession?.Invoke(client);
+            bool current;
+            lock (Gate) {
+                current = !_disposed && _connectGeneration == generation;
+            }
+            // A connect that a newer one superseded skips the read-once work: the device is dropped below.
+            var commitPrepared = current ? _prepareSession?.Invoke(client) : null;
             lock (Gate) {
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;

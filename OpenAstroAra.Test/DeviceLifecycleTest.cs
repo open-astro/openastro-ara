@@ -140,6 +140,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_superseded_connect_skips_the_read_once_session_work() {
+            using var holdFirst = new ManualResetEventSlim(false);
+            using var first = new FakeDeviceAdapter { HoldConnect = holdFirst }; // the lifecycle disposes them too; a second Dispose is harmless
+            using var second = new FakeDeviceAdapter();
+            var prepared = new List<FakeDeviceAdapter>();
+            using var l = new DeviceLifecycle<FakeDeviceAdapter>(this, DeviceType.Rotator, "rotator",
+                d => d.UniqueId == Device.UniqueId ? first : second,
+                d => new DeviceRead(null, CommitLocked: () => { }),
+                resetSessionLocked: () => { }, DeviceHealthTracker.DefaultThreshold, NullLogger.Instance, events: null, _faults,
+                prepareSession: d => { lock (prepared) { prepared.Add(d); } return () => { }; });
+            await l.ConnectAsync(Device, null);
+            await l.ConnectAsync(Device with { UniqueId = "rot-2" }, null);
+            await ConnectedAsync(l);
+            holdFirst.Set();
+            await WaitForAsync(() => first.Disposed, "the superseded device's release");
+            lock (prepared) { Assert.That(prepared, Is.EqualTo(new[] { second }), "only the live connect reads its capabilities"); }
+        }
+
+        [Test]
         public async Task A_rotator_serves_its_capabilities_as_soon_as_it_reads_connected() {
             // Review of #1761: the seed refresh can be skipped or stuck behind a tick in flight, so
             // capabilities that only a refresh commits can lag the Connected state and details_ready.
@@ -152,6 +171,22 @@ namespace OpenAstroAra.Test {
                 await WaitForAsync(() => svc.GetAsync(CancellationToken.None).Result?.State == EquipmentConnectionState.Connected, "the connect");
                 var dto = await svc.GetAsync(CancellationToken.None);
                 Assert.That(dto?.Capabilities, Is.EqualTo(new RotatorCapabilitiesDto(true, 0.1f)));
+            } finally {
+                hold.Set();
+            }
+        }
+
+        [Test]
+        public async Task A_dome_serves_its_capabilities_as_soon_as_it_reads_connected() {
+            // Same gap as the rotator's: with every essential read held, no refresh completes.
+            using var hold = new ManualResetEventSlim(false);
+            using var dome = new FakeDomeDevice { HoldReads = hold };
+            using var svc = new DomeService { DeviceFactory = _ => dome };
+            try {
+                await svc.ConnectAsync(new ConnectRequestDto(Device with { Type = DeviceType.Dome }), null, CancellationToken.None);
+                await WaitForAsync(() => svc.GetAsync(CancellationToken.None).Result?.State == EquipmentConnectionState.Connected, "the connect");
+                var dto = await svc.GetAsync(CancellationToken.None);
+                Assert.That(dto?.Capabilities, Is.EqualTo(new DomeCapabilitiesDto(true, true, true, true, true, true)));
             } finally {
                 hold.Set();
             }
