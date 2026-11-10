@@ -44,6 +44,16 @@ public interface IEquipmentReconnector {
     /// its service is hot-reconnected after a fault too.</summary>
     Task<ReconnectOutcome> ReconnectAsync(DeviceType type, CancellationToken ct);
 
+    /// <summary>#1539 — the §42.3 ladder's reconnect: <see cref="ReconnectAsync"/>, except that a
+    /// device whose service records the user's disconnect (<see cref="IRecoverableDevice"/>) is not
+    /// dispatched, and does not count as <see cref="ReconnectOutcome.Dispatched"/>. The refusal and
+    /// the dispatch are one step in the service, so a disconnect cannot land between them.</summary>
+    Task<ReconnectOutcome> RecoverAsync(DeviceType type, CancellationToken ct) => ReconnectAsync(type, ct);
+
+    /// <summary>#1539 — the desired connection state the type's service records, or null when it
+    /// records none (no device selected, or a service without the lifecycle module yet).</summary>
+    DesiredConnection? GetDesiredConnection(DeviceType type) => null;
+
     /// <summary>The connection state of the device service for <paramref name="type"/>, so a
     /// caller that dispatched a background <see cref="ReconnectAsync"/> can confirm the outcome.
     /// Null when the type has no Alpaca service, or nothing is remembered/known for it. For the
@@ -97,11 +107,16 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
         if (connect is null) {
             return null;
         }
-        var localized = HostLocality.LocalizeDevice(device, _isThisMachine);
         return async () => {
-            var target = await FindMovedAsync(localized, ct).ConfigureAwait(false) ?? localized;
+            var target = await LocateAsync(device, ct).ConfigureAwait(false);
             await connect(new ConnectRequestDto(target)).ConfigureAwait(false);
         };
+    }
+
+    // The record to dial: localized to this box, or found again on this box's own Alpaca server.
+    private async Task<DiscoveredDeviceDto> LocateAsync(DiscoveredDeviceDto device, CancellationToken ct) {
+        var localized = HostLocality.LocalizeDevice(device, _isThisMachine);
+        return await FindMovedAsync(localized, ct).ConfigureAwait(false) ?? localized;
     }
 
     // A record saved under an address this box no longer has (the field router's, back on the home LAN)
@@ -122,7 +137,13 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
         return moved;
     }
 
-    public async Task<ReconnectOutcome> ReconnectAsync(DeviceType type, CancellationToken ct) {
+    public Task<ReconnectOutcome> ReconnectAsync(DeviceType type, CancellationToken ct) => DispatchAsync(type, recovery: false, ct);
+
+    public Task<ReconnectOutcome> RecoverAsync(DeviceType type, CancellationToken ct) => DispatchAsync(type, recovery: true, ct);
+
+    public DesiredConnection? GetDesiredConnection(DeviceType type) => (ResolveService(type) as IRecoverableDevice)?.DesiredConnection;
+
+    private async Task<ReconnectOutcome> DispatchAsync(DeviceType type, bool recovery, CancellationToken ct) {
         // The guider is not an Alpaca device (PHD2 over JSON-RPC) and never appears in
         // the remembered-selection store — dispatch its connect directly. A null-field
         // request means "the active profile's phd2 host/port", so this heals a dropped
@@ -168,7 +189,15 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
             try {
                 // The service's ConnectAsync returns once accepted and connects in the
                 // background, so this awaits only the dispatch.
-                await connect().ConfigureAwait(false);
+                if (recovery && ResolveService(device.Type) is IRecoverableDevice recoverable) {
+                    var target = await LocateAsync(device, ct).ConfigureAwait(false);
+                    if (!recoverable.TryRecover(target)) {
+                        LogRecoveryRefused(device.Type, device.Name);
+                        continue;
+                    }
+                } else {
+                    await connect().ConfigureAwait(false);
+                }
                 dispatched++;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) {
@@ -189,8 +218,12 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
 
     // #1127 — the single-instance service's retained record for the type (null when the service
     // is a placeholder or holds nothing). Internal for direct unit testing.
-    internal DiscoveredDeviceDto? ResolveRetained(DeviceType type) {
-        object? service = type.Canonical() switch {
+    internal DiscoveredDeviceDto? ResolveRetained(DeviceType type) =>
+        (ResolveService(type) as IRetainedDeviceSource)?.RetainedDevice;
+
+    // The single-instance service for the type, or null (Switch, Guider, or not registered).
+    private object? ResolveService(DeviceType type) =>
+        type.Canonical() switch {
             DeviceType.Camera => _services.GetService<ICameraService>(),
             DeviceType.Telescope => _services.GetService<ITelescopeService>(),
             DeviceType.Focuser => _services.GetService<IFocuserService>(),
@@ -202,8 +235,6 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
             DeviceType.FlatDevice or DeviceType.CoverCalibrator => _services.GetService<IFlatDeviceService>(),
             _ => null,
         };
-        return (service as IRetainedDeviceSource)?.RetainedDevice;
-    }
 
     public async Task<EquipmentConnectionState?> GetConnectionStateAsync(DeviceType type, CancellationToken ct) {
         switch (type.Canonical()) {
@@ -254,6 +285,10 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
     [LoggerMessage(Level = LogLevel.Information,
         Message = "{DeviceType} '{DeviceName}' ({UniqueId}) was saved under {OldAddress}, which no longer serves it; this box's own Alpaca server lists the same UniqueID, so it is dialled and saved as localhost (re-pick it in the client if it belongs to another rig)")]
     private partial void LogMovedToLocalhost(DeviceType deviceType, string deviceName, string uniqueId, string oldAddress);
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "{DeviceType} '{DeviceName}' was disconnected by the user; recovery leaves it alone (#1539)")]
+    private partial void LogRecoveryRefused(DeviceType deviceType, string deviceName);
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Reconnect dispatch for {DeviceType} '{DeviceName}' failed; the other remembered devices still get their turn.")]
