@@ -893,6 +893,8 @@
   "storageConfigureMountFailed": "O disco foi preparado, mas não pôde ser conectado.",
   "storageDiskContentsChecking": "Verificando o que há neste disco…",
   "storageDiskContentsFrames": "{count, plural, =1{Este disco tem 1 quadro, de {date}.} other{Este disco tem {count} quadros. O mais recente é de {date}.}}",
+  "storageDiskContentsFramesUndated": "{count, plural, =1{Este disco tem 1 quadro.} other{Este disco tem {count} quadros.}}",
+  "storageDiskContentsReadFailed": "O ARA não conseguiu ler o que há neste disco. Apagar o disco perde tudo o que há nele.",
   "storageDiskContentsNone": "Não há quadros neste disco.",
   "storageDiskContentsNotCopied": "{count, plural, =1{1 quadro não foi copiado para outro disco pelo ARA.} other{{count} quadros não foram copiados para outro disco pelo ARA.}}",
   "storageDiskContentsUnknown": "O ARA não consegue ver o que há neste disco enquanto ele não está conectado. Apagar o disco perde tudo o que há nele.",

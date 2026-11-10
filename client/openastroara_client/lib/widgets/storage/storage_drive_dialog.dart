@@ -96,10 +96,6 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
   /// ext4 is the rig-resident choice.
   String _newFilesystem = 'exfat';
 
-  /// A labelled disk asks the user to type its name — the standard guard
-  /// against erasing the wrong one. An unlabelled disk still holds someone's
-  /// data (stock USB sticks ship label-less), so it demands typing ERASE:
-  /// a destructive click is never one static warning away.
   /// What erasing the picked disk would lose. A blank disk (no filesystem, no
   /// UUID) holds nothing to read.
   AsyncValue<StorageContents>? get _contents {
@@ -109,6 +105,10 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
         : null;
   }
 
+  /// A labelled disk asks the user to type its name — the standard guard
+  /// against erasing the wrong one. An unlabelled disk still holds someone's
+  /// data (stock USB sticks ship label-less), so it demands typing ERASE:
+  /// a destructive click is never one static warning away.
   bool get _confirmSatisfied {
     if (!_needsErase) {
       return true;
@@ -182,6 +182,10 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
     if (contents.isLoading) {
       return [Text(l10n.storageDiskContentsChecking, style: body)];
     }
+    // A request that failed is not a disk that isn't connected.
+    if (contents.hasError) {
+      return [Text(l10n.storageDiskContentsReadFailed, style: body)];
+    }
     if (c == null || !c.readable) {
       return [Text(l10n.storageDiskContentsUnknown, style: body)];
     }
@@ -191,15 +195,26 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
     final newest = c.newestFrameUtc;
     return [
       Text(
-          l10n.storageDiskContentsFrames(
-              c.frames,
-              newest == null
-                  ? ''
-                  : DateFormat.yMMMd(l10n.localeName).format(newest.toLocal())),
+          newest == null
+              ? l10n.storageDiskContentsFramesUndated(c.frames)
+              : l10n.storageDiskContentsFrames(c.frames,
+                  DateFormat.yMMMd(l10n.localeName).format(newest.toLocal())),
           style: body),
+      // What #1579 is for: as loud as the erase heading, never a footnote.
       if (c.framesNotCopied > 0)
-        Text(l10n.storageDiskContentsNotCopied(c.framesNotCopied),
-            style: body?.copyWith(color: AraColors.accentBusy)),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          spacing: 6,
+          children: [
+            const Icon(Icons.warning_amber_rounded,
+                size: 20, color: AraColors.accentBusy),
+            Expanded(
+              child: Text(l10n.storageDiskContentsNotCopied(c.framesNotCopied),
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(color: AraColors.accentBusy)),
+            ),
+          ],
+        ),
     ];
   }
 
@@ -312,6 +327,11 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                   ),
                 ],
                 if (_needsErase) ...[
+                  // What would be lost comes first, before how to erase.
+                  if (_contents case final contents?) ...[
+                    const SizedBox(height: 10),
+                    ..._contentsLines(contents, l10n, theme),
+                  ],
                   if (_mustErase) ...[
                     const Divider(height: 24),
                     Text(l10n.storageDiskMustErase,
@@ -351,10 +371,6 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                       ],
                     ),
                   ),
-                  if (_contents case final contents?) ...[
-                    const SizedBox(height: 10),
-                    ..._contentsLines(contents, l10n, theme),
-                  ],
                   const SizedBox(height: 10),
                   Text(
                       (_selected!.label ?? '').isNotEmpty

@@ -3199,6 +3199,21 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String storageDiskContentsFramesUndated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'This disk holds $count frames.',
+      one: 'This disk holds 1 frame.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get storageDiskContentsReadFailed =>
+      'ARA couldn\'t read what is on this disk. Erasing it loses everything on it.';
+
+  @override
   String get storageDiskContentsNone => 'There are no frames on this disk.';
 
   @override
@@ -6830,6 +6845,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
     );
     return '$_temp0';
   }
+
+  @override
+  String storageDiskContentsFramesUndated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Este disco tem $count quadros.',
+      one: 'Este disco tem 1 quadro.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get storageDiskContentsReadFailed =>
+      'O ARA não conseguiu ler o que há neste disco. Apagar o disco perde tudo o que há nele.';
 
   @override
   String get storageDiskContentsNone => 'Não há quadros neste disco.';

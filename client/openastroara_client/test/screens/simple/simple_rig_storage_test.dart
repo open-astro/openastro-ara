@@ -328,6 +328,35 @@ void main() {
     expect(find.text('There are no frames on this disk.'), findsNothing);
   });
 
+  testWidgets('a contents read that fails says it could not read the disk, not that it is disconnected', (tester) async {
+    final (_, api) = await _pump(tester);
+    api.contents_ = (_) async => throw StateError('no answer');
+    await _tap(tester, find.byKey(const Key('simple-storage-choose')));
+    await _tap(tester, find.text('PHOTOS'));
+    expect(find.textContaining("ARA couldn't read what is on this disk"), findsOneWidget);
+    expect(find.textContaining("while it isn't connected"), findsNothing);
+  });
+
+  testWidgets('frames with no date read as a count, never "from ."', (tester) async {
+    final (_, api) = await _pump(tester);
+    api.contents_ = (_) async => const StorageContents(readable: true, frames: 3);
+    await _tap(tester, find.byKey(const Key('simple-storage-choose')));
+    await _tap(tester, find.text('PHOTOS'));
+    expect(find.text('This disk holds 3 frames.'), findsOneWidget);
+  });
+
+  testWidgets('the not-copied warning comes before the format choice', (tester) async {
+    final (_, api) = await _pump(tester);
+    api.contents_ = (_) async => StorageContents(
+        readable: true, frames: 12, newestFrameUtc: DateTime.utc(2026, 10, 3, 12), framesNotCopied: 5);
+    await _tap(tester, find.byKey(const Key('simple-storage-choose')));
+    await _tap(tester, find.text('PHOTOS'));
+    final warning = find.text('5 frames have not been copied to another disk by ARA.');
+    expect(tester.getTopLeft(warning).dy, lessThan(tester.getTopLeft(find.byType(RadioListTile<String>).first).dy));
+    expect(find.descendant(of: find.ancestor(of: warning, matching: find.byType(Row)).first,
+        matching: find.byIcon(Icons.warning_amber_rounded)), findsOneWidget);
+  });
+
   testWidgets('Erase stays off until the disk contents are read', (tester) async {
     final read = Completer<StorageContents>();
     final (_, api) = await _pump(tester);

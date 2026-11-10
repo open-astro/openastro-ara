@@ -4250,6 +4250,17 @@
       "date": {"type": "String"}
     }
   },
+  "storageDiskContentsFramesUndated": "{count, plural, =1{This disk holds 1 frame.} other{This disk holds {count} frames.}}",
+  "@storageDiskContentsFramesUndated": {
+    "description": "Erase step: frames whose date the rig did not give",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "storageDiskContentsReadFailed": "ARA couldn't read what is on this disk. Erasing it loses everything on it.",
+  "@storageDiskContentsReadFailed": {
+    "description": "Erase step: the request for the disk's contents failed"
+  },
   "storageDiskContentsNone": "There are no frames on this disk.",
   "@storageDiskContentsNone": {
     "description": "Erase step: a readable disk with no frames"

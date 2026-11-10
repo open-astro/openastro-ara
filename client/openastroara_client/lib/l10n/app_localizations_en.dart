@@ -3199,6 +3199,21 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String storageDiskContentsFramesUndated(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'This disk holds $count frames.',
+      one: 'This disk holds 1 frame.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get storageDiskContentsReadFailed =>
+      'ARA couldn\'t read what is on this disk. Erasing it loses everything on it.';
+
+  @override
   String get storageDiskContentsNone => 'There are no frames on this disk.';
 
   @override

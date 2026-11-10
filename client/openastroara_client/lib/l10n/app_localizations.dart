@@ -5457,6 +5457,18 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{This disk holds 1 frame, from {date}.} other{This disk holds {count} frames. The newest is from {date}.}}'**
   String storageDiskContentsFrames(int count, String date);
 
+  /// Erase step: frames whose date the rig did not give
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{This disk holds 1 frame.} other{This disk holds {count} frames.}}'**
+  String storageDiskContentsFramesUndated(int count);
+
+  /// Erase step: the request for the disk's contents failed
+  ///
+  /// In en, this message translates to:
+  /// **'ARA couldn\'t read what is on this disk. Erasing it loses everything on it.'**
+  String get storageDiskContentsReadFailed;
+
   /// Erase step: a readable disk with no frames
   ///
   /// In en, this message translates to:
