@@ -4231,6 +4231,33 @@
   "@storageConfigureMountFailed": {
     "description": "Use Disk failed"
   },
+  "storageDiskContentsChecking": "Checking what is on this disk…",
+  "@storageDiskContentsChecking": {
+    "description": "Erase step: the frame count is loading"
+  },
+  "storageDiskContentsFrames": "{count, plural, =1{This disk holds 1 frame, from {date}.} other{This disk holds {count} frames. The newest is from {date}.}}",
+  "@storageDiskContentsFrames": {
+    "description": "Erase step: what erasing would lose",
+    "placeholders": {
+      "count": {"type": "int"},
+      "date": {"type": "String"}
+    }
+  },
+  "storageDiskContentsNone": "There are no frames on this disk.",
+  "@storageDiskContentsNone": {
+    "description": "Erase step: a readable disk with no frames"
+  },
+  "storageDiskContentsNotCopied": "{count, plural, =1{1 frame has not been copied to another disk by ARA.} other{{count} frames have not been copied to another disk by ARA.}}",
+  "@storageDiskContentsNotCopied": {
+    "description": "Erase step warning",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "storageDiskContentsUnknown": "ARA can't see what is on this disk while it isn't connected. Erasing it loses everything on it.",
+  "@storageDiskContentsUnknown": {
+    "description": "Erase step: the disk's contents can't be read"
+  },
   "storageConfigureExfatUnsupported": "This server can't read exFAT drives. Erase the drive as ext4 and ARA can use it.",
   "@storageConfigureExfatUnsupported": {
     "description": "Use Disk or Erase failed: the server's kernel cannot mount exFAT"

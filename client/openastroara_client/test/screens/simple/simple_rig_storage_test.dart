@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/storage_panel.dart';
@@ -50,6 +51,12 @@ class _FakeApi extends StorageDevicesApi {
     );
     return const StorageConfigureOutcome(success: true, code: 'ok');
   }
+
+  Future<StorageContents> Function(String uuid) contents_ =
+      (_) async => StorageContents.unknown;
+
+  @override
+  Future<StorageContents> contents(String uuid) => contents_(uuid);
 
   @override
   void close() {}
@@ -299,6 +306,43 @@ void main() {
     await _tap(tester, find.text('PHOTOS'));
     final row = tester.widget<ListTile>(find.ancestor(of: find.text('PHOTOS'), matching: find.byType(ListTile)));
     expect(row.selectedTileColor, AraColors.selectionTint);
+  });
+
+  testWidgets('before Erase the chooser says how many frames the disk holds, the newest date and what was never copied', (tester) async {
+    final newest = DateTime.utc(2026, 10, 3, 12);
+    final (_, api) = await _pump(tester);
+    api.contents_ = (uuid) async => uuid == 'BBBB'
+        ? StorageContents(readable: true, frames: 12, newestFrameUtc: newest, framesNotCopied: 5)
+        : StorageContents.unknown;
+    await _tap(tester, find.byKey(const Key('simple-storage-choose')));
+    await _tap(tester, find.text('PHOTOS'));
+    expect(find.text('This disk holds 12 frames. The newest is from ${DateFormat.yMMMd('en').format(newest.toLocal())}.'), findsOneWidget);
+    expect(find.text('5 frames have not been copied to another disk by ARA.'), findsOneWidget);
+  });
+
+  testWidgets('a disk whose contents cannot be read says so, not zero frames', (tester) async {
+    await _pump(tester);
+    await _tap(tester, find.byKey(const Key('simple-storage-choose')));
+    await _tap(tester, find.text('PHOTOS'));
+    expect(find.textContaining("ARA can't see what is on this disk"), findsOneWidget);
+    expect(find.text('There are no frames on this disk.'), findsNothing);
+  });
+
+  testWidgets('Erase stays off until the disk contents are read', (tester) async {
+    final read = Completer<StorageContents>();
+    final (_, api) = await _pump(tester);
+    api.contents_ = (_) => read.future;
+    await _tap(tester, find.byKey(const Key('simple-storage-choose')));
+    await _tap(tester, find.text('PHOTOS'));
+    await tester.enterText(find.byType(TextField), 'PHOTOS');
+    await tester.pump();
+    FilledButton erase() => tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Erase and Use Disk'));
+    expect(find.text('Checking what is on this disk…'), findsOneWidget);
+    expect(erase().onPressed, isNull);
+    read.complete(const StorageContents(readable: true));
+    await tester.pumpAndSettle();
+    expect(find.text('There are no frames on this disk.'), findsOneWidget);
+    expect(erase().onPressed, isNotNull);
   });
 
   testWidgets('Erase turns off when a refreshed disk list fails', (tester) async {

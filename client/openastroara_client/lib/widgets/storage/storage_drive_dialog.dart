@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../services/storage_devices_api.dart';
 import '../../services/storage_space_api.dart';
@@ -99,9 +100,22 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
   /// against erasing the wrong one. An unlabelled disk still holds someone's
   /// data (stock USB sticks ship label-less), so it demands typing ERASE:
   /// a destructive click is never one static warning away.
+  /// What erasing the picked disk would lose. A blank disk (no filesystem, no
+  /// UUID) holds nothing to read.
+  AsyncValue<StorageContents>? get _contents {
+    final uuid = _selected?.uuid;
+    return _needsErase && uuid != null
+        ? ref.watch(storageContentsProvider(uuid))
+        : null;
+  }
+
   bool get _confirmSatisfied {
     if (!_needsErase) {
       return true;
+    }
+    // The user sees what is on the disk before the erase is offered.
+    if (_contents?.isLoading ?? false) {
+      return false;
     }
     final label = _selected!.label ?? '';
     return label.isEmpty ? _confirm.text == 'ERASE' : _confirm.text == label;
@@ -159,6 +173,34 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
         setState(() => _busy = false);
       }
     }
+  }
+
+  List<Widget> _contentsLines(AsyncValue<StorageContents> contents,
+      AppLocalizations l10n, ThemeData theme) {
+    final body = theme.textTheme.bodySmall;
+    final c = contents.asData?.value;
+    if (contents.isLoading) {
+      return [Text(l10n.storageDiskContentsChecking, style: body)];
+    }
+    if (c == null || !c.readable) {
+      return [Text(l10n.storageDiskContentsUnknown, style: body)];
+    }
+    if (c.frames == 0) {
+      return [Text(l10n.storageDiskContentsNone, style: body)];
+    }
+    final newest = c.newestFrameUtc;
+    return [
+      Text(
+          l10n.storageDiskContentsFrames(
+              c.frames,
+              newest == null
+                  ? ''
+                  : DateFormat.yMMMd(l10n.localeName).format(newest.toLocal())),
+          style: body),
+      if (c.framesNotCopied > 0)
+        Text(l10n.storageDiskContentsNotCopied(c.framesNotCopied),
+            style: body?.copyWith(color: AraColors.accentBusy)),
+    ];
   }
 
   @override
@@ -309,6 +351,10 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                       ],
                     ),
                   ),
+                  if (_contents case final contents?) ...[
+                    const SizedBox(height: 10),
+                    ..._contentsLines(contents, l10n, theme),
+                  ],
                   const SizedBox(height: 10),
                   Text(
                       (_selected!.label ?? '').isNotEmpty
