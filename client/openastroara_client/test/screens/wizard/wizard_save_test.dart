@@ -167,6 +167,27 @@ void main() {
       expect(out.forceCalibrationEachSession, isFalse);
     });
 
+    test('applyDraftToPhd2 #1308: a new guide camera does not keep the old camera\'s UniqueID', () {
+      final d = ProfileDraft();
+      d.guider.guiderCamera = 'Alpaca Camera [rig.lan:6800/2]';
+      final out = applyDraftToPhd2(
+          const Phd2Settings(
+              guiderCamera: 'Alpaca Camera [rig.lan:6800/1]',
+              guiderCameraAlpacaUniqueId: 'old-camera'),
+          d);
+      expect(out.guiderCamera, 'Alpaca Camera [rig.lan:6800/2]');
+      expect(out.guiderCameraAlpacaUniqueId, '');
+    });
+
+    test('applyDraftToPhd2 #1308: an untouched guide camera keeps its UniqueID', () {
+      final out = applyDraftToPhd2(
+          const Phd2Settings(
+              guiderCamera: 'Alpaca Camera [rig.lan:6800/1]',
+              guiderCameraAlpacaUniqueId: 'cam-1'),
+          ProfileDraft());
+      expect(out.guiderCameraAlpacaUniqueId, 'cam-1');
+    });
+
     test('§76 S5 — ASTAP downsample stays automatic (0); the daemon derives it '
         'per frame (#1136)', () {
       final d = ProfileDraft();

@@ -225,6 +225,11 @@ Phd2Settings applyDraftToPhd2(Phd2Settings base, ProfileDraft d,
         g.calibrationCadence == CalibrationCadence.eachSession,
     // §63.17 — null (untouched picker) keeps the base profile's selection.
     guiderCamera: g.guiderCamera,
+    // #1308 — a picked camera brings its own UniqueID (or none): the base
+    // profile's names the camera it replaced.
+    guiderCameraAlpacaUniqueId: g.guiderCamera == null
+        ? null
+        : g.guiderCameraAlpacaUniqueId ?? '',
     guiderMount: g.guiderMount,
     guiderAuxMount: g.guiderAuxMount,
     guiderRotator: g.guiderRotator,

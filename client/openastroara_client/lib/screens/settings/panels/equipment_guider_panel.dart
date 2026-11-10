@@ -7,7 +7,6 @@ import '../../../l10n/l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/guider_equipment_choices.dart';
-import '../../../services/alpaca_device_names_api.dart';
 import '../../../services/profile_api.dart';
 import '../../../state/guider/guider_equipment_state.dart';
 import '../../../state/guider/guider_state.dart';
@@ -82,14 +81,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
   // this the panel offered only the bare "Alpaca Camera" the daemon lists,
   // which pushes nothing about the server and leaves the guider on
   // localhost:0.
-  final Map<String, String> _alpacaNames = {};
-  // #1308 — "host:port|type/N" → Alpaca UniqueID, stored with a camera pick
-  // so the daemon can re-resolve the number after an AlpacaBridge renumber.
-  final Map<String, String> _alpacaUniqueIds = {};
-  final Set<String> _namedEndpoints = {};
-  // Endpoints with a lookup in flight: two triggers landing together (hydrate
-  // plus a choices refresh) must not fetch the same server twice.
-  final Set<String> _resolving = {};
+  Map<String, String> get _alpacaNames =>
+      ref.watch(guiderAlpacaDevicesProvider).names;
 
   @override
   void initState() {
@@ -117,9 +110,9 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
       final endpoints = <String>[
         if (phd2.guiderAlpacaHost.isNotEmpty && phd2.guiderAlpacaPort > 0)
           '${phd2.guiderAlpacaHost}:${phd2.guiderAlpacaPort}',
-        if (loaded != null) ..._choiceEndpoints(loaded),
+        ...choiceEndpoints(loaded),
       ];
-      await _resolveAlpacaNames(endpoints);
+      await ref.read(guiderAlpacaDevicesProvider.notifier).resolve(endpoints);
     } catch (e) {
       _loading = false;
       if (mounted) {
@@ -233,9 +226,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
       _discoveredServers = null;
     });
     try {
-      final servers = await ref
-          .read(guiderEquipmentProvider.notifier)
-          .discoverAlpaca();
+      final servers =
+          await ref.read(guiderAlpacaDevicesProvider.notifier).discover();
       if (!mounted) return;
       setState(() {
         _discoveredServers = servers;
@@ -245,7 +237,6 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
                   'server${servers.length == 1 ? '' : 's'} — their devices '
                   'are now in the pickers; tap one to fill host/port.';
       });
-      await _resolveAlpacaNames(servers);
     } catch (e) {
       if (!mounted) return;
       setState(
@@ -256,66 +247,6 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
       );
     } finally {
       if (mounted) setState(() => _discovering = false);
-    }
-  }
-
-  /// Read the real device names on each "host:port" endpoint not yet
-  /// resolved (parallel; an unreachable server costs only its own timeout)
-  /// and fold them into [_alpacaNames]. Best-effort: the generic labels stay
-  /// when the management API can't be reached, and an endpoint that answered
-  /// nothing is asked again on the next trigger (review r1: a brief outage
-  /// must not leave the labels generic until the panel is reopened).
-  Future<void> _resolveAlpacaNames(Iterable<String> endpoints) async {
-    final namesApi = ref.read(alpacaDeviceNamesApiProvider);
-    final targets = <({String endpoint, String host, int port})>[];
-    for (final endpoint in endpoints.toSet()) {
-      if (_namedEndpoints.contains(endpoint) || _resolving.contains(endpoint)) {
-        continue;
-      }
-      final parsed = parseHostPort(endpoint);
-      if (parsed.host == null || parsed.port == null) continue;
-      targets.add((endpoint: endpoint, host: parsed.host!, port: parsed.port!));
-    }
-    if (targets.isEmpty) return;
-    _resolving.addAll(targets.map((t) => t.endpoint));
-    final List<({String endpoint, Map<String, AlpacaDeviceInfo> devices})> fetched;
-    try {
-      fetched = await Future.wait([
-        for (final t in targets)
-          namesApi
-              .fetchDevices(t.host, t.port)
-              .then((devices) => (endpoint: t.endpoint, devices: devices)),
-      ]);
-    } finally {
-      // fetchNames never throws today; if it ever does, the endpoint must
-      // not stay marked in flight forever.
-      _resolving.removeAll(targets.map((t) => t.endpoint));
-    }
-    if (!mounted) return;
-    setState(() {
-      for (final result in fetched) {
-        if (result.devices.isEmpty) continue; // retry next time
-        _namedEndpoints.add(result.endpoint);
-        result.devices.forEach((typeSlot, device) {
-          _alpacaNames['${result.endpoint}|$typeSlot'] = device.name;
-          if (device.uniqueId.isNotEmpty) {
-            _alpacaUniqueIds['${result.endpoint}|$typeSlot'] = device.uniqueId;
-          }
-        });
-      }
-    });
-  }
-
-  /// Endpoints the daemon's own choice strings mention.
-  static Iterable<String> _choiceEndpoints(GuiderEquipmentChoices choices) sync* {
-    for (final choice in [
-      ...choices.cameras,
-      ...choices.mounts,
-      ...choices.auxMounts,
-      ...choices.rotators,
-    ]) {
-      final e = parseAlpacaChoiceEndpoint(choice);
-      if (e != null) yield '${e.host}:${e.port}';
     }
   }
 
@@ -699,7 +630,9 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
     final refreshing = equipment.isLoading;
     ref.listen(guiderEquipmentProvider, (_, next) {
       final c = next.value?.choices;
-      if (c != null) _resolveAlpacaNames(_choiceEndpoints(c));
+      if (c != null) {
+        ref.read(guiderAlpacaDevicesProvider.notifier).resolve(choiceEndpoints(c));
+      }
     });
     final serving = _servingEndpoint(phd2);
     final cameraOptions =
@@ -724,8 +657,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
         ('Aux mount', phd2.guiderAuxMount),
         ('Rotator', phd2.guiderRotator),
       ]) {
-        final e = parseAlpacaChoiceEndpoint(sel);
-        if (e == null || '${e.host}:${e.port}' == serving) continue;
+        if (!isCrossServerPick(serving, sel)) continue;
+        final e = parseAlpacaChoiceEndpoint(sel)!;
         crossServer.add(
             '$slot is on ${e.host}:${e.port}, a different Alpaca server than the '
             'guide camera ($serving); the guider uses one server, so pick it '
@@ -811,7 +744,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
           if (v == null) return;
           phd2N.setGuiderCamera(v);
           phd2N.setGuiderCameraAlpacaUniqueId(
-              alpacaCameraUniqueIdFor(v, _alpacaUniqueIds));
+              ref.read(guiderAlpacaDevicesProvider.notifier).uniqueIdFor(v));
           // A camera with an endpoint retargets the guider's Alpaca server
           // on Apply — keep the stored host/port in step so the mount and
           // rotator pickers offer that server and the push names it.

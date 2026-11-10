@@ -204,6 +204,9 @@ class GuiderSettings {
   // GET /equipment/guider/choices). Null = untouched, keeps the base profile's
   // value on Save (like the other nullable draft fields).
   String? guiderCamera;
+  // #1308 — the Alpaca UniqueID behind [guiderCamera]; "" when unknown. Null
+  // with an untouched camera keeps the base profile's.
+  String? guiderCameraAlpacaUniqueId;
   // §63.17 — mount / aux-mount / rotator selections (daemon choice strings,
   // same format as guiderCamera). Null = untouched, keeps the base profile's
   // value on Save; empty string = explicit "keep the guider's current pick".
