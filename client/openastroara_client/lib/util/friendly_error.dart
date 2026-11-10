@@ -11,8 +11,8 @@ import 'gps_site_fill.dart' show clientPlatform, thisDeviceLabel;
 /// Raw exception text ("DioException [connection timeout]: The request
 /// connection took longer than 0:00:03.000000") tells an astrophotographer
 /// standing in the dark exactly nothing. Every screen that catches an error
-/// should render this instead — the daemon's own sentence on a 400, 409 or
-/// 422 ([daemonDetail]), otherwise a plain description of what failed and
+/// should render this instead — the daemon's own sentence on a 400, 404, 409
+/// or 422 ([daemonDetail]), otherwise a plain description of what failed and
 /// what to check, in [l]'s language and never a status code (#1699).
 ///
 /// [action] names what was being attempted, lower-case and without a period:
@@ -37,13 +37,13 @@ String failureReason(AppLocalizations l, Object error) {
 }
 
 /// The first line of the daemon's own sentence, on the statuses where it is
-/// written for people (400, 409, 422, and 507: a full disk the user can free);
-/// null otherwise. A framework-shaped 400
+/// written for people (400, 404 (#1764: "No guide camera is known."), 409,
+/// 422, and 507: a full disk the user can free); null otherwise. A framework-shaped 400
 /// detail can carry a "(Parameter 'x')" tail that is not for people.
 String? daemonDetail(Object error) {
   if (error is! DioException) return null;
   final code = error.response?.statusCode;
-  if (code != 400 && code != 409 && code != 422 && code != 507) return null;
+  if (code != 400 && code != 404 && code != 409 && code != 422 && code != 507) return null;
   // application/problem+json may reach us undecoded, depending on Dio's
   // transformer.
   var data = error.response?.data;

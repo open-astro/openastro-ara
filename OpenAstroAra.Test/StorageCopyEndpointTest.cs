@@ -53,6 +53,7 @@ namespace OpenAstroAra.Test {
         private Mock<ICameraService> camera = null!;
         private string stateDir = null!;
         private StorageEraseLog erased = null!;
+        private Mock<IStorageBrowseService> browse = null!;
 
         [OneTimeSetUp]
         public async Task StartKestrel() {
@@ -60,6 +61,7 @@ namespace OpenAstroAra.Test {
             devices = new Mock<IStorageDeviceService>(MockBehavior.Strict);
             runs = new ActiveRunSessionRegistry();
             camera = new Mock<ICameraService>();
+            browse = new Mock<IStorageBrowseService>();
             stateDir = Path.Combine(Path.GetTempPath(), "ara-erase-" + Path.GetRandomFileName());
             erased = new StorageEraseLog(stateDir);
             var builder = WebApplication.CreateSlimBuilder();
@@ -76,7 +78,7 @@ namespace OpenAstroAra.Test {
             builder.Services.AddSingleton(Mock.Of<IProfileShareService>());
             builder.Services.AddSingleton(Mock.Of<IProfileStore>());
             builder.Services.AddSingleton(Mock.Of<ISkyCatalogService>());
-            builder.Services.AddSingleton(Mock.Of<IStorageBrowseService>());
+            builder.Services.AddSingleton(browse.Object);
             builder.Services.AddSingleton(Mock.Of<ISolverRecommender>());
             builder.Services.AddSingleton(Mock.Of<IGuiderService>());
             builder.Services.AddSingleton(Mock.Of<IAraDatabase>());
@@ -177,6 +179,24 @@ namespace OpenAstroAra.Test {
             Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
             Assert.That(await resp.Content.ReadAsStringAsync(), Does.Contain("still being saved"));
             // Strict mock: any helper call would have thrown.
+        }
+
+        [Test]
+        public async Task A_folder_that_is_gone_reads_as_a_sentence_not_the_system_message() {
+            // #1764 — a race (the drive pulled mid-listing) throws the runtime's own message.
+            browse.Setup(b => b.Browse("/media/gone")).Throws(new DirectoryNotFoundException("Could not find a part of the path '/media/gone'."));
+            browse.Setup(b => b.CreateFolder("/media/gone", "M31")).Throws(new DirectoryNotFoundException("Could not find a part of the path '/media/gone'."));
+
+            using var listed = await http.GetAsync(new Uri("/api/v1/storage/browse?path=/media/gone", UriKind.Relative));
+            using var made = await http.PostAsJsonAsync("/api/v1/storage/mkdir", new { path = "/media/gone", name = "M31" }, Json);
+
+            foreach (var resp in new[] { listed, made }) {
+                Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+                using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+                var detail = doc.RootElement.GetProperty("detail").GetString();
+                Assert.That(detail, Does.Not.Contain("Could not find a part of the path"));
+                Assert.That(detail, Is.EqualTo("That folder isn't on the rig, or it isn't storage. Pick another folder."));
+            }
         }
 
         [Test]
