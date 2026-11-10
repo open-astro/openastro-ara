@@ -43,7 +43,8 @@ String _files(int n) => n == 1 ? '1 file' : '$n files';
 
 /// Why a copy did not happen (start refused, or the job failed), in the
 /// user's terms.
-String copyFailureMessage(String code, String? detail, {int bytesToCopy = 0}) =>
+String copyFailureMessage(AppLocalizations l, String code, String? detail,
+        {int bytesToCopy = 0}) =>
     switch (code) {
       'not_enough_space' => bytesToCopy > 0
           ? 'The drive doesn\'t have room for ${_size(bytesToCopy)}.'
@@ -58,8 +59,8 @@ String copyFailureMessage(String code, String? detail, {int bytesToCopy = 0}) =>
       'not_ext4' =>
         'ARA can only write to exFAT or ext4 drives, and this one is neither.',
       'mount_failed' => 'The drive could not be connected.',
-      'exfat_unsupported' =>
-        'This server can\'t read exFAT drives. Erase the drive as ext4 and ARA can use it.',
+      // The disk chooser's sentence, so it reads the same in both places.
+      'exfat_unsupported' => l.storageConfigureExfatUnsupported,
       'uuid_not_found' => 'The drive disconnected. Plug it back in and try again.',
       'no_store' => 'No storage drive is connected, so there is nothing to copy.',
       'copy_running' => 'A copy is already running.',
@@ -70,7 +71,7 @@ String copyFailureMessage(String code, String? detail, {int bytesToCopy = 0}) =>
     };
 
 /// The outcome of a finished copy, one sentence per thing worth knowing.
-List<String> copySummary(StorageCopyStatus s) {
+List<String> copySummary(AppLocalizations l, StorageCopyStatus s) {
   final lines = <String>[];
   switch (s.state) {
     case 'done':
@@ -81,7 +82,7 @@ List<String> copySummary(StorageCopyStatus s) {
       lines.add('Copy cancelled after ${_files(s.filesCopied)}. '
           'Files already copied stay on the drive.');
     case 'failed':
-      lines.add(copyFailureMessage(s.errorCode ?? 'copy_failed', s.errorDetail,
+      lines.add(copyFailureMessage(l, s.errorCode ?? 'copy_failed', s.errorDetail,
           bytesToCopy: s.bytesToCopy));
   }
   if (s.filesSkipped > 0) {
@@ -138,7 +139,7 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
       _started = true;
       ref.invalidate(storageCopyStatusProvider);
     } on StorageCopyRefused catch (e) {
-      if (mounted) setState(() => _error = copyFailureMessage(e.code, e.detail));
+      if (mounted) setState(() => _error = copyFailureMessage(context.l10n, e.code, e.detail));
     } catch (e) {
       if (mounted) {
         setState(() => _error = friendlyError(context.l10n, e, action: 'start the copy'));
@@ -325,7 +326,7 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final line in copySummary(s))
+          for (final line in copySummary(context.l10n, s))
             Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Text(line),
