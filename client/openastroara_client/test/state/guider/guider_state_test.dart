@@ -485,7 +485,7 @@ void main() {
       expect(c.read(guideStartLateFailureProvider)?.reason, 'new failure');
     });
 
-    test('a late "refused" is a failure with no reason, as a quick one is', () async {
+    test('a late refused answer is a failure with no reason, as a quick one is', () async {
       final (c, _, ws) = await calibratingRig();
       await c.read(guiderStatusProvider.notifier).startGuiding();
       ws.add(complete('op-1', ok: false, error: 'refused'));
