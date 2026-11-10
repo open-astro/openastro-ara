@@ -49,6 +49,10 @@ at the top. This happens in the same commit that pushes the release tag.
 - Simple Mode's polar alignment loads its frames one at a time, as the Full UI does: a frame that finishes while one is loading is fetched once after it (#1698).
 - First-run setup pins the guide camera by its Alpaca UniqueID, as Settings › Equipment › Guider does, so a new pick no longer keeps the UniqueID of the camera it replaced (#1698, #1308).
 
+### Fixed (capture)
+
+- Frames whose values all fit in 0-255 (for example a short bias from a camera with a low black level) are saved with their real values. Before, when the camera server sent such a frame in the narrow Alpaca ImageBytes Byte format, Ara multiplied every pixel by 256. Frames already saved this way are exact: divide each value by 256.
+
 ### Changed (daemon device lifecycle)
 
 - The rotator and the dome share one device lifecycle module: connect, disconnect, remove, the refresh loop, the connection probe and the read-health check (#1696, slice 1 of 4). A dome whose Slewing read keeps failing while it still answers its connection probe now shows a degraded fault. Before, only the probe watched the dome.

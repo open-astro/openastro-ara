@@ -14,6 +14,7 @@
 
 using System;
 using System.Buffers.Binary;
+using ASCOM.Common.Alpaca;
 using NUnit.Framework;
 using OpenAstroAra.Server.Services;
 
@@ -60,6 +61,25 @@ namespace OpenAstroAra.Test {
             BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(4), 70000);
             var (pixels, _, _) = AlpacaImageBytes.Decode(Body(1, 2, 2, payload));
             Assert.That(pixels, Is.EqualTo(new ushort[] { 0, ushort.MaxValue }));
+        }
+
+        [Test]
+        public void Byte_payload_keeps_values_unscaled() {
+            // A server narrows Int32 to Byte when every value fits (AlpacaBridge does for
+            // short biases); the values are the real ADU, not an 8-bit image to stretch.
+            byte[] payload = [51, 0, 255, 13];
+            var (pixels, _, _) = AlpacaImageBytes.Decode(Body(2, 2, 6, payload));
+            Assert.That(pixels, Is.EqualTo(new ushort[] { 51, 255, 0, 13 }));
+        }
+
+        [Test]
+        public void Byte_payload_matches_library_fallback() {
+            // CameraService falls back to the ASCOM library's ImageArray; both paths must
+            // save the same pixels for the same wire bytes.
+            var body = Body(2, 2, 6, [51, 0, 255, 13]);
+            var (fallback, _, _) = CameraService.ConvertImageArray(body.ToImageArray());
+            var (direct, _, _) = AlpacaImageBytes.Decode(body);
+            Assert.That(direct, Is.EqualTo(fallback));
         }
 
         [Test]
