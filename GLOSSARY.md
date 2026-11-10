@@ -58,6 +58,10 @@ _Avoid_: Mobile Mode
 Simple Mode's ordered walk through the steps before imaging (plan, focus, polar alignment, guide), whose last step starts the Session. Not the Full UI's Checklist.
 _Avoid_: Night Setup, Guided Run, Autopilot
 
+**Screen**:
+One of Simple Mode's five views (Preview, Focus, Polar align, Guide, Queue). Preflight is not a Screen; it chooses which Screen shows.
+_Avoid_: mode, panel, page
+
 ### Sky Album
 
 **Sky Album**:

@@ -1,5 +1,6 @@
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
+import 'simple_screen.dart';
 import 'simple_search.dart';
 
 import 'package:flutter/cupertino.dart';
@@ -105,11 +106,6 @@ import '../../state/settings/phd2_settings_state.dart'
 import '../../state/focus/bahtinov_focus_state.dart'
     show MainFocusMethod, bahtinovFocusProvider, effectiveFocusMethodProvider;
 import 'simple_message_pills.dart';
-import 'simple_guide_panel.dart'
-    show
-        SimpleGuidePanel,
-        SimpleGuideShutter,
-        simpleGuideSummary;
 import 'simple_polar_panel.dart';
 import '../album/sky_album_screen.dart';
 import 'simple_plan_panel.dart';
@@ -1048,10 +1044,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
               kSimplePlanSquareHeight * simpleRailScale(context) +
               kSimpleInset
         : kSimpleInset;
-    final queuePanel = SimpleRunPanel(
-      onAdd: () => _openSheet(),
-      onEdit: (i) => _openSheet(edit: i),
+    final screenHost = SimpleScreenHost(
+      onAddTarget: () => _openSheet(),
+      onEditTarget: (i) => _openSheet(edit: i),
     );
+    final queuePanel = SimpleScreen.of(SimpleModeScreen.plan).panel(screenHost);
     final runSheet =
         shown == SimpleModeScreen.plan &&
         ((_popover == _Popover.settings && !runActive) || _adding);
@@ -1414,21 +1411,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                                 // chip opens its panel (user, 2026-11-02).
                                                 onPicked: _pickMode,
                                               )
-                                            : switch (shown) {
-                                                SimpleModeScreen.focus =>
-                                                  const SimpleFocusPanel(),
-                                                SimpleModeScreen.polarAlign =>
-                                                  const SimplePolarPanel(),
-                                                SimpleModeScreen.guide =>
-                                                  const SimpleGuidePanel(),
-                                                SimpleModeScreen.plan =>
-                                                  queuePanel,
-                                                _ => const SizedBox(
-                                                  width: 280,
-                                                  child:
-                                                      SimpleSettingsPopover(),
-                                                ),
-                                              },
+                                            : SimpleScreen.of(shown)
+                                                  .panel(screenHost),
                                     ),
                                   ),
                                 ),
@@ -2133,13 +2117,7 @@ class _RightRail extends ConsumerWidget {
               ),
             ),
           ),
-          switch (mode) {
-            SimpleModeScreen.focus => const SimpleFocusShutter(),
-            SimpleModeScreen.polarAlign => const SimplePolarShutter(),
-            SimpleModeScreen.guide => const SimpleGuideShutter(),
-            SimpleModeScreen.plan => const SimpleRunShutter(),
-            _ => const SimpleShutter(),
-          },
+          SimpleScreen.of(mode).shutter,
           _RailButton(
             key: const Key('simple-settings'),
             icon: Icons.tune,
@@ -2156,20 +2134,7 @@ class _RightRail extends ConsumerWidget {
   // In Preflight the chip names the step whose settings it shows ("Focus"
   // over "Auto"), so they don't read as random.
   String _chipLabel(BuildContext context, WidgetRef ref) {
-    final label = switch (mode) {
-      SimpleModeScreen.focus => simpleFocusSummary(ref),
-      SimpleModeScreen.guide => simpleGuideSummary(ref),
-      SimpleModeScreen.plan => simpleRunChip(
-        ref.watch(simpleRunProvider),
-        ref.watch(simpleRunPlanProvider),
-      ),
-      SimpleModeScreen.polarAlign => simplePolarSummary(
-        ref.watch(simplePolarSettingsProvider).value ??
-            const PolarAlignSettings(),
-        ref.context.l10n,
-      ),
-      _ => simpleSettingsSummary(context, ref),
-    };
+    final label = SimpleScreen.of(mode).caption(context, ref);
     return named == null
         ? label
         : '${mode.railLabelOf(context.l10n)}\n${label.split('\n').first}';
