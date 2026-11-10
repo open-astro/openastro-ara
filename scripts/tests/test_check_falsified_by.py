@@ -236,6 +236,14 @@ class FalsifiedByTest(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertEqual(self.run_check(self.body("case a", path=path)).returncode, 0)
 
+    def test_a_packaged_script_is_production(self):
+        # The .deb installs packaging/ onto the rig: configure-storage.sh runs as root there.
+        self._one_new_dart_case()
+        self.write("packaging/debian/opt/openastroara/scripts/helper.sh", "exit 0\n")
+        self.commit("packaged")
+        r = self.run_check(self.body("case a", path="packaging/debian/opt/openastroara/scripts/helper.sh"))
+        self.assertEqual(r.returncode, 0, r.stdout)
+
     def test_helper_path_is_refused_unless_the_name_says_the_helper_is_the_subject(self):
         self.start_branch()
         self.write(DART, "void main() { test('case a', () {}); test('Fake rotator moves', () {}); }\n")
