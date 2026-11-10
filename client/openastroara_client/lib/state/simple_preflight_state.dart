@@ -7,16 +7,12 @@ import '../screens/simple/simple_plan_panel.dart'
         simpleDarkStartProvider,
         simpleRunProvider,
         simpleScheduleAllowedProvider;
-import '../screens/simple/simple_guide_panel.dart'
-    show simpleGuideActive, simpleGuiding;
 import '../screens/simple/simple_polar_panel.dart' show simplePolarActive;
 import '../models/polar_align.dart' show PolarAlignStates;
 import '../util/friendly_error.dart';
 import 'app_locale_state.dart';
 import 'guider/guider_state.dart';
-import 'imaging/capture_progress_state.dart';
-import 'imaging/live_view_state.dart';
-import 'sequencer/sequence_list_state.dart';
+import 'imaging/main_camera_state.dart';
 import 'polar_align/polar_align_state.dart';
 import 'setup/setup_readiness.dart';
 import 'simple_messages_state.dart';
@@ -143,20 +139,11 @@ SimplePreflightStep? preflightNextStep({
   return null;
 }
 
-/// The main camera is taking frames, as the Guide shutter reads it
-/// (simpleMainCameraBusy with a paused Queue idle, read once).
-bool _mainCameraBusy(Ref ref) {
-  final queue = ref.read(sequenceRunStateProvider).value?.state;
-  return ref.read(captureProgressProvider).isCapturing ||
-      ref.read(liveViewControllerProvider) ||
-      ((queue?.isActive ?? false) && !queue!.isAnyPaused);
-}
-
 /// The guide step has nothing to do: guiding already, or no guider to guide
 /// with (an unguided rig images without it).
 bool _guided(Ref ref) {
   final g = ref.read(guiderStatusProvider).value;
-  return g == null || !g.isConnected || simpleGuiding(g);
+  return g == null || !g.isConnected || g.isCorrecting;
 }
 
 /// [preflightNextStep] from the rig's state now, watched: the step after [after].
@@ -170,7 +157,7 @@ SimplePreflightStep? simplePreflightNext(
     focused: ref.watch(setupFocusStateProvider) == SetupStepState.done,
     aligned: ref.watch(setupPolarAlignStateProvider) == SetupStepState.done,
     permanentPier: ref.watch(simplePermanentPierProvider).value ?? false,
-    guided: g == null || !g.isConnected || simpleGuiding(g),
+    guided: g == null || !g.isConnected || g.isCorrecting,
   );
 }
 
@@ -246,8 +233,8 @@ class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
     // is busy (a shot, a loop, a plan's exposure): calibration turns the
     // mount, the same gate as the Guide shutter, which then says why.
     if (step == SimplePreflightStep.guide &&
-        !simpleGuideActive(ref.read(guiderStatusProvider).value) &&
-        !_mainCameraBusy(ref)) {
+        !(ref.read(guiderStatusProvider).value?.isBusy ?? false) &&
+        !ref.read(mainCameraTakingFramesProvider)) {
       unawaited(
         _stepAction(
           ref.read(guiderStatusProvider.notifier).startGuiding,

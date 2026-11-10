@@ -51,18 +51,6 @@ enum GuiderRuntimeState {
   unknown,
 }
 
-/// The phases a "Stop guiding" ends; in every other one (stopped, looping, a
-/// star picked or lost) the way forward is "Guide".
-bool guiderIsGuiding(GuiderRuntimeState state) => switch (state) {
-      GuiderRuntimeState.calibrating ||
-      GuiderRuntimeState.guiding ||
-      GuiderRuntimeState.settling ||
-      GuiderRuntimeState.dithering ||
-      GuiderRuntimeState.paused =>
-        true,
-      _ => false,
-    };
-
 /// #1364 item 6 — the one wording of a guider phase, used by the guiding
 /// strip, the guider dialog and the Run tab alike.
 String guiderRuntimeText(AppLocalizations l, GuiderRuntimeState state) => switch (state) {
@@ -182,7 +170,34 @@ class GuiderStatus {
   }
 
   bool get isConnected => connectionState == GuiderConnectionState.connected;
-  bool get isGuiding => runtimeState == GuiderRuntimeState.guiding;
+
+  /// Correcting the mount now, or about to be back at it (a dither's settle):
+  /// the RMS means something, and Preflight's Guide step is done.
+  bool get isCorrecting =>
+      isConnected &&
+      const {
+        GuiderRuntimeState.guiding,
+        GuiderRuntimeState.settling,
+        GuiderRuntimeState.dithering,
+      }.contains(runtimeState);
+
+  /// Doing anything at all (looping, a star picked or lost, calibrating,
+  /// guiding, the assistant): Simple Mode's shutter square stops it.
+  bool get isBusy =>
+      isConnected &&
+      !const {GuiderRuntimeState.stopped, GuiderRuntimeState.unknown}.contains(runtimeState);
+
+  /// A phase a "Stop guiding" ends; in every other one (stopped, looping, a
+  /// star picked or lost) the way forward is "Guide".
+  bool get stopEndsPhase =>
+      isConnected &&
+      const {
+        GuiderRuntimeState.calibrating,
+        GuiderRuntimeState.guiding,
+        GuiderRuntimeState.settling,
+        GuiderRuntimeState.dithering,
+        GuiderRuntimeState.paused,
+      }.contains(runtimeState);
 
   /// Parse a `GuiderDto` frame. The nested `runtime` object is optional/defensive
   /// — a malformed or absent runtime degrades to [GuiderRuntimeState.unknown]

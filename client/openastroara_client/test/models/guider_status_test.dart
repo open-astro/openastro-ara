@@ -23,7 +23,6 @@ void main() {
       expect(s.connectionState, GuiderConnectionState.connected);
       expect(s.isConnected, isTrue);
       expect(s.runtimeState, GuiderRuntimeState.guiding);
-      expect(s.isGuiding, isTrue);
       expect(s.rmsTotal, 0.42);
       expect(s.rmsRa, 0.31);
       expect(s.rmsDec, 0.28);
@@ -76,7 +75,6 @@ void main() {
         'runtime': <String, dynamic>{'state': 'star_lost'},
       });
       expect(s.runtimeState, GuiderRuntimeState.starLost);
-      expect(s.isGuiding, isFalse);
     });
 
     test('the out-of-step reason makes a different status, so listeners rebuild (#1665)', () {
@@ -121,7 +119,6 @@ void main() {
       expect(withState('assistant').runtimeSummary(_en), 'Guiding Assistant');
       expect(withState('looping').runtimeSummary(_en), 'Looping');
       expect(withState('settling').runtimeSummary(_en), 'Settling');
-      expect(withState('settling').isGuiding, isFalse, reason: 'isGuiding stays the plain guiding phase');
     });
 
     test('the summary carries the calibration leg and says when not connected', () {
@@ -235,6 +232,39 @@ void main() {
 
       final c = GuiderStatus.fromJson(frame()..['state'] = 'disconnected');
       expect(a, isNot(equals(c)));
+    });
+  });
+
+  group('the three guider questions', () {
+    // Which phases answer yes, connected; disconnected answers no to all.
+    const correcting = {GuiderRuntimeState.guiding, GuiderRuntimeState.settling, GuiderRuntimeState.dithering};
+    const notBusy = {GuiderRuntimeState.stopped, GuiderRuntimeState.unknown};
+    const stopEnds = {
+      GuiderRuntimeState.calibrating,
+      GuiderRuntimeState.guiding,
+      GuiderRuntimeState.settling,
+      GuiderRuntimeState.dithering,
+      GuiderRuntimeState.paused,
+    };
+    GuiderStatus at(GuiderConnectionState c, GuiderRuntimeState r) =>
+        GuiderStatus(name: 'Guider', connectionState: c, runtimeState: r);
+
+    for (final r in GuiderRuntimeState.values) {
+      test('connected, ${r.name}', () {
+        final g = at(GuiderConnectionState.connected, r);
+        expect(g.isCorrecting, correcting.contains(r), reason: 'isCorrecting');
+        expect(g.isBusy, !notBusy.contains(r), reason: 'isBusy');
+        expect(g.stopEndsPhase, stopEnds.contains(r), reason: 'stopEndsPhase');
+      });
+    }
+
+    test('a guider not connected answers no, whatever phase it last reported', () {
+      for (final c in GuiderConnectionState.values.where((c) => c != GuiderConnectionState.connected)) {
+        for (final r in GuiderRuntimeState.values) {
+          final g = at(c, r);
+          expect([g.isCorrecting, g.isBusy, g.stopEndsPhase], [false, false, false], reason: '$c $r');
+        }
+      }
     });
   });
 }

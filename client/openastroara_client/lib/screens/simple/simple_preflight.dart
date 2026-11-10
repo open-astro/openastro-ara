@@ -7,7 +7,6 @@ import '../../state/setup/setup_readiness.dart';
 import '../../state/simple_mode_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/simple_preflight_state.dart';
-import 'simple_guide_panel.dart' show simpleGuiding;
 import 'simple_plan_panel.dart' show simpleRunProvider;
 export '../../state/simple_preflight_state.dart'
     show
@@ -68,8 +67,10 @@ class SimplePreflightStrip extends ConsumerWidget {
                     SimplePreflightStep.polarAlign => aligned,
                     SimplePreflightStep.plan =>
                       ref.watch(simpleRunProvider).sequenceId != null,
-                    SimplePreflightStep.guide => simpleGuiding(
-                      ref.watch(guiderStatusProvider).value,
+                    SimplePreflightStep.guide => ref.watch(
+                      guiderStatusProvider.select(
+                        (g) => g.value?.isCorrecting ?? false,
+                      ),
                     ),
                   },
                 ),

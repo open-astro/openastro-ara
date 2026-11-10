@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/autofocus_run.dart';
+import 'package:openastroara/models/bahtinov_focus.dart';
 import 'package:openastroara/models/collimation_verdict.dart';
 import 'package:openastroara/widgets/focus/collimation_dial.dart';
 import 'package:openastroara/models/guide_focus.dart';
@@ -11,6 +13,7 @@ import 'package:openastroara/state/focus/guide_focus_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/fit_pane.dart';
+import 'package:openastroara/widgets/focus/bahtinov_focus_card.dart';
 import 'package:openastroara/widgets/focus/focusing_pane.dart';
 import 'package:openastroara/widgets/focus/guide_focus_card.dart';
 import 'package:openastroara/widgets/focus/v_curve_chart.dart';
@@ -42,6 +45,18 @@ class _PinnedAutofocus extends MainFocusMethodNotifier {
   MainFocusMethod? build() => MainFocusMethod.autofocus;
 }
 
+/// A Bahtinov readout found running: another client started it, or a reconnect.
+class _Reading extends BahtinovFocusNotifier {
+  @override
+  BahtinovFocusLive build() => const BahtinovFocusLive(
+        status: BahtinovFocusStatus(
+            active: true, state: BahtinovFocusStates.running, exposureSec: 2, seq: 0,
+            recent: [], zonePx: 0.3, zoneFromOptics: false, hasFrame: false),
+      );
+  @override
+  Future<void> refresh() async {}
+}
+
 class _OagPhd2 extends Phd2SettingsNotifier {
   @override
   Phd2Settings build() => const Phd2Settings(guiderSetupType: 'oag', guiderCamera: 'Alpaca Camera [rc91.lan:6800/1]');
@@ -52,6 +67,7 @@ Widget _harness({
   GuideFocusLive guide = GuideFocusLive.idle,
   bool oag = false,
   Size pane = const Size(1100, 3200),
+  List<Override> extra = const [],
 }) =>
     ProviderScope(
       overrides: [
@@ -59,6 +75,7 @@ Widget _harness({
         guideFocusProvider.overrideWith(() => _StubGuideFocus(guide)),
         mainFocusMethodProvider.overrideWith(_PinnedAutofocus.new),
         if (oag) phd2SettingsProvider.overrideWith(_OagPhd2.new),
+        ...extra,
       ],
       child: MaterialApp(home: Scaffold(body: SizedBox.fromSize(size: pane, child: const FocusingPane()))),
     );
@@ -264,6 +281,12 @@ void main() {
     await t.tap(find.text('Guide camera'));
     await t.pumpAndSettle();
     expect(find.textContaining('Focus the main telescope first'), findsNothing);
+  });
+
+  testWidgets('a readout already running shows the Bahtinov card over a pick of autofocus', (t) async {
+    await t.pumpWidget(_harness(extra: [bahtinovFocusProvider.overrideWith(_Reading.new)]));
+    await t.pump();
+    expect(find.byType(BahtinovFocusCard), findsOneWidget);
   });
 
   testWidgets('a live guide loop shows Stop and the readout', (t) async {

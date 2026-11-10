@@ -11,6 +11,7 @@ import '../../state/guider/guider_live_state.dart';
 import '../../models/guiding_assistant.dart';
 import '../../models/guider_status.dart';
 import '../../state/guider/guider_state.dart';
+import '../../state/imaging/main_camera_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
@@ -33,33 +34,11 @@ import 'simple_preview_panel.dart'
         SimplePresetTile,
         SimpleShutterButton,
         formatExposure,
-        kSimpleText,
-        simpleMainCameraBusy;
+        kSimpleText;
 import 'simple_shell.dart' show SimplePanel, SimpleSegments, kSimpleGoStyle;
 
 /// Guide mode: the guider's routine (loop, pick a star, calibrate when
 /// needed, settle, guide) runs from the shutter; its red square stops it.
-
-/// The guider is doing something the shutter's square stops: looping,
-/// calibrating, guiding, settling. Pure — unit-tested.
-bool simpleGuideActive(GuiderStatus? g) =>
-    g != null &&
-    g.isConnected &&
-    !const {
-      GuiderRuntimeState.stopped,
-      GuiderRuntimeState.unknown,
-    }.contains(g.runtimeState);
-
-/// Guiding, or about to be back at it (a dither's settle): what Preflight's
-/// Guide step waits for. Pure — unit-tested.
-bool simpleGuiding(GuiderStatus? g) =>
-    g != null &&
-    g.isConnected &&
-    const {
-      GuiderRuntimeState.guiding,
-      GuiderRuntimeState.settling,
-      GuiderRuntimeState.dithering,
-    }.contains(g.runtimeState);
 
 String _arcsec(double v) => '${v.toStringAsFixed(2)}″';
 
@@ -95,7 +74,7 @@ Color simpleGuiderColour(GuiderStatus? g) => g == null || !g.isConnected
 String simpleGuideSummary(WidgetRef ref) {
   final g = ref.watch(guiderStatusProvider).value;
   final rms = g?.rmsTotalArcsec;
-  return simpleGuiding(g) && rms != null
+  return (g?.isCorrecting ?? false) && rms != null
       ? _arcsec(rms)
       : ref.context.l10n.deviceOff;
 }
@@ -108,8 +87,8 @@ class SimpleGuideShutter extends ConsumerWidget {
     final g = ref.watch(guiderStatusProvider).value;
     final pending = ref.watch(simpleGuiderPendingProvider);
     // An ask in flight shows as done already, and takes no second tap.
-    final active = pending ?? simpleGuideActive(g);
-    final cameraBusy = simpleMainCameraBusy(ref, pausedQueueBusy: false);
+    final active = pending ?? (g?.isBusy ?? false);
+    final cameraBusy = ref.watch(mainCameraTakingFramesProvider);
     final l10n = context.l10n;
     return SimpleShutterButton(
       start: true,
@@ -154,7 +133,7 @@ Future<void> simpleGuideRun(
     // The guider answers the ask at once and acts a moment later: read again
     // every half second until it shows, 10 s at most.
     for (var i = 0; i < 20; i++) {
-      if (simpleGuideActive(container.read(guiderStatusProvider).value) ==
+      if ((container.read(guiderStatusProvider).value?.isBusy ?? false) ==
           start) {
         break;
       }
@@ -164,7 +143,7 @@ Future<void> simpleGuideRun(
     // The rig accepts a Stop and may then refuse it (ALP-5018): say so, or the
     // shutter just flips back to running.
     final g = container.read(guiderStatusProvider).value;
-    if (!start && simpleGuideActive(g)) {
+    if (!start && (g?.isBusy ?? false)) {
       notify(
         // Lower case inside the sentence, as the guiding strip writes the phase.
         l10n.guideStopRefused(guiderRuntimeText(l10n, g!.runtimeState).toLowerCase()),
@@ -197,8 +176,8 @@ class SimpleGuidePanel extends ConsumerWidget {
     final l10n = context.l10n;
     final g = ref.watch(guiderStatusProvider).value;
     final connected = g != null && g.isConnected;
-    final active = simpleGuideActive(g);
-    final guiding = simpleGuiding(g);
+    final active = g?.isBusy ?? false;
+    final guiding = g?.isCorrecting ?? false;
     final pending = ref.watch(simpleGuiderPendingProvider);
     final colour = pending != null
         ? AraColors.accentInfo
@@ -614,10 +593,10 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
     });
     final g = ref.watch(guiderStatusProvider).value;
     final connected = g != null && g.isConnected;
-    final active = simpleGuideActive(g);
-    final guiding = g != null && guiderIsGuiding(g.runtimeState);
+    final active = g?.isBusy ?? false;
+    final guiding = g?.stopEndsPhase ?? false;
     final pending = ref.watch(simpleGuiderPendingProvider);
-    final cameraBusy = simpleMainCameraBusy(ref, pausedQueueBusy: false);
+    final cameraBusy = ref.watch(mainCameraTakingFramesProvider);
     final planRunning =
         ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
     final assistant = ref.watch(guidingAssistantProvider);

@@ -441,24 +441,6 @@ void main() {
     });
   });
 
-  group('what the guider is doing, for the shutter and Preflight', () {
-    GuiderStatus at(String state, String runtime) =>
-        GuiderStatus.fromJson({'device_id': 'g', 'name': 'PHD2', 'state': state, 'runtime': {'state': runtime}});
-    test('active: anything the red square stops', () {
-      for (final r in ['looping', 'calibrating', 'guiding', 'settling', 'paused', 'star_lost']) {
-        expect(simpleGuideActive(at('connected', r)), isTrue, reason: r);
-      }
-      expect(simpleGuideActive(at('connected', 'stopped')), isFalse);
-      expect(simpleGuideActive(at('disconnected', 'guiding')), isFalse);
-      expect(simpleGuideActive(null), isFalse);
-    });
-    test('guiding: guiding, settling or dithering, not calibrating', () {
-      expect(simpleGuiding(at('connected', 'guiding')), isTrue);
-      expect(simpleGuiding(at('connected', 'calibrating')), isFalse);
-      expect(simpleGuiding(at('connected', 'stopped')), isFalse);
-    });
-  });
-
   test('the guider follows the DESIGN.md status rule: green good (blinking while guiding), blue changing, '
       'amber warning, red error, grey off', () {
     GuiderStatus at(String state, String runtime) =>

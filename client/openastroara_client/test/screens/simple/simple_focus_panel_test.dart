@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/autofocus_run.dart';
+import 'package:openastroara/models/bahtinov_focus.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/screens/simple/simple_preflight.dart';
@@ -76,6 +77,18 @@ class _Live extends AutofocusLiveNotifier {
   Future<void> cancel() async => cancels++;
 }
 
+/// A Bahtinov readout found running: another client started it, or a reconnect.
+class _Reading extends BahtinovFocusNotifier {
+  @override
+  BahtinovFocusLive build() => const BahtinovFocusLive(
+        status: BahtinovFocusStatus(
+            active: true, state: BahtinovFocusStates.running, exposureSec: 2, seq: 0,
+            recent: [], zonePx: 0.3, zoneFromOptics: false, hasFrame: false),
+      );
+  @override
+  Future<void> refresh() async {}
+}
+
 late ProviderContainer _c;
 
 class _Pilot extends SimplePreflightNotifier {
@@ -142,6 +155,19 @@ void main() {
   testWidgets('no focuser: Manual, the Bahtinov helper; no Autofocus button', (tester) async {
     await _pump(tester);
     expect(find.text('Fit the mask, then Start'), findsOneWidget);
+    expect(find.text('Autofocus'), findsNothing);
+  });
+
+  testWidgets('a readout already running shows Manual over a connected focuser, as the full UI does', (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        focuserProvider.overrideWith(() => _Focuser(_focuser())),
+        bahtinovFocusProvider.overrideWith(_Reading.new),
+      ],
+      child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
+    ));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-bahtinov-finish')), findsOneWidget, reason: 'the Bahtinov panel');
     expect(find.text('Autofocus'), findsNothing);
   });
 
@@ -362,6 +388,9 @@ void main() {
         ]);
         addTearDown(c.dispose);
         await c.read(simplePermanentPierProvider.future);
+        // Loaded first: a derived provider refreshed after the next pumpWidget
+        // drops this container's tree leaves Riverpod's refresh timer pending.
+        await c.read(focuserProvider.future);
         await tester.pumpWidget(UncontrolledProviderScope(
           container: c,
           child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
