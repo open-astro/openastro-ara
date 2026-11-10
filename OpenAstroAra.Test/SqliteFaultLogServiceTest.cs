@@ -518,7 +518,7 @@ namespace OpenAstroAra.Test {
                     (_, a, r, _) => { lock (recorded) { recorded.Add((a, r)); } })
                 .Returns(Task.CompletedTask);
             var reconnector = new Mock<IEquipmentReconnector>();
-            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
+            reconnector.Setup(r => r.RecoverAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new ReconnectOutcome(1, 1));
             reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(EquipmentConnectionState.Connected);
@@ -549,7 +549,7 @@ namespace OpenAstroAra.Test {
                     (_, a, _, _) => { lock (recorded) { recorded.Add(a); } })
                 .Returns(Task.CompletedTask);
             var reconnector = new Mock<IEquipmentReconnector>();
-            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
+            reconnector.Setup(r => r.RecoverAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new ReconnectOutcome(1, 1));
             reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(EquipmentConnectionState.Error);
