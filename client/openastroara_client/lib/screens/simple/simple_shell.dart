@@ -102,6 +102,7 @@ import 'simple_message_pills.dart';
 import '../album/sky_album_screen.dart';
 import 'simple_plan_panel.dart';
 import 'simple_preview_panel.dart';
+import 'simple_rig_card.dart';
 import 'simple_wallpaper.dart';
 
 /// Inset from the frame edge and between panels.
@@ -856,6 +857,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final showSky = _sky || !hasFrame;
     // No frame and no sky asked for: the wallpaper (#1602).
     final wallpaper = !_sky && !hasFrame;
+    final linkUp = ref.watch(serverLinkUpProvider);
     final panels = !_clean || showSky;
     // Every mode reads the sequencer (the plan squares, the status pill), so
     // opening Simple Mode adopts a run in progress; only Plan acts on it.
@@ -1118,7 +1120,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               child: const ColoredBox(color: AraColors.unseenPaint),
                             ),
                           ),
-                        if (!hasFrame)
+                        // #1559 — no rig link: the card offers one, over the wallpaper.
+                        if (!linkUp)
+                          const Positioned.fill(
+                            child: Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(kSimpleInset),
+                                child: SimpleRigCard(),
+                              ),
+                            ),
+                          )
+                        else if (!hasFrame)
                           Positioned.fill(
                             child: IgnorePointer(
                               child: Center(

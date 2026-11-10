@@ -1,0 +1,210 @@
+<title>Connect to Your Rig</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: one iPad stage (1024 × 640, scaled to fit) with the No rig card centred over the wallpaper; variant and state switches above it.
+     Single dark look on purpose: DESIGN.md tokens (lib/theme/ara_colors.dart), as the other design/preview mocks. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --hair: #404040; --text: #E0E0E0; --text2: #A0A0A0; --dis: #6E6E6E;
+    --ok: #4CAF50; --info: #42A5F5; --link: #64B5F6; --sel: #1976D2; --fill: #1565C0; --warn: #FFB300;
+    --tile: rgba(56,56,56,.55); --errt: #FF8A80; --err: #E53935; --scrim: rgba(26,26,26,.9);
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys);
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+  .page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 78ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
+  .group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--hair); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--hair); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+  .why { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  .why div { background: var(--bg); border: 1px solid #2a2a2a; border-radius: 10px; padding: 12px 14px; min-width: 0; }
+  .why b { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .why span { color: var(--text2); font-size: 13px; }
+
+  .stage { position: relative; width: 100%; }
+  .ipad { width: 1024px; height: 640px; position: absolute; left: 0; top: 0; transform-origin: 0 0; overflow: hidden; border-radius: 18px; border: 1px solid #333; background: #07080c; }
+  .sky { position: absolute; inset: 0; }
+  .sf { background: var(--scrim); border-radius: 10px; box-shadow: inset 0 0 0 1px var(--hair); }
+
+  .strip { position: absolute; left: 16px; top: 16px; right: 16px; height: 56px; display: flex; align-items: center; gap: 16px; padding: 0 14px; font-size: 12px; color: var(--text2); }
+  .strip .mode { color: var(--dis); font-size: 15px; font-weight: 600; }
+  .dotx { display: inline-flex; gap: 6px; align-items: center; color: var(--dis); }
+  .dotx i { width: 8px; height: 8px; border-radius: 50%; background: #5a5a5a; }
+  .strip .sp { flex: 1; }
+  .strip .gear { color: var(--text2); }
+  .pill { position: absolute; left: 16px; top: 88px; height: 36px; padding: 0 14px; display: flex; gap: 8px; align-items: center; font-size: 13px; white-space: nowrap; }
+  .pill i { width: 9px; height: 9px; border-radius: 50%; background: #5a5a5a; }
+  .rail { position: absolute; left: 16px; top: 220px; width: 76px; display: flex; flex-direction: column; gap: 14px; padding: 12px 6px; font-size: 12px; color: var(--dis); text-align: center; }
+  .right { position: absolute; right: 16px; top: 220px; width: 72px; padding: 10px 4px; display: flex; flex-direction: column; align-items: center; gap: 10px; font-size: 12px; color: var(--dis); }
+  .shutter { width: 46px; height: 46px; border-radius: 50%; border: 2px solid #555; }
+  .estop { position: absolute; right: 16px; bottom: 16px; width: 72px; height: 72px; border-radius: 50%; background: var(--err); display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; letter-spacing: .04em; }
+
+  /* The card: 440 wide, centred in the image area. */
+  .card { position: absolute; left: 50%; top: 50%; width: 440px; max-height: 520px; transform: translate(-50%, -50%); padding: 20px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+  .card h2 { margin: 0; font-size: 20px; font-weight: 600; }
+  .card .sub { margin: -8px 0 0; color: var(--text2); font-size: 13px; }
+  .sec { display: flex; flex-direction: column; gap: 6px; }
+  .sec h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--text2); letter-spacing: .06em; text-transform: uppercase; display: flex; gap: 8px; align-items: center; }
+  .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--hair); border-top-color: var(--info); animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+  .rig { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 6px 6px 12px; background: var(--tile); border-radius: 10px; }
+  .rig .who { flex: 1; min-width: 0; }
+  .rig .who b { display: block; font-weight: 500; font-size: 15px; }
+  .rig .who span { display: block; color: var(--text2); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .rig .tag { color: var(--link); }
+  .rig .seen { color: var(--warn); }
+  .btn { height: 44px; padding: 0 18px; border-radius: 8px; border: 0; font: 600 14px var(--sys); cursor: pointer; white-space: nowrap; }
+  .btn.fill { background: var(--fill); color: #fff; }
+  .btn.out { background: transparent; color: #fff; box-shadow: inset 0 0 0 1px var(--hair); }
+  .btn.text { background: transparent; color: var(--link); padding: 0 10px; }
+  .btn[disabled] { opacity: .5; cursor: default; }
+  .empty { color: var(--text2); font-size: 13px; padding: 6px 2px; }
+  .addr { display: flex; gap: 8px; }
+  .addr input { flex: 1; min-width: 0; height: 44px; border-radius: 8px; border: 1px solid var(--hair); background: #222; color: var(--text); padding: 0 12px; font: 15px var(--sys); }
+  .addr input.bad { border-color: var(--errt); }
+  .err { color: var(--errt); font-size: 13px; margin: 0; }
+  .foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; border-top: 1px solid var(--hair); padding-top: 10px; color: var(--text2); font-size: 13px; }
+  .chosen { color: var(--ok); font-size: 12px; }
+</style>
+
+<div class="page">
+  <h1>Simple Mode: Connect to your rig (#1559)</h1>
+  <p class="note"><b>Chosen: B, one list (user, 2026-11-11).</b> The card Simple Mode shows over tonight's wallpaper whenever the rig link is down: a dropped link or offline planning. The device dots go grey and the mode name dims, as DESIGN.md's No rig state says. Pick a variant and a state. The full UI keeps its 15 s return to the profile screen (#1570).</p>
+
+  <div class="controls">
+    <div class="group"><span class="lbl">Variant</span>
+      <div class="seg" id="variant">
+        <button type="button" data-v="a" aria-pressed="false">A · Two lists</button>
+        <button type="button" data-v="b" aria-pressed="true">B · One list (chosen)</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">State</span>
+      <div class="seg" id="state">
+        <button type="button" data-s="dropped" aria-pressed="true">Link dropped</button>
+        <button type="button" data-s="searching" aria-pressed="false">Searching</button>
+        <button type="button" data-s="connecting" aria-pressed="false">Connecting</button>
+        <button type="button" data-s="bad" aria-pressed="false">Address failed</button>
+        <button type="button" data-s="offline" aria-pressed="false">Offline planning</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="ipad" id="ipad">
+      <canvas class="sky" id="sky" width="1024" height="640" aria-hidden="true"></canvas>
+      <div class="strip sf">
+        <span class="mode">Preview</span>
+        <span class="dotx"><i></i>Camera</span><span class="dotx"><i></i>Mount</span><span class="dotx"><i></i>Focuser</span><span class="dotx"><i></i>Guider</span>
+        <span class="sp"></span><span class="gear">Settings</span>
+      </div>
+      <div class="pill sf"><i></i><span id="pillText">Rig not connected</span></div>
+      <div class="rail sf"><span>Preview</span><span>Plan</span><span>Focus</span><span>Guide</span><span>Polar</span></div>
+      <div class="right sf"><span class="shutter"></span><span>Shoot</span></div>
+      <div class="estop">STOP</div>
+      <div class="card sf" id="card" role="region" aria-labelledby="cardTitle"></div>
+    </div>
+  </div>
+
+  <div class="why">
+    <div><b>A · Two lists</b><span>Found on the network, then Saved, as the first-run screen groups them. A saved rig that is also found shows once, under Found. Add by address is always open at the foot.</span></div>
+    <div><b>B · One list (chosen)</b><span>The rig the session was on comes first with a Reconnect button, then every other rig, each saying whether it was found or only saved. Add by address opens from a text button, so the card stays short.</span></div>
+    <div><b>Both</b><span>Connect on the session's rig brings it back in place. Another rig goes through its profile box, as Settings › Change rig does. The card goes the moment the link is back.</span></div>
+  </div>
+</div>
+
+<script>
+  const RIGS = {
+    session: { name: 'Backyard rig', addr: 'astro-pi.local · 192.0.2.24:5555', found: true },
+    others: [
+      { name: 'Club observatory', addr: '192.0.2.61:5555', found: true },
+      { name: 'Travel rig', addr: '198.51.100.7:5555', found: false },
+    ],
+  };
+  let variant = 'b', state = 'dropped', addrOpen = false;
+
+  const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  function rigRow(r, { session = false, label = null } = {}) {
+    const connecting = state === 'connecting' && session;
+    const btnLabel = connecting ? 'Connecting…' : session && variant === 'b' ? 'Reconnect' : 'Connect';
+    const fill = session || variant === 'a' && r.found;
+    const tag = label ? `<span class="${r.found ? 'tag' : 'seen'}">${label}</span> · ` : '';
+    return `<div class="rig"><div class="who"><b>${esc(r.name)}</b><span>${tag}${esc(r.addr)}</span></div>
+      <button type="button" class="btn ${fill ? 'fill' : 'out'}" ${connecting || state === 'connecting' ? 'disabled' : ''}>${btnLabel}</button></div>`;
+  }
+
+  function addrBlock(open) {
+    if (!open) return `<button type="button" class="btn text" id="openAddr" style="align-self:flex-start">Add by address</button>`;
+    const bad = state === 'bad';
+    return `<div class="sec"><h3>Add by address</h3>
+      <div class="addr"><label for="addrIn" hidden>Rig address</label>
+        <input id="addrIn" class="${bad ? 'bad' : ''}" placeholder="astro-pi.local or 192.0.2.24" value="${bad ? '192.0.2.99' : ''}" ${bad ? 'aria-describedby="addrErr"' : ''}>
+        <button type="button" class="btn out">Connect</button></div>
+      ${bad ? '<p class="err" id="addrErr">No rig answered at 192.0.2.99:5555. Check the rig is on and on this network, or try its name.</p>' : ''}</div>`;
+  }
+
+  function render() {
+    const offline = state === 'offline';
+    const searching = state === 'searching';
+    const title = offline ? 'Go online' : 'Connect to your rig';
+    const sub = offline
+      ? 'You are planning offline. Connect a rig to image.'
+      : `The link to ${RIGS.session.name} dropped. A running plan keeps going on the rig.`;
+    let body = '';
+    if (variant === 'a') {
+      const found = searching ? [] : [RIGS.session, ...RIGS.others.filter(r => r.found)];
+      const saved = RIGS.others.filter(r => !r.found);
+      body += `<div class="sec"><h3>Found on the network <span class="spin" aria-label="Looking for rigs"></span></h3>
+        ${found.length ? found.map(r => rigRow(r, { session: r === RIGS.session && !offline })).join('') : '<div class="empty">Looking for rigs on this network…</div>'}</div>`;
+      body += `<div class="sec"><h3>Saved</h3>${(searching ? [RIGS.session, ...saved] : saved).map(r => rigRow(r, { session: searching && r === RIGS.session && !offline })).join('')}</div>`;
+      body += addrBlock(true);
+    } else {
+      body += `<div class="sec"><h3>${offline ? 'Last used' : 'This session'}</h3>${rigRow({ ...RIGS.session, found: !searching }, { session: !offline, label: searching ? 'Saved' : 'Found' })}</div>`;
+      const rest = RIGS.others.map(r => searching ? { ...r, found: false } : r);
+      body += `<div class="sec"><h3>Other rigs <span class="spin" aria-label="Looking for rigs"></span></h3>${rest.map(r => rigRow(r, { label: r.found ? 'Found' : 'Saved, not seen now' })).join('')}</div>`;
+      body += addrBlock(addrOpen || state === 'bad');
+    }
+    const foot = offline ? `<div class="foot"><span>Keep planning offline</span><button type="button" class="btn text">Close</button></div>` : '';
+    document.getElementById('card').innerHTML = `<h2 id="cardTitle">${title}</h2><p class="sub">${esc(sub)}</p>${body}${foot}`;
+    document.getElementById('pillText').textContent = offline ? 'Planning offline' : state === 'connecting' ? 'Connecting to Backyard rig…' : 'Rig not connected';
+    const o = document.getElementById('openAddr');
+    if (o) o.onclick = () => { addrOpen = true; render(); document.getElementById('addrIn')?.focus(); };
+  }
+
+  function pick(groupId, attr, set) {
+    document.getElementById(groupId).addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      for (const x of e.currentTarget.querySelectorAll('button')) x.setAttribute('aria-pressed', String(x === b));
+      set(b.dataset[attr]); render();
+    });
+  }
+  pick('variant', 'v', v => { variant = v; addrOpen = false; });
+  pick('state', 's', s => { state = s; });
+
+  // Tonight's wallpaper: a fixed star field, so every reload looks the same.
+  (function stars() {
+    const c = document.getElementById('sky'), g = c.getContext('2d');
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let i = 0; i < 520; i++) {
+      const r = rnd() < .94 ? rnd() * .9 + .2 : rnd() * 1.4 + 1;
+      g.fillStyle = `rgba(${200 + rnd() * 55 | 0},${210 + rnd() * 45 | 0},255,${.25 + rnd() * .6})`;
+      g.beginPath(); g.arc(rnd() * 1024, rnd() * 640, r, 0, 7); g.fill();
+    }
+  })();
+
+  function fit() {
+    const stage = document.getElementById('stage'), s = Math.min(1, stage.clientWidth / 1024);
+    document.getElementById('ipad').style.transform = `scale(${s})`;
+    stage.style.height = `${640 * s}px`;
+  }
+  addEventListener('resize', fit); fit(); render();
+</script>

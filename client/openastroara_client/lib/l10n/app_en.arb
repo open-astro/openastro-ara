@@ -4749,5 +4749,35 @@
     "placeholders": {
       "device": {"type": "String"}
     }
-  }
+  },
+  "simpleRigConnectTitle": "Connect to your rig",
+  "@simpleRigConnectTitle": {"description": "Title of Simple Mode's card while the rig link is down (#1559)"},
+  "simpleRigGoOnline": "Go online",
+  "@simpleRigGoOnline": {"description": "Title of the same card during offline planning"},
+  "simpleRigDropped": "The link to {rig} dropped. A running plan keeps going on the rig.",
+  "@simpleRigDropped": {"description": "Under the card title; rig is the session's rig name", "placeholders": {"rig": {"type": "String"}}},
+  "simpleRigOfflineHint": "You are planning offline. Connect a rig to image.",
+  "@simpleRigOfflineHint": {"description": "Under the card title during offline planning"},
+  "simpleRigThisSession": "This session",
+  "@simpleRigThisSession": {"description": "Card heading over the session's rig"},
+  "simpleRigOthers": "Other rigs",
+  "@simpleRigOthers": {"description": "Card heading over the other rigs"},
+  "simpleRigRigs": "Rigs",
+  "@simpleRigRigs": {"description": "Card heading over the rigs when there is no session rig"},
+  "simpleRigFound": "Found",
+  "@simpleRigFound": {"description": "A rig row: found on the network now"},
+  "simpleRigSavedNotSeen": "Saved, not seen now",
+  "@simpleRigSavedNotSeen": {"description": "A rig row: saved this session but not found on the network now"},
+  "simpleRigConnecting": "Connecting…",
+  "@simpleRigConnecting": {"description": "A rig row's button while its handshake runs"},
+  "simpleRigConnect": "Connect",
+  "@simpleRigConnect": {"description": "A rig row's button"},
+  "simpleRigLooking": "Looking for rigs on this network…",
+  "@simpleRigLooking": {"description": "The card while discovery has found nothing"},
+  "simpleRigNoAnswer": "No rig answered at {address}. Check the rig is on and on this network, or try its name.",
+  "@simpleRigNoAnswer": {"description": "The card when a rig did not answer; address is host:port", "placeholders": {"address": {"type": "String"}}},
+  "simpleRigAddByAddress": "Add by address",
+  "@simpleRigAddByAddress": {"description": "The card's button and field label for a rig discovery cannot see"},
+  "simpleRigAddressHint": "astro-pi.local or 192.0.2.24",
+  "@simpleRigAddressHint": {"description": "Hint in the card's address field; made-up example address"}
 }

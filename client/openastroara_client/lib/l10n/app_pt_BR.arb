@@ -1005,5 +1005,20 @@
   "focusChartFocus": "foco {position}",
   "simpleGuiderCalibrationFailed": "O guia não conseguiu calibrar, então está guiando com a calibração anterior. A guiagem pode ficar menos precisa esta noite.",
   "simpleDewWarning": "Pode estar se formando orvalho: as estrelas estão inchando com a umidade alta. Limpe a óptica ou ligue os aquecedores de orvalho. O autofoco programado espera até passar.",
-  "simpleDeviceDidNotConnect": "{device} não conectou. Verifique se está ligado e com o cabo conectado, depois toque em Reconectar."
+  "simpleDeviceDidNotConnect": "{device} não conectou. Verifique se está ligado e com o cabo conectado, depois toque em Reconectar.",
+  "simpleRigConnectTitle": "Conecte-se ao seu setup",
+  "simpleRigGoOnline": "Ficar online",
+  "simpleRigDropped": "A conexão com {rig} caiu. Um plano em andamento continua no setup.",
+  "simpleRigOfflineHint": "Você está planejando offline. Conecte um setup para fotografar.",
+  "simpleRigThisSession": "Esta sessão",
+  "simpleRigOthers": "Outros setups",
+  "simpleRigRigs": "Setups",
+  "simpleRigFound": "Encontrado",
+  "simpleRigSavedNotSeen": "Salvo, não visto agora",
+  "simpleRigConnecting": "Conectando…",
+  "simpleRigConnect": "Conectar",
+  "simpleRigLooking": "Procurando setups nesta rede…",
+  "simpleRigNoAnswer": "Nenhum setup respondeu em {address}. Verifique se o setup está ligado e nesta rede, ou tente o nome dele.",
+  "simpleRigAddByAddress": "Adicionar pelo endereço",
+  "simpleRigAddressHint": "astro-pi.local ou 192.0.2.24"
 }

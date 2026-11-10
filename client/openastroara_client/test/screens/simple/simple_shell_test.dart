@@ -78,6 +78,7 @@ import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart';
 import 'package:openastroara/state/imaging/last_frame_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/server_state.dart' show discoveredServersProvider;
 import 'package:openastroara/models/profile_list.dart';
 import 'package:openastroara/models/profile_meta.dart';
 import 'package:openastroara/screens/settings/settings_shell.dart';
@@ -180,6 +181,8 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     if (feature) simpleModeFeaturePrefsProvider.overrideWithValue(_MemPrefs()),
     if (pier) simplePermanentPierPrefsProvider.overrideWithValue(_MemPrefs()..value = false),
     if (linkUp) serverLinkUpProvider.overrideWithValue(true),
+    // The Connect to your rig card scans while the link is down: no network in a test.
+    discoveredServersProvider.overrideWith((ref) => const Stream<AraServer>.empty()),
     ...gear,
     if (versions != null) daemonVersionsProvider.overrideWith((ref) async => versions),
     if (starDatabases != null)
@@ -896,7 +899,7 @@ void main() {
   });
 
   testWidgets('at rest only the essentials show: no mode list, no settings, no info', (tester) async {
-    await _pump(tester, const Size(1024, 768));
+    await _pump(tester, const Size(1024, 768), linkUp: true);
     for (final hidden in ['Focus', 'Polar align', 'Plan', 'Exposure', 'Gain', 'Loop', 'HFR', 'Guiding']) {
       expect(find.text(hidden), findsNothing, reason: '$hidden is one tap away, not out');
     }
@@ -1405,7 +1408,7 @@ void main() {
 
   testWidgets('the settings chip opens Exposure from a list, the Gain slider under it, Filter and Loop/Single',
       (tester) async {
-    final container = await _pump(tester, const Size(1024, 768),
+    final container = await _pump(tester, const Size(1024, 768), linkUp: true,
         gear: [filterWheelProvider.overrideWith(() => _FilterWheel(EquipmentConnectionState.connected))]);
     expect(find.text(_summary(container)), findsOneWidget, reason: 'the chip reads the settings');
     await tester.tap(find.byKey(const Key('simple-settings')));
@@ -2017,7 +2020,7 @@ void main() {
 
   testWidgets("Preview on Guide with no guide frame says so, and does not show the main camera's last frame or histogram",
       (tester) async {
-    final c = await _pump(tester, const Size(1024, 768), histogram: _histogram,
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, histogram: _histogram,
         gear: [guiderStatusProvider.overrideWith(() => _GuiderAt('stopped'))]);
     await _frame(tester, c);
     await tester.pump();
@@ -2031,7 +2034,7 @@ void main() {
   });
 
   testWidgets("Preview on Guide says Starting, not to tap the shutter, while the loop waits for its first frame", (tester) async {
-    final c = await _pump(tester, const Size(1024, 768), gear: [
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
       guideFocusProvider.overrideWith(_GuideStarting.new),
       guiderStatusProvider.overrideWith(() => _GuiderAt('stopped')),
     ]);
@@ -2337,7 +2340,7 @@ void main() {
   });
 
   testWidgets("no frame yet: the wallpaper, not the sky; the Sky button shows tonight's sky (#1602)", (tester) async {
-    await _pump(tester, const Size(1024, 768));
+    await _pump(tester, const Size(1024, 768), linkUp: true);
     expect(find.byKey(const Key('simple-wallpaper')), findsOneWidget);
     expect(find.byKey(const Key('sky')), findsNothing);
     expect(find.text('Tap the shutter to take a frame'), findsOneWidget);
@@ -3874,7 +3877,7 @@ void main() {
   });
 
   testWidgets('screen readers can hide and show the controls over a frame', (tester) async {
-    final container = await _pump(tester, const Size(1024, 768));
+    final container = await _pump(tester, const Size(1024, 768), linkUp: true);
     // The label leads; the frame's own words may follow it.
     expect(find.bySemanticsLabel(RegExp('^Hide controls')), findsNothing, reason: 'no frame yet: nothing to clear');
     await _frame(tester, container);
@@ -3886,7 +3889,7 @@ void main() {
 
   testWidgets('a tap on the image hides everything (Stop too); the status stays and drops into the corner',
       (tester) async {
-    final container = await _pump(tester, const Size(1024, 768));
+    final container = await _pump(tester, const Size(1024, 768), linkUp: true);
     await _frame(tester, container);
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
@@ -4283,6 +4286,17 @@ void main() {
     wheel.report({'state': 'awaiting_user', 'current_slot': 1, 'pending_slot': 2}, manual: true);
     await tester.pump();
     expect(find.descendant(of: pill, matching: find.textContaining('Swap in F2, then confirm.')), findsOneWidget);
+  });
+
+  testWidgets('the Connect to your rig card shows over the wallpaper while the link is down (#1559)', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    expect(find.byKey(const Key('simple-rig-card')), findsOneWidget);
+    expect(find.text('Tap the shutter to take a frame'), findsNothing, reason: 'the card says what to do instead');
+  });
+
+  testWidgets('with the rig link up there is no Connect to your rig card (#1559)', (tester) async {
+    await _pump(tester, const Size(1024, 768), linkUp: true);
+    expect(find.byKey(const Key('simple-rig-card')), findsNothing);
   });
 
   group('the failed-connect pill (#1559)', () {
@@ -5414,6 +5428,7 @@ void main() {
     final container = ProviderContainer(overrides: [
       simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
       selectedTabIndexProvider.overrideWith(_StartOnLive.new),
+      serverLinkUpProvider.overrideWithValue(true), // no Connect card scanning the network
     ]);
     addTearDown(container.dispose);
     await container.read(simpleModeProvider.future);

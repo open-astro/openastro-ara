@@ -6134,6 +6134,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{device} didn\'t connect. Check it\'s powered and plugged in, then Reconnect.'**
   String simpleDeviceDidNotConnect(String device);
+
+  /// Title of Simple Mode's card while the rig link is down (#1559)
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to your rig'**
+  String get simpleRigConnectTitle;
+
+  /// Title of the same card during offline planning
+  ///
+  /// In en, this message translates to:
+  /// **'Go online'**
+  String get simpleRigGoOnline;
+
+  /// Under the card title; rig is the session's rig name
+  ///
+  /// In en, this message translates to:
+  /// **'The link to {rig} dropped. A running plan keeps going on the rig.'**
+  String simpleRigDropped(String rig);
+
+  /// Under the card title during offline planning
+  ///
+  /// In en, this message translates to:
+  /// **'You are planning offline. Connect a rig to image.'**
+  String get simpleRigOfflineHint;
+
+  /// Card heading over the session's rig
+  ///
+  /// In en, this message translates to:
+  /// **'This session'**
+  String get simpleRigThisSession;
+
+  /// Card heading over the other rigs
+  ///
+  /// In en, this message translates to:
+  /// **'Other rigs'**
+  String get simpleRigOthers;
+
+  /// Card heading over the rigs when there is no session rig
+  ///
+  /// In en, this message translates to:
+  /// **'Rigs'**
+  String get simpleRigRigs;
+
+  /// A rig row: found on the network now
+  ///
+  /// In en, this message translates to:
+  /// **'Found'**
+  String get simpleRigFound;
+
+  /// A rig row: saved this session but not found on the network now
+  ///
+  /// In en, this message translates to:
+  /// **'Saved, not seen now'**
+  String get simpleRigSavedNotSeen;
+
+  /// A rig row's button while its handshake runs
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting…'**
+  String get simpleRigConnecting;
+
+  /// A rig row's button
+  ///
+  /// In en, this message translates to:
+  /// **'Connect'**
+  String get simpleRigConnect;
+
+  /// The card while discovery has found nothing
+  ///
+  /// In en, this message translates to:
+  /// **'Looking for rigs on this network…'**
+  String get simpleRigLooking;
+
+  /// The card when a rig did not answer; address is host:port
+  ///
+  /// In en, this message translates to:
+  /// **'No rig answered at {address}. Check the rig is on and on this network, or try its name.'**
+  String simpleRigNoAnswer(String address);
+
+  /// The card's button and field label for a rig discovery cannot see
+  ///
+  /// In en, this message translates to:
+  /// **'Add by address'**
+  String get simpleRigAddByAddress;
+
+  /// Hint in the card's address field; made-up example address
+  ///
+  /// In en, this message translates to:
+  /// **'astro-pi.local or 192.0.2.24'**
+  String get simpleRigAddressHint;
 }
 
 class _AppLocalizationsDelegate

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-11T01:18:12+13:00",
+  "generatedAt": "2026-11-11T01:44:45+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -856,6 +856,12 @@
       "description": "Mode › Guider's Guide, Tuning and Tools tabs: Simple Mode segments on a tile, 44 px tall, the selected one in the selection blue with white words. A null pick locks them. The panel keeps Guide's height on every tab (#1722).",
       "html": "<div class=\"ds-sseg\" role=\"tablist\" aria-label=\"Guider page\"><button role=\"tab\" aria-selected=\"true\" class=\"on\">Guide</button><button role=\"tab\" aria-selected=\"false\">Tuning</button><button role=\"tab\" aria-selected=\"false\">Tools</button></div>",
       "css": ".ds-sseg{display:flex;gap:2px;padding:2px;background:rgba(56,56,56,0.55);border-radius:8px;width:300px} .ds-sseg button{flex:1;height:44px;border:0;border-radius:8px;background:transparent;color:#E0E0E0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-size:14px;cursor:pointer;transition:background .15s} .ds-sseg button.on{background:#1976D2;color:#FFFFFF} .ds-sseg button:hover:not(.on){background:rgba(255,255,255,0.06)} .ds-sseg button:focus-visible{outline:2px solid #42A5F5;outline-offset:-2px}"
+    },
+    {
+      "name": "Connect to Your Rig Card (Simple Mode)",
+      "kind": "custom",
+      "refersTo": "panel-simple",
+      "description": "#1559: centred over the wallpaper while the rig link is down. Title, one line on what happened, the session's rig with a filled Reconnect, then every other rig once (Found in Link Blue, Saved, not seen now in amber) with outlined Connect, then Add by address. A rig that does not answer gets a light-red line. One list, mock design/preview/simple-no-rig-card-mock.html B (user 2026-11-11)."
     }
   ],
   "narrative": {

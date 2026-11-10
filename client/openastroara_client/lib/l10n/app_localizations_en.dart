@@ -3628,4 +3628,54 @@ class AppLocalizationsEn extends AppLocalizations {
   String simpleDeviceDidNotConnect(String device) {
     return '$device didn\'t connect. Check it\'s powered and plugged in, then Reconnect.';
   }
+
+  @override
+  String get simpleRigConnectTitle => 'Connect to your rig';
+
+  @override
+  String get simpleRigGoOnline => 'Go online';
+
+  @override
+  String simpleRigDropped(String rig) {
+    return 'The link to $rig dropped. A running plan keeps going on the rig.';
+  }
+
+  @override
+  String get simpleRigOfflineHint =>
+      'You are planning offline. Connect a rig to image.';
+
+  @override
+  String get simpleRigThisSession => 'This session';
+
+  @override
+  String get simpleRigOthers => 'Other rigs';
+
+  @override
+  String get simpleRigRigs => 'Rigs';
+
+  @override
+  String get simpleRigFound => 'Found';
+
+  @override
+  String get simpleRigSavedNotSeen => 'Saved, not seen now';
+
+  @override
+  String get simpleRigConnecting => 'Connecting…';
+
+  @override
+  String get simpleRigConnect => 'Connect';
+
+  @override
+  String get simpleRigLooking => 'Looking for rigs on this network…';
+
+  @override
+  String simpleRigNoAnswer(String address) {
+    return 'No rig answered at $address. Check the rig is on and on this network, or try its name.';
+  }
+
+  @override
+  String get simpleRigAddByAddress => 'Add by address';
+
+  @override
+  String get simpleRigAddressHint => 'astro-pi.local or 192.0.2.24';
 }

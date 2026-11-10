@@ -38,6 +38,7 @@ at the top. This happens in the same commit that pushes the release tag.
 ### Added (rig link)
 
 - In Simple Mode, a profile device that goes into an error state shows one amber pill naming it, with Reconnect and Devices. The pill goes once the device connects (#1559).
+- In Simple Mode, a card over the wallpaper offers a way back while the rig link is down: Reconnect to this session's rig, Connect to another rig found on the network or saved, or Add by address. Offline planning shows the same card to go online (#1559).
 
 ### Changed (rig link)
 
