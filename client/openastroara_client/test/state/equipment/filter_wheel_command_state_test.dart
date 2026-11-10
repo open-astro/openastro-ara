@@ -44,18 +44,21 @@ class _Wheel extends FilterWheelNotifier {
 }
 
 class _Run extends SequenceRunStateNotifier {
-  _Run(this.running);
+  _Run(this.running, {this.delay = Duration.zero});
   final bool running;
+  final Duration delay;
   @override
-  Future<SequenceRunStateInfo?> build() async =>
-      running ? const SequenceRunStateInfo(runId: 'r', state: SequenceRunState.running) : null;
+  Future<SequenceRunStateInfo?> build() async {
+    if (delay > Duration.zero) await Future<void>.delayed(delay);
+    return running ? const SequenceRunStateInfo(runId: 'r', state: SequenceRunState.running) : null;
+  }
 }
 
-(ProviderContainer, _Wheel) _rig(FakeAsync async, {bool planRunning = false}) {
+(ProviderContainer, _Wheel) _rig(FakeAsync async, {bool planRunning = false, Duration runReadTakes = Duration.zero}) {
   final wheel = _Wheel();
   final c = ProviderContainer(overrides: [
     filterWheelProvider.overrideWith(() => wheel),
-    sequenceRunStateProvider.overrideWith(() => _Run(planRunning)),
+    sequenceRunStateProvider.overrideWith(() => _Run(planRunning, delay: runReadTakes)),
   ]);
   addTearDown(c.dispose);
   c.listen(sequenceRunStateProvider, (_, _) {});
@@ -148,6 +151,28 @@ void main() {
       c.read(filterWheelCommandProvider.notifier).request(1);
       async.elapse(const Duration(milliseconds: 4600));
       expect(wheel.refreshes, 3);
+    });
+  });
+
+  test('a tap before the run state is read waits for it, and asks while a plan runs', () {
+    fakeAsync((async) {
+      final (c, wheel) = _rig(async, planRunning: true, runReadTakes: const Duration(seconds: 1));
+      c.read(filterWheelCommandProvider.notifier).request(1);
+      async.flushMicrotasks();
+      expect(wheel.sent, isEmpty, reason: 'not sent before the run state is known');
+      async.elapse(const Duration(seconds: 2));
+      expect(c.read(filterWheelCommandProvider).phase, DeviceCommandPhase.asking);
+      expect(wheel.sent, isEmpty);
+    });
+  });
+
+  test('the move remembers who asked for it', () {
+    fakeAsync((async) {
+      final (c, _) = _rig(async);
+      final picker = Object();
+      c.read(filterWheelCommandProvider.notifier).request(1, by: picker);
+      async.flushMicrotasks();
+      expect(c.read(filterWheelCommandProvider).by, same(picker));
     });
   });
 }

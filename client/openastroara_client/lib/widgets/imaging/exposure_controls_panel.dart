@@ -526,6 +526,9 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
   @override
   Widget build(BuildContext context) {
     ref.listen(filterWheelCommandProvider, (prev, next) {
+      // Only a move this picker asked for: another picker's question and
+      // outcome are its own to show.
+      if (next.by != this) return;
       if (next.phase == DeviceCommandPhase.asking &&
           prev?.phase != DeviceCommandPhase.asking &&
           widget.inline == null) {
@@ -610,7 +613,9 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
               _pickedUnnamed = slot.name.isEmpty;
               // No onChanged(n) for NAMED target slots — the follow-logic
               // syncs filterSlot when the wheel reports its new slot.
-              ref.read(filterWheelCommandProvider.notifier).request(slot.position);
+              ref
+                  .read(filterWheelCommandProvider.notifier)
+                  .request(slot.position, by: this);
             };
     final inline = widget.inline;
     if (inline != null) {
@@ -619,7 +624,9 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
         busy ? (_picked ?? widget.value) : widget.value,
         pick,
       );
-      if (command.phase != DeviceCommandPhase.asking) return picker;
+      if (command.phase != DeviceCommandPhase.asking || command.by != this) {
+        return picker;
+      }
       final cmd = ref.read(filterWheelCommandProvider.notifier);
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -2596,7 +2596,7 @@ class _SimpleFilterWheelWindowState
     // The change itself is the shared device command's (ADR 0013); a refused
     // one says why in a pill.
     ref.listen(filterWheelCommandProvider, (prev, next) {
-      if (next.outcomes == prev?.outcomes) return;
+      if (next.outcomes == prev?.outcomes || next.by != this) return;
       final l10n = context.l10n;
       switch (next.refusal) {
         case DeviceCommandRefusal.busy:
@@ -2662,7 +2662,7 @@ class _SimpleFilterWheelWindowState
           ),
         ),
       );
-      if (command.phase == DeviceCommandPhase.asking) {
+      if (command.phase == DeviceCommandPhase.asking && command.by == this) {
         final cmd = ref.read(filterWheelCommandProvider.notifier);
         children.add(
           simpleWindowConfirm(
@@ -2750,7 +2750,7 @@ class _SimpleFilterWheelWindowState
                                 ? null
                                 : () => ref
                                       .read(filterWheelCommandProvider.notifier)
-                                      .request(slot.position),
+                                      .request(slot.position, by: this),
                           ),
                       ],
                     ),

@@ -23,6 +23,7 @@ class DeviceCommand {
     this.refusal,
     this.error,
     this.outcomes = 0,
+    this.by,
   });
 
   final DeviceCommandPhase phase;
@@ -38,18 +39,25 @@ class DeviceCommand {
   /// can react to each once.
   final int outcomes;
 
+  /// Who asked for this move (a picker passes itself): only it renders the
+  /// question and reacts to the outcome, so two pickers on screen never both
+  /// ask or both report.
+  final Object? by;
+
   DeviceCommand copyWith({
     DeviceCommandPhase? phase,
     int? target,
     DeviceCommandRefusal? refusal,
     Object? error,
     bool outcome = false,
+    Object? by,
   }) => DeviceCommand(
     phase: phase ?? this.phase,
     target: target,
     refusal: refusal,
     error: error,
     outcomes: outcomes + (outcome ? 1 : 0),
+    by: by ?? this.by,
   );
 }
 
@@ -88,18 +96,35 @@ class FilterWheelCommandNotifier extends Notifier<DeviceCommand> {
     return const DeviceCommand();
   }
 
-  bool get _planRunning =>
-      ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false;
-
-  /// Change to [position]; while a plan runs this asks first, and [confirm]
-  /// sends it.
-  void request(int position) {
+  /// Change to [position] for [by]; while a plan runs this asks first, and
+  /// [confirm] sends it.
+  void request(int position, {Object? by}) {
     if (state.phase == DeviceCommandPhase.moving) return;
-    if (_planRunning) {
-      state = state.copyWith(phase: DeviceCommandPhase.asking, target: position);
+    final run = ref.read(sequenceRunStateProvider);
+    if (run.hasValue) return _decide(position, by, run.value?.state?.isActive ?? false);
+    // Not read yet: wait for it rather than send without asking. A read that
+    // fails asks, the safe side.
+    unawaited(
+      ref
+          .read(sequenceRunStateProvider.future)
+          .then((info) => info?.state?.isActive ?? false, onError: (_) => true)
+          .then((running) {
+            if (ref.mounted) _decide(position, by, running);
+          }),
+    );
+  }
+
+  void _decide(int position, Object? by, bool planRunning) {
+    if (state.phase == DeviceCommandPhase.moving) return;
+    if (planRunning) {
+      state = state.copyWith(
+        phase: DeviceCommandPhase.asking,
+        target: position,
+        by: by,
+      );
       return;
     }
-    unawaited(_send(position));
+    unawaited(_send(position, by: by));
   }
 
   /// The question's Change anyway.
@@ -116,9 +141,13 @@ class FilterWheelCommandNotifier extends Notifier<DeviceCommand> {
     }
   }
 
-  Future<void> _send(int position) async {
+  Future<void> _send(int position, {Object? by}) async {
     _sawMove = false;
-    state = state.copyWith(phase: DeviceCommandPhase.moving, target: position);
+    state = state.copyWith(
+      phase: DeviceCommandPhase.moving,
+      target: position,
+      by: by,
+    );
     _armStall();
     _armReconcile();
     final bool performed;
@@ -153,7 +182,7 @@ class FilterWheelCommandNotifier extends Notifier<DeviceCommand> {
     _stall?.cancel();
     _stall = Timer(firstStall, () {
       if (_sawMove) {
-        _stall = Timer(backstop, _stallHard);
+        _stall = Timer(backstop, () => unawaited(_stallHard()));
       } else {
         unawaited(_stallHard());
       }
