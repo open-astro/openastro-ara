@@ -71,6 +71,10 @@ abstract interface class AutofocusApi {
   /// swallowed — the record will say so on the next [state] read.
   Future<void> cancel();
 
+  /// #1543 — forget the Smart Focus calibration; the next autofocus runs a
+  /// full sweep and records a new one.
+  Future<void> recalibrate();
+
   /// The run's rendered frame, or `null` (204) when none exists yet.
   Future<AutofocusFrame?> fetchFrame();
 
@@ -129,6 +133,11 @@ class DioAutofocusApi implements AutofocusApi {
       '/api/v1/autofocus/cancel',
       options: Options(validateStatus: (s) => s != null && (s < 400 || s == 409)),
     );
+  }
+
+  @override
+  Future<void> recalibrate() async {
+    await _dio.post<void>('/api/v1/autofocus/recalibrate');
   }
 
   @override

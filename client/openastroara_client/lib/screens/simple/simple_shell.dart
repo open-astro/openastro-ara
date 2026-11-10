@@ -303,6 +303,28 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
   }
 
+  int? _calibrationPill;
+
+  /// #1716 — one warning each time the Guider falls back to its earlier
+  /// calibration; the next calibration that works takes it away.
+  void _syncCalibrationPill(
+    DiagnosticsSnapshot? previous,
+    DiagnosticsSnapshot next,
+  ) {
+    const failed = 'guider.calibration.failed';
+    final open = next.openTypes.contains(failed);
+    final messages = ref.read(simpleMessagesProvider.notifier);
+    if (open && !(previous?.openTypes.contains(failed) ?? false)) {
+      _calibrationPill = messages.show(
+        SimpleMessageKind.warning,
+        context.l10n.simpleGuiderCalibrationFailed,
+      );
+    } else if (!open && _calibrationPill != null) {
+      messages.dismiss(_calibrationPill!);
+      _calibrationPill = null;
+    }
+  }
+
   void _setStatusHeight(double height) {
     if (mounted && height != _statusHeight) {
       setState(() => _statusHeight = height);
@@ -339,6 +361,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     ref.listenManual(diagnosticsStateProvider, (previous, next) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_syncDewPill(previous, next));
+        if (mounted) _syncCalibrationPill(previous, next);
       });
     }, fireImmediately: true);
     ref.listenManual(coolingFanAskDueProvider, (_, due) {
@@ -399,10 +422,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   void dispose() {
     _publishOnTop(false);
     final dewPill = _dewPill;
+    final calibrationPill = _calibrationPill;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _messages.dismissQuestions();
       // Its button belongs to this shell too, and the next one shows its own.
       if (dewPill != null) _messages.dismiss(dewPill);
+      if (calibrationPill != null) _messages.dismiss(calibrationPill);
     });
     _stopDisarm?.cancel();
     _focus.dispose();
@@ -2506,9 +2531,14 @@ class SimpleSegment extends StatelessWidget {
     this.onTap,
     this.alignment = Alignment.center,
     this.padding = const EdgeInsets.symmetric(horizontal: 14),
+    this.shrinkToFit = false,
   });
 
   final String label;
+
+  /// A label too wide at large text shrinks instead of ending in an ellipsis:
+  /// for a short fixed word, where a cut-off one reads as nothing.
+  final bool shrinkToFit;
 
   /// What the row of segments chooses, for screen readers.
   final String? group;
@@ -2519,6 +2549,15 @@ class SimpleSegment extends StatelessWidget {
   final bool selected;
   final double radius;
   final VoidCallback? onTap;
+
+  Text get _text => Text(
+    label,
+    maxLines: 1,
+    overflow: shrinkToFit ? null : TextOverflow.ellipsis,
+    style: kSimpleText.copyWith(
+      color: selected ? AraColors.selectionFg : AraColors.textSecondary,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -2538,14 +2577,9 @@ class SimpleSegment extends StatelessWidget {
           height: 44,
           padding: padding,
           alignment: alignment,
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: kSimpleText.copyWith(
-              color: selected ? AraColors.selectionFg : AraColors.textSecondary,
-            ),
-          ),
+          child: shrinkToFit
+              ? FittedBox(fit: BoxFit.scaleDown, child: _text)
+              : _text,
         ),
       ),
     ),
@@ -2565,6 +2599,7 @@ class SimpleSegments<T> extends StatelessWidget {
     this.keyPrefix,
     this.expand = true,
     this.group,
+    this.shrinkToFit = false,
   });
 
   final List<(T, String, String)> options;
@@ -2572,6 +2607,7 @@ class SimpleSegments<T> extends StatelessWidget {
   final ValueChanged<T>? onPick;
   final String? keyPrefix;
   final bool expand;
+  final bool shrinkToFit;
 
   /// Read with each segment: what the row chooses.
   final String? group;
@@ -2591,6 +2627,7 @@ class SimpleSegments<T> extends StatelessWidget {
               key: keyPrefix == null ? null : Key('$keyPrefix-$id'),
               label: label,
               group: group,
+              shrinkToFit: shrinkToFit,
               selected: value == selected,
               radius: 8,
               onTap: onPick == null || value == selected

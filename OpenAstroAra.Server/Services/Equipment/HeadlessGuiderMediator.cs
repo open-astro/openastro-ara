@@ -75,6 +75,8 @@ public sealed class HeadlessGuiderMediator : IGuiderMediator {
     public RMS StopRMSRecording(Guid handle) => new RMS();
     public Task<bool> StartGuiding(bool forceCalibration, IProgress<ApplicationStatus> progress, CancellationToken token) =>
         Task.FromResult(false);
+    public Task<bool> RecalibrateAndGuide(IProgress<ApplicationStatus> progress, CancellationToken token) => Task.FromResult(false);
+    public Task<bool> StartGuidingCalibratedTonight(IProgress<ApplicationStatus> progress, CancellationToken token) => Task.FromResult(false);
     public Task<bool> StopGuiding(CancellationToken token) => Task.FromResult(false);
     public Task<bool> AutoSelectGuideStar(CancellationToken token) => Task.FromResult(false);
     public Task<bool> ClearCalibration(CancellationToken token) => Task.FromResult(false);

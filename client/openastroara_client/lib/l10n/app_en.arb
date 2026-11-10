@@ -3651,6 +3651,65 @@
   },
   "guideRaAggressiveness": "RA aggressiveness",
   "guideDecAggressiveness": "Dec aggressiveness",
+  "guideTabGuide": "Guide",
+  "guideTabTuning": "Tuning",
+  "guideTabTools": "Tools",
+  "guideMinimumMove": "Minimum move · goes to the Guider now",
+  "guideSettle": "Settle after each dither",
+  "guideSettleWithin": "Within",
+  "guideSettleFor": "For",
+  "guideSettleGiveUp": "Give up after",
+  "guideRecalibrateNow": "Recalibrate now",
+  "guideRunAssistant": "Run Guiding Assistant",
+  "guideStopAssistant": "Stop Guiding Assistant",
+  "guideAssistantMeasuring": "Measuring. Guide corrections are off for now.",
+  "guideAssistantApply": "{count, plural, =1{Apply 1 suggestion} other{Apply {count} suggestions}}",
+  "@guideAssistantApply": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "guideStopPlanFirst": "Stop the plan to use these.",
+  "guideStopGuidingFirst": "Stop guiding to use these.",
+  "guideTabsGroup": "Guider page",
+  "guideMinimumMoveName": "Minimum move",
+  "guideStopLoopFirst": "Stop the guide loop to recalibrate.",
+  "guideAssistantCalibrateFirst": "Calibrate first: press Recalibrate now, then run the Guiding Assistant.",
+  "guideAssistantNoStar": "The guider found no star to measure. Check the guide camera, then try again.",
+  "focusNudgePlanRunning": "Stop the plan to move the focuser.",
+  "focusNudgeAutofocusRunning": "Autofocus has the focuser. Wait for it to finish, or cancel it.",
+  "guideAssistantFailed": "The Guiding Assistant stopped: {reason}",
+  "@guideAssistantFailed": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "guideAssistantFailedNoReason": "the guider gave no reason",
+  "focusNudgeIn": "Nudge in",
+  "focusNudgeOut": "Nudge out",
+  "focusNudgeStop": "Stop",
+  "focusNudgeSteps": "{count, plural, =1{1 step} other{{count} steps}}",
+  "@focusNudgeSteps": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "focusMoveFailed": "Couldn't move the focuser",
+  "focusStopFailed": "Couldn't stop the focuser",
+  "focusCalibrationSection": "Calibration",
+  "focusCalibrationReset": "Reset focus calibration",
+  "focusCalibrationResetHint": "The next autofocus runs a full sweep and calibrates again.",
+  "focusCalibrationResetAsk": "Reset the focus calibration?",
+  "focusCalibrationResetCancel": "Keep it",
+  "focusCalibrationResetConfirm": "Reset",
+  "focusCalibrationResetDone": "Focus calibration reset.",
+  "focusCalibrationResetAction": "reset the focus calibration",
   "guideDecMode": "Dec guide mode",
   "guideDecAuto": "Auto",
   "guideDecNorth": "North",
@@ -4626,6 +4685,10 @@
         "type": "int"
       }
     }
+  },
+  "simpleGuiderCalibrationFailed": "The guider could not calibrate, so it is guiding on its earlier calibration. Guiding may be less accurate tonight.",
+  "@simpleGuiderCalibrationFailed": {
+    "description": "Simple Mode warning pill while the daemon's guider.calibration.failed diagnostic is open"
   },
   "simpleDewWarning": "Dew may be forming: stars are swelling at high humidity. Wipe the optics or turn on the dew heaters. Scheduled autofocus waits until it clears.",
   "@simpleDewWarning": {

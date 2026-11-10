@@ -2621,6 +2621,143 @@ class AppLocalizationsEn extends AppLocalizations {
   String get guideDecAggressiveness => 'Dec aggressiveness';
 
   @override
+  String get guideTabGuide => 'Guide';
+
+  @override
+  String get guideTabTuning => 'Tuning';
+
+  @override
+  String get guideTabTools => 'Tools';
+
+  @override
+  String get guideMinimumMove => 'Minimum move · goes to the Guider now';
+
+  @override
+  String get guideSettle => 'Settle after each dither';
+
+  @override
+  String get guideSettleWithin => 'Within';
+
+  @override
+  String get guideSettleFor => 'For';
+
+  @override
+  String get guideSettleGiveUp => 'Give up after';
+
+  @override
+  String get guideRecalibrateNow => 'Recalibrate now';
+
+  @override
+  String get guideRunAssistant => 'Run Guiding Assistant';
+
+  @override
+  String get guideStopAssistant => 'Stop Guiding Assistant';
+
+  @override
+  String get guideAssistantMeasuring =>
+      'Measuring. Guide corrections are off for now.';
+
+  @override
+  String guideAssistantApply(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Apply $count suggestions',
+      one: 'Apply 1 suggestion',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get guideStopPlanFirst => 'Stop the plan to use these.';
+
+  @override
+  String get guideStopGuidingFirst => 'Stop guiding to use these.';
+
+  @override
+  String get guideTabsGroup => 'Guider page';
+
+  @override
+  String get guideMinimumMoveName => 'Minimum move';
+
+  @override
+  String get guideStopLoopFirst => 'Stop the guide loop to recalibrate.';
+
+  @override
+  String get guideAssistantCalibrateFirst =>
+      'Calibrate first: press Recalibrate now, then run the Guiding Assistant.';
+
+  @override
+  String get guideAssistantNoStar =>
+      'The guider found no star to measure. Check the guide camera, then try again.';
+
+  @override
+  String get focusNudgePlanRunning => 'Stop the plan to move the focuser.';
+
+  @override
+  String get focusNudgeAutofocusRunning =>
+      'Autofocus has the focuser. Wait for it to finish, or cancel it.';
+
+  @override
+  String guideAssistantFailed(String reason) {
+    return 'The Guiding Assistant stopped: $reason';
+  }
+
+  @override
+  String get guideAssistantFailedNoReason => 'the guider gave no reason';
+
+  @override
+  String get focusNudgeIn => 'Nudge in';
+
+  @override
+  String get focusNudgeOut => 'Nudge out';
+
+  @override
+  String get focusNudgeStop => 'Stop';
+
+  @override
+  String focusNudgeSteps(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count steps',
+      one: '1 step',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get focusMoveFailed => 'Couldn\'t move the focuser';
+
+  @override
+  String get focusStopFailed => 'Couldn\'t stop the focuser';
+
+  @override
+  String get focusCalibrationSection => 'Calibration';
+
+  @override
+  String get focusCalibrationReset => 'Reset focus calibration';
+
+  @override
+  String get focusCalibrationResetHint =>
+      'The next autofocus runs a full sweep and calibrates again.';
+
+  @override
+  String get focusCalibrationResetAsk => 'Reset the focus calibration?';
+
+  @override
+  String get focusCalibrationResetCancel => 'Keep it';
+
+  @override
+  String get focusCalibrationResetConfirm => 'Reset';
+
+  @override
+  String get focusCalibrationResetDone => 'Focus calibration reset.';
+
+  @override
+  String get focusCalibrationResetAction => 'reset the focus calibration';
+
+  @override
   String get guideDecMode => 'Dec guide mode';
 
   @override
@@ -3422,6 +3559,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String focusChartFocus(int position) {
     return 'focus $position';
   }
+
+  @override
+  String get simpleGuiderCalibrationFailed =>
+      'The guider could not calibrate, so it is guiding on its earlier calibration. Guiding may be less accurate tonight.';
 
   @override
   String get simpleDewWarning =>

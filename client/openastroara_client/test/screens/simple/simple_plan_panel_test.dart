@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
@@ -688,6 +689,25 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       return (c, seq);
     }
+
+    test('every path that writes a Simple Mode target asks the Guider to calibrate (#1716)', () async {
+      final (c, seq) = await queue();
+      c.read(phd2SettingsProvider.notifier).setGuiderCamera('ASI120MM Mini');
+      final n = c.read(simpleRunProvider.notifier);
+      int asked(String field) => RegExp('"$field":true').allMatches(jsonEncode(seq.bodies.values.single)).length;
+      void expectBlocks(int count, String path) {
+        expect(asked('CalibrateEachNight'), count, reason: '$path: Start Guiding');
+        expect(asked('RecalibrateGuider'), count, reason: '$path: the flip');
+      }
+
+      expect(await n.create(), isTrue);
+      expectBlocks(1, 'create');
+      final t = c.read(simpleRunProvider).targets.single;
+      expect(await n.edit(0, t.steps), isTrue);
+      expectBlocks(1, 'edit');
+      expect(await n.restore(t, 0), isTrue);
+      expectBlocks(2, 'restore');
+    });
 
     test('Add to queue reads the picked target itself: one block on the rig, one Target queued', () async {
       final (c, seq) = await queue();

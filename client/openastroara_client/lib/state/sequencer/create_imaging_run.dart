@@ -163,6 +163,8 @@ Future<ImagingRunResult?> createImagingRun(
   String? stopAtDawn,
   bool parkAtEnd = false,
   bool pauseForFilterSwap = true,
+  // #1716 — Simple Mode: see [buildImagingRunBody].
+  bool recalibrateGuider = false,
 }) async {
   // Pin the autoDispose API for the whole create. With no widget watching
   // it (the coordinate-entry dialog, a Tonight's Sky row whose panel just
@@ -194,6 +196,7 @@ Future<ImagingRunResult?> createImagingRun(
       stopAtDawn: stopAtDawn,
       parkAtEnd: parkAtEnd,
       pauseForFilterSwap: pauseForFilterSwap,
+      recalibrateGuider: recalibrateGuider,
     );
   } finally {
     keepApi.close();
@@ -221,6 +224,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   String? stopAtDawn,
   bool parkAtEnd = false,
   bool pauseForFilterSwap = true,
+  required bool recalibrateGuider,
 }) async {
   final api = container.read(sequenceApiProvider);
 
@@ -288,6 +292,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
       positionAngleDeg: positionAngleDeg,
       filterPlan: choice.filterPlan,
       startGuiding: choice.guide,
+      recalibrateGuider: recalibrateGuider,
       rig: rig,
       unguidedOptions: unguidedOptionsOf(container),
       ditherEveryNExposures: _ditherCadence(container, choice),
@@ -315,6 +320,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
           positionAngleDeg: positionAngleDeg,
           filterPlan: choice.filterPlan,
           startGuiding: choice.guide,
+          recalibrateGuider: recalibrateGuider,
           rig: rig,
           unguidedOptions: unguidedOptionsOf(container),
           ditherEveryNExposures: _ditherCadence(container, choice),
@@ -348,6 +354,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
             positionAngleDeg: positionAngleDeg,
             filterPlan: choice.filterPlan,
             startGuiding: choice.guide,
+            recalibrateGuider: recalibrateGuider,
             rig: rig,
             unguidedOptions: unguidedOptionsOf(container),
             ditherEveryNExposures: _ditherCadence(container, choice),
@@ -438,6 +445,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
           positionAngleDeg: positionAngleDeg,
           filterPlan: choice.filterPlan,
           startGuiding: choice.guide,
+          recalibrateGuider: recalibrateGuider,
           rig: rig,
           unguidedOptions: unguidedOptionsOf(container),
           ditherEveryNExposures: ditherEvery,
@@ -495,6 +503,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
     positionAngleDeg: positionAngleDeg,
     filterPlan: choice.filterPlan,
     startGuiding: choice.guide,
+    recalibrateGuider: recalibrateGuider,
     rig: rig,
     unguidedOptions: unguidedOptionsOf(container),
     ditherEveryNExposures: ditherEvery,
@@ -521,6 +530,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
         positionAngleDeg: positionAngleDeg,
         filterPlan: choice.filterPlan,
         startGuiding: choice.guide,
+        recalibrateGuider: recalibrateGuider,
         rig: rig,
         unguidedOptions: unguidedOptionsOf(container),
         ditherEveryNExposures: ditherEvery,

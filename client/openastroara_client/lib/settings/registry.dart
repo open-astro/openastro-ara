@@ -2241,6 +2241,16 @@ const List<Setting> settingsRegistry = [
 
   // §37.11 Autofocus — 12 fields covering method + V-curve params + triggers
   // + failure handling. State lives in `autofocusSettingsProvider`.
+  // An action, not a stored value: forgets the Smart Focus calibration (#1543).
+  Setting(
+    id: 'img.autofocus.reset_calibration',
+    label: 'Reset focus calibration',
+    description: 'Forgets the stored focus calibration, so the next autofocus runs a full sweep and calibrates again.',
+    keywords: ['reset', 'calibration', 'recalibrate', 'smart focus', 'autofocus', 'forget'],
+    path: ['Settings', 'Imaging', 'Autofocus'],
+    type: SettingType.complex(),
+    defaultValue: null,
+  ),
   Setting(
     id: 'img.autofocus.method',
     label: 'Autofocus method',

@@ -31,6 +31,14 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
     /// Splitting it behind an interface keeps the trigger's timing logic unit-testable without any of the
     /// equipment mediators, and lets the orchestration land as its own sub-PR.
     /// </summary>
+    /// <summary>#1716: the flip finished, but guiding did not come back on a new or an earlier calibration.
+    /// The mount has flipped, so the trigger must not flip it again when the run resumes.</summary>
+    public sealed class GuidingNotRestoredException : Exception {
+        public GuidingNotRestoredException() : base("Guiding did not come back after the meridian flip.") { }
+        public GuidingNotRestoredException(string message) : base(message) { }
+        public GuidingNotRestoredException(string message, Exception inner) : base(message, inner) { }
+    }
+
     public interface IMeridianFlipExecutor {
 
         /// <summary>
@@ -42,5 +50,10 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
         /// return false or throw on unrecoverable failure; both stop the sequence.
         /// </summary>
         Task<bool> MeridianFlip(Coordinates targetCoordinates, TimeSpan timeToFlip, IProgress<ApplicationStatus> progress, CancellationToken token);
+
+        /// <summary>#1716: the same flip; with <paramref name="recalibrateGuider"/> guiding comes back on a
+        /// new calibration whatever the profile's mode says, unless that mode is skip.</summary>
+        Task<bool> MeridianFlip(Coordinates targetCoordinates, TimeSpan timeToFlip, bool recalibrateGuider, IProgress<ApplicationStatus> progress, CancellationToken token) =>
+            MeridianFlip(targetCoordinates, timeToFlip, progress, token);
     }
 }

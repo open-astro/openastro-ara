@@ -4527,6 +4527,234 @@ abstract class AppLocalizations {
   /// **'Dec aggressiveness'**
   String get guideDecAggressiveness;
 
+  /// No description provided for @guideTabGuide.
+  ///
+  /// In en, this message translates to:
+  /// **'Guide'**
+  String get guideTabGuide;
+
+  /// No description provided for @guideTabTuning.
+  ///
+  /// In en, this message translates to:
+  /// **'Tuning'**
+  String get guideTabTuning;
+
+  /// No description provided for @guideTabTools.
+  ///
+  /// In en, this message translates to:
+  /// **'Tools'**
+  String get guideTabTools;
+
+  /// No description provided for @guideMinimumMove.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum move · goes to the Guider now'**
+  String get guideMinimumMove;
+
+  /// No description provided for @guideSettle.
+  ///
+  /// In en, this message translates to:
+  /// **'Settle after each dither'**
+  String get guideSettle;
+
+  /// No description provided for @guideSettleWithin.
+  ///
+  /// In en, this message translates to:
+  /// **'Within'**
+  String get guideSettleWithin;
+
+  /// No description provided for @guideSettleFor.
+  ///
+  /// In en, this message translates to:
+  /// **'For'**
+  String get guideSettleFor;
+
+  /// No description provided for @guideSettleGiveUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Give up after'**
+  String get guideSettleGiveUp;
+
+  /// No description provided for @guideRecalibrateNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Recalibrate now'**
+  String get guideRecalibrateNow;
+
+  /// No description provided for @guideRunAssistant.
+  ///
+  /// In en, this message translates to:
+  /// **'Run Guiding Assistant'**
+  String get guideRunAssistant;
+
+  /// No description provided for @guideStopAssistant.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop Guiding Assistant'**
+  String get guideStopAssistant;
+
+  /// No description provided for @guideAssistantMeasuring.
+  ///
+  /// In en, this message translates to:
+  /// **'Measuring. Guide corrections are off for now.'**
+  String get guideAssistantMeasuring;
+
+  /// No description provided for @guideAssistantApply.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Apply 1 suggestion} other{Apply {count} suggestions}}'**
+  String guideAssistantApply(int count);
+
+  /// No description provided for @guideStopPlanFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the plan to use these.'**
+  String get guideStopPlanFirst;
+
+  /// No description provided for @guideStopGuidingFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop guiding to use these.'**
+  String get guideStopGuidingFirst;
+
+  /// No description provided for @guideTabsGroup.
+  ///
+  /// In en, this message translates to:
+  /// **'Guider page'**
+  String get guideTabsGroup;
+
+  /// No description provided for @guideMinimumMoveName.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum move'**
+  String get guideMinimumMoveName;
+
+  /// No description provided for @guideStopLoopFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the guide loop to recalibrate.'**
+  String get guideStopLoopFirst;
+
+  /// No description provided for @guideAssistantCalibrateFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Calibrate first: press Recalibrate now, then run the Guiding Assistant.'**
+  String get guideAssistantCalibrateFirst;
+
+  /// No description provided for @guideAssistantNoStar.
+  ///
+  /// In en, this message translates to:
+  /// **'The guider found no star to measure. Check the guide camera, then try again.'**
+  String get guideAssistantNoStar;
+
+  /// No description provided for @focusNudgePlanRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the plan to move the focuser.'**
+  String get focusNudgePlanRunning;
+
+  /// No description provided for @focusNudgeAutofocusRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Autofocus has the focuser. Wait for it to finish, or cancel it.'**
+  String get focusNudgeAutofocusRunning;
+
+  /// No description provided for @guideAssistantFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The Guiding Assistant stopped: {reason}'**
+  String guideAssistantFailed(String reason);
+
+  /// No description provided for @guideAssistantFailedNoReason.
+  ///
+  /// In en, this message translates to:
+  /// **'the guider gave no reason'**
+  String get guideAssistantFailedNoReason;
+
+  /// No description provided for @focusNudgeIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Nudge in'**
+  String get focusNudgeIn;
+
+  /// No description provided for @focusNudgeOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Nudge out'**
+  String get focusNudgeOut;
+
+  /// No description provided for @focusNudgeStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get focusNudgeStop;
+
+  /// No description provided for @focusNudgeSteps.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 step} other{{count} steps}}'**
+  String focusNudgeSteps(int count);
+
+  /// No description provided for @focusMoveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t move the focuser'**
+  String get focusMoveFailed;
+
+  /// No description provided for @focusStopFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t stop the focuser'**
+  String get focusStopFailed;
+
+  /// No description provided for @focusCalibrationSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Calibration'**
+  String get focusCalibrationSection;
+
+  /// No description provided for @focusCalibrationReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset focus calibration'**
+  String get focusCalibrationReset;
+
+  /// No description provided for @focusCalibrationResetHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The next autofocus runs a full sweep and calibrates again.'**
+  String get focusCalibrationResetHint;
+
+  /// No description provided for @focusCalibrationResetAsk.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset the focus calibration?'**
+  String get focusCalibrationResetAsk;
+
+  /// No description provided for @focusCalibrationResetCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep it'**
+  String get focusCalibrationResetCancel;
+
+  /// No description provided for @focusCalibrationResetConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get focusCalibrationResetConfirm;
+
+  /// No description provided for @focusCalibrationResetDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Focus calibration reset.'**
+  String get focusCalibrationResetDone;
+
+  /// No description provided for @focusCalibrationResetAction.
+  ///
+  /// In en, this message translates to:
+  /// **'reset the focus calibration'**
+  String get focusCalibrationResetAction;
+
   /// No description provided for @guideDecMode.
   ///
   /// In en, this message translates to:
@@ -5834,6 +6062,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'focus {position}'**
   String focusChartFocus(int position);
+
+  /// Simple Mode warning pill while the daemon's guider.calibration.failed diagnostic is open
+  ///
+  /// In en, this message translates to:
+  /// **'The guider could not calibrate, so it is guiding on its earlier calibration. Guiding may be less accurate tonight.'**
+  String get simpleGuiderCalibrationFailed;
 
   /// Simple Mode warning pill while the daemon's dew_formation diagnostic is open
   ///

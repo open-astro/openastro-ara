@@ -367,6 +367,10 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         public override string Method => "flip_calibration";
     }
 
+    public class Phd2RestoreCalibration : Phd2Method {
+        public override string Method => "restore_calibration";
+    }
+
     public class Phd2GuidePulse : Phd2Method<Array> {
         public override string Method => "guide_pulse";
     }

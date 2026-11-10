@@ -181,6 +181,21 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
         return Task.FromResult(Accepted("focuser.disconnect", idempotencyKey));
     }
 
+    // The rotator's panic-stop shape: await Halt so the 202 means the stop reached the driver.
+    // CancellationToken.None: an already-cancelled token would skip the stop.
+    public async Task<OperationAcceptedDto> HaltAsync(string? idempotencyKey, CancellationToken ct) {
+        AlpacaFocuser? client;
+        lock (_gate) {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            client = _state == EquipmentConnectionState.Connected ? _client : null;
+        }
+        if (client is null) {
+            throw new InvalidOperationException("focuser is not connected");
+        }
+        await Task.Run(() => client.Halt(), CancellationToken.None).ConfigureAwait(false);
+        return Accepted("focuser.halt", idempotencyKey);
+    }
+
     public Task<OperationAcceptedDto> MoveAsync(FocuserMoveRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
         AlpacaFocuser? client;

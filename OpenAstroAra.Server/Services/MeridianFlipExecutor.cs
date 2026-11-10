@@ -136,9 +136,13 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
     // §58.4 step 3 — the session's completed autofocus runs (their focuser temperature) for if_temp_drifted.
     private readonly OpenAstroAra.Sequencer.Interfaces.IImageHistory? imageHistory;
 
+    public Task<bool> MeridianFlip(Coordinates targetCoordinates, TimeSpan timeToFlip,
+            IProgress<ApplicationStatus> progress, CancellationToken token) =>
+        MeridianFlip(targetCoordinates, timeToFlip, recalibrateGuider: false, progress, token);
+
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Flip-recovery boundary: any step (mount slew/flip, tracking toggle, plate-solve recenter, guider resume) can throw arbitrary driver/HTTP/IO exceptions. A flip MUST fail safe on ANY of them — restore tracking + resume the guider, then halt the sequence (return false) — never let an escape leave the OTA mid-flip or fault the engine. CA1031's fail-safe boundary applies.")]
-    public async Task<bool> MeridianFlip(Coordinates targetCoordinates, TimeSpan timeToFlip,
+    public async Task<bool> MeridianFlip(Coordinates targetCoordinates, TimeSpan timeToFlip, bool recalibrateGuider,
             IProgress<ApplicationStatus> progress, CancellationToken token) {
         ArgumentNullException.ThrowIfNull(targetCoordinates);
 
@@ -241,7 +245,18 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             var guiderMode = MeridianFlipPolicy.GuiderPlan(safety).Mode;
             if (wasGuiding && guiderMode != MeridianFlipPolicy.GuiderSkip) {
                 await SelectNewGuideStar(token);
-                await ResumeAutoguider(guiderMode == MeridianFlipPolicy.GuiderFull, progress, token);
+                if (recalibrateGuider) {
+                    progress.Report(new ApplicationStatus { Source = "MeridianFlip", Status = "Recalibrating the guider" });
+                    if (!await guiderMediator.RecalibrateAndGuide(progress, token)) {
+                        // The flip worked, so no safe rest: the trigger records the flip and pauses the run.
+                        Logger.Error("Meridian Flip - Guiding did not come back on a new or an earlier calibration.");
+                        await NotifyCritical("Guiding did not come back after the flip",
+                            "The mount flipped, but the guider could not calibrate and has no earlier calibration. The run is paused awaiting your attention.");
+                        throw new GuidingNotRestoredException();
+                    }
+                } else {
+                    await ResumeAutoguider(guiderMode == MeridianFlipPolicy.GuiderFull, progress, token);
+                }
             } else if (wasGuiding) {
                 Logger.Info("Meridian Flip - guiding not resumed (meridian_guider_recal = skip).");
             }
@@ -269,7 +284,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
                 TryRestoreTracking();
             }
             throw;
-        } catch (Exception ex) {
+        } catch (Exception ex) when (ex is not GuidingNotRestoredException) {
             // A failed flip suspends the sequence: the trigger arms the pause gate as
             // AwaitingUser on our false return (§58.12), so the run sits resumable once
             // the user sorts the rig out (it halts outright only when no gate is wired).

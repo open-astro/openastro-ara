@@ -6,9 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/l10n.dart';
 import '../../models/autofocus_run.dart';
 import '../../models/equipment_device_status.dart';
+import '../../models/focuser_status.dart';
+import '../../services/equipment_device_api.dart';
 import '../../models/guide_focus.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/focus/autofocus_live_state.dart';
+import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/focus/bahtinov_focus_state.dart';
 import '../../state/focus/guide_focus_state.dart';
 import '../../state/settings/settings_nav.dart';
@@ -170,6 +173,87 @@ class _TabPage extends StatelessWidget {
 }
 
 /// Main telescope: run / cancel autofocus and watch the run.
+/// #1542 — move the focuser by hand from the pane: nudge in or out by a chosen
+/// step, and stop a move in progress.
+class ManualFocusControl extends ConsumerStatefulWidget {
+  const ManualFocusControl({super.key, required this.focuser});
+
+  final FocuserStatus focuser;
+
+  @override
+  ConsumerState<ManualFocusControl> createState() => _ManualFocusControlState();
+}
+
+class _ManualFocusControlState extends ConsumerState<ManualFocusControl> {
+  int _step = 50;
+
+  Future<void> _command(Future<bool> Function(FocuserNotifier) send, String failure) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await send(ref.read(focuserProvider.notifier));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('$failure: ${describeEquipmentError(e)}')));
+    }
+  }
+
+  void _nudge(int direction) {
+    final caps = widget.focuser.capabilities;
+    var target = widget.focuser.position! + direction * _step;
+    if (target < (caps?.minPosition ?? 0)) target = caps?.minPosition ?? 0;
+    // A device that reports no travel has a max of 0: no upper clamp then.
+    if (caps != null && caps.maxPosition > 0 && target > caps.maxPosition) target = caps.maxPosition;
+    _command((n) => n.move(target), context.l10n.focusMoveFailed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final moving = widget.focuser.isMoving;
+    final planRunning = ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
+    final autofocusRunning = ref.watch(autofocusLiveProvider.select((l) => l.run.isRunning));
+    final canNudge = !moving && !planRunning && !autofocusRunning && widget.focuser.position != null;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        SegmentedButton<int>(
+          segments: [
+            for (final steps in const [10, 50, 200])
+              ButtonSegment(value: steps, label: Text('$steps'), tooltip: l10n.focusNudgeSteps(steps)),
+          ],
+          selected: {_step},
+          showSelectedIcon: false,
+          onSelectionChanged: (s) => setState(() => _step = s.single),
+        ),
+        IconButton.outlined(
+          key: const Key('manual-focus-in'),
+          tooltip: l10n.focusNudgeIn,
+          onPressed: canNudge ? () => _nudge(-1) : null,
+          icon: const Icon(Icons.remove),
+        ),
+        IconButton.outlined(
+          key: const Key('manual-focus-out'),
+          tooltip: l10n.focusNudgeOut,
+          onPressed: canNudge ? () => _nudge(1) : null,
+          icon: const Icon(Icons.add),
+        ),
+        FilledButton.tonalIcon(
+          key: const Key('manual-focus-stop'),
+          onPressed: moving ? () => _command((n) => n.halt(), l10n.focusStopFailed) : null,
+          icon: const Icon(Icons.stop_rounded, size: 18),
+          label: Text(l10n.focusNudgeStop),
+        ),
+        if (planRunning || autofocusRunning)
+          Text(
+            planRunning ? l10n.focusNudgePlanRunning : l10n.focusNudgeAutofocusRunning,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+      ],
+    );
+  }
+}
+
 class MainFocusCard extends ConsumerWidget {
   const MainFocusCard({super.key});
 
@@ -189,7 +273,10 @@ class MainFocusCard extends ConsumerWidget {
             (focuserConnected ? MainFocusMethod.autofocus : MainFocusMethod.bahtinov);
     final selector = MainFocusMethodSelector(method: method);
     if (method == MainFocusMethod.bahtinov) {
-      return BahtinovFocusCard(methodSelector: selector);
+      return BahtinovFocusCard(
+        methodSelector: selector,
+        manualFocus: focuserConnected ? ManualFocusControl(focuser: focuser!) : null,
+      );
     }
     final run = live.run;
     final apiAvailable = ref.watch(autofocusApiProvider) != null;
@@ -253,6 +340,10 @@ class MainFocusCard extends ConsumerWidget {
           ],
           if (weakFitText(context.l10n, run) case final weak?) ...[
             InlineNotice.warning(weak),
+            const SizedBox(height: 16),
+          ],
+          if (focuserConnected && !run.isRunning) ...[
+            ManualFocusControl(focuser: focuser!),
             const SizedBox(height: 16),
           ],
           if (run.isCancelled) ...[

@@ -1259,6 +1259,12 @@ void main() {
     expect(panel.bottom, lessThanOrEqualTo(768 - kSimpleInset));
     expect(panel.top, greaterThanOrEqualTo(kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight),
         reason: 'under the status pill');
+    // #1722 — the longest other tab has to fit too.
+    await tester.tap(find.byKey(const Key('simple-guider-tab-tuning')));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-window-row-RA minimum move')), findsOneWidget);
+    expect(scroll.position.maxScrollExtent, 0, reason: 'Tuning fits as well');
+    expect(tester.getRect(find.byKey(const Key('simple-guide-panel'))).bottom, lessThanOrEqualTo(768 - kSimpleInset));
   });
 
   testWidgets("with the histogram showing, a mode panel stops above the bottom row, like Plan's sheet (user, 2026-11-09)",
@@ -4416,6 +4422,19 @@ void main() {
       expect(pill, findsNothing);
     });
 
+    testWidgets('a guider calibration fallback warns until a calibration works (#1716)', (tester) async {
+      final (c, d) = await shell(tester);
+      d.open({'guider.calibration.failed'});
+      await tester.pump();
+      await tester.pump();
+      expect(find.textContaining('could not calibrate'), findsOneWidget);
+      expect(c.read(simpleMessagesProvider).single.kind, SimpleMessageKind.warning);
+      d.open({});
+      await tester.pump();
+      await tester.pump();
+      expect(find.textContaining('could not calibrate'), findsNothing);
+    });
+
     testWidgets('closed by hand, it comes back the next time dew opens', (tester) async {
       final (c, d) = await shell(tester);
       d.open({'dew_formation'});
@@ -4454,6 +4473,27 @@ void main() {
       final (c, d) = await shell(tester, start: {'dew_formation'});
       await tester.pump();
       expect(pill, findsOneWidget);
+      await tester.pumpWidget(UncontrolledProviderScope(container: c, child: const MaterialApp(home: SizedBox())));
+      await tester.pump();
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(home: SimpleShell(planetarium: SizedBox(key: Key('sky')))),
+      ));
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider), hasLength(1));
+      d.open({});
+      await tester.pump();
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider), isEmpty);
+    });
+
+    testWidgets('a calibration warning: leaving and coming back shows one pill, and it clears (#1716)', (tester) async {
+      final calPill = find.textContaining('could not calibrate');
+      final (c, d) = await shell(tester, start: {'guider.calibration.failed'});
+      await tester.pump();
+      expect(calPill, findsOneWidget);
       await tester.pumpWidget(UncontrolledProviderScope(container: c, child: const MaterialApp(home: SizedBox())));
       await tester.pump();
       await tester.pumpWidget(UncontrolledProviderScope(

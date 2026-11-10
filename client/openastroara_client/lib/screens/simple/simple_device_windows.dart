@@ -339,6 +339,8 @@ const double kSimpleWindowControlWidth = 216;
 Widget simpleWindowStepper({
   required String id,
   required String text,
+  // What it changes: read with Less and More on the buttons.
+  String? name,
   required VoidCallback onLess,
   required VoidCallback onMore,
 }) {
@@ -351,7 +353,10 @@ Widget simpleWindowStepper({
     builder: (context) => IconButton(
       key: Key('$id-$dir'),
       onPressed: onTap,
-      icon: Icon(icon, semanticLabel: label(context.l10n)),
+      icon: Icon(
+        icon,
+        semanticLabel: name == null ? label(context.l10n) : '$name, ${label(context.l10n)}',
+      ),
     ),
   );
   return DecoratedBox(

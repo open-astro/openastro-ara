@@ -26,6 +26,9 @@ class _FakeSavedServerService implements SavedServerService {
 }
 
 class _FakeAutofocusApi implements AutofocusApi {
+  @override
+  Future<void> recalibrate() async {}
+
   _FakeAutofocusApi({this.terminalState = 'complete', this.errorMessage, this.failFirstPolls = 0});
   final String terminalState;
   final String? errorMessage;

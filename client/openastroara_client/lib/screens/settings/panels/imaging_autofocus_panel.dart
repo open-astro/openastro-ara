@@ -4,6 +4,7 @@ import '../../../l10n/l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../services/profile_api.dart';
+import '../../../state/equipment/focuser_state.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/autofocus_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
@@ -68,6 +69,39 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
     } catch (e) {
       if (!mounted) return;
       setState(() => _lastError = friendlyError(context.l10n, e, action: 'save that'));
+      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
+    }
+  }
+
+  Future<void> _resetCalibration() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: Text(l10n.focusCalibrationResetAsk),
+        content: Text(l10n.focusCalibrationResetHint),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialog).pop(false),
+            child: Text(l10n.focusCalibrationResetCancel),
+          ),
+          FilledButton(
+            key: const Key('af-reset-calibration-confirm'),
+            onPressed: () => Navigator.of(dialog).pop(true),
+            child: Text(l10n.focusCalibrationResetConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await ref.read(autofocusApiProvider)?.recalibrate();
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(l10n.focusCalibrationResetDone)));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _lastError = friendlyError(context.l10n, e, action: l10n.focusCalibrationResetAction));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -242,6 +276,20 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
           label: 'Restore position on failure',
           value: s.restorePositionOnFailure,
           onChanged: n.setRestorePositionOnFailure,
+        ),
+        SettingsSectionHeader(context.l10n.focusCalibrationSection),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton(
+            key: const Key('af-reset-calibration'),
+            onPressed: ref.watch(autofocusApiProvider) == null ? null : _resetCalibration,
+            child: Text(context.l10n.focusCalibrationReset),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          context.l10n.focusCalibrationResetHint,
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 24),
         if (_lastError != null) ...[

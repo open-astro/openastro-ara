@@ -72,6 +72,16 @@ class FocuserNotifier extends EquipmentDeviceNotifier<FocuserStatus> {
           'use_temp_comp': useTempComp,
         }),
       );
+
+  /// #1542 — stop a move now, even with another command still in flight.
+  /// True if dispatched (false only when no active server); a transport
+  /// failure throws so the caller can say so.
+  Future<bool> halt() async {
+    final api = readClient();
+    if (api == null) return false;
+    await api.command('halt');
+    return true;
+  }
 }
 
 final focuserProvider = AsyncNotifierProvider<FocuserNotifier, FocuserStatus?>(

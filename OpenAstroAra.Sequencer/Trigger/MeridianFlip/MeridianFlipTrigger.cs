@@ -65,11 +65,16 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
             // Dedup state (lastFlipTime/lastFlipCoordinates) is intentionally NOT copied — a fresh clone starts
             // with no flip history so it evaluates the next flip on its own merits.
             CopyMetaData(cloneMe);
+            RecalibrateGuider = cloneMe.RecalibrateGuider;
         }
 
         public override object Clone() {
             return new MeridianFlipTrigger(this);
         }
+
+        /// <summary>#1716: set by Simple Mode plans: guiding comes back on a new calibration.</summary>
+        [JsonProperty]
+        public bool RecalibrateGuider { get; set; } = false;
 
         private IList<string> _issues = new List<string>();
 
@@ -178,7 +183,14 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
             bool success;
             _flipping = true;
             try {
-                success = await executor.MeridianFlip(target, timeToFlip, progress, token);
+                success = RecalibrateGuider
+                    ? await executor.MeridianFlip(target, timeToFlip, recalibrateGuider: true, progress, token)
+                    : await executor.MeridianFlip(target, timeToFlip, progress, token);
+            } catch (GuidingNotRestoredException) {
+                // #1716: the mount did flip, so record it; a resume inside the window must not flip it again.
+                lastFlipTime = DateTime.Now;
+                lastFlipCoordinates = target;
+                success = false;
             } finally {
                 _flipping = false;
             }

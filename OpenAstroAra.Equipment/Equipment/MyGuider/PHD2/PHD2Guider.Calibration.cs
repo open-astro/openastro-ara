@@ -60,6 +60,17 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 DeclinationDeg: Num(cal, "declination"));
         }
 
+        /// <summary>#1716: put back the calibration saved in the guider's profile. False when nothing was
+        /// saved, or the guider is too old to know the call.</summary>
+        public async Task<bool> RestoreCalibrationAsync(CancellationToken ct) {
+            ct.ThrowIfCancellationRequested();
+            if (!Connected) {
+                return false;
+            }
+            var response = await SendMessage<BooleanPhdMethodResponse>(new Phd2RestoreCalibration(), LiveRpcTimeoutMs, notifyOnError: false).ConfigureAwait(false);
+            return response?.error is null && (response?.result ?? false);
+        }
+
         /// <summary>Drop the stored calibration so the next guide start calibrates again.</summary>
         public async Task ClearCalibrationAsync(CancellationToken ct) {
             ct.ThrowIfCancellationRequested();
