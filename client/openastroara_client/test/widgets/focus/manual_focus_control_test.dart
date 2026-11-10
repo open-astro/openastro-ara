@@ -152,6 +152,7 @@ void main() {
     final f = await _pump(tester, _status(), autofocus: true);
     await tester.tap(_outward, warnIfMissed: false);
     expect(f.moves, isEmpty);
+    expect(find.textContaining('Autofocus has the focuser'), findsOneWidget);
   });
 
   testWidgets('idle, Stop has nothing to stop', (tester) async {

@@ -244,7 +244,11 @@ class _ManualFocusControlState extends ConsumerState<ManualFocusControl> {
           icon: const Icon(Icons.stop_rounded, size: 18),
           label: Text(l10n.focusNudgeStop),
         ),
-        if (planRunning) Text(l10n.focusNudgePlanRunning, style: Theme.of(context).textTheme.bodySmall),
+        if (planRunning || autofocusRunning)
+          Text(
+            planRunning ? l10n.focusNudgePlanRunning : l10n.focusNudgeAutofocusRunning,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
       ],
     );
   }

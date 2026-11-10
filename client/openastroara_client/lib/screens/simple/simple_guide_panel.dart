@@ -662,6 +662,22 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
           child: Text(status.isRunning ? l10n.guideStopAssistant : l10n.guideRunAssistant),
         ),
         if (status.isRunning) Text(l10n.guideAssistantMeasuring, style: AraText.caption),
+        // Stays while the last run's failure stands, so leaving the tab mid-run loses nothing.
+        if (status.isFailed)
+          Row(
+            key: const Key('simple-guider-assistant-failed'),
+            spacing: AraSpace.s8,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.warning_amber_rounded, size: 18, color: AraColors.accentWarning),
+              Expanded(
+                child: Text(
+                  l10n.guideAssistantFailed(status.error ?? l10n.guideAssistantFailedNoReason),
+                  style: AraText.caption.copyWith(color: AraColors.accentWarning),
+                ),
+              ),
+            ],
+          ),
         if (suggestions.isNotEmpty)
           FilledButton(
             style: kSimpleGoStyle,

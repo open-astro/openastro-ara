@@ -389,6 +389,14 @@ void main() {
       expect(c.read(simpleMessagesProvider).single.title, contains('star lost'));
     });
 
+    testWidgets('a failed run says why on Tools, whenever Tools opens', (tester) async {
+      final a = _Assistant(GuidingAssistantStatus.fromJson({'connected': true, 'state': 'failed', 'error': 'star lost'}));
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      expect(find.byKey(const Key('simple-guider-assistant-failed')), findsOneWidget);
+      expect(find.textContaining('star lost'), findsOneWidget);
+    });
+
     testWidgets('each Tuning stepper is read with its full name', (tester) async {
       final semantics = tester.ensureSemantics();
       await _pump(tester, _wire(), rig: rig(_GuiderEquipment()));

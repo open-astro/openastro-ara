@@ -2695,6 +2695,18 @@ class AppLocalizationsPt extends AppLocalizations {
   String get focusNudgePlanRunning => 'Stop the plan to move the focuser.';
 
   @override
+  String get focusNudgeAutofocusRunning =>
+      'Autofocus has the focuser. Wait for it to finish, or cancel it.';
+
+  @override
+  String guideAssistantFailed(String reason) {
+    return 'The Guiding Assistant stopped: $reason';
+  }
+
+  @override
+  String get guideAssistantFailedNoReason => 'the guider gave no reason';
+
+  @override
   String get focusNudgeIn => 'Nudge in';
 
   @override
@@ -6270,6 +6282,18 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get focusNudgePlanRunning => 'Pare o plano para mover o focalizador.';
+
+  @override
+  String get focusNudgeAutofocusRunning =>
+      'O autofoco está usando o focalizador. Espere terminar ou cancele.';
+
+  @override
+  String guideAssistantFailed(String reason) {
+    return 'O Assistente de Guiagem parou: $reason';
+  }
+
+  @override
+  String get guideAssistantFailedNoReason => 'o Guia não informou o motivo';
 
   @override
   String get focusNudgeIn => 'Mover para dentro';

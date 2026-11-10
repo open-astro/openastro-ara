@@ -4653,6 +4653,24 @@ abstract class AppLocalizations {
   /// **'Stop the plan to move the focuser.'**
   String get focusNudgePlanRunning;
 
+  /// No description provided for @focusNudgeAutofocusRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Autofocus has the focuser. Wait for it to finish, or cancel it.'**
+  String get focusNudgeAutofocusRunning;
+
+  /// No description provided for @guideAssistantFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The Guiding Assistant stopped: {reason}'**
+  String guideAssistantFailed(String reason);
+
+  /// No description provided for @guideAssistantFailedNoReason.
+  ///
+  /// In en, this message translates to:
+  /// **'the guider gave no reason'**
+  String get guideAssistantFailedNoReason;
+
   /// No description provided for @focusNudgeIn.
   ///
   /// In en, this message translates to:
