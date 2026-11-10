@@ -70,9 +70,17 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
   /// The typed address could not be read (empty, or a bad port).
   bool _badAddress = false;
 
+  /// Opened from the bar, whose Connect is gone: focus lands on ×.
+  final _closeFocus = FocusNode();
+
   @override
   void initState() {
     super.initState();
+    if (widget.onClose != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _closeFocus.requestFocus();
+      });
+    }
     // As the first-run screen: mDNS is one-shot, so scan again while shown.
     unawaited(MulticastLock.acquire());
     _rescan = Timer.periodic(const Duration(seconds: 4), (_) {
@@ -87,6 +95,7 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
     unawaited(MulticastLock.release());
     _rescan?.cancel();
     _address.dispose();
+    _closeFocus.dispose();
     super.dispose();
   }
 
@@ -210,7 +219,7 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
 
     // No spinner: the scan never ends while the card shows, and "Looking
     // for rigs…" says it when nothing is found.
-    Widget heading(String text) => Text(text.toUpperCase(), style: AraText.section);
+    Widget heading(String text) => Semantics(header: true, child: Text(text.toUpperCase(), style: AraText.section));
 
     final failed = _failed;
     return ConstrainedBox(
@@ -238,6 +247,7 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
                   if (widget.onClose != null)
                     IconButton(
                       key: const Key('simple-rig-card-close'),
+                      focusNode: _closeFocus,
                       tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                       icon: const Icon(Icons.close, size: 18),
                       onPressed: widget.onClose,
@@ -326,9 +336,12 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
 /// #1559 — the card folded into one line beside Stop, on a window too narrow
 /// to hold it between the rails: the rails stay usable, and Connect opens it.
 class SimpleRigBar extends ConsumerWidget {
-  const SimpleRigBar({super.key, required this.onOpen});
+  const SimpleRigBar({super.key, required this.onOpen, this.focusNode});
 
   final VoidCallback onOpen;
+
+  /// Connect's focus, for the shell to give back when the card closes.
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -349,6 +362,7 @@ class SimpleRigBar extends ConsumerWidget {
           ),
           FilledButton(
             key: const Key('simple-rig-bar-connect'),
+            focusNode: focusNode,
             style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
             onPressed: onOpen,
             child: Text(l10n.simpleRigConnect),

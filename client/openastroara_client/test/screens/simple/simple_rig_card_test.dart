@@ -176,6 +176,15 @@ void main() {
     expect(c.read(profileGatePassedProvider), isTrue);
   });
 
+  testWidgets('#1559: THIS SESSION and OTHER RIGS are headings to screen readers, as the title is', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _card(tester);
+    for (final heading in ['THIS SESSION', 'OTHER RIGS']) {
+      expect(tester.getSemantics(find.text(heading)).flagsCollection.isHeader, isTrue, reason: heading);
+    }
+    handle.dispose();
+  });
+
   testWidgets('#1559: the no-answer line is announced to screen readers', (tester) async {
     await _card(tester, down: {_club});
     await tester.tap(find.byKey(const Key('simple-rig-card-connect-192.0.2.61:5555')));

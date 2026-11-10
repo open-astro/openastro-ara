@@ -4353,6 +4353,31 @@ void main() {
     });
   }
 
+  testWidgets('on a narrow window the bar takes no focus, its Connect moves focus into the card, and × gives it back to the bar (#1559)', (tester) async {
+    final c = await _pump(tester, const Size(390, 844), server: const AraServer(hostname: '192.0.2.24', port: 5555, mdnsName: 'Backyard rig'));
+    await tester.pump();
+    // Whether the focused control sits inside the widget keyed [key].
+    bool focusUnder(Key key) {
+      final focused = FocusManager.instance.primaryFocus?.context;
+      if (focused == null) return false;
+      var found = false;
+      focused.visitAncestorElements((e) => !(found = e.widget.key == key));
+      return found;
+    }
+    expect(focusUnder(const Key('simple-rig-bar')), isFalse, reason: 'a drop does not take focus from where the user is');
+    await tester.tap(find.byKey(const Key('simple-rig-bar-connect')));
+    await tester.pump();
+    await tester.pump();
+    expect(focusUnder(const Key('simple-rig-card')), isTrue, reason: 'the bar it was on is gone');
+    await tester.tap(find.byKey(const Key('simple-rig-card-close')));
+    await tester.pump();
+    await tester.pump();
+    expect(focusUnder(const Key('simple-rig-bar')), isTrue, reason: 'back where the user opened it');
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
+  });
+
   testWidgets('with the rig link up there is no Connect to your rig card (#1559)', (tester) async {
     await _pump(tester, const Size(1024, 768), linkUp: true);
     expect(find.byKey(const Key('simple-rig-card')), findsNothing);

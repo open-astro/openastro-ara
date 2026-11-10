@@ -369,6 +369,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// #1559 — on a narrow window, the rig card opened from its bar.
   bool _rigCardOpen = false;
 
+  /// #1559 — the bar's Connect, which takes focus back when × closes the card.
+  final _rigBarConnect = FocusNode();
+
   /// #1559 — the device pill showing, by device; one per device, however often it fails.
   final _devicePills = <String, int>{};
 
@@ -471,6 +474,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       if (calibrationPill != null) _messages.dismiss(calibrationPill);
     });
     _focus.dispose();
+    _rigBarConnect.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _guiderPoll?.cancel();
     super.dispose();
@@ -1028,14 +1032,22 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       top: panels ? railTop : kSimpleInset,
       bottom: panels ? aboveStop : kSimpleInset,
       child: Center(
-        child: SimpleRigCard(onClose: cardNarrow ? () => setState(() => _rigCardOpen = false) : null),
+        child: SimpleRigCard(
+          onClose: cardNarrow
+              ? () {
+                  setState(() => _rigCardOpen = false);
+                  // Back where the user opened it; a drop alone never takes focus.
+                  WidgetsBinding.instance.addPostFrameCallback((_) => _rigBarConnect.requestFocus());
+                }
+              : null,
+        ),
       ),
     );
     final rigBar = Positioned(
       left: kSimpleInset,
       right: kSimpleInset * 2 + (railWidth + stopSize) / 2,
       bottom: kSimpleInset,
-      child: SimpleRigBar(onOpen: () => setState(() => _rigCardOpen = true)),
+      child: SimpleRigBar(focusNode: _rigBarConnect, onOpen: () => setState(() => _rigCardOpen = true)),
     );
     final pillsLeft = kSimpleInset + (pillsBesideRail ? railShift : 0);
     final pillsTop = panels ? messagesTop : kSimpleInset + statusRow;
