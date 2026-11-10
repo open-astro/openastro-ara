@@ -45,6 +45,7 @@ Future<(ProviderContainer, _Saved, List<AraServer>)> _card(WidgetTester tester,
     Set<AraServer> down = const {},
     List<AraServer> foundOnce = const [],
     Future<void>? answer,
+    double textScale = 1,
     bool offline = false}) async {
   final saves = _Saved(saved);
   final asked = <AraServer>[];
@@ -70,7 +71,13 @@ Future<(ProviderContainer, _Saved, List<AraServer>)> _card(WidgetTester tester,
   if (offline) container.read(offlineModeProvider.notifier).enter();
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
-    child: const MaterialApp(home: Scaffold(body: Center(child: SimpleRigCard()))),
+    child: MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(textScale)),
+        child: child!,
+      ),
+      home: const Scaffold(body: Center(child: SimpleRigCard())),
+    ),
   ));
   await tester.pump();
   await tester.pump();
@@ -140,6 +147,24 @@ void main() {
     await tester.pump();
     await tester.pump();
   });
+
+  // A phone at 2x text: beside the button, the name had 120 px and its address broke mid-number.
+  for (final (scale, below) in const [(1.0, false), (2.0, true)]) {
+    final where = below ? 'under' : 'beside';
+    testWidgets('#1559: on a phone at ${scale}x text, a row puts its button $where the name', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await _card(tester, textScale: scale);
+      final row = find.byKey(const Key('simple-rig-card-row-192.0.2.61:5555'));
+      final name = tester.getRect(find.descendant(of: row, matching: find.text('Club observatory')));
+      final address = tester.getRect(find.descendant(of: row, matching: find.textContaining('192.0.2.61:5555')));
+      final button = tester.getRect(find.byKey(const Key('simple-rig-card-connect-192.0.2.61:5555')));
+      expect(button.top >= address.bottom, below);
+      if (below) expect(address.width, greaterThan(button.width), reason: 'the words get the row');
+      expect(name.top, lessThan(button.top + 1));
+    });
+  }
 
   testWidgets('#1559: a rig that does not answer says so and keeps the user where they are', (tester) async {
     final (c, saves, _) = await _card(tester, down: {_club});

@@ -35,6 +35,10 @@ AraServer? parseRigAddress(String text) {
 /// the session's rig first with Reconnect, then every other rig found on the
 /// network or saved, then Add by address. The session's rig comes back in
 /// place; another rig goes through its profile box, as Change rig does.
+/// A rig row narrower than this at 1x text (the address, then the button)
+/// puts its button under the name; it scales with the user's text size.
+const double _kRowBesideWidth = 260;
+
 class SimpleRigCard extends ConsumerStatefulWidget {
   const SimpleRigCard({super.key, this.onClose});
 
@@ -154,42 +158,52 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
           color: AraColors.tileFill,
           borderRadius: BorderRadius.circular(AraRadius.simplePanel),
         ),
-        child: Row(
-          spacing: AraSpace.s12,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(name(s), style: kSimpleText.copyWith(fontWeight: FontWeight.w500)),
-                  Text.rich(
-                    TextSpan(children: [
-                      TextSpan(
-                        text: isFound ? l10n.simpleRigFound : l10n.simpleRigSavedNotSeen,
-                        style: TextStyle(color: isFound ? AraColors.linkText : AraColors.accentWarning),
-                      ),
-                      TextSpan(text: ' · ${s.hostname}:${s.port}'),
-                    ]),
-                    style: kSimpleCaption.copyWith(color: AraColors.textSecondary),
-                  ),
-                ],
-              ),
-            ),
-            if (isSession)
-              FilledButton(
-                key: const Key('simple-rig-card-reconnect'),
-                style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
-                onPressed: busy ? null : () => _connect(s, session: true),
-                child: Text(_connecting == s ? l10n.simpleRigConnecting : l10n.shellReconnect),
-              )
-            else
-              OutlinedButton(
-                key: Key('simple-rig-card-connect-${s.hostname}:${s.port}'),
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
-                onPressed: busy ? null : () => _connect(s, session: false),
-                child: Text(_connecting == s ? l10n.simpleRigConnecting : l10n.simpleRigConnect),
-              ),
-          ],
+        // The button goes under the words once beside them they'd have too
+        // little room (a phone at large text), so an address never breaks
+        // mid-number.
+        child: LayoutBuilder(
+          builder: (context, box) {
+            final words = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name(s), style: kSimpleText.copyWith(fontWeight: FontWeight.w500)),
+                Text.rich(
+                  TextSpan(children: [
+                    TextSpan(
+                      text: isFound ? l10n.simpleRigFound : l10n.simpleRigSavedNotSeen,
+                      style: TextStyle(color: isFound ? AraColors.linkText : AraColors.accentWarning),
+                    ),
+                    TextSpan(text: ' · ${s.hostname}:${s.port}'),
+                  ]),
+                  style: kSimpleCaption.copyWith(color: AraColors.textSecondary),
+                ),
+              ],
+            );
+            final button = isSession
+                ? FilledButton(
+                    key: const Key('simple-rig-card-reconnect'),
+                    style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+                    onPressed: busy ? null : () => _connect(s, session: true),
+                    child: Text(_connecting == s ? l10n.simpleRigConnecting : l10n.shellReconnect),
+                  )
+                : OutlinedButton(
+                    key: Key('simple-rig-card-connect-${s.hostname}:${s.port}'),
+                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                    onPressed: busy ? null : () => _connect(s, session: false),
+                    child: Text(_connecting == s ? l10n.simpleRigConnecting : l10n.simpleRigConnect),
+                  );
+            if (box.maxWidth >= MediaQuery.textScalerOf(context).scale(_kRowBesideWidth)) {
+              return Row(spacing: AraSpace.s12, children: [Expanded(child: words), button]);
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              spacing: AraSpace.s4,
+              children: [
+                Padding(padding: const EdgeInsets.only(right: AraSpace.s8), child: words),
+                Align(alignment: Alignment.centerRight, child: button),
+              ],
+            );
+          },
         ),
       );
     }
