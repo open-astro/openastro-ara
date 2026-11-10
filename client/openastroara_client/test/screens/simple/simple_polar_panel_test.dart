@@ -9,6 +9,7 @@ import 'package:openastroara/screens/simple/simple_preflight.dart';
 import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
+import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimpleShutterButton;
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_routine_state.dart' show polarAlignActionProvider;
@@ -350,7 +351,7 @@ void main() {
       expect(find.byType(SnackBar), findsNothing);
     });
 
-    testWidgets('a start runs through the shared module: busy while it runs, its failure in the module (#1764)', (tester) async {
+    testWidgets('a start runs through the shared module: busy while it runs, its failure in the pill only (#1764)', (tester) async {
       final api = _SlowFailingApi();
       final c = ProviderContainer(overrides: [
         polarAlignApiProvider.overrideWithValue(api),
@@ -364,11 +365,14 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pump();
       expect(c.read(polarAlignActionProvider).busy, isTrue, reason: 'the module knows the start is in flight');
+      expect(tester.widget<SimpleShutterButton>(find.byType(SimpleShutterButton)).onPressed, isNull,
+          reason: 'a second press would send a second start');
       api.gate.complete();
       await tester.pump();
       await tester.pump();
       expect(c.read(polarAlignActionProvider).busy, isFalse);
-      expect(c.read(polarAlignActionProvider).error, contains('no camera'));
+      // The panel shows the module's error inline; the shutter's own pill already says it.
+      expect(c.read(polarAlignActionProvider).error, isNull, reason: 'one failure, one message');
     });
 
     testWidgets('idle: starts it', (tester) async {

@@ -36,7 +36,10 @@ AraServer? parseRigAddress(String text) {
 /// network or saved, then Add by address. The session's rig comes back in
 /// place; another rig goes through its profile box, as Change rig does.
 class SimpleRigCard extends ConsumerStatefulWidget {
-  const SimpleRigCard({super.key});
+  const SimpleRigCard({super.key, this.onClose});
+
+  /// Folds the card back into its bar (a narrow window); null hides ×.
+  final VoidCallback? onClose;
 
   @override
   ConsumerState<SimpleRigCard> createState() => _SimpleRigCardState();
@@ -53,6 +56,9 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
 
   /// The rig being connected, while its handshake runs.
   AraServer? _connecting;
+
+  /// That rig came from the typed address: its Connect says so.
+  bool _connectingAddress = false;
 
   /// The rig that did not answer, for the line under the list.
   AraServer? _failed;
@@ -108,7 +114,12 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
     } finally {
       hold.close();
       selected.select(null);
-      if (mounted) setState(() => _connecting = null);
+      if (mounted) {
+        setState(() {
+          _connecting = null;
+          _connectingAddress = false;
+        });
+      }
     }
   }
 
@@ -199,12 +210,25 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             spacing: AraSpace.s12,
             children: [
-              Semantics(
-                header: true,
-                child: Text(
-                  offline ? l10n.simpleRigGoOnline : l10n.simpleRigConnectTitle,
-                  style: kSimpleReading,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Semantics(
+                      header: true,
+                      child: Text(
+                        offline ? l10n.simpleRigGoOnline : l10n.simpleRigConnectTitle,
+                        style: kSimpleReading,
+                      ),
+                    ),
+                  ),
+                  if (widget.onClose != null)
+                    IconButton(
+                      key: const Key('simple-rig-card-close'),
+                      tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: widget.onClose,
+                    ),
+                ],
               ),
               Text(
                 offline || session == null ? l10n.simpleRigOfflineHint : l10n.simpleRigDropped(name(session)),
@@ -264,7 +288,7 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
                       key: const Key('simple-rig-card-address-connect'),
                       style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
                       onPressed: _connecting != null ? null : _connectAddress,
-                      child: Text(l10n.simpleRigConnect),
+                      child: Text(_connectingAddress ? l10n.simpleRigConnecting : l10n.simpleRigConnect),
                     ),
                   ],
                 ),
@@ -280,6 +304,43 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
     setState(() => _badAddress = server == null);
     if (server == null) return;
     final session = ref.read(offlineModeProvider) ? null : ref.read(activeServerProvider);
+    _connectingAddress = true;
     unawaited(_connect(server, session: server == session));
+  }
+}
+
+/// #1559 — the card folded into one line beside Stop, on a window too narrow
+/// to hold it between the rails: the rails stay usable, and Connect opens it.
+class SimpleRigBar extends ConsumerWidget {
+  const SimpleRigBar({super.key, required this.onOpen});
+
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    return SimplePanel(
+      key: const Key('simple-rig-bar'),
+      padding: const EdgeInsets.fromLTRB(AraSpace.s12, AraSpace.s4, AraSpace.s4, AraSpace.s4),
+      // Connect drops under the words when large text leaves no room beside them.
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: AraSpace.s8,
+        runSpacing: AraSpace.s4,
+        children: [
+          Text(
+            ref.watch(offlineModeProvider) ? l10n.simpleRigGoOnline : l10n.shellRigNotConnected,
+            style: kSimpleText.copyWith(color: AraColors.accentWarning),
+          ),
+          FilledButton(
+            key: const Key('simple-rig-bar-connect'),
+            style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+            onPressed: onOpen,
+            child: Text(l10n.simpleRigConnect),
+          ),
+        ],
+      ),
+    );
   }
 }

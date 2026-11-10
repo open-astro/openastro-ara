@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,6 +44,7 @@ Future<(ProviderContainer, _Saved, List<AraServer>)> _card(WidgetTester tester,
     List<AraServer> saved = const [_travel, _club, _session],
     Set<AraServer> down = const {},
     List<AraServer> foundOnce = const [],
+    Future<void>? answer,
     bool offline = false}) async {
   final saves = _Saved(saved);
   final asked = <AraServer>[];
@@ -55,6 +58,8 @@ Future<(ProviderContainer, _Saved, List<AraServer>)> _card(WidgetTester tester,
       final s = ref.watch(selectedServerProvider);
       if (s == null) return null;
       asked.add(s);
+      // [answer]: the handshake waits for it, so the Connecting state shows.
+      if (answer != null) await answer;
       if (down.contains(s)) throw StateError('no answer');
       return ServerInfo(name: s.mdnsName ?? s.hostname, version: '1', apiVersion: '1');
     }),
@@ -119,6 +124,21 @@ void main() {
     expect(asked, [const AraServer(hostname: 'astro-pi.local', port: 5555)]);
     expect(parseRigAddress('192.0.2.9:6000'), const AraServer(hostname: '192.0.2.9', port: 6000));
     expect(parseRigAddress('host:99999'), isNull);
+  });
+
+  testWidgets('#1559: an address being tried says Connecting…, as a row does', (tester) async {
+    final answer = Completer<void>();
+    await _card(tester, answer: answer.future);
+    await tester.tap(find.byKey(const Key('simple-rig-card-address-open')));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('simple-rig-card-address')), 'astro-pi.local');
+    await tester.tap(find.byKey(const Key('simple-rig-card-address-connect')));
+    await tester.pump();
+    final button = find.byKey(const Key('simple-rig-card-address-connect'));
+    expect(find.descendant(of: button, matching: find.text('Connecting…')), findsOneWidget);
+    answer.complete();
+    await tester.pump();
+    await tester.pump();
   });
 
   testWidgets('#1559: a rig that does not answer says so and keeps the user where they are', (tester) async {

@@ -128,6 +128,14 @@ import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart' show planningSettingsBootstrapProvider;
 import 'package:openastroara/widgets/support/bug_report_card.dart';
 
+/// The session's rigs, without storage.
+class _SavedRigs extends SavedServersNotifier {
+  _SavedRigs(this.rigs);
+  final List<AraServer> rigs;
+  @override
+  Future<List<AraServer>> build() async => rigs;
+}
+
 class _MemPrefs extends SimpleModePrefsService {
   bool value = true;
   @override
@@ -4293,6 +4301,57 @@ void main() {
     expect(find.byKey(const Key('simple-rig-card')), findsOneWidget);
     expect(find.text('Tap the shutter to take a frame'), findsNothing, reason: 'the card says what to do instead');
   });
+
+  // A phone, a narrow window, a desktop: the rails, the strip and Stop never cover the card's buttons.
+  for (final size in const [Size(390, 844), Size(600, 900), Size(1024, 768)]) {
+    testWidgets('at ${size.width.toInt()}x${size.height.toInt()} every button on the Connect to your rig card takes its tap, and the rails keep theirs (#1559)', (tester) async {
+      final c = await _pump(tester, size, server: const AraServer(hostname: '192.0.2.24', port: 5555, mdnsName: 'Backyard rig'), gear: [
+        savedServersProvider.overrideWith(() => _SavedRigs(const [
+              AraServer(hostname: '198.51.100.7', port: 5555, mdnsName: 'Travel rig'),
+              AraServer(hostname: '192.0.2.61', port: 5555, mdnsName: 'Club observatory'),
+              AraServer(hostname: '192.0.2.24', port: 5555, mdnsName: 'Backyard rig'),
+            ])),
+      ]);
+      // The rails settle once measured.
+      await tester.pump();
+      await tester.pump();
+      if (size.width < 500) {
+        // Too narrow for the card between the rails: a bar beside Stop, and the rails still take taps.
+        expect(find.byKey(const Key('simple-rig-card')), findsNothing);
+        final mode = tester.getCenter(find.byKey(const Key('simple-mode')));
+        expect(tester.hitTestOnBinding(mode).path.any((h) => h.target == tester.renderObject(find.byKey(const Key('simple-mode')))), isTrue);
+        expect(tester.getRect(find.byKey(const Key('simple-rig-bar'))).overlaps(tester.getRect(find.byType(EmergencyStopButton))), isFalse);
+        await tester.tap(find.byKey(const Key('simple-rig-bar-connect')));
+        await tester.pump();
+      }
+      final card = find.byKey(const Key('simple-rig-card'));
+      final buttons = find.descendant(of: card, matching: find.byWidgetPredicate((w) => w is ButtonStyleButton));
+      expect(buttons, findsNWidgets(size.width < 500 ? 5 : 4), reason: 'Reconnect, two Connects, Add by address, and × on a narrow window');
+      for (final e in buttons.evaluate().toList()) {
+        // The card scrolls when its list outgrows the room.
+        await tester.ensureVisible(find.byWidget(e.widget));
+        await tester.pump();
+        final r = tester.getRect(find.byWidget(e.widget)).deflate(2);
+        for (final at in [r.topLeft, r.topRight, r.bottomLeft, r.bottomRight, r.center]) {
+          expect(tester.hitTestOnBinding(at).path.any((h) => h.target == e.renderObject), isTrue,
+              reason: '${e.widget.key ?? 'Add by address'} under something else at $at');
+        }
+      }
+      final rect = tester.getRect(card);
+      expect(rect.top, greaterThanOrEqualTo(kSimpleInset * 2 + kSimpleBarHeight), reason: 'below the strip');
+      expect(rect.overlaps(tester.getRect(find.byType(EmergencyStopButton))), isFalse, reason: 'clear of Stop');
+      if (size.width < 500) {
+        await tester.tap(find.byKey(const Key('simple-rig-card-close')));
+        await tester.pump();
+        expect(find.byKey(const Key('simple-rig-bar')), findsOneWidget, reason: '× folds it back into the bar');
+      } else {
+        expect(find.byKey(const Key('simple-rig-card-close')), findsNothing, reason: 'no bar to fold into');
+      }
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+      await tester.pump(const Duration(seconds: 5));
+    });
+  }
 
   testWidgets('with the rig link up there is no Connect to your rig card (#1559)', (tester) async {
     await _pump(tester, const Size(1024, 768), linkUp: true);
