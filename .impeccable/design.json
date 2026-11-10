@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-10T13:20:46+13:00",
+  "generatedAt": "2026-11-10T16:42:44+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -848,6 +848,14 @@
       "description": "A collected Card in the binder grid: Art, catalog label, name, a gold-tier border with the one sanctioned glow. On the new-cards shelf it plays a one-time grey-to-colour reveal; tapping ends it. A collected Card also writes its tier name, on the front label row and in the back banner.",
       "html": "<button class=\"ds-album-card ds-album-gold\"><span class=\"ds-album-art\"></span><span class=\"ds-album-label\">M 31</span><span class=\"ds-album-name\">Andromeda Galaxy</span></button>",
       "css": ".ds-album-card{display:flex;flex-direction:column;width:130px;padding:4px;background:#262626;border:2px solid #404040;border-radius:10px;cursor:pointer;text-align:left;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;transition:transform .2s} .ds-album-gold{border-color:#FFD54F;box-shadow:0 0 8px rgba(255,213,79,.35)} .ds-album-art{display:block;aspect-ratio:5/6;border-radius:6px;background:radial-gradient(circle at 50% 45%,#d9c8a0 0,#5a4a30 18%,#000 46%)} .ds-album-label{margin-top:4px;font-size:13px;font-weight:600;color:#E0E0E0} .ds-album-name{font-size:11.5px;color:#A0A0A0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .ds-album-card:hover{transform:translateY(-1px)} .ds-album-card:focus-visible{outline:2px solid #42A5F5;outline-offset:2px}"
+    },
+    {
+      "name": "Guider Tabs (Simple Mode)",
+      "kind": "nav",
+      "refersTo": "segmented-switch",
+      "description": "Mode › Guider's Guide, Tuning and Tools tabs: Simple Mode segments on a tile, 44 px tall, the selected one in the selection blue with white words. A null pick locks them. The panel keeps Guide's height on every tab (#1722).",
+      "html": "<div class=\"ds-sseg\" role=\"tablist\" aria-label=\"Guider page\"><button role=\"tab\" aria-selected=\"true\" class=\"on\">Guide</button><button role=\"tab\" aria-selected=\"false\">Tuning</button><button role=\"tab\" aria-selected=\"false\">Tools</button></div>",
+      "css": ".ds-sseg{display:flex;gap:2px;padding:2px;background:rgba(56,56,56,0.55);border-radius:8px;width:300px} .ds-sseg button{flex:1;height:44px;border:0;border-radius:8px;background:transparent;color:#E0E0E0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-size:14px;cursor:pointer;transition:background .15s} .ds-sseg button.on{background:#1976D2;color:#FFFFFF} .ds-sseg button:hover:not(.on){background:rgba(255,255,255,0.06)} .ds-sseg button:focus-visible{outline:2px solid #42A5F5;outline-offset:-2px}"
     }
   ],
   "narrative": {
@@ -910,7 +918,7 @@
       },
       {
         "name": "The Drawings Stay Grey Rule",
-        "body": "Device-window drawings (the dome clamshell and dial, the flat panel face) use their own grey ramp: dome body #808080 to #4A4A4A, shells #A8A8A8 to #6A6A6A, plinth #8A8A8A, hinge bolt #D0D0D0, dial slit #6E6E6E at 95 %, flat panel face #111111, lids #303030, ribs #242424, glow #FFFBE8 to #B8B29A. They picture hardware and never mark a state; a state on a drawing comes only from a status token.",
+        "body": "The device windows' drawings (the Dome window's clamshell and dial, the Flat panel window's face) are painted in their own grey ramp, outside the UI tokens on purpose: they picture hardware, so they never mark a state, and Night mode's red filter covers them like everything else (#1690 audit, 2026-11-08). State on a drawing comes only from the status tokens (a moving shell's edge in Info Blue, a target in Connected Green).",
         "section": "colors"
       }
     ],
