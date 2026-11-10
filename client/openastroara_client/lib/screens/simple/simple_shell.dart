@@ -352,6 +352,51 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         _opticsFromMount(caps);
       }
     }, fireImmediately: true);
+    _watchDeviceFailures();
+  }
+
+  /// #1559 — the device pill showing, by device; one per device, however often it fails.
+  final _devicePills = <String, int>{};
+
+  /// #1559 — the profile's devices (Settings › Devices) going into error.
+  void _watchDeviceFailures() {
+    void watch<T extends EquipmentDeviceStatus>(
+      String key,
+      AsyncNotifierProvider<EquipmentDeviceNotifier<T>, T?> provider,
+      String Function(AppLocalizations l10n) type,
+    ) {
+      ref.listenManual(provider, (previous, next) {
+        final was = previous?.value?.connectionState;
+        final now = next.value?.connectionState;
+        if (now == EquipmentConnectionState.error && was != now && !_devicePills.containsKey(key)) {
+          if (!mounted) return;
+          final l10n = context.l10n;
+          _devicePills[key] = _messages.show(
+            SimpleMessageKind.warning,
+            l10n.simpleDeviceDidNotConnect(type(l10n)),
+            actions: [
+              SimpleMessageAction(l10n.shellReconnect, () {
+                unawaited(ref.read(provider.notifier).reconnect().catchError((Object _) => false));
+              }),
+              SimpleMessageAction(l10n.shellSectionDevices, () => _openMenu(section: 'Devices')),
+            ],
+          );
+        } else if (now == EquipmentConnectionState.connected) {
+          final id = _devicePills.remove(key);
+          if (id != null) _messages.dismiss(id);
+        }
+      });
+    }
+
+    watch('camera', cameraStatusProvider, (l) => l.shellSectionCamera);
+    watch('mount', mountProvider, (l) => l.shellSectionMount);
+    watch('focuser', focuserProvider, (l) => l.shellSectionFocuser);
+    watch('filterwheel', filterWheelProvider, (l) => l.shellFilterWheel);
+    watch('rotator', rotatorProvider, (l) => l.shellRotator);
+    watch('flat', flatPanelProvider, (l) => l.shellFlatPanel);
+    watch('dome', domeProvider, (l) => l.shellDome);
+    watch('weather', weatherProvider, (l) => l.shellWeather);
+    watch('safety', safetyMonitorProvider, (l) => l.shellSafetyMonitor);
   }
 
   /// The profile owns the telescope; a value it doesn't know (0) is filled
@@ -400,7 +445,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     _publishOnTop(false);
     final dewPill = _dewPill;
     final calibrationPill = _calibrationPill;
+    final devicePills = [..._devicePills.values];
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      devicePills.forEach(_messages.dismiss);
       _messages.dismissQuestions();
       // Its button belongs to this shell too, and the next one shows its own.
       if (dewPill != null) _messages.dismiss(dewPill);

@@ -6128,6 +6128,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dew may be forming: stars are swelling at high humidity. Wipe the optics or turn on the dew heaters. Scheduled autofocus waits until it clears.'**
   String get simpleDewWarning;
+
+  /// Simple Mode warning pill when a profile device goes into an error state (#1559); device is its type, e.g. Mount
+  ///
+  /// In en, this message translates to:
+  /// **'{device} didn\'t connect. Check it\'s powered and plugged in, then Reconnect.'**
+  String simpleDeviceDidNotConnect(String device);
 }
 
 class _AppLocalizationsDelegate

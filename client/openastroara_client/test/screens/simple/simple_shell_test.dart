@@ -450,6 +450,12 @@ class _Mount extends MountNotifier with _Calls<MountStatus> {
   Future<MountStatus?> build() async => MountStatus.fromJson(_wire('AM5', state0));
 }
 
+/// A mount whose connection state the test moves (#1559).
+class _FlakyMount extends _Mount {
+  _FlakyMount() : super(EquipmentConnectionState.connecting);
+  void report(EquipmentConnectionState s) => state = AsyncData(MountStatus.fromJson(_wire('AM5', s)));
+}
+
 class _ChoosingMount extends _Mount {
   _ChoosingMount() : super(EquipmentConnectionState.disconnected);
   final picked = <String>[];
@@ -2944,7 +2950,9 @@ void main() {
     ]);
     await _openSection(tester, 'Devices');
     final page = find.byKey(const Key('simple-gear'));
-    expect(find.text('Devices'), findsOneWidget, reason: 'only in the section list, no page title');
+    // The failed focuser's pill offers Devices too (#1559): count the Settings sheet only.
+    expect(find.descendant(of: find.byKey(const Key('simple-menu')), matching: find.text('Devices')), findsOneWidget,
+        reason: 'only in the section list, no page title');
     expect(find.descendant(of: page, matching: find.textContaining('ASI2600MM')), findsOneWidget);
     expect(find.byKey(const Key('simple-gear-filterwheel')), findsNothing, reason: 'never set up: no row of its own');
     await tester.tap(find.byKey(const Key('simple-gear-camera-disconnect')));
@@ -4275,6 +4283,56 @@ void main() {
     wheel.report({'state': 'awaiting_user', 'current_slot': 1, 'pending_slot': 2}, manual: true);
     await tester.pump();
     expect(find.descendant(of: pill, matching: find.textContaining('Swap in F2, then confirm.')), findsOneWidget);
+  });
+
+  group('the failed-connect pill (#1559)', () {
+    final pill = find.textContaining("Mount didn't connect");
+
+    Future<(ProviderContainer, _FlakyMount)> shell(WidgetTester tester) async {
+      final mount = _FlakyMount();
+      final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [mountProvider.overrideWith(() => mount)]);
+      await tester.pump();
+      return (c, mount);
+    }
+
+    testWidgets('a device going into error shows one amber pill naming it; connected takes it away', (tester) async {
+      final (c, mount) = await shell(tester);
+      expect(pill, findsNothing);
+      mount.report(EquipmentConnectionState.error);
+      await tester.pump();
+      expect(pill, findsOneWidget);
+      expect(find.textContaining("Check it's powered and plugged in"), findsOneWidget);
+      expect(c.read(simpleMessagesProvider).single.kind, SimpleMessageKind.warning);
+      mount.report(EquipmentConnectionState.connected);
+      await tester.pump();
+      expect(pill, findsNothing);
+    });
+
+    testWidgets('a device that keeps failing still shows one pill', (tester) async {
+      final (c, mount) = await shell(tester);
+      mount.report(EquipmentConnectionState.error);
+      await tester.pump();
+      mount.report(EquipmentConnectionState.connecting);
+      await tester.pump();
+      mount.report(EquipmentConnectionState.error);
+      await tester.pump();
+      expect(pill, findsOneWidget);
+      expect(c.read(simpleMessagesProvider), hasLength(1));
+    });
+
+    testWidgets('Reconnect asks the rig again, and Devices opens Settings › Devices', (tester) async {
+      final (_, mount) = await shell(tester);
+      mount.report(EquipmentConnectionState.error);
+      await tester.pump();
+      await tester.tap(find.widgetWithText(TextButton, 'Reconnect'));
+      await tester.pump();
+      expect(mount.calls, ['reconnect']);
+      expect(pill, findsOneWidget, reason: 'it stays until the device connects');
+      await tester.tap(find.widgetWithText(TextButton, 'Devices'));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('simple-gear')), findsOneWidget);
+    });
   });
 
   group('the dew warning pill (#1564)', () {

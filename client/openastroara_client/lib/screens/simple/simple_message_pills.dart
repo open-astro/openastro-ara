@@ -254,13 +254,18 @@ class _Pill extends ConsumerWidget {
                     ),
                   ),
                       if (actionBelow)
-                        TextButton(
-                          onPressed: () => _answer(notifier, 0),
-                          // Shrinks in a narrow pill rather than breaking the word.
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(m.actions.first.label, softWrap: false),
-                          ),
+                        Wrap(
+                          children: [
+                            for (var i = 0; i < m.actions.length; i++)
+                              TextButton(
+                                onPressed: () => _answer(notifier, i),
+                                // Shrinks in a narrow pill rather than breaking the word.
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(m.actions[i].label, softWrap: false),
+                                ),
+                              ),
+                          ],
                         ),
                     ],
                   ),
