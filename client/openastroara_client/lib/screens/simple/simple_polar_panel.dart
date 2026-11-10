@@ -50,7 +50,8 @@ class SimplePolarShutter extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final api = ref.watch(polarAlignApiProvider);
     final active = simplePolarActive(ref.watch(polarAlignLiveProvider));
-    // Busy while any panel's call runs: a second press would send it twice.
+    // Busy while any panel's call runs: a second press would send a start
+    // twice. Stop never waits, as it halts a routine that moves the mount.
     final busy = ref.watch(polarAlignActionProvider).busy;
     final notify = userNotifier(context, origin: SimpleStatusOrigin.polar);
     final l10n = context.l10n;
@@ -72,7 +73,7 @@ class SimplePolarShutter extends ConsumerWidget {
       label: active ? l10n.polarStop : l10n.polarStart,
       whyOff: api == null ? l10n.shellRigNotConnected : l10n.shellMainCameraBusy,
       // It turns the mount: never under the main camera's frame.
-      onPressed: api == null || busy || (!active && ref.watch(mainCameraBusyProvider))
+      onPressed: api == null || (!active && (busy || ref.watch(mainCameraBusyProvider)))
           ? null
           : active
           ? () => run(l10n.polarActionStop, (api) => api.stop())

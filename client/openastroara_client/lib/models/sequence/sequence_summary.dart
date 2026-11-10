@@ -385,6 +385,15 @@ class SequenceRunStateInfo {
   final String? reasonCode;
   final String? reasonText;
 
+  /// #1747 — whole seconds left on the meridian wait; null otherwise or from
+  /// an older daemon.
+  final int? meridianWaitSecondsLeft;
+
+  /// #1747 — the run is waiting out the meridian: the code and the seconds
+  /// together (a code alone is an older daemon, shown as its text).
+  int? get meridianWaitLeft =>
+      reasonCode == 'meridian' ? meridianWaitSecondsLeft : null;
+
   /// #1597 — the next flip; null when no run is active.
   final MeridianFlipInfo? meridianFlip;
 
@@ -408,6 +417,7 @@ class SequenceRunStateInfo {
     this.currentInstructionProgress,
     this.reasonCode,
     this.reasonText,
+    this.meridianWaitSecondsLeft,
     this.meridianFlip,
     this.stopAfterFrame = false,
   });
@@ -432,6 +442,7 @@ class SequenceRunStateInfo {
           _doubleOrNull(json['current_instruction_progress']),
       reasonCode: _str(json['reason_code']),
       reasonText: _str(json['reason_text']),
+      meridianWaitSecondsLeft: _intOrNull(json['meridian_wait_seconds_left']),
       meridianFlip: MeridianFlipInfo.tryParse(json['meridian_flip']),
       stopAfterFrame: json['stop_after_frame'] == true,
     );
@@ -488,6 +499,9 @@ class SequenceRunStateInfo {
       reasonText: payload.containsKey('reason_text')
           ? _str(payload['reason_text'])
           : reasonText,
+      meridianWaitSecondsLeft: payload.containsKey('meridian_wait_seconds_left')
+          ? _intOrNull(payload['meridian_wait_seconds_left'])
+          : meridianWaitSecondsLeft,
       // A null clears it (the run ended); an older daemon omits the key.
       meridianFlip: payload.containsKey('meridian_flip')
           ? MeridianFlipInfo.tryParse(payload['meridian_flip'])
@@ -518,7 +532,8 @@ class SequenceRunStateInfo {
       other.framesCaptured == framesCaptured &&
       other.currentInstructionProgress == currentInstructionProgress &&
       other.reasonCode == reasonCode &&
-      other.reasonText == reasonText;
+      other.reasonText == reasonText &&
+      other.meridianWaitSecondsLeft == meridianWaitSecondsLeft;
 
   @override
   int get hashCode => Object.hash(
@@ -537,7 +552,8 @@ class SequenceRunStateInfo {
       framesCaptured,
       currentInstructionProgress,
       reasonCode,
-      reasonText);
+      reasonText,
+      meridianWaitSecondsLeft);
 }
 
 /// One row in the sequence list — daemon's `SequenceListItemDto`.

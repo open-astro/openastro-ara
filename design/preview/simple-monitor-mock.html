@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body>
+<title>Ara Monitor</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0,0">
+<style>
+  /* Layout: an iPad-sized stage, a one-line verdict on top, tiles under it, tonight's timeline along the foot.
+     Single dark look on purpose: DESIGN.md tokens (lib/theme/ara_colors.dart), as the other design/preview mocks. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0; --faint: #606060;
+    --ok: #4CAF50; --info: #42A5F5; --sel: #1976D2; --tile: rgba(56,56,56,.55); --warn: #FFB300; --err: #E53935;
+    --err-text: #FF8A80; --stop: #D32F2F;
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys);
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+  .page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 80ch; }
+  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--warn); color: var(--warn); margin-left: 6px; vertical-align: 3px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  .group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button, .plain { background: transparent; color: var(--text); border: 0; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  .plain { border: 1px solid var(--border); border-radius: 8px; }
+  button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+  #tapnote { color: var(--text2); font-size: 13px; min-height: 20px; }
+
+  .wrap { position: relative; background: #000; border-radius: 18px; overflow: hidden; max-width: 1024px; }
+  .wrap:fullscreen { max-width: none; border-radius: 0; display: flex; align-items: center; justify-content: center; }
+  .stage { width: 1024px; height: 768px; background: var(--bg); padding: 12px; display: flex; flex-direction: column; gap: 8px; position: relative; transform-origin: top left; flex: none; }
+  .wrap:fullscreen .stage { transform-origin: center; }
+  .stage.night { filter: url(#nightRed); }
+
+  .ms { font-family: 'Material Symbols Outlined'; font-weight: normal; font-style: normal; line-height: 1; letter-spacing: normal; text-transform: none; white-space: nowrap; direction: ltr; -webkit-font-smoothing: antialiased; font-feature-settings: 'liga'; }
+
+  i.d { flex: none; display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
+  /* All well draws no dot here, so any dot on this screen means something changed. */
+  i.d.ok, i.d.active { display: none; }
+  i.d.change { border: 2px solid var(--info); }
+  i.d.warn { background: var(--warn); }
+  i.d.err { background: var(--err); }
+  i.d.off { background: var(--faint); }
+
+  .bar { height: 64px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 4px 0 12px; }
+  .bar i.d { width: 16px; height: 16px; }
+  .verdict { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .verdict b { font-size: 20px; font-weight: 600; line-height: 1.25; }
+  .verdict span { color: var(--text2); }
+  .bar.warn .verdict b { color: var(--warn); }
+  .bar.err .verdict b { color: var(--err-text); }
+  .clock { font-size: 30px; font-weight: 300; font-variant-numeric: tabular-nums; }
+  .bat { display: flex; align-items: center; gap: 5px; color: var(--text2); font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .bat.low { color: var(--warn); }
+  .bat .ms { font-size: 16px; }
+  .batbox { position: relative; display: block; width: 26px; height: 13px; border: 1.5px solid currentColor; border-radius: 3px; padding: 1px; margin-right: 3px; }
+  .batbox i { display: block; height: 100%; background: currentColor; border-radius: 1px; }
+  .batbox::after { content: ""; position: absolute; right: -4.5px; top: 2.5px; width: 2px; height: 5px; background: currentColor; border-radius: 0 1px 1px 0; }
+  .icon { width: 44px; height: 44px; border: 0; border-radius: 10px; background: transparent; color: var(--text2); cursor: pointer; display: grid; place-items: center; }
+  .icon .ms { font-size: 24px; }
+  .icon[aria-pressed="true"] { color: var(--info); }
+
+  /* The two right columns keep their width, so a wider window goes to Now, Guider and the timeline. */
+  .grid { flex: 1; min-height: 0; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 244px 244px; }
+  .qb { flex: none; height: 44px; padding: 0 18px; border: 0; border-radius: 10px; background: #1565C0; color: #fff; font: 600 14px var(--sys); cursor: pointer; }
+  .grid.frozen .tile { opacity: .55; }
+
+  .tile { min-width: 0; min-height: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; background: var(--tile); border: 0; box-shadow: inset 0 0 0 1px var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: flex-start; gap: 3px; overflow: hidden; }
+  .tile > span { display: block; }
+  .tile .h { display: flex; align-items: center; gap: 6px; color: var(--text2); min-height: 22px; flex: none; }
+  .tile .h .ms { font-size: 18px; }
+  .tile .h .nm { flex: 1; min-width: 0; }
+  .tile .h .w.active { color: var(--ok); }
+  .tile.warn { box-shadow: inset 0 0 0 1.5px var(--warn); }
+  .tile.err { box-shadow: inset 0 0 0 1.5px var(--err); }
+  .tile.warn .h .ms, .tile.warn .h .w, .tile.warn .big { color: var(--warn); }
+  .tile.err .h .ms, .tile.err .h .w, .tile.err .big { color: var(--err-text); }
+  .big { font-size: 30px; font-weight: 300; font-variant-numeric: tabular-nums; line-height: 1.2; flex: none; white-space: nowrap; }
+  .big small { font-size: 14px; color: var(--text2); margin-left: 4px; }
+  .sub { font-size: 13px; color: var(--text2); line-height: 1.35; flex: none; }
+  .sub.v { color: var(--text); }
+  .none { color: var(--faint); margin-top: 6px; }
+  .chart { flex: 1 1 0; min-height: 0; position: relative; margin-top: 4px; }
+  .chart svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .chart .pt { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--text); transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--bg); }
+  .chart .cap { position: absolute; right: 0; font-size: 11px; color: var(--text2); }
+  .ln { display: inline-block; width: 14px; height: 0; border-top: 2px solid; vertical-align: 3px; margin-right: 4px; }
+  .ln.ra { border-color: var(--info); } .ln.dec { border-color: var(--err-text); border-top-style: dashed; }
+
+  .what { font-size: 22px; font-weight: 600; flex: none; }
+  .tile[data-t="now"] .sub { font-size: 14px; }
+  .tile .main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(170px, 34%); gap: 16px; align-items: center; }
+  .nowleft { display: flex; flex-direction: column; min-width: 0; }
+  .nowbig { font-size: 120px; font-weight: 200; font-variant-numeric: tabular-nums; line-height: 1; white-space: nowrap; }
+  .nowbig.long { font-size: 96px; }
+  .nowbig small { display: block; font-size: 14px; font-weight: 400; color: var(--text2); line-height: 1.4; margin-top: -4px; }
+  .nowbig.word { font-size: 44px; font-weight: 300; white-space: normal; line-height: 1.15; }
+  .up { display: flex; flex-direction: column; min-width: 0; }
+  .up em { font-style: normal; font-size: 12px; color: var(--text2); padding-bottom: 2px; }
+  .up > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 30px; border-top: 1px solid var(--border); white-space: nowrap; }
+  .up u { text-decoration: none; font-size: 13px; color: var(--text2); font-variant-numeric: tabular-nums; }
+  .track { display: block; height: 6px; border-radius: 3px; background: #333; overflow: hidden; flex: none; }
+  .track i { display: block; height: 100%; background: var(--text2); }
+  .tile .nowtrack { height: 6px; margin-top: 10px; }
+  .tile .flt { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 10px; flex: none; }
+  .flt > span { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .flt b { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .flt small { font-size: 13px; font-weight: 400; color: var(--text2); }
+  .flt .done i { background: var(--ok); }
+  .flt .hand i { background: var(--info); }
+
+  .tile .wx { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; align-items: center; gap: 2px 10px; margin-top: 2px; }
+  .wx > span { display: block; min-width: 0; }
+  .wx b { display: block; font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; white-space: nowrap; }
+  .wx small { font-size: 13px; font-weight: 400; color: var(--text2); margin-left: 2px; }
+  .tile .pair { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+  .pair .col { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .wx em { display: block; font-style: normal; font-size: 13px; color: var(--text2); line-height: 1.25; }
+  .wx > span:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .wx .over b, .wx .over em { color: var(--warn); }
+  .tile[data-t="safety"] { justify-content: center; padding-block: 0; }
+  .tile .safe { display: flex; align-items: center; gap: 8px; flex: none; }
+  .safe .ms { font-size: 22px; color: var(--ok); }
+  .safe b { font-size: 16px; font-weight: 600; }
+  .tile .safe .sub { flex: 1; text-align: right; font-size: 12px; white-space: nowrap; }
+  .tile.warn .safe .ms, .tile.warn .safe b { color: var(--warn); }
+  .tile .steps { display: flex; flex-direction: column; gap: 1px; font-size: 13px; margin-top: 2px; }
+  .steps > span { display: flex; align-items: center; gap: 6px; color: var(--text2); }
+  .steps .ms { font-size: 16px; }
+  .steps .cur { color: var(--text); font-weight: 600; }
+  .steps .done .ms { color: var(--ok); }
+  .steps .cur .ms { color: var(--ok); }
+
+  .tile[data-t="night"] { margin-right: 116px; padding-bottom: 6px; }
+  .nt { position: relative; height: 30px; flex: none; margin-top: 4px; }
+  .blk { position: absolute; top: 0; bottom: 0; background: rgba(120,120,120,.28); border-radius: 4px; padding: 0 8px; font-size: 12px; line-height: 30px; white-space: nowrap; overflow: hidden; }
+  .blk .pr { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--info); }
+  .mk { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--text); box-shadow: 0 0 0 1px var(--bg); }
+  .fl { position: absolute; top: 3px; width: 24px; height: 24px; margin-left: -12px; border-radius: 50%; background: var(--bg); box-shadow: inset 0 0 0 1px var(--text2); display: grid; place-items: center; color: var(--text); }
+  .fl .ms { font-size: 16px; }
+  .hrs { position: relative; height: 16px; flex: none; font-size: 11px; color: var(--text2); font-variant-numeric: tabular-nums; }
+  .hrs span { position: absolute; transform: translateX(-50%); }
+
+  .stopb { position: absolute; right: 12px; bottom: 12px; width: 108px; height: 108px; border: 0; border-radius: 10px; background: var(--stop); color: #fff; font: 700 22px var(--sys); letter-spacing: 1px; cursor: pointer; touch-action: none; }
+  .seg button:disabled { color: var(--faint); cursor: default; }
+
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .notes div { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+  .notes h2 { font-size: 14px; margin: 0 0 4px; }
+  .notes p { margin: 0; color: var(--text2); font-size: 13px; }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="nightRed" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values=".2126 .7152 .0722 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/></filter></svg>
+
+<div class="page">
+  <h1>Monitor <span class="tag">idea</span></h1>
+  <p class="note">A full-screen, read-only view of the imaging session for Simple Mode. The line on top says whether all is well; each tile is one thing about the night. Switch State to see how it reacts. All numbers are made-up examples, and the countdowns run live.</p>
+
+  <div class="controls">
+    <div class="group"><span class="lbl">Rig</span>
+      <div class="seg" role="group" aria-label="Rig" id="gear">
+        <button aria-pressed="true" data-v="full">Full rig</button>
+        <button aria-pressed="false" data-v="noguide">No guider</button>
+        <button aria-pressed="false" data-v="nosafety">No safety monitor</button>
+        <button aria-pressed="false" data-v="noweather">No weather</button>
+        <button aria-pressed="false" data-v="small">Small rig</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">This screen</span>
+      <div class="seg" role="group" aria-label="Battery of the device showing this screen" id="power">
+        <button aria-pressed="true" data-v="battery">On battery</button>
+        <button aria-pressed="false" data-v="charging">Charging</button>
+        <button aria-pressed="false" data-v="low">Low</button>
+        <button aria-pressed="false" data-v="none">No battery</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">Window</span>
+      <div class="seg" role="group" aria-label="Window shape" id="win">
+        <button aria-pressed="true" data-v="1024">iPad 4:3</button>
+        <button aria-pressed="false" data-v="1229">Mac 16:10</button>
+        <button aria-pressed="false" data-v="1365">Wide 16:9</button>
+      </div>
+    </div>
+    <button class="plain" id="fs">Fullscreen</button>
+  </div>
+  <div class="controls">
+    <div class="group"><span class="lbl">State</span>
+      <div class="seg" role="group" aria-label="State" id="state"></div>
+    </div>
+  </div>
+
+  <div class="wrap" id="wrap">
+    <div class="stage" id="stage">
+      <div class="bar" id="bar"></div>
+      <div class="grid" id="grid"></div>
+      <button class="stopb" id="stop" aria-label="Emergency Stop, hold for 2 seconds">STOP</button>
+    </div>
+  </div>
+  <div id="tapnote" role="status">Tap a tile to see where it goes.</div>
+
+  <div class="notes">
+    <div><h2>How you get there</h2><p>A Monitor item on Simple Mode's left rail, beside Sky, Info and Library. The × comes back to the frame. The screen stays awake while it shows.</p></div>
+    <div><h2>What it may do</h2><p>It only reads. The one control is Emergency Stop, because that is on every screen. A tap on a tile opens the window or panel that already owns that thing, so nothing is built twice.</p></div>
+    <div><h2>What stays above it</h2><p>The full-screen safety alarm still covers everything. Unsafe here shows the screen after Silence. A question takes the top line, with its button (State: Question).</p></div>
+    <div><h2>Only the gear you have</h2><p>Tiles come from the rig's profile, and the others grow into the room (Rig: Small rig). Gear in the profile that drops mid-night stays on screen in red (State: Guider dropped), so a fault can't look like a tidy layout.</p></div>
+  </div>
+</div>
+
+<script>
+const AREAS = ['now', 'target', 'flip', 'safety', 'guide', 'focus', 'weather', 'night'];
+const OPENS = { now: 'the queue panel', target: 'Sky, centred on the target', flip: 'the Mount window', safety: 'the Safety monitor window', guide: 'the Guider panel', focus: 'the frame, with its facts in Info', weather: 'the Weather window', night: 'the queue panel' };
+const GEAR = {
+  full: { guide: true, weather: true, safety: true, focuser: true },
+  noguide: { guide: false, weather: true, safety: true, focuser: true },
+  nosafety: { guide: true, weather: true, safety: false, focuser: true },
+  noweather: { guide: true, weather: false, safety: true, focuser: true },
+  small: { guide: false, weather: false, safety: false, focuser: false },
+};
+function template(g) {
+  const bottom = g.guide ? 'guide guide focus focus' : 'focus focus focus focus';
+  let top, rows;
+  if (g.safety && g.weather) { top = ['now now target safety', 'now now target weather', 'now now flip weather']; rows = '56px 1fr 1fr 170px 108px'; }
+  else if (g.safety) { top = ['now now safety safety', 'now now target target', 'now now flip flip']; rows = '56px 1fr 1fr 170px 108px'; }
+  else if (g.weather) { top = ['now now target weather', 'now now flip weather']; rows = '1fr 1fr 170px 108px'; }
+  else { top = ['now now target target', 'now now flip flip']; rows = '1fr 150px 170px 108px'; }
+  return { areas: [...top, bottom, 'night night night night'].map(r => `"${r}"`).join(' '), rows };
+}
+
+const DUSK = 21 * 60 + 47, DAWN = 5 * 60 + 12 + 1440;
+const toMin = c => { const [h, m] = c.split(':').map(Number); return h * 60 + m + (h < 12 ? 1440 : 0); };
+const nightX = m => (m - DUSK) / (DAWN - DUSK) * 100;
+const noise = (i, s) => Math.sin(i * 1.7 + s) * .55 + Math.sin(i * .63 + s * 2) * .35 + Math.sin(i * 3.1 + s * 3) * .25;
+const series = (n, f) => Array.from({ length: n }, (_, i) => f(i, i / (n - 1)));
+const path = (pts, w, h, lo, hi) => pts.map((v, i) => `${i ? 'L' : 'M'}${(i / (pts.length - 1) * w).toFixed(1)} ${(h - (v - lo) / (hi - lo) * h).toFixed(1)}`).join(' ');
+const alt = x => 74 * Math.cos((x - .43) * 2.1);
+const mmss = s => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+const flipFmt = s => s >= 3600 ? `${Math.floor(s / 3600)} h ${String(Math.floor(s % 3600 / 60)).padStart(2, '0')} min` : mmss(s);
+
+const BASE = {
+  clock: '23:52',
+  master: ['active', 'All good · imaging M 42', 'Nothing needs you. Plan ends 04:38, then the mount parks.'],
+  now: { s: 'active', word: 'Exposing', what: 'M 42 · Red · 180 s', t: 127, total: 180, unit: 'left in this frame', sub: 'Frame 42 of 72 · about 1 h 30 min left on M 42', filters: [['L', 24, 24], ['R', 18, 24], ['G', 0, 12], ['B', 0, 12]],
+    up: [['Dither', '23:54'], ['Frame 43 · R', '23:54'], ['Meridian flip', '00:58'], ['IC 434', '01:25'], ['Mount parks', '04:38']] },
+  target: { s: 'active', word: 'Tracking', name: 'M 42', long: 'Orion Nebula', sub: 'Imaging to 01:25 · max 74°', sub2: 'Transits 00:58 · Moon 3 %', win: ['21:47', '01:25'] },
+  flip: { s: 'ok', word: 'Automatic', t: 3960, sub: 'At 00:58 · East to West', sub2: 'Waits for the frame, then re-centres and restarts guiding' },
+  safety: { s: 'ok', word: '', state: 'Safe', sub: 'Since 20:14 · 3 h 38 min' },
+  guide: { s: 'active', word: 'Guiding', rms: '0.62', ra: '0.41', dec: '0.46', sub: 'Last dither 23:45' },
+  focus: { s: 'ok', word: '', hfr: '2.14', stars: '1 412', bg: '812', clip: '0.4', sub: 'Autofocus 23:08 · −0.6 °C since' },
+  weather: { s: 'ok', word: '', cells: [['4', '%', 'Cloud'], ['21.34', '', 'Sky quality'], ['8.4', '°C', 'Air'], ['7.2', '°', 'Above dew point'], ['61', '%', 'Humidity'], ['0', 'mm/h', 'Rain'], ['9', 'km/h', 'Wind · NW · gusts 14']] },
+  night: { right: 'Dark 21:47 to 05:12 · 2 h 06 min so far · 3 targets', progress: .58, blocks: [['M 42', '21:47', '01:25'], ['IC 434', '01:25', '03:20'], ['M 78', '03:20', '04:38']], flipAt: '00:58', parkAt: '04:38' },
+};
+
+const STATES = {
+  imaging: ['Imaging', {}],
+  soon: ['Flip soon', { clock: '00:52',
+    master: ['active', 'All good · meridian flip in 6 min', 'Ara waits for this frame to finish, then flips.'],
+    now: { what: 'M 42 · Blue · 180 s', t: 88, sub: 'Frame 62 of 72 · about 30 min left on M 42', filters: [['L', 24, 24], ['R', 24, 24], ['G', 12, 12], ['B', 2, 12]],
+      up: [['Meridian flip', '00:58'], ['Re-centre', 'then'], ['Restart guiding', 'then'], ['IC 434', '01:25'], ['Mount parks', '04:38']] },
+    guide: { sub: 'Last dither 00:48' },
+    flip: { word: 'Coming up', t: 372, sub: 'At 00:58 · East to West', sub2: 'Waits for the frame, then re-centres and restarts guiding' },
+    night: { progress: .86, right: 'Dark 21:47 to 05:12 · 3 h 06 min so far · 3 targets' } }],
+  flipping: ['Flipping', { clock: '00:59',
+    master: ['active', 'Meridian flip · step 2 of 4', 'Imaging carries on by itself when it is done.'],
+    now: { word: 'Flipping', what: 'Slewing to the West side', t: null, big: 'Meridian flip', total: 0, sub: 'Frame 64 of 72 is saved', filters: [['L', 24, 24], ['R', 24, 24], ['G', 12, 12], ['B', 4, 12]],
+      up: [['Re-centre', 'next'], ['Restart guiding', 'then'], ['Frame 65 · B', 'then'], ['IC 434', '01:25'], ['Mount parks', '04:38']] },
+    flip: { s: 'active', word: 'Moving', t: null, steps: [['done', 'check', 'Frame saved'], ['cur', 'sync', 'Slewing to West'], ['', 'radio_button_unchecked', 'Re-centre on M 42'], ['', 'radio_button_unchecked', 'Restart guiding']] },
+    guide: { s: 'change', word: 'Paused', sub: 'Ara paused it for the flip' },
+    night: { progress: .9, right: 'Dark 21:47 to 05:12 · 3 h 12 min so far · 3 targets' } }],
+  lost: ['Star lost', { clock: '02:03',
+    master: ['warn', 'Guide star lost · retrying 2 of 5', 'Often clouds passing. Ara holds the next frame until guiding is back.'],
+    now: { s: 'change', word: 'Paused by Ara', what: 'IC 434 · Ha · 300 s', t: null, big: 'Waiting for guiding', total: 0, sub: 'Frame 8 of 30 is saved · resumes on its own', filters: [['Ha', 8, 30]],
+      up: [['Find guide star', '2 of 5'], ['Frame 9 · Ha', 'then'], ['M 78', '03:20'], ['Mount parks', '04:38']] },
+    target: { name: 'IC 434', long: 'Horsehead Nebula', sub: 'Imaging to 03:20 · max 69°', sub2: 'Transits 01:12 · Moon 3 %', win: ['01:25', '03:20'] },
+    guide: { s: 'warn', word: 'Star lost', rms: '—', ra: '—', dec: '—', sub: 'Retrying (2 of 5)' },
+    focus: { hfr: '2.31', stars: '212', bg: '2 380', clip: '0.0', dip: true },
+    flip: { word: 'Done tonight', t: null, big: 'West side', sub: 'Flipped at 00:58', sub2: '' },
+    night: { progress: .2, cur: 1, right: 'Dark 21:47 to 05:12 · 3 h 46 min so far · 3 targets' } }],
+  dropped: ['Guider dropped', { clock: '01:40',
+    master: ['err', 'Guider disconnected', 'Ara holds the next frame. Check the guide camera cable and reconnect from the Guider panel.'],
+    now: { s: 'warn', word: 'Waiting for you', what: 'IC 434 · Ha · 300 s', t: null, big: 'Waiting for the guider', total: 0, sub: 'Frame 3 of 30 is saved', filters: [['Ha', 3, 30]],
+      up: [['Reconnect guider', 'you'], ['Frame 4 · Ha', 'then'], ['M 78', '03:20'], ['Mount parks', '04:38']] },
+    target: { name: 'IC 434', long: 'Horsehead Nebula', sub: 'Imaging to 03:20 · max 69°', sub2: 'Transits 01:12 · Moon 3 %', win: ['01:25', '03:20'] },
+    guide: { s: 'err', word: 'Disconnected', rms: '—', ra: '—', dec: '—', sub: 'Disconnected at 01:39' },
+    flip: { word: 'Done tonight', t: null, big: 'West side', sub: 'Flipped at 00:58', sub2: '' },
+    night: { progress: .08, cur: 1, right: 'Dark 21:47 to 05:12 · 3 h 24 min so far · 3 targets' } }],
+  unsafe: ['Unsafe', { clock: '02:26',
+    master: ['warn', 'Unsafe · wind 41 km/h, over the 36 km/h limit', 'Ara paused the plan, parked the mount and closed the dome.'],
+    now: { s: 'change', word: 'Paused by Ara', what: 'IC 434 · Ha · 300 s', t: null, big: 'Waiting for safe sky', total: 0, sub: 'Frame 12 of 30 is saved · resumes 10 min after Safe', filters: [['Ha', 12, 30]],
+      up: [['Safe for 10 min', 'wait'], ['Unpark, re-centre', 'then'], ['Frame 13 · Ha', 'then'], ['M 78', '03:20']] },
+    target: { s: 'off', word: 'Parked', name: 'IC 434', long: 'Horsehead Nebula', sub: 'Imaging to 03:20 · max 69°', sub2: 'Transits 01:12 · Moon 3 %', win: ['01:25', '03:20'] },
+    flip: { s: 'off', word: 'Parked', t: null, big: '—', sub: 'No flip while parked', sub2: '' },
+    safety: { s: 'warn', word: '', state: 'Unsafe', sub: 'Since 02:14 · 12 min' },
+    guide: { s: 'ok', word: 'Idle', rms: '—', ra: '—', dec: '—', sub: 'Stopped for the park' },
+    weather: { s: 'warn', word: 'Past limit', cells: [['4', '%', 'Cloud'], ['21.30', '', 'Sky quality'], ['8.9', '°C', 'Air'], ['8.1', '°', 'Above dew point'], ['58', '%', 'Humidity'], ['0', 'mm/h', 'Rain'], ['41', 'km/h', 'Wind · limit 36 · gusts 52', 1]] },
+    night: { progress: .3, cur: 1, right: 'Dark 21:47 to 05:12 · 3 h 58 min so far · 3 targets' } }],
+  dusk: ['Before dark', { clock: '20:58',
+    master: ['change', 'Waiting for dark · plan starts at 21:47', 'Camera starts cooling at 21:32.'],
+    now: { s: 'change', word: 'Waiting', what: 'First up: M 42', t: 2940, total: 0, unit: 'until dark', sub: '72 frames · 3 targets in the queue', filters: [['L', 0, 24], ['R', 0, 24], ['G', 0, 12], ['B', 0, 12]],
+      up: [['Cool the camera', '21:32'], ['Autofocus', '21:45'], ['First frame', '21:47'], ['Meridian flip', '00:58'], ['Mount parks', '04:38']] },
+    target: { s: 'ok', word: 'Queued', sub: 'Up 28° · max 74°' },
+    flip: { word: 'Automatic', t: 14400, sub: 'At 00:58 · East to West', sub2: '' },
+    safety: { sub: 'Since 20:14 · 44 min' },
+    guide: { s: 'ok', word: 'Idle', rms: '—', ra: '—', dec: '—', sub: 'Starts with the plan' },
+    focus: { hfr: '—', stars: '—', bg: '—', clip: '—', sub: 'Autofocus runs before the first frame' },
+    night: { progress: 0, right: 'Dark 21:47 to 05:12 · nothing yet · 3 targets' } }],
+  idle: ['No plan', { clock: '22:40',
+    master: ['ok', 'Rig ready · no plan running', 'Start a plan from Simple Mode and this screen fills in.'],
+    now: { s: 'off', word: 'Idle', what: 'Nothing running', t: null, big: 'No plan', total: 0, sub: 'The queue is empty', filters: [], upTitle: "Tonight's best",
+      up: [['M 42', '62° up'], ['IC 434', '55° up'], ['M 78', '48° up'], ['NGC 2244', '41° up']] },
+    target: { s: 'off', word: '', none: 'No target picked' },
+    flip: { s: 'off', word: '', t: null, big: '—', sub: 'No target to flip on', sub2: '' },
+    guide: { s: 'ok', word: 'Idle', rms: '—', ra: '—', dec: '—', sub: 'Not running' },
+    focus: { hfr: '—', stars: '—', bg: '—', clip: '—', sub: 'No frame tonight' },
+    night: { progress: 0, blocks: [], flipAt: null, parkAt: null, right: 'Dark 21:47 to 05:12 · queue empty' } }],
+  disk: ['Disk low', {
+    master: ['warn', 'Low disk space · 6 GB free', 'About 1 h of frames left, and the plan needs 4 h 45 min. Free space or shorten the queue.'] }],
+  cooler: ['Cooler', {
+    master: ['warn', 'Cooler can\'t reach −10 °C · sensor at −6.2 °C', 'Cooler at 100 %. Frames still save, but they won\'t match your −10 °C darks.'] }],
+  question: ['Question', {
+    master: ['warn', 'Swap in the Ha filter, then confirm', 'Manual filter wheel. The plan waits for you.', 'Confirm'],
+    now: { s: 'warn', word: 'Waiting for you', what: 'M 42 · next filter Ha', t: null, big: 'Swap the filter', total: 0, sub: 'Frame 42 of 72 is saved',
+      up: [['Swap in Ha', 'you'], ['Frame 43 · Ha', 'then'], ['Meridian flip', '00:58'], ['IC 434', '01:25'], ['Mount parks', '04:38']] } }],
+  link: ['Link lost', { clock: '02:15', frozen: true,
+    master: ['err', 'Lost contact with the rig · 42 s ago', 'Last numbers from 02:14. Trying to reconnect. A running plan carries on by itself.'] }],
+};
+
+const hdr = (icon, name, t) => `<span class="h"><span class="ms" aria-hidden="true">${icon}</span><span class="nm">${name}</span><span class="w ${t.s}">${t.word || ''}</span><i class="d ${t.s}"></i></span>`;
+const tile = (id, icon, name, t, inner) => `<button class="tile ${t.s === 'warn' || t.s === 'err' ? t.s : ''}" data-t="${id}" style="grid-area:${id}">${hdr(icon, name, t)}${t.none ? `<span class="none">${t.none}</span>` : inner}</button>`;
+const sub = (s, c = '') => s ? `<span class="sub ${c}">${s}</span>` : '';
+
+function renderNow(n) {
+  const num = n.t != null;
+  const pct = n.total ? (1 - n.t / n.total) * 100 : 0;
+  const hand = n.filters.findIndex(f => f[1] < f[2]);
+  return `<span class="what">${n.what}</span>${sub(n.sub)}
+    <span class="main">
+      <span class="nowleft">
+        ${num ? `<span class="nowbig ${n.t >= 600 ? 'long' : ''}"><span data-live="now">${mmss(n.t)}</span><small>${n.unit}</small></span>` : `<span class="nowbig word">${n.big}</span>`}
+        ${n.total ? `<span class="track nowtrack"><i id="nowbar" style="width:${pct}%"></i></span>` : ''}
+      </span>
+      <span class="up"><em>${n.upTitle || 'Up next'}</em>${n.up.map(([l, t]) => `<span>${l}<u>${t}</u></span>`).join('')}</span>
+    </span>
+    ${n.filters.length ? `<span class="flt">${n.filters.map(([f, a, b], i) => `<span class="${a === b ? 'done' : i === hand ? 'hand' : ''}"><b>${f}<small>${a} / ${b}</small></b><span class="track"><i style="width:${a / b * 100}%"></i></span></span>`).join('')}</span>` : ''}`;
+}
+function renderTarget(t, min) {
+  const x = Math.max(0, Math.min(1, (min - DUSK) / (DAWN - DUSK)));
+  const a = series(60, (_, u) => alt(u));
+  const w = 200, h = 60, top = 90;
+  const [x0, x1] = t.win.map(c => nightX(toMin(c)) / 100);
+  const under = series(30, (_, u) => x0 + (x1 - x0) * u).map(p => `${(p * w).toFixed(1)} ${(h - alt(p) / top * h).toFixed(1)}`);
+  return `<span class="big">${t.name}<small>${t.long}</small></span>${sub(t.sub, 'v')}${sub(t.sub2)}
+    <span class="chart" aria-hidden="true"><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      <path d="${path(a, w, h, 0, top)} L${w} ${h} L0 ${h} Z" fill="#A0A0A0" fill-opacity=".12"/>
+      <path d="M${(x0 * w).toFixed(1)} ${h} L${under.join(' L')} L${(x1 * w).toFixed(1)} ${h} Z" fill="#E0E0E0" fill-opacity=".24"/>
+      <path d="${path(a, w, h, 0, top)}" fill="none" stroke="#A0A0A0" stroke-width="2" vector-effect="non-scaling-stroke"/>
+      <line x1="0" x2="${w}" y1="${h - 30 / top * h}" y2="${h - 30 / top * h}" stroke="#606060" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>
+    </svg><span class="cap" style="left:4px;right:auto;top:calc(${100 - 30 / top * 100}% - 16px)">30°</span><span class="pt" style="left:${x * 100}%;top:${100 - alt(x) / top * 100}%"></span></span>`;
+}
+function renderFlip(f) {
+  if (f.steps) return `<span class="steps">${f.steps.map(([c, i, l]) => `<span class="${c}"><span class="ms" aria-hidden="true">${i}</span>${l}</span>`).join('')}</span>`;
+  return `<span class="big">${f.t != null ? `<span data-live="flip">${flipFmt(f.t)}</span>` : f.big}</span>${sub(f.sub, 'v')}${sub(f.sub2)}`;
+}
+function renderGuide(g, paused) {
+  const ra = series(90, i => noise(i, 1) * .5), dec = series(90, i => noise(i, 4) * .55);
+  const w = 200, h = 60;
+  return `<span class="big">${g.rms}<small>″ RMS</small></span>
+    <span class="sub v"><span class="ln ra"></span>RA ${g.ra}″ &nbsp; <span class="ln dec"></span>Dec ${g.dec}″ &nbsp; ${g.sub}</span>
+    <span class="chart" aria-hidden="true" style="opacity:${paused ? .4 : 1}"><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      <line x1="0" x2="${w}" y1="${h / 2}" y2="${h / 2}" stroke="#404040" vector-effect="non-scaling-stroke"/>
+      <path d="${path(ra, w, h, -1.5, 1.5)}" fill="none" stroke="#42A5F5" stroke-width="2" vector-effect="non-scaling-stroke"/>
+      <path d="${path(dec, w, h, -1.5, 1.5)}" fill="none" stroke="#FF8A80" stroke-width="2" stroke-dasharray="4 3" vector-effect="non-scaling-stroke"/>
+    </svg><span class="cap" style="top:0">±1.5″</span></span>`;
+}
+// Scale to the night's own range, so a slow drift shows; minSpan keeps sensor noise from looking dramatic.
+function fitRange(v, minSpan) {
+  const lo = Math.min(...v), hi = Math.max(...v), pad = Math.max(0, minSpan - (hi - lo)) / 2;
+  return [lo - pad, hi + pad];
+}
+function spark(v, lo, hi) {
+  const w = 200, h = 40, y = (v[v.length - 1] - lo) / (hi - lo);
+  return `<span class="chart" aria-hidden="true"><svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      <path d="${path(v, w, h, lo, hi)} L${w} ${h} L0 ${h} Z" fill="#A0A0A0" fill-opacity=".16"/>
+      <path d="${path(v, w, h, lo, hi)}" fill="none" stroke="#A0A0A0" stroke-width="2" vector-effect="non-scaling-stroke"/>
+    </svg><span class="pt" style="left:calc(100% - 4px);top:${100 - y * 100}%"></span></span>`;
+}
+function renderFocus(f) {
+  const empty = f.hfr === '—';
+  const hfr = series(40, (i, u) => (u < .3 ? 2.5 - u * .9 : 1.93 + (u - .3) * .3) + noise(i, 2) * .025);
+  const stars = series(40, (i, u) => f.dip && u > .8 ? 1400 * (1 - (u - .8) * 4.2) : 1400 + noise(i, 3) * 70);
+  const bg = series(40, (i, u) => f.dip && u > .8 ? 820 + (u - .8) * 7800 : 700 + u * 110 + noise(i, 5) * 12);
+  const clip = series(40, (i, u) => f.dip && u > .8 ? Math.max(0, .4 * (1 - (u - .8) * 5)) : .4 + noise(i, 6) * .06);
+  const col = (v, l, chart) => `<span class="col"><span class="big">${v}</span><span class="sub">${l}</span>${empty ? '' : chart}</span>`;
+  return `<span class="pair">${col(f.hfr, 'HFR', spark(hfr, 1.6, 2.7))}${col(f.stars, 'Stars', spark(stars, 0, 1700))}${col(f.bg + (empty ? '' : '<small>ADU</small>'), 'Sky background', spark(bg, ...fitRange(bg, 300)))}${col(f.clip + (empty ? '' : '<small>%</small>'), 'Clipped stars', spark(clip, ...fitRange(clip, .5)))}</span>${sub(f.sub, 'v')}`;
+}
+function renderNight(n, min) {
+  const hours = [22, 24, 26, 28].map(h => `<span style="left:${nightX(h * 60)}%">${String(h % 24).padStart(2, '0')}:00</span>`).join('');
+  const cur = n.cur || 0;
+  const blocks = n.blocks.map(([name, a, b], i) => {
+    const l = nightX(toMin(a)), r = nightX(toMin(b));
+    const inHand = i === cur && n.progress > 0;
+    return `<span class="blk" style="left:${l}%;width:calc(${r - l}% - 2px)">${name}${inHand ? `<span class="pr" style="width:${n.progress * 100}%"></span>` : ''}</span>`;
+  }).join('');
+  const nowIn = min >= DUSK && min <= DAWN;
+  return `<span class="nt">${blocks}${n.parkAt ? `<span class="fl" style="left:calc(${nightX(toMin(n.parkAt))}% + 15px)" title="Mount parks"><span class="ms" aria-hidden="true">local_parking</span></span>` : ''}${n.flipAt ?`<span class="fl" style="left:${nightX(toMin(n.flipAt))}%" title="Meridian flip"><span class="ms" aria-hidden="true">swap_horiz</span></span>` : ''}${nowIn ? `<span class="mk" style="left:${nightX(min)}%"></span>` : ''}</span><span class="hrs">${hours}</span>`;
+}
+
+const grid = document.getElementById('grid'), bar = document.getElementById('bar'), stage = document.getElementById('stage');
+const note = document.getElementById('tapnote');
+let cur = 'imaging', gear = 'full', live = {}, clockS = 0;
+let night = false;
+
+function render() {
+  const p = STATES[cur][1];
+  const d = Object.fromEntries(AREAS.map(k => [k, { ...BASE[k], ...(p[k] || {}) }]));
+  const clock = p.clock || BASE.clock, master = p.master || BASE.master;
+  if (p.frozen) AREAS.forEach(k => { d[k].s = 'off'; d[k].word = 'Last known'; });
+  const min = toMin(clock);
+  const g = GEAR[gear];
+  const head = g.guide ? master[1] : master[1].replace('of 4', 'of 3');
+  if (!g.guide) {
+    d.now.up = d.now.up.filter(u => !/guid|dither/i.test(u[0]));
+    if (d.flip.sub2) d.flip.sub2 = d.flip.sub2.replace(' and restarts guiding', '');
+    if (d.flip.steps) d.flip.steps = d.flip.steps.filter(s => s[2] !== 'Restart guiding');
+  }
+  if (!g.focuser) d.focus.sub = '';
+  if (gear === 'small') { // one-shot colour camera, no filter wheel
+    const f = d.now.filters;
+    if (f.length) d.now.filters = [['Frames', f.reduce((n, x) => n + x[1], 0), f.reduce((n, x) => n + x[2], 0)]];
+    d.now.what = d.now.what.replace(/ · (Red|Blue|Ha)/, '');
+    d.now.up = d.now.up.filter(u => u[0] !== 'Autofocus').map(([l, t]) => [l.replace(/ · (R|B|Ha)$/, ''), t]);
+  }
+  const { areas, rows } = template(g);
+  grid.style.gridTemplateAreas = areas;
+  grid.style.gridTemplateRows = rows;
+
+  live = p.frozen ? {} : { now: d.now.t, nowTotal: d.now.total, flip: d.flip.t };
+  clockS = 0;
+  bar.className = `bar ${master[0] === 'warn' || master[0] === 'err' ? master[0] : ''}`;
+  bar.innerHTML = `<i class="d ${master[0]}"></i><span class="verdict"><b>${head}</b><span>${master[2]}</span></span>${master[3] ? `<button class="qb" id="qb">${master[3]}</button>` : ''}
+    <span class="clock" id="clock">${clock}</span>
+    <span class="bat" id="bat" role="img"></span>
+    <button class="icon" id="nightb" aria-pressed="${night}" aria-label="Night mode"><span class="ms" aria-hidden="true">bedtime</span></button>
+    <button class="icon" id="exit" aria-label="Close Monitor"><span class="ms" aria-hidden="true">close</span></button>`;
+  paintBattery();
+  grid.classList.toggle('frozen', !!p.frozen);
+  grid.innerHTML = [
+    tile('now', 'play_circle', 'Now', d.now, renderNow(d.now)),
+    tile('target', 'my_location', 'Target', d.target, renderTarget(d.target, min)),
+    tile('flip', 'swap_horiz', 'Meridian flip', d.flip, renderFlip(d.flip)),
+    g.safety && `<button class="tile ${d.safety.s === 'warn' ? 'warn' : ''}" data-t="safety" style="grid-area:safety"><span class="safe"><span class="ms" aria-hidden="true">shield</span><b>${d.safety.state}</b>${sub(d.safety.sub)}<i class="d ${d.safety.s}"></i></span></button>`,
+    g.guide && tile('guide', 'adjust', 'Guider', d.guide, renderGuide(d.guide, d.guide.s !== 'active')),
+    tile('focus', 'grain', 'Last frame', d.focus, renderFocus(d.focus)),
+    g.weather && tile('weather', 'cloud', 'Weather', d.weather, `<span class="wx">${d.weather.cells.map(([v, u, l, o]) => `<span class="${o ? 'over' : ''}"><b>${v}<small>${u}</small></b><em>${l}</em></span>`).join('')}</span>`),
+    `<button class="tile" data-t="night" style="grid-area:night"><span class="h"><span class="ms" aria-hidden="true">nights_stay</span><span class="nm">Tonight</span><span class="w">${d.night.right}</span></span>${renderNight(d.night, min)}</button>`,
+  ].filter(Boolean).join('');
+  document.getElementById('nightb').onclick = () => { night = !night; stage.classList.toggle('night', night); document.getElementById('nightb').setAttribute('aria-pressed', night); };
+  const qb = document.getElementById('qb');
+  if (qb) qb.onclick = () => { note.textContent = 'Confirm answers the question, and the plan carries on. In this mock nothing moves.'; };
+  document.getElementById('exit').onclick = () => { note.textContent = '× returns to Simple Mode, on the frame.'; };
+}
+
+setInterval(() => {
+  const cl = document.getElementById('clock');
+  if (!STATES[cur][1].frozen && ++clockS % 60 === 0 && cl) {
+    const m = (toMin(STATES[cur][1].clock || BASE.clock) + clockS / 60) % 1440;
+    cl.textContent = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  }
+  if (live.now != null) {
+    live.now = live.now > 0 ? live.now - 1 : (live.nowTotal || 0);
+    const e = document.querySelector('[data-live="now"]');
+    if (e) e.textContent = live.now >= 3600 ? flipFmt(live.now) : mmss(live.now);
+    const b = document.getElementById('nowbar');
+    if (b && live.nowTotal) b.style.width = `${(1 - live.now / live.nowTotal) * 100}%`;
+  }
+  if (live.flip != null && live.flip > 0) {
+    live.flip--;
+    const e = document.querySelector('[data-live="flip"]');
+    if (e) e.textContent = flipFmt(live.flip);
+  }
+}, 1000);
+
+const stateSeg = document.getElementById('state');
+stateSeg.innerHTML = Object.entries(STATES).map(([k, v]) => `<button aria-pressed="${k === cur}" data-v="${k}">${v[0]}</button>`).join('');
+const seg = (el, fn) => el.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  fn(b.dataset.v);
+});
+seg(stateSeg, v => { cur = v; render(); });
+// A state about gear the rig doesn't have can't happen, so it can't be picked.
+const possible = (k, g) => ['lost', 'dropped'].includes(k) ? g.guide : k === 'unsafe' ? g.safety || g.weather : k === 'question' ? g !== GEAR.small : true;
+seg(document.getElementById('gear'), v => {
+  gear = v;
+  if (!possible(cur, GEAR[gear])) cur = 'imaging';
+  stateSeg.querySelectorAll('button').forEach(b => { b.disabled = !possible(b.dataset.v, GEAR[gear]); b.setAttribute('aria-pressed', b.dataset.v === cur); });
+  render();
+});
+grid.addEventListener('click', e => {
+  const t = e.target.closest('.tile'); if (t) note.textContent = `Tap opens ${OPENS[t.dataset.t]}.`;
+});
+
+const POWER = { battery: { pct: 78 }, charging: { pct: 62, bolt: true }, low: { pct: 18, low: true }, none: null };
+let power = 'battery';
+function paintBattery() {
+  const el = document.getElementById('bat'), b = POWER[power];
+  el.hidden = !b;
+  if (!b) return;
+  el.className = `bat ${b.low ? 'low' : ''}`;
+  el.setAttribute('aria-label', `This device's battery ${b.pct} percent${b.bolt ? ', charging' : ''}`);
+  el.innerHTML = `<span class="batbox"><i style="width:${b.pct}%"></i></span>${b.bolt ? '<span class="ms" aria-hidden="true">bolt</span>' : ''}<span>${b.pct} %</span>`;
+}
+seg(document.getElementById('power'), v => { power = v; paintBattery(); });
+
+const stopB = document.getElementById('stop');
+let hold;
+stopB.addEventListener('pointerdown', () => { stopB.textContent = 'HOLD'; hold = setTimeout(() => { stopB.textContent = 'STOP'; note.textContent = 'Emergency Stop fired. In this mock nothing moves.'; }, 2000); });
+['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => stopB.addEventListener(ev, () => { clearTimeout(hold); stopB.textContent = 'STOP'; }));
+
+const wrap = document.getElementById('wrap');
+let winW = 1024;
+seg(document.getElementById('win'), v => { winW = Number(v); fit(); });
+function fit() {
+  const fs = document.fullscreenElement === wrap || document.webkitFullscreenElement === wrap;
+  const k = fs ? Math.min(innerWidth / 1024, innerHeight / 768) : Math.min(1, wrap.clientWidth / winW);
+  stage.style.width = `${fs ? innerWidth / k : winW}px`;
+  stage.style.height = `${fs ? innerHeight / k : 768}px`;
+  stage.style.transform = `scale(${k})`;
+  wrap.style.height = fs ? '' : `${768 * k}px`;
+}
+new ResizeObserver(fit).observe(wrap);
+document.addEventListener('fullscreenchange', fit);
+document.addEventListener('webkitfullscreenchange', fit);
+document.getElementById('fs').onclick = () => {
+  try {
+    const r = wrap.requestFullscreen ? wrap.requestFullscreen() : wrap.webkitRequestFullscreen && wrap.webkitRequestFullscreen();
+    if (r && r.catch) r.catch(() => { note.textContent = 'This browser refused fullscreen.'; });
+  } catch { note.textContent = 'This browser refused fullscreen.'; }
+};
+
+render();
+fit();
+</script>
+
+</body>
+</html>

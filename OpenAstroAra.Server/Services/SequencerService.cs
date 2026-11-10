@@ -966,9 +966,12 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     // Tree-derived status first, so the instruction's own report wins.
                     RefreshLiveStatus(run);
                     // #1596 — only the executor's wait / refusal report is a reason; any other flip report
-                    // (the flip proper, its closing empty one) ends it.
+                    // (the flip proper, its closing empty one) ends it. #1747 — the wait carries its seconds
+                    // left, and a refusal has its own code so no client reads it as a wait.
                     if (status.Source == MeridianFlipExecutor.WaitSource) {
-                        run.SetReason("meridian", status.Status);
+                        run.SetReason("meridian", status.Status, (status as MeridianFlipExecutor.WaitStatus)?.SecondsLeft);
+                    } else if (status.Source == MeridianFlipExecutor.RefusedSource) {
+                        run.SetReason("meridian_refused", status.Status);
                     } else if (status.Source == "MeridianFlip") {
                         run.SetReason(null, null);
                     }
@@ -1648,14 +1651,16 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
         private string? _reasonCode;
         private string? _reasonText;
+        private int? _meridianWaitSecondsLeft;
 
-        public void SetReason(string? code, string? text) {
+        public void SetReason(string? code, string? text, int? meridianWaitSecondsLeft = null) {
             lock (_gate) {
                 // #1596 — progress reports are posted to the pool and can land after the run ended; a clear always applies.
                 if (code is not null && (IsTerminal(State) || State == SequenceRunState.Aborting)) {
                     return;
                 }
-                (_reasonCode, _reasonText) = code is null ? (null, null) : (code, text);
+                (_reasonCode, _reasonText, _meridianWaitSecondsLeft) =
+                    code is null ? (null, null, null) : (code, text, meridianWaitSecondsLeft);
             }
         }
 
@@ -1770,7 +1775,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     EstimatedRemainingSeconds: remaining,
                     CurrentInstructionProgress: CurrentInstructionProgress,
                     ReasonCode: _reasonCode,
-                    ReasonText: _reasonText);
+                    ReasonText: _reasonText,
+                    MeridianWaitSecondsLeft: _meridianWaitSecondsLeft);
             }
             return dto with { MeridianFlip = MeridianFlipStatus() };
         }

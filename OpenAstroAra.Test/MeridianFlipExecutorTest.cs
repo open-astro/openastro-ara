@@ -230,7 +230,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_failed_flight_check_is_reported_as_a_wait_that_starts_with_Flip_refused() {
+        public async Task The_passing_meridian_countdown_carries_its_whole_seconds_left() {
+            // #1747 — the run status reads the seconds from the wait's own report.
+            SetupProfile(recenter: false);
+            var progress = new RecordingProgress();
+
+            await CreateSUT().MeridianFlip(Target, TimeSpan.FromSeconds(1.5), progress, CancellationToken.None);
+
+            var first = progress.Reports.OfType<MeridianFlipExecutor.WaitStatus>().First();
+            Assert.That(first.SecondsLeft, Is.EqualTo(2), "1.5 s rounds up");
+        }
+
+        [Test]
+        public async Task A_failed_flight_check_is_reported_as_a_refusal_that_starts_with_Flip_refused() {
             SetupProfile();
             SetupSafety(Safety());
             SetupHealthyTrackingMount();
@@ -241,7 +253,8 @@ namespace OpenAstroAra.Test {
 
             Assert.That(ok, Is.False);
             var refused = progress.Reports.Single(r => r.Status.StartsWith("Flip refused:", StringComparison.Ordinal));
-            Assert.That(refused.Source, Is.EqualTo(MeridianFlipExecutor.WaitSource), "stays on the run status until the resumed flip reports again");
+            // #1747 — its own source, so the run status never shows it as a wait.
+            Assert.That(refused.Source, Is.EqualTo(MeridianFlipExecutor.RefusedSource), "stays on the run status until the resumed flip reports again");
         }
 
         [Test]

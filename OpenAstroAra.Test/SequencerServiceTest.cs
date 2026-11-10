@@ -1468,6 +1468,91 @@ namespace OpenAstroAra.Test {
             await WaitForTerminalAsync(svc, id);
         }
 
+        /// <summary>#1747 — a run whose only trigger is a meridian flip run by <paramref name="flip"/>.</summary>
+        private static (SequencerService Svc, Guid Id) FlipRun(
+                Func<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>, CancellationToken, Task<bool>> flip) {
+            var coords = new OpenAstroAra.Astrometry.Coordinates(
+                OpenAstroAra.Astrometry.Angle.ByHours(5), OpenAstroAra.Astrometry.Angle.ByDegree(20),
+                OpenAstroAra.Astrometry.Epoch.J2000);
+            var telescope = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>();
+            telescope.Setup(t => t.GetCurrentPosition()).Returns(coords);
+            telescope.Setup(t => t.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyTelescope.TelescopeInfo {
+                Connected = true, TrackingEnabled = true, TimeToMeridianFlip = 0, Coordinates = coords,
+            });
+            var executor = new Mock<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor>();
+            executor
+                .Setup(x => x.MeridianFlip(It.IsAny<OpenAstroAra.Astrometry.Coordinates>(), It.IsAny<TimeSpan>(),
+                    It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Returns((OpenAstroAra.Astrometry.Coordinates _, TimeSpan _, IProgress<OpenAstroAra.Core.Model.ApplicationStatus> p, CancellationToken t) => flip(p, t));
+            var profile = new HeadlessProfileService();
+            profile.ActiveProfile.MeridianFlipSettings.UseSideOfPier = false;
+            var factory = HeadlessSequencerFactory.WithDefaults(
+                telescopeMediator: telescope.Object, profileService: profile, meridianFlipExecutor: executor.Object);
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Triggers.Add(new OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger(
+                    profile, telescope.Object, executor.Object));
+                c.Items.Add(new Annotation { Name = "after the flip" });
+            }, factory), factory: factory);
+            return (svc, id);
+        }
+
+        private static async Task<SequenceRunStateDto> PollUntil(SequencerService svc, Guid id, Func<SequenceRunStateDto?, bool> done) {
+            SequenceRunStateDto? s = null;
+            for (var i = 0; i < 250 && !done(s); i++) {
+                s = await svc.GetRunStateAsync(id, CancellationToken.None);
+                await Task.Delay(10);
+            }
+            return s!;
+        }
+
+        [Test]
+        public async Task The_meridian_wait_reports_its_seconds_left_until_the_flip_starts_and_not_after_the_run() {
+            var release = new TaskCompletionSource();
+            var flipping = new TaskCompletionSource();
+            var (svc, id) = FlipRun(async (p, _) => {
+                p.Report(new MeridianFlipExecutor.WaitStatus {
+                    Source = MeridianFlipExecutor.WaitSource, Status = "Passing meridian — 00:04:32", SecondsLeft = 272,
+                });
+                await flipping.Task;
+                p.Report(new OpenAstroAra.Core.Model.ApplicationStatus { Source = "MeridianFlip", Status = "Flipping scope" });
+                await release.Task;
+                p.Report(new OpenAstroAra.Core.Model.ApplicationStatus { Source = "MeridianFlip", Status = string.Empty });
+                return true;
+            });
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            var waiting = await PollUntil(svc, id, s => s?.ReasonCode is not null);
+            Assert.That((waiting.ReasonCode, waiting.MeridianWaitSecondsLeft), Is.EqualTo(("meridian", (int?)272)));
+
+            flipping.SetResult();
+            var flip = await PollUntil(svc, id, s => s?.CurrentInstructionDescription == "Flipping scope");
+            Assert.That(flip.MeridianWaitSecondsLeft, Is.Null, "the flip proper has no wait left");
+
+            release.SetResult();
+            var done = await WaitForTerminalAsync(svc, id);
+            Assert.That(done!.MeridianWaitSecondsLeft, Is.Null);
+        }
+
+        [Test]
+        public async Task A_refused_flip_reports_meridian_refused_with_no_seconds_left() {
+            var (svc, id) = FlipRun((p, _) => {
+                p.Report(new OpenAstroAra.Core.Model.ApplicationStatus {
+                    Source = MeridianFlipExecutor.RefusedSource, Status = "Flip refused: the target is too low.",
+                });
+                return Task.FromResult(false);
+            });
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            var refused = await PollUntil(svc, id, s => s?.ReasonCode is not null);
+            Assert.That(refused.ReasonCode, Is.EqualTo("meridian_refused"));
+            Assert.That(refused.ReasonText, Does.StartWith("Flip refused:"));
+            Assert.That(refused.MeridianWaitSecondsLeft, Is.Null);
+
+            await svc.StopAsync(id, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+        }
+
         [Test]
         public async Task A_stopped_run_does_not_keep_its_meridian_reason() {
             var coords = new OpenAstroAra.Astrometry.Coordinates(

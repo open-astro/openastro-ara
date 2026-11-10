@@ -1,5 +1,6 @@
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
+import 'simple_monitor_screen.dart';
 import 'simple_queue_screen.dart' show simpleQueueSheetProvider;
 import 'simple_screen.dart';
 import 'simple_search.dart';
@@ -41,6 +42,7 @@ import '../../state/settings/cooling_fan_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
+import '../../state/simple_monitor_state.dart';
 import '../../util/app_licenses.dart';
 import '../../state/simple_preflight_state.dart';
 export '../../state/simple_preflight_state.dart' show SimpleModeScreen, SimpleModeScreenLabels;
@@ -572,7 +574,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   void _openFromPill(SimpleStatusOrigin origin) {
     final window = switch (origin) {
       SimpleStatusOrigin.mount => 'eq.mount',
-      SimpleStatusOrigin.camera => 'eq.camera',
+      SimpleStatusOrigin.camera ||
+      SimpleStatusOrigin.mainCameraExposure => 'eq.camera',
       SimpleStatusOrigin.focuser => 'eq.focuser',
       SimpleStatusOrigin.filterWheel => 'eq.filterwheel',
       SimpleStatusOrigin.rotator => 'eq.rotator',
@@ -583,16 +586,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       SimpleStatusOrigin.guiderCamera => 'eq.guider',
       _ => null,
     };
-    if (window != null) {
-      setState(() {
-        _clean = false;
-        _device = window;
-        if (_popover.topLeft || !_sideBySide(context)) {
-          _popover = _Popover.none;
-        }
-      });
-      return;
-    }
+    if (window != null) return _openDevice(window);
     final mode = SimpleScreen.showing(origin);
     // A Preflight on that step keeps going; anything else switches mode.
     if (ref.read(simpleShowingProvider) != mode) _pickMode(mode);
@@ -601,6 +595,47 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       _popover = _Popover.settings;
     });
   }
+
+  /// A device window, by its id ('eq.mount').
+  void _openDevice(String window) => setState(() {
+    _clean = false;
+    _device = window;
+    if (_popover.topLeft || !_sideBySide(context)) {
+      _popover = _Popover.none;
+    }
+  });
+
+  /// Monitor (#1724): a tile tap closes it and opens what owns that thing.
+  void _openMonitor() => unawaited(
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (monitorContext) => SimpleMonitorScreen(
+          onOpen: (to) {
+            Navigator.of(monitorContext).pop();
+            switch (to) {
+              case MonitorDestination.queue:
+                _openFromPill(SimpleStatusOrigin.plan);
+              case MonitorDestination.guider:
+                _openFromPill(SimpleStatusOrigin.guide);
+              case MonitorDestination.mount:
+                _openFromPill(SimpleStatusOrigin.mount);
+              case MonitorDestination.safety:
+                _openFromPill(SimpleStatusOrigin.safetyMonitor);
+              case MonitorDestination.weather:
+                _openDevice('eq.weather');
+              case MonitorDestination.sky:
+                setState(() => _sky = true);
+              case MonitorDestination.frameInfo:
+                setState(() {
+                  _sky = false;
+                  _info = true;
+                });
+            }
+          },
+        ),
+      ),
+    ),
+  );
 
   void _pickMode(SimpleModeScreen m) {
     if (m == SimpleModeScreen.preflight) return _startSimplePreflight();
@@ -878,6 +913,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // No frame and no sky asked for: the wallpaper (#1602).
     final wallpaper = !_sky && !hasFrame;
     final linkUp = ref.watch(serverLinkUpProvider);
+    // Monitor's trends and link age run from when Simple Mode opens (#1724).
+    ref.listen(monitorTrendsProvider, (_, _) {});
+    ref.listen(monitorLinkDownProvider, (_, _) {});
     // #1559 — the next drop starts with the bar again.
     ref.listen(serverLinkUpProvider, (_, up) {
       if (up) _rigCardOpen = false;
@@ -1290,6 +1328,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                           setState(() => _info = !_info),
                                       onSky: () => setState(() => _sky = !_sky),
                                       onAlbum: _openAlbum,
+                                      // The grid needs the room.
+                                      onMonitor:
+                                          MediaQuery.sizeOf(context).width >=
+                                              kMonitorMinWidth
+                                          ? _openMonitor
+                                          : null,
                                     ),
                                   ),
                                 ),
@@ -1970,6 +2014,7 @@ class _LeftRail extends StatelessWidget {
     required this.onInfo,
     required this.onSky,
     required this.onAlbum,
+    this.onMonitor,
   });
 
   final bool info;
@@ -1977,6 +2022,9 @@ class _LeftRail extends StatelessWidget {
   final VoidCallback onInfo;
   final VoidCallback? onSky;
   final VoidCallback onAlbum;
+
+  /// Null: the window is too narrow for Monitor, so it isn't offered.
+  final VoidCallback? onMonitor;
 
   @override
   Widget build(BuildContext context) => SimplePanel(
@@ -2013,6 +2061,13 @@ class _LeftRail extends StatelessWidget {
           label: context.l10n.shellAlbum,
           onTap: onAlbum,
         ),
+        if (onMonitor != null)
+          _RailButton(
+            key: const Key('simple-monitor-open'),
+            icon: Icons.monitor_heart_outlined,
+            label: context.l10n.monitorTitle,
+            onTap: onMonitor,
+          ),
       ],
     ),
   );

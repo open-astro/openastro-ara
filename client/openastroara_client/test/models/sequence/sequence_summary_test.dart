@@ -33,6 +33,24 @@ void main() {
     });
   });
 
+  group('the meridian wait\'s seconds left (#1747)', () {
+    test('parse, and a wait needs the code and the seconds together', () {
+      final wait = SequenceRunStateInfo.fromJson(const {'reason_code': 'meridian', 'meridian_wait_seconds_left': 272});
+      expect(wait.meridianWaitLeft, 272);
+      expect(SequenceRunStateInfo.fromJson(const {'reason_code': 'meridian'}).meridianWaitLeft, isNull,
+          reason: 'an older daemon: no seconds, no wait');
+      expect(SequenceRunStateInfo.fromJson(const {'reason_code': 'meridian_refused'}).meridianWaitLeft, isNull);
+    });
+
+    test('a progress frame updates them, clears them with null, and keeps them when omitted', () {
+      final wait = SequenceRunStateInfo.fromJson(const {'reason_code': 'meridian', 'meridian_wait_seconds_left': 272});
+      expect(wait.applyWsProgress(const {'meridian_wait_seconds_left': 271}).meridianWaitLeft, 271);
+      expect(wait.applyWsProgress(const {'reason_code': null, 'meridian_wait_seconds_left': null}).meridianWaitSecondsLeft, isNull);
+      expect(wait.applyWsProgress(const {}).meridianWaitLeft, 272);
+      expect(wait.applyWsProgress(const {'meridian_wait_seconds_left': 271}), isNot(wait), reason: 'a new count is a new state');
+    });
+  });
+
   group('SequenceRunState.fromWire', () {
     test('parses every state by its daemon wire name (lowercased enum name)',
         () {

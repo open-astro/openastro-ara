@@ -283,6 +283,9 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
       _ => AraColors.selectionBg,
     };
     String? stateWord() => switch (phase) {
+      // #1747: no frame in hand while the rig waits out the meridian.
+      SimpleRunPhase.imaging when info?.meridianWaitLeft != null =>
+        context.l10n.planWaitingForFlip,
       SimpleRunPhase.pausing => context.l10n.planPausing,
       SimpleRunPhase.paused => context.l10n.planPaused,
       SimpleRunPhase.done => context.l10n.planDone,
@@ -605,6 +608,10 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
     );
     final camera = ref.watch(cameraStatusProvider).value;
     final exposing = camera?.runtimeState == 'exposing';
+    // #1747: a pause asked during the meridian wait lands after the flip.
+    final flipWait = ref.watch(
+      sequenceRunStateProvider.select((s) => s.value?.meridianWaitLeft != null),
+    );
     final holdable = _holdable(phase);
     ref.watch(planetariumSelectionProvider);
     // A picked target with no plan yet starts like a ready plan; a plan
@@ -641,6 +648,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
         _ when idle => context.l10n.planPickTargetFirst,
         SimpleRunPhase.ready ||
         SimpleRunPhase.none => context.l10n.planStartImaging,
+        SimpleRunPhase.imaging when flipWait => context.l10n.planPauseAfterFlip,
         SimpleRunPhase.imaging => context.l10n.planPauseAfterFrame,
         SimpleRunPhase.pausing => context.l10n.planPausingLabel,
         SimpleRunPhase.paused => context.l10n.planResume,

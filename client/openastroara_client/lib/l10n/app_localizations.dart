@@ -963,6 +963,18 @@ abstract class AppLocalizations {
   /// **'Moving…'**
   String get deviceMoving;
 
+  /// Simple Mode camera pill: the main camera is exposing a frame nothing in this app started (#1755)
+  ///
+  /// In en, this message translates to:
+  /// **'Exposing'**
+  String get deviceExposing;
+
+  /// Simple Mode camera pill: the main camera is downloading a frame nothing in this app started (#1755)
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading'**
+  String get deviceDownloading;
+
   /// Full-width button under the focuser knobs: runs autofocus
   ///
   /// In en, this message translates to:
@@ -1340,6 +1352,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Skipped: conditions not met'**
   String get previewPlanSkipped;
+
+  /// Simple Mode Plan pill while the plan waits out the meridian, with the time left (mm:ss or h:mm:ss) (#1747)
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the meridian flip · {countdown}'**
+  String previewWaitingForFlip(String countdown);
 
   /// Simple Mode status pill: the mount is parking
   ///
@@ -2733,6 +2751,12 @@ abstract class AppLocalizations {
   /// **'Paused'**
   String get planPaused;
 
+  /// Plan square state word while the plan waits out the meridian before the flip (#1747)
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for flip'**
+  String get planWaitingForFlip;
+
   /// Plan square: the target or run is finished
   ///
   /// In en, this message translates to:
@@ -2780,6 +2804,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pausing'**
   String get planPausingLabel;
+
+  /// Shutter screen-reader label while the plan waits out the meridian before the flip (#1747)
+  ///
+  /// In en, this message translates to:
+  /// **'Pause after the flip'**
+  String get planPauseAfterFlip;
 
   /// Shutter screen-reader label while paused
   ///
@@ -6230,6 +6260,510 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Type the rig\'s name or address, for example astro-pi.local or 192.0.2.24:5555.'**
   String get simpleRigAddressInvalid;
+
+  /// Simple Mode's full-screen read-only view of the Session (#1724); left rail item
+  ///
+  /// In en, this message translates to:
+  /// **'Monitor'**
+  String get monitorTitle;
+
+  /// Monitor's close button tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Close Monitor'**
+  String get monitorClose;
+
+  /// Monitor: screen-reader label of this device's battery
+  ///
+  /// In en, this message translates to:
+  /// **'This device\'s battery: {level} %'**
+  String monitorBattery(int level);
+
+  /// Monitor tile status word while the link to the rig is lost
+  ///
+  /// In en, this message translates to:
+  /// **'Last known'**
+  String get monitorLastKnown;
+
+  /// Monitor top line: the link to the rig is lost, with how long ago
+  ///
+  /// In en, this message translates to:
+  /// **'Lost contact with the rig · {age} ago'**
+  String monitorLinkLost(String age);
+
+  /// Monitor top line reason while the link is lost
+  ///
+  /// In en, this message translates to:
+  /// **'A running plan carries on by itself on the rig.'**
+  String get monitorLinkLostReason;
+
+  /// Monitor top line: a device in the profile has dropped
+  ///
+  /// In en, this message translates to:
+  /// **'{device} disconnected'**
+  String monitorDeviceDropped(String device);
+
+  /// Monitor top line reason: a device dropped
+  ///
+  /// In en, this message translates to:
+  /// **'Reconnect it from its window. Tap its tile to open it.'**
+  String get monitorDeviceDroppedReason;
+
+  /// Monitor top line reason while Unsafe
+  ///
+  /// In en, this message translates to:
+  /// **'The rig reacts as your safety settings say.'**
+  String get monitorUnsafeReason;
+
+  /// Monitor top line: the guide star is lost
+  ///
+  /// In en, this message translates to:
+  /// **'Guide star lost'**
+  String get monitorStarLost;
+
+  /// Monitor top line reason: guide star lost
+  ///
+  /// In en, this message translates to:
+  /// **'Often clouds passing. Ara holds the next frame until guiding is back.'**
+  String get monitorStarLostReason;
+
+  /// Monitor Guider tile status word
+  ///
+  /// In en, this message translates to:
+  /// **'Star lost'**
+  String get monitorStarLostWord;
+
+  /// Monitor top line: the Queue won't fit on the disk
+  ///
+  /// In en, this message translates to:
+  /// **'Low disk space · {free} free'**
+  String monitorLowDisk(String free);
+
+  /// Monitor top line reason: low disk
+  ///
+  /// In en, this message translates to:
+  /// **'The queue\'s frames won\'t all fit. Free space or shorten the queue.'**
+  String get monitorLowDiskReason;
+
+  /// Monitor top line: the cooler can't hold its target
+  ///
+  /// In en, this message translates to:
+  /// **'Cooler can\'t reach {target} · sensor at {sensor}'**
+  String monitorCooler(String target, String sensor);
+
+  /// Monitor top line reason: cooler
+  ///
+  /// In en, this message translates to:
+  /// **'Frames still save, but they won\'t match your darks.'**
+  String get monitorCoolerReason;
+
+  /// Monitor top line reason during a meridian flip
+  ///
+  /// In en, this message translates to:
+  /// **'Imaging carries on by itself when it is done.'**
+  String get monitorFlippingReason;
+
+  /// Monitor top line reason while waiting for the meridian flip
+  ///
+  /// In en, this message translates to:
+  /// **'No frames until the mount flips.'**
+  String get monitorWaitingForFlipReason;
+
+  /// Monitor: the plan was paused by Ara
+  ///
+  /// In en, this message translates to:
+  /// **'Paused by Ara'**
+  String get monitorPausedByAra;
+
+  /// Monitor top line reason: paused by Ara
+  ///
+  /// In en, this message translates to:
+  /// **'It resumes on its own.'**
+  String get monitorPausedByAraReason;
+
+  /// Monitor top line: the plan is paused until the user acts
+  ///
+  /// In en, this message translates to:
+  /// **'Plan paused · waiting for you'**
+  String get monitorWaitingForYou;
+
+  /// Monitor Now tile status word: paused until the user acts
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for you'**
+  String get monitorWaitingForYouWord;
+
+  /// Monitor top line: a scheduled plan waits for its start
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for dark · plan starts at {time}'**
+  String monitorWaitingForDark(String time);
+
+  /// Monitor top line reason: waiting for dark
+  ///
+  /// In en, this message translates to:
+  /// **'Imaging starts on its own.'**
+  String get monitorWaitingForDarkReason;
+
+  /// Monitor top line: no plan
+  ///
+  /// In en, this message translates to:
+  /// **'Rig ready · no plan running'**
+  String get monitorNoPlan;
+
+  /// Monitor top line reason: no plan
+  ///
+  /// In en, this message translates to:
+  /// **'Start a plan and this screen fills in.'**
+  String get monitorNoPlanReason;
+
+  /// Monitor Now tile: no plan, in place of a countdown
+  ///
+  /// In en, this message translates to:
+  /// **'No plan'**
+  String get monitorNoPlanBig;
+
+  /// Monitor Meridian flip tile with no active run
+  ///
+  /// In en, this message translates to:
+  /// **'No plan running'**
+  String get monitorNoPlanRunning;
+
+  /// Monitor top line: all well
+  ///
+  /// In en, this message translates to:
+  /// **'All good · imaging {target}'**
+  String monitorAllGood(String target);
+
+  /// Monitor top line reason: all well
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing needs you.'**
+  String get monitorAllGoodReason;
+
+  /// Monitor top line reason: all well, with the park time
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing needs you. The plan ends at {time}, then the mount parks.'**
+  String monitorAllGoodParks(String time);
+
+  /// Monitor tile: what the rig is doing
+  ///
+  /// In en, this message translates to:
+  /// **'Now'**
+  String get monitorNow;
+
+  /// Monitor status word: working normally, not exposing
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get monitorRunning;
+
+  /// Monitor Now tile status word during a meridian flip
+  ///
+  /// In en, this message translates to:
+  /// **'Flipping'**
+  String get monitorFlipping;
+
+  /// Monitor Now tile status word: waiting to start
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get monitorWaiting;
+
+  /// Monitor status word: nothing running
+  ///
+  /// In en, this message translates to:
+  /// **'Idle'**
+  String get monitorIdle;
+
+  /// Monitor Now tile with no plan
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing running'**
+  String get monitorNothingRunning;
+
+  /// Monitor Now tile caption under the frame countdown
+  ///
+  /// In en, this message translates to:
+  /// **'left in this frame'**
+  String get monitorLeftInFrame;
+
+  /// Monitor Now tile caption under a countdown to the plan's start
+  ///
+  /// In en, this message translates to:
+  /// **'until the plan starts'**
+  String get monitorUntilStart;
+
+  /// Monitor Now tile caption under the meridian wait countdown
+  ///
+  /// In en, this message translates to:
+  /// **'until the flip'**
+  String get monitorUntilFlip;
+
+  /// Monitor Now tile: progress on the Target
+  ///
+  /// In en, this message translates to:
+  /// **'Frame {frame} of {frames} · about {left} left on {target}'**
+  String monitorFrameOf(int frame, int frames, String left, String target);
+
+  /// Monitor Now tile: the upcoming steps
+  ///
+  /// In en, this message translates to:
+  /// **'Up next'**
+  String get monitorUpNext;
+
+  /// Monitor Now tile with no plan: tonight's best Targets
+  ///
+  /// In en, this message translates to:
+  /// **'Tonight\'s best'**
+  String get monitorTonightsBest;
+
+  /// Monitor Up next row: the next frame and filter
+  ///
+  /// In en, this message translates to:
+  /// **'Frame {frame} · {filter}'**
+  String monitorUpFrame(int frame, String filter);
+
+  /// Monitor Up next row: the park at the end
+  ///
+  /// In en, this message translates to:
+  /// **'Mount parks'**
+  String get monitorUpPark;
+
+  /// Monitor Up next row whose time isn't known
+  ///
+  /// In en, this message translates to:
+  /// **'then'**
+  String get monitorThen;
+
+  /// Monitor Tonight's best row: the Target's altitude now
+  ///
+  /// In en, this message translates to:
+  /// **'{alt}° up'**
+  String monitorAltitudeUp(String alt);
+
+  /// Monitor tile: the Target
+  ///
+  /// In en, this message translates to:
+  /// **'Target'**
+  String get monitorTarget;
+
+  /// Monitor Target tile with no Target
+  ///
+  /// In en, this message translates to:
+  /// **'No target picked'**
+  String get monitorNoTarget;
+
+  /// Monitor Target tile: when imaging this Target ends
+  ///
+  /// In en, this message translates to:
+  /// **'Imaging to {time}'**
+  String monitorImagingTo(String time);
+
+  /// Monitor Target tile: maximum altitude tonight
+  ///
+  /// In en, this message translates to:
+  /// **'max {alt}°'**
+  String monitorMaxAltitude(String alt);
+
+  /// Monitor Target tile: transit time
+  ///
+  /// In en, this message translates to:
+  /// **'Transits {time}'**
+  String monitorTransits(String time);
+
+  /// Monitor Target tile: the Moon's illumination
+  ///
+  /// In en, this message translates to:
+  /// **'Moon {pct} %'**
+  String monitorMoon(int pct);
+
+  /// Monitor Target tile status word
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking'**
+  String get monitorTracking;
+
+  /// Monitor Target tile status word
+  ///
+  /// In en, this message translates to:
+  /// **'Queued'**
+  String get monitorQueued;
+
+  /// Monitor Target tile status word
+  ///
+  /// In en, this message translates to:
+  /// **'Parked'**
+  String get monitorParked;
+
+  /// Monitor Meridian flip tile status word: a flip is due
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic'**
+  String get monitorFlipAutomatic;
+
+  /// Monitor Meridian flip tile status word: waiting for the frame
+  ///
+  /// In en, this message translates to:
+  /// **'Coming up'**
+  String get monitorFlipComingUp;
+
+  /// Monitor Meridian flip tile: when the flip is due
+  ///
+  /// In en, this message translates to:
+  /// **'At {time}'**
+  String monitorFlipAt(String time);
+
+  /// Monitor Meridian flip tile: waiting for the exposure
+  ///
+  /// In en, this message translates to:
+  /// **'Waits for the frame in hand, then flips'**
+  String get monitorFlipWaitsForFrame;
+
+  /// Monitor Meridian flip tile: auto flip off
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic flip is off'**
+  String get monitorFlipOff;
+
+  /// Monitor Meridian flip tile: none due tonight
+  ///
+  /// In en, this message translates to:
+  /// **'No flip tonight'**
+  String get monitorFlipNone;
+
+  /// Monitor tile status word: the device dropped
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnected'**
+  String get monitorDisconnected;
+
+  /// Monitor Safety strip: since when, and for how long
+  ///
+  /// In en, this message translates to:
+  /// **'Since {time} · {duration}'**
+  String monitorSince(String time, String duration);
+
+  /// Monitor Weather tile status word
+  ///
+  /// In en, this message translates to:
+  /// **'Past limit'**
+  String get monitorPastLimit;
+
+  /// Monitor Weather cell
+  ///
+  /// In en, this message translates to:
+  /// **'Cloud'**
+  String get monitorCloud;
+
+  /// Monitor Weather cell
+  ///
+  /// In en, this message translates to:
+  /// **'Sky quality'**
+  String get monitorSkyQuality;
+
+  /// Monitor Weather cell: air temperature
+  ///
+  /// In en, this message translates to:
+  /// **'Air'**
+  String get monitorAir;
+
+  /// Monitor Weather cell: the margin over the dew point
+  ///
+  /// In en, this message translates to:
+  /// **'Above dew point'**
+  String get monitorDewMargin;
+
+  /// Monitor Weather cell
+  ///
+  /// In en, this message translates to:
+  /// **'Humidity'**
+  String get monitorHumidity;
+
+  /// Monitor Weather cell
+  ///
+  /// In en, this message translates to:
+  /// **'Rain'**
+  String get monitorRain;
+
+  /// Monitor Weather cell
+  ///
+  /// In en, this message translates to:
+  /// **'Wind'**
+  String get monitorWind;
+
+  /// Monitor Weather wind cell: the gusts
+  ///
+  /// In en, this message translates to:
+  /// **'gusts {kmh}'**
+  String monitorGusts(String kmh);
+
+  /// Monitor Weather cell past its limit: the limit
+  ///
+  /// In en, this message translates to:
+  /// **'limit {value}'**
+  String monitorLimit(String value);
+
+  /// Monitor Guider tile: the last dither's time
+  ///
+  /// In en, this message translates to:
+  /// **'Last dither {time}'**
+  String monitorLastDither(String time);
+
+  /// Monitor tile: the last saved frame's quality
+  ///
+  /// In en, this message translates to:
+  /// **'Last frame'**
+  String get monitorLastFrame;
+
+  /// Monitor Last frame reading
+  ///
+  /// In en, this message translates to:
+  /// **'HFR'**
+  String get monitorHfr;
+
+  /// Monitor Last frame reading
+  ///
+  /// In en, this message translates to:
+  /// **'Stars'**
+  String get monitorStars;
+
+  /// Monitor Last frame reading: the frame's median in ADU
+  ///
+  /// In en, this message translates to:
+  /// **'Sky background'**
+  String get monitorSkyBackground;
+
+  /// Monitor Last frame reading: the share of clipped stars
+  ///
+  /// In en, this message translates to:
+  /// **'Clipped stars'**
+  String get monitorClippedStars;
+
+  /// Monitor Last frame: the last autofocus and the temperature change since
+  ///
+  /// In en, this message translates to:
+  /// **'Autofocus {time} · {delta} since'**
+  String monitorAutofocusSince(String time, String delta);
+
+  /// Monitor tile: tonight's timeline
+  ///
+  /// In en, this message translates to:
+  /// **'Tonight'**
+  String get monitorTonight;
+
+  /// Monitor Tonight tile: the dark and the time imaged so far
+  ///
+  /// In en, this message translates to:
+  /// **'Dark {start} to {end} · {imaged} imaged'**
+  String monitorDarkSpan(String start, String end, String imaged);
+
+  /// Monitor Tonight tile with no site set
+  ///
+  /// In en, this message translates to:
+  /// **'Set the site to see tonight\'s dark'**
+  String get monitorNoDark;
 }
 
 class _AppLocalizationsDelegate

@@ -168,6 +168,41 @@ void main() {
     expect(c.read(simpleMessagesProvider), isEmpty);
   });
 
+  group('a question stacks its answers under its words (#1745)', () {
+    const words = 'Before you sleep: the plan parks at dawn, the cooler warms up slowly and the dew heaters stay on.';
+
+    testWidgets('a long answer sits below the words and spans the pill', (tester) async {
+      final c = await _pump(tester);
+      c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.question, words,
+          actions: [SimpleMessageAction('Got it — let me go to bed', () {})]);
+      await tester.pump();
+      final text = tester.getRect(find.textContaining('Before you sleep'));
+      final answer = tester.getRect(find.widgetWithText(FilledButton, 'Got it — let me go to bed'));
+      expect(answer.top, greaterThanOrEqualTo(text.bottom));
+      final pill = tester.getRect(find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('simple-message-')).first);
+      expect(answer.width, greaterThan(pill.width * 0.75));
+      expect(text.width, greaterThan(pill.width * 0.75));
+    });
+
+    testWidgets('two long answers at a narrow width and 2x text do not overflow', (tester) async {
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final c = await _pump(tester, width: 220);
+      c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.question, words, actions: [
+        SimpleMessageAction('Keep the rig running all night', () {}),
+        SimpleMessageAction('Got it — let me go to bed', () {}),
+      ]);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      final first = tester.getRect(find.widgetWithText(TextButton, 'Keep the rig running all night'));
+      final last = tester.getRect(find.widgetWithText(FilledButton, 'Got it — let me go to bed'));
+      expect(last.top, greaterThanOrEqualTo(first.bottom), reason: 'the answers wrap onto their own lines');
+    });
+  });
+
   group('a long warning with an action', () {
     const words = 'Dew may be forming: stars are swelling at high humidity. Wipe the optics or turn on the dew heaters.';
 

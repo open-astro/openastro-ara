@@ -1,5 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../focus/autofocus_live_state.dart';
+import '../focus/bahtinov_focus_state.dart';
+import '../polar_align/polar_align_state.dart';
 import '../sequencer/sequence_list_state.dart';
 import 'capture_progress_state.dart';
 import 'live_view_state.dart';
@@ -27,4 +30,18 @@ final mainCameraBusyProvider = Provider.autoDispose<bool>(
   (ref) =>
       ref.watch(mainCameraTakingFramesProvider) ||
       ref.watch(sequenceRunStateProvider.select((s) => s.value?.state?.isAnyPaused ?? false)),
+);
+
+/// Something this app shows explains the main camera's exposure, so it needs
+/// no camera pill of its own (#1755): its own shot, Live View, a plan taking
+/// frames, autofocus, the Bahtinov readout or the Polar Align Routine. The
+/// guide camera's loop is another camera. A routine with its own pill joins
+/// here.
+final mainCameraExplainedProvider = Provider.autoDispose<bool>(
+  (ref) =>
+      ref.watch(captureProgressProvider.select((p) => p.isActive)) ||
+      ref.watch(mainCameraTakingFramesProvider) ||
+      ref.watch(autofocusLiveProvider.select((a) => a.run.isRunning)) ||
+      ref.watch(bahtinovFocusProvider.select((b) => b.status.active)) ||
+      ref.watch(polarAlignLiveProvider.select((p) => p.isActive)),
 );
