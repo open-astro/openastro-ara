@@ -89,7 +89,13 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
         _isThisMachine = isThisMachine;
     }
 
-    public Func<Task>? ResolveConnect(DeviceType type, DiscoveredDeviceDto device, CancellationToken ct) {
+    public Func<Task>? ResolveConnect(DeviceType type, DiscoveredDeviceDto device, CancellationToken ct) =>
+        ResolveDispatch(type, device, recoverable: null, ct);
+
+    // The one dispatch for a device record: locate it, then connect it, or (recovery) hand it to
+    // TryRecover. The task answers false when recovery refused the device.
+    private Func<Task<bool>>? ResolveDispatch(DeviceType type, DiscoveredDeviceDto device,
+            IRecoverableDevice? recoverable, CancellationToken ct) {
         Func<ConnectRequestDto, Task>? connect = type switch {
             DeviceType.Camera => req => _services.GetRequiredService<ICameraService>().ConnectAsync(req, null, ct),
             DeviceType.Telescope => req => _services.GetRequiredService<ITelescopeService>().ConnectAsync(req, null, ct),
@@ -109,7 +115,11 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
         }
         return async () => {
             var target = await LocateAsync(device, ct).ConfigureAwait(false);
+            if (recoverable is not null) {
+                return recoverable.TryRecover(target);
+            }
             await connect(new ConnectRequestDto(target)).ConfigureAwait(false);
+            return true;
         };
     }
 
@@ -182,22 +192,17 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
         }
         var recoverable = recovery ? ResolveService(type) as IRecoverableDevice : null;
         foreach (var device in candidates) {
-            var connect = ResolveConnect(device.Type, device, ct);
-            if (connect is null) {
+            var dispatch = ResolveDispatch(device.Type, device, recoverable, ct);
+            if (dispatch is null) {
                 continue;
             }
             attempted++;
             try {
                 // The service's ConnectAsync returns once accepted and connects in the
                 // background, so this awaits only the dispatch.
-                if (recoverable is not null) {
-                    var target = await LocateAsync(device, ct).ConfigureAwait(false);
-                    if (!recoverable.TryRecover(target)) {
-                        LogRecoveryRefused(device.Type, device.Name);
-                        continue;
-                    }
-                } else {
-                    await connect().ConfigureAwait(false);
+                if (!await dispatch().ConfigureAwait(false)) {
+                    LogRecoveryRefused(device.Type, device.Name);
+                    continue;
                 }
                 dispatched++;
             }
