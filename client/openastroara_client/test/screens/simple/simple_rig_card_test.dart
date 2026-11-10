@@ -39,7 +39,7 @@ class _MemLastRig extends LastRigService {
 /// (the last one active). The handshake answers unless the rig is [down].
 Future<(ProviderContainer, _Saved, List<AraServer>)> _card(WidgetTester tester,
     {List<AraServer> found = const [_session, _club],
-    List<AraServer> saved = const [_travel, _session],
+    List<AraServer> saved = const [_travel, _club, _session],
     Set<AraServer> down = const {},
     bool offline = false}) async {
   final saves = _Saved(saved);
@@ -75,6 +75,7 @@ void main() {
     expect(find.text('Connect to your rig'), findsOneWidget);
     expect(find.textContaining('The link to Backyard rig dropped'), findsOneWidget);
     expect(find.byKey(const Key('simple-rig-card-row-192.0.2.24:5555')), findsOneWidget, reason: 'found and saved: one row');
+    expect(find.byKey(const Key('simple-rig-card-row-192.0.2.61:5555')), findsOneWidget, reason: 'found and saved: one row');
     expect(find.byKey(const Key('simple-rig-card-reconnect')), findsOneWidget);
     expect(find.descendant(of: find.byKey(const Key('simple-rig-card-row-192.0.2.61:5555')), matching: find.textContaining('Found')),
         findsOneWidget);
