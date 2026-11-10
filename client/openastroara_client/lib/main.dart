@@ -164,6 +164,8 @@ class _RootRouter extends ConsumerWidget {
     ref.listen(launchGateRearmProvider, (previous, next) {});
     // ALP-4890 — a relaunch enters on the rig's active profile.
     ref.listen(launchAutoEnterProvider, (previous, next) {});
+    // #1570 — the full UI goes back to the profile screen after 15 s without the rig.
+    ref.listen(rigUnreachableReturnProvider, (previous, next) {});
     final saved = ref.watch(savedServersProvider);
     final gatePassed = ref.watch(profileGatePassedProvider);
     final offline = ref.watch(offlineModeProvider);

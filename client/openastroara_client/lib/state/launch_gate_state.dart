@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/profile_list.dart';
 import '../models/server.dart';
 import 'profile_management_state.dart';
 import 'saved_server_state.dart';
+import 'simple_mode_state.dart';
+import 'ws/ws_providers.dart';
 
 /// §30.1 launch-sequence gate — false until the user clicks [Image] on the
 /// launch profile box, at which point the root router swaps in the main shell.
@@ -141,4 +145,52 @@ final launchAutoEnterProvider = Provider<void>((ref) {
       gate.pass();
     }
   }, fireImmediately: true);
+});
+
+/// #1570 — how long the full UI waits on a lost rig link before it goes back to
+/// the launch profile screen. Long enough for a short Wi-Fi drop or a daemon
+/// restart (the user's call, 2026-11-03).
+const rigUnreachableGrace = Duration(seconds: 15);
+
+/// #1570 — is the full UI up against a rig it cannot reach? Simple Mode shows
+/// its Connect to your rig card instead (#1559), and offline planning has no
+/// rig to lose.
+bool rigUnreachableInFullUi({
+  required bool gatePassed,
+  required bool offline,
+  required bool simple,
+  required bool linkUp,
+}) =>
+    gatePassed && !offline && !simple && !linkUp;
+
+/// #1570 — root-mounted (`main.dart` keeps it alive with a listen): after
+/// [rigUnreachableGrace] of a lost link in the full UI, re-arm the launch gate.
+/// The profile screen already offers Retry, Plan offline and Back to network.
+/// A link back inside the grace cancels the timer, so drops never add up. A
+/// running sequence keeps going on the rig either way.
+final rigUnreachableReturnProvider = Provider<void>((ref) {
+  Timer? timer;
+  bool unreachable() => rigUnreachableInFullUi(
+        gatePassed: ref.read(profileGatePassedProvider),
+        offline: ref.read(offlineModeProvider),
+        simple: ref.read(simpleModeActiveProvider),
+        linkUp: ref.read(serverLinkUpProvider),
+      );
+  void update() {
+    if (!unreachable()) {
+      timer?.cancel();
+      timer = null;
+      return;
+    }
+    timer ??= Timer(rigUnreachableGrace, () {
+      timer = null;
+      if (unreachable()) ref.read(profileGatePassedProvider.notifier).reset();
+    });
+  }
+
+  ref.listen(profileGatePassedProvider, (_, _) => update());
+  ref.listen(offlineModeProvider, (_, _) => update());
+  ref.listen(simpleModeActiveProvider, (_, _) => update());
+  ref.listen(serverLinkUpProvider, (_, _) => update(), fireImmediately: true);
+  ref.onDispose(() => timer?.cancel());
 });
