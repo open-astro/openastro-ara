@@ -3678,6 +3678,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get simpleRigAddressHint => 'astro-pi.local or 192.0.2.24';
+
+  @override
+  String get simpleRigAddressInvalid =>
+      'Type the rig\'s name or address, for example astro-pi.local or 192.0.2.24:5555.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -7382,4 +7386,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get simpleRigAddressHint => 'astro-pi.local ou 192.0.2.24';
+
+  @override
+  String get simpleRigAddressInvalid =>
+      'Digite o nome ou o endereço do setup, por exemplo astro-pi.local ou 192.0.2.24:5555.';
 }

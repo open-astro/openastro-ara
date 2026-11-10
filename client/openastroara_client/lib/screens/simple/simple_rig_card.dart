@@ -43,7 +43,10 @@ class SimpleRigCard extends ConsumerStatefulWidget {
 }
 
 class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
-  final _found = <AraServer>{};
+  /// Each rig found, with the scan that last saw it: "Found" means seen within
+  /// the last two rescans, not once while the card was up.
+  final _seen = <AraServer, int>{};
+  int _scan = 0;
   final _address = TextEditingController();
   Timer? _rescan;
   bool _addressOpen = false;
@@ -54,13 +57,18 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
   /// The rig that did not answer, for the line under the list.
   AraServer? _failed;
 
+  /// The typed address could not be read (empty, or a bad port).
+  bool _badAddress = false;
+
   @override
   void initState() {
     super.initState();
     // As the first-run screen: mDNS is one-shot, so scan again while shown.
     unawaited(MulticastLock.acquire());
     _rescan = Timer.periodic(const Duration(seconds: 4), (_) {
-      if (mounted) ref.invalidate(discoveredServersProvider);
+      if (!mounted) return;
+      setState(() => _scan++);
+      ref.invalidate(discoveredServersProvider);
     });
   }
 
@@ -107,25 +115,30 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
   @override
   Widget build(BuildContext context) {
     ref.listen(discoveredServersProvider, (_, next) {
-      next.whenData((s) => setState(() => _found.add(s)));
+      // AsyncData only: a rescan's loading state still carries the last rig, which is no new sighting.
+      if (next case AsyncData(:final value, isLoading: false)) setState(() => _seen[value] = _scan);
     });
+    final found = {
+      for (final e in _seen.entries)
+        if (_scan - e.value <= 2) e.key,
+    };
     final l10n = context.l10n;
     final offline = ref.watch(offlineModeProvider);
     final saved = ref.watch(savedServersProvider).value ?? const <AraServer>[];
     final session = offline ? null : ref.watch(activeServerProvider);
     final others = [
-      ..._found.where((s) => s != session),
-      ...saved.reversed.where((s) => s != session && !_found.contains(s)),
+      ...found.where((s) => s != session),
+      ...saved.reversed.where((s) => s != session && !found.contains(s)),
     ];
     String name(AraServer s) => s.mdnsName ?? s.hostname;
 
     Widget row(AraServer s, {required bool isSession}) {
-      final found = _found.contains(s);
+      final isFound = found.contains(s);
       final busy = _connecting != null;
       return Container(
         key: Key('simple-rig-card-row-${s.hostname}:${s.port}'),
         constraints: const BoxConstraints(minHeight: 52),
-        padding: const EdgeInsets.fromLTRB(AraSpace.s12, 6, 6, 6),
+        padding: const EdgeInsets.fromLTRB(AraSpace.s12, AraSpace.s4, AraSpace.s4, AraSpace.s4),
         decoration: BoxDecoration(
           color: AraColors.tileFill,
           borderRadius: BorderRadius.circular(AraRadius.simplePanel),
@@ -141,8 +154,8 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
                   Text.rich(
                     TextSpan(children: [
                       TextSpan(
-                        text: found ? l10n.simpleRigFound : l10n.simpleRigSavedNotSeen,
-                        style: TextStyle(color: found ? AraColors.linkText : AraColors.accentWarning),
+                        text: isFound ? l10n.simpleRigFound : l10n.simpleRigSavedNotSeen,
+                        style: TextStyle(color: isFound ? AraColors.linkText : AraColors.accentWarning),
                       ),
                       TextSpan(text: ' · ${s.hostname}:${s.port}'),
                     ]),
@@ -172,21 +185,14 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
 
     // No spinner: the scan never ends while the card shows, and "Looking
     // for rigs…" says it when nothing is found.
-    Widget heading(String text) => Text(
-      text.toUpperCase(),
-      style: kSimpleCaption.copyWith(
-        color: AraColors.textSecondary,
-        fontWeight: FontWeight.w600,
-        letterSpacing: 0.7,
-      ),
-    );
+    Widget heading(String text) => Text(text.toUpperCase(), style: AraText.section);
 
     final failed = _failed;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 440),
       child: SimplePanel(
         key: const Key('simple-rig-card'),
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(AraSpace.s16),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -214,10 +220,14 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
               else
                 for (final s in others) row(s, isSession: false),
               if (failed != null)
-                Text(
-                  l10n.simpleRigNoAnswer('${failed.hostname}:${failed.port}'),
-                  key: const Key('simple-rig-card-error'),
-                  style: kSimpleText.copyWith(color: AraColors.errorText),
+                // Announced as it appears, as the message pills are.
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    l10n.simpleRigNoAnswer('${failed.hostname}:${failed.port}'),
+                    key: const Key('simple-rig-card-error'),
+                    style: kSimpleText.copyWith(color: AraColors.errorText),
+                  ),
                 ),
               if (!_addressOpen)
                 Align(
@@ -241,7 +251,12 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
                         decoration: InputDecoration(
                           labelText: l10n.simpleRigAddByAddress,
                           hintText: l10n.simpleRigAddressHint,
+                          errorText: _badAddress ? l10n.simpleRigAddressInvalid : null,
+                          errorMaxLines: 3,
                         ),
+                        onChanged: (_) {
+                          if (_badAddress) setState(() => _badAddress = false);
+                        },
                         onSubmitted: (_) => _connectAddress(),
                       ),
                     ),
@@ -262,6 +277,7 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
 
   void _connectAddress() {
     final server = parseRigAddress(_address.text);
+    setState(() => _badAddress = server == null);
     if (server == null) return;
     final session = ref.read(offlineModeProvider) ? null : ref.read(activeServerProvider);
     unawaited(_connect(server, session: server == session));

@@ -4779,5 +4779,7 @@
   "simpleRigAddByAddress": "Add by address",
   "@simpleRigAddByAddress": {"description": "The card's button and field label for a rig discovery cannot see"},
   "simpleRigAddressHint": "astro-pi.local or 192.0.2.24",
-  "@simpleRigAddressHint": {"description": "Hint in the card's address field; made-up example address"}
+  "@simpleRigAddressHint": {"description": "Hint in the card's address field; made-up example address"},
+  "simpleRigAddressInvalid": "Type the rig's name or address, for example astro-pi.local or 192.0.2.24:5555.",
+  "@simpleRigAddressInvalid": {"description": "Error under the card's address field when the typed address cannot be read (#1559); made-up example address"}
 }

@@ -1020,5 +1020,6 @@
   "simpleRigLooking": "Procurando setups nesta rede…",
   "simpleRigNoAnswer": "Nenhum setup respondeu em {address}. Verifique se o setup está ligado e nesta rede, ou tente o nome dele.",
   "simpleRigAddByAddress": "Adicionar pelo endereço",
-  "simpleRigAddressHint": "astro-pi.local ou 192.0.2.24"
+  "simpleRigAddressHint": "astro-pi.local ou 192.0.2.24",
+  "simpleRigAddressInvalid": "Digite o nome ou o endereço do setup, por exemplo astro-pi.local ou 192.0.2.24:5555."
 }

@@ -6224,6 +6224,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'astro-pi.local or 192.0.2.24'**
   String get simpleRigAddressHint;
+
+  /// Error under the card's address field when the typed address cannot be read (#1559); made-up example address
+  ///
+  /// In en, this message translates to:
+  /// **'Type the rig\'s name or address, for example astro-pi.local or 192.0.2.24:5555.'**
+  String get simpleRigAddressInvalid;
 }
 
 class _AppLocalizationsDelegate

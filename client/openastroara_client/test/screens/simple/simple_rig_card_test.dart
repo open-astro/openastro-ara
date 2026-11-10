@@ -41,12 +41,15 @@ Future<(ProviderContainer, _Saved, List<AraServer>)> _card(WidgetTester tester,
     {List<AraServer> found = const [_session, _club],
     List<AraServer> saved = const [_travel, _club, _session],
     Set<AraServer> down = const {},
+    List<AraServer> foundOnce = const [],
     bool offline = false}) async {
   final saves = _Saved(saved);
   final asked = <AraServer>[];
+  var scans = 0;
   final container = ProviderContainer(overrides: [
     savedServersProvider.overrideWith(() => saves),
-    discoveredServersProvider.overrideWith((ref) => Stream.fromIterable(found)),
+    // [foundOnce]: those rigs answer the first scan only, then leave the network.
+    discoveredServersProvider.overrideWith((ref) => Stream.fromIterable(scans++ == 0 ? [...found, ...foundOnce] : found)),
     lastRigServiceProvider.overrideWithValue(_MemLastRig()),
     serverHandshakeProvider.overrideWith((ref) async {
       final s = ref.watch(selectedServerProvider);
@@ -126,6 +129,44 @@ void main() {
     expect(find.textContaining('No rig answered at 192.0.2.61:5555'), findsOneWidget);
     expect(saves.added, isEmpty);
     expect(c.read(profileGatePassedProvider), isTrue);
+  });
+
+  testWidgets('#1559: the no-answer line is announced to screen readers', (tester) async {
+    await _card(tester, down: {_club});
+    await tester.tap(find.byKey(const Key('simple-rig-card-connect-192.0.2.61:5555')));
+    await tester.pump();
+    await tester.pump();
+    final semantics = tester.getSemantics(find.byKey(const Key('simple-rig-card-error')));
+    expect(semantics.flagsCollection.isLiveRegion, isTrue);
+  });
+
+  testWidgets('#1559: an address that cannot be read says so, and nothing is asked', (tester) async {
+    final (_, _, asked) = await _card(tester);
+    await tester.tap(find.byKey(const Key('simple-rig-card-address-open')));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('simple-rig-card-address')), 'pi:99999');
+    await tester.tap(find.byKey(const Key('simple-rig-card-address-connect')));
+    await tester.pump();
+    expect(asked, isEmpty);
+    expect(find.textContaining("Type the rig's name or address"), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('simple-rig-card-address')), 'pi.local');
+    await tester.pump();
+    expect(find.textContaining("Type the rig's name or address"), findsNothing, reason: 'typing clears it');
+  });
+
+  testWidgets('#1559: a rig not seen for two rescans is no longer Found', (tester) async {
+    const gone = AraServer(hostname: '192.0.2.77', port: 5555, mdnsName: 'Borrowed rig');
+    await _card(tester, foundOnce: const [gone, _travel]);
+    final goneRow = find.byKey(const Key('simple-rig-card-row-192.0.2.77:5555'));
+    final travelRow = find.byKey(const Key('simple-rig-card-row-198.51.100.7:5555'));
+    expect(find.descendant(of: travelRow, matching: find.textContaining('Found')), findsOneWidget);
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(seconds: 4)); // one rescan each
+      await tester.pump();
+    }
+    expect(goneRow, findsNothing, reason: 'found only, and gone: no row left');
+    expect(find.descendant(of: travelRow, matching: find.textContaining('Saved, not seen now')), findsOneWidget,
+        reason: 'saved: back to its saved label');
   });
 
   testWidgets('#1559: offline planning shows the same card to go online', (tester) async {
