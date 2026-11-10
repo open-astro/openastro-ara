@@ -187,7 +187,8 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
     public bool TryRecover(DiscoveredDeviceDto device) {
         ArgumentNullException.ThrowIfNull(device);
         lock (Gate) {
-            if (_disposed || (_device is not null && _desired == DesiredConnection.DisconnectedByUser)) {
+            // #1763 — also after Remove: the store may still remember a device the service forgot.
+            if (_disposed || _desired == DesiredConnection.DisconnectedByUser) {
                 return false;
             }
             Dispatch(device);
@@ -249,7 +250,7 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
             ThrowIfLiveLocked();
             var removed = _device;
             _device = null;
-            _desired = null;
+            // _desired stays DisconnectedByUser (set by the disconnect above) until the user's next connect (#1763).
             // §60.9 — a second open client drops its card on this instead of waiting for its next poll (#1127).
             _events?.Removed(_type, removed.UniqueId, removed.Name);
             return true;
