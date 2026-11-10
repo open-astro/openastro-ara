@@ -44,7 +44,8 @@ public sealed partial class DomeService : IDomeService, IRetainedDeviceSource, I
     // Guarded by the lifecycle's gate, like the connection state.
     private DomeStateDto _runtime = IdleRuntime;
     // Read-once capabilities + the raw ASCOM shutter status, cached for the IDomeMediator GetInfo()
-    // snapshot (the REST DomeDto doesn't expose them). Populated by the §32.4 refresh; reset on adopt.
+    // snapshot (the REST DomeDto doesn't expose them). Capabilities are read on connect, the shutter
+    // status by the §32.4 refresh; both reset on adopt.
     private DomeCaps? _domeCaps;
     // Error maps to NINA ShutterError ("not yet read") so GetInfo honestly signals "unknown" in the
     // ≤2s window between connect and the first refresh, rather than a possibly-false ShutterClosed.
@@ -56,7 +57,7 @@ public sealed partial class DomeService : IDomeService, IRetainedDeviceSource, I
         _faults = faults;
         _lifecycle = new DeviceLifecycle<IDomeDevice>(this, DeviceType.Dome, "dome",
             d => _createDevice(d), ReadRuntime, ResetSessionLocked,
-            DeviceHealthTracker.DefaultThreshold, _logger, events, faults);
+            DeviceHealthTracker.DefaultThreshold, _logger, events, faults, PrepareSession);
     }
 
     private object _gate => _lifecycle.Gate;
@@ -114,6 +115,13 @@ public sealed partial class DomeService : IDomeService, IRetainedDeviceSource, I
         _runtime = IdleRuntime;                  // don't serve a prior device's runtime
         _domeCaps = null;                        // re-read capabilities for the new device
         _shutterStatusRaw = ShutterState.Error; // "not yet read" until the first refresh, not a false Closed
+    }
+
+    // Capabilities are read once on connect, before the dome reads Connected, so a client that
+    // re-reads on Connected or details_ready never sees them missing.
+    private Action PrepareSession(IDomeDevice client) {
+        var caps = ReadCaps(client);
+        return () => _domeCaps = caps;
     }
 
     public Task<OperationAcceptedDto> SlewAsync(DomeSlewRequestDto request, string? idempotencyKey, CancellationToken ct) {
@@ -216,21 +224,12 @@ public sealed partial class DomeService : IDomeService, IRetainedDeviceSource, I
         }
     }
 
-    // The runtime read the lifecycle runs each tick; Slewing is the essential read (§42.3 second
-    // channel). Capabilities are read once per session, on the first tick that finds them missing.
+    // The runtime read the lifecycle runs each tick; Slewing is the essential read (§42.3 second channel).
     private DeviceRead ReadRuntime(IDomeDevice client) {
-        bool needCaps;
-        lock (_gate) {
-            needCaps = _domeCaps is null;
-        }
         var (runtime, rawShutter) = ReadRuntime(client, out var readError);
-        var caps = needCaps ? ReadCaps(client) : (DomeCaps?)null;
         return new DeviceRead(readError, CommitLocked: () => {
             _runtime = runtime;
             _shutterStatusRaw = rawShutter;
-            if (caps is not null) {
-                _domeCaps = caps;
-            }
         });
     }
 
