@@ -139,6 +139,23 @@ public class StorageCopyServiceTest {
     }
 
     [Test]
+    public async Task A_frame_saved_while_the_copy_runs_still_counts_as_not_copied() {
+        PutAt("night/a.fits", DateTime.UtcNow.AddHours(-2));
+        // freeBytes runs after the walk and before the files go across: a plan saving
+        // a frame then is what the copy never sees.
+        freeBytes = _ => {
+            PutAt("night/late.fits", DateTime.UtcNow);
+            return null;
+        };
+
+        var status = await RunToEnd(Svc).ConfigureAwait(false);
+
+        Assert.That(status.State, Is.EqualTo("done"), status.ErrorDetail);
+        Assert.That(File.Exists(Path.Combine(target, "night/late.fits")), Is.False, "not in the plan");
+        Assert.That(StorageCopyService.Summarize(store).FramesNotCopied, Is.EqualTo(1), "late.fits is on no other drive");
+    }
+
+    [Test]
     public async Task A_copy_of_chosen_folders_leaves_the_store_not_copied() {
         PutAt("manual/M31/a.fits", DateTime.UtcNow.AddHours(-2));
         PutAt("manual/M42/b.fits", DateTime.UtcNow.AddHours(-2));

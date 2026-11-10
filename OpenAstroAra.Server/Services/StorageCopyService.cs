@@ -234,6 +234,9 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
             mounted = true;
             ct.ThrowIfCancellationRequested();
             var targetRoot = mount.MountPoint;
+            // Taken before the walk: a frame saved after it is not in the plan, so the
+            // marker must not vouch for it.
+            var plannedAt = DateTime.UtcNow;
             var plan = Plan(current, targetRoot, ct);
             var needed = plan.Sum(f => f.Length + PerFileSlackBytes);
             var free = freeBytes(targetRoot);
@@ -250,7 +253,7 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
             }
             outcome = ("done", null, null);
             if (current.Folders.Count == 0 && current.FilesFailed == 0 && current.FilesConflicting == 0) {
-                MarkCopied(sourceRoot);
+                MarkCopied(sourceRoot, plannedAt);
             }
         } catch (OperationCanceledException) {
             outcome = ("cancelled", null, null);
@@ -376,11 +379,13 @@ public sealed partial class StorageCopyService : IStorageCopyService, IDisposabl
             newest is { } n ? new DateTimeOffset(n, TimeSpan.Zero) : null, notCopied);
     }
 
-    private void MarkCopied(string root) {
+    /// <summary>Stamps the marker at <paramref name="plannedAt"/>, less exFAT's 2 s mtime
+    /// granularity, so a frame saved just after the walk never reads as older than it.</summary>
+    private void MarkCopied(string root, DateTime plannedAt) {
         try {
             var path = Path.Combine(root, LastCopyMarker);
             File.WriteAllBytes(path, []);
-            File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
+            File.SetLastWriteTimeUtc(path, plannedAt - TimeSpan.FromSeconds(2));
         } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
             // The copy itself worked; the erase warning just stays on the safe side.
             LogMarkFailed(logger, ex);
