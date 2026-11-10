@@ -146,7 +146,8 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
   Future<void> _sweepAlpaca() async {
     final devices = ref.read(guiderAlpacaDevicesProvider.notifier);
     await devices.resolve(
-        choiceEndpoints(ref.read(guiderEquipmentProvider).value?.choices));
+        choiceEndpoints(ref.read(guiderEquipmentProvider).value?.choices),
+        fresh: true);
     try {
       await devices.discover();
     } catch (_) {

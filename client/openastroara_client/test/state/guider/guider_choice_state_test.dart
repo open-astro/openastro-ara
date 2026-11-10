@@ -1,7 +1,18 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/alpaca_device_names_api.dart';
+import 'package:openastroara/models/server.dart';
 import 'package:openastroara/state/guider/guider_choice_state.dart';
+import 'package:openastroara/state/saved_server_state.dart';
+
+/// The rig the app talks to, switchable from a test.
+class _Rig extends Notifier<AraServer?> {
+  @override
+  AraServer? build() => const AraServer(hostname: 'rig-a', port: 1);
+  void set(AraServer s) => state = s;
+}
+
+final _rig = NotifierProvider<_Rig, AraServer?>(_Rig.new);
 
 class _FakeNames extends AlpacaDeviceNamesClient {
   _FakeNames(this.byServer);
@@ -23,6 +34,7 @@ void main() {
   ProviderContainer container(_FakeNames names) {
     final c = ProviderContainer(overrides: [
       alpacaDeviceNamesApiProvider.overrideWithValue(names),
+      activeServerProvider.overrideWith((ref) => ref.watch(_rig)),
     ]);
     addTearDown(c.dispose);
     return c;
@@ -62,5 +74,33 @@ void main() {
     expect(isCrossServerPick('rig.lan:6800', 'Alpaca Telescope [rig.lan:6800/0]'), isFalse);
     expect(isCrossServerPick(null, 'Alpaca Telescope [other.lan:11111/0]'), isFalse);
     expect(isCrossServerPick('rig.lan:6800', 'EQMOD ASCOM'), isFalse);
+  });
+
+  test('a server switch forgets the last rig\'s names and UniqueIDs', () async {
+    final names = _FakeNames({
+      'localhost:11111': {'camera/0': const AlpacaDeviceInfo(name: 'ASI120', uniqueId: 'rig-a-cam')},
+    });
+    final c = container(names);
+    c.listen(guiderAlpacaDevicesProvider, (_, _) {});
+    await c.read(guiderAlpacaDevicesProvider.notifier).resolve(['localhost:11111']);
+    expect(c.read(guiderAlpacaDevicesProvider).uniqueIds, isNotEmpty);
+
+    c.read(_rig.notifier).set(const AraServer(hostname: 'rig-b', port: 1));
+    expect(c.read(guiderAlpacaDevicesProvider).uniqueIds, isEmpty, reason: 'rig B has its own localhost');
+    names.byServer['localhost:11111'] = {'camera/0': const AlpacaDeviceInfo(name: 'ASI290', uniqueId: 'rig-b-cam')};
+    await c.read(guiderAlpacaDevicesProvider.notifier).resolve(['localhost:11111']);
+    expect(c.read(guiderAlpacaDevicesProvider.notifier).uniqueIdFor('Alpaca Camera [localhost:11111/0]'), 'rig-b-cam');
+  });
+
+  test('an explicit refresh asks a named server again, so a swapped camera is pinned by its own UniqueID', () async {
+    final names = _FakeNames({
+      'rig.lan:6800': {'camera/0': const AlpacaDeviceInfo(name: 'Old', uniqueId: 'old-cam')},
+    });
+    final c = container(names);
+    final devices = c.read(guiderAlpacaDevicesProvider.notifier);
+    await devices.resolve(['rig.lan:6800']);
+    names.byServer['rig.lan:6800'] = {'camera/0': const AlpacaDeviceInfo(name: 'New', uniqueId: 'new-cam')};
+    await devices.resolve(['rig.lan:6800'], fresh: true);
+    expect(devices.uniqueIdFor('Alpaca Camera [rig.lan:6800/0]'), 'new-cam');
   });
 }

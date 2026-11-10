@@ -112,7 +112,10 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
           '${phd2.guiderAlpacaHost}:${phd2.guiderAlpacaPort}',
         ...choiceEndpoints(loaded),
       ];
-      await ref.read(guiderAlpacaDevicesProvider.notifier).resolve(endpoints);
+      // Opening the panel reads the servers again, as it did on its own.
+      await ref
+          .read(guiderAlpacaDevicesProvider.notifier)
+          .resolve(endpoints, fresh: true);
     } catch (e) {
       _loading = false;
       if (mounted) {
@@ -227,7 +230,9 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
     });
     try {
       final servers =
-          await ref.read(guiderAlpacaDevicesProvider.notifier).discover();
+          await ref
+              .read(guiderAlpacaDevicesProvider.notifier)
+              .discover(fresh: false);
       if (!mounted) return;
       setState(() {
         _discoveredServers = servers;

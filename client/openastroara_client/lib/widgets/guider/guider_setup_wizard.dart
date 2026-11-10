@@ -110,7 +110,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
       if (mounted) setState(() => _choices = res.choices);
       await ref
           .read(guiderAlpacaDevicesProvider.notifier)
-          .resolve(choiceEndpoints(res.choices));
+          .resolve(choiceEndpoints(res.choices), fresh: true);
     } catch (_) {
       // Choices need the daemon link; the connection step surfaces that.
     }

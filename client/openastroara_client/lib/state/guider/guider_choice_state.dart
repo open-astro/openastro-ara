@@ -193,8 +193,14 @@ class GuiderAlpacaDevicesNotifier extends Notifier<GuiderAlpacaDevices> {
   // Two triggers landing together must not fetch the same server twice.
   final Set<String> _resolving = {};
 
+  /// Another rig has its own "localhost:11111": a server switch starts over.
   @override
-  GuiderAlpacaDevices build() => (names: const {}, uniqueIds: const {});
+  GuiderAlpacaDevices build() {
+    ref.watch(activeServerProvider);
+    _named.clear();
+    _resolving.clear();
+    return (names: const {}, uniqueIds: const {});
+  }
 
   /// The UniqueID behind a camera [choice]; "" when unknown or not Alpaca.
   String uniqueIdFor(String choice) =>
@@ -203,12 +209,16 @@ class GuiderAlpacaDevicesNotifier extends Notifier<GuiderAlpacaDevices> {
   /// Read the device names on each "host:port" not yet named (in parallel: an
   /// unreachable server costs only its own timeout). A server that answered
   /// nothing is asked again next time, so a brief outage does not leave the
-  /// labels generic.
-  Future<void> resolve(Iterable<String> endpoints) async {
+  /// labels generic. [fresh] asks named servers again too: a surface opening,
+  /// Discover or Refresh, so a camera swapped since is pinned by its own
+  /// UniqueID, as each surface's own fetch did before.
+  Future<void> resolve(Iterable<String> endpoints, {bool fresh = false}) async {
     final namesApi = ref.read(alpacaDeviceNamesApiProvider);
     final targets = <({String endpoint, String host, int port})>[];
     for (final endpoint in endpoints.toSet()) {
-      if (_named.contains(endpoint) || _resolving.contains(endpoint)) continue;
+      if ((!fresh && _named.contains(endpoint)) || _resolving.contains(endpoint)) {
+        continue;
+      }
       final parsed = parseHostPort(endpoint);
       if (parsed.host == null || parsed.port == null) continue;
       targets.add((endpoint: endpoint, host: parsed.host!, port: parsed.port!));
@@ -244,12 +254,14 @@ class GuiderAlpacaDevicesNotifier extends Notifier<GuiderAlpacaDevices> {
   }
 
   /// Sweep the network for Alpaca servers (daemon-side UDP discovery) and name
-  /// their devices; returns the servers found ("host:port").
-  Future<List<String>> discover() async {
+  /// their devices; returns the servers found ("host:port"). [fresh] as for
+  /// [resolve]: the wizards ask every server again, Settings' Discover keeps
+  /// what its panel already named, as each did on its own.
+  Future<List<String>> discover({bool fresh = true}) async {
     final servers = await ref
         .read(guiderEquipmentProvider.notifier)
         .discoverAlpaca();
-    await resolve(servers);
+    await resolve(servers, fresh: fresh);
     return servers;
   }
 }
