@@ -85,6 +85,8 @@ class _Reading extends BahtinovFocusNotifier {
             active: true, state: BahtinovFocusStates.running, exposureSec: 2, seq: 0,
             recent: [], zonePx: 0.3, zoneFromOptics: false, hasFrame: false),
       );
+  @override
+  Future<void> refresh() async {}
 }
 
 late ProviderContainer _c;

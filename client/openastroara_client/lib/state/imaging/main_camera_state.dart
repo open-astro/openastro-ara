@@ -20,7 +20,8 @@ final mainCameraTakingFramesProvider = Provider.autoDispose<bool>(
 );
 
 /// The main camera is busy: taking frames, or held by a paused plan that will
-/// take it back. Routines that need it, or that move the mount under it
+/// take it back. Together that is any active run (both paused states count as
+/// active), plus a shot or Live View. Routines that need it, or that move the mount under it
 /// (autofocus, the Bahtinov readout, polar alignment), wait (user, 2026-11-04).
 final mainCameraBusyProvider = Provider.autoDispose<bool>(
   (ref) =>
