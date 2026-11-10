@@ -58,6 +58,8 @@ String copyFailureMessage(String code, String? detail, {int bytesToCopy = 0}) =>
       'not_ext4' =>
         'ARA can only write to exFAT or ext4 drives, and this one is neither.',
       'mount_failed' => 'The drive could not be connected.',
+      'exfat_unsupported' =>
+        'This server can\'t read exFAT drives. Erase the drive as ext4 and ARA can use it.',
       'uuid_not_found' => 'The drive disconnected. Plug it back in and try again.',
       'no_store' => 'No storage drive is connected, so there is nothing to copy.',
       'copy_running' => 'A copy is already running.',

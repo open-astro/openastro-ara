@@ -122,8 +122,21 @@ for a; do dev=$a; done
 echo "$dev" >> "$SHIM_DIR/erased"
 [ ! -e "$SHIM_DIR/mkfs-fails" ]
 """,
+    "mkfs.ext4": r"""#!/bin/sh
+for a; do dev=$a; done
+echo "$dev" >> "$SHIM_DIR/erased"
+""",
+    "wipefs": r"""#!/bin/sh
+for a; do dev=$a; done
+echo "$dev" >> "$SHIM_DIR/wiped"
+""",
+    # Loading the module adds exfat to the stand-in kernel filesystem table.
+    "modprobe": r"""#!/bin/sh
+[ -e "$SHIM_DIR/module-loads" ] || exit 1
+printf '\texfat\n' >> "$ARA_PROC_FILESYSTEMS"
+""",
 }
-NO_OPS = ("sync", "systemctl", "chown", "fsck.exfat", "e2fsck", "udevadm", "wipefs", "sfdisk")
+NO_OPS = ("sync", "systemctl", "chown", "fsck.exfat", "e2fsck", "udevadm", "sfdisk")
 
 
 @unittest.skipIf(len(DEVICES) < 2, "needs two block nodes in /dev to stand in for the drives")
@@ -153,6 +166,8 @@ class HelperRig(unittest.TestCase):
             f"UUID={self.OLD[0]}  {self.mount_point}  exfat  defaults,nofail  0  0\n")
         self.mounts = self.shims / "mounts"
         self.mounts.write_text(f"{self.OLD[1]} {self.mount_point}\n")
+        self.proc_filesystems = root / "filesystems"
+        self.proc_filesystems.write_text("nodev\tsysfs\n\tvfat\n\text4\n\texfat\n")
         self.env = dict(
             os.environ,
             PATH=f"{self.shims}:{os.environ.get('PATH', '/usr/bin:/bin')}",
@@ -161,6 +176,7 @@ class HelperRig(unittest.TestCase):
             FSTAB_LOCK=str(root / "fstab.lock"),
             ARA_MOUNT_POINT=self.mount_point,
             ARA_COPY_POINT=self.copy_point,
+            ARA_PROC_FILESYSTEMS=str(self.proc_filesystems),
             ARA_STORAGE_OWNER=os.environ.get("USER") or subprocess.check_output(["id", "-un"], text=True).strip(),
         )
 
@@ -375,6 +391,72 @@ class ConfigureStorageCopyTarget(HelperRig):
         result = self.run_helper("--mount-copy", self.NEW[0])
         self.assertEqual(result.returncode, 8, result.stdout + result.stderr)
         self.assertIn("ERROR: mount_failed", result.stdout)
+
+
+class ExfatUnsupportedKernel(HelperRig):
+    """A kernel with no exFAT (ZWO's 4.19 on an rk-flashtool image): refuse before touching anything."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.proc_filesystems.write_text("nodev\tsysfs\n\tvfat\n\text4\nnodev\tfuse\n")
+        # mount.exfat lives in /sbin or /usr/sbin; leaving those off PATH keeps a host's own
+        # exfat-fuse from passing for the stand-in kernel's support.
+        self.env["PATH"] = f"{self.shims}:/usr/bin:/bin"
+
+    def assert_store_untouched(self) -> None:
+        self.assertEqual(self.mounted(), [self.OLD[1]], "the previous store stays mounted")
+        self.assertEqual(self.fstab_uuid(), self.OLD[0], "fstab still names the previous store")
+
+    def test_erasing_as_exfat_is_refused_before_the_drive_is_touched(self) -> None:
+        result = self.run_helper("--format", "--fs", "exfat", self.NEW[0], "ARA-DISK")
+        self.assertEqual(result.returncode, 12, result.stdout + result.stderr)
+        self.assertIn("ERROR: exfat_unsupported", result.stdout)
+        self.assertFalse((self.shims / "wiped").exists(), "no signature was wiped")
+        self.assertFalse((self.shims / "erased").exists(), "no filesystem was made")
+        self.assert_store_untouched()
+
+    def test_erasing_as_ext4_still_works(self) -> None:
+        result = self.run_helper("--format", "--fs", "ext4", self.NEW[0], "ARA-DISK")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.mounted(), [self.NEW[1]])
+
+    def test_using_an_exfat_drive_is_refused_and_the_store_stays(self) -> None:
+        result = self.run_helper(self.NEW[0])
+        self.assertEqual(result.returncode, 12, result.stdout + result.stderr)
+        self.assertIn("ERROR: exfat_unsupported", result.stdout)
+        self.assert_store_untouched()
+
+    def test_using_an_ext4_drive_still_works(self) -> None:
+        (self.shims / "drives").write_text(
+            f"{self.OLD[0]} {self.OLD[1]} ext4 ARA-DISK\n{self.NEW[0]} {self.NEW[1]} ext4 ARA-DISK\n")
+        result = self.run_helper(self.NEW[0])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.mounted(), [self.NEW[1]])
+
+    def test_an_exfat_copy_target_is_refused(self) -> None:
+        result = self.run_helper("--mount-copy", self.NEW[0])
+        self.assertEqual(result.returncode, 12, result.stdout + result.stderr)
+        self.assertIn("ERROR: exfat_unsupported", result.stdout)
+        self.assertEqual(self.copy_mounted(), [])
+
+    def test_an_ext4_copy_target_still_mounts(self) -> None:
+        (self.shims / "drives").write_text(
+            f"{self.OLD[0]} {self.OLD[1]} exfat ARA-DISK\n{self.NEW[0]} {self.NEW[1]} ext4 ARA-DISK\n")
+        result = self.run_helper("--mount-copy", self.NEW[0])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.copy_mounted(), [self.NEW[1]])
+
+    def test_a_module_that_loads_on_demand_is_support(self) -> None:
+        (self.shims / "module-loads").write_text("")
+        result = self.run_helper(self.NEW[0])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.mounted(), [self.NEW[1]])
+
+    def test_a_userspace_mount_helper_is_support(self) -> None:
+        self._shim("mount.exfat", "#!/bin/sh\nexit 0\n")
+        result = self.run_helper(self.NEW[0])
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.mounted(), [self.NEW[1]])
 
 
 class RestoreDoesNotRemountTheRejectedDrive(HelperRig):

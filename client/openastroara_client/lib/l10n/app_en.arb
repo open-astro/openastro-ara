@@ -4231,6 +4231,10 @@
   "@storageConfigureMountFailed": {
     "description": "Use Disk failed"
   },
+  "storageConfigureExfatUnsupported": "This server can't read exFAT drives. Erase the drive as ext4 and ARA can use it.",
+  "@storageConfigureExfatUnsupported": {
+    "description": "Use Disk or Erase failed: the server's kernel cannot mount exFAT"
+  },
   "storageConfigureFailed": "Could not use {name}.",
   "@storageConfigureFailed": {
     "description": "Use Disk failed",

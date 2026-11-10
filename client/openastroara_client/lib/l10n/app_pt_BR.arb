@@ -890,6 +890,7 @@
   "storageConfigureHelperMissing": "Falta parte da instalação do servidor. Reinstale o openastroara-server.",
   "storageConfigureMkfsFailed": "Não foi possível apagar o disco. Veja o log do servidor para mais detalhes.",
   "storageConfigureMountFailed": "O disco foi preparado, mas não pôde ser conectado.",
+  "storageConfigureExfatUnsupported": "Este servidor não consegue ler discos exFAT. Apague o disco como ext4 para o ARA poder usá-lo.",
   "storageConfigureFailed": "Não foi possível usar {name}.",
   "storageCheckTitle": "Verificar o disco de armazenamento?",
   "storageCheckBody": "O disco fica offline por um momento enquanto o sistema de arquivos é verificado e, se preciso, reparado. Leva de alguns segundos a uns dois minutos; a captura precisa estar parada.",

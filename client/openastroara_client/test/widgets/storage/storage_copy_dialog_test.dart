@@ -107,6 +107,8 @@ void main() {
         'That drive is the one frames are saved to.');
     expect(copyFailureMessage('device_busy', 'mounted_elsewhere'),
         contains('somewhere else'));
+    expect(copyFailureMessage('exfat_unsupported', null),
+        'This server can\'t read exFAT drives. Erase the drive as ext4 and ARA can use it.');
     expect(copyFailureMessage('weird', 'helper said so'), 'helper said so');
   });
 

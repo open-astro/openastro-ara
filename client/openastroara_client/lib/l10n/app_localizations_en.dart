@@ -3180,6 +3180,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'The disk was prepared but could not be connected.';
 
   @override
+  String get storageConfigureExfatUnsupported =>
+      'This server can\'t read exFAT drives. Erase the drive as ext4 and ARA can use it.';
+
+  @override
   String storageConfigureFailed(String name) {
     return 'Could not use $name.';
   }

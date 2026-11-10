@@ -46,6 +46,7 @@ String storageConfigureMessage(AppLocalizations l,
       'helper_missing' => l.storageConfigureHelperMissing,
       'mkfs_failed' => l.storageConfigureMkfsFailed,
       'mount_failed' => l.storageConfigureMountFailed,
+      'exfat_unsupported' => l.storageConfigureExfatUnsupported,
       _ => outcome.detail ?? l.storageConfigureFailed(device.friendlyName),
     };
 

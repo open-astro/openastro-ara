@@ -5439,6 +5439,12 @@ abstract class AppLocalizations {
   /// **'The disk was prepared but could not be connected.'**
   String get storageConfigureMountFailed;
 
+  /// Use Disk or Erase failed: the server's kernel cannot mount exFAT
+  ///
+  /// In en, this message translates to:
+  /// **'This server can\'t read exFAT drives. Erase the drive as ext4 and ARA can use it.'**
+  String get storageConfigureExfatUnsupported;
+
   /// Use Disk failed
   ///
   /// In en, this message translates to:
