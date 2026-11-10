@@ -2599,7 +2599,7 @@ namespace OpenAstroAra.Test {
             await fake.BroadcastAsync(PhdEvents.CalibrationComplete()).ConfigureAwait(false);
 
             var cleared = await WaitUntilAsync(() => diagnostics.Invocations.Any(i =>
-                i.Method.Name == nameof(IDiagnosticsService.ClearOpenEventsByTypeAsync) && (string)i.Arguments[0] == CalibrationFailed)).ConfigureAwait(false);
+                i.Method.Name == nameof(IDiagnosticsService.ClearOpenEventsByTypeAsync) && (string?)i.Arguments[0] == CalibrationFailed)).ConfigureAwait(false);
             Assert.That(cleared, Is.True);
         }
 
