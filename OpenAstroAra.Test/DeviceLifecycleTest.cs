@@ -140,6 +140,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_rotator_serves_its_capabilities_as_soon_as_it_reads_connected() {
+            // Review of #1761: the seed refresh can be skipped or stuck behind a tick in flight, so
+            // capabilities that only a refresh commits can lag the Connected state and details_ready.
+            // Here every essential read is held, so no refresh completes.
+            using var hold = new ManualResetEventSlim(false);
+            using var rotator = new FakeRotatorDevice { HoldReads = hold };
+            using var svc = new RotatorService { DeviceFactory = _ => rotator };
+            try {
+                await svc.ConnectAsync(new ConnectRequestDto(Device), null, CancellationToken.None);
+                await WaitForAsync(() => svc.GetAsync(CancellationToken.None).Result?.State == EquipmentConnectionState.Connected, "the connect");
+                var dto = await svc.GetAsync(CancellationToken.None);
+                Assert.That(dto?.Capabilities, Is.EqualTo(new RotatorCapabilitiesDto(true, 0.1f)));
+            } finally {
+                hold.Set();
+            }
+        }
+
+        [Test]
         public async Task A_dome_whose_Slewing_read_keeps_failing_is_degraded() {
             using var dome = new FakeDomeDevice(); // the service disposes it too; a second Dispose is harmless
             using var svc = new DomeService(faults: _faults) {

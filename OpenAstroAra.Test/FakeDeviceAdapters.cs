@@ -20,11 +20,14 @@ using System.Threading;
 namespace OpenAstroAra.Test {
 
     /// <summary>ADR 0011 rule 4 — the test adapter a device lifecycle runs against instead of a port.
-    /// <see cref="Answers"/> drives the §42.3 probe; <see cref="ReadFails"/> makes the essential read throw.</summary>
+    /// <see cref="Answers"/> drives the §42.3 probe; <see cref="ReadFails"/> makes the essential read throw;
+    /// <see cref="HoldReads"/> holds it.</summary>
     internal class FakeDeviceAdapter : IDeviceAdapter {
         private int _connects;
         public volatile bool Answers = true;
         public volatile bool ReadFails;
+        // When set, the essential read waits for it: a refresh tick stays in flight.
+        public ManualResetEventSlim? HoldReads;
         public int Connects => Volatile.Read(ref _connects);
         public bool Disposed { get; private set; }
 
@@ -35,6 +38,7 @@ namespace OpenAstroAra.Test {
         public void Dispose() => Disposed = true;
 
         protected void ThrowIfReadFails() {
+            HoldReads?.Wait(TimeSpan.FromSeconds(10));
             if (ReadFails) {
                 throw new InvalidOperationException("CAA not responding");
             }

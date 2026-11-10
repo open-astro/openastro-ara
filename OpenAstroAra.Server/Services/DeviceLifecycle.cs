@@ -75,6 +75,7 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
     private readonly Func<DiscoveredDeviceDto, TDevice> _createDevice;
     private readonly Func<TDevice, DeviceRead> _read;
     private readonly Action _resetSessionLocked;
+    private readonly Func<TDevice, Action>? _prepareSession;
     private readonly ILogger _logger;
     private readonly EquipmentEventPublisher? _events;
     private readonly IEquipmentFaultSink? _faults;
@@ -96,16 +97,20 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
     /// <param name="resetSessionLocked">Clears the class's session state; called under the gate on
     /// adopt, disconnect and trip.</param>
     /// <param name="failedReadThreshold">Consecutive failed essential reads that make the device degraded.</param>
+    /// <param name="prepareSession">Optional read-once work (capabilities), off the gate after the connect;
+    /// the action it returns runs under the gate on adopt, before the device reads Connected.</param>
     public DeviceLifecycle(object owner, DeviceType type, string noun,
             Func<DiscoveredDeviceDto, TDevice> createDevice, Func<TDevice, DeviceRead> read,
             Action resetSessionLocked, int failedReadThreshold, ILogger logger,
-            EquipmentEventPublisher? events, IEquipmentFaultSink? faults) {
+            EquipmentEventPublisher? events, IEquipmentFaultSink? faults,
+            Func<TDevice, Action>? prepareSession = null) {
         _owner = owner;
         _type = type;
         _noun = noun;
         _createDevice = createDevice;
         _read = read;
         _resetSessionLocked = resetSessionLocked;
+        _prepareSession = prepareSession;
         _logger = logger;
         _events = events;
         _faults = faults;
@@ -314,6 +319,7 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
         try {
             client = _createDevice(device);
             client.Connect();
+            var commitPrepared = _prepareSession?.Invoke(client);
             lock (Gate) {
                 if (!_disposed && _connectGeneration == generation) {
                     _client = client;
@@ -321,6 +327,7 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
                     _health.Reset();
                     _cleanReadSinceConnect = false;
                     _resetSessionLocked(); // don't serve a prior device's runtime
+                    commitPrepared?.Invoke();
                     _desired = DesiredConnection.ConnectedByUser;
                     SetState(EquipmentConnectionState.Connected);
                     adopted = true;

@@ -50,7 +50,7 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
         _faults = faults;
         _lifecycle = new DeviceLifecycle<IRotatorDevice>(this, DeviceType.Rotator, "rotator",
             d => _createDevice(d), ReadRuntime, ResetSessionLocked,
-            DeviceHealthTracker.DefaultThreshold, _logger, events, faults);
+            DeviceHealthTracker.DefaultThreshold, _logger, events, faults, PrepareSession);
     }
 
     private object _gate => _lifecycle.Gate;
@@ -103,6 +103,13 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
         _runtime = IdleRuntime; // don't serve a prior device's runtime
         _capabilities = null;
         _drift.Reset();         // a prior session's commanded angle means nothing here
+    }
+
+    // Capabilities are read once on connect, before the rotator reads Connected, so a client that
+    // re-reads on Connected or details_ready never sees them missing.
+    private Action PrepareSession(IRotatorDevice client) {
+        var caps = ReadCapabilities(client);
+        return () => _capabilities = caps;
     }
 
     public Task<OperationAcceptedDto> MoveAsync(RotatorMoveRequestDto request, string? idempotencyKey, CancellationToken ct) {
@@ -216,18 +223,12 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
     // gate as the liveness check (the #789 one-critical-section lesson) and acts off-lock.
     private DeviceRead ReadRuntime(IRotatorDevice client) {
         var runtime = ReadRuntime(client, out var readError);
-        bool needCaps;
-        lock (_gate) {
-            needCaps = _capabilities is null;
-        }
-        var caps = needCaps ? ReadCapabilities(client) : null; // read once per session; they don't change
         var verdict = ReadbackVerdict.Idle;
         (float TargetDeg, bool Mechanical)? commanded = null;
         string? deviceName = null;
         return new DeviceRead(readError,
             CommitLocked: () => {
                 _runtime = runtime;
-                _capabilities ??= caps;
                 // §42.2 item 4 — angle-drift check against the last commanded move.
                 verdict = _drift.Observe(runtime.MechanicalAngleDeg, runtime.SkyAngleDeg,
                     isMoving: runtime.State == "moving",
@@ -272,9 +273,8 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
         return new RotatorStateDto(moving ? "moving" : "idle", mechanical, sky, reverse);
     }
 
-    // Capabilities are read once per session (they don't change while connected): whether the
-    // rotator supports the Reverse property and its minimum step size in degrees. Per-field
-    // tolerant — an unsupported property yields a safe default.
+    // Whether the rotator supports the Reverse property and its minimum step size in degrees.
+    // Per-field tolerant — an unsupported property yields a safe default rather than failing the connect.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field capability read: an unsupported rotator property throws; that field falls back to a safe default rather than failing the connect. CA1031's log-and-recover boundary applies.")]
     private static RotatorCapabilitiesDto ReadCapabilities(IRotatorDevice c) {

@@ -180,6 +180,7 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
         if (candidates.Count == 0 && ResolveRetained(type) is { } retained) {
             candidates.Add(retained);
         }
+        var recoverable = recovery ? ResolveService(type) as IRecoverableDevice : null;
         foreach (var device in candidates) {
             var connect = ResolveConnect(device.Type, device, ct);
             if (connect is null) {
@@ -189,7 +190,7 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
             try {
                 // The service's ConnectAsync returns once accepted and connects in the
                 // background, so this awaits only the dispatch.
-                if (recovery && ResolveService(device.Type) is IRecoverableDevice recoverable) {
+                if (recoverable is not null) {
                     var target = await LocateAsync(device, ct).ConfigureAwait(false);
                     if (!recoverable.TryRecover(target)) {
                         LogRecoveryRefused(device.Type, device.Name);
