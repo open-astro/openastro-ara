@@ -2,12 +2,11 @@ import 'dart:async';
 import 'package:flutter/material.dart' show IconData, Icons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
-import '../screens/simple/simple_plan_panel.dart'
+import 'simple_run_state.dart'
     show
         simpleDarkStartProvider,
         simpleRunProvider,
         simpleScheduleAllowedProvider;
-import '../screens/simple/simple_polar_panel.dart' show simplePolarActive;
 import '../models/polar_align.dart' show PolarAlignStates;
 import '../util/friendly_error.dart';
 import 'app_locale_state.dart';
@@ -223,7 +222,7 @@ class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
     // verdict, not wipe it and send the mount Home again unasked.
     final polarLive = ref.read(polarAlignLiveProvider);
     if (step == SimplePreflightStep.polarAlign &&
-        !simplePolarActive(polarLive) &&
+        !polarLive.isActive &&
         polarLive.phase != PolarAlignStates.checked) {
       final api = ref.read(polarAlignApiProvider);
       if (api != null) unawaited(_stepAction(api.start, (l) => l.polarActionStart));
@@ -326,7 +325,7 @@ class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
   /// screen with the step. Done has already finished it.
   void _endPolar() {
     if (_polarFinished ||
-        !simplePolarActive(ref.read(polarAlignLiveProvider))) {
+        !ref.read(polarAlignLiveProvider).isActive) {
       return;
     }
     final api = ref.read(polarAlignApiProvider);

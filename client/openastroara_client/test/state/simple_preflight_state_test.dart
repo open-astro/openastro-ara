@@ -1,7 +1,7 @@
 import 'package:openastroara/models/polar_align.dart' show PolarAlignStages, PolarAlignStates;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/screens/simple/simple_plan_panel.dart';
+import 'package:openastroara/state/simple_run_state.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
