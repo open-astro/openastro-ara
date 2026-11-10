@@ -104,14 +104,14 @@ namespace OpenAstroAra.Test {
                 new DateTimeOffset(2026, 7, 10, 4, 0, 0, TimeSpan.Zero));
 
         private void ReconnectSucceeds(DeviceType type) {
-            reconnector.Setup(r => r.ReconnectAsync(type, It.IsAny<CancellationToken>()))
+            reconnector.Setup(r => r.RecoverAsync(type, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new ReconnectOutcome(1, 1));
             reconnector.Setup(r => r.GetConnectionStateAsync(type, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(EquipmentConnectionState.Connected);
         }
 
         private void ReconnectAlwaysFails(DeviceType type) {
-            reconnector.Setup(r => r.ReconnectAsync(type, It.IsAny<CancellationToken>()))
+            reconnector.Setup(r => r.RecoverAsync(type, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new ReconnectOutcome(1, 1));
             reconnector.Setup(r => r.GetConnectionStateAsync(type, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(EquipmentConnectionState.Error);
@@ -184,7 +184,7 @@ namespace OpenAstroAra.Test {
 
             Assert.That(Actions(), Is.All.EqualTo("notify_only"));
             Assert.That(Actions(), Does.Not.Contain("recovered").And.Not.Contain("reconnecting"));
-            reconnector.Verify(r => r.ReconnectAsync(It.IsAny<DeviceType>(), It.IsAny<CancellationToken>()), Times.Never,
+            reconnector.Verify(r => r.RecoverAsync(It.IsAny<DeviceType>(), It.IsAny<CancellationToken>()), Times.Never,
                 "no attempt: ConnectAsync on a Connected device reopens nothing");
             sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Never);
             Assert.That(posted.Select(n => n.Severity), Is.All.EqualTo(NotificationSeverity.Warning));
@@ -241,7 +241,7 @@ namespace OpenAstroAra.Test {
             // AB #1452 — a bridge that searches serial ports answers Connected=true late. The ladder
             // must keep waiting while the service reports Connecting, not walk the next rung.
             service.ConnectInFlightTimeout = TimeSpan.FromSeconds(10);
-            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
+            reconnector.Setup(r => r.RecoverAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new ReconnectOutcome(1, 1));
             var connecting = new Stopwatch();
             reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
@@ -263,7 +263,7 @@ namespace OpenAstroAra.Test {
             Assert.That(Actions(), Is.EqualTo(ReconnectRecover));
             Assert.That(ActionPayload("recovered").GetProperty("attempts").GetInt32(), Is.EqualTo(1),
                 "the first attempt's connect landed; no rung was spent waiting on it");
-            reconnector.Verify(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()), Times.Once);
+            reconnector.Verify(r => r.RecoverAsync(DeviceType.Camera, It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Test]
@@ -272,7 +272,7 @@ namespace OpenAstroAra.Test {
             // then needs one clean refresh tick. That wait is timed from when the connect landed,
             // not from the dispatch, or a connect that worked counts as a failed rung.
             service.ConnectInFlightTimeout = TimeSpan.FromSeconds(10);
-            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()))
+            reconnector.Setup(r => r.RecoverAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new ReconnectOutcome(1, 1));
             var sinceDispatch = new Stopwatch();
             TimeSpan Elapsed() {
@@ -294,7 +294,7 @@ namespace OpenAstroAra.Test {
             await service.WhenIdleAsync();
 
             Assert.That(ActionPayload("recovered").GetProperty("attempts").GetInt32(), Is.EqualTo(1));
-            reconnector.Verify(r => r.ReconnectAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()), Times.Once);
+            reconnector.Verify(r => r.RecoverAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Test]
@@ -304,7 +304,7 @@ namespace OpenAstroAra.Test {
             service.ConnectInFlightTimeout = TimeSpan.FromMilliseconds(500);
             var clock = Stopwatch.StartNew();
             var dispatches = new List<TimeSpan>();
-            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
+            reconnector.Setup(r => r.RecoverAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
                 .Callback(() => { lock (dispatches) { dispatches.Add(clock.Elapsed); } })
                 .ReturnsAsync(new ReconnectOutcome(1, 1));
             reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
@@ -330,7 +330,7 @@ namespace OpenAstroAra.Test {
             Assert.That(Actions(), Does.Contain("gave_up"));
             Assert.That(ActionPayload("gave_up").GetProperty("terminal").GetString(), Is.EqualTo("pause_sequence"));
             Assert.That(ActionPayload("gave_up").GetProperty("attempts").GetInt32(), Is.EqualTo(5));
-            reconnector.Verify(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()), Times.Exactly(5),
+            reconnector.Verify(r => r.RecoverAsync(DeviceType.Camera, It.IsAny<CancellationToken>()), Times.Exactly(5),
                 "every rung of the 0/5/15/30/60 ladder ran");
             sequencer.Verify(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()), Times.Never,
                 "a dead camera must leave the sequence paused");
@@ -348,7 +348,7 @@ namespace OpenAstroAra.Test {
             // user re-seated the hub — and the first linger tick finds it. Phase-based on the
             // published actions (synchronously, so the collapsed-delay linger cannot outrun it),
             // not a read count: #1307 added release checks that read the state too.
-            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
+            reconnector.Setup(r => r.RecoverAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new ReconnectOutcome(1, 1));
             reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(() => Actions().Contains("gave_up") ? EquipmentConnectionState.Connected : EquipmentConnectionState.Error);
@@ -400,7 +400,7 @@ namespace OpenAstroAra.Test {
             // Rung 1 fails (Error throughout its confirm window); then the user disconnects, so every
             // later read says Disconnected.
             var reconnects = 0;
-            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()))
+            reconnector.Setup(r => r.RecoverAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(() => { reconnects++; return new ReconnectOutcome(1, 1); });
             reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(() => reconnects == 0 ? EquipmentConnectionState.Error : EquipmentConnectionState.Disconnected);
@@ -431,9 +431,24 @@ namespace OpenAstroAra.Test {
             service.OnFault(Fault());
             await service.WhenIdleAsync();
 
-            reconnector.Verify(r => r.ReconnectAsync(It.IsAny<DeviceType>(), It.IsAny<CancellationToken>()), Times.Never);
+            reconnector.Verify(r => r.RecoverAsync(It.IsAny<DeviceType>(), It.IsAny<CancellationToken>()), Times.Never);
             Assert.That(Actions(), Is.EqualTo(PauseReconnectReleased));
             Assert.That(ActionPayload("released").GetProperty("paused_runs").GetInt32(), Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task A_recorded_user_disconnect_releases_the_episode_whatever_the_state_reads() {
+            // #1539 — a service with the lifecycle module records the user's disconnect; the ladder
+            // asks it first, so a state read that fails (and reads as Error) does not hide it.
+            reconnector.Setup(r => r.GetDesiredConnection(DeviceType.Rotator)).Returns(DesiredConnection.DisconnectedByUser);
+            reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Rotator, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(EquipmentConnectionState.Error);
+
+            service.OnFault(Fault(DeviceType.Rotator));
+            await service.WhenIdleAsync();
+
+            reconnector.Verify(r => r.RecoverAsync(It.IsAny<DeviceType>(), It.IsAny<CancellationToken>()), Times.Never);
+            Assert.That(Actions(), Does.Contain("released").And.Not.Contain("gave_up"));
         }
 
         [Test]
@@ -460,7 +475,7 @@ namespace OpenAstroAra.Test {
             await service.WhenIdleAsync();
 
             Assert.That(Actions(), Does.Not.Contain("readopted"));
-            reconnector.Verify(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()),
+            reconnector.Verify(r => r.RecoverAsync(DeviceType.Camera, It.IsAny<CancellationToken>()),
                 Times.Exactly(5 + 3), "5 ladder rungs, then exactly LingerMaxAttempts linger re-dispatches");
         }
 
@@ -515,7 +530,7 @@ namespace OpenAstroAra.Test {
             Assert.That(notRecovered, Is.Not.Null, "the give-up notice is the 'reconnect did not clear the latch' signal");
             Assert.That(Actions(), Does.Not.Contain("readopted"), "nor is the linger fooled by Connected-but-latched");
             // Every rung and every linger tick re-dispatched the connect (the pair that clears the bridge).
-            reconnector.Verify(r => r.ReconnectAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()), Times.AtLeast(2));
+            reconnector.Verify(r => r.RecoverAsync(DeviceType.Telescope, It.IsAny<CancellationToken>()), Times.AtLeast(2));
         }
 
         [Test]
@@ -585,7 +600,7 @@ namespace OpenAstroAra.Test {
             await service.WhenIdleAsync();
 
             telescope.Verify(t => t.SetTrackingAsync(true, It.IsAny<CancellationToken>()), Times.Once);
-            reconnector.Verify(r => r.ReconnectAsync(It.IsAny<DeviceType>(), It.IsAny<CancellationToken>()), Times.Never);
+            reconnector.Verify(r => r.RecoverAsync(It.IsAny<DeviceType>(), It.IsAny<CancellationToken>()), Times.Never);
             Assert.That(Actions(), Does.Contain("recovered"));
         }
 
@@ -608,7 +623,7 @@ namespace OpenAstroAra.Test {
 
             Assert.That(Actions(), Is.EqualTo(NotifyOnly));
             Assert.That(posted, Has.Count.EqualTo(1));
-            reconnector.Verify(r => r.ReconnectAsync(It.IsAny<DeviceType>(), It.IsAny<CancellationToken>()), Times.Never);
+            reconnector.Verify(r => r.RecoverAsync(It.IsAny<DeviceType>(), It.IsAny<CancellationToken>()), Times.Never);
             sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Never);
         }
 
@@ -622,7 +637,7 @@ namespace OpenAstroAra.Test {
             service.OnFault(Fault());
             await service.WhenIdleAsync();
 
-            reconnector.Verify(r => r.ReconnectAsync(It.IsAny<DeviceType>(), It.IsAny<CancellationToken>()), Times.Never);
+            reconnector.Verify(r => r.RecoverAsync(It.IsAny<DeviceType>(), It.IsAny<CancellationToken>()), Times.Never);
             Assert.That(ActionPayload("gave_up").GetProperty("terminal").GetString(), Is.EqualTo("pause_sequence"));
         }
 
@@ -630,7 +645,7 @@ namespace OpenAstroAra.Test {
         public async Task A_second_fault_during_an_active_episode_folds_into_it() {
             var firstAttemptStarted = new TaskCompletionSource();
             var releaseFirst = new TaskCompletionSource();
-            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
+            reconnector.Setup(r => r.RecoverAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
                 .Returns(async (DeviceType _, CancellationToken _) => {
                     firstAttemptStarted.TrySetResult();
                     await releaseFirst.Task;
@@ -646,7 +661,7 @@ namespace OpenAstroAra.Test {
             await service.WhenIdleAsync();
 
             Assert.That(Actions().Count(a => a == "reconnecting"), Is.EqualTo(1), "one episode, not two");
-            reconnector.Verify(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()), Times.Once);
+            reconnector.Verify(r => r.RecoverAsync(DeviceType.Camera, It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Test]
@@ -663,7 +678,7 @@ namespace OpenAstroAra.Test {
         public async Task A_notify_only_fault_still_notifies_while_the_same_device_type_is_reconnecting() {
             var reconnectStarted = new TaskCompletionSource();
             var releaseReconnect = new TaskCompletionSource();
-            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Switch, It.IsAny<CancellationToken>()))
+            reconnector.Setup(r => r.RecoverAsync(DeviceType.Switch, It.IsAny<CancellationToken>()))
                 .Returns(async (DeviceType _, CancellationToken _) => {
                     reconnectStarted.TrySetResult();
                     await releaseReconnect.Task;
@@ -725,7 +740,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Recovery_on_a_later_rung_reports_the_attempt_number() {
             var calls = 0;
-            reconnector.Setup(r => r.ReconnectAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
+            reconnector.Setup(r => r.RecoverAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(() => new ReconnectOutcome(1, ++calls >= 3 ? 1 : 0));
             reconnector.Setup(r => r.GetConnectionStateAsync(DeviceType.Camera, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(EquipmentConnectionState.Connected);

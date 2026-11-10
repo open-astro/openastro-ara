@@ -14,6 +14,7 @@
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
@@ -45,7 +46,7 @@ namespace OpenAstroAra.Test {
         // has no live stacking; the contract is a 501 not-implemented problem on every route.
         [Test]
         public void A_camera_service_without_live_stacking_gets_501_on_every_route() {
-            var svc = new PlaceholderCameraService();
+            var svc = new Mock<ICameraService>().Object; // a camera service with no live stacking
             var http = new DefaultHttpContext();
             Assert.Multiple(() => {
                 Assert.That(StatusOf(LiveStackEndpoints.Start(svc)), Is.EqualTo(501));

@@ -17,7 +17,6 @@
 
 #endregion "copyright"
 
-using ASCOM.Alpaca.Clients;
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enums;
@@ -78,13 +77,14 @@ public sealed partial class DomeService : IDomeMediator {
     /// </summary>
     public DomeInfo GetInfo() {
         lock (_gate) {
-            var connected = !_disposed && _state == EquipmentConnectionState.Connected && _client is not null;
+            var connected = _lifecycle.Live is not null;
             var runtime = _runtime;
             var caps = _domeCaps ?? default;
+            var device = _lifecycle.Device;
             return new DomeInfo {
                 Connected = connected,
-                Name = _device?.Name ?? string.Empty,
-                DeviceId = _device?.UniqueId ?? string.Empty,
+                Name = device?.Name ?? string.Empty,
+                DeviceId = device?.UniqueId ?? string.Empty,
                 ShutterStatus = connected ? MapShutter(_shutterStatusRaw) : NinaShutter.ShutterNone,
                 Azimuth = connected ? runtime.AzimuthDeg ?? double.NaN : double.NaN,
                 AtHome = connected && runtime.AtHome,
@@ -141,14 +141,11 @@ public sealed partial class DomeService : IDomeMediator {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Sequencer dome-op boundary: the blocking ASCOM call can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-op; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP-timeout OCE) is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]
-    private async Task<bool> RunDomeOpAsync(string op, Action<AlpacaDome> action, Func<AlpacaDome, bool> isDone, CancellationToken ct) {
-        AlpacaDome? client;
-        lock (_gate) {
-            if (_disposed) {
-                return false;
-            }
-            client = _state == EquipmentConnectionState.Connected ? _client : null;
+    private async Task<bool> RunDomeOpAsync(string op, Action<IDomeDevice> action, Func<IDomeDevice, bool> isDone, CancellationToken ct) {
+        if (_lifecycle.IsDisposed) {
+            return false;
         }
+        var client = _lifecycle.Live;
         if (client is null) {
             return false; // not connected: the instruction's Validate has already blocked this
         }
@@ -194,15 +191,10 @@ public sealed partial class DomeService : IDomeMediator {
 
     // Polls the device directly until the terminal condition holds (refreshing the §32.4 cache each
     // tick so GetInfo stays current), or returns false on timeout / a dropped-or-superseded connection.
-    private async Task<bool> WaitForDomeConditionAsync(AlpacaDome client, Func<AlpacaDome, bool> isDone, CancellationToken ct) {
+    private async Task<bool> WaitForDomeConditionAsync(IDomeDevice client, Func<IDomeDevice, bool> isDone, CancellationToken ct) {
         var loggedReadFailure = false;
         for (var i = 0; i < DomeOpSettleMaxPolls; i++) {
-            bool stillOurClient;
-            lock (_gate) {
-                stillOurClient = !_disposed && _state == EquipmentConnectionState.Connected
-                    && ReferenceEquals(_client, client);
-            }
-            if (!stillOurClient) {
+            if (!_lifecycle.IsLive(client)) {
                 return false; // disconnected / superseded — the op can't be confirmed
             }
             var done = ReadCondition(client, isDone);
@@ -214,10 +206,10 @@ public sealed partial class DomeService : IDomeMediator {
                 loggedReadFailure = true;
             }
             if (done == true) {
-                RefreshCacheOnce();
+                _lifecycle.Refresh();
                 return true;
             }
-            RefreshCacheOnce();
+            _lifecycle.Refresh();
             await Task.Delay(DomeOpPollInterval, ct).ConfigureAwait(false);
         }
         return false; // timed out without reaching the terminal state
@@ -225,7 +217,7 @@ public sealed partial class DomeService : IDomeMediator {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-poll predicate boundary: a transient/unsupported device read throws; report null ('unknown') so the wait keeps polling (and logs once) rather than faulting. CA1031's log-and-recover boundary applies.")]
-    private static bool? ReadCondition(AlpacaDome client, Func<AlpacaDome, bool> isDone) {
+    private static bool? ReadCondition(IDomeDevice client, Func<IDomeDevice, bool> isDone) {
         try {
             return isDone(client);
         } catch (Exception) {
@@ -248,16 +240,12 @@ public sealed partial class DomeService : IDomeMediator {
     // only be blamed on the LIVE client — an op whose client was superseded or disposed by a user
     // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
     // so the liveness check and the device snapshot share one critical section.
-    private void PublishOpFault(AlpacaDome client, EquipmentFaultKind kind, string details) {
+    private void PublishOpFault(IDomeDevice client, EquipmentFaultKind kind, string details) {
         if (_faults is null) {
             return;
         }
-        DiscoveredDeviceDto? device;
-        lock (_gate) {
-            if (!ReferenceEquals(_client, client)) {
-                return;
-            }
-            device = _device;
+        if (_lifecycle.DeviceIfCurrent(client) is not { } device) {
+            return;
         }
         _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.Dome, device?.UniqueId, device?.Name,
             kind, details, DateTimeOffset.UtcNow));
@@ -265,11 +253,11 @@ public sealed partial class DomeService : IDomeMediator {
 
     // Guarded per-field reads used by the terminal-condition predicates (each may throw on an
     // unsupported/transient property; the predicate treats a throw as not-yet-done via ReadCondition).
-    private static AscomShutter ReadShutter(AlpacaDome c) => c.ShutterStatus;
-    private static bool ReadAtPark(AlpacaDome c) => c.AtPark;
-    private static bool ReadAtHome(AlpacaDome c) => c.AtHome;
-    private static bool ReadSlewing(AlpacaDome c) => c.Slewing;
-    private static bool AzimuthReached(AlpacaDome c, double target) => Math.Abs(c.Azimuth - target) < AzimuthToleranceDeg;
+    private static AscomShutter ReadShutter(IDomeDevice c) => c.ShutterStatus;
+    private static bool ReadAtPark(IDomeDevice c) => c.AtPark;
+    private static bool ReadAtHome(IDomeDevice c) => c.AtHome;
+    private static bool ReadSlewing(IDomeDevice c) => c.Slewing;
+    private static bool AzimuthReached(IDomeDevice c, double target) => Math.Abs(c.Azimuth - target) < AzimuthToleranceDeg;
 
     private static double NormalizeAzimuth(double deg) {
         var a = deg % 360.0;

@@ -18,7 +18,6 @@
 
 #endregion "copyright"
 
-using ASCOM.Alpaca.Clients;
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyRotator;
@@ -67,12 +66,13 @@ public sealed partial class RotatorService : IRotatorMediator {
     /// </summary>
     public RotatorInfo GetInfo() {
         lock (_gate) {
-            var connected = !_disposed && _state == EquipmentConnectionState.Connected && _client is not null;
+            var connected = _lifecycle.Live is not null;
             var runtime = _runtime;
+            var device = _lifecycle.Device;
             return new RotatorInfo {
                 Connected = connected,
-                Name = _device?.Name ?? string.Empty,
-                DeviceId = _device?.UniqueId ?? string.Empty,
+                Name = device?.Name ?? string.Empty,
+                DeviceId = device?.UniqueId ?? string.Empty,
                 Position = connected ? (float)(runtime.SkyAngleDeg ?? 0) : 0,
                 // NaN, not 0, while connected but not read yet: a frame taken right after the rotator
                 // connects would otherwise record 0° and its flats would turn to the wrong angle.
@@ -100,20 +100,17 @@ public sealed partial class RotatorService : IRotatorMediator {
     public float GetTargetMechanicalPosition(float position) => NormalizeAngle(position);
 
     public void Sync(float skyAngle) {
-        AlpacaRotator? client;
-        lock (_gate) {
-            client = _state == EquipmentConnectionState.Connected ? _client : null;
-        }
+        var client = _lifecycle.Live;
         if (client is null) {
             return; // not connected: no-op (caller has already validated)
         }
         TrySync(client, NormalizeAngle(skyAngle));
-        RefreshCacheOnce();
+        _lifecycle.Refresh();
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort sky-angle sync: Sync can throw on a driver that doesn't support it; the failure is logged and ignored rather than faulting the sequence. CA1031's log-and-recover boundary applies.")]
-    private void TrySync(AlpacaRotator client, float skyAngle) {
+    private void TrySync(IRotatorDevice client, float skyAngle) {
         try {
             client.Sync(skyAngle);
             ResetDriftIfLive(client); // sync redefines the sky-angle frame — the old expectation is stale
@@ -129,10 +126,7 @@ public sealed partial class RotatorService : IRotatorMediator {
     // timeout. Alpaca reads are normally sub-ms and any exception falls back to the cache, so this is
     // an accepted tradeoff (parity with the focuser-mediator temperature read).
     private float CurrentSkyAngle() {
-        AlpacaRotator? client;
-        lock (_gate) {
-            client = _state == EquipmentConnectionState.Connected ? _client : null;
-        }
+        var client = _lifecycle.Live;
         var live = client is not null ? ReadAngle(client, useMechanical: false) : null;
         if (live is float a) {
             return a;
@@ -145,13 +139,10 @@ public sealed partial class RotatorService : IRotatorMediator {
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Sequencer move boundary: the blocking ASCOM MoveAbsolute/MoveMechanical can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-move; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP timeout OCE) is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]
     private async Task<float> MoveBlockingAsync(float target, bool useMechanical, CancellationToken ct) {
-        AlpacaRotator? client;
-        lock (_gate) {
-            if (_disposed) {
-                return 0;
-            }
-            client = _state == EquipmentConnectionState.Connected ? _client : null;
+        if (_lifecycle.IsDisposed) {
+            return 0;
         }
+        var client = _lifecycle.Live;
         if (client is null) {
             // Not connected: the instruction's Validate has already blocked this; defensively report
             // the cached angle without moving rather than throwing into the sequencer.
@@ -210,7 +201,7 @@ public sealed partial class RotatorService : IRotatorMediator {
             PublishOpFault(client, EquipmentFaultKind.OpError, $"rotator move to {target}° failed: {ex.Message}");
             throw new SequenceEntityFailedException($"rotator move to {target}° failed: {ex.Message}", ex);
         }
-        RefreshCacheOnce();
+        _lifecycle.Refresh();
         // Prefer a direct device read for the returned angle so a single-flight RefreshCacheOnce that
         // no-op'd against a concurrent timer tick can't report a stale value. If neither the live read
         // nor the cache is available, report 0 ("unknown") rather than the requested target.
@@ -226,22 +217,17 @@ public sealed partial class RotatorService : IRotatorMediator {
     // §42.3 disconnect episode owns the fault/reaction — the publish gate suppresses a spurious
     // stall event for that case, aligning with the mount/dome/filter settle loops). A driver
     // without IsMoving reports true: its blocking Move settled when the call returned.
-    private async Task<bool> WaitForMoveCompleteAsync(AlpacaRotator client, CancellationToken ct) {
+    private async Task<bool> WaitForMoveCompleteAsync(IRotatorDevice client, CancellationToken ct) {
         var unknownStreak = 0;
         for (var i = 0; i < MoveSettleMaxPolls; i++) {
             await Task.Delay(MoveSettlePollInterval, ct).ConfigureAwait(false);
             // Stop if the device is gone (disconnected / superseded / disposed): a dropped connection
             // must NOT be mistaken for "settled" the way a swallowed IsMoving read would be.
-            bool stillOurClient;
-            lock (_gate) {
-                stillOurClient = !_disposed && _state == EquipmentConnectionState.Connected
-                    && ReferenceEquals(_client, client);
-            }
-            if (!stillOurClient) {
+            if (!_lifecycle.IsLive(client)) {
                 return false;
             }
             var moving = ReadIsMoving(client);
-            RefreshCacheOnce();
+            _lifecycle.Refresh();
             if (moving == false) {
                 return true; // confirmed settled
             }
@@ -260,7 +246,7 @@ public sealed partial class RotatorService : IRotatorMediator {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: a transient/unsupported IsMoving read throws; report null ('unknown') so the settle-wait keeps polling rather than concluding 'settled', while a genuine disconnect is caught by the connection check in the loop. CA1031's log-and-recover boundary applies.")]
-    private static bool? ReadIsMoving(AlpacaRotator client) {
+    private static bool? ReadIsMoving(IRotatorDevice client) {
         try {
             return client.IsMoving;
         } catch (Exception) {
@@ -270,7 +256,7 @@ public sealed partial class RotatorService : IRotatorMediator {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: a transient/unsupported angle read throws; report null so the caller falls back to the cached angle rather than faulting. CA1031's log-and-recover boundary applies.")]
-    private static float? ReadAngle(AlpacaRotator client, bool useMechanical) {
+    private static float? ReadAngle(IRotatorDevice client, bool useMechanical) {
         try {
             return useMechanical ? client.MechanicalPosition : client.Position;
         } catch (Exception) {
@@ -289,16 +275,12 @@ public sealed partial class RotatorService : IRotatorMediator {
     // only be blamed on the LIVE client — an op whose client was superseded or disposed by a user
     // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
     // so the liveness check and the device snapshot share one critical section.
-    private void PublishOpFault(AlpacaRotator client, EquipmentFaultKind kind, string details) {
+    private void PublishOpFault(IRotatorDevice client, EquipmentFaultKind kind, string details) {
         if (_faults is null) {
             return;
         }
-        DiscoveredDeviceDto? device;
-        lock (_gate) {
-            if (!ReferenceEquals(_client, client)) {
-                return;
-            }
-            device = _device;
+        if (_lifecycle.DeviceIfCurrent(client) is not { } device) {
+            return;
         }
         _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.Rotator, device?.UniqueId, device?.Name,
             kind, details, DateTimeOffset.UtcNow));

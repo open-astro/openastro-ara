@@ -12,8 +12,6 @@
 
 #endregion "copyright"
 
-using ASCOM.Alpaca.Clients;
-using ASCOM.Common.Alpaca;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
@@ -28,161 +26,97 @@ namespace OpenAstroAra.Server.Services;
 /// §14e — fifth real Alpaca-backed device service. Replaces <c>PlaceholderRotatorService</c>:
 /// connects to a discovered Alpaca Rotator, serves its live runtime (state + mechanical/sky angle)
 /// over the §6 REST surface, and rotates it via <see cref="MoveAsync"/> (a §60.5 202-Accepted
-/// background operation). Follows the established template (generation supersede, §32.4
-/// background-refresh cache, Halt-before-disconnect). REST-only — the <c>IRotatorMediator</c>
+/// background operation). Its lifecycle (generation supersede, §32.4 background-refresh cache,
+/// Halt-before-disconnect) is the shared <see cref="DeviceLifecycle{TDevice}"/> (ADR 0011). REST-only — the <c>IRotatorMediator</c>
 /// unification is the follow-up.
 /// </summary>
-public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSource, IDisposable {
+public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSource, IRecoverableDevice, IDisposable {
 
-    // #1127 — the record the card names. The remembered-selection store and this can diverge
-    // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
-    public DiscoveredDeviceDto? RetainedDevice {
-        get {
-            lock (_gate) {
-                return _disposed ? null : _device;
-            }
-        }
-    }
-
-
-    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
     private static readonly RotatorStateDto IdleRuntime = new("idle", null, null, false);
 
     private readonly ILogger<RotatorService> _logger;
-    private readonly EquipmentEventPublisher? _events;
     private readonly IEquipmentFaultSink? _faults;
-    private readonly DeviceConnectionProbe _probe = new();
-    // §42.3 second channel — the essential runtime read's health (the probe alone misses a bridge
-    // that answers Connected while every read fails, 2026-10-16). Mutated under _gate like _probe.
-    // Built in the constructor, once the fault sink is known.
-    private readonly DeviceHealthWatch _health;
-    private void ObserveRuntimeReadLocked(bool ok, string? reason, DiscoveredDeviceDto? device) => _health.Observe(ok, reason, device);
-    private void ResetHealthLocked() => _health.Reset();
-
+    // ADR 0011 — connect, disconnect, forget, refresh, probe, read health and the desired state.
+    private readonly DeviceLifecycle<IRotatorDevice> _lifecycle;
     private readonly RotatorDriftWatch _drift = new();
-    private readonly object _gate = new();
-    private readonly Timer _refreshTimer;
-    // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence so a fixture that
-    // needs "several ticks" waits milliseconds, not multiples of the 2 s production interval.
-    // Init-only (object initializer), so it can never re-arm a disposed timer; never used by the daemon.
-    internal TimeSpan RefreshPeriod { init => _refreshTimer.Change(value, value); }
-    private AlpacaRotator? _client;
-    private DiscoveredDeviceDto? _device;
-    private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
+    private Func<DiscoveredDeviceDto, IRotatorDevice> _createDevice = AlpacaRotatorDevice.Create;
+    // Guarded by the lifecycle's gate, like the connection state.
     private RotatorStateDto _runtime = IdleRuntime;
     private RotatorCapabilitiesDto? _capabilities;
-    private int _refreshing;
-    private long _connectGeneration;
-    private bool _disposed;
 
     public RotatorService(ILogger<RotatorService>? logger = null, EquipmentEventPublisher? events = null,
             IEquipmentFaultSink? faults = null) {
         _logger = logger ?? NullLogger<RotatorService>.Instance;
-        _events = events;
         _faults = faults;
-        _health = new DeviceHealthWatch(DeviceType.Rotator, faults);
-        _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
+        _lifecycle = new DeviceLifecycle<IRotatorDevice>(this, DeviceType.Rotator, "rotator",
+            d => _createDevice(d), ReadRuntime, ResetSessionLocked,
+            DeviceHealthTracker.DefaultThreshold, _logger, events, faults, PrepareSession);
     }
+
+    private object _gate => _lifecycle.Gate;
+
+    // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence. Init-only, never used by the daemon.
+    internal TimeSpan RefreshPeriod { init => _lifecycle.RefreshPeriod = value; }
+
+    // Test seam (ADR 0011 rule 4): the adapter the lifecycle builds for a selected device.
+    internal Func<DiscoveredDeviceDto, IRotatorDevice> DeviceFactory { init => _createDevice = value; }
+
+    // #1127 — the record the card names. The remembered-selection store and this can diverge
+    // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
+    public DiscoveredDeviceDto? RetainedDevice => _lifecycle.RetainedDevice;
+
+    public DesiredConnection? DesiredConnection => _lifecycle.Desired;
+
+    public bool TryRecover(DiscoveredDeviceDto device) => _lifecycle.TryRecover(device);
 
     public Task<RotatorDto?> GetAsync(CancellationToken ct) {
         lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
+            ObjectDisposedException.ThrowIf(_lifecycle.IsDisposed, this);
             // null ONLY when no device has ever been selected (-> 404). After a disconnect the
             // device is retained and the DTO is returned with Disconnected state + idle runtime
             // ("device selected but not connected"), consistent across all the device services.
-            if (_device is null) {
+            var device = _lifecycle.Device;
+            if (device is null) {
                 return Task.FromResult<RotatorDto?>(null);
             }
-            var state = _state;
+            var state = _lifecycle.State;
             var runtime = state == EquipmentConnectionState.Connected ? _runtime : IdleRuntime;
             var caps = state == EquipmentConnectionState.Connected ? _capabilities : null;
             return Task.FromResult<RotatorDto?>(
-                new RotatorDto(_device.UniqueId, _device.Name, state, caps, runtime));
+                new RotatorDto(device.UniqueId, device.Name, state, caps, runtime));
         }
     }
 
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.Device);
-        var device = request.Device;
-        long generation;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if ((_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected)
-                && _device?.UniqueId == device.UniqueId) {
-                return Task.FromResult(Accepted("rotator.connect", idempotencyKey));
-            }
-            DisposeClientLocked();
-            _device = device;
-            generation = ++_connectGeneration;
-            SetState(EquipmentConnectionState.Connecting);
-        }
-        _ = Task.Run(() => ConnectInBackground(device, generation), CancellationToken.None);
-        return Task.FromResult(Accepted("rotator.connect", idempotencyKey));
+        return _lifecycle.ConnectAsync(request.Device, idempotencyKey);
     }
 
-    public async Task<bool> ForgetAsync(CancellationToken ct) {
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_device is null) {
-                return false;
-            }
-            if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
-                throw new InvalidOperationException("the rotator is connected — disconnect it before removing it");
-            }
-        }
-        // The SAME teardown as a disconnect — bump the connect generation, drop the client and hand
-        // it to SafeDisconnectDispose off-lock, publish Disconnected (the §60.9 transition while the
-        // device is still known to subscribers). An Error reached from Connected (§42.3 trip, a
-        // throwing property read) still holds a live, adopted client, and the card offers no
-        // Disconnect there any more — so Remove must release the driver itself (#1108 review).
-        await DisconnectAsync(null, ct).ConfigureAwait(false);
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_device is null) {
-                return false;
-            }
-            // A connect that raced in between the two locks is live again — refuse, don't drop.
-            if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
-                throw new InvalidOperationException("the rotator is connected — disconnect it before removing it");
-            }
-            var removed = _device;
-            _device = null;
-            // §60.9 — a second open client drops its card on this instead of waiting for its
-            // next poll (#1127); the lock-held publish is the same hand-off SetState makes.
-            _events?.Removed(DeviceType.Rotator, removed.UniqueId, removed.Name);
-            return true;
-        }
+    public Task<bool> ForgetAsync(CancellationToken ct) => _lifecycle.ForgetAsync();
+
+    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) =>
+        _lifecycle.DisconnectAsync(idempotencyKey);
+
+    // Caller holds the gate: a fresh, ended or tripped session forgets the last one's reads.
+    private void ResetSessionLocked() {
+        _runtime = IdleRuntime; // don't serve a prior device's runtime
+        _capabilities = null;
+        _drift.Reset();         // a prior session's commanded angle means nothing here
     }
 
-    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) {
-        AlpacaRotator? client;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            _connectGeneration++;
-            client = _client;
-            _client = null;
-            ResetHealthLocked(); // a standing degraded episode ends with the session (resolved, not left to seed)
-            _drift.Reset();
-            if (_device is not null) {
-                SetState(EquipmentConnectionState.Disconnected);
-            }
-        }
-        if (client is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(client), CancellationToken.None);
-        }
-        return Task.FromResult(Accepted("rotator.disconnect", idempotencyKey));
+    // Capabilities are read once on connect, before the rotator reads Connected, so a client that
+    // re-reads on Connected or details_ready never sees them missing.
+    private Action PrepareSession(IRotatorDevice client) {
+        var caps = ReadCapabilities(client);
+        return () => _capabilities = caps;
     }
 
     public Task<OperationAcceptedDto> MoveAsync(RotatorMoveRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
         // Dispose check first (a disposed service can't be operated regardless of the argument),
         // then argument range, then connection state — aligned with the other device services.
-        AlpacaRotator? client;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            client = _state == EquipmentConnectionState.Connected ? _client : null;
-        }
+        var client = _lifecycle.ConnectedDevice();
         if (IsAngleOutOfRange(request.TargetAngleDeg)) {
             throw new ArgumentOutOfRangeException(nameof(request), request.TargetAngleDeg,
                 "TargetAngleDeg must be in [0, 360).");
@@ -200,11 +134,7 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
 
     public Task<OperationAcceptedDto> SetReverseAsync(RotatorReverseRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
-        AlpacaRotator? client;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            client = _state == EquipmentConnectionState.Connected ? _client : null;
-        }
+        var client = _lifecycle.ConnectedDevice();
         if (client is null) {
             throw new InvalidOperationException("rotator is not connected");
         }
@@ -215,11 +145,7 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
 
     public Task<OperationAcceptedDto> SyncAsync(RotatorSyncRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
-        AlpacaRotator? client;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            client = _state == EquipmentConnectionState.Connected ? _client : null;
-        }
+        var client = _lifecycle.ConnectedDevice();
         // Range first, then connection — matches MoveAsync's established order (and
         // the test that exercises range validation via the disconnected path).
         if (IsAngleOutOfRange(request.SkyAngleDeg)) {
@@ -238,28 +164,24 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
     // means the stop reached the driver. CancellationToken.None: Task.Run with an already-cancelled
     // token never runs the lambda, so an HTTP timeout would silently skip the stop.
     public async Task<OperationAcceptedDto> HaltAsync(string? idempotencyKey, CancellationToken ct) {
-        AlpacaRotator? client;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            client = _state == EquipmentConnectionState.Connected ? _client : null;
-        }
+        var client = _lifecycle.ConnectedDevice();
         if (client is null) {
             throw new InvalidOperationException("rotator is not connected");
         }
         await Task.Run(() => client.Halt(), CancellationToken.None).ConfigureAwait(false);
         // Stopped short of the move's target: the drift watch must not re-issue that move.
         ResetDriftIfLive(client);
-        RefreshCacheOnce();
+        _lifecycle.Refresh();
         return Accepted("rotator.halt", idempotencyKey);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background reverse boundary: the blocking ASCOM Reverse setter can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    private void SetReverseInBackground(AlpacaRotator client, bool reverse) {
+    private void SetReverseInBackground(IRotatorDevice client, bool reverse) {
         try {
             client.Reverse = reverse;
             ResetDriftIfLive(client); // reverse remaps the angle domains — the old expectation is stale
-            RefreshCacheOnce();
+            _lifecycle.Refresh();
         } catch (Exception ex) {
             LogReverseFailed(ex, reverse);
         }
@@ -267,11 +189,11 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background sync boundary: the blocking ASCOM Sync can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    private void SyncInBackground(AlpacaRotator client, float angle) {
+    private void SyncInBackground(IRotatorDevice client, float angle) {
         try {
             client.Sync(angle);
             ResetDriftIfLive(client); // sync redefines the sky-angle frame — the old expectation is stale
-            RefreshCacheOnce();
+            _lifecycle.Refresh();
         } catch (Exception ex) {
             LogSyncFailed(ex, angle);
         }
@@ -279,7 +201,7 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background move boundary: the blocking ASCOM MoveAbsolute/MoveMechanical can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client before/during the move; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    private void MoveInBackground(AlpacaRotator client, float target, bool useSkyAngle) {
+    private void MoveInBackground(IRotatorDevice client, float target, bool useSkyAngle) {
         try {
             // UseSkyAngle moves to the offset-corrected sky angle (Position); otherwise to the raw
             // mechanical angle (MechanicalPosition).
@@ -289,65 +211,37 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
                 client.MoveMechanical(target);
             }
             RecordMoveIfLive(client, target, mechanical: !useSkyAngle);
-            RefreshCacheOnce();
+            _lifecycle.Refresh();
         } catch (Exception ex) {
             ResetDriftIfLive(client); // the move failed — where the rotator sits now is unknown
             LogMoveFailed(ex, target);
         }
     }
 
-    private void RefreshTick(object? state) => RefreshCacheOnce();
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Timer-callback boundary: an unhandled exception in a System.Threading.Timer callback crashes the process. The per-field reads already absorb device failures; this catch-all is a hard backstop so a refresh tick can never fault the daemon. CA1031's log-and-recover boundary applies.")]
-    private void RefreshCacheOnce() {
-        if (Interlocked.CompareExchange(ref _refreshing, 1, 0) != 0) {
-            return;
-        }
-        try {
-            AlpacaRotator? client;
-            lock (_gate) {
-                if (_disposed || _state != EquipmentConnectionState.Connected) {
+    // The runtime read the lifecycle runs each tick. Position is the essential read: a streak of
+    // failures is a degraded fault (§42.3 second channel). The drift check commits under the same
+    // gate as the liveness check (the #789 one-critical-section lesson) and acts off-lock.
+    private DeviceRead ReadRuntime(IRotatorDevice client) {
+        var runtime = ReadRuntime(client, out var readError);
+        var verdict = ReadbackVerdict.Idle;
+        (float TargetDeg, bool Mechanical)? commanded = null;
+        string? deviceName = null;
+        return new DeviceRead(readError,
+            CommitLocked: () => {
+                _runtime = runtime;
+                // §42.2 item 4 — angle-drift check against the last commanded move.
+                verdict = _drift.Observe(runtime.MechanicalAngleDeg, runtime.SkyAngleDeg,
+                    isMoving: runtime.State == "moving",
+                    RotatorDriftWatch.DefaultToleranceDeg, DateTimeOffset.UtcNow);
+                if (verdict is ReadbackVerdict.Recommand or ReadbackVerdict.Mismatch) {
+                    commanded = _drift.Commanded;
+                    deviceName = _lifecycle.Device?.Name;
+                }
+            },
+            AfterCommit: () => {
+                if (commanded is not { } move) {
                     return;
                 }
-                client = _client;
-            }
-            if (client is null) {
-                return;
-            }
-            // §42.3 — the ONE deliberate connection probe per tick. The per-field runtime reads
-            // below deliberately swallow failures (an unsupported property must stay benign), so
-            // this probe is the only disconnect-detection source: Connected throws on transport
-            // death and reads false on a driver-side disconnect; a consecutive-failure streak
-            // (not one blip) trips the device to Error + publishes the §42.2 fault.
-            if (!ProbeConnected(client)) {
-                if (ObserveProbeIfLive(client, probeSucceeded: false) == ProbeVerdict.Lost) {
-                    TripConnectionLost(client);
-                }
-                return; // the device didn't answer — skip this tick's reads
-            }
-            ObserveProbeIfLive(client, probeSucceeded: true);
-            var runtime = ReadRuntime(client, out var readError);
-            var verdict = ReadbackVerdict.Idle;
-            (float TargetDeg, bool Mechanical)? commanded = null;
-            string? deviceName = null;
-            lock (_gate) {
-                if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
-                    _runtime = runtime;
-                    ObserveRuntimeReadLocked(readError is null, readError, _device);
-                    // §42.2 item 4 — angle-drift check against the last commanded move, under the
-                    // same commit lock as the liveness check (the #789 one-critical-section
-                    // lesson). The verdict is acted on off-lock below.
-                    verdict = _drift.Observe(runtime.MechanicalAngleDeg, runtime.SkyAngleDeg,
-                        isMoving: runtime.State == "moving",
-                        RotatorDriftWatch.DefaultToleranceDeg, DateTimeOffset.UtcNow);
-                    if (verdict is ReadbackVerdict.Recommand or ReadbackVerdict.Mismatch) {
-                        commanded = _drift.Commanded;
-                        deviceName = _device?.Name;
-                    }
-                }
-            }
-            if (commanded is { } move) {
                 var domain = move.Mechanical ? "mechanical" : "sky";
                 if (verdict == ReadbackVerdict.Recommand) {
                     RecommandMoveQuietly(client, move.TargetDeg, move.Mechanical);
@@ -358,17 +252,12 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
                         $"rotator {domain} angle reads {reported:0.##}°, commanded {move.TargetDeg:0.##}° " +
                         $"(tolerance ±{RotatorDriftWatch.DefaultToleranceDeg:0.##}°) — persists after one re-command");
                 }
-            }
-        } catch (Exception ex) {
-            LogRuntimeReadFailed(ex);
-        } finally {
-            Interlocked.Exchange(ref _refreshing, 0);
-        }
+            });
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported/transiently-failing rotator property throws; that field is reported null rather than failing the whole runtime read. CA1031's log-and-recover boundary applies.")]
-    private static RotatorStateDto ReadRuntime(AlpacaRotator c, out string? readError) {
+    private static RotatorStateDto ReadRuntime(IRotatorDevice c, out string? readError) {
         bool moving;
         readError = null;
         try { moving = c.IsMoving; } catch (Exception) { moving = false; }
@@ -384,12 +273,11 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
         return new RotatorStateDto(moving ? "moving" : "idle", mechanical, sky, reverse);
     }
 
-    // Capabilities are read once on connect (they don't change while connected): whether the
-    // rotator supports the Reverse property and its minimum step size in degrees. Per-field
-    // tolerant — an unsupported property yields a safe default rather than failing the connect.
+    // Whether the rotator supports the Reverse property and its minimum step size in degrees.
+    // Per-field tolerant — an unsupported property yields a safe default rather than failing the connect.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field capability read: an unsupported rotator property throws; that field falls back to a safe default rather than failing the connect. CA1031's log-and-recover boundary applies.")]
-    private static RotatorCapabilitiesDto ReadCapabilities(AlpacaRotator c) {
+    private static RotatorCapabilitiesDto ReadCapabilities(IRotatorDevice c) {
         bool canReverse;
         try { canReverse = c.CanReverse; } catch (Exception) { canReverse = false; }
         double stepSize;
@@ -397,118 +285,20 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
         return new RotatorCapabilitiesDto(canReverse, stepSize);
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Background connect boundary: constructing the Alpaca client and setting Connected can throw arbitrary driver/HTTP/socket exceptions; any escape must surface as the Error state and be contained, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
-        Justification = "Ownership of the AlpacaRotator is managed explicitly: on every non-adopt path SafeDisconnectDispose disposes it; on the adopt path it is stored in _client (local set to null) and disposed later by DisconnectAsync/Dispose. CA2000 cannot follow the transfer through the lock + helper.")]
-    private void ConnectInBackground(DiscoveredDeviceDto device, long generation) {
-        AlpacaRotator? client = null;
-        var adopted = false;
-        try {
-            var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
-            if (string.IsNullOrWhiteSpace(host)) {
-                throw new InvalidOperationException(
-                    $"discovered device '{device.Name}' carries neither an IP address nor a host name");
-            }
-            client = new AlpacaRotator(
-                device.UseHttps ? ServiceType.Https : ServiceType.Http,
-                host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
-            AlpacaConnect.Connect(client);
-            var caps = ReadCapabilities(client); // read once; they don't change while connected
-            lock (_gate) {
-                if (!_disposed && _connectGeneration == generation) {
-                    _client = client;
-                    _runtime = IdleRuntime; // don't serve a prior device's runtime
-                    _capabilities = caps;
-                    _probe.Reset(); ResetHealthLocked();         // §42.3 — a fresh session starts a fresh streak
-                    _drift.Reset();         // a prior session's commanded angle means nothing here
-                    SetState(EquipmentConnectionState.Connected);
-                    adopted = true;
-                }
-            }
-            if (!adopted) {
-                SafeDisconnectDispose(client);
-                return;
-            }
-            client = null; // ownership transferred to _client
-            RefreshCacheOnce(); // seed runtime through the guarded path
-            bool stillConnected;
-            lock (_gate) {
-                stillConnected = _state == EquipmentConnectionState.Connected;
-                if (stillConnected) {
-                    // The Connected push went out before this seed read; tell clients the
-                    // details are cached so they re-read now.
-                    _events?.DetailsReady(DeviceType.Rotator, _device?.UniqueId, _device?.Name);
-                }
-            }
-            if (stillConnected) {
-                LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
-            }
-        } catch (Exception ex) {
-            if (!adopted) {
-                if (client is not null) {
-                    SafeDisconnectDispose(client);
-                }
-                lock (_gate) {
-                    if (!_disposed && _connectGeneration == generation) {
-                        SetState(EquipmentConnectionState.Error);
-                    }
-                }
-                LogConnectFailed(ex, device.Name);
-            }
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort teardown: Halt / Connected = false can throw driver/HTTP exceptions, which must be swallowed so Dispose always runs and cleanup completes. CA1031's log-and-recover boundary applies.")]
-    private void SafeDisconnectDispose(AlpacaRotator client) {
-        try {
-            // Interrupt any in-flight move so a disconnect-during-move fails fast rather than
-            // waiting out the full ASCOM timeout.
-            client.Halt();
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
-        }
-        try {
-            client.Connected = false;
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
-        }
-        DisposeQuietly(client);
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort teardown: ASCOM/COM-backed clients have been known to throw from Dispose(); the throw must be swallowed (and logged) rather than escape into a fire-and-forget Task.Run as an unobserved exception. CA1031's log-and-recover boundary applies.")]
-    private void DisposeQuietly(AlpacaRotator client) {
-        try {
-            client.Dispose();
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
-        }
-    }
-
-    private void DisposeClientLocked() {
-        var c = _client;
-        _client = null;
-        if (c is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
-        }
-    }
-
     // §42.2 item 4 — the drift watch may only track (or forget) an expectation for the LIVE
     // client: the move calls run off the gate, so a concurrent disconnect/reconnect can have
     // swapped the client while a stale move's bookkeeping was still in flight.
-    private void RecordMoveIfLive(AlpacaRotator client, float targetDeg, bool mechanical) {
+    private void RecordMoveIfLive(IRotatorDevice client, float targetDeg, bool mechanical) {
         lock (_gate) {
-            if (ReferenceEquals(_client, client)) {
+            if (_lifecycle.IsCurrent(client)) {
                 _drift.Command(targetDeg, mechanical, DateTimeOffset.UtcNow);
             }
         }
     }
 
-    private void ResetDriftIfLive(AlpacaRotator client) {
+    private void ResetDriftIfLive(IRotatorDevice client) {
         lock (_gate) {
-            if (ReferenceEquals(_client, client)) {
+            if (_lifecycle.IsCurrent(client)) {
                 _drift.Reset();
             }
         }
@@ -520,7 +310,7 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
     // already re-armed its settle window.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort recovery step in a fire-and-forget task: the re-issued ASCOM move can throw arbitrary driver/HTTP exceptions; a failure is logged and the drift episode simply proceeds to its fault. CA1031's log-and-recover boundary applies.")]
-    private void RecommandMoveQuietly(AlpacaRotator client, float targetDeg, bool mechanical) {
+    private void RecommandMoveQuietly(IRotatorDevice client, float targetDeg, bool mechanical) {
         LogRecommandMove(targetDeg, mechanical ? "mechanical" : "sky");
         _ = Task.Run(() => {
             try {
@@ -544,61 +334,6 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
     [LoggerMessage(Level = LogLevel.Warning, Message = "Rotator '{Device}' {Domain} angle reads {Reported}°, commanded {Target}° — §42.2 drift fault")]
     private partial void LogAngleDrift(string device, string domain, double reported, float target);
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "The probe's whole job is turning any transport/driver exception into a failed-probe observation. CA1031's log-and-recover boundary applies.")]
-    private static bool ProbeConnected(AlpacaRotator c) {
-        try { return c.Connected; } catch (Exception) { return false; }
-    }
-
-    // Only a probe of the LIVE client may feed the streak: the blocking probe runs outside
-    // _gate, so a concurrent reconnect can have swapped the client (and reset the probe)
-    // while a stale probe of the dead session was still in flight. The liveness check and
-    // the Observe are ONE operation under _gate — a separate check-then-observe leaves a
-    // gap for ConnectInBackground's Reset to land between them (review finding). Returns
-    // null when the probed client is stale (the observation is discarded).
-    private ProbeVerdict? ObserveProbeIfLive(AlpacaRotator client, bool probeSucceeded) {
-        lock (_gate) {
-            return ReferenceEquals(_client, client) ? _probe.Observe(probeSucceeded) : null;
-        }
-    }
-
-    // §42.3 — declare the device lost: Connected → Error (keeps _device remembered so a
-    // reconnect can find it; the state publisher already maps Error to
-    // equipment.connection_failed for WILMA's chips) + publish the §42.2 fault event.
-    // Re-checks the probed client's identity under the gate: a reconnect between the probe
-    // and this trip must never flip the NEW, healthy session to Error (review finding).
-    private void TripConnectionLost(AlpacaRotator probed) {
-        DiscoveredDeviceDto? device;
-        lock (_gate) {
-            if (_state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, probed)) {
-                return;
-            }
-            device = _device;
-            SetState(EquipmentConnectionState.Error);
-            _probe.Reset(); ResetHealthLocked();
-            _drift.Reset();
-        }
-        LogConnectionLost(device?.Name ?? "?");
-        _faults?.Publish(new EquipmentFaultEvent(DeviceType.Rotator, device?.UniqueId, device?.Name,
-            EquipmentFaultKind.Disconnected,
-            $"stopped answering {DeviceConnectionProbe.DefaultLostThreshold} consecutive connection probes",
-            DateTimeOffset.UtcNow));
-    }
-
-    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Rotator '{Device}' stopped answering — marked Error (§42.3)")]
-    private partial void LogConnectionLost(string device);
-
-    // Caller must hold _gate (every call site already does), so no inner lock here.
-    private void SetState(EquipmentConnectionState state) {
-        if (_state == state) {
-            return;
-        }
-        _state = state;
-        // Callers hold the service lock; the publisher's synchronous part only
-        // serializes a small payload and hands off (see EquipmentEventPublisher).
-        _events?.StateChanged(DeviceType.Rotator, _device?.UniqueId, _device?.Name, state);
-    }
-
     private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>
         new(OperationId: Guid.NewGuid(),
             OperationType: operationType,
@@ -609,27 +344,9 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
     internal static bool IsAngleOutOfRange(double angleDeg) => angleDeg < 0 || angleDeg >= 360;
 
     public void Dispose() {
-        AlpacaRotator? client;
-        lock (_gate) {
-            if (_disposed) {
-                return;
-            }
-            _disposed = true;
-            client = _client;
-            _client = null;
-        }
-        _refreshTimer.Dispose();
-        // Dispose the client directly (guarded), not via SafeDisconnectDispose: the courtesy
-        // Halt/Connected=false are blocking HTTP calls (up to ~3s ASCOM timeout) that would hang
-        // container shutdown if the device is unreachable. DisposeQuietly releases resources only.
-        if (client is not null) {
-            DisposeQuietly(client);
-        }
+        _lifecycle.Dispose();
         GC.SuppressFinalize(this);
     }
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Rotator runtime read failed")]
-    private partial void LogRuntimeReadFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Rotator move to {Target} failed")]
     private partial void LogMoveFailed(Exception ex, float target);
@@ -639,13 +356,4 @@ public sealed partial class RotatorService : IRotatorService, IRetainedDeviceSou
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Rotator sync to {Angle} failed")]
     private partial void LogSyncFailed(Exception ex, float angle);
-
-    [LoggerMessage(Level = LogLevel.Information, Message = "Rotator connected: {Name} at {Host}:{Port}/{Device}")]
-    private partial void LogConnected(string name, string host, int port, int device);
-
-    [LoggerMessage(Level = LogLevel.Error, Message = "Rotator connect failed for {Name}")]
-    private partial void LogConnectFailed(Exception ex, string name);
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "ignored error while disconnecting Rotator during teardown")]
-    private partial void LogTeardownIgnored(Exception ex);
 }
