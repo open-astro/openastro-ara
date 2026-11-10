@@ -35,6 +35,10 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Fixed (storage)
+
+- On a server whose kernel can't mount exFAT (an ASIAIR Plus on an rk-flashtool image), Erase as exFAT is refused before the drive is touched, so the drive keeps its data. Use Disk and disk-to-disk copy onto an exFAT drive say the server can't read exFAT and that erasing as ext4 lets ARA use it. Before, the erase wiped the drive and then failed with "could not be connected" (#1753).
+
 ### Fixed (Simple Mode focus)
 
 - Simple Mode's Focus shows a Bahtinov readout that is already running (started by another client, or still running after a reconnect), as the Full UI does. Before, with a focuser connected, it showed autofocus and hid the readout's frame (#1590).
