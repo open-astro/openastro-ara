@@ -14,6 +14,7 @@
 
 using System;
 using System.Buffers.Binary;
+using ASCOM.Common.Alpaca;
 using NUnit.Framework;
 using OpenAstroAra.Server.Services;
 
@@ -69,6 +70,16 @@ namespace OpenAstroAra.Test {
             byte[] payload = [51, 0, 255, 13];
             var (pixels, _, _) = AlpacaImageBytes.Decode(Body(2, 2, 6, payload));
             Assert.That(pixels, Is.EqualTo(new ushort[] { 51, 255, 0, 13 }));
+        }
+
+        [Test]
+        public void Byte_payload_matches_library_fallback() {
+            // CameraService falls back to the ASCOM library's ImageArray; both paths must
+            // save the same pixels for the same wire bytes.
+            var body = Body(2, 2, 6, [51, 0, 255, 13]);
+            var (fallback, _, _) = CameraService.ConvertImageArray(body.ToImageArray());
+            var (direct, _, _) = AlpacaImageBytes.Decode(body);
+            Assert.That(direct, Is.EqualTo(fallback));
         }
 
         [Test]
