@@ -4647,6 +4647,12 @@ abstract class AppLocalizations {
   /// **'The guider found no star to measure. Check the guide camera, then try again.'**
   String get guideAssistantNoStar;
 
+  /// No description provided for @focusNudgePlanRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the plan to move the focuser.'**
+  String get focusNudgePlanRunning;
+
   /// No description provided for @focusNudgeIn.
   ///
   /// In en, this message translates to:

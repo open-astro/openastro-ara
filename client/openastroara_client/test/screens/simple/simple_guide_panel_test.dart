@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -143,6 +145,16 @@ class _Live extends GuiderLiveNotifier {
 }
 
 /// The rig refuses to forget its calibration: the real notifier reads this.
+class _SlowLive extends _Live {
+  final clear = Completer<void>();
+  int clears = 0;
+  @override
+  Future<void> clearCalibration() {
+    clears++;
+    return clear.future;
+  }
+}
+
 class _RefusingLive implements GuiderLiveClient {
   @override
   Future<GuiderLive> getLive() async => GuiderLive.disconnected;
@@ -173,6 +185,7 @@ class _Assistant extends GuidingAssistantNotifier {
   Future<void> apply(List<String> which) async => applied.add(which);
 
   void fail(String error) => state = state.copyWith(error: error);
+  void report(GuidingAssistantStatus status) => state = state.copyWith(status: status);
 }
 
 GuidingAssistantStatus _assistant(String state, {Map<String, dynamic>? recs}) =>
@@ -342,12 +355,48 @@ void main() {
       expect(find.text('No star selected'), findsNothing);
     });
 
+    testWidgets('a second tap while the calibration is being forgotten does nothing', (tester) async {
+      final live = _SlowLive();
+      await _pump(tester, _wire(runtime: 'stopped'), rig: [
+        simpleModeActiveProvider.overrideWithValue(true),
+        guiderLiveProvider.overrideWith(() => live),
+        guidingAssistantProvider.overrideWith(() => _Assistant(_idleAssistant)),
+      ]);
+      await _tab(tester, 'tools');
+      await tester.tap(find.byKey(const Key('simple-guider-recalibrate')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-guider-recalibrate')), warnIfMissed: false);
+      await tester.pump();
+      expect(live.clears, 1);
+      expect(_g.calls, isEmpty, reason: 'nothing starts on the old calibration');
+      live.clear.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(_g.calls, ['start']);
+    });
+
+    testWidgets('an old Guiding Assistant failure is not a new pill; a run that fails now is', (tester) async {
+      final a = _Assistant(_idleAssistant);
+      final c = await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      a.report(GuidingAssistantStatus.fromJson({'connected': true, 'state': 'failed', 'error': 'from last night'}));
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider), isEmpty, reason: 'the first read found an old result');
+      a.report(GuidingAssistantStatus.fromJson({'connected': true, 'state': 'measuring'}));
+      await tester.pump();
+      a.report(GuidingAssistantStatus.fromJson({'connected': true, 'state': 'failed', 'error': 'star lost'}));
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider).single.title, contains('star lost'));
+    });
+
     testWidgets('each Tuning stepper is read with its full name', (tester) async {
       final semantics = tester.ensureSemantics();
       await _pump(tester, _wire(), rig: rig(_GuiderEquipment()));
       await _tab(tester, 'tuning');
-      expect(find.bySemanticsLabel(RegExp('Minimum move, RA')), findsOneWidget);
-      expect(find.bySemanticsLabel(RegExp('Settle after each dither, For')), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp(r'^Minimum move, RA$')), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp(r'^Settle after each dither, For$')), findsOneWidget);
+      expect(find.bySemanticsLabel('Settle after each dither, For, More'), findsOneWidget,
+          reason: 'a button reached on its own still says what it changes');
       semantics.dispose();
     });
 

@@ -3678,6 +3678,7 @@
   "guideStopLoopFirst": "Stop the guide loop to recalibrate.",
   "guideAssistantCalibrateFirst": "Calibrate first: press Recalibrate now, then run the Guiding Assistant.",
   "guideAssistantNoStar": "The guider found no star to measure. Check the guide camera, then try again.",
+  "focusNudgePlanRunning": "Stop the plan to move the focuser.",
   "focusNudgeIn": "Nudge in",
   "focusNudgeOut": "Nudge out",
   "focusNudgeStop": "Stop",

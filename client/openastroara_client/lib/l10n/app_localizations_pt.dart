@@ -2692,6 +2692,9 @@ class AppLocalizationsPt extends AppLocalizations {
       'The guider found no star to measure. Check the guide camera, then try again.';
 
   @override
+  String get focusNudgePlanRunning => 'Stop the plan to move the focuser.';
+
+  @override
   String get focusNudgeIn => 'Nudge in';
 
   @override
@@ -6264,6 +6267,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get guideAssistantNoStar =>
       'O Guia não encontrou estrela para medir. Verifique a câmera de guiagem e tente de novo.';
+
+  @override
+  String get focusNudgePlanRunning => 'Pare o plano para mover o focalizador.';
 
   @override
   String get focusNudgeIn => 'Mover para dentro';

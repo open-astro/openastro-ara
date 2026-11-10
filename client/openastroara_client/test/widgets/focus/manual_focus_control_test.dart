@@ -6,6 +6,10 @@ import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
+import 'package:openastroara/models/autofocus_run.dart';
+import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/state/focus/autofocus_live_state.dart';
+import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/widgets/focus/focusing_pane.dart';
 
 class _Focuser extends FocuserNotifier {
@@ -37,10 +41,27 @@ FocuserStatus _status({int? position = 1000, String runtime = 'idle', int? max =
       tempCompEnabled: false,
     );
 
-Future<_Focuser> _pump(WidgetTester tester, FocuserStatus status) async {
+class _Run extends SequenceRunStateNotifier {
+  @override
+  Future<SequenceRunStateInfo?> build() async =>
+      SequenceRunStateInfo(sequenceId: 's', runId: 'r', state: SequenceRunState.running);
+}
+
+class _Autofocusing extends AutofocusLiveNotifier {
+  @override
+  AutofocusLive build() => AutofocusLive(run: AutofocusRun.fromJson({'state': AutofocusRunStates.running}));
+  @override
+  Future<void> refresh() async {}
+}
+
+Future<_Focuser> _pump(WidgetTester tester, FocuserStatus status, {bool plan = false, bool autofocus = false}) async {
   final f = _Focuser();
   await tester.pumpWidget(ProviderScope(
-    overrides: [focuserProvider.overrideWith(() => f)],
+    overrides: [
+      focuserProvider.overrideWith(() => f),
+      if (plan) sequenceRunStateProvider.overrideWith(_Run.new),
+      if (autofocus) autofocusLiveProvider.overrideWith(_Autofocusing.new),
+    ],
     child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -117,6 +138,20 @@ void main() {
     expect(f.moves, isEmpty);
     await tester.tap(_stop);
     expect(f.halts, 1);
+  });
+
+  testWidgets('a running plan refuses the nudge and says why', (tester) async {
+    final f = await _pump(tester, _status(), plan: true);
+    await tester.pump();
+    await tester.tap(_outward, warnIfMissed: false);
+    expect(f.moves, isEmpty);
+    expect(find.textContaining('Stop the plan'), findsOneWidget);
+  });
+
+  testWidgets('a running autofocus refuses the nudge', (tester) async {
+    final f = await _pump(tester, _status(), autofocus: true);
+    await tester.tap(_outward, warnIfMissed: false);
+    expect(f.moves, isEmpty);
   });
 
   testWidgets('idle, Stop has nothing to stop', (tester) async {

@@ -2692,6 +2692,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'The guider found no star to measure. Check the guide camera, then try again.';
 
   @override
+  String get focusNudgePlanRunning => 'Stop the plan to move the focuser.';
+
+  @override
   String get focusNudgeIn => 'Nudge in';
 
   @override

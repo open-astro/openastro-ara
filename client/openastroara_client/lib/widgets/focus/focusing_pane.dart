@@ -11,6 +11,7 @@ import '../../services/equipment_device_api.dart';
 import '../../models/guide_focus.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/focus/autofocus_live_state.dart';
+import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/focus/bahtinov_focus_state.dart';
 import '../../state/focus/guide_focus_state.dart';
 import '../../state/settings/settings_nav.dart';
@@ -208,7 +209,9 @@ class _ManualFocusControlState extends ConsumerState<ManualFocusControl> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final moving = widget.focuser.isMoving;
-    final canNudge = !moving && widget.focuser.position != null;
+    final planRunning = ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
+    final autofocusRunning = ref.watch(autofocusLiveProvider.select((l) => l.run.isRunning));
+    final canNudge = !moving && !planRunning && !autofocusRunning && widget.focuser.position != null;
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -241,6 +244,7 @@ class _ManualFocusControlState extends ConsumerState<ManualFocusControl> {
           icon: const Icon(Icons.stop_rounded, size: 18),
           label: Text(l10n.focusNudgeStop),
         ),
+        if (planRunning) Text(l10n.focusNudgePlanRunning, style: Theme.of(context).textTheme.bodySmall),
       ],
     );
   }

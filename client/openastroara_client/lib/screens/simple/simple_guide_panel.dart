@@ -452,6 +452,7 @@ class _SimpleGuiderTuning extends ConsumerWidget {
           id: label,
           group: l10n.guideMinimumMoveName,
           simpleWindowStepper(
+            name: '${l10n.guideMinimumMoveName}, $axis',
             id: 'simple-guider-min-move-$id',
             text: '${v.toStringAsFixed(2)} px',
             onLess: () {
@@ -474,6 +475,7 @@ class _SimpleGuiderTuning extends ConsumerWidget {
             id: 'Dither by',
             simpleWindowStepper(
               id: 'simple-guider-dither-px',
+              name: l10n.deviceDitherBy,
               text: '${px == px.roundToDouble() ? px.round() : px} px',
               onLess: () {
                 if (px > 1) save((p) => p.setDitherPixels(px - 1));
@@ -490,6 +492,7 @@ class _SimpleGuiderTuning extends ConsumerWidget {
           group: l10n.guideSettle,
           simpleWindowStepper(
             id: 'simple-guider-settle-px',
+            name: '${l10n.guideSettle}, ${l10n.guideSettleWithin}',
             text: '${phd2.settlePixels.toStringAsFixed(1)} px',
             onLess: () {
               if (phd2.settlePixels > 0.1) save((p) => p.setSettlePixels(_stepped(phd2.settlePixels, -0.1)));
@@ -503,6 +506,7 @@ class _SimpleGuiderTuning extends ConsumerWidget {
           group: l10n.guideSettle,
           simpleWindowStepper(
             id: 'simple-guider-settle-time',
+            name: '${l10n.guideSettle}, ${l10n.guideSettleFor}',
             text: '${phd2.settleTimeSec} s',
             onLess: () {
               if (phd2.settleTimeSec > 1) save((p) => p.setSettleTimeSec(phd2.settleTimeSec - 1));
@@ -516,6 +520,7 @@ class _SimpleGuiderTuning extends ConsumerWidget {
           group: l10n.guideSettle,
           simpleWindowStepper(
             id: 'simple-guider-settle-timeout',
+            name: '${l10n.guideSettle}, ${l10n.guideSettleGiveUp}',
             text: '${phd2.settleTimeoutSec} s',
             onLess: () {
               if (phd2.settleTimeoutSec > 5) save((p) => p.setSettleTimeoutSec(phd2.settleTimeoutSec - 5));
@@ -537,7 +542,8 @@ class _SimpleGuiderTools extends ConsumerStatefulWidget {
 }
 
 class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
-  // Picking a star takes seconds, before the assistant's own state shows it.
+  // Forgetting a calibration or picking a star takes seconds, before the
+  // guider's own state shows anything: a second tap must wait.
   bool _preparing = false;
 
   Future<void> _recalibrate() async {
@@ -545,6 +551,7 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
     final container = ProviderScope.containerOf(context, listen: false);
     // Held across the await: nothing else watches it here, so autoDispose would lose the error.
     final keep = container.listen(guiderLiveProvider, (_, _) {});
+    setState(() => _preparing = true);
     try {
       await container.read(guiderLiveProvider.notifier).clearCalibration();
       if (container.read(guiderLiveProvider).error case final error?) {
@@ -553,6 +560,7 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
       }
     } finally {
       keep.close();
+      if (mounted) setState(() => _preparing = false);
     }
     if (mounted) await simpleGuideRun(context, start: true);
   }
@@ -592,14 +600,18 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    ref.listen(
-      guidingAssistantProvider.select((s) => s.error ?? s.status.error),
-      (previous, problem) {
-        if (problem != null && problem != previous) {
-          userNotifier(context, origin: SimpleStatusOrigin.guide)(problem, error: true, snackBarRed: false);
-        }
-      },
-    );
+    ref.listen(guidingAssistantProvider, (previous, next) {
+      // A run failing now, not the last run's result found on opening this tab.
+      final runFailed = previous != null && previous.status.isRunning && next.status.isFailed;
+      final problem = next.error != null && next.error != previous?.error
+          ? next.error
+          : runFailed
+          ? next.status.error
+          : null;
+      if (problem != null) {
+        userNotifier(context, origin: SimpleStatusOrigin.guide)(problem, error: true, snackBarRed: false);
+      }
+    });
     final g = ref.watch(guiderStatusProvider).value;
     final connected = g != null && g.isConnected;
     final active = simpleGuideActive(g);
@@ -634,7 +646,7 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
       children: [
         FilledButton.tonal(
           key: const Key('simple-guider-recalibrate'),
-          onPressed: canRun && !active ? _recalibrate : null,
+          onPressed: canRun && !active && !_preparing ? _recalibrate : null,
           child: Text(l10n.guideRecalibrateNow),
         ),
         if (why != null) Text(why, style: AraText.caption),
