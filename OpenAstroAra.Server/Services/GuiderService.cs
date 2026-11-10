@@ -691,6 +691,9 @@ public sealed partial class GuiderService : IGuiderService, IDisposable {
             }
             guider = _guider!;
         }
+        if (marker.Kind == "calibration_complete") {
+            _ = RecordCalibrationOutcomeQuietlyAsync(failed: false); // #1716: whoever started it, the warning is over
+        }
         if (_ws is not null) {
             _ = PublishGuiderEventAsync(BuildGuiderEventPayload(marker));
         }

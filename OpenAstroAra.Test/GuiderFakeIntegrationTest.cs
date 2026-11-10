@@ -2588,6 +2588,22 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Any_calibration_that_completes_clears_the_calibration_warning() {
+            // #1716: Simple Mode's Recalibrate now calibrates through the guider's own start.
+            await using var fake = FakeGuider.Start();
+            _ = new ProfileDaemon(fake);
+            var diagnostics = new Mock<IDiagnosticsService>();
+            using var svc = CalibratedTonightService(diagnostics.Object);
+            await ConnectToAsync(svc, fake).ConfigureAwait(false);
+
+            await fake.BroadcastAsync(PhdEvents.CalibrationComplete()).ConfigureAwait(false);
+
+            var cleared = await WaitUntilAsync(() => diagnostics.Invocations.Any(i =>
+                i.Method.Name == nameof(IDiagnosticsService.ClearOpenEventsByTypeAsync) && (string)i.Arguments[0] == CalibrationFailed)).ConfigureAwait(false);
+            Assert.That(cleared, Is.True);
+        }
+
+        [Test]
         public async Task A_failed_recalibration_goes_on_with_the_restored_calibration_and_warns() {
             await using var fake = FakeGuider.Start();
             _ = new ProfileDaemon(fake);
