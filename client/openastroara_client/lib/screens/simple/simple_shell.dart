@@ -375,7 +375,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       ref.listenManual(provider, (previous, next) {
         final was = previous?.value?.connectionState;
         final now = next.value?.connectionState;
-        if (now == EquipmentConnectionState.error && was != now && !_devicePills.containsKey(key)) {
+        // A pill closed with × no longer counts: the next failure shows a new one.
+        final showing = _devicePills[key];
+        final stillShown = showing != null && ref.read(simpleMessagesProvider).any((m) => m.id == showing);
+        if (now == EquipmentConnectionState.error && was != now && !stillShown) {
           if (!mounted) return;
           final l10n = context.l10n;
           _devicePills[key] = _messages.show(

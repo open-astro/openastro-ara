@@ -4345,6 +4345,20 @@ void main() {
       expect(c.read(simpleMessagesProvider), hasLength(1));
     });
 
+    testWidgets('closed by hand, it comes back the next time the device fails', (tester) async {
+      final (c, mount) = await shell(tester);
+      mount.report(EquipmentConnectionState.error);
+      await tester.pump();
+      c.read(simpleMessagesProvider.notifier).dismiss(c.read(simpleMessagesProvider).single.id);
+      await tester.pump();
+      expect(pill, findsNothing);
+      mount.report(EquipmentConnectionState.connecting);
+      await tester.pump();
+      mount.report(EquipmentConnectionState.error);
+      await tester.pump();
+      expect(pill, findsOneWidget);
+    });
+
     testWidgets('Reconnect asks the rig again, and Devices opens Settings › Devices', (tester) async {
       final (_, mount) = await shell(tester);
       mount.report(EquipmentConnectionState.error);
