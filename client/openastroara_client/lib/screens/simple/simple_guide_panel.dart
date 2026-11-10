@@ -673,6 +673,9 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
               Expanded(
                 child: Text(
                   l10n.guideAssistantFailed(status.error ?? l10n.guideAssistantFailedNoReason),
+                  // Two lines at most, so Tools keeps Guide's height; the pill carries it whole.
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: AraText.caption.copyWith(color: AraColors.accentWarning),
                 ),
               ),

@@ -397,6 +397,16 @@ void main() {
       expect(find.textContaining('star lost'), findsOneWidget);
     });
 
+    testWidgets('a long failure reason keeps to two lines, so Tools keeps Guide\'s height', (tester) async {
+      final a = _Assistant(GuidingAssistantStatus.fromJson({'connected': true, 'state': 'failed', 'error': 'star lost ' * 40}));
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      final reason = tester.widget<Text>(
+          find.descendant(of: find.byKey(const Key('simple-guider-assistant-failed')), matching: find.byType(Text)));
+      expect(reason.maxLines, 2);
+      expect(reason.overflow, TextOverflow.ellipsis);
+    });
+
     testWidgets('each Tuning stepper is read with its full name', (tester) async {
       final semantics = tester.ensureSemantics();
       await _pump(tester, _wire(), rig: rig(_GuiderEquipment()));
