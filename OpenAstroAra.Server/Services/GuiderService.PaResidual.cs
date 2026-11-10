@@ -54,6 +54,8 @@ public sealed partial class GuiderService {
     // A Polar Align result older than this is not tonight's alignment.
     private static readonly TimeSpan AlignComparisonWindow = TimeSpan.FromHours(12);
 
+    private const double AlignDisagreementMarginArcmin = 2.0;
+
     private readonly object _paGate = new();
     private PaResidualTracker _paTracker = new();
     private PaResidualDto? _paCurrent;  // what GET shows; null = nothing measured yet
@@ -245,10 +247,9 @@ public sealed partial class GuiderService {
             }
 
             var now = PaResidualClock();
-            var lowResponse = fit?.PulseResponse < PaResidualEstimator.MinPulseResponse;
-            var reason = rate is null ? "no_calibration" : !(pixelScale > 0) ? "no_pixel_scale" : fit is null ? "no_fit" : lowResponse ? "pulse_response_low" : null;
+            var reason = rate is null ? "no_calibration" : !(pixelScale > 0) ? "no_pixel_scale" : fit is null ? "no_fit" : null;
             PaResidualDto result;
-            if (lowResponse || fit is not PaResidualFit f) {
+            if (fit is not PaResidualFit f) {
                 result = started with { Status = "unavailable", CompletedUtc = now, Reason = reason };
             } else {
                 var pointing = MountPointing?.Invoke();
@@ -263,7 +264,10 @@ public sealed partial class GuiderService {
                     DriftArcsecPerMin = f.DriftArcsecPerMin,
                     PaErrorMinArcmin = f.PaErrorMinArcmin,
                     UncertaintyArcmin = f.UncertaintyArcmin,
-                    Reliable = f.UncertaintyArcmin <= Math.Max(1.0, 0.5 * f.PaErrorMinArcmin),
+                    // #1731: the lower bound cannot exceed the total error Polar Align measured; past it plus a
+                    // 2′ margin for the Align's own error, Dec lost motion is the likelier story.
+                    Reliable = f.UncertaintyArcmin <= Math.Max(1.0, 0.5 * f.PaErrorMinArcmin)
+                        && !(f.PaErrorMinArcmin - 2 * f.UncertaintyArcmin > align?.FinalErrorArcmin + AlignDisagreementMarginArcmin),
                     HourAngleHours = pointing?.HourAngleHours,
                     DecDeg = pointing?.DecDeg,
                     AlignErrorArcmin = align?.FinalErrorArcmin,

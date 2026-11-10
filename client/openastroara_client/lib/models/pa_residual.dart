@@ -97,7 +97,6 @@ class PaResidual {
     'ao' => 'An adaptive optics unit makes the Dec corrections, so the mount drift cannot be read from them.',
     'no_calibration' => "The guider's calibration data could not be read.",
     'no_pixel_scale' => 'The guider has not reported its pixel scale.',
-    'pulse_response_low' => 'The mount did not follow the Dec corrections, so the drift could not be measured.',
     _ => 'Not enough clean guiding to fit the drift.',
   };
 

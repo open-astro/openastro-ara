@@ -46,12 +46,13 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         }
 
         /// <summary>The guide camera's frame size in pixels, or null when the camera is not connected to
-        /// the guider (the guider answers that with an error, which is not a fault of ours).</summary>
+        /// the guider (the guider answers that with an error, which is not a fault of ours) or has no frame
+        /// yet (it answers [0, 0]; #1730).</summary>
         public async Task<(int Width, int Height)?> GetCameraFrameSizeAsync(CancellationToken ct) {
             ct.ThrowIfCancellationRequested();
             RequireConnectedForLive();
             var response = await SendMessage<Phd2IntListResponse>(new Phd2GetCameraFrameSize(), LiveRpcTimeoutMs, notifyOnError: false).ConfigureAwait(false);
-            if (response.error != null || response.result is not { Count: 2 } size) {
+            if (response.error != null || response.result is not { Count: 2 } size || size[0] <= 0 || size[1] <= 0) {
                 return null;
             }
             return (size[0], size[1]);

@@ -25,19 +25,6 @@ void main() {
   };
 
   group('PaResidual.fromJson', () {
-    test('a run refused for a low pulse response says the mount did not follow (#1731)', () {
-      final u = PaResidual.fromJson({
-        'id': 'x',
-        'status': 'unavailable',
-        'sample_seconds': 300.0,
-        'target_seconds': 300.0,
-        'frames': 150,
-        'reason': 'pulse_response_low',
-      })!;
-      expect(u.reason, 'pulse_response_low');
-      expect(PaResidual.reasonText(u.reason), contains('did not follow'));
-    });
-
     test('parses a finished measurement', () {
       final r = PaResidual.fromJson(done)!;
       expect(r.status, PaResidualStatus.done);

@@ -697,6 +697,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_zero_frame_size_is_unknown_so_select_is_not_refused_as_off_frame() {
+            // #1730: a guider with no camera frame yet answers [0, 0]; that is "can't say", not a 0×0 frame.
+            var received = new ConcurrentQueue<JsonNode?>();
+            var (fake, svc) = await ConnectedAsync(f => {
+                LiveRpcs(f);
+                f.OnRpc("get_camera_frame_size", _ => new JsonArray(0, 0));
+                f.OnRpc("set_lock_position", req => { received.Enqueue(req["params"]?.DeepClone()); return JsonValue.Create(0); });
+            }).ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            var live = new GuiderLiveService(svc, new NoFrames());
+
+            await live.SelectStarAsync(320.5, 240.25, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(received, Has.Count.EqualTo(1));
+        }
+
+        [Test]
         public async Task Select_a_guider_refusal_is_a_GuiderRpcException() {
             var (fake, svc) = await ConnectedAsync(f => {
                 LiveRpcs(f);

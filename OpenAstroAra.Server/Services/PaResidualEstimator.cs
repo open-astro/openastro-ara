@@ -24,8 +24,7 @@ internal readonly record struct PaResidualFit(
     double PaErrorMinArcmin,
     double UncertaintyArcmin,
     int Frames,
-    double SampleSeconds,
-    double PulseResponse = 1.0);
+    double SampleSeconds);
 
 /// <summary>
 /// #1311 — the polar alignment error left after Align, measured from the guiding Ara already does.
@@ -45,6 +44,11 @@ internal readonly record struct PaResidualFit(
 /// Samples are grouped in segments: a dither, a settle, a lost star or a pause closes one, and each
 /// segment gets its own intercept, so a moved lock position never reads as drift. The slope is the
 /// pooled within-segment least-squares fit. Pure; the guider wiring is GuiderService.PaResidual.cs.
+///
+/// Pulses that Dec lost motion ate read as drift here. The share that reached the star is not fitted:
+/// the guider sizes each pulse from the frame's own seeing, so regressing the next change on the pulse
+/// reads the guider's aggressiveness, above 1 for any real response (#1731). The guider wiring checks
+/// the result against Polar Align instead.
 /// </summary>
 internal sealed class PaResidualEstimator {
 
@@ -107,10 +111,6 @@ internal sealed class PaResidualEstimator {
         _closedFrames = 0;
     }
 
-    /// <summary>Below this share of a commanded Dec pulse reaching the star, Dec lost motion is eating the
-    /// corrections and the drift cannot be told from them: the measurement is not published (#1731).</summary>
-    internal const double MinPulseResponse = 0.6;
-
     /// <summary>
     /// Fits the uncorrected Dec drift. <paramref name="decRatePxPerSec"/> is the calibration's Dec
     /// guide rate (PHD2 <c>get_calibration_data</c> yRate) and <paramref name="pixelScaleArcsec"/>
@@ -123,9 +123,6 @@ internal sealed class PaResidualEstimator {
         }
         var ratePxPerMs = decRatePxPerSec / 1000.0;
 
-        // #1731 — a pulse lost in Dec backlash moved nothing, so only the share that reached the star is taken off.
-        var response = Math.Min(PulseResponse(ratePxPerMs), 1.0);
-
         // Uncorrected position u_k = offset_k − Σ_{j<k} pulse_j × rate: a North pulse (positive)
         // raises the next offset by rate × length, so taking it off leaves the free drift.
         var rebuilt = new List<(double[] T, double[] U)>();
@@ -137,7 +134,7 @@ internal sealed class PaResidualEstimator {
             for (var k = 0; k < segment.Count; k++) {
                 t[k] = segment[k].TimeSec;
                 u[k] = segment[k].DecRawPx - applied;
-                applied += segment[k].DecDurationMs * ratePxPerMs * response;
+                applied += segment[k].DecDurationMs * ratePxPerMs;
             }
             rebuilt.Add((t, u));
             n += segment.Count;
@@ -186,30 +183,7 @@ internal sealed class PaResidualEstimator {
             PaErrorMinArcmin: Math.Abs(drift) * ArcminPerArcsecPerMin,
             UncertaintyArcmin: slopeSe * toArcsecPerMin * ArcminPerArcsecPerMin,
             Frames: n,
-            SampleSeconds: SampleSeconds,
-            PulseResponse: response);
-    }
-
-    // The next frame's Dec change regressed on the commanded move (pooled within segments, so the drift
-    // is each segment's intercept). 1 when the pulses do not vary enough to tell.
-    // shortcut: on a seeing-dominated closed loop each pulse answers its frame's own noise, so this reads high and
-    // a mount that ignores its pulses can escape the refusal. Upgrade against a real guide log.
-    private double PulseResponse(double ratePxPerMs) {
-        double sxx = 0, sxy = 0;
-        foreach (var segment in Usable()) {
-            var moves = new double[segment.Count - 1];
-            var changes = new double[segment.Count - 1];
-            for (var k = 0; k < moves.Length; k++) {
-                moves[k] = segment[k].DecDurationMs * ratePxPerMs;
-                changes[k] = segment[k + 1].DecRawPx - segment[k].DecRawPx;
-            }
-            var (moveMean, changeMean) = (Mean(moves), Mean(changes));
-            for (var k = 0; k < moves.Length; k++) {
-                sxx += (moves[k] - moveMean) * (moves[k] - moveMean);
-                sxy += (moves[k] - moveMean) * (changes[k] - changeMean);
-            }
-        }
-        return sxx > 1e-9 ? sxy / sxx : 1.0;
+            SampleSeconds: SampleSeconds);
     }
 
     private static bool IsUsable(List<Sample>? segment) => segment is { Count: >= MinSegmentFrames };
