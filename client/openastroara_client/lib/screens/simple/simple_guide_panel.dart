@@ -664,22 +664,8 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
         if (status.isRunning) Text(l10n.guideAssistantMeasuring, style: AraText.caption),
         // Stays while the last run's failure stands, so leaving the tab mid-run loses nothing.
         if (status.isFailed)
-          Row(
-            key: const Key('simple-guider-assistant-failed'),
-            spacing: AraSpace.s8,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.warning_amber_rounded, size: 18, color: AraColors.accentWarning),
-              Expanded(
-                child: Text(
-                  l10n.guideAssistantFailed(status.error ?? l10n.guideAssistantFailedNoReason),
-                  // Two lines at most, so Tools keeps Guide's height; the pill carries it whole.
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AraText.caption.copyWith(color: AraColors.accentWarning),
-                ),
-              ),
-            ],
+          _SimpleAssistantFailure(
+            l10n.guideAssistantFailed(status.error ?? l10n.guideAssistantFailedNoReason),
           ),
         if (suggestions.isNotEmpty)
           FilledButton(
@@ -690,6 +676,51 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
       ],
     );
   }
+}
+
+/// A failed Guiding Assistant run's reason, in amber. Two lines at most, so
+/// Tools keeps Guide's height; a tap shows the rest in place. A pill carries
+/// the reason too, but only for a run that fails while Tools is open.
+class _SimpleAssistantFailure extends StatefulWidget {
+  const _SimpleAssistantFailure(this.reason);
+
+  final String reason;
+
+  @override
+  State<_SimpleAssistantFailure> createState() => _SimpleAssistantFailureState();
+}
+
+class _SimpleAssistantFailureState extends State<_SimpleAssistantFailure> {
+  bool _whole = false;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    expanded: _whole,
+    child: InkWell(
+      key: const Key('simple-guider-assistant-failed'),
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => setState(() => _whole = !_whole),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: Row(
+          spacing: AraSpace.s8,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.warning_amber_rounded, size: 18, color: AraColors.accentWarning),
+            Expanded(
+              child: Text(
+                widget.reason,
+                maxLines: _whole ? null : 2,
+                overflow: _whole ? null : TextOverflow.ellipsis,
+                style: AraText.caption.copyWith(color: AraColors.accentWarning),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 /// How strongly the guider corrects one axis: 0-100 % in 5s, set when the

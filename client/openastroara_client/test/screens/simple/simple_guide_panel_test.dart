@@ -407,6 +407,19 @@ void main() {
       expect(reason.overflow, TextOverflow.ellipsis);
     });
 
+    testWidgets('tapping a cut-off failure reason shows it whole, in place', (tester) async {
+      final a = _Assistant(GuidingAssistantStatus.fromJson({'connected': true, 'state': 'failed', 'error': 'star lost ' * 40}));
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      final row = find.byKey(const Key('simple-guider-assistant-failed'));
+      await tester.tap(row);
+      await tester.pump();
+      expect(tester.widget<Text>(find.descendant(of: row, matching: find.byType(Text))).maxLines, isNull);
+      await tester.tap(row);
+      await tester.pump();
+      expect(tester.widget<Text>(find.descendant(of: row, matching: find.byType(Text))).maxLines, 2);
+    });
+
     testWidgets('each Tuning stepper is read with its full name', (tester) async {
       final semantics = tester.ensureSemantics();
       await _pump(tester, _wire(), rig: rig(_GuiderEquipment()));
