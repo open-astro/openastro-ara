@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-11T01:44:45+13:00",
+  "generatedAt": "2026-11-11T01:47:49+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -861,7 +861,7 @@
       "name": "Connect to Your Rig Card (Simple Mode)",
       "kind": "custom",
       "refersTo": "panel-simple",
-      "description": "#1559: centred over the wallpaper while the rig link is down. Title, one line on what happened, the session's rig with a filled Reconnect, then every other rig once (Found in Link Blue, Saved, not seen now in amber) with outlined Connect, then Add by address. A rig that does not answer gets a light-red line. One list, mock design/preview/simple-no-rig-card-mock.html B (user 2026-11-11)."
+      "description": "#1559: centred over the wallpaper while the rig link is down. Title at the reading size (22 px semibold), one line on what happened, the session's rig with a filled Reconnect, then every other rig once (Found in Link Blue, Saved, not seen now in amber) with outlined Connect, then Add by address. A rig that does not answer gets a light-red line. One list, mock design/preview/simple-no-rig-card-mock.html B (user 2026-11-11)."
     }
   ],
   "narrative": {
