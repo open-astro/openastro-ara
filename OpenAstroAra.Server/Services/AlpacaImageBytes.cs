@@ -106,7 +106,7 @@ internal static class AlpacaImageBytes {
             }
             case TypeByte: {
                 ExpectLength(payload.Length, count, "Byte");
-                Transpose(payload, pixels, width, height, static v => (ushort)(v << 8));
+                Transpose(payload, pixels, width, height, static v => (ushort)v);
                 break;
             }
             default:
