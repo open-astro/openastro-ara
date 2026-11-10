@@ -189,11 +189,12 @@ class _Live implements GuiderLiveClient {
 
 class _GuiderAt extends GuiderStatusNotifier {
   final GuiderRuntimeState runtime;
-  _GuiderAt(this.runtime);
+  final GuiderConnectionState connection;
+  _GuiderAt(this.runtime, [this.connection = GuiderConnectionState.connected]);
   @override
   Future<GuiderStatus?> build() async => GuiderStatus(
     name: 'Guider',
-    connectionState: GuiderConnectionState.connected,
+    connectionState: connection,
     runtimeState: runtime,
   );
 }
@@ -206,6 +207,7 @@ Future<_Fake> _pump(
   WidgetTester t,
   GuidingAssistantStatus status, {
   GuiderRuntimeState guider = GuiderRuntimeState.starSelected,
+  GuiderConnectionState guiderConnection = GuiderConnectionState.connected,
   _Fake? fake,
   bool open = true,
   bool shared = false,
@@ -226,7 +228,7 @@ Future<_Fake> _pump(
         activeServerProvider.overrideWith((ref) => ref.watch(_server)),
         guidingAssistantApiFactoryProvider.overrideWithValue((_) => fake!),
         guiderLiveApiFactoryProvider.overrideWithValue((_) => live!),
-        guiderStatusProvider.overrideWith(() => _GuiderAt(guider)),
+        guiderStatusProvider.overrideWith(() => _GuiderAt(guider, guiderConnection)),
         profileApiProvider.overrideWithValue(profile ?? _Profile()),
       ],
       child: MaterialApp(
@@ -703,6 +705,17 @@ void main() {
     );
     expect(_text(t, const Key('ga-figure-0')), '—');
     expect(_text(t, const Key('ga-figure-2')), '0.30 px');
+  });
+
+  testWidgets('a guider no longer connected is not "guiding", whatever phase it last reported', (t) async {
+    await _pump(
+      t,
+      const GuidingAssistantStatus(connected: true, state: 'idle'),
+      guider: GuiderRuntimeState.guiding,
+      guiderConnection: GuiderConnectionState.disconnected,
+    );
+    // The default live guider is looping on a calibrated star: ready, not refused.
+    expect(_text(t, const Key('guiding-assistant-headline')), 'Ready. Press Start.');
   });
 
   testWidgets('Start waits while the guider is guiding', (t) async {
