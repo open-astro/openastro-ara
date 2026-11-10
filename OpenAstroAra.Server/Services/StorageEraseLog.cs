@@ -44,7 +44,8 @@ public sealed class StorageEraseLog(string profileDir) {
     public bool ErasedSince(string uuid, DateTime utc) {
         string[] lines;
         lock (gate) {
-            if (!File.Exists(path)) {
+            // Path.Exists, not File.Exists: something else in the log's place is unreadable, not absent.
+            if (!Path.Exists(path)) {
                 return false;
             }
             try {

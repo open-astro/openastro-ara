@@ -219,6 +219,27 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_erase_that_cannot_be_noted_is_refused_and_never_reaches_the_drive() {
+            camera.Setup(c => c.IsFreeToCapture(It.IsAny<object>())).Returns(true);
+            // A file where the state directory should be: the append throws.
+            if (Directory.Exists(stateDir)) {
+                Directory.Delete(stateDir, recursive: true);
+            }
+            await File.WriteAllTextAsync(stateDir, "not a directory");
+            try {
+                using var resp = await http.PostAsJsonAsync("/api/v1/storage/configure",
+                    new { uuid = "C9D0-E1F2", format = true, confirm_label = "BACKUP" }, Json);
+
+                Assert.That(resp.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
+                Assert.That(await resp.Content.ReadAsStringAsync(), Does.Contain("could not note it"));
+                // Strict mock: a ConfigureAsync call would have thrown; verify it explicitly too.
+                devices.Verify(d => d.ConfigureAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            } finally {
+                File.Delete(stateDir);
+            }
+        }
+
+        [Test]
         public async Task Using_a_drive_without_erasing_it_notes_nothing() {
             camera.Setup(c => c.IsFreeToCapture(It.IsAny<object>())).Returns(true);
             var before = DateTime.UtcNow;

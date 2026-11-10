@@ -154,6 +154,18 @@ public class StorageCopyServiceTest {
     }
 
     [Test]
+    public async Task An_erase_log_that_cannot_be_read_counts_every_frame_as_not_copied() {
+        PutAt("night/a.fits", DateTime.UtcNow.AddHours(-2));
+        var stateDir = Path.GetDirectoryName(store)!;
+        var status = await RunToEnd(Svc, "6EF6-FD21").ConfigureAwait(false);
+        Assert.That(status.State, Is.EqualTo("done"), status.ErrorDetail);
+        // A directory where the log file should be: File.ReadAllLines throws.
+        Directory.CreateDirectory(Path.Combine(stateDir, StorageEraseLog.FileName));
+
+        Assert.That(StorageCopyService.Summarize(store, erased: new StorageEraseLog(stateDir)).FramesNotCopied, Is.EqualTo(1));
+    }
+
+    [Test]
     public void A_marker_from_before_it_named_its_drive_counts_nothing_as_copied() {
         PutAt("night/a.fits", DateTime.UtcNow.AddHours(-2));
         var marker = Path.Combine(store, StorageCopyService.LastCopyMarker);
