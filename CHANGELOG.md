@@ -122,7 +122,7 @@ at the top. This happens in the same commit that pushes the release tag.
 ### Added
 
 - Simple Mode: a plan calibrates the guider at the night's first guiding start and after each meridian flip. If a calibration fails, the plan goes on with the earlier calibration and an amber pill says so; with no earlier calibration the run pauses, as it did before. Going on needs `openastro-guider` with `restore_calibration`; an older guider pauses the run (#1716).
-- Simple Mode: the Guider panel has three tabs. Guide holds what it held. Tuning holds minimum move (sent to the Guider at once) and the settle after a dither. Tools holds Recalibrate now and the Guiding Assistant, one tap each (#1722).
+- Simple Mode: the Guider panel has three tabs. Guide holds what it held, except Dither by, which moved to Tuning. Tuning also holds minimum move (sent to the Guider at once) and the settle after a dither. Tools holds Recalibrate now and the Guiding Assistant, one tap each (#1722).
 - Focusing pane: nudge the focuser in or out by 10, 50 or 200 steps, and Stop a move. New `POST /api/v1/equipment/focuser/halt` (#1542).
 - Settings › Autofocus: Reset focus calibration, so the next autofocus runs a full sweep (#1543).
 - Simple Mode Guider panel: RA and Dec aggressiveness sliders and Dec guide mode, sent to the guider live so guiding continues.
