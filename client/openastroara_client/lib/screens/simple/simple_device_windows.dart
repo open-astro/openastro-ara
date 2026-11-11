@@ -3071,7 +3071,9 @@ class _SimpleFilterWheelWindowState
           : w.slots.where((s) => s.position == sentSlot).firstOrNull;
       final moving = sent != null || w.isMoving;
       final pending = w.isAwaitingUser ? w.pending : null;
-      final shownSlot = sent ?? w.current;
+      // The filter in place until the wheel lands; the status line names the
+      // target meanwhile.
+      final shownSlot = w.current;
       final shownName = shownSlot == null ? '—' : _name(shownSlot);
       // Moving is working: blinking green (DESIGN.md status rule); a hand
       // swap waits in amber.
@@ -3110,7 +3112,6 @@ class _SimpleFilterWheelWindowState
             : w.currentSlot == position && !moving
             ? FilterCellRing.here
             : FilterCellRing.none;
-        final inPlace = w.current;
         children.add(
           LayoutBuilder(
             builder: (context, box) {
@@ -3124,7 +3125,8 @@ class _SimpleFilterWheelWindowState
                 slots: w.slots,
                 size: size,
                 large: large,
-                pointAt: sentSlot ?? w.currentSlot,
+                // A manual wheel turns only once the hand swap is confirmed.
+                pointAt: w.manual ? w.currentSlot : sentSlot ?? w.currentSlot,
                 ringOf: ringOf,
                 locked: moving || pending != null || asked,
                 semanticLabel: _labelled,
@@ -3139,14 +3141,12 @@ class _SimpleFilterWheelWindowState
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(l10n.deviceFilter, style: AraText.caption),
-                            Text(
-                              shownName,
-                              maxLines: 1,
-                              style: kSimpleReading,
-                            ),
-                            if (inPlace != null && inPlace.name.isNotEmpty)
+                            Text(shownName, maxLines: 1, style: kSimpleReading),
+                            if (shownSlot != null && shownSlot.name.isNotEmpty)
                               Text(
-                                l10n.deviceSlot(inPlace.position).toLowerCase(),
+                                l10n
+                                    .deviceSlot(shownSlot.position)
+                                    .toLowerCase(),
                                 style: AraText.caption,
                               ),
                           ],

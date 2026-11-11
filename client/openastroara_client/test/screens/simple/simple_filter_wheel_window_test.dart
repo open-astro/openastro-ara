@@ -173,6 +173,21 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
   });
 
+  testWidgets('the reading keeps the filter in place until the wheel lands', (tester) async {
+    final (_, wheel) = await _pump(tester, _wire());
+    Finder inReading(String text) =>
+        find.descendant(of: find.byKey(const Key('simple-filterwheel-reading')), matching: find.text(text));
+    await tester.tap(_slot(1));
+    await tester.pump();
+    expect(inReading('L'), findsOneWidget, reason: 'L is still in');
+    expect(inReading('Ha'), findsNothing, reason: 'Ha is not in yet');
+    expect(find.text('Moving to Ha…'), findsOneWidget);
+    wheel.set(_wire(current: 1));
+    await tester.pump();
+    expect(inReading('Ha'), findsOneWidget, reason: 'landed');
+    await tester.pump(const Duration(seconds: 2));
+  });
+
   testWidgets('a move started elsewhere reads Moving…', (tester) async {
     await _pump(tester, _wire(runtime: 'moving', current: -1));
     expect(find.text('Moving…'), findsOneWidget);
@@ -275,6 +290,26 @@ void main() {
     await tester.tap(find.text('Cancel swap'));
     await tester.pump();
     expect(wheel.calls, ['change 1', 'installed 1', 'cancel']);
+  });
+
+  testWidgets('a manual wheel turns the drawn wheel only once the swap is confirmed', (tester) async {
+    final (_, wheel) = await _pump(tester, _wire(manual: true));
+    final drawn = find.byType(SimpleFilterWheel);
+    bool underMark(int p) => (tester.getCenter(_slot(p)).dx - tester.getRect(drawn).center.dx).abs() < 1 &&
+        tester.getCenter(_slot(p)).dy < tester.getRect(drawn).center.dy;
+    await tester.tap(_slot(1));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+    expect(underMark(0), isTrue, reason: 'asked, not swapped yet');
+    wheel.set(_wire(manual: true, runtime: 'awaiting_user', pending: 1));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+    expect(underMark(0), isTrue, reason: 'waiting for the hand swap');
+    wheel.set(_wire(manual: true, current: 1));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+    expect(underMark(1), isTrue, reason: 'confirmed: now it turns');
+    await tester.pump(const Duration(seconds: 11));
   });
 
   testWidgets('in Settings it ends with the wheel\'s versions; from the dot, none', (tester) async {

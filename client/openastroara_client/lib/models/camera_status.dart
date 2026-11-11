@@ -191,7 +191,9 @@ class DewHeaterRef {
 
   @override
   bool operator ==(Object other) =>
-      other is DewHeaterRef && other.deviceId == deviceId && other.portId == portId;
+      other is DewHeaterRef &&
+      other.deviceId == deviceId &&
+      other.portId == portId;
 
   @override
   int get hashCode => Object.hash(deviceId, portId);
