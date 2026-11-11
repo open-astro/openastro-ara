@@ -4,6 +4,7 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   audioplayers_windows
+  battery_plus
   flutter_secure_storage_windows
   geolocator_windows
   url_launcher_windows

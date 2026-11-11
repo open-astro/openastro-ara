@@ -553,6 +553,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceMoving => 'Moving…';
 
   @override
+  String get deviceExposing => 'Exposing';
+
+  @override
+  String get deviceDownloading => 'Downloading';
+
+  @override
   String get deviceAutofocus => 'Autofocus';
 
   @override
@@ -767,6 +773,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get previewPlanSkipped => 'Skipped: conditions not met';
+
+  @override
+  String previewWaitingForFlip(String countdown) {
+    return 'Waiting for the meridian flip · $countdown';
+  }
 
   @override
   String get previewParking => 'Parking';
@@ -1536,6 +1547,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planPaused => 'Paused';
 
   @override
+  String get planWaitingForFlip => 'Waiting for flip';
+
+  @override
   String get planDone => 'Done';
 
   @override
@@ -1567,6 +1581,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get planPausingLabel => 'Pausing';
+
+  @override
+  String get planPausingAfterFrame => 'Pausing after this frame';
+
+  @override
+  String get planPauseAfterFlip => 'Pause after the flip';
 
   @override
   String get planResume => 'Resume';
@@ -3682,4 +3702,305 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get simpleRigAddressInvalid =>
       'Type the rig\'s name or address, for example astro-pi.local or 192.0.2.24:5555.';
+
+  @override
+  String get monitorTitle => 'Monitor';
+
+  @override
+  String monitorBattery(int level) {
+    return 'This device\'s battery: $level %';
+  }
+
+  @override
+  String get monitorLastKnown => 'Last known';
+
+  @override
+  String monitorLinkLost(String age) {
+    return 'Lost contact with the rig · $age ago';
+  }
+
+  @override
+  String get monitorLinkLostReason =>
+      'A running plan carries on by itself on the rig.';
+
+  @override
+  String monitorDeviceDropped(String device) {
+    return '$device disconnected';
+  }
+
+  @override
+  String get monitorDeviceDroppedReason =>
+      'Reconnect it from its window. Tap its tile to open it.';
+
+  @override
+  String get monitorUnsafeReason =>
+      'The rig reacts as your safety settings say.';
+
+  @override
+  String get monitorStarLost => 'Guide star lost';
+
+  @override
+  String get monitorStarLostReason =>
+      'Often clouds passing. Ara holds the next frame until guiding is back.';
+
+  @override
+  String get monitorStarLostWord => 'Star lost';
+
+  @override
+  String monitorLowDisk(String free) {
+    return 'Low disk space · $free free';
+  }
+
+  @override
+  String get monitorLowDiskReason =>
+      'The queue\'s frames won\'t all fit. Free space or shorten the queue.';
+
+  @override
+  String monitorCooler(String target, String sensor) {
+    return 'Cooler can\'t reach $target · sensor at $sensor';
+  }
+
+  @override
+  String get monitorCoolerReason =>
+      'Frames still save, but they won\'t match your darks.';
+
+  @override
+  String get monitorFlippingReason =>
+      'Imaging carries on by itself when it is done.';
+
+  @override
+  String get monitorWaitingForFlipReason => 'No frames until the mount flips.';
+
+  @override
+  String get monitorPaused => 'Paused';
+
+  @override
+  String get monitorWaitingForYou => 'Plan paused · waiting for you';
+
+  @override
+  String get monitorWaitingForYouWord => 'Waiting for you';
+
+  @override
+  String monitorWaitingForDark(String time) {
+    return 'Waiting for dark · plan starts at $time';
+  }
+
+  @override
+  String get monitorWaitingForDarkReason => 'Imaging starts on its own.';
+
+  @override
+  String get monitorNoPlan => 'Rig ready · no plan running';
+
+  @override
+  String get monitorNoPlanReason => 'Start a plan and this screen fills in.';
+
+  @override
+  String get monitorNoPlanBig => 'No plan';
+
+  @override
+  String get monitorNoPlanRunning => 'No plan running';
+
+  @override
+  String monitorAllGood(String target) {
+    return 'All good · imaging $target';
+  }
+
+  @override
+  String get monitorAllGoodReason => 'Nothing needs you.';
+
+  @override
+  String monitorAllGoodParks(String time) {
+    return 'Nothing needs you. The plan ends at $time, then the mount parks.';
+  }
+
+  @override
+  String get monitorNow => 'Now';
+
+  @override
+  String get monitorRunning => 'Running';
+
+  @override
+  String get monitorFlipping => 'Flipping';
+
+  @override
+  String get monitorWaiting => 'Waiting';
+
+  @override
+  String get monitorIdle => 'Idle';
+
+  @override
+  String get monitorNothingRunning => 'Nothing running';
+
+  @override
+  String get monitorLeftInFrame => 'left in this frame';
+
+  @override
+  String get monitorUntilStart => 'until the plan starts';
+
+  @override
+  String get monitorUntilFlip => 'until the flip';
+
+  @override
+  String monitorFrameOf(int frame, int frames, String left, String target) {
+    return 'Frame $frame of $frames · about $left left on $target';
+  }
+
+  @override
+  String get monitorUpNext => 'Up next';
+
+  @override
+  String get monitorTonightsBest => 'Tonight\'s best';
+
+  @override
+  String monitorUpFrame(int frame, String filter) {
+    return 'Frame $frame · $filter';
+  }
+
+  @override
+  String get monitorUpPark => 'Mount parks';
+
+  @override
+  String get monitorThen => 'then';
+
+  @override
+  String monitorAltitudeUp(String alt) {
+    return '$alt° up';
+  }
+
+  @override
+  String get monitorTarget => 'Target';
+
+  @override
+  String get monitorNoTarget => 'No target picked';
+
+  @override
+  String monitorImagingTo(String time) {
+    return 'Imaging to $time';
+  }
+
+  @override
+  String monitorMaxAltitude(String alt) {
+    return 'max $alt°';
+  }
+
+  @override
+  String monitorTransits(String time) {
+    return 'Transits $time';
+  }
+
+  @override
+  String monitorMoon(int pct) {
+    return 'Moon $pct %';
+  }
+
+  @override
+  String get monitorTracking => 'Tracking';
+
+  @override
+  String get monitorQueued => 'Queued';
+
+  @override
+  String get monitorParked => 'Parked';
+
+  @override
+  String get monitorFlipAutomatic => 'Automatic';
+
+  @override
+  String get monitorFlipComingUp => 'Coming up';
+
+  @override
+  String monitorFlipAt(String time) {
+    return 'At $time';
+  }
+
+  @override
+  String get monitorFlipWaitsForFrame =>
+      'Waits for the frame in hand, then flips';
+
+  @override
+  String get monitorFlipOff => 'Automatic flip is off';
+
+  @override
+  String get monitorFlipNone => 'No flip tonight';
+
+  @override
+  String get monitorDisconnected => 'Disconnected';
+
+  @override
+  String monitorSince(String time, String duration) {
+    return 'Since $time · $duration';
+  }
+
+  @override
+  String get monitorPastLimit => 'Past limit';
+
+  @override
+  String get monitorCloud => 'Cloud';
+
+  @override
+  String get monitorSkyQuality => 'Sky quality';
+
+  @override
+  String get monitorAir => 'Air';
+
+  @override
+  String get monitorDewMargin => 'Above dew point';
+
+  @override
+  String get monitorHumidity => 'Humidity';
+
+  @override
+  String get monitorRain => 'Rain';
+
+  @override
+  String get monitorWind => 'Wind';
+
+  @override
+  String monitorGusts(String kmh) {
+    return 'gusts $kmh';
+  }
+
+  @override
+  String monitorLimit(String value) {
+    return 'limit $value';
+  }
+
+  @override
+  String monitorLastDither(String time) {
+    return 'Last dither $time';
+  }
+
+  @override
+  String get monitorLastFrame => 'Last frame';
+
+  @override
+  String get monitorHfr => 'HFR';
+
+  @override
+  String get monitorStars => 'Stars';
+
+  @override
+  String get monitorSkyBackground => 'Sky background';
+
+  @override
+  String get monitorClippedStars => 'Clipped stars';
+
+  @override
+  String monitorAutofocusSince(String time, String delta) {
+    return 'Autofocus $time · $delta since';
+  }
+
+  @override
+  String get monitorTonight => 'Tonight';
+
+  @override
+  String monitorDarkSpan(String start, String end, String imaged) {
+    return 'Dark $start to $end · $imaged imaged';
+  }
+
+  @override
+  String get monitorNoDark => 'Set the site to see tonight\'s dark';
+
+  @override
+  String get monitorLinkLostShort => 'Lost contact with the rig';
 }

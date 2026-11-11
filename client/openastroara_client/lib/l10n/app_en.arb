@@ -725,6 +725,14 @@
   "@deviceMoving": {
     "description": "Focuser window caption while the focuser moves"
   },
+  "deviceExposing": "Exposing",
+  "@deviceExposing": {
+    "description": "Simple Mode camera pill: the main camera is exposing a frame nothing in this app started (#1755)"
+  },
+  "deviceDownloading": "Downloading",
+  "@deviceDownloading": {
+    "description": "Simple Mode camera pill: the main camera is downloading a frame nothing in this app started (#1755)"
+  },
   "deviceAutofocus": "Autofocus",
   "@deviceAutofocus": {
     "description": "Full-width button under the focuser knobs: runs autofocus"
@@ -1026,6 +1034,15 @@
   "previewPlanSkipped": "Skipped: conditions not met",
   "@previewPlanSkipped": {
     "description": "Simple Mode status pill: a finished plan imaged nothing because its target never started (#1596). Keep it short: the pill is one line, max 300 px, after the 'Plan' label, and the cause must survive the ellipsis."
+  },
+  "previewWaitingForFlip": "Waiting for the meridian flip · {countdown}",
+  "@previewWaitingForFlip": {
+    "description": "Simple Mode Plan pill while the plan waits out the meridian, with the time left (mm:ss or h:mm:ss) (#1747)",
+    "placeholders": {
+      "countdown": {
+        "type": "String"
+      }
+    }
   },
   "@previewPlan": {
     "description": "Simple Mode status pill: the imaging plan is running (its step follows)"
@@ -2141,6 +2158,10 @@
   "@planPaused": {
     "description": "Plan square: the run is paused"
   },
+  "planWaitingForFlip": "Waiting for flip",
+  "@planWaitingForFlip": {
+    "description": "Plan square state word while the plan waits out the meridian before the flip (#1747)"
+  },
   "planDone": "Done",
   "@planDone": {
     "description": "Plan square: the target or run is finished"
@@ -2182,6 +2203,14 @@
   "planPausingLabel": "Pausing",
   "@planPausingLabel": {
     "description": "Shutter screen-reader label while pausing"
+  },
+  "planPausingAfterFrame": "Pausing after this frame",
+  "@planPausingAfterFrame": {
+    "description": "Plan pill and the greyed shutter's tap while a pause waits for the frame in hand to finish"
+  },
+  "planPauseAfterFlip": "Pause after the flip",
+  "@planPauseAfterFlip": {
+    "description": "Shutter screen-reader label while the plan waits out the meridian before the flip (#1747)"
   },
   "planResume": "Resume",
   "@planResume": {
@@ -4781,5 +4810,474 @@
   "simpleRigAddressHint": "astro-pi.local or 192.0.2.24",
   "@simpleRigAddressHint": {"description": "Hint in the card's address field; made-up example address"},
   "simpleRigAddressInvalid": "Type the rig's name or address, for example astro-pi.local or 192.0.2.24:5555.",
-  "@simpleRigAddressInvalid": {"description": "Error under the card's address field when the typed address cannot be read (#1559); made-up example address"}
+  "@simpleRigAddressInvalid": {"description": "Error under the card's address field when the typed address cannot be read (#1559); made-up example address"},
+  "monitorTitle": "Monitor",
+  "@monitorTitle": {
+    "description": "Simple Mode's full-screen read-only view of the Session (#1724); left rail item"
+  },
+  "monitorBattery": "This device's battery: {level} %",
+  "@monitorBattery": {
+    "description": "Monitor: screen-reader label of this device's battery",
+    "placeholders": {
+      "level": {
+        "type": "int"
+      }
+    }
+  },
+  "monitorLastKnown": "Last known",
+  "@monitorLastKnown": {
+    "description": "Monitor tile status word while the link to the rig is lost"
+  },
+  "monitorLinkLost": "Lost contact with the rig · {age} ago",
+  "@monitorLinkLost": {
+    "description": "Monitor top line: the link to the rig is lost, with how long ago",
+    "placeholders": {
+      "age": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorLinkLostReason": "A running plan carries on by itself on the rig.",
+  "@monitorLinkLostReason": {
+    "description": "Monitor top line reason while the link is lost"
+  },
+  "monitorDeviceDropped": "{device} disconnected",
+  "@monitorDeviceDropped": {
+    "description": "Monitor top line: a device in the profile has dropped",
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorDeviceDroppedReason": "Reconnect it from its window. Tap its tile to open it.",
+  "@monitorDeviceDroppedReason": {
+    "description": "Monitor top line reason: a device dropped"
+  },
+  "monitorUnsafeReason": "The rig reacts as your safety settings say.",
+  "@monitorUnsafeReason": {
+    "description": "Monitor top line reason while Unsafe"
+  },
+  "monitorStarLost": "Guide star lost",
+  "@monitorStarLost": {
+    "description": "Monitor top line: the guide star is lost"
+  },
+  "monitorStarLostReason": "Often clouds passing. Ara holds the next frame until guiding is back.",
+  "@monitorStarLostReason": {
+    "description": "Monitor top line reason: guide star lost"
+  },
+  "monitorStarLostWord": "Star lost",
+  "@monitorStarLostWord": {
+    "description": "Monitor Guider tile status word"
+  },
+  "monitorLowDisk": "Low disk space · {free} free",
+  "@monitorLowDisk": {
+    "description": "Monitor top line: the Queue won't fit on the disk",
+    "placeholders": {
+      "free": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorLowDiskReason": "The queue's frames won't all fit. Free space or shorten the queue.",
+  "@monitorLowDiskReason": {
+    "description": "Monitor top line reason: low disk"
+  },
+  "monitorCooler": "Cooler can't reach {target} · sensor at {sensor}",
+  "@monitorCooler": {
+    "description": "Monitor top line: the cooler can't hold its target",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      },
+      "sensor": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorCoolerReason": "Frames still save, but they won't match your darks.",
+  "@monitorCoolerReason": {
+    "description": "Monitor top line reason: cooler"
+  },
+  "monitorFlippingReason": "Imaging carries on by itself when it is done.",
+  "@monitorFlippingReason": {
+    "description": "Monitor top line reason during a meridian flip"
+  },
+  "monitorWaitingForFlipReason": "No frames until the mount flips.",
+  "@monitorWaitingForFlipReason": {
+    "description": "Monitor top line reason while waiting for the meridian flip"
+  },
+  "monitorPaused": "Paused",
+  "@monitorPaused": {
+    "description": "Monitor: the plan is paused (by the user or by Ara; the run state does not say which)"
+  },
+  "monitorWaitingForYou": "Plan paused · waiting for you",
+  "@monitorWaitingForYou": {
+    "description": "Monitor top line: the plan is paused until the user acts"
+  },
+  "monitorWaitingForYouWord": "Waiting for you",
+  "@monitorWaitingForYouWord": {
+    "description": "Monitor Now tile status word: paused until the user acts"
+  },
+  "monitorWaitingForDark": "Waiting for dark · plan starts at {time}",
+  "@monitorWaitingForDark": {
+    "description": "Monitor top line: a scheduled plan waits for its start",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorWaitingForDarkReason": "Imaging starts on its own.",
+  "@monitorWaitingForDarkReason": {
+    "description": "Monitor top line reason: waiting for dark"
+  },
+  "monitorNoPlan": "Rig ready · no plan running",
+  "@monitorNoPlan": {
+    "description": "Monitor top line: no plan"
+  },
+  "monitorNoPlanReason": "Start a plan and this screen fills in.",
+  "@monitorNoPlanReason": {
+    "description": "Monitor top line reason: no plan"
+  },
+  "monitorNoPlanBig": "No plan",
+  "@monitorNoPlanBig": {
+    "description": "Monitor Now tile: no plan, in place of a countdown"
+  },
+  "monitorNoPlanRunning": "No plan running",
+  "@monitorNoPlanRunning": {
+    "description": "Monitor Meridian flip tile with no active run"
+  },
+  "monitorAllGood": "All good · imaging {target}",
+  "@monitorAllGood": {
+    "description": "Monitor top line: all well",
+    "placeholders": {
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorAllGoodReason": "Nothing needs you.",
+  "@monitorAllGoodReason": {
+    "description": "Monitor top line reason: all well"
+  },
+  "monitorAllGoodParks": "Nothing needs you. The plan ends at {time}, then the mount parks.",
+  "@monitorAllGoodParks": {
+    "description": "Monitor top line reason: all well, with the park time",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorNow": "Now",
+  "@monitorNow": {
+    "description": "Monitor tile: what the rig is doing"
+  },
+  "monitorRunning": "Running",
+  "@monitorRunning": {
+    "description": "Monitor status word: working normally, not exposing"
+  },
+  "monitorFlipping": "Flipping",
+  "@monitorFlipping": {
+    "description": "Monitor Now tile status word during a meridian flip"
+  },
+  "monitorWaiting": "Waiting",
+  "@monitorWaiting": {
+    "description": "Monitor Now tile status word: waiting to start"
+  },
+  "monitorIdle": "Idle",
+  "@monitorIdle": {
+    "description": "Monitor status word: nothing running"
+  },
+  "monitorNothingRunning": "Nothing running",
+  "@monitorNothingRunning": {
+    "description": "Monitor Now tile with no plan"
+  },
+  "monitorLeftInFrame": "left in this frame",
+  "@monitorLeftInFrame": {
+    "description": "Monitor Now tile caption under the frame countdown"
+  },
+  "monitorUntilStart": "until the plan starts",
+  "@monitorUntilStart": {
+    "description": "Monitor Now tile caption under a countdown to the plan's start"
+  },
+  "monitorUntilFlip": "until the flip",
+  "@monitorUntilFlip": {
+    "description": "Monitor Now tile caption under the meridian wait countdown"
+  },
+  "monitorFrameOf": "Frame {frame} of {frames} · about {left} left on {target}",
+  "@monitorFrameOf": {
+    "description": "Monitor Now tile: progress on the Target",
+    "placeholders": {
+      "frame": {
+        "type": "int"
+      },
+      "frames": {
+        "type": "int"
+      },
+      "left": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorUpNext": "Up next",
+  "@monitorUpNext": {
+    "description": "Monitor Now tile: the upcoming steps"
+  },
+  "monitorTonightsBest": "Tonight's best",
+  "@monitorTonightsBest": {
+    "description": "Monitor Now tile with no plan: tonight's best Targets"
+  },
+  "monitorUpFrame": "Frame {frame} · {filter}",
+  "@monitorUpFrame": {
+    "description": "Monitor Up next row: the next frame and filter",
+    "placeholders": {
+      "frame": {
+        "type": "int"
+      },
+      "filter": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorUpPark": "Mount parks",
+  "@monitorUpPark": {
+    "description": "Monitor Up next row: the park at the end"
+  },
+  "monitorThen": "then",
+  "@monitorThen": {
+    "description": "Monitor Up next row whose time isn't known"
+  },
+  "monitorAltitudeUp": "{alt}° up",
+  "@monitorAltitudeUp": {
+    "description": "Monitor Tonight's best row: the Target's altitude now",
+    "placeholders": {
+      "alt": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorTarget": "Target",
+  "@monitorTarget": {
+    "description": "Monitor tile: the Target"
+  },
+  "monitorNoTarget": "No target picked",
+  "@monitorNoTarget": {
+    "description": "Monitor Target tile with no Target"
+  },
+  "monitorImagingTo": "Imaging to {time}",
+  "@monitorImagingTo": {
+    "description": "Monitor Target tile: when imaging this Target ends",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorMaxAltitude": "max {alt}°",
+  "@monitorMaxAltitude": {
+    "description": "Monitor Target tile: maximum altitude tonight",
+    "placeholders": {
+      "alt": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorTransits": "Transits {time}",
+  "@monitorTransits": {
+    "description": "Monitor Target tile: transit time",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorMoon": "Moon {pct} %",
+  "@monitorMoon": {
+    "description": "Monitor Target tile: the Moon's illumination",
+    "placeholders": {
+      "pct": {
+        "type": "int"
+      }
+    }
+  },
+  "monitorTracking": "Tracking",
+  "@monitorTracking": {
+    "description": "Monitor Target tile status word"
+  },
+  "monitorQueued": "Queued",
+  "@monitorQueued": {
+    "description": "Monitor Target tile status word"
+  },
+  "monitorParked": "Parked",
+  "@monitorParked": {
+    "description": "Monitor Target tile status word"
+  },
+  "monitorFlipAutomatic": "Automatic",
+  "@monitorFlipAutomatic": {
+    "description": "Monitor Meridian flip tile status word: a flip is due"
+  },
+  "monitorFlipComingUp": "Coming up",
+  "@monitorFlipComingUp": {
+    "description": "Monitor Meridian flip tile status word: waiting for the frame"
+  },
+  "monitorFlipAt": "At {time}",
+  "@monitorFlipAt": {
+    "description": "Monitor Meridian flip tile: when the flip is due",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorFlipWaitsForFrame": "Waits for the frame in hand, then flips",
+  "@monitorFlipWaitsForFrame": {
+    "description": "Monitor Meridian flip tile: waiting for the exposure"
+  },
+  "monitorFlipOff": "Automatic flip is off",
+  "@monitorFlipOff": {
+    "description": "Monitor Meridian flip tile: auto flip off"
+  },
+  "monitorFlipNone": "No flip tonight",
+  "@monitorFlipNone": {
+    "description": "Monitor Meridian flip tile: none due tonight"
+  },
+  "monitorDisconnected": "Disconnected",
+  "@monitorDisconnected": {
+    "description": "Monitor tile status word: the device dropped"
+  },
+  "monitorSince": "Since {time} · {duration}",
+  "@monitorSince": {
+    "description": "Monitor Safety strip: since when, and for how long",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorPastLimit": "Past limit",
+  "@monitorPastLimit": {
+    "description": "Monitor Weather tile status word"
+  },
+  "monitorCloud": "Cloud",
+  "@monitorCloud": {
+    "description": "Monitor Weather cell"
+  },
+  "monitorSkyQuality": "Sky quality",
+  "@monitorSkyQuality": {
+    "description": "Monitor Weather cell"
+  },
+  "monitorAir": "Air",
+  "@monitorAir": {
+    "description": "Monitor Weather cell: air temperature"
+  },
+  "monitorDewMargin": "Above dew point",
+  "@monitorDewMargin": {
+    "description": "Monitor Weather cell: the margin over the dew point"
+  },
+  "monitorHumidity": "Humidity",
+  "@monitorHumidity": {
+    "description": "Monitor Weather cell"
+  },
+  "monitorRain": "Rain",
+  "@monitorRain": {
+    "description": "Monitor Weather cell"
+  },
+  "monitorWind": "Wind",
+  "@monitorWind": {
+    "description": "Monitor Weather cell"
+  },
+  "monitorGusts": "gusts {kmh}",
+  "@monitorGusts": {
+    "description": "Monitor Weather wind cell: the gusts",
+    "placeholders": {
+      "kmh": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorLimit": "limit {value}",
+  "@monitorLimit": {
+    "description": "Monitor Weather cell past its limit: the limit",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorLastDither": "Last dither {time}",
+  "@monitorLastDither": {
+    "description": "Monitor Guider tile: the last dither's time",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorLastFrame": "Last frame",
+  "@monitorLastFrame": {
+    "description": "Monitor tile: the last saved frame's quality"
+  },
+  "monitorHfr": "HFR",
+  "@monitorHfr": {
+    "description": "Monitor Last frame reading"
+  },
+  "monitorStars": "Stars",
+  "@monitorStars": {
+    "description": "Monitor Last frame reading"
+  },
+  "monitorSkyBackground": "Sky background",
+  "@monitorSkyBackground": {
+    "description": "Monitor Last frame reading: the frame's median in ADU"
+  },
+  "monitorClippedStars": "Clipped stars",
+  "@monitorClippedStars": {
+    "description": "Monitor Last frame reading: the share of clipped stars"
+  },
+  "monitorAutofocusSince": "Autofocus {time} · {delta} since",
+  "@monitorAutofocusSince": {
+    "description": "Monitor Last frame: the last autofocus and the temperature change since",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      },
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorTonight": "Tonight",
+  "@monitorTonight": {
+    "description": "Monitor tile: tonight's timeline"
+  },
+  "monitorDarkSpan": "Dark {start} to {end} · {imaged} imaged",
+  "@monitorDarkSpan": {
+    "description": "Monitor Tonight tile: the dark and the time imaged so far",
+    "placeholders": {
+      "start": {
+        "type": "String"
+      },
+      "end": {
+        "type": "String"
+      },
+      "imaged": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorNoDark": "Set the site to see tonight's dark",
+  "@monitorNoDark": {
+    "description": "Monitor Tonight tile with no site set"
+  },
+  "monitorLinkLostShort": "Lost contact with the rig",
+  "@monitorLinkLostShort": {
+    "description": "Monitor: what a screen reader announces when the link to the rig is lost (no age)"
+  }
 }

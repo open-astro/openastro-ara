@@ -35,6 +35,7 @@ class EmergencyStopButton extends ConsumerStatefulWidget {
     super.key,
     this.simple = false,
     this.compact = false,
+    this.large = false,
   });
 
   final bool simple;
@@ -42,6 +43,10 @@ class EmergencyStopButton extends ConsumerStatefulWidget {
   /// Simple Mode's rail version: a 60 px square reading STOP (HOLD while
   /// held), same hold-to-confirm.
   final bool compact;
+
+  /// Monitor's corner version (#1724): the compact square at 108 pt, with
+  /// type and icon to match.
+  final bool large;
 
   @override
   ConsumerState<EmergencyStopButton> createState() =>
@@ -112,7 +117,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
 
   void _onPressed() {
     if (_viaPointer) return;
-    if (widget.simple || widget.compact) {
+    if (widget.simple || widget.compact || widget.large) {
       _pressAgain();
     } else {
       _confirmAndStop();
@@ -192,7 +197,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
         _summarize(
           l10n,
           result,
-          failuresFirst: widget.simple || widget.compact,
+          failuresFirst: widget.simple || widget.compact || widget.large,
         ),
         error: result.failedRungs.isNotEmpty,
         snackBarRed: false,
@@ -265,7 +270,8 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final compact = widget.compact;
+    final large = widget.large;
+    final compact = widget.compact || large;
     final simple = widget.simple || compact;
     const red = AraColors.emergencyStop;
     final radius = simple ? 10.0 : 16.0;
@@ -275,7 +281,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
             height: simple ? 18 : 14,
             child: const CircularProgressIndicator(strokeWidth: 2),
           )
-        : Icon(Icons.report, size: simple ? 20 : 16);
+        : Icon(Icons.report, size: large ? 32 : (simple ? 20 : 16));
     final label = Text(
       compact
           ? (_inFlight
@@ -311,7 +317,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
       ),
       // From the theme's label style, so it carries the app's font family.
       textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-        fontSize: compact ? 12 : (simple ? 14 : 13),
+        fontSize: large ? 22 : (compact ? 12 : (simple ? 14 : 13)),
         fontWeight: compact ? FontWeight.w700 : FontWeight.w600,
       ),
     );

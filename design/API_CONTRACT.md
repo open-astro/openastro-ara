@@ -38,6 +38,34 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-11 — A pause stops the plan's work in progress
+
+**Endpoint(s) or area:** `POST /api/v1/sequences/{id}/pause`, and the daemon's own safety pause.
+
+**Decision:** a pause now stops what the plan has in progress, not only what comes next: an instruction (a wait, a slew, centring, cooling, an autofocus instruction) or a trigger (autofocus, dither) in progress is cancelled, the run suspends, and on Resume that instruction runs again and the triggers are asked again. A frame in progress (an exposure item), a flat set (`FlatPanelFlats`, `SkyFlats`, which take their frames inside one instruction) and a meridian flip still finish first. An instruction's own wait for the user (a failed settle, a prompt) does not interrupt anything. The response and the `sequence.paused` event are unchanged; `Paused` is still reported only once the run has suspended.
+
+**Reasoning:** with NINA's semantics (the current instruction always finishes) a paused plan kept focusing for minutes, which reads as a pause that did nothing (user, 2026-11-11). A frame keeps "Pause after this frame"; a flip is never cut short with the mount mid-move.
+
+**Spec ref:** `OpenAstroAra.Sequencer/Utility/PauseGate.cs` (`InterruptToken`), `Container/ExecutionStrategy/SequentialStrategy.cs`, `Trigger/SequenceTrigger.cs` (`RunsThroughPause`), `Trigger/MeridianFlip/MeridianFlipTrigger.cs`.
+
+**Related:** #1724, #1747; tests `PauseInterruptsPlanWorkTest`, `SequencerServiceTest.A_pause_stops_the_wait_in_progress_and_resume_runs_it_again_then_completes`.
+
+---
+
+## 2026-11-11 — #1747 the meridian wait's seconds left; a refused flip has its own reason code
+
+**Endpoint(s) or area:** `GET /api/v1/sequences/{id}/state` and WS `sequence.progress` gain `meridian_wait_seconds_left`; `sequence.progress` also gains `reason_code` and `reason_text` (the wait starts mid-run, and the client re-reads the state only on lifecycle events); `reason_code` gains `meridian_refused`.
+
+**Decision:** `meridian_wait_seconds_left` is the whole seconds left while the run waits out the meridian (rounded up), set only with `reason_code` `meridian`, null in every other case, and cleared together with the reason. A flip the pre-flip flight check refused now reports `reason_code` `meridian_refused` (it was `meridian`, the same code as the wait). `reason_text` is unchanged for both. Clients treat a run as waiting only when the code is `meridian` and the seconds are present; the code without seconds is an older daemon, shown by its text. Run state stays `running`. No new routes (ADR 0009 rule 1).
+
+**Reasoning:** with one code for both, a client branching on `meridian` showed a refused flip as a countdown. Breaking change for such a client: a refusal no longer reads `meridian`. The Full UI shows `reason_text` for both and is unaffected.
+
+**Spec ref:** `OpenAstroAra.Server/openapi.yaml` (`SequenceRunStateDto.meridian_wait_seconds_left`); `Services/MeridianFlipExecutor.cs` (`WaitStatus`, `RefusedSource`), `Services/SequencerService.cs` (`SetReason`, `EmitAsync`); test `SequencerServiceTest.Progress_frames_carry_the_meridian_wait_and_clear_it_at_the_flip`.
+
+**Related:** #1596, #1597, #1724; tests `SequencerServiceTest` (`The_meridian_wait_reports_its_seconds_left_until_the_flip_starts_and_not_after_the_run`, `A_refused_flip_reports_meridian_refused_with_no_seconds_left`), `MeridianFlipExecutorTest` (`The_passing_meridian_countdown_carries_its_whole_seconds_left`).
+
+---
+
 ## 2026-11-10 — #1579 what erasing a drive would lose: `GET /api/v1/storage/contents`
 
 **Endpoint(s) or area:** `GET /api/v1/storage/contents?uuid=` → `StorageContentsDto { readable, frames, newest_frame_utc, frames_not_copied }`; the disk-to-disk copy (`POST /api/v1/storage/copy`) now leaves a hidden `.ara-last-copy` marker on the store.

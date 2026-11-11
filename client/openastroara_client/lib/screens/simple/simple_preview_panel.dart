@@ -78,6 +78,8 @@ import 'simple_shell.dart'
     show
         SimplePanel,
         SimpleSegment,
+        SimpleSegments,
+        simpleStackText,
         kSimpleRailWidth,
         simpleRailScale,
         kSimpleStatusMaxWidth,
@@ -150,6 +152,15 @@ String simpleUptime(double seconds) {
   if (d > 0) return '$d d $h h';
   if (h > 0) return '$h h $m min';
   return '$m min';
+}
+
+/// "04:32" under an hour, "1:04:32" from an hour up: a countdown (#1747).
+/// Pure — unit-tested.
+String simpleCountdown(int seconds) {
+  final s = seconds < 0 ? 0 : seconds;
+  final h = s ~/ 3600, m = (s % 3600) ~/ 60, sec = s % 60;
+  String two(int v) => v.toString().padLeft(2, '0');
+  return h > 0 ? '$h:${two(m)}:${two(sec)}' : '${two(m)}:${two(sec)}';
 }
 
 /// "412 GB free" (whole GB from 100 up, one decimal below), or "Unplugged"
@@ -227,8 +238,45 @@ class _SimpleSystemPanelState extends ConsumerState<SimpleSystemPanel> {
   }
 }
 
+/// Info's facts over the frame are on (session only; off to start). Turned
+/// on and off from Preview's and Focus's panels; the left rail's Info went
+/// when Monitor took over watching the night (user, 2026-11-11).
+class SimpleInfoShown extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set(bool shown) => state = shown;
+  void toggle() => state = !state;
+}
+
+final simpleInfoShownProvider = NotifierProvider<SimpleInfoShown, bool>(SimpleInfoShown.new);
+
+/// Info On / Off, a row in Preview's and Focus's panels.
+class SimpleInfoToggle extends ConsumerWidget {
+  const SimpleInfoToggle({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final label = Text(l10n.shellInfo, style: kSimpleText);
+    // Large text: the segments go under the label, sharing its width.
+    final stack = simpleStackText(context);
+    final segments = SimpleSegments<bool>(
+      keyPrefix: 'simple-info',
+      expand: stack,
+      group: l10n.shellInfo,
+      options: [(true, l10n.deviceOn, 'on'), (false, l10n.deviceOff, 'off')],
+      selected: ref.watch(simpleInfoShownProvider),
+      onPick: ref.read(simpleInfoShownProvider.notifier).set,
+    );
+    return stack
+        ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: AraSpace.s4, children: [label, segments])
+        : Row(spacing: AraSpace.s8, children: [Expanded(child: label), segments]);
+  }
+}
+
 /// The last frame's facts as tiles in the bottom-left corner, turned on
-/// from the left rail's Info:
+/// from [SimpleInfoToggle]:
 /// HFR, stars, exposure · filter, gain · offset and clipped highlights.
 class SimpleInfoPanel extends ConsumerWidget {
   const SimpleInfoPanel({super.key});
@@ -432,6 +480,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
         children: [
           // Leaving a running camera would strand it with no stop.
           ..._previewCameraRows(context, ref),
+          const SimpleInfoToggle(),
           // No title: the chip that opened it says what it is (user,
           // 2026-11-04).
           if (guide) ...[
@@ -1378,7 +1427,16 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         // meridian countdown) are the daemon's live text, like the step itself.
         : run?.reasonCode == 'target_skipped'
         ? l10n.previewPlanSkipped
+        // #1747: the meridian wait in the person's words, counting down.
+        : run?.meridianWaitLeft != null
+        ? l10n.previewWaitingForFlip(simpleCountdown(run!.meridianWaitLeft!))
         : run?.reasonText ?? run?.currentInstructionDescription;
+    final flipWait = run?.meridianWaitLeft != null;
+    // A pause asked here, until the frame in hand lands (user, 2026-11-11).
+    final pausing =
+        ref.watch(simpleRunProvider.select((r) => r.pausing)) &&
+        (run?.state?.isActive ?? false) &&
+        !(run?.state?.isAnyPaused ?? false);
     final paused =
         run?.state == SequenceRunState.paused ||
         run?.state == SequenceRunState.pausedAwaitingUser;
@@ -1397,6 +1455,14 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         target != null &&
         ccd - target > 0.5;
     _coolStart = cooling ? (_coolStart ?? ccd) : null;
+    // The main camera's own exposure (#1755): its progress fills a plan
+    // frame's bar, and an exposure nothing here explains gets its own pill.
+    final camExposing = cam != null && cam.isConnected && cam.runtimeState == 'exposing';
+    final camPct = cam?.exposureProgressPct;
+    final camUnexplained = cam != null &&
+        cam.isConnected &&
+        cam.isExposing &&
+        !ref.watch(mainCameraExplainedProvider);
     // A park or unpark asked for in Simple Mode, until the mount gets there.
     final parking = ref.watch(simpleMountMotionProvider);
     // The filter wheel turning, or a manual wheel waiting for its hand swap.
@@ -1509,7 +1575,28 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           null,
           AraColors.accentConnected,
           working: true,
-        ),
+        )
+      // Another client's frame: exposing is working, downloading is changing
+      // (DESIGN.md status rule); no bar when the camera reports none.
+      else if (camUnexplained)
+        camExposing
+            ? _PillData(
+                SimpleStatusOrigin.mainCameraExposure,
+                l10n.deviceCamera,
+                l10n.deviceExposing,
+                AraColors.accentConnected,
+                working: true,
+                shotProgress: camPct == null ? null : (camPct / 100).clamp(0.0, 1.0),
+                spoken: l10n.deviceCamera,
+              )
+            : _PillData(
+                SimpleStatusOrigin.mainCameraExposure,
+                l10n.deviceCamera,
+                l10n.deviceDownloading,
+                AraColors.accentInfo,
+                ring: true,
+                spoken: l10n.deviceCamera,
+              ),
       // A running plan says what it's doing (cooling, slewing, centring,
       // focusing), with how far the step has got along the pill's foot.
       // #1596: a finished run that imaged nothing keeps its reason on the pill.
@@ -1519,18 +1606,28 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         _PillData(
           SimpleStatusOrigin.plan,
           paused ? l10n.previewPlanPaused : l10n.previewPlan,
-          step,
+          pausing ? l10n.planPausingAfterFrame : step,
           // DESIGN.md status rule: running is working (green); paused by Ara
           // is on its way back (blue); paused waiting for the user needs a
           // look (amber).
+          // Waiting out the meridian is on its way between two states: a
+          // blue ring, not imaging (#1747).
           run!.state == SequenceRunState.pausedAwaitingUser || !planActive
               ? AraColors.accentBusy
-              : paused
+              : paused || flipWait || pausing
               ? AraColors.accentInfo
               : AraColors.accentConnected,
-          ring: paused && run.state != SequenceRunState.pausedAwaitingUser,
-          working: planActive && !paused,
-          footProgress: run.currentInstructionProgress,
+          ring:
+              (paused && run.state != SequenceRunState.pausedAwaitingUser) ||
+              ((flipWait || pausing) && planActive),
+          working: planActive && !paused && !flipWait && !pausing,
+          // A step that reports none (an exposure) follows the camera's
+          // own frame; a paused plan shows no frame (#1755).
+          footProgress:
+              run.currentInstructionProgress ??
+              (planActive && !paused && camExposing && camPct != null
+                  ? (camPct / 100).clamp(0.0, 1.0)
+                  : null),
         ),
       // Unsafe right after the plan: it is why a plan holds. Steady amber,
       // not error red: the monitor works, the sky doesn't.

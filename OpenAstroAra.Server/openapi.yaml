@@ -14449,6 +14449,13 @@ components:
           type:
             - 'null'
             - string
+        meridian_wait_seconds_left:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
         meridian_flip:
           oneOf:
             - type: 'null'

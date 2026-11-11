@@ -178,7 +178,11 @@ class _Pill extends ConsumerWidget {
     // A warning stays and can run long: its × and dot keep to its first line,
     // and its action goes under the words so they keep the width.
     final warning = m.kind == SimpleMessageKind.warning;
-    final actionBelow = warning && m.actions.isNotEmpty;
+    final question = m.kind == SimpleMessageKind.question;
+    // A question stacks too: its words take the pill's width, its answers go
+    // underneath (#1745).
+    final stacked = warning || question;
+    final actionBelow = stacked && m.actions.isNotEmpty;
     // A warning's first line grows with the text size; its dot and × follow.
     final line = TextPainter(
       text: TextSpan(
@@ -212,12 +216,12 @@ class _Pill extends ConsumerWidget {
           children: [
             Row(
               spacing: 10,
-              crossAxisAlignment: warning
+              crossAxisAlignment: stacked
                   ? CrossAxisAlignment.start
                   : CrossAxisAlignment.center,
               children: [
                 Padding(
-                  padding: EdgeInsets.only(top: warning ? firstLineCentre - 5 : 0),
+                  padding: EdgeInsets.only(top: stacked ? firstLineCentre - 5 : 0),
                   child: Icon(Icons.circle, size: 10, color: dot),
                 ),
                 Expanded(
@@ -227,7 +231,7 @@ class _Pill extends ConsumerWidget {
                     children: [
                       Padding(
                     // A warning's first line sits level with its ×.
-                    padding: EdgeInsets.only(top: warning ? 14 : 6, bottom: 6),
+                    padding: EdgeInsets.only(top: stacked ? 14 : 6, bottom: 6),
                     child: Text.rich(
                       TextSpan(
                         text: m.title,
@@ -253,7 +257,15 @@ class _Pill extends ConsumerWidget {
                       style: kSimpleText,
                     ),
                   ),
-                      if (actionBelow)
+                      if (question && actionBelow)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 10, bottom: 10),
+                          child: _QuestionAnswers(
+                            labels: [for (final a in m.actions) a.label],
+                            onAnswer: (i) => _answer(notifier, i),
+                          ),
+                        )
+                      else if (actionBelow)
                         Wrap(
                           children: [
                             for (var i = 0; i < m.actions.length; i++)
@@ -291,31 +303,7 @@ class _Pill extends ConsumerWidget {
                       onPressed: () => notifier.dismiss(m.id),
                     ),
                   ),
-                if (m.kind == SimpleMessageKind.question)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      spacing: 6,
-                      children: [
-                        for (var i = 0; i < m.actions.length; i++)
-                          i == m.actions.length - 1
-                              ? FilledButton(
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: AraColors.accentBusy,
-                                    foregroundColor: AraColors.bgPrimary,
-                                  ),
-                                  onPressed: () => _answer(notifier, i),
-                                  child: Text(m.actions[i].label),
-                                )
-                              : TextButton(
-                                  onPressed: () => _answer(notifier, i),
-                                  child: Text(m.actions[i].label),
-                                ),
-                      ],
-                    ),
-                  )
-                else if (m.actions.isNotEmpty && !actionBelow)
+                if (m.actions.isNotEmpty && !actionBelow)
                   // A message's one action (Undo), there while the pill lasts.
                   TextButton(
                     onPressed: () => _answer(notifier, 0),
@@ -361,5 +349,72 @@ class _Pill extends ConsumerWidget {
     // A warning stays until it is closed or cleared; its action is help.
     if (message.kind != SimpleMessageKind.warning) notifier.dismiss(message.id);
     message.actions[i].onPressed();
+  }
+}
+
+/// A question's answers under its words: one row across the pill's width
+/// while every label fits whole, else one full-width button per line (#1745).
+/// The filled primary answer stays last.
+class _QuestionAnswers extends StatelessWidget {
+  const _QuestionAnswers({required this.labels, required this.onAnswer});
+
+  final List<String> labels;
+  final ValueChanged<int> onAnswer;
+
+  // A button's side padding (Material 3) plus the gap between buttons.
+  static const _buttonChrome = 48.0;
+  static const _gap = 6.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = DefaultTextStyle.of(context).style.merge(
+      Theme.of(context).textTheme.labelLarge,
+    );
+    final scaler = MediaQuery.textScalerOf(context);
+    double width(String label) {
+      final p = TextPainter(
+        text: TextSpan(text: label, style: style),
+        textScaler: scaler,
+        textDirection: TextDirection.ltr,
+      )..layout();
+      final w = p.width;
+      p.dispose();
+      return w + _buttonChrome;
+    }
+
+    Widget button(int i) {
+      final label = Text(labels[i], textAlign: TextAlign.center);
+      return i == labels.length - 1
+          ? FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: AraColors.accentBusy,
+                foregroundColor: AraColors.bgPrimary,
+              ),
+              onPressed: () => onAnswer(i),
+              child: label,
+            )
+          : TextButton(onPressed: () => onAnswer(i), child: label);
+    }
+
+    return LayoutBuilder(
+      builder: (context, box) {
+        final needed = labels.fold<double>(0, (sum, l) => sum + width(l)) +
+            _gap * (labels.length - 1);
+        if (needed <= box.maxWidth) {
+          return Row(
+            spacing: _gap,
+            children: [
+              // Shared by need, so each label keeps the width it was measured at.
+              for (var i = 0; i < labels.length; i++) Expanded(flex: width(labels[i]).ceil(), child: button(i)),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          spacing: _gap,
+          children: [for (var i = 0; i < labels.length; i++) button(i)],
+        );
+      },
+    );
   }
 }

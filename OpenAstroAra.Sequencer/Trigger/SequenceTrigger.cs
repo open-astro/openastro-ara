@@ -130,7 +130,10 @@ namespace OpenAstroAra.Sequencer.Trigger {
                     }
                 }
 
-                await this.Execute(context, progress, token);
+                // A user's pause stops the trigger (an autofocus); it is asked again on Resume.
+                var gate = RunsThroughPause ? null : (root as IPauseGateHost)?.PauseGate;
+                using var interruptible = gate is null ? null : CancellationTokenSource.CreateLinkedTokenSource(token, gate.InterruptToken);
+                await this.Execute(context, progress, interruptible?.Token ?? token);
                 foreach (var instruction in TriggerRunner.GetItemsSnapshot()) {
                     if (instruction.Status == SequenceEntityStatus.FAILED) {
                         throw new SequenceEntityFailedException($"{instruction} failed to exectue");
@@ -181,6 +184,10 @@ namespace OpenAstroAra.Sequencer.Trigger {
                 + (nextItem?.GetEstimatedDuration() ?? TimeSpan.Zero);
             return Parent is { } parent && ItemUtility.IsTooCloseToMeridianFlip(parent, duration);
         }
+
+        /// <summary>A user's pause never cuts this trigger short (a meridian flip): the pause lands
+        /// after it. Every other trigger stops with the pause and is asked again on Resume.</summary>
+        protected virtual bool RunsThroughPause => false;
 
         public abstract bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem);
 

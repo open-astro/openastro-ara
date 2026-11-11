@@ -890,11 +890,11 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Pause_suspends_at_the_instruction_boundary_and_resume_completes() {
-            // §38 pause: the current instruction (a 2s wait) always finishes; the
-            // run then suspends BETWEEN instructions, reports Paused, and emits
-            // sequence.paused. Resume releases the gate, emits sequence.resumed,
-            // and the run completes.
+        public async Task A_pause_stops_the_wait_in_progress_and_resume_runs_it_again_then_completes() {
+            // §38 pause, since 2026-11-11: a user's pause stops the instruction in
+            // progress (a 2 s wait here; only a frame or a flip finishes first), the
+            // run suspends, reports Paused and emits sequence.paused. Resume runs the
+            // wait again, emits sequence.resumed, and the run completes.
             var id = Guid.NewGuid();
             var ws = new RecordingWsBroadcaster();
             var svc = BuildService(id, BuildBody(c => {
@@ -905,12 +905,12 @@ namespace OpenAstroAra.Test {
             await WaitForInstructionInFlightAsync(svc, id, 0); // #1244 — the 2 s wait must be running before the pause
 
             await svc.PauseAsync(id, null, CancellationToken.None);
-            // The 2s wait must finish first — Paused is reported only when the
-            // engine actually suspends at the boundary, never on the mere request.
+            // Paused is reported only when the engine actually suspends, never on
+            // the mere request.
             await WaitForStateAsync(svc, id, SequenceRunState.Paused);
             var paused = await svc.GetRunStateAsync(id, CancellationToken.None);
             Assert.That(paused!.State, Is.EqualTo(SequenceRunState.Paused));
-            Assert.That(paused.InstructionsCompleted, Is.EqualTo(1), "the in-flight wait ran to completion before the suspension");
+            Assert.That(paused.InstructionsCompleted, Is.Zero, "the pause stopped the wait; it did not run it out");
             Assert.That(ws.Events, Does.Contain("sequence.paused"));
 
             // Suspended means suspended: the run must still be Paused after a beat.
@@ -920,7 +920,7 @@ namespace OpenAstroAra.Test {
             await svc.ResumeAsync(id, null, null, CancellationToken.None);
             var state = await WaitForTerminalAsync(svc, id);
             Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
-            Assert.That(state.InstructionsCompleted, Is.EqualTo(2), "the post-pause instruction ran after resume");
+            Assert.That(state.InstructionsCompleted, Is.EqualTo(2), "the wait ran again, then the instruction after it");
             Assert.That(ws.Events, Does.Contain("sequence.resumed"));
         }
 
@@ -1465,6 +1465,120 @@ namespace OpenAstroAra.Test {
             Assert.That(s!.CurrentInstructionDescription, Is.EqualTo("Flipping scope"));
             Assert.That(s.ReasonCode, Is.Null, "the flip proper is progress, not a reason");
             release.SetResult();
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        /// <summary>#1747 — a run whose only trigger is a meridian flip run by <paramref name="flip"/>.</summary>
+        private static (SequencerService Svc, Guid Id) FlipRun(
+                Func<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>, CancellationToken, Task<bool>> flip, IWsBroadcaster? ws = null) {
+            var coords = new OpenAstroAra.Astrometry.Coordinates(
+                OpenAstroAra.Astrometry.Angle.ByHours(5), OpenAstroAra.Astrometry.Angle.ByDegree(20),
+                OpenAstroAra.Astrometry.Epoch.J2000);
+            var telescope = new Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>();
+            telescope.Setup(t => t.GetCurrentPosition()).Returns(coords);
+            telescope.Setup(t => t.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyTelescope.TelescopeInfo {
+                Connected = true, TrackingEnabled = true, TimeToMeridianFlip = 0, Coordinates = coords,
+            });
+            var executor = new Mock<OpenAstroAra.Sequencer.Trigger.MeridianFlip.IMeridianFlipExecutor>();
+            executor
+                .Setup(x => x.MeridianFlip(It.IsAny<OpenAstroAra.Astrometry.Coordinates>(), It.IsAny<TimeSpan>(),
+                    It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .Returns((OpenAstroAra.Astrometry.Coordinates _, TimeSpan _, IProgress<OpenAstroAra.Core.Model.ApplicationStatus> p, CancellationToken t) => flip(p, t));
+            var profile = new HeadlessProfileService();
+            profile.ActiveProfile.MeridianFlipSettings.UseSideOfPier = false;
+            var factory = HeadlessSequencerFactory.WithDefaults(
+                telescopeMediator: telescope.Object, profileService: profile, meridianFlipExecutor: executor.Object);
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Triggers.Add(new OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger(
+                    profile, telescope.Object, executor.Object));
+                c.Items.Add(new Annotation { Name = "after the flip" });
+            }, factory), ws: ws, factory: factory);
+            return (svc, id);
+        }
+
+        private static async Task<SequenceRunStateDto> PollUntil(SequencerService svc, Guid id, Func<SequenceRunStateDto?, bool> done) {
+            SequenceRunStateDto? s = null;
+            for (var i = 0; i < 250 && !done(s); i++) {
+                s = await svc.GetRunStateAsync(id, CancellationToken.None);
+                await Task.Delay(10);
+            }
+            return s!;
+        }
+
+        [Test]
+        public async Task The_meridian_wait_reports_its_seconds_left_until_the_flip_starts_and_not_after_the_run() {
+            var release = new TaskCompletionSource();
+            var flipping = new TaskCompletionSource();
+            var (svc, id) = FlipRun(async (p, _) => {
+                p.Report(new MeridianFlipExecutor.WaitStatus {
+                    Source = MeridianFlipExecutor.WaitSource, Status = "Passing meridian — 00:04:32", SecondsLeft = 272,
+                });
+                await flipping.Task;
+                p.Report(new OpenAstroAra.Core.Model.ApplicationStatus { Source = "MeridianFlip", Status = "Flipping scope" });
+                await release.Task;
+                p.Report(new OpenAstroAra.Core.Model.ApplicationStatus { Source = "MeridianFlip", Status = string.Empty });
+                return true;
+            });
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            var waiting = await PollUntil(svc, id, s => s?.ReasonCode is not null);
+            Assert.That((waiting.ReasonCode, waiting.MeridianWaitSecondsLeft), Is.EqualTo(("meridian", (int?)272)));
+
+            flipping.SetResult();
+            var flip = await PollUntil(svc, id, s => s?.CurrentInstructionDescription == "Flipping scope");
+            Assert.That(flip.MeridianWaitSecondsLeft, Is.Null, "the flip proper has no wait left");
+
+            release.SetResult();
+            var done = await WaitForTerminalAsync(svc, id);
+            Assert.That(done!.MeridianWaitSecondsLeft, Is.Null);
+        }
+
+        [Test]
+        public async Task Progress_frames_carry_the_meridian_wait_and_clear_it_at_the_flip() {
+            // The client re-reads the run state only on lifecycle events, and the wait starts mid-run.
+            var ws = new RecordingWsBroadcaster();
+            var flipping = new TaskCompletionSource();
+            var (svc, id) = FlipRun(async (p, _) => {
+                p.Report(new MeridianFlipExecutor.WaitStatus {
+                    Source = MeridianFlipExecutor.WaitSource, Status = "Passing meridian — 00:04:32", SecondsLeft = 272,
+                });
+                await flipping.Task;
+                p.Report(new OpenAstroAra.Core.Model.ApplicationStatus { Source = "MeridianFlip", Status = "Flipping scope" });
+                return true;
+            }, ws);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await PollUntil(svc, id, s => s?.ReasonCode is not null);
+            await Task.Delay(100);
+            flipping.SetResult();
+            await WaitForTerminalAsync(svc, id);
+
+            var progress = ws.Records.Where(e => e.Type == "sequence.progress").Select(e => e.Payload).ToList();
+            var waiting = progress.First(p => p.TryGetProperty("reason_code", out var c) && c.GetString() == "meridian");
+            Assert.That(waiting.GetProperty("reason_text").GetString(), Does.StartWith("Passing meridian"));
+            Assert.That(waiting.GetProperty("meridian_wait_seconds_left").GetInt32(), Is.EqualTo(272));
+            var flip = progress.Last(p => p.TryGetProperty("current_instruction_description", out var d) && d.GetString() == "Flipping scope");
+            Assert.That(flip.GetProperty("reason_code").ValueKind, Is.EqualTo(JsonValueKind.Null), "the flip proper clears the wait");
+            Assert.That(flip.GetProperty("meridian_wait_seconds_left").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        }
+
+        [Test]
+        public async Task A_refused_flip_reports_meridian_refused_with_no_seconds_left() {
+            var (svc, id) = FlipRun((p, _) => {
+                p.Report(new OpenAstroAra.Core.Model.ApplicationStatus {
+                    Source = MeridianFlipExecutor.RefusedSource, Status = "Flip refused: the target is too low.",
+                });
+                return Task.FromResult(false);
+            });
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            var refused = await PollUntil(svc, id, s => s?.ReasonCode is not null);
+            Assert.That(refused.ReasonCode, Is.EqualTo("meridian_refused"));
+            Assert.That(refused.ReasonText, Does.StartWith("Flip refused:"));
+            Assert.That(refused.MeridianWaitSecondsLeft, Is.Null);
+
+            await svc.StopAsync(id, null, CancellationToken.None);
             await WaitForTerminalAsync(svc, id);
         }
 

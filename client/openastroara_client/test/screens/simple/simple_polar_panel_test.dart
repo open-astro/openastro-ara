@@ -375,6 +375,27 @@ void main() {
       expect(c.read(polarAlignActionProvider).error, isNull, reason: 'one failure, one message');
     });
 
+    testWidgets('while another polar call is in flight, Stop still takes the press (#1770)', (tester) async {
+      final c = ProviderContainer(overrides: [
+        polarAlignApiProvider.overrideWithValue(_Api()),
+        polarAlignLiveProvider.overrideWith(() => _Live(_adjusting)),
+      ]);
+      addTearDown(c.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarShutter()))),
+      ));
+      // A settings save from the panel, still waiting on the rig.
+      final save = Completer<void>();
+      unawaited(c.read(polarAlignActionProvider.notifier).run((_) => save.future, describe: (_) => null));
+      await tester.pump();
+      expect(c.read(polarAlignActionProvider).busy, isTrue);
+      expect(tester.widget<SimpleShutterButton>(find.byType(SimpleShutterButton)).onPressed, isNotNull,
+          reason: 'stopping a routine that moves the mount never waits');
+      save.complete();
+      await tester.pump();
+    });
+
     testWidgets('idle: starts it', (tester) async {
       final api = await shutter(tester, const PolarAlignLive());
       expect(find.descendant(of: find.byKey(const Key('simple-shutter')), matching: find.byIcon(Icons.play_arrow)),
