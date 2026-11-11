@@ -772,24 +772,21 @@ void main() {
       expect(t.steps.single.frameCount, 20);
     });
 
-    test('editing an End of night target keeps its filters in the Flats block when another joins or leaves', () async {
+    test('editing an End of night target moves its filters in the Flats block at once', () async {
       final (c, seq) = await queue();
       c.read(simpleRunFlatsProvider.notifier).set(SimpleTargetFlats.endOfNight);
+      c.read(simpleRunPlanProvider.notifier).load(const [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 10)]);
       final n = c.read(simpleRunProvider.notifier);
       expect(await n.create(), isTrue);
-      const l20 = [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 20)];
-      expect(await n.edit(0, l20), isTrue);
       List<Object?> endFilters() {
         final end = childrenOf(seq.bodies.values.single).firstWhere((b) => b['Name'] == kEndFlatsBlockName);
         return [for (final k in childrenOf(end)) if (k[r'$type'] == switchFilterType) (k['Filter'] as Map)['_name']];
       }
 
-      c.read(planetariumSelectionProvider.notifier).set(_m42);
-      c.read(simpleRunPlanProvider.notifier).load(const [FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 20)]);
-      expect(await n.create(), isTrue);
-      expect(endFilters(), containsAll(['L', 'Ha']), reason: 'M31 is still End of night after its edit');
-      await n.remove(1);
       expect(endFilters(), ['L']);
+      const ha = [FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 20)];
+      expect(await n.edit(0, ha), isTrue);
+      expect(endFilters(), ['Ha'], reason: 'no other target joined: the edit alone re-syncs the block');
     });
 
     test('removing the last End of night target takes its Flats block and the empty queue with it', () async {
