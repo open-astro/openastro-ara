@@ -47,7 +47,7 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
   // The observer site is seeded from the URL (lat/lon) and later moved by the
   // 'site' command; assert the seed reaches stel.core.observer.
-  await page.goto(`http://localhost:${PORT}/index.html?lat=34.66&lon=-106.78`, { waitUntil: 'load', timeout: 40000 });
+  await page.goto(`http://localhost:${PORT}/index.html?lat=-33.856784&lon=151.215297`, { waitUntil: 'load', timeout: 40000 });
   // Poll engine state for up to 60s, dumping diagnostics so we can tell
   // "slow" from "broken" (headless WebGL, missing onReady, etc.).
   let ready = false;
@@ -97,14 +97,14 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   };
   if (ready) {
     res.chart = await loadLayers('bare=1');
-    res.full = await loadLayers('lat=34.66&lon=-106.78');
+    res.full = await loadLayers('');
   }
   console.log('=== RESULT ===\n' + JSON.stringify(res, null, 2));
   console.log('=== PAGE LOGS (' + logs.length + ') ===\n' + logs.slice(0, 50).join('\n'));
   await browser.close(); server.close();
   // Verdict
   const ok = res.ready && res.fov1 < res.fov0 && Math.abs(res.yaw1 - res.yaw0) > 1e-6 &&
-             Math.abs(res.latRad - 34.66 * Math.PI / 180) < 1e-3 &&
+             Math.abs(res.latRad - -33.856784 * Math.PI / 180) < 1e-3 &&
              // Simple Mode chart: art/atmosphere/landscape/Milky Way/DSS2 off; lines, grid, DSO hints on.
              !res.chart.atmosphere && !res.chart.landscape && !res.chart.milkyway && !res.chart.dss &&
              !res.chart.art && res.chart.lines && res.chart.grid && res.chart.dsos && res.chart.hints &&

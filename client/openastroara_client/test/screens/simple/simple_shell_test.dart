@@ -1391,9 +1391,23 @@ void main() {
   });
 
   group('Sky Map rail button, Art on the sky card and the Stats button (#1647, #1646)', () {
-    PlanningDso dso(String id, String name, {int? m, int? c, List<String> aliases = const []}) => PlanningDso(
-        id: id, name: name, type: 'G', magnitude: 4, raDeg: 10, decDeg: 20, messierNum: m, caldwellNum: c,
-        aliases: aliases);
+    PlanningDso dso(
+      String id,
+      String name, {
+      int? m,
+      int? c,
+      List<String> aliases = const [],
+    }) => PlanningDso(
+      id: id,
+      name: name,
+      type: 'G',
+      magnitude: 4,
+      raDeg: 10,
+      decDeg: 20,
+      messierNum: m,
+      caldwellNum: c,
+      aliases: aliases,
+    );
     final catalog = [
       dso('NGC1976', 'Orion Nebula', m: 42, aliases: ['M 42']),
       dso('NGC0869', 'Double Cluster', c: 14, aliases: ['NGC 869']),
@@ -1401,137 +1415,285 @@ void main() {
       dso('NGC0205', 'Messier 110', m: 110, aliases: ['M 110']),
     ];
     final manifest = {
-      'M42': const AlbumArt(asset: 'assets/album/art/m042.webp', credit: 'ESO', licence: 'CC BY 4.0'),
-      'C14': const AlbumArt(asset: 'assets/album/art/c014.webp', credit: 'NOIRLab', licence: 'CC0'),
+      'M42': const AlbumArt(
+        asset: 'assets/album/art/m042.webp',
+        credit: 'ESO',
+        licence: 'CC BY 4.0',
+      ),
+      'C14': const AlbumArt(
+        asset: 'assets/album/art/c014.webp',
+        credit: 'NOIRLab',
+        licence: 'CC0',
+      ),
       'M110': const AlbumArt(credit: 'Nobody'),
     };
     final overrides = [
       albumManifestProvider.overrideWith((ref) async => manifest),
       bundledCatalogProvider.overrideWith((ref) async => catalog),
     ];
-    PlanetariumSelection pick(String name, List<String> designations) => PlanetariumSelection(
-        name: name, kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27,
-        altDeg: 62.4, maxAltDeg: 74.2, designations: designations);
+    PlanetariumSelection pick(String name, List<String> designations) =>
+        PlanetariumSelection(
+          name: name,
+          kind: 'Galaxy',
+          raHours: 0.73,
+          decDeg: 41.4,
+          raJ2000Hours: 0.71,
+          decJ2000Deg: 41.27,
+          altDeg: 62.4,
+          maxAltDeg: 74.2,
+          designations: designations,
+        );
 
-    Future<ProviderContainer> openSky(WidgetTester tester, {Locale? locale}) async {
-      final container = await _pump(tester, const Size(1024, 768), gear: overrides, locale: locale);
+    Future<ProviderContainer> openSky(
+      WidgetTester tester, {
+      Locale? locale,
+    }) async {
+      final container = await _pump(
+        tester,
+        const Size(1024, 768),
+        gear: overrides,
+        locale: locale,
+      );
       await _frame(tester, container);
       await tester.tap(find.byKey(const Key('simple-sky')));
       await tester.pump();
       return container;
     }
 
-    Future<void> select(WidgetTester tester, ProviderContainer c, PlanetariumSelection s) async {
+    Future<void> select(
+      WidgetTester tester,
+      ProviderContainer c,
+      PlanetariumSelection s,
+    ) async {
       c.read(planetariumSelectionProvider.notifier).set(s);
       await tester.pump();
       await tester.pump(); // the manifest and the catalog resolve
     }
 
-    testWidgets('the rail button reads Sky Map with the drawn chart icon, 60 x 56, not the globe', (tester) async {
-      await _pump(tester, const Size(1024, 768));
-      final sky = find.byKey(const Key('simple-sky'));
-      expect(find.descendant(of: sky, matching: find.text('Sky Map')), findsOneWidget);
-      expect(find.descendant(of: sky, matching: find.byType(SkyChartIcon)), findsOneWidget);
-      expect(find.descendant(of: sky, matching: find.byIcon(Icons.public)), findsNothing);
-      expect(tester.getSize(find.descendant(of: sky, matching: find.byType(SizedBox)).first), const Size(60, 56));
-    });
+    testWidgets(
+      'the rail button reads Sky Map with the drawn chart icon, 60 x 56, not the globe',
+      (tester) async {
+        await _pump(tester, const Size(1024, 768));
+        final sky = find.byKey(const Key('simple-sky'));
+        expect(
+          find.descendant(of: sky, matching: find.text('Sky Map')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: sky, matching: find.byType(SkyChartIcon)),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: sky, matching: find.byIcon(Icons.public)),
+          findsNothing,
+        );
+        expect(
+          tester.getSize(
+            find.descendant(of: sky, matching: find.byType(SizedBox)).first,
+          ),
+          const Size(60, 56),
+        );
+      },
+    );
 
     for (final scale in [1.0, 1.3]) {
       // The test font draws square glyphs, far wider than a real face: fit is measured with the SDK's Roboto.
-      final fonts = '${Platform.environment['FLUTTER_ROOT']}/bin/cache/artifacts/material_fonts';
-      testWidgets('pt-BR: Mapa do céu shows in full on two lines at ${scale}x text; Números is not cut',
-          skip: !File('$fonts/Roboto-Regular.ttf').existsSync(), (tester) async {
-        final roboto = FontLoader('Roboto');
-        for (final f in ['Roboto-Regular.ttf', 'Roboto-Medium.ttf']) {
-          roboto.addFont(Future.value(ByteData.view(File('$fonts/$f').readAsBytesSync().buffer)));
-        }
-        await roboto.load();
-        tester.platformDispatcher.textScaleFactorTestValue = scale;
-        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-        await _pump(tester, const Size(1024, 768), locale: const Locale('pt', 'BR'));
-        expect(tester.takeException(), isNull, reason: 'no overflow');
-        for (final (key, label) in [('simple-sky', 'Mapa do céu'), ('simple-stats', 'Números')]) {
-          final text = find.descendant(of: find.byKey(Key(key)), matching: find.text(label));
-          expect(text, findsOneWidget);
-          final p = tester.renderObject<RenderParagraph>(text);
-          expect(p.didExceedMaxLines, isFalse, reason: '$label cut');
-        }
-        if (scale == 1.0) {
-          expect(tester.getSize(find.descendant(of: find.byKey(const Key('simple-sky')), matching: find.byType(SizedBox)).first),
-              const Size(60, 56));
-        }
-      });
+      final fonts =
+          '${Platform.environment['FLUTTER_ROOT']}/bin/cache/artifacts/material_fonts';
+      testWidgets(
+        'pt-BR: Mapa do céu shows in full on two lines at ${scale}x text; Números is not cut',
+        skip: !File('$fonts/Roboto-Regular.ttf').existsSync(),
+        (tester) async {
+          final roboto = FontLoader('Roboto');
+          for (final f in ['Roboto-Regular.ttf', 'Roboto-Medium.ttf']) {
+            roboto.addFont(
+              Future.value(
+                ByteData.view(File('$fonts/$f').readAsBytesSync().buffer),
+              ),
+            );
+          }
+          await roboto.load();
+          tester.platformDispatcher.textScaleFactorTestValue = scale;
+          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+          await _pump(
+            tester,
+            const Size(1024, 768),
+            locale: const Locale('pt', 'BR'),
+          );
+          expect(tester.takeException(), isNull, reason: 'no overflow');
+          for (final (key, label) in [
+            ('simple-sky', 'Mapa do céu'),
+            ('simple-stats', 'Números'),
+          ]) {
+            final text = find.descendant(
+              of: find.byKey(Key(key)),
+              matching: find.text(label),
+            );
+            expect(text, findsOneWidget);
+            final p = tester.renderObject<RenderParagraph>(text);
+            expect(p.didExceedMaxLines, isFalse, reason: '$label cut');
+          }
+          if (scale == 1.0) {
+            expect(
+              tester.getSize(
+                find
+                    .descendant(
+                      of: find.byKey(const Key('simple-sky')),
+                      matching: find.byType(SizedBox),
+                    )
+                    .first,
+              ),
+              const Size(60, 56),
+            );
+          }
+        },
+      );
     }
 
-    testWidgets('picking M42 shows its Art and credit with Image this; a second pick swaps the Art', (tester) async {
-      final c = await openSky(tester);
-      expect(find.byKey(const Key('simple-sky-art')), findsNothing);
-      await select(tester, c, pick('Orion Nebula', ['NAME Orion Nebula', 'M 42', 'NGC 1976']));
-      expect(tester.widget<Image>(find.byKey(const Key('simple-sky-art'))).image,
-          isA<ResizeImage>().having((r) => (r.imageProvider as AssetImage).assetName, 'asset', 'assets/album/art/m042.webp'));
-      expect(find.text('Art (cropped): ESO · CC BY 4.0'), findsOneWidget);
-      expect(find.byKey(const Key('simple-sky-image-this')), findsOneWidget);
-      expect(
-          tester.widget<Semantics>(find.ancestor(of: find.byKey(const Key('simple-sky-art')), matching: find.byType(Semantics)).first)
-              .properties.label,
-          'Orion Nebula');
+    testWidgets(
+      'picking M42 shows its Art and credit with Image this; a second pick swaps the Art',
+      (tester) async {
+        final c = await openSky(tester);
+        expect(find.byKey(const Key('simple-sky-art')), findsNothing);
+        await select(
+          tester,
+          c,
+          pick('Orion Nebula', ['NAME Orion Nebula', 'M 42', 'NGC 1976']),
+        );
+        expect(
+          tester.widget<Image>(find.byKey(const Key('simple-sky-art'))).image,
+          isA<ResizeImage>().having(
+            (r) => (r.imageProvider as AssetImage).assetName,
+            'asset',
+            'assets/album/art/m042.webp',
+          ),
+        );
+        expect(find.text('Art (cropped): ESO · CC BY 4.0'), findsOneWidget);
+        expect(find.byKey(const Key('simple-sky-image-this')), findsOneWidget);
+        expect(
+          tester
+              .widget<Semantics>(
+                find
+                    .ancestor(
+                      of: find.byKey(const Key('simple-sky-art')),
+                      matching: find.byType(Semantics),
+                    )
+                    .first,
+              )
+              .properties
+              .label,
+          'Orion Nebula',
+        );
 
-      await select(tester, c, pick('Double Cluster', ['NGC 869']));
-      expect(tester.widget<Image>(find.byKey(const Key('simple-sky-art'))).image,
-          isA<ResizeImage>().having((r) => (r.imageProvider as AssetImage).assetName, 'asset', 'assets/album/art/c014.webp'));
-      expect(find.text('Art (cropped): NOIRLab · CC0'), findsOneWidget, reason: 'a Caldwell object by its NGC number');
-      expect(find.text('Art (cropped): ESO · CC BY 4.0'), findsNothing);
-    });
+        await select(tester, c, pick('Double Cluster', ['NGC 869']));
+        expect(
+          tester.widget<Image>(find.byKey(const Key('simple-sky-art'))).image,
+          isA<ResizeImage>().having(
+            (r) => (r.imageProvider as AssetImage).assetName,
+            'asset',
+            'assets/album/art/c014.webp',
+          ),
+        );
+        expect(
+          find.text('Art (cropped): NOIRLab · CC0'),
+          findsOneWidget,
+          reason: 'a Caldwell object by its NGC number',
+        );
+        expect(find.text('Art (cropped): ESO · CC BY 4.0'), findsNothing);
+      },
+    );
 
-    testWidgets('an object with no manifest row, or a row without art, shows the card with no Art and no credit',
-        (tester) async {
-      final c = await openSky(tester);
-      for (final s in [pick('Andromeda Galaxy', ['M 31']), pick('Messier 110', ['M 110']), pick('Vega', ['HIP 91262'])]) {
-        await select(tester, c, s);
-        expect(find.byKey(const Key('simple-sky-art')), findsNothing, reason: s.name);
-        expect(find.textContaining('Art (cropped)'), findsNothing, reason: s.name);
-        expect(find.byKey(const Key('simple-sky-image-this')), findsOneWidget, reason: s.name);
-      }
-    });
+    testWidgets(
+      'an object with no manifest row, or a row without art, shows the card with no Art and no credit',
+      (tester) async {
+        final c = await openSky(tester);
+        for (final s in [
+          pick('Andromeda Galaxy', ['M 31']),
+          pick('Messier 110', ['M 110']),
+          pick('Vega', ['HIP 91262']),
+        ]) {
+          await select(tester, c, s);
+          expect(
+            find.byKey(const Key('simple-sky-art')),
+            findsNothing,
+            reason: s.name,
+          );
+          expect(
+            find.textContaining('Art (cropped)'),
+            findsNothing,
+            reason: s.name,
+          );
+          expect(
+            find.byKey(const Key('simple-sky-image-this')),
+            findsOneWidget,
+            reason: s.name,
+          );
+        }
+      },
+    );
 
-    testWidgets('the card shows at once; the Art joins once the manifest has loaded', (tester) async {
-      final gate = Completer<Map<String, AlbumArt>>();
-      final c = await _pump(tester, const Size(1024, 768),
-          gear: [albumManifestProvider.overrideWith((ref) => gate.future), overrides.last]);
-      await _frame(tester, c);
-      await tester.tap(find.byKey(const Key('simple-sky')));
-      await tester.pump();
-      c.read(planetariumSelectionProvider.notifier).set(pick('Orion Nebula', ['M 42']));
-      await tester.pump();
-      expect(find.byKey(const Key('simple-sky-image-this')), findsOneWidget);
-      expect(find.byKey(const Key('simple-sky-art')), findsNothing);
-      gate.complete(manifest);
-      await tester.pump();
-      await tester.pump();
-      expect(find.byKey(const Key('simple-sky-art')), findsOneWidget);
-    });
+    testWidgets(
+      'the card shows at once; the Art joins once the manifest has loaded',
+      (tester) async {
+        final gate = Completer<Map<String, AlbumArt>>();
+        final c = await _pump(
+          tester,
+          const Size(1024, 768),
+          gear: [
+            albumManifestProvider.overrideWith((ref) => gate.future),
+            overrides.last,
+          ],
+        );
+        await _frame(tester, c);
+        await tester.tap(find.byKey(const Key('simple-sky')));
+        await tester.pump();
+        c
+            .read(planetariumSelectionProvider.notifier)
+            .set(pick('Orion Nebula', ['M 42']));
+        await tester.pump();
+        expect(find.byKey(const Key('simple-sky-image-this')), findsOneWidget);
+        expect(find.byKey(const Key('simple-sky-art')), findsNothing);
+        gate.complete(manifest);
+        await tester.pump();
+        await tester.pump();
+        expect(find.byKey(const Key('simple-sky-art')), findsOneWidget);
+      },
+    );
 
-    testWidgets('Stats opens the Simple Mode page: four sections, no Targets, charts, Pi or export; Back returns',
-        (tester) async {
-      await _pump(tester, const Size(1024, 768));
-      await tester.tap(find.byKey(const Key('simple-stats')));
-      await tester.pumpAndSettle();
-      expect(find.byType(StatsDashboardScreen), findsOneWidget);
-      for (final t in ['Overview', 'Best Frames', 'Achievements']) {
-        expect(find.text(t), findsOneWidget, reason: t);
-      }
-      expect(find.byType(CalendarHeatmap), findsOneWidget);
-      for (final t in ['Targets', 'Pi performance', 'Visualizations', 'Export CSV']) {
-        expect(find.text(t), findsNothing, reason: t);
-      }
-      for (final type in [FocusTempScatterChart, GuidingRmsChart, FrameQualityChart, TargetsSection, PiPerformanceSection]) {
-        expect(find.byType(type), findsNothing, reason: '$type');
-      }
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-      expect(find.byType(StatsDashboardScreen), findsNothing);
-      expect(find.byKey(const Key('simple-stats')), findsOneWidget);
-    });
+    testWidgets(
+      'Stats opens the Simple Mode page: four sections, no Targets, charts, Pi or export; Back returns',
+      (tester) async {
+        await _pump(tester, const Size(1024, 768));
+        await tester.tap(find.byKey(const Key('simple-stats')));
+        await tester.pumpAndSettle();
+        expect(find.byType(StatsDashboardScreen), findsOneWidget);
+        for (final t in ['Overview', 'Best Frames', 'Achievements']) {
+          expect(find.text(t), findsOneWidget, reason: t);
+        }
+        expect(find.byType(CalendarHeatmap), findsOneWidget);
+        for (final t in [
+          'Targets',
+          'Pi performance',
+          'Visualizations',
+          'Export CSV',
+        ]) {
+          expect(find.text(t), findsNothing, reason: t);
+        }
+        for (final type in [
+          FocusTempScatterChart,
+          GuidingRmsChart,
+          FrameQualityChart,
+          TargetsSection,
+          PiPerformanceSection,
+        ]) {
+          expect(find.byType(type), findsNothing, reason: '$type');
+        }
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        expect(find.byType(StatsDashboardScreen), findsNothing);
+        expect(find.byKey(const Key('simple-stats')), findsOneWidget);
+      },
+    );
   });
 
   testWidgets('Sky Album on the left rail; a card\'s action closes it on Plan\'s sheet with the card picked',

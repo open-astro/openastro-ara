@@ -2041,7 +2041,9 @@ class _RailButton extends StatelessWidget {
               ],
               Text(
                 label,
-                maxLines: (icon == null && glyph == null) || tall || twoLines ? 2 : 1,
+                maxLines: (icon == null && glyph == null) || tall || twoLines
+                    ? 2
+                    : 1,
                 textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
                 style: AraText.caption.copyWith(color: color),
@@ -2069,10 +2071,8 @@ class SkyChartIcon extends StatelessWidget {
   final Color color;
 
   @override
-  Widget build(BuildContext context) => CustomPaint(
-    size: const Size(24, 24),
-    painter: _SkyChartPainter(color),
-  );
+  Widget build(BuildContext context) =>
+      CustomPaint(size: const Size(24, 24), painter: _SkyChartPainter(color));
 }
 
 class _SkyChartPainter extends CustomPainter {

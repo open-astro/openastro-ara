@@ -16,8 +16,12 @@ enum AlbumTier { bronze, silver, gold }
 
 /// A Book's objects from the full bundled catalog, in catalog-number order.
 List<PlanningDso> bookObjects(List<PlanningDso> catalog, AlbumBook book) {
-  int? numOf(PlanningDso d) => book == AlbumBook.messier ? d.messierNum : d.caldwellNum;
-  return [for (final d in catalog) if (numOf(d) != null) d]..sort((a, b) => numOf(a)!.compareTo(numOf(b)!));
+  int? numOf(PlanningDso d) =>
+      book == AlbumBook.messier ? d.messierNum : d.caldwellNum;
+  return [
+    for (final d in catalog)
+      if (numOf(d) != null) d,
+  ]..sort((a, b) => numOf(a)!.compareTo(numOf(b)!));
 }
 
 /// Whether [f] contains [o]: the object lies within the frame's inscribed
@@ -25,9 +29,11 @@ List<PlanningDso> bookObjects(List<PlanningDso> catalog, AlbumBook book) {
 /// False for a frame without pointing or pixel scale (those use [targetNames]).
 bool frameContains(AlbumFrame f, PlanningDso o) {
   if (!f.hasPosition) return false;
-  final radiusArcmin = math.min(f.width, f.height) * f.pixelScaleArcsec! / 2 / 60;
+  final radiusArcmin =
+      math.min(f.width, f.height) * f.pixelScaleArcsec! / 2 / 60;
   // 1e-9': the edge itself counts, whatever the last bit of the trigonometry says.
-  return separationArcmin(f.raDeg!, f.decDeg!, o.raDeg, o.decDeg) <= radiusArcmin + 1e-9;
+  return separationArcmin(f.raDeg!, f.decDeg!, o.raDeg, o.decDeg) <=
+      radiusArcmin + 1e-9;
 }
 
 /// The alias fallback: [target] (a frame's target name) names [o] when it
@@ -49,9 +55,14 @@ AlbumArt? skyPickArt(
   Map<String, AlbumArt> manifest,
 ) {
   // The engine prefixes common names ("NAME Orion Nebula").
-  final names = [for (final d in [...designations, name]) d.replaceFirst(RegExp(r'^NAME\s+'), '')];
+  final names = [
+    for (final d in [...designations, name])
+      d.replaceFirst(RegExp(r'^NAME\s+'), ''),
+  ];
   for (final o in catalog) {
-    final num = o.messierNum != null ? 'M${o.messierNum}' : (o.caldwellNum != null ? 'C${o.caldwellNum}' : null);
+    final num = o.messierNum != null
+        ? 'M${o.messierNum}'
+        : (o.caldwellNum != null ? 'C${o.caldwellNum}' : null);
     if (num == null || !names.any((n) => targetNames(n, o))) continue;
     final art = manifest[num];
     return art?.asset == null ? null : art;
@@ -59,10 +70,17 @@ AlbumArt? skyPickArt(
   return null;
 }
 
-final RegExp _catalogWord = RegExp(r'^\s*(messier|caldwell)', caseSensitive: false);
+final RegExp _catalogWord = RegExp(
+  r'^\s*(messier|caldwell)',
+  caseSensitive: false,
+);
 
 String _albumKey(String s) => designationKey(
-    s.replaceFirstMapped(_catalogWord, (m) => m[1]!.toLowerCase() == 'messier' ? 'M' : 'C'));
+  s.replaceFirstMapped(
+    _catalogWord,
+    (m) => m[1]!.toLowerCase() == 'messier' ? 'M' : 'C',
+  ),
+);
 
 /// Hours of lights, any filter, that make a Card silver and gold.
 const double albumSilverHours = 1;
@@ -84,7 +102,12 @@ class AlbumNight {
   final int lights;
   final double subSeconds;
   final double hours;
-  const AlbumNight({required this.key, required this.lights, required this.subSeconds, required this.hours});
+  const AlbumNight({
+    required this.key,
+    required this.lights,
+    required this.subSeconds,
+    required this.hours,
+  });
 }
 
 /// One Card's figures, derived from the lights that contain its object.
@@ -111,7 +134,10 @@ class CardStats {
 /// Per-object stats for a Book, keyed by object id; an object no frame
 /// contains has no entry. A frame with pointing and scale credits every object
 /// it contains; one without falls back to its target name.
-Map<String, CardStats> aggregateBook(Iterable<AlbumFrame> frames, List<PlanningDso> book) {
+Map<String, CardStats> aggregateBook(
+  Iterable<AlbumFrame> frames,
+  List<PlanningDso> book,
+) {
   final epoch = DateTime.utc(0);
   final ordered = frames.toList()
     // frameId breaks capture-time ties so the order doesn't depend on the reply's.
@@ -155,7 +181,9 @@ List<AlbumNight> albumNights(Iterable<AlbumFrame> frames) {
   final byNight = <String, List<AlbumFrame>>{};
   for (final f in frames) {
     final t = f.capturedUtc;
-    if (t != null) byNight.putIfAbsent(preflightNightKey(t.toLocal()), () => []).add(f);
+    if (t != null) {
+      byNight.putIfAbsent(preflightNightKey(t.toLocal()), () => []).add(f);
+    }
   }
   final keys = byNight.keys.toList()..sort((a, b) => b.compareTo(a));
   return [
@@ -175,18 +203,28 @@ double _commonest(Iterable<double> values) {
   for (final v in values) {
     counts[v] = (counts[v] ?? 0) + 1;
   }
-  return counts.entries.reduce((a, b) => b.value > a.value || (b.value == a.value && b.key > a.key) ? b : a).key;
+  return counts.entries
+      .reduce(
+        (a, b) =>
+            b.value > a.value || (b.value == a.value && b.key > a.key) ? b : a,
+      )
+      .key;
 }
 
 /// [cache] with [rows] merged in by frame id: a row replaces the cached one
 /// unless it is older (a pointing backfill can add objects to a frame).
 /// Nothing is removed: the collection is a high-water mark (ADR 0001).
-Map<String, AlbumFrame> mergeAlbumRows(Map<String, AlbumFrame> cache, Iterable<AlbumFrame> rows) {
+Map<String, AlbumFrame> mergeAlbumRows(
+  Map<String, AlbumFrame> cache,
+  Iterable<AlbumFrame> rows,
+) {
   final out = {...cache};
   for (final r in rows) {
     final held = out[r.frameId]?.updatedUtc;
     final next = r.updatedUtc;
-    if (held == null || (next != null && !next.isBefore(held))) out[r.frameId] = r;
+    if (held == null || (next != null && !next.isBefore(held))) {
+      out[r.frameId] = r;
+    }
   }
   return out;
 }
