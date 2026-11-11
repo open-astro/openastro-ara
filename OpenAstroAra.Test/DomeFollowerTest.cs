@@ -365,6 +365,43 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_unknown_pier_side_keeps_following_and_sends_nothing() {
+            // A German mount that reports no side of the pier (for a moment after a connect, or for good when its
+            // driver has no SideOfPier) is not a geometry error: following stays on and the dome waits.
+            Assert.That(_store.GetDomeSettings().MountType, Is.EqualTo("equatorial"));
+            await PlaceDomeAtAsync(Target() + 30);
+            _mount.SideOfPier = PierSide.pierUnknown;
+            await _follower.TickAsync();
+            Assert.That(_follower.IsSynchronized, Is.False, "an exposure keeps waiting");
+            Assert.That(_store.GetDomeSettings().FollowMount, Is.True);
+            Assert.That(_dome.Slews, Is.Empty);
+        }
+
+        [Test]
+        public async Task Once_the_mount_reports_its_pier_side_the_next_tick_turns_the_dome() {
+            await PlaceDomeAtAsync(Target() + 30);
+            _mount.SideOfPier = PierSide.pierUnknown;
+            await _follower.TickAsync();
+            _ = _follower.IsSynchronized; // an exposure's wait polls this
+
+            _mount.SideOfPier = PierSide.pierEast;
+            await _follower.TickAsync();
+            Assert.That(_dome.Slews, Has.Count.EqualTo(1));
+            Assert.That(_dome.Slews[0], Is.EqualTo(Target()).Within(0.5));
+        }
+
+        [Test]
+        public async Task A_fork_mount_follows_without_a_pier_side() {
+            // A fork on a wedge has no side of the pier, and its geometry does not ask for one.
+            _store.PutDomeSettings(_store.GetDomeSettings() with { MountType = "fork_on_wedge" });
+            _mount.SideOfPier = PierSide.pierUnknown;
+            await PlaceDomeAtAsync(Target() + 30);
+            await _follower.TickAsync();
+            Assert.That(_dome.Slews, Has.Count.EqualTo(1));
+            Assert.That(_dome.Slews[0], Is.EqualTo(Target()).Within(0.5));
+        }
+
+        [Test]
         public void The_setting_is_restored_on_daemon_start() {
             // A second follower over the same store, as a restarted daemon builds it.
             using var restarted = new DomeFollower(_svc, new Mock<ITelescopeMediator>().Object,

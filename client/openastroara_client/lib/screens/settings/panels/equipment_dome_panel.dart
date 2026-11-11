@@ -134,9 +134,11 @@ class _DomeFollowSection extends ConsumerWidget {
             'With this on, Ara turns the dome so its slit stays in front of '
             'the telescope: after a mount slew, after a meridian flip, and '
             'while tracking whenever the slit falls behind by more than the '
-            'tolerance. Turning the dome by hand, parking it, sending it home '
-            'or disconnecting it turns this off. The dome must be able to '
-            'turn to an azimuth.',
+            'tolerance. Turning the dome by hand, parking it, sending it '
+            'home, stopping it or disconnecting it turns this off, and so do '
+            'an emergency stop, an unsafe-weather reaction and a geometry '
+            'that puts the telescope outside the dome. The dome must be able '
+            'to turn to an azimuth.',
             style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: AraColors.textSecondary),
           ),

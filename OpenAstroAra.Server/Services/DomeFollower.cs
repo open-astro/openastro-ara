@@ -36,8 +36,9 @@ namespace OpenAstroAra.Server.Services;
 /// the dome when the mount has finished a slew, flipped side of the pier, or drifted past the profile's
 /// azimuth tolerance. The azimuth itself comes from <see cref="IDomeSynchronization"/> (the ported NINA
 /// geometry) and the move from <see cref="DomeService"/>. Following stops (and the setting goes off) when
-/// the dome is turned by hand, parked, homed, aborted or disconnected, when its azimuth cannot be set, and
-/// when the safety policy reacts to unsafe conditions.
+/// the dome is turned by hand, parked, homed, aborted or disconnected, when its azimuth cannot be set, when
+/// the safety policy reacts to unsafe conditions, on an emergency stop, and when the dome geometry puts the
+/// scope outside the dome.
 /// </summary>
 public sealed partial class DomeFollower : IDomeFollower, IHostedService, IDisposable {
 
@@ -57,6 +58,7 @@ public sealed partial class DomeFollower : IDomeFollower, IHostedService, IDispo
     private bool _mountWasSlewing;
     private PierSide? _lastPierSide;
     private bool _failureShown;
+    private bool _geometryFailureLogged;
     private bool _lastReportedFollowing;
 
     /// <summary>Tick cadence; production 2 s, tests drive <see cref="TickAsync"/> directly.</summary>
@@ -191,18 +193,34 @@ public sealed partial class DomeFollower : IDomeFollower, IHostedService, IDispo
         }
     }
 
-    // The geometry math shows an error pill each time it fails (a scope outside the dome for this pointing), so
-    // the first failure turns following off: one pill, not one per tick or per wait poll.
+    // A German mount's dome azimuth needs the side of the pier, which the mount does not report for a moment after
+    // a connect, or ever when its driver has no SideOfPier: wait (exposures keep waiting) and retry on the next tick.
+    // With that checked here and the position checked by both callers, the only InvalidOperationException left is
+    // the geometry's radius check (the scope outside the dome for this pointing). It shows an error pill each time,
+    // so it turns following off: one pill, not one per tick or per wait poll.
     private bool TryFollowTarget(TelescopeInfo tel, out TopocentricCoordinates target) {
-        try {
-            target = GetSynchronizedDomeCoordinates(tel);
-            return true;
-        } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) {
-            LogGeometryFailed(ex);
-            TurnOff("the dome geometry puts the scope outside the dome");
-            target = null!;
+        target = null!;
+        if (_profile.ActiveProfile.DomeSettings.MountType == MountType.EQUATORIAL && tel.SideOfPier == PierSide.pierUnknown) {
+            if (!_geometryFailureLogged) {
+                _geometryFailureLogged = true;
+                LogPierSideUnknown();
+            }
             return false;
         }
+        try {
+            target = GetSynchronizedDomeCoordinates(tel);
+            _geometryFailureLogged = false;
+            return true;
+        } catch (InvalidOperationException ex) {
+            LogGeometryFailed(ex);
+            TurnOff("the dome geometry puts the scope outside the dome");
+        } catch (ArgumentException ex) {
+            if (!_geometryFailureLogged) {
+                _geometryFailureLogged = true;
+                LogGeometryFailed(ex);
+            }
+        }
+        return false;
     }
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -364,6 +382,9 @@ public sealed partial class DomeFollower : IDomeFollower, IHostedService, IDispo
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Dome azimuth for the mount's position could not be worked out; check the dome geometry")]
     private partial void LogGeometryFailed(Exception ex);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Dome cannot follow the mount yet: the mount reports no side of the pier, which a German equatorial mount needs; trying again")]
+    private partial void LogPierSideUnknown();
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Dome did not reach the mount's azimuth within {Seconds} s; carrying on")]
     private partial void LogWaitTimedOut(int seconds);

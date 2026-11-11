@@ -2171,7 +2171,8 @@ const Map<String, Help> helpRegistry = {
     body:
         'Ara turns the dome so the slit stays in front of the telescope: after a mount slew, after a meridian flip, '
         'and while tracking whenever the slit falls behind by more than the tolerance. Turning the dome by hand, '
-        'parking it, sending it home or disconnecting it turns following off, and so does an unsafe-weather reaction. '
+        'parking it, sending it home, stopping it or disconnecting it turns following off, and so do an emergency '
+        'stop, an unsafe-weather reaction and a geometry that puts the telescope outside the dome. '
         'It needs a dome that can turn to an azimuth and a dome radius in the geometry below. Roll-off roofs and '
         'clamshells have nothing to turn.',
   ),
