@@ -2107,6 +2107,58 @@ void main() {
     expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('0 / 30')), findsOneWidget);
   });
 
+  // #1789: the plan squares belong to the shell, so every Screen shows them where Queue does.
+  const squaresRun = SimpleRun(sequenceId: 'seq-1', targets: [
+    SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+  ]);
+  Future<void> pickMode(WidgetTester tester, String mode) async {
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(Key('simple-mode-$mode')));
+    await tester.pump();
+  }
+
+  testWidgets('the plan squares sit at the Queue rect on Preview, Focus, Polar align, Guide and Calibration', (tester) async {
+    await _pump(tester, const Size(1024, 768), plan: squaresRun);
+    await pickMode(tester, 'plan');
+    await tester.tap(find.byKey(const Key('simple-settings'))); // puts Plan's sheet away
+    await tester.pump();
+    final queue = tester.getRect(find.byKey(const Key('simple-run-tracker')));
+    for (final mode in const ['preview', 'focus', 'polarAlign', 'guide', 'calibration']) {
+      await pickMode(tester, mode);
+      expect(find.byKey(const Key('simple-run-tracker')), findsOneWidget, reason: mode);
+      expect(tester.getRect(find.byKey(const Key('simple-run-tracker'))), queue, reason: mode);
+    }
+  });
+
+  testWidgets('a plan square tapped off Queue opens the queue panel', (tester) async {
+    await _pump(tester, const Size(1024, 768), plan: squaresRun);
+    await pickMode(tester, 'focus');
+    await tester.tap(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('M31')));
+    await tester.pump();
+    expect(find.byType(SimpleRunPanel), findsOneWidget);
+  });
+
+  testWidgets('no run, no plan squares, on any Screen', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    expect(find.byKey(const Key('simple-run-tracker')), findsNothing);
+    await pickMode(tester, 'guide');
+    expect(find.byKey(const Key('simple-run-tracker')), findsNothing);
+  });
+
+  testWidgets('Preflight\'s step panel hides the plan squares and the chip brings them back', (tester) async {
+    await _pump(tester, const Size(1024, 768), plan: squaresRun);
+    await _startPreflight(tester);
+    final panelUp = find.byKey(const Key('simple-run-tracker')).evaluate().isEmpty;
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-run-tracker')).evaluate().isEmpty, !panelUp,
+        reason: 'the chip toggles the step panel; the squares are shown exactly when it is away');
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-run-tracker')).evaluate().isEmpty, panelUp);
+  });
+
   for (final size in const [Size(1024, 768), Size(768, 1024)]) {
     testWidgets('at $size: Plan\'s sheet runs from the status pill to the bottom row (the inset while it is empty) while the plan squares '
         'step aside; a plan square opens the queue panel', (tester) async {

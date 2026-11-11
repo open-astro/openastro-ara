@@ -1029,11 +1029,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         _popover = _Popover.none;
         _closeSheet();
       }),
-      onTrackerTap: () => _toggle(_Popover.queue),
     );
     final sheet = screen.overlay(screenHost);
-    final tracker = screen.tracker(screenHost);
-    final runActive =
+        final runActive =
         sheet != null &&
         ref.watch(
           sequenceRunStateProvider.select(
@@ -1531,7 +1529,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // The plan squares hug the bottom-right corner, just
                               // above the bottom row, growing left over the right
                               // half (the Info tiles have the left).
-                              if (tracker != null && !runSheet)
+                              if (!runSheet && !preflightPanel)
                                 AnimatedPositioned(
                                   key: const ValueKey('plan-squares'),
                                   left: width / 2,
@@ -1541,7 +1539,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   curve: Curves.easeOut,
                                   child: Align(
                                     alignment: Alignment.bottomRight,
-                                    child: tracker,
+                                    child: SimpleRunTracker(
+                                      onTap: () => _toggle(_Popover.queue),
+                                    ),
                                   ),
                                 ),
                               // The sky's pick, offered to Plan.
