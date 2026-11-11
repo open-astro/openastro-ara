@@ -45,17 +45,22 @@ class _Calibration implements CalibrationClient {
       status: 'idle', totalCombinations: 0, completedCombinations: 0, generatedSequenceId: null, entries: []);
   final builds = <DarkLibraryBuildRequest>[];
 
+  /// The rig already holds enough of every dark asked for: a reuse build saves no run.
+  bool rigCoversAll = false;
+
   @override
   Future<DarkLibraryState> darkLibraryStatus() async => library;
 
   @override
   Future<void> buildDarkLibrary(DarkLibraryBuildRequest request) async {
+    // As the rig: SqliteDarkLibraryService refuses an empty list (a 422).
+    if (request.exposureSecondsList.isEmpty) throw ArgumentError('ExposureSecondsList must contain at least one positive exposure.');
     builds.add(request);
     library = DarkLibraryState(
         status: 'pending',
         totalCombinations: request.exposureSecondsList.length,
         completedCombinations: 0,
-        generatedSequenceId: 'lib-run',
+        generatedSequenceId: rigCoversAll && request.reuseExistingFrames ? null : 'lib-run',
         entries: library.entries,
         biasEntries: library.biasEntries);
   }
@@ -562,6 +567,18 @@ void main() {
         final kids = childrenOf(childrenOf(seq.bodies['queue-1']!).last);
         expect(kids[0][r'$type'], waitForUserType);
         expect(kids[1]['Name'], startsWith('Bias'));
+      });
+
+      testWidgets('darks the rig already holds: no error, and nothing queued', (tester) async {
+        final (c, cal, seq, _) = await library(tester, [], child: shutter());
+        cal.rigCoversAll = true;
+        button(tester).onPressed!();
+        await tester.pumpAndSettle();
+        expect(seq.calls, isEmpty, reason: 'no run to edit, nothing put in the queue');
+        final said = c.read(simpleMessagesProvider).single;
+        expect(said.kind, SimpleMessageKind.result);
+        expect(said.title, 'Nothing missing.');
+        await tester.pump(kSimpleResultLife); // the pill's own timer
       });
 
       testWidgets('Add to queue puts the library run in the Queue as its Calibration block, closing the cover, without starting', (tester) async {

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../models/calibration/calibration_models.dart';
 import '../models/sequence/imaging_run_body.dart';
+import '../models/sequence/instruction_catalog.dart' show instructionForType, sequentialContainerType;
 import '../models/sequence/sequence_summary.dart';
 import '../models/sequence/nina_dom.dart' show childrenOf, withChildren;
 import '../util/friendly_error.dart';
@@ -159,8 +160,10 @@ class SimpleCalibrationNotifier extends Notifier<SimpleCalibrationRun?> {
   /// The camera's library run for [need]: darks for [exposures] at the plan's
   /// gain and temperature (all of them again with [refresh]), bias first when
   /// [bias], and before both the cover closing ([cover]) or the lens-cap
-  /// question. Returns the rig's run id and its body, edited on the rig.
-  Future<(String, Map<String, dynamic>)> _libraryRun(
+  /// question. Returns the rig's run id (null when the rig had no darks to
+  /// shoot) and the body, edited on the rig; null when there is nothing to
+  /// shoot at all.
+  Future<(String?, Map<String, dynamic>)?> _libraryRun(
     LibraryNeed need,
     List<double> exposures, {
     required bool bias,
@@ -170,18 +173,25 @@ class SimpleCalibrationNotifier extends Notifier<SimpleCalibrationRun?> {
   }) async {
     final api = ref.read(calibrationApiProvider)!;
     final sequences = ref.read(sequenceApiProvider)!;
-    await api.buildDarkLibrary(
-      DarkLibraryBuildRequest(
-        exposureSecondsList: exposures,
-        gainList: [need.gain],
-        targetTemperatureCList: [?need.temperatureC],
-        framesPerCombination: kSimpleLibraryFrames,
-        reuseExistingFrames: !refresh,
-      ),
-    );
-    final id = (await api.darkLibraryStatus()).generatedSequenceId;
-    if (id == null) throw StateError('the rig saved no dark library run');
-    final body = (await sequences.getSequenceDetail(id)).body;
+    // Bias alone has no darks to ask the rig for: it refuses an empty
+    // exposure list (422). And a reuse build it already covers saves no run.
+    String? id;
+    if (exposures.isNotEmpty) {
+      await api.buildDarkLibrary(
+        DarkLibraryBuildRequest(
+          exposureSecondsList: exposures,
+          gainList: [need.gain],
+          targetTemperatureCList: [?need.temperatureC],
+          framesPerCombination: kSimpleLibraryFrames,
+          reuseExistingFrames: !refresh,
+        ),
+      );
+      id = (await api.darkLibraryStatus()).generatedSequenceId;
+    }
+    if (id == null && !bias) return null;
+    final body = id == null
+        ? instructionForType(sequentialContainerType)!.build()
+        : (await sequences.getSequenceDetail(id)).body;
     final edited = withChildren(body, [
       if (!cover) withLensCap(lensCapPrompt),
       if (bias)
@@ -192,8 +202,23 @@ class SimpleCalibrationNotifier extends Notifier<SimpleCalibrationRun?> {
         ),
       ...childrenOf(body),
     ]);
-    await sequences.updateSequence(id, body: edited);
+    if (id != null) await sequences.updateSequence(id, body: edited);
     return (id, edited);
+  }
+
+  /// The rig's library run [id] goes once its body is in the queue.
+  Future<void> _dropRun(String? id) async {
+    if (id == null) return;
+    try {
+      await ref.read(sequenceApiProvider)!.deleteSequence(id);
+    } catch (_) {}
+  }
+
+  void _nothingMissing() {
+    final l = l10nFor(ref.read(appLocaleProvider));
+    ref
+        .read(simpleMessagesProvider.notifier)
+        .show(SimpleMessageKind.result, l.calibrationNothingMissing);
   }
 
   /// Builds the camera's library for [exposures] now (see [_libraryRun]).
@@ -210,7 +235,7 @@ class SimpleCalibrationNotifier extends Notifier<SimpleCalibrationRun?> {
         return false;
       }
       try {
-        final (id, body) = await _libraryRun(
+        final run = await _libraryRun(
           need,
           exposures,
           bias: bias,
@@ -218,9 +243,12 @@ class SimpleCalibrationNotifier extends Notifier<SimpleCalibrationRun?> {
           cover: false,
           lensCapPrompt: lensCapPrompt,
         );
-        try {
-          await ref.read(sequenceApiProvider)!.deleteSequence(id);
-        } catch (_) {}
+        if (run == null) {
+          _nothingMissing();
+          return false;
+        }
+        final (id, body) = run;
+        await _dropRun(id);
         return await _throughQueue(
           calibrationBlockFrom(body),
           total:
@@ -252,7 +280,7 @@ class SimpleCalibrationNotifier extends Notifier<SimpleCalibrationRun?> {
       final panel = ref.read(flatPanelProvider).value;
       final cover = (panel?.isConnected ?? false) && panel!.hasCover;
       try {
-        final (id, body) = await _libraryRun(
+        final run = await _libraryRun(
           need,
           exposures,
           bias: bias,
@@ -260,9 +288,12 @@ class SimpleCalibrationNotifier extends Notifier<SimpleCalibrationRun?> {
           cover: cover,
           lensCapPrompt: lensCapPrompt,
         );
-        try {
-          await sequences.deleteSequence(id);
-        } catch (_) {}
+        if (run == null) {
+          _nothingMissing();
+          return false;
+        }
+        final (id, body) = run;
+        await _dropRun(id);
         return await ref
             .read(simpleRunProvider.notifier)
             .addCalibration(calibrationBlockFrom(body, closeCover: cover));
