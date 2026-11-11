@@ -36,6 +36,10 @@ import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimpleStatusPill;
 import 'package:openastroara/state/equipment/focuser_state.dart';
+import 'package:openastroara/models/filter_offset_calibration.dart';
+import 'package:openastroara/models/filter_wheel_status.dart';
+import 'package:openastroara/state/equipment/filter_wheel_state.dart';
+import 'package:openastroara/state/focus/filter_offset_calibration_state.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
 import 'package:openastroara/widgets/inline_choices.dart';
 import 'package:openastroara/widgets/support/bug_report_card.dart';
@@ -147,7 +151,7 @@ void main() {
   final lang = locale.toLanguageTag();
   final l = lookupAppLocalizations(locale);
   for (final (scale, size) in cases) {
-    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Settings Focuser', 'Search', 'Wheels lat', 'Wheels lng', 'Wheels aperture', 'Wheels focal', 'Settings Guider', 'Guiding', 'Focus Auto', 'Focus Manual', 'Focus Guide', 'Polar adjusting', 'Guide', 'Preflight']) {
+    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Settings Focuser', 'Search', 'Wheels lat', 'Wheels lng', 'Wheels aperture', 'Wheels focal', 'Settings Guider', 'Guiding', 'Focus Auto', 'Focus Manual', 'Focus Guide', 'Focus Offsets', 'Focus Offsets results', 'Polar adjusting', 'Guide', 'Preflight']) {
       testWidgets('$lang text ${scale}x at ${size.width.toInt()}x${size.height.toInt()}, $open: nothing overflows',
           skip: !hasFonts, (tester) async {
         tester.view.physicalSize = size;
@@ -165,6 +169,9 @@ void main() {
           if (open == 'Settings Guider' || open == 'Guiding' || open == 'Focus Guide' || open == 'Guide')
             guiderStatusProvider.overrideWith(_Guiding.new),
           if (open.startsWith('Focus')) focuserProvider.overrideWith(_Focuser.new),
+          // #1675: the Offsets picker over a seven-filter wheel, and its results table.
+          if (open.startsWith('Focus Offsets')) filterWheelProvider.overrideWith(_Wheel.new),
+          if (open == 'Focus Offsets results') filterOffsetCalibrationProvider.overrideWith(_OffsetResults.new),
           if (open == 'Polar adjusting') polarAlignLiveProvider.overrideWith(_Adjusting.new),
           if (open == 'Plan') ...[
             tonightSkyProvider.overrideWith(
@@ -179,6 +186,7 @@ void main() {
           await c.read(guiderStatusProvider.future);
         }
         if (open.startsWith('Focus')) await c.read(focuserProvider.future);
+        if (open.startsWith('Focus Offsets')) await c.read(filterWheelProvider.future);
         await tester.pumpWidget(UncontrolledProviderScope(
           container: c,
           child: MaterialApp(
@@ -321,6 +329,12 @@ void main() {
           } else if (open == 'Focus Guide') {
             await tester.tap(find.byKey(const Key('simple-focus-scope-guide')), warnIfMissed: false);
             await tester.pump();
+          } else if (open.startsWith('Focus Offsets')) {
+            await tester.tap(find.byKey(const Key('simple-focus-method-offsets')), warnIfMissed: false);
+            await tester.pump();
+            expect(
+                find.byKey(Key(open == 'Focus Offsets' ? 'simple-offsets-pick-0' : 'simple-offsets-table')),
+                findsOneWidget);
           }
           if (!focus && !guide && size.width >= 768) expect(find.byKey(const Key('simple-polar-bullseye')), findsOneWidget);
           // Every label whole: "Principal", "Manual", "Contínuo" were cut at 1.3x-2x.
@@ -484,4 +498,40 @@ class _SkippedRun extends SequenceRunStateNotifier {
   Future<SequenceRunStateInfo?> build() async => const SequenceRunStateInfo(
       sequenceId: 'seq-1', state: SequenceRunState.completed,
       reasonCode: 'target_skipped', reasonText: 'Skipped, nothing was imaged: M31 did not run');
+}
+
+/// A seven-filter wheel, for the Offsets picker (#1675).
+class _Wheel extends FilterWheelNotifier {
+  @override
+  Future<FilterWheelStatus?> build() async => FilterWheelStatus.fromJson({
+        'device_id': 'w', 'name': 'ZWO EFW 7', 'state': 'connected',
+        'slots': [
+          for (final (i, n) in ['Luminance', 'Red', 'Green', 'Blue', 'H-alpha', 'OIII', 'SII'].indexed)
+            {'position': i, 'name': n, 'focus_offset': 0},
+        ],
+        'runtime': {'state': 'idle', 'current_slot': 0},
+      });
+}
+
+/// A finished offset calibration: a weak fit, a failure and drift (#1675).
+class _OffsetResults extends FilterOffsetCalibrationNotifier {
+  @override
+  FilterOffsetLive build() => FilterOffsetLive(
+      calibration: FilterOffsetCalibration.fromJson(const {
+        'state': 'complete', 'reference_position': 0, 'reference_name': 'Luminance',
+        'reference_first_position': 31200, 'reference_second_position': 31240, 'cfz_steps': 22,
+        'drift_checked': true, 'drift_warning': true, 'run_index': 7, 'run_count': 7,
+        'filters': [
+          {'position': 0, 'name': 'Luminance', 'status': 'measured', 'offset': 0, 'r_squared': 0.98, 'previous_offset': 0},
+          {'position': 1, 'name': 'Red', 'status': 'measured', 'offset': -12, 'r_squared': 0.62, 'previous_offset': -10},
+          {'position': 2, 'name': 'Green', 'status': 'failed', 'previous_offset': 5,
+            'failure_reason': 'No stars were found in the autofocus frame.'},
+          {'position': 3, 'name': 'Blue', 'status': 'measured', 'offset': 18, 'r_squared': 0.95, 'previous_offset': 20},
+          {'position': 4, 'name': 'H-alpha', 'status': 'measured', 'offset': 41, 'r_squared': 0.93, 'previous_offset': 0},
+          {'position': 5, 'name': 'OIII', 'status': 'measured', 'offset': 42, 'r_squared': 0.97, 'previous_offset': 30},
+          {'position': 6, 'name': 'SII', 'status': 'skipped', 'previous_offset': 0},
+        ],
+      }));
+  @override
+  Future<void> refresh() async {}
 }

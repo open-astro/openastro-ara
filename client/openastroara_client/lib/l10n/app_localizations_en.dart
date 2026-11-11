@@ -4227,4 +4227,140 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get searchCalibrationWords =>
       'flats darks bias calibration frames dark library';
+
+  @override
+  String get focusOffsets => 'Offsets';
+
+  @override
+  String get focusOffsetsTitle => 'Focus offsets';
+
+  @override
+  String focusOffsetsProgress(String filter, int index, int count) {
+    return '$filter · $index of $count';
+  }
+
+  @override
+  String get focusOffsetsIntro =>
+      'Point at a star field, pick the filters, then Start. Each filter is focused once, the reference before and after.';
+
+  @override
+  String focusOffsetsReference(String filter) {
+    return 'Offsets are measured from $filter, the reference.';
+  }
+
+  @override
+  String focusOffsetsReferenceChip(String filter) {
+    return '$filter · reference';
+  }
+
+  @override
+  String get focusOffsetsPicker => 'Filters to measure';
+
+  @override
+  String get focusOffsetsStart => 'Calibrate focus offsets';
+
+  @override
+  String get focusOffsetsCancel => 'Stop calibrating focus offsets';
+
+  @override
+  String focusOffsetsMeasuring(String filter, int index, int count) {
+    return 'Measuring $filter · $index of $count';
+  }
+
+  @override
+  String get focusOffsetsStarting => 'Starting…';
+
+  @override
+  String get focusOffsetsPlanRunning =>
+      'Wait for the plan to finish: calibrating changes filters and focus.';
+
+  @override
+  String get focusOffsetsFocusBusy =>
+      'Wait for the other focus routine to finish.';
+
+  @override
+  String get focusOffsetsNeedsCamera =>
+      'Connect the camera to calibrate focus offsets.';
+
+  @override
+  String get focusOffsetsNeedsFocuser =>
+      'Connect the focuser to calibrate focus offsets.';
+
+  @override
+  String get focusOffsetsNeedsWheel =>
+      'Connect the filter wheel to calibrate focus offsets.';
+
+  @override
+  String get focusOffsetsNeedsMotorisedWheel =>
+      'Calibrating needs a motorised filter wheel: a manual one can\'t change filters by itself.';
+
+  @override
+  String get focusOffsetsNeedsAbsoluteFocuser =>
+      'Calibrating needs an absolute focuser: a relative one has no positions to compare.';
+
+  @override
+  String get focusOffsetsPickOne =>
+      'Pick at least one filter besides the reference.';
+
+  @override
+  String get focusOffsetsResults => 'Offsets measured';
+
+  @override
+  String get focusOffsetsStopped =>
+      'Stopped. Your saved offsets are unchanged.';
+
+  @override
+  String get focusOffsetsFailed =>
+      'The calibration failed. Your saved offsets are unchanged.';
+
+  @override
+  String get focusOffsetsColFilter => 'Filter';
+
+  @override
+  String get focusOffsetsColOffset => 'Offset';
+
+  @override
+  String get focusOffsetsColPrevious => 'Before';
+
+  @override
+  String get focusOffsetsRowFailed => 'Failed';
+
+  @override
+  String get focusOffsetsRowSkipped => 'Not measured';
+
+  @override
+  String get focusOffsetsRowPending => 'Waiting';
+
+  @override
+  String focusOffsetsWeakFit(String r2) {
+    return 'Weak curve fit (R² $r2): run again if the sky has settled.';
+  }
+
+  @override
+  String focusOffsetsDrift(int steps, int cfz) {
+    return 'The reference moved $steps steps between its two runs, more than its critical focus zone ($cfz steps). Run it again for steadier numbers.';
+  }
+
+  @override
+  String get focusOffsetsDriftNotChecked =>
+      'Drift not checked: the reference\'s second run didn\'t measure.';
+
+  @override
+  String get focusOffsetsSave => 'Save offsets';
+
+  @override
+  String get focusOffsetsDiscard => 'Discard';
+
+  @override
+  String get focusOffsetsSaved =>
+      'Offsets saved. Autofocus after a filter change can now be turned off.';
+
+  @override
+  String deviceFocusOffset(String offset) {
+    return 'Offset $offset steps';
+  }
+
+  @override
+  String get searchFocusOffsetsWords =>
+      'focus offsets filter offsets calibrate';
 }

@@ -42,6 +42,8 @@ import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/focus/bahtinov_focus_state.dart';
 import 'package:openastroara/models/bahtinov_focus.dart';
 import 'package:openastroara/state/focus/guide_focus_state.dart';
+import 'package:openastroara/models/filter_offset_calibration.dart';
+import 'package:openastroara/state/focus/filter_offset_calibration_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusBlink, StatusDot, StatusLevel;
@@ -6218,6 +6220,39 @@ void main() {
         ['M 31']);
   });
 
+  test('Simple search finds the Focus offsets routine by "focus offsets" and "filter offsets" (#1675)', () {
+    final en = lookupAppLocalizations(const Locale('en'));
+    for (final q in ['focus offsets', 'filter offsets']) {
+      expect(simpleSearch(en, q).whereType<SimpleModeHit>().map((h) => (h.mode, h.focusOffsets)),
+          [(SimpleModeScreen.focus, true)], reason: q);
+    }
+  });
+
+  testWidgets('a Focus offsets search hit opens Focus on its Offsets routine (#1675)', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    await tester.tap(find.byKey(const Key('simple-search-button')));
+    await tester.pump();
+    await tester.enterText(find.byKey(const Key('simple-search-field')), 'filter offsets');
+    await tester.pump();
+    await tester.pump();
+    expect(find.descendant(of: find.byKey(const Key('simple-search-mode-0')), matching: find.text('Focus offsets')),
+        findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-search-mode-0')));
+    await tester.pump();
+    expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Focus')), findsOneWidget);
+    expect(c.read(simpleFocusOffsetsProvider), isTrue);
+  });
+
+  testWidgets('the status pill reads Focus offsets · OIII · 4 of 7 while offsets calibrate (#1675)', (tester) async {
+    await _pump(tester, const Size(1024, 768), gear: [filterOffsetCalibrationProvider.overrideWith(_OffsetsRunning.new)]);
+    await tester.pump();
+    final words = tester
+        .widgetList<RichText>(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText)))
+        .map((t) => t.text.toPlainText())
+        .join(' ');
+    expect(words, allOf(contains('Focus offsets'), contains('OIII · 4 of 7')));
+  });
+
   test('the exposure list stays inside what the camera reports', () {
     expect(exposurePresets(minSec: 1, maxSec: 60), allOf(contains(const Duration(seconds: 1)),
         contains(const Duration(seconds: 60)), isNot(contains(const Duration(milliseconds: 500))),
@@ -6369,4 +6404,15 @@ void main() {
 class _NoFan extends CoolingFanNotifier {
   @override
   Future<CoolingFan> build() async => CoolingFan.none;
+}
+
+/// An offset calibration on its 4th autofocus run of 7, measuring OIII.
+class _OffsetsRunning extends FilterOffsetCalibrationNotifier {
+  @override
+  FilterOffsetLive build() => const FilterOffsetLive(
+      calibration: FilterOffsetCalibration(
+          state: 'running', referencePosition: 0, referenceName: 'L', currentPosition: 3, runIndex: 4, runCount: 7,
+          filters: [FilterOffsetRow(position: 3, name: 'OIII', status: 'pending')]));
+  @override
+  Future<void> refresh() async {}
 }

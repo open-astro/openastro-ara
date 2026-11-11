@@ -5568,5 +5568,199 @@
   "searchCalibrationWords": "flats darks bias calibration frames dark library",
   "@searchCalibrationWords": {
     "description": "Simple Mode search: words (never shown) that find the Calibration mode; space-separated, lower case"
+  },
+  "focusOffsets": "Offsets",
+  "@focusOffsets": {
+    "description": "Simple Focus panel: the third routine beside Auto and Manual, which measures each filter's focus offset (keep it short, it shares a row)"
+  },
+  "focusOffsetsTitle": "Focus offsets",
+  "@focusOffsetsTitle": {
+    "description": "Simple Mode: the offset calibration routine's name, on its status pill and its search result"
+  },
+  "focusOffsetsProgress": "{filter} · {index} of {count}",
+  "@focusOffsetsProgress": {
+    "description": "Simple Mode status pill, Focus offsets: the filter being measured and which autofocus run of how many (e.g. OIII · 4 of 7)",
+    "placeholders": {
+      "filter": {
+        "type": "String"
+      },
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "focusOffsetsIntro": "Point at a star field, pick the filters, then Start. Each filter is focused once, the reference before and after.",
+  "@focusOffsetsIntro": {
+    "description": "Simple Focus panel, Offsets: what the routine does, before it starts"
+  },
+  "focusOffsetsReference": "Offsets are measured from {filter}, the reference.",
+  "@focusOffsetsReference": {
+    "description": "Simple Focus panel, Offsets: which filter the offsets are measured from, before the run",
+    "placeholders": {
+      "filter": {
+        "type": "String"
+      }
+    }
+  },
+  "focusOffsetsReferenceChip": "{filter} · reference",
+  "@focusOffsetsReferenceChip": {
+    "description": "Simple Focus panel, Offsets filter picker: the reference filter's chip, always measured",
+    "placeholders": {
+      "filter": {
+        "type": "String"
+      }
+    }
+  },
+  "focusOffsetsPicker": "Filters to measure",
+  "@focusOffsetsPicker": {
+    "description": "Simple Focus panel, Offsets: the filter picker's caption"
+  },
+  "focusOffsetsStart": "Calibrate focus offsets",
+  "@focusOffsetsStart": {
+    "description": "Simple Mode shutter in Focus, Offsets: starts the calibration (screen-reader label)"
+  },
+  "focusOffsetsCancel": "Stop calibrating focus offsets",
+  "@focusOffsetsCancel": {
+    "description": "Simple Mode shutter in Focus, Offsets while it runs: the red square stops it (screen-reader label)"
+  },
+  "focusOffsetsMeasuring": "Measuring {filter} · {index} of {count}",
+  "@focusOffsetsMeasuring": {
+    "description": "Simple Focus panel, Offsets: the run's headline while it measures a filter",
+    "placeholders": {
+      "filter": {
+        "type": "String"
+      },
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "focusOffsetsStarting": "Starting…",
+  "@focusOffsetsStarting": {
+    "description": "Simple Focus panel, Offsets: the headline before the first measurement starts"
+  },
+  "focusOffsetsPlanRunning": "Wait for the plan to finish: calibrating changes filters and focus.",
+  "@focusOffsetsPlanRunning": {
+    "description": "Simple Focus panel, Offsets: why it can't start while a plan runs"
+  },
+  "focusOffsetsFocusBusy": "Wait for the other focus routine to finish.",
+  "@focusOffsetsFocusBusy": {
+    "description": "Simple Focus panel, Offsets: why it can't start while autofocus, the Bahtinov readout or guide-camera focus runs"
+  },
+  "focusOffsetsNeedsCamera": "Connect the camera to calibrate focus offsets.",
+  "@focusOffsetsNeedsCamera": {
+    "description": "Simple Focus panel, Offsets: why it can't start, no camera connected"
+  },
+  "focusOffsetsNeedsFocuser": "Connect the focuser to calibrate focus offsets.",
+  "@focusOffsetsNeedsFocuser": {
+    "description": "Simple Focus panel, Offsets: why it can't start, no focuser connected"
+  },
+  "focusOffsetsNeedsWheel": "Connect the filter wheel to calibrate focus offsets.",
+  "@focusOffsetsNeedsWheel": {
+    "description": "Simple Focus panel, Offsets: why it can't start, no filter wheel connected"
+  },
+  "focusOffsetsNeedsMotorisedWheel": "Calibrating needs a motorised filter wheel: a manual one can't change filters by itself.",
+  "@focusOffsetsNeedsMotorisedWheel": {
+    "description": "Simple Focus panel, Offsets: why it can't start with the manual filter wheel"
+  },
+  "focusOffsetsNeedsAbsoluteFocuser": "Calibrating needs an absolute focuser: a relative one has no positions to compare.",
+  "@focusOffsetsNeedsAbsoluteFocuser": {
+    "description": "Simple Focus panel, Offsets: why it can't start with a relative focuser"
+  },
+  "focusOffsetsPickOne": "Pick at least one filter besides the reference.",
+  "@focusOffsetsPickOne": {
+    "description": "Simple Focus panel, Offsets: why it can't start with only the reference picked"
+  },
+  "focusOffsetsResults": "Offsets measured",
+  "@focusOffsetsResults": {
+    "description": "Simple Focus panel, Offsets: the finished run's headline"
+  },
+  "focusOffsetsStopped": "Stopped. Your saved offsets are unchanged.",
+  "@focusOffsetsStopped": {
+    "description": "Simple Focus panel, Offsets: the headline after the run was stopped"
+  },
+  "focusOffsetsFailed": "The calibration failed. Your saved offsets are unchanged.",
+  "@focusOffsetsFailed": {
+    "description": "Simple Focus panel, Offsets: the headline after the run failed (the reason follows)"
+  },
+  "focusOffsetsColFilter": "Filter",
+  "@focusOffsetsColFilter": {
+    "description": "Simple Focus panel, Offsets results table: the filter column"
+  },
+  "focusOffsetsColOffset": "Offset",
+  "@focusOffsetsColOffset": {
+    "description": "Simple Focus panel, Offsets results table: the offset column, in focuser steps"
+  },
+  "focusOffsetsColPrevious": "Before",
+  "@focusOffsetsColPrevious": {
+    "description": "Simple Focus panel, Offsets results table: the offset saved before this run"
+  },
+  "focusOffsetsRowFailed": "Failed",
+  "@focusOffsetsRowFailed": {
+    "description": "Simple Focus panel, Offsets results table: a filter whose autofocus failed (the reason follows)"
+  },
+  "focusOffsetsRowSkipped": "Not measured",
+  "@focusOffsetsRowSkipped": {
+    "description": "Simple Focus panel, Offsets results table: a filter the run ended before"
+  },
+  "focusOffsetsRowPending": "Waiting",
+  "@focusOffsetsRowPending": {
+    "description": "Simple Focus panel, Offsets results table: a filter not reached yet"
+  },
+  "focusOffsetsWeakFit": "Weak curve fit (R² {r2}): run again if the sky has settled.",
+  "@focusOffsetsWeakFit": {
+    "description": "Simple Focus panel, Offsets results table: a filter whose fit was weak, in the full UI's weak-fit words",
+    "placeholders": {
+      "r2": {
+        "type": "String"
+      }
+    }
+  },
+  "focusOffsetsDrift": "The reference moved {steps} steps between its two runs, more than its critical focus zone ({cfz} steps). Run it again for steadier numbers.",
+  "@focusOffsetsDrift": {
+    "description": "Simple Focus panel, Offsets results: the drift warning",
+    "placeholders": {
+      "steps": {
+        "type": "int"
+      },
+      "cfz": {
+        "type": "int"
+      }
+    }
+  },
+  "focusOffsetsDriftNotChecked": "Drift not checked: the reference's second run didn't measure.",
+  "@focusOffsetsDriftNotChecked": {
+    "description": "Simple Focus panel, Offsets results: the reference's second run failed, so drift was not checked"
+  },
+  "focusOffsetsSave": "Save offsets",
+  "@focusOffsetsSave": {
+    "description": "Simple Focus panel, Offsets results: keeps the measured offsets"
+  },
+  "focusOffsetsDiscard": "Discard",
+  "@focusOffsetsDiscard": {
+    "description": "Simple Focus panel, Offsets results: throws the results away, the saved offsets stay"
+  },
+  "focusOffsetsSaved": "Offsets saved. Autofocus after a filter change can now be turned off.",
+  "@focusOffsetsSaved": {
+    "description": "Simple Focus panel, Offsets: the hint after Save"
+  },
+  "deviceFocusOffset": "Offset {offset} steps",
+  "@deviceFocusOffset": {
+    "description": "Simple Filter wheel window: the filter in place's saved focus offset, signed (e.g. Offset +42 steps)",
+    "placeholders": {
+      "offset": {
+        "type": "String"
+      }
+    }
+  },
+  "searchFocusOffsetsWords": "focus offsets filter offsets calibrate",
+  "@searchFocusOffsetsWords": {
+    "description": "Simple Mode search: words (never shown) that find the Focus offsets routine; space-separated, lower case"
   }
 }

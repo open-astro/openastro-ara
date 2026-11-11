@@ -4,6 +4,7 @@ import 'simple_monitor_screen.dart';
 import 'simple_queue_screen.dart' show simpleQueueSheetProvider;
 import 'simple_screen.dart';
 import 'simple_search.dart';
+import 'simple_focus_panel.dart' show simpleOpenFocusOffsets;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -735,7 +736,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         _pickMode(SimpleModeScreen.guide);
       case SimpleSettingHit(:final section):
         _openMenu(section: section);
-      case SimpleModeHit(:final mode):
+      case SimpleModeHit(:final mode, :final focusOffsets):
+        if (focusOffsets) simpleOpenFocusOffsets(ref);
         _pickMode(mode);
       case SimpleImageHit(:final target):
         ref.read(libraryFilterProvider.notifier).setQuery(target);

@@ -35,8 +35,11 @@ class SimpleSettingHit extends SimpleSearchHit {
 }
 
 class SimpleModeHit extends SimpleSearchHit {
-  const SimpleModeHit(this.mode);
+  const SimpleModeHit(this.mode, {this.focusOffsets = false});
   final SimpleModeScreen mode;
+
+  /// Focus's Offsets routine (#1675), not the mode as it was left.
+  final bool focusOffsets;
 }
 
 class SimpleImageHit extends SimpleSearchHit {
@@ -116,6 +119,8 @@ List<SimpleSearchHit> simpleSearch(
       if (hit(m.labelOf(l10n)) ||
           (m == SimpleModeScreen.calibration && hit(l10n.searchCalibrationWords)))
         SimpleModeHit(m),
+    if (hit(l10n.focusOffsetsTitle) || hit(l10n.searchFocusOffsetsWords))
+      const SimpleModeHit(SimpleModeScreen.focus, focusOffsets: true),
     ...{
       for (final t in targets)
         if (hit(t)) t,
@@ -320,8 +325,10 @@ class _SimpleSearchPanelState extends ConsumerState<SimpleSearchPanel> {
                   _row(
                     'simple-search-mode-$i',
                     m.mode.icon,
-                    m.mode.labelOf(context.l10n),
-                    null,
+                    m.focusOffsets
+                        ? l10n.focusOffsetsTitle
+                        : m.mode.labelOf(context.l10n),
+                    m.focusOffsets ? m.mode.labelOf(context.l10n) : null,
                     m,
                   ),
                 if (images.isNotEmpty) _group(l10n.searchGroupImages),

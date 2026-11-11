@@ -112,6 +112,10 @@ String simpleCelsius(double c) {
   return '${rounded.replaceFirst('-', '−')} °C';
 }
 
+/// A focus offset in steps as Simple Mode shows it: signed, a real minus.
+String simpleSigned(int steps) =>
+    steps > 0 ? '+$steps' : '$steps'.replaceFirst('-', '−');
+
 /// The camera's window: the cooler (On / Off), its target and what the
 /// sensor reads now. The target is the profile's, so plans cool to it too.
 class SimpleCameraWindow extends ConsumerStatefulWidget {
@@ -2561,9 +2565,10 @@ class _RotatorHub extends StatelessWidget {
   );
 }
 
-/// The filter wheel's window: the filter in place, and a tap on a filter
-/// moves to it. A manual wheel asks the user to swap it by hand and confirm.
-/// Names, offsets and labels stay in the full UI.
+/// The filter wheel's window: the filter in place, with its saved focus
+/// offset once any slot has one (#1675), and a tap on a filter moves to it. A
+/// manual wheel asks the user to swap it by hand and confirm. Names and labels
+/// stay in the full UI.
 class SimpleFilterWheelWindow extends ConsumerStatefulWidget {
   const SimpleFilterWheelWindow({super.key, this.inSettings = false});
 
@@ -2662,6 +2667,18 @@ class _SimpleFilterWheelWindowState
           ),
         ),
       );
+      // The saved offset of the filter in place, once any slot has one.
+      if (!moving &&
+          w.current != null &&
+          w.slots.any((s) => s.focusOffset != 0)) {
+        children.add(
+          Text(
+            l10n.deviceFocusOffset(simpleSigned(w.current!.focusOffset)),
+            key: const Key('simple-filterwheel-offset'),
+            style: AraText.caption,
+          ),
+        );
+      }
       if (command.phase == DeviceCommandPhase.asking && command.by == this) {
         final cmd = ref.read(filterWheelCommandProvider.notifier);
         children.add(

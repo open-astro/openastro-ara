@@ -7160,6 +7160,222 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'flats darks bias calibration frames dark library'**
   String get searchCalibrationWords;
+
+  /// Simple Focus panel: the third routine beside Auto and Manual, which measures each filter's focus offset (keep it short, it shares a row)
+  ///
+  /// In en, this message translates to:
+  /// **'Offsets'**
+  String get focusOffsets;
+
+  /// Simple Mode: the offset calibration routine's name, on its status pill and its search result
+  ///
+  /// In en, this message translates to:
+  /// **'Focus offsets'**
+  String get focusOffsetsTitle;
+
+  /// Simple Mode status pill, Focus offsets: the filter being measured and which autofocus run of how many (e.g. OIII · 4 of 7)
+  ///
+  /// In en, this message translates to:
+  /// **'{filter} · {index} of {count}'**
+  String focusOffsetsProgress(String filter, int index, int count);
+
+  /// Simple Focus panel, Offsets: what the routine does, before it starts
+  ///
+  /// In en, this message translates to:
+  /// **'Point at a star field, pick the filters, then Start. Each filter is focused once, the reference before and after.'**
+  String get focusOffsetsIntro;
+
+  /// Simple Focus panel, Offsets: which filter the offsets are measured from, before the run
+  ///
+  /// In en, this message translates to:
+  /// **'Offsets are measured from {filter}, the reference.'**
+  String focusOffsetsReference(String filter);
+
+  /// Simple Focus panel, Offsets filter picker: the reference filter's chip, always measured
+  ///
+  /// In en, this message translates to:
+  /// **'{filter} · reference'**
+  String focusOffsetsReferenceChip(String filter);
+
+  /// Simple Focus panel, Offsets: the filter picker's caption
+  ///
+  /// In en, this message translates to:
+  /// **'Filters to measure'**
+  String get focusOffsetsPicker;
+
+  /// Simple Mode shutter in Focus, Offsets: starts the calibration (screen-reader label)
+  ///
+  /// In en, this message translates to:
+  /// **'Calibrate focus offsets'**
+  String get focusOffsetsStart;
+
+  /// Simple Mode shutter in Focus, Offsets while it runs: the red square stops it (screen-reader label)
+  ///
+  /// In en, this message translates to:
+  /// **'Stop calibrating focus offsets'**
+  String get focusOffsetsCancel;
+
+  /// Simple Focus panel, Offsets: the run's headline while it measures a filter
+  ///
+  /// In en, this message translates to:
+  /// **'Measuring {filter} · {index} of {count}'**
+  String focusOffsetsMeasuring(String filter, int index, int count);
+
+  /// Simple Focus panel, Offsets: the headline before the first measurement starts
+  ///
+  /// In en, this message translates to:
+  /// **'Starting…'**
+  String get focusOffsetsStarting;
+
+  /// Simple Focus panel, Offsets: why it can't start while a plan runs
+  ///
+  /// In en, this message translates to:
+  /// **'Wait for the plan to finish: calibrating changes filters and focus.'**
+  String get focusOffsetsPlanRunning;
+
+  /// Simple Focus panel, Offsets: why it can't start while autofocus, the Bahtinov readout or guide-camera focus runs
+  ///
+  /// In en, this message translates to:
+  /// **'Wait for the other focus routine to finish.'**
+  String get focusOffsetsFocusBusy;
+
+  /// Simple Focus panel, Offsets: why it can't start, no camera connected
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the camera to calibrate focus offsets.'**
+  String get focusOffsetsNeedsCamera;
+
+  /// Simple Focus panel, Offsets: why it can't start, no focuser connected
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the focuser to calibrate focus offsets.'**
+  String get focusOffsetsNeedsFocuser;
+
+  /// Simple Focus panel, Offsets: why it can't start, no filter wheel connected
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the filter wheel to calibrate focus offsets.'**
+  String get focusOffsetsNeedsWheel;
+
+  /// Simple Focus panel, Offsets: why it can't start with the manual filter wheel
+  ///
+  /// In en, this message translates to:
+  /// **'Calibrating needs a motorised filter wheel: a manual one can\'t change filters by itself.'**
+  String get focusOffsetsNeedsMotorisedWheel;
+
+  /// Simple Focus panel, Offsets: why it can't start with a relative focuser
+  ///
+  /// In en, this message translates to:
+  /// **'Calibrating needs an absolute focuser: a relative one has no positions to compare.'**
+  String get focusOffsetsNeedsAbsoluteFocuser;
+
+  /// Simple Focus panel, Offsets: why it can't start with only the reference picked
+  ///
+  /// In en, this message translates to:
+  /// **'Pick at least one filter besides the reference.'**
+  String get focusOffsetsPickOne;
+
+  /// Simple Focus panel, Offsets: the finished run's headline
+  ///
+  /// In en, this message translates to:
+  /// **'Offsets measured'**
+  String get focusOffsetsResults;
+
+  /// Simple Focus panel, Offsets: the headline after the run was stopped
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped. Your saved offsets are unchanged.'**
+  String get focusOffsetsStopped;
+
+  /// Simple Focus panel, Offsets: the headline after the run failed (the reason follows)
+  ///
+  /// In en, this message translates to:
+  /// **'The calibration failed. Your saved offsets are unchanged.'**
+  String get focusOffsetsFailed;
+
+  /// Simple Focus panel, Offsets results table: the filter column
+  ///
+  /// In en, this message translates to:
+  /// **'Filter'**
+  String get focusOffsetsColFilter;
+
+  /// Simple Focus panel, Offsets results table: the offset column, in focuser steps
+  ///
+  /// In en, this message translates to:
+  /// **'Offset'**
+  String get focusOffsetsColOffset;
+
+  /// Simple Focus panel, Offsets results table: the offset saved before this run
+  ///
+  /// In en, this message translates to:
+  /// **'Before'**
+  String get focusOffsetsColPrevious;
+
+  /// Simple Focus panel, Offsets results table: a filter whose autofocus failed (the reason follows)
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get focusOffsetsRowFailed;
+
+  /// Simple Focus panel, Offsets results table: a filter the run ended before
+  ///
+  /// In en, this message translates to:
+  /// **'Not measured'**
+  String get focusOffsetsRowSkipped;
+
+  /// Simple Focus panel, Offsets results table: a filter not reached yet
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get focusOffsetsRowPending;
+
+  /// Simple Focus panel, Offsets results table: a filter whose fit was weak, in the full UI's weak-fit words
+  ///
+  /// In en, this message translates to:
+  /// **'Weak curve fit (R² {r2}): run again if the sky has settled.'**
+  String focusOffsetsWeakFit(String r2);
+
+  /// Simple Focus panel, Offsets results: the drift warning
+  ///
+  /// In en, this message translates to:
+  /// **'The reference moved {steps} steps between its two runs, more than its critical focus zone ({cfz} steps). Run it again for steadier numbers.'**
+  String focusOffsetsDrift(int steps, int cfz);
+
+  /// Simple Focus panel, Offsets results: the reference's second run failed, so drift was not checked
+  ///
+  /// In en, this message translates to:
+  /// **'Drift not checked: the reference\'s second run didn\'t measure.'**
+  String get focusOffsetsDriftNotChecked;
+
+  /// Simple Focus panel, Offsets results: keeps the measured offsets
+  ///
+  /// In en, this message translates to:
+  /// **'Save offsets'**
+  String get focusOffsetsSave;
+
+  /// Simple Focus panel, Offsets results: throws the results away, the saved offsets stay
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get focusOffsetsDiscard;
+
+  /// Simple Focus panel, Offsets: the hint after Save
+  ///
+  /// In en, this message translates to:
+  /// **'Offsets saved. Autofocus after a filter change can now be turned off.'**
+  String get focusOffsetsSaved;
+
+  /// Simple Filter wheel window: the filter in place's saved focus offset, signed (e.g. Offset +42 steps)
+  ///
+  /// In en, this message translates to:
+  /// **'Offset {offset} steps'**
+  String deviceFocusOffset(String offset);
+
+  /// Simple Mode search: words (never shown) that find the Focus offsets routine; space-separated, lower case
+  ///
+  /// In en, this message translates to:
+  /// **'focus offsets filter offsets calibrate'**
+  String get searchFocusOffsetsWords;
 }
 
 class _AppLocalizationsDelegate

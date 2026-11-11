@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-11T14:46:09+13:00",
+  "generatedAt": "2026-11-11T22:50:41+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -862,6 +862,12 @@
       "description": "Mode › Guider's Guide, Tuning and Tools tabs: Simple Mode segments on a tile, 44 px tall, the selected one in the selection blue with white words. A null pick locks them. The panel keeps Guide's height on every tab (#1722).",
       "html": "<div class=\"ds-sseg\" role=\"tablist\" aria-label=\"Guider page\"><button role=\"tab\" aria-selected=\"true\" class=\"on\">Guide</button><button role=\"tab\" aria-selected=\"false\">Tuning</button><button role=\"tab\" aria-selected=\"false\">Tools</button></div>",
       "css": ".ds-sseg{display:flex;gap:2px;padding:2px;background:rgba(56,56,56,0.55);border-radius:8px;width:300px} .ds-sseg button{flex:1;height:44px;border:0;border-radius:8px;background:transparent;color:#E0E0E0;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-size:14px;cursor:pointer;transition:background .15s} .ds-sseg button.on{background:#1976D2;color:#FFFFFF} .ds-sseg button:hover:not(.on){background:rgba(255,255,255,0.06)} .ds-sseg button:focus-visible{outline:2px solid #42A5F5;outline-offset:-2px}"
+    },
+    {
+      "name": "Calibration Panel (Simple Mode)",
+      "kind": "screen",
+      "refersTo": "client/openastroara_client/lib/screens/simple/simple_calibration.dart",
+      "description": "#1757, mock design/preview/simple-calibration-mock.html: the seventh mode, between Guider and Plan (the mode grid keeps two columns of 138 x 52 tiles; Plan sits alone in the fourth row). 340 pt panel left of the rail: the title, the run's frames with a bar while it runs, an amber line while a plan runs, then Flats / Darks & bias / Guide Camera tabs (the Guider tabs' segments). Each set is a row: its name, a dim line saying why, and Covered in Connected Green or Missing in Busy Amber. The chip reads 'N missing', 'Ready', 'No lights' or 'n / N'; the shutter shoots everything missing and its red square stops it. Night done carries the same action as one row: what is missing (flats first) and Take flats / Take darks / Take flats and darks, then 'Calibration frames · n of N' with Stop (#1563). A calibration run waiting for the lens cap asks in a question pill with Resume."
     },
     {
       "name": "Connect to Your Rig Card (Simple Mode)",
