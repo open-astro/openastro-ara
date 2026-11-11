@@ -3183,6 +3183,11 @@ paths:
       tags:
         - Calibration
       operationId: GetDarkLibraryStatus
+      parameters:
+        - name: camera
+          in: query
+          schema:
+            type: string
       responses:
         '200':
           description: OK
@@ -8233,6 +8238,10 @@ components:
             - integer
             - string
           format: int64
+        camera:
+          type:
+            - 'null'
+            - string
     BugReportPreparationDto:
       required:
         - preparation_id
@@ -8557,6 +8566,10 @@ components:
         manual_capture:
           type: boolean
           default: false
+        camera:
+          type:
+            - 'null'
+            - string
     CalibrationStateDto:
       required:
         - dark_library
@@ -9060,6 +9073,10 @@ components:
             - integer
             - string
           format: int64
+        camera:
+          type:
+            - 'null'
+            - string
     DarkLibraryStateDto:
       required:
         - status
@@ -9115,6 +9132,10 @@ components:
             - array
           items:
             $ref: '#/components/schemas/BiasLibraryEntryDto'
+        camera:
+          type:
+            - 'null'
+            - string
     DataManagerActiveDownloadDto:
       required:
         - download_id
@@ -10456,6 +10477,14 @@ components:
           type:
             - 'null'
             - boolean
+        camera_name:
+          type:
+            - 'null'
+            - string
+        camera_id:
+          type:
+            - 'null'
+            - string
     FrameHistogramDto:
       required:
         - bins

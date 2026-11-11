@@ -36,7 +36,8 @@ public sealed record CalibrationSessionDto(
     string? ProfileId,
     double? CoolerSetpointC = null,
     bool MatchingBiasAvailable = false,
-    bool ManualCapture = false);
+    bool ManualCapture = false,
+    string? Camera = null);
 
 /// <summary>Per-filter summary inside a calibration session. <c>MatchingFlatFrames</c> counts the
 /// catalogued flats that calibrate this filter's lights — same filter, taken at the same rotator
@@ -142,7 +143,8 @@ public sealed record DarkLibraryStateDto(
     string? FailureReason,
     IReadOnlyList<DarkLibraryEntryDto> Entries,
     Guid? GeneratedSequenceId,
-    IReadOnlyList<BiasLibraryEntryDto>? BiasEntries = null);
+    IReadOnlyList<BiasLibraryEntryDto>? BiasEntries = null,
+    string? Camera = null);
 
 /// <summary>One entry in the dark library: a distinct (exposure, gain, whole-degree temperature)
 /// group of catalogued DARK frames. <c>Id</c> is a stable hash of that key (same group ⇒ same id
@@ -156,7 +158,8 @@ public sealed record DarkLibraryEntryDto(
     int FrameCount,
     DateTimeOffset CapturedUtc,
     string FilePath,
-    long FileSizeBytes);
+    long FileSizeBytes,
+    string? Camera = null);
 
 /// <summary>One group of catalogued BIAS frames: a distinct (gain, offset, binning) — the key bias
 /// frames match lights by. <c>Id</c> is a stable hash of that key; <c>FileSizeBytes</c> is the
@@ -168,4 +171,5 @@ public sealed record BiasLibraryEntryDto(
     int Bin,
     int FrameCount,
     DateTimeOffset CapturedUtc,
-    long FileSizeBytes);
+    long FileSizeBytes,
+    string? Camera = null);

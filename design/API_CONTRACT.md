@@ -26,6 +26,22 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-12 — #1757 the dark and bias library belongs to one camera
+
+**Endpoint(s) or area:** the `frames` catalog (`camera_name`, `camera_id`; `FrameDto.camera_name`, `FrameDto.camera_id`); `GET /api/v1/calibration/dark-library/status?camera=` (`DarkLibraryStateDto.camera`); `DarkLibraryEntryDto.camera`, `BiasLibraryEntryDto.camera` (also on `GET /calibration/dark-library/list`); `CalibrationSessionDto.camera`; the session coverage flags and the matching-flats generator.
+
+**Decision:** every frame Ara captures records the main camera that took it: `camera_name`, the selected device's name (the value the FITS `INSTRUME` header is written from), and `camera_id`, the driver's unique id. Rows from before the columns, and foreign frames the drive scan catalogues, stay NULL. Dark and bias library groups add the camera to their key and carry it as `camera`; a group's `id` hashes the camera too, except for a NULL-camera group, which keeps its old id. `dark-library/status` lists one camera's library: the `camera` query, else the connected main camera; `camera` on the response says which. With no camera asked and none connected it lists every group (`camera: null`). A build's progress counts the same frames. A session's darks, bias and flats coverage, and what the generator shoots, count only calibration frames whose camera matches the lights'. `CalibrationSessionDto.camera` is the camera most of the session's lights were taken with, null when none recorded one. Matching uses the name.
+
+**Legacy rule:** a NULL camera on either side matches any camera. Library groups with `camera: null` appear in every camera's status, as the flag that they predate the camera record, and they keep covering lights, so an existing library is not lost. NULL-camera lights are covered by any camera's frames.
+
+**Reasoning:** darks and bias are a property of one sensor; a second camera's library silently "covering" lights would skip frames the user needs. Treating legacy frames as foreign would throw away every library built before this change, which costs a cloudy night to rebuild; the null `camera` lets the client label them. The name is the match key because it is what the user sees and what the FITS header carries; `camera_id` is stored for telling apart two cameras of the same model later.
+
+**Spec ref:** `Services/SqliteAraDatabase.cs` (camera columns), `Services/CameraService.cs` (`RegisterFrameAsync`), `Services/SqliteDarkLibraryService.cs` (`GetStatusAsync`), `Services/SqliteCalibrationService.cs` (`SameCamera`, `ModalCamerasAsync`, flat coverage).
+
+**Related:** #1757; tests `FramesSchemaWideningTest`, `AlbumFrameFieldsTest`, `SqliteDarkLibraryServiceTest`, `SqliteCalibrationServiceTest`.
+
+---
+
 ## 2026-11-11 — #1649/#1650 a leased MoveAxis, the mount's tracking rate, and the solve's angle in Verify Position
 
 **Endpoint(s) or area:** `POST /api/v1/equipment/telescope/moveaxis` (optional `lease_ms`); new `POST /api/v1/equipment/telescope/trackingrate`; `GET /api/v1/equipment/telescope` (`runtime.tracking_rate`); `POST /api/v1/platesolve/verify-position` (`position_angle_degrees`, `rotator_synced_degrees`, and a rotator sync).

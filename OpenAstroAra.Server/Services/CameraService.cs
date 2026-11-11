@@ -1954,6 +1954,8 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         // bin the header's XPIXSZ follows, so a coerced bin still gets the right scale.
         var j2000 = pointing is { IsJ2000: true } pt ? pt : (FramePointing?)null;
         var optics = _profileStore?.GetOpticsSettings();
+        // #1757 — the camera, from the same selected device the FITS INSTRUME header is written from.
+        var device = _device;
         var pixelScale = optics is null ? null : FrameAlbumFields.ArcsecPerPixel(
             optics.PixelSizeUm * Math.Max(bin, 1),
             optics.FocalLengthMm * (optics.ReducerFactor > 0 ? optics.ReducerFactor : 1));
@@ -1984,7 +1986,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             RaDeg: j2000 is FramePointing p ? OpenAstroAra.Astrometry.AstroUtil.HoursToDegrees(p.RaHours) : null,
             DecDeg: j2000?.DecDegrees,
             PixelScaleArcsec: pixelScale,
-            CapturedByAra: true), CancellationToken.None).ConfigureAwait(false);
+            CapturedByAra: true,
+            CameraName: string.IsNullOrWhiteSpace(device?.Name) ? null : device.Name,
+            CameraId: string.IsNullOrWhiteSpace(device?.UniqueId) ? null : device.UniqueId), CancellationToken.None).ConfigureAwait(false);
     }
 
     // ── §32.4 cache (single-flight with coalescing, mirrors TelescopeService) ────────────────────
