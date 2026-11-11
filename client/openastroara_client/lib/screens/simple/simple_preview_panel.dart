@@ -78,6 +78,8 @@ import 'simple_shell.dart'
     show
         SimplePanel,
         SimpleSegment,
+        SimpleSegments,
+        simpleStackText,
         kSimpleRailWidth,
         simpleRailScale,
         kSimpleStatusMaxWidth,
@@ -236,8 +238,45 @@ class _SimpleSystemPanelState extends ConsumerState<SimpleSystemPanel> {
   }
 }
 
+/// Info's facts over the frame are on (session only; off to start). Turned
+/// on and off from Preview's and Focus's panels; the left rail's Info went
+/// when Monitor took over watching the night (user, 2026-11-11).
+class SimpleInfoShown extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set(bool shown) => state = shown;
+  void toggle() => state = !state;
+}
+
+final simpleInfoShownProvider = NotifierProvider<SimpleInfoShown, bool>(SimpleInfoShown.new);
+
+/// Info On / Off, a row in Preview's and Focus's panels.
+class SimpleInfoToggle extends ConsumerWidget {
+  const SimpleInfoToggle({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final label = Text(l10n.shellInfo, style: kSimpleText);
+    // Large text: the segments go under the label, sharing its width.
+    final stack = simpleStackText(context);
+    final segments = SimpleSegments<bool>(
+      keyPrefix: 'simple-info',
+      expand: stack,
+      group: l10n.shellInfo,
+      options: [(true, l10n.deviceOn, 'on'), (false, l10n.deviceOff, 'off')],
+      selected: ref.watch(simpleInfoShownProvider),
+      onPick: ref.read(simpleInfoShownProvider.notifier).set,
+    );
+    return stack
+        ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: AraSpace.s4, children: [label, segments])
+        : Row(spacing: AraSpace.s8, children: [Expanded(child: label), segments]);
+  }
+}
+
 /// The last frame's facts as tiles in the bottom-left corner, turned on
-/// from the left rail's Info:
+/// from [SimpleInfoToggle]:
 /// HFR, stars, exposure · filter, gain · offset and clipped highlights.
 class SimpleInfoPanel extends ConsumerWidget {
   const SimpleInfoPanel({super.key});
@@ -441,6 +480,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
         children: [
           // Leaving a running camera would strand it with no stop.
           ..._previewCameraRows(context, ref),
+          const SimpleInfoToggle(),
           // No title: the chip that opened it says what it is (user,
           // 2026-11-04).
           if (guide) ...[

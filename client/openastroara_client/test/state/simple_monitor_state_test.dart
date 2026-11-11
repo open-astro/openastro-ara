@@ -295,7 +295,7 @@ void main() {
       m.show(SimpleMessageKind.warning, 'Emergency Stop: done', detail: 'Check the rig', sticky: true);
       final v = r.read().verdict;
       expect((v.kind, v.message?.title, v.status), (MonitorVerdictKind.message, 'Emergency Stop: done', MonitorStatus.warning));
-      m.show(SimpleMessageKind.error, "Couldn't stop: no rig");
+      m.show(SimpleMessageKind.error, "Couldn't stop: no rig", sticky: true);
       expect((r.read().verdict.message?.title, r.read().verdict.status), ("Couldn't stop: no rig", MonitorStatus.fault),
           reason: 'the newest');
       m.dismissQuestions();
@@ -303,6 +303,27 @@ void main() {
         m.dismiss(x.id);
       }
       expect(r.read().verdict.kind, MonitorVerdictKind.allGood);
+    });
+
+    test('a plain error ranks below Unsafe and a dropped device; a sticky one stays above them (re-audit 3)', () async {
+      final r = await _rig(run: _running(), safe: false);
+      final m = r.c.read(simpleMessagesProvider.notifier);
+      m.show(SimpleMessageKind.error, "Autofocus didn't converge");
+      expect(r.read().verdict.kind, MonitorVerdictKind.unsafe, reason: 'Unsafe outranks a passing error');
+      m.show(SimpleMessageKind.error, 'Emergency Stop did NOT happen', sticky: true);
+      expect(r.read().verdict.message?.title, 'Emergency Stop did NOT happen');
+    });
+
+    test('with the link lost, a failed Stop still takes the top line (re-audit 3)', () async {
+      final r = await _rig(run: _running());
+      r.read();
+      r.c.read(_link.notifier).set(false);
+      r.read();
+      expect(r.read().verdict.kind, MonitorVerdictKind.linkLost);
+      r.c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, 'Emergency Stop did NOT happen', sticky: true);
+      final v = r.read().verdict;
+      expect((v.kind, v.message?.title), (MonitorVerdictKind.message, 'Emergency Stop did NOT happen'));
+      expect(r.read().frozen, isTrue, reason: 'the numbers stay frozen');
     });
 
     test('a meridian flip in progress, the wait before it, a pause by Ara and the wait for dark', () async {

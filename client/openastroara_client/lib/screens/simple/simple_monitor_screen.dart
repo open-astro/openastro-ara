@@ -142,29 +142,37 @@ class _TopLine extends ConsumerWidget {
           const SizedBox(width: AraSpace.s4),
           if (_dot(v.status) case final dot?) ...[dot, const SizedBox(width: AraSpace.s12)],
           Expanded(
-            child: SingleChildScrollView(
-              child: Column(
+            // The words scroll past the cap; the answers (or Dismiss) stay
+            // fixed under them, always on screen (re-audit 3).
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Announced once per state: the visible line carries a
-                // countdown or an age that would re-announce every second.
-                Semantics(liveRegion: true, label: monitorVerdictAnnouncement(l10n, s, head), child: const SizedBox.shrink()),
-                Text(head,
-                      key: const Key('simple-monitor-verdict'),
-                      // A question shows whole: it is what the person answers.
-                      maxLines: whole ? null : 2,
-                      overflow: whole ? null : TextOverflow.ellipsis,
-                      style: kSimpleText.copyWith(
-                          fontSize: AraFontSize.monitorVerdict, fontWeight: FontWeight.w600, color: colour)),
-                if (reason != null)
-                  Text(reason,
-                      maxLines: whole ? null : 2,
-                      overflow: whole ? null : TextOverflow.ellipsis,
-                      style: _dim),
-                // A question's answers, under its words: the only controls
-                // besides Stop, Night mode and close. The same actions as its
-                // pill, which Monitor doesn't draw.
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Announced once per state: the visible line carries a
+                        // countdown or an age that would re-announce every second.
+                        Semantics(liveRegion: true, label: monitorVerdictAnnouncement(l10n, s, head), child: const SizedBox.shrink()),
+                        Text(head,
+                            key: const Key('simple-monitor-verdict'),
+                            // A question or a stop's outcome shows whole.
+                            maxLines: whole ? null : 2,
+                            overflow: whole ? null : TextOverflow.ellipsis,
+                            style: kSimpleText.copyWith(
+                                fontSize: AraFontSize.monitorVerdict, fontWeight: FontWeight.w600, color: colour)),
+                        if (reason != null)
+                          Text(reason,
+                              maxLines: whole ? null : 2,
+                              overflow: whole ? null : TextOverflow.ellipsis,
+                              style: _dim),
+                      ],
+                    ),
+                  ),
+                ),
                 if (message != null)
                   Padding(
                     padding: const EdgeInsets.only(top: AraSpace.s8, bottom: AraSpace.s8),
@@ -174,6 +182,9 @@ class _TopLine extends ConsumerWidget {
                       child: Text(l10n.pillsDismiss),
                     ),
                   ),
+                // A question's answers: the only controls besides Stop, Night
+                // mode and Back. The same actions as its pill, which Monitor
+                // doesn't draw.
                 if (question != null)
                   Padding(
                     padding: const EdgeInsets.only(top: AraSpace.s8, bottom: AraSpace.s8),
@@ -189,7 +200,6 @@ class _TopLine extends ConsumerWidget {
                     ]),
                   ),
               ],
-            ),
             ),
           ),
           const SizedBox(width: AraSpace.s16),

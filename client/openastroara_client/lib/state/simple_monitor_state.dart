@@ -529,10 +529,15 @@ class MonitorState extends Notifier<MonitorSnapshot> {
     final last = down == null ? null : stateOrNull ?? _live(now, down);
     if (down != null && last != null) {
       final since = last.frozenSince ?? down;
+      // Messages are this device's own: a failed Stop still shows with the link
+      // lost (re-audit 3).
+      final sticky = ref.watch(simpleMessagesProvider).where((m) => m.sticky).firstOrNull;
       return MonitorSnapshot(
         asOf: last.asOf,
         frozenSince: since,
-        verdict: MonitorVerdict(MonitorVerdictKind.linkLost, MonitorStatus.fault, at: since),
+        verdict: sticky != null
+            ? monitorMessageVerdict(sticky)
+            : MonitorVerdict(MonitorVerdictKind.linkLost, MonitorStatus.fault, at: since),
         now: last.now,
         upNext: last.upNext,
         tonightsBest: last.tonightsBest,
@@ -627,7 +632,10 @@ class MonitorState extends Notifier<MonitorSnapshot> {
     final unsafeMonitor = safetyMon != null && safetyMon.isConnected && !safetyMon.safe;
     final question = messages.where((m) => m.kind == SimpleMessageKind.question).firstOrNull;
     // Newest first: the list is kept that way.
-    final message = messages.where((m) => m.sticky || m.kind == SimpleMessageKind.error).firstOrNull;
+    // A sticky message (Emergency Stop's outcome) leads; a passing error waits
+    // behind a dropped device and Unsafe (re-audit 3).
+    final sticky = messages.where((m) => m.sticky).firstOrNull;
+    final error = messages.where((m) => m.kind == SimpleMessageKind.error && !m.sticky).firstOrNull;
     final starLost = guider != null && guider.isConnected && guider.runtimeState == GuiderRuntimeState.starLost;
 
     // Low disk: the Queue's frames left need more than the drive has free,
@@ -643,14 +651,14 @@ class MonitorState extends Notifier<MonitorSnapshot> {
         free < framesLeft * lastDims.width! * lastDims.height! * 2;
     final cooler = coolerOff != null && now.difference(coolerOff) >= kMonitorCoolerHold;
 
-    final verdict = message != null
-        ? MonitorVerdict(MonitorVerdictKind.message,
-            message.kind == SimpleMessageKind.error ? MonitorStatus.fault : MonitorStatus.warning,
-            message: message)
+    final verdict = sticky != null
+        ? monitorMessageVerdict(sticky)
         : droppedDevice != null
         ? MonitorVerdict(MonitorVerdictKind.deviceDropped, MonitorStatus.fault, device: droppedDevice)
         : unsafeMonitor || breaches.isNotEmpty
         ? MonitorVerdict(MonitorVerdictKind.unsafe, MonitorStatus.warning, breach: breaches.firstOrNull)
+        : error != null
+        ? monitorMessageVerdict(error)
         : question != null
         ? MonitorVerdict(MonitorVerdictKind.question, MonitorStatus.warning, question: question)
         : starLost
@@ -944,6 +952,11 @@ class MonitorState extends Notifier<MonitorSnapshot> {
 }
 
 final monitorProvider = NotifierProvider.autoDispose<MonitorState, MonitorSnapshot>(MonitorState.new);
+
+/// A message on the top line: red for an error, amber otherwise.
+MonitorVerdict monitorMessageVerdict(SimpleMessage m) => MonitorVerdict(MonitorVerdictKind.message,
+    m.kind == SimpleMessageKind.error ? MonitorStatus.fault : MonitorStatus.warning,
+    message: m);
 
 /// The row of [t]'s plan the next frame comes from: the first not yet full.
 int _currentStep(SimpleTarget t, List<int> done) {

@@ -184,7 +184,6 @@ class SimpleShell extends ConsumerStatefulWidget {
 
 class _SimpleShellState extends ConsumerState<SimpleShell> {
   bool _clean = false;
-  bool _info = false;
 
   /// The planetarium on demand (the left rail's Sky), over any frame.
   bool _sky = false;
@@ -627,10 +626,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
               case MonitorDestination.sky:
                 setState(() => _sky = true);
               case MonitorDestination.frameInfo:
-                setState(() {
-                  _sky = false;
-                  _info = true;
-                });
+                setState(() => _sky = false);
+                ref.read(simpleInfoShownProvider.notifier).set(true);
             }
           },
         ),
@@ -801,7 +798,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// Whether any window is open (a device window, a rail menu, Plan's sheet
   /// or the Info tiles): a tap on the background closes them all.
   bool get _anyOpen =>
-      _device != null || _popover != _Popover.none || _adding || _info;
+      _device != null ||
+      _popover != _Popover.none ||
+      _adding ||
+      ref.read(simpleInfoShownProvider);
 
   void _tapImage(bool hasFrame, {bool discarded = false}) {
     if (!discarded && _askDiscard(() => _tapImage(hasFrame, discarded: true))) {
@@ -810,7 +810,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     setState(() {
       if (_anyOpen) {
         _device = null;
-        _info = false;
+        ref.read(simpleInfoShownProvider.notifier).set(false);
         _popover = _Popover.none;
         _closeSheet();
       } else if (hasFrame) {
@@ -1293,7 +1293,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               ),
                               // Info: fact tiles hugging the bottom-left corner,
                               // above the bottom row.
-                              if (_info)
+                              if (ref.watch(simpleInfoShownProvider))
                                 AnimatedPositioned(
                                   // Keyed: each slides only from its own place.
                                   key: const ValueKey('info'),
@@ -1324,10 +1324,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   child: KeyedSubtree(
                                     key: _leftRailKey,
                                     child: _LeftRail(
-                                      info: _info,
                                       sky: _sky,
-                                      onInfo: () =>
-                                          setState(() => _info = !_info),
                                       onSky: () => setState(() => _sky = !_sky),
                                       onAlbum: _openAlbum,
                                       // The grid needs the room.
@@ -2015,17 +2012,13 @@ bool simpleStackText(BuildContext context) =>
 
 class _LeftRail extends StatelessWidget {
   const _LeftRail({
-    required this.info,
     required this.sky,
-    required this.onInfo,
     required this.onSky,
     required this.onAlbum,
     this.onMonitor,
   });
 
-  final bool info;
   final bool sky;
-  final VoidCallback onInfo;
   final VoidCallback? onSky;
   final VoidCallback onAlbum;
 
@@ -2049,13 +2042,8 @@ class _LeftRail extends StatelessWidget {
           selected: sky,
           onTap: onSky,
         ),
-        _RailButton(
-          key: const Key('simple-info'),
-          icon: Icons.info_outline,
-          label: context.l10n.shellInfo,
-          selected: info,
-          onTap: onInfo,
-        ),
+        // Info moved to Preview's and Focus's panels: Monitor watches the
+        // night (user, 2026-11-11).
         _RailButton(
           key: const Key('simple-library'),
           icon: Icons.photo_library_outlined,

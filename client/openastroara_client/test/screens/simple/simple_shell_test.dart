@@ -925,7 +925,7 @@ void main() {
       expect(right.bottom, lessThan(stop.top));
       final left = _panelOf(tester, find.byKey(const Key('simple-sky')));
       expect(left.left, kSimpleInset);
-      for (final key in ['simple-info', 'simple-library', 'simple-album']) {
+      for (final key in ['simple-library', 'simple-album']) {
         expect(_panelOf(tester, find.byKey(Key(key))), left, reason: '$key on the left rail');
       }
     });
@@ -2042,12 +2042,12 @@ void main() {
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     final container = await _pump(tester, const Size(1024, 768));
     await _frame(tester, container);
-    await tester.tap(find.byKey(const Key('simple-info')));
+    container.read(simpleInfoShownProvider.notifier).toggle();
     await tester.pump();
     // Labels follow the user's size all the way; nothing caps them at 1.3x.
     final library = tester.element(find.text('Library'));
     expect(MediaQuery.textScalerOf(library).scale(1), 2);
-    expect(tester.getSize(find.byKey(const Key('simple-info'))).width, greaterThan(60),
+    expect(tester.getSize(find.byKey(const Key('simple-library'))).width, greaterThan(60),
         reason: 'the rail button grows past its 1x width');
     // The facts read as one list, label and value per line, not 72 px tiles.
     expect(find.byKey(const Key('simple-facts-list')), findsOneWidget);
@@ -2084,10 +2084,38 @@ void main() {
     expect(find.text("Tap the shutter for the guide camera's frames"), findsNothing);
   });
 
+  testWidgets("Info leaves the rail; Preview's settings panel turns it on and off (user, 2026-11-11)", (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    await _frame(tester, container);
+    expect(find.byKey(const Key('simple-info')), findsNothing, reason: 'Monitor watches the night; the rail has no Info');
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-info-on')));
+    await tester.pump();
+    expect(find.byType(SimpleInfoPanel), findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-info-off')));
+    await tester.pump();
+    expect(find.byType(SimpleInfoPanel), findsNothing);
+  });
+
+  testWidgets("Focus's panel turns Info on too", (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    await _frame(tester, container);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-focus')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-info-on')));
+    await tester.pump();
+    expect(container.read(simpleInfoShownProvider), isTrue);
+  });
+
   testWidgets('Info shows the last frame facts as tiles in the bottom-left corner', (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await _frame(tester, container);
-    await tester.tap(find.byKey(const Key('simple-info')));
+    container.read(simpleInfoShownProvider.notifier).toggle();
     await tester.pump();
     final row = tester.getRect(find.byType(SimpleInfoPanel));
     expect(row.left, tileLeft, reason: 'hugs the corner');
@@ -2098,7 +2126,7 @@ void main() {
     }
     // HFR nearest the corner.
     expect(tester.getRect(find.text('HFR')).center.dx, lessThan(tester.getRect(find.text('Clipped')).center.dx));
-    await tester.tap(find.byKey(const Key('simple-info')));
+    container.read(simpleInfoShownProvider.notifier).toggle();
     await tester.pump();
     expect(find.byType(SimpleInfoPanel), findsNothing);
   });
@@ -2872,7 +2900,7 @@ void main() {
               raDeg: 10.7, decDeg: 41.3),
         ]));
     await _frame(tester, c);
-    await tester.tap(find.byKey(const Key('simple-info'))); // the Info tiles
+    c.read(simpleInfoShownProvider.notifier).toggle(); // the Info tiles
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
@@ -3258,7 +3286,7 @@ void main() {
     expect(window, findsNothing, reason: 'the dot again closes it');
 
     await cameraDot();
-    await tester.tap(find.byKey(const Key('simple-info')));
+    c.read(simpleInfoShownProvider.notifier).toggle();
     await tester.pump();
     expect(find.byType(SimpleInfoPanel), findsOneWidget, reason: 'one tap opens Info');
     expect(window, findsOneWidget, reason: 'they don\'t overlap, so both stay');
@@ -3298,7 +3326,7 @@ void main() {
     c.read(selectedSettingsPanelProvider.notifier).select('eq.camera');
     c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('simple-info')));
+    c.read(simpleInfoShownProvider.notifier).toggle();
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     expect(find.byKey(const Key('simple-device-camera')), findsOneWidget);
@@ -3938,7 +3966,7 @@ void main() {
     final container = await _pump(tester, const Size(1024, 768), steps: _someSteps,
         gear: [guiderStatusProvider.overrideWith(() => guider)]);
     await _frame(tester, container);
-    await tester.tap(find.byKey(const Key('simple-info')));
+    container.read(simpleInfoShownProvider.notifier).toggle();
     await tester.pump(const Duration(milliseconds: 300));
     const above = 768 - kSimpleInset * 2 - kSimpleBarHeight;
     expect(tester.getRect(find.byType(SimpleInfoPanel)).bottom, above, reason: 'just above the guiding row');
@@ -4766,7 +4794,7 @@ void main() {
       }
       final words = tester.getRect(pill);
       final covered = [
-        for (final k in ['simple-sky', 'simple-info', 'simple-library', 'simple-album'])
+        for (final k in ['simple-sky', 'simple-library', 'simple-album'])
           tester.getCenter(find.byKey(Key(k))),
       ].where(words.contains).toList();
       expect(covered, isNotEmpty, reason: 'precondition: the rail runs behind the words');
@@ -5811,7 +5839,7 @@ void main() {
     });
 
     for (final size in const [Size(900, 700), Size(1024, 768)]) {
-      testWidgets('at $size and 2x text a question stays answerable: the top line scrolls (re-audit)', (tester) async {
+      testWidgets('at $size and 2x text a question stays answerable: its words scroll, its answers stay put (re-audit)', (tester) async {
         tester.platformDispatcher.textScaleFactorTestValue = 2;
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
         final (c, _) = await openMonitor(tester, size: size);
@@ -5822,9 +5850,9 @@ void main() {
         await tester.pump();
         expect(tester.takeException(), isNull);
         final allow = find.widgetWithText(FilledButton, 'Allow');
-        await tester.ensureVisible(allow);
-        await tester.pump();
-        expect(tester.getRect(allow).bottom, lessThanOrEqualTo(size.height));
+        // The words scroll; the answers stay on screen under them (re-audit 3).
+        expect(allow.hitTestable(), findsOneWidget);
+        expect(find.widgetWithText(TextButton, 'Keep connected').hitTestable(), findsOneWidget);
         await tester.tap(allow);
         await tester.pump();
         expect(answered, isTrue);
