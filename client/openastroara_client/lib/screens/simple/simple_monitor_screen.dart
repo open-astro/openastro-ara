@@ -127,15 +127,20 @@ class _TopLine extends ConsumerWidget {
       _ => false,
     };
     final question = v.kind == MonitorVerdictKind.question ? v.question : null;
-    // 64 pt, growing with the user's text size.
+    final message = v.kind == MonitorVerdictKind.message ? v.message : null;
+    // Shown whole: a question to answer, or a stop's outcome to read.
+    final whole = question != null || message != null;
+    // 64 pt, growing with the user's text size up to half the screen; past
+    // that it scrolls, so a question's answers stay reachable at 2x text.
     return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 64),
+      constraints: BoxConstraints(minHeight: 64, maxHeight: math.max(64, MediaQuery.sizeOf(context).height / 2)),
       child: Row(
         children: [
           const SizedBox(width: AraSpace.s12),
           if (_dot(v.status) case final dot?) ...[dot, const SizedBox(width: AraSpace.s12)],
           Expanded(
-            child: Column(
+            child: SingleChildScrollView(
+              child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -145,18 +150,27 @@ class _TopLine extends ConsumerWidget {
                 Text(head,
                       key: const Key('simple-monitor-verdict'),
                       // A question shows whole: it is what the person answers.
-                      maxLines: question == null ? 2 : null,
-                      overflow: question == null ? TextOverflow.ellipsis : null,
+                      maxLines: whole ? null : 2,
+                      overflow: whole ? null : TextOverflow.ellipsis,
                       style: kSimpleText.copyWith(
                           fontSize: AraFontSize.monitorVerdict, fontWeight: FontWeight.w600, color: colour)),
                 if (reason != null)
                   Text(reason,
-                      maxLines: question == null ? 2 : null,
-                      overflow: question == null ? TextOverflow.ellipsis : null,
+                      maxLines: whole ? null : 2,
+                      overflow: whole ? null : TextOverflow.ellipsis,
                       style: _dim),
                 // A question's answers, under its words: the only controls
                 // besides Stop, Night mode and close. The same actions as its
                 // pill, which Monitor doesn't draw.
+                if (message != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AraSpace.s8, bottom: AraSpace.s8),
+                    child: TextButton(
+                      key: const Key('simple-monitor-dismiss'),
+                      onPressed: () => ref.read(simpleMessagesProvider.notifier).dismiss(message.id),
+                      child: Text(l10n.pillsDismiss),
+                    ),
+                  ),
                 if (question != null)
                   Padding(
                     padding: const EdgeInsets.only(top: AraSpace.s8, bottom: AraSpace.s8),
@@ -172,6 +186,7 @@ class _TopLine extends ConsumerWidget {
                     ]),
                   ),
               ],
+            ),
             ),
           ),
           const SizedBox(width: AraSpace.s16),
@@ -462,6 +477,7 @@ class _Tile extends StatelessWidget {
         l10n.monitorUnsafeReason,
       ),
     MonitorVerdictKind.question => (v.question!.title, v.question!.detail),
+    MonitorVerdictKind.message => (v.message!.title, v.message!.detail),
     MonitorVerdictKind.starLost => (l10n.monitorStarLost, l10n.monitorStarLostReason),
     MonitorVerdictKind.lowDisk => (
         l10n.monitorLowDisk('${((v.freeBytes ?? 0) / 1073741824).toStringAsFixed(0)} GB'),

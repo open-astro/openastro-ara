@@ -288,6 +288,23 @@ void main() {
           (MonitorVerdictKind.question, 'Swap in Ha', 'Confirm'));
     });
 
+    test("Emergency Stop's outcome and an error take the top line, above a question (re-audit)", () async {
+      final r = await _rig(run: _running());
+      final m = r.c.read(simpleMessagesProvider.notifier);
+      m.show(SimpleMessageKind.question, 'Swap in Ha', actions: [SimpleMessageAction('Confirm', () {})]);
+      m.show(SimpleMessageKind.warning, 'Emergency Stop: done', detail: 'Check the rig', sticky: true);
+      final v = r.read().verdict;
+      expect((v.kind, v.message?.title, v.status), (MonitorVerdictKind.message, 'Emergency Stop: done', MonitorStatus.warning));
+      m.show(SimpleMessageKind.error, "Couldn't stop: no rig");
+      expect((r.read().verdict.message?.title, r.read().verdict.status), ("Couldn't stop: no rig", MonitorStatus.fault),
+          reason: 'the newest');
+      m.dismissQuestions();
+      for (final x in [...r.c.read(simpleMessagesProvider)]) {
+        m.dismiss(x.id);
+      }
+      expect(r.read().verdict.kind, MonitorVerdictKind.allGood);
+    });
+
     test('a meridian flip in progress, the wait before it, a pause by Ara and the wait for dark', () async {
       final flipping = await _rig(run: _running(flip: const MeridianFlipInfo(state: 'flipping')));
       expect(flipping.read().verdict.kind, MonitorVerdictKind.flipping);

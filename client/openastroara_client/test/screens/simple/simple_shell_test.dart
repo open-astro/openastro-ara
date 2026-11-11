@@ -5799,6 +5799,48 @@ void main() {
       await close(tester);
     });
 
+    for (final size in const [Size(900, 700), Size(1024, 768)]) {
+      testWidgets('at $size and 2x text a question stays answerable: the top line scrolls (re-audit)', (tester) async {
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final (c, _) = await openMonitor(tester, size: size);
+        var answered = false;
+        c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.question, 'Another app asks to take control of the rig',
+            detail: 'It is a phone on the same network',
+            actions: [SimpleMessageAction('Keep connected', () {}), SimpleMessageAction('Allow', () => answered = true)]);
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+        final allow = find.widgetWithText(FilledButton, 'Allow');
+        await tester.ensureVisible(allow);
+        await tester.pump();
+        expect(tester.getRect(allow).bottom, lessThanOrEqualTo(size.height));
+        await tester.tap(allow);
+        await tester.pump();
+        expect(answered, isTrue);
+        await close(tester);
+      });
+    }
+
+    testWidgets("Emergency Stop's outcome shows on Monitor's top line, and Dismiss clears it (re-audit)", (tester) async {
+      final (c, _) = await openMonitor(tester);
+      c.read(simpleMessagesProvider.notifier)
+          .show(SimpleMessageKind.warning, 'Emergency Stop: done', detail: 'Check the rig', sticky: true);
+      await tester.pump();
+      expect(find.text('Emergency Stop: done'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-monitor-dismiss')));
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider), isEmpty);
+      await close(tester);
+    });
+
+    testWidgets('a scope torn down with Monitor open throws nothing (re-audit)', (tester) async {
+      final (c, _) = await openMonitor(tester);
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('the top line announces its state once, not each second of a countdown (audit)', (tester) async {
       final handle = tester.ensureSemantics();
       await openMonitor(tester,

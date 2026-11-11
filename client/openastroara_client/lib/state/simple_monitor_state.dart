@@ -51,6 +51,9 @@ enum MonitorStatus {
 /// The top line's condition, the first that applies in this order (#1724).
 enum MonitorVerdictKind {
   linkLost,
+  // Emergency Stop's outcome, or an error: Monitor draws no pills (#1724
+  // re-audit), so the top line says it.
+  message,
   deviceDropped,
   unsafe,
   question,
@@ -76,6 +79,7 @@ class MonitorVerdict {
     this.device,
     this.breach,
     this.question,
+    this.message,
     this.freeBytes,
     this.coolerTargetC,
     this.coolerSensorC,
@@ -91,6 +95,9 @@ class MonitorVerdict {
   /// The weather reading past its limit, when weather made it Unsafe.
   final ({WeatherBreach kind, double value, double limit})? breach;
   final SimpleMessage? question;
+
+  /// A sticky message (Emergency Stop's outcome) or an error, newest first.
+  final SimpleMessage? message;
   final int? freeBytes;
   final double? coolerTargetC;
   final double? coolerSensorC;
@@ -365,7 +372,11 @@ const kMonitorCoolerHold = Duration(minutes: 5);
 class MonitorShowing extends Notifier<bool> {
   @override
   bool build() => false;
-  void set(bool on) => state = on;
+
+  void set(bool on) {
+    // Set a microtask late: the scope may be gone (a closing test).
+    if (ref.mounted) state = on;
+  }
 }
 
 final monitorShowingProvider = NotifierProvider<MonitorShowing, bool>(MonitorShowing.new);
@@ -615,6 +626,8 @@ class MonitorState extends Notifier<MonitorSnapshot> {
         : const <({WeatherBreach kind, double value, double limit})>[];
     final unsafeMonitor = safetyMon != null && safetyMon.isConnected && !safetyMon.safe;
     final question = messages.where((m) => m.kind == SimpleMessageKind.question).firstOrNull;
+    // Newest first: the list is kept that way.
+    final message = messages.where((m) => m.sticky || m.kind == SimpleMessageKind.error).firstOrNull;
     final starLost = guider != null && guider.isConnected && guider.runtimeState == GuiderRuntimeState.starLost;
 
     // Low disk: the Queue's frames left need more than the drive has free,
@@ -630,7 +643,11 @@ class MonitorState extends Notifier<MonitorSnapshot> {
         free < framesLeft * lastDims.width! * lastDims.height! * 2;
     final cooler = coolerOff != null && now.difference(coolerOff) >= kMonitorCoolerHold;
 
-    final verdict = droppedDevice != null
+    final verdict = message != null
+        ? MonitorVerdict(MonitorVerdictKind.message,
+            message.kind == SimpleMessageKind.error ? MonitorStatus.fault : MonitorStatus.warning,
+            message: message)
+        : droppedDevice != null
         ? MonitorVerdict(MonitorVerdictKind.deviceDropped, MonitorStatus.fault, device: droppedDevice)
         : unsafeMonitor || breaches.isNotEmpty
         ? MonitorVerdict(MonitorVerdictKind.unsafe, MonitorStatus.warning, breach: breaches.firstOrNull)
