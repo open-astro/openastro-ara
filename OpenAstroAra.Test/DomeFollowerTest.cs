@@ -402,6 +402,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_geometry_error_other_than_the_scope_outside_the_dome_keeps_following() {
+            // Only the radius check turns following off; any other error from the geometry waits for the next tick.
+            var geometry = new Mock<IDomeSynchronization>();
+            geometry.Setup(g => g.TargetDomeCoordinates(It.IsAny<Coordinates>(), It.IsAny<double>(), It.IsAny<Angle>(),
+                    It.IsAny<Angle>(), It.IsAny<double>(), It.IsAny<PierSide>()))
+                .Throws(new ArgumentException("bad input"));
+            var mount = new Mock<ITelescopeMediator>();
+            mount.Setup(m => m.GetInfo()).Returns(() => _mount);
+            await PlaceDomeAtAsync(Target() + 30);
+            using var follower = new DomeFollower(_svc, mount.Object, geometry.Object, _profile, _store) { UtcNow = () => Now };
+            await follower.TickAsync();
+            Assert.That(follower.IsSynchronized, Is.False, "an exposure keeps waiting");
+            Assert.That(_store.GetDomeSettings().FollowMount, Is.True);
+            Assert.That(_dome.Slews, Is.Empty);
+        }
+
+        [Test]
         public void The_setting_is_restored_on_daemon_start() {
             // A second follower over the same store, as a restarted daemon builds it.
             using var restarted = new DomeFollower(_svc, new Mock<ITelescopeMediator>().Object,
