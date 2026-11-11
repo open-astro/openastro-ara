@@ -1470,7 +1470,7 @@ namespace OpenAstroAra.Test {
 
         /// <summary>#1747 — a run whose only trigger is a meridian flip run by <paramref name="flip"/>.</summary>
         private static (SequencerService Svc, Guid Id) FlipRun(
-                Func<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>, CancellationToken, Task<bool>> flip) {
+                Func<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>, CancellationToken, Task<bool>> flip, IWsBroadcaster? ws = null) {
             var coords = new OpenAstroAra.Astrometry.Coordinates(
                 OpenAstroAra.Astrometry.Angle.ByHours(5), OpenAstroAra.Astrometry.Angle.ByDegree(20),
                 OpenAstroAra.Astrometry.Epoch.J2000);
@@ -1493,7 +1493,7 @@ namespace OpenAstroAra.Test {
                 c.Triggers.Add(new OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger(
                     profile, telescope.Object, executor.Object));
                 c.Items.Add(new Annotation { Name = "after the flip" });
-            }, factory), factory: factory);
+            }, factory), ws: ws, factory: factory);
             return (svc, id);
         }
 
@@ -1532,6 +1532,35 @@ namespace OpenAstroAra.Test {
             release.SetResult();
             var done = await WaitForTerminalAsync(svc, id);
             Assert.That(done!.MeridianWaitSecondsLeft, Is.Null);
+        }
+
+        [Test]
+        public async Task Progress_frames_carry_the_meridian_wait_and_clear_it_at_the_flip() {
+            // The client re-reads the run state only on lifecycle events, and the wait starts mid-run.
+            var ws = new RecordingWsBroadcaster();
+            var flipping = new TaskCompletionSource();
+            var (svc, id) = FlipRun(async (p, _) => {
+                p.Report(new MeridianFlipExecutor.WaitStatus {
+                    Source = MeridianFlipExecutor.WaitSource, Status = "Passing meridian — 00:04:32", SecondsLeft = 272,
+                });
+                await flipping.Task;
+                p.Report(new OpenAstroAra.Core.Model.ApplicationStatus { Source = "MeridianFlip", Status = "Flipping scope" });
+                return true;
+            }, ws);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await PollUntil(svc, id, s => s?.ReasonCode is not null);
+            await Task.Delay(100);
+            flipping.SetResult();
+            await WaitForTerminalAsync(svc, id);
+
+            var progress = ws.Records.Where(e => e.Type == "sequence.progress").Select(e => e.Payload).ToList();
+            var waiting = progress.First(p => p.TryGetProperty("reason_code", out var c) && c.GetString() == "meridian");
+            Assert.That(waiting.GetProperty("reason_text").GetString(), Does.StartWith("Passing meridian"));
+            Assert.That(waiting.GetProperty("meridian_wait_seconds_left").GetInt32(), Is.EqualTo(272));
+            var flip = progress.Last(p => p.TryGetProperty("current_instruction_description", out var d) && d.GetString() == "Flipping scope");
+            Assert.That(flip.GetProperty("reason_code").ValueKind, Is.EqualTo(JsonValueKind.Null), "the flip proper clears the wait");
+            Assert.That(flip.GetProperty("meridian_wait_seconds_left").ValueKind, Is.EqualTo(JsonValueKind.Null));
         }
 
         [Test]

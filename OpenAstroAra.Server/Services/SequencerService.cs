@@ -1281,6 +1281,11 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 ["frames_captured"] = run.FramesCaptured,
                 ["stop_after_frame"] = run.StopAfterFrame,
             };
+            // #1747 — the meridian wait starts mid-run, so its reason rides the progress frame too.
+            var (reasonCode, reasonText, meridianWaitSecondsLeft) = run.Reason;
+            payload["reason_code"] = reasonCode;
+            payload["reason_text"] = reasonText;
+            payload["meridian_wait_seconds_left"] = meridianWaitSecondsLeft;
             var (estimatedTotal, estimatedRemaining) = run.EstimatedSeconds();
             payload["estimated_total_seconds"] = estimatedTotal;
             payload["estimated_remaining_seconds"] = estimatedRemaining;
@@ -1653,6 +1658,10 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         private string? _reasonCode;
         private string? _reasonText;
         private int? _meridianWaitSecondsLeft;
+
+        public (string? Code, string? Text, int? MeridianWaitSecondsLeft) Reason {
+            get { lock (_gate) { return (_reasonCode, _reasonText, _meridianWaitSecondsLeft); } }
+        }
 
         public void SetReason(string? code, string? text, int? meridianWaitSecondsLeft = null) {
             lock (_gate) {
