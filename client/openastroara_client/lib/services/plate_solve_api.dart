@@ -64,10 +64,12 @@ class PlateSolveApi {
     } on DioException catch (e) {
       final code = e.response?.statusCode;
       if (code == 422 || code == 409) {
-        throw PlateSolveException(_problemDetail(e.response?.data) ??
-            (code == 409
-                ? 'The camera cannot take the verification image right now (not connected, or busy with an exposure).'
-                : 'The plate solver is not configured (check focal length, pixel size, and the ASTAP path in settings).'));
+        throw PlateSolveException(
+            _problemDetail(e.response?.data) ??
+                (code == 409
+                    ? 'The camera cannot take the verification image right now (not connected, or busy with an exposure).'
+                    : 'The plate solver is not configured (check focal length, pixel size, and the ASTAP path in settings).'),
+            statusCode: code);
       }
       rethrow;
     }
@@ -86,7 +88,11 @@ class PlateSolveApi {
 /// 422 solver-misconfiguration).
 class PlateSolveException implements Exception {
   final String message;
-  const PlateSolveException(this.message);
+
+  /// The rig's HTTP status when it refused (409: no camera to look with,
+  /// 422: solver or optics not set up); null otherwise.
+  final int? statusCode;
+  const PlateSolveException(this.message, {this.statusCode});
 
   @override
   String toString() => message;

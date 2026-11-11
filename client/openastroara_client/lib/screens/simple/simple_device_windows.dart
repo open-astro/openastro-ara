@@ -873,7 +873,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                     : trackingRateWord(context.l10n, rate).toLowerCase(),
               ),
               key: const Key('simple-mount-rate-caption'),
-              style: AraText.caption,
+              style: kSimpleCaption,
             ),
           );
         }
@@ -893,7 +893,10 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
               ? SizedBox(
                   height: 44,
                   child: Center(
-                    child: Text(
+                    child: StatusBlink(
+                      // Working blinks green; Parking is a change (blue).
+                      on: homing,
+                      child: Text(
                       homing
                           ? context.l10n.deviceFindingHome
                           : (parking ?? !m.parked)
@@ -904,6 +907,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                             ? AraColors.accentConnected
                             : AraColors.accentInfo,
                       ),
+                    ),
                     ),
                   ),
                 )
@@ -1018,6 +1022,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
   }) {
     final l10n = context.l10n;
     final caps = m.capabilities;
+    final scale = simpleRailScale(context);
     final run = ref.watch(sequenceRunStateProvider).value?.state;
     final planImaging = (run?.isActive ?? false) && !run!.isAnyPaused;
     final guiding =
@@ -1032,12 +1037,12 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
         : const <(String, double)>[];
     final pad = speeds.isEmpty
         ? SizedBox(
-            width: kSimplePadCell * 3 + AraSpace.s8 * 2,
+            width: kSimplePadCell * scale * 3 + AraSpace.s8 * 2,
             child: Text(
               l10n.padNoRates,
               key: const Key('simple-mount-pad-none'),
               textAlign: TextAlign.center,
-              style: AraText.caption,
+              style: kSimpleCaption,
             ),
           )
         : SimpleMountPad(
@@ -1064,7 +1069,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     children
       ..add(
         LayoutBuilder(
-          builder: (context, box) => box.maxWidth >= kSimpleMountWideWidth
+          builder: (context, box) => box.maxWidth >= kSimpleMountWideWidth * scale
               ? Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   spacing: AraSpace.s16,
@@ -2708,7 +2713,7 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
       final target = _target == null ? null : simpleDegrees(_target!);
       children.addAll([
         const SizedBox(height: AraSpace.s12),
-        _RotatorButton(
+        SimpleWindowButton(
           key: const Key('simple-rotator-sync'),
           label: target == null ? l10n.deviceSync : l10n.deviceSyncTo(target),
           onTap: enabled && _target != null
@@ -2733,13 +2738,11 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
   }
 }
 
-/// A window's plain button (the Mount window's Check, Centre and Sync).
-typedef SimpleWindowButton = _RotatorButton;
-
-/// Sync under the rotator's dial, full width, carrying the target ("Sync to
-/// 75°"); dimmed and taking no tap with no target.
-class _RotatorButton extends StatelessWidget {
-  const _RotatorButton({super.key, required this.label, required this.onTap});
+/// A window's plain button: Sync under the rotator's dial, full width,
+/// carrying the target ("Sync to 75°"; dimmed and taking no tap with no
+/// target), the Dome's Park and Home, the Mount window's Check, Center and Sync.
+class SimpleWindowButton extends StatelessWidget {
+  const SimpleWindowButton({super.key, required this.label, required this.onTap});
 
   final String label;
   final VoidCallback? onTap;
@@ -4697,7 +4700,7 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
       final buttons = [
         if (caps?.canPark ?? false)
           Expanded(
-            child: _RotatorButton(
+            child: SimpleWindowButton(
               key: const Key('simple-dome-park'),
               label: l10n.devicePark,
               onTap: locked ? null : () => send(_DomeMove.park),
@@ -4705,7 +4708,7 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
           ),
         if (caps?.canFindHome ?? false)
           Expanded(
-            child: _RotatorButton(
+            child: SimpleWindowButton(
               key: const Key('simple-dome-home'),
               label: l10n.deviceHome,
               onTap: locked ? null : () => send(_DomeMove.home),
@@ -4724,7 +4727,7 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
       // window keeps its size.
       if (!rotates) {
         children.add(
-          _RotatorButton(
+          SimpleWindowButton(
             key: const Key('simple-dome-stop'),
             label: l10n.deviceStop,
             onTap: s.isBusy ? _stop : null,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,6 +25,7 @@ import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/simple_run_state.dart';
 import 'package:openastroara/util/slew_rates.dart';
+import 'package:openastroara/widgets/status_indicator.dart' show StatusBlink;
 
 /// #1649 / #1650 — Simple Mode's Mount window moves the mount by hand and
 /// checks where it points. Fakes record what the rig is asked.
@@ -102,9 +105,13 @@ class _Solver implements PlateSolveApi {
   Object? error;
   int checks = 0;
 
+  /// Held open: the check stays under way until it completes.
+  Completer<void>? hold;
+
   @override
   Future<VerifyPositionResult> verifyPosition({double? exposureSeconds}) async {
     checks++;
+    await hold?.future;
     if (error != null) throw error!;
     return answer!;
   }
@@ -177,6 +184,7 @@ Future<(ProviderContainer, _Mount, _Solver, _Centre)> _pump(
   Map<String, dynamic> wire, {
   double width = 640,
   bool imaging = false,
+  double textScale = 1,
 }) async {
   await tester.pumpWidget(const SizedBox());
   final mount = _Mount(wire);
@@ -198,6 +206,10 @@ Future<(ProviderContainer, _Mount, _Solver, _Centre)> _pump(
     UncontrolledProviderScope(
       container: c,
       child: MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
         home: Scaffold(
           body: SingleChildScrollView(
             child: Align(
@@ -397,6 +409,70 @@ void main() {
       final narrowPad = tester.getRect(find.byKey(const Key('simple-mount-pad-s')));
       final flip = tester.getRect(find.byKey(const Key('simple-window-row-Meridian flip')));
       expect(narrowPad.top, greaterThan(flip.bottom));
+    });
+  });
+
+  group('audit of #1785', () {
+    testWidgets('keyboard focus on the pad shows a 2 pt Info Blue ring', (tester) async {
+      await _pump(tester, _wire());
+      expect(find.byKey(const Key('simple-mount-pad-focus')), findsNothing);
+      tester.binding.focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      for (var i = 0; i < 20 && find.byKey(const Key('simple-mount-pad-focus')).evaluate().isEmpty; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+        await tester.pump();
+      }
+      expect(find.byKey(const Key('simple-mount-pad-focus')), findsOneWidget);
+      tester.binding.focusManager.highlightStrategy = FocusHighlightStrategy.automatic;
+    });
+
+    testWidgets('Finding home… and Taking a frame and solving… blink', (tester) async {
+      final (_, _, solver, _) = await _pump(tester, _wire());
+      await tester.tap(find.byKey(const Key('simple-mount-park-home')));
+      await tester.pump();
+      expect(find.ancestor(of: find.text('Finding home…'), matching: find.byType(StatusBlink)), findsOneWidget);
+      await tester.pump(const Duration(seconds: 4));
+      solver.answer = const VerifyPositionResult(success: false, exposureSeconds: 2);
+      solver.hold = Completer<void>();
+      await tester.tap(find.byKey(const Key('simple-mount-check')));
+      await tester.pump();
+      expect(find.ancestor(of: find.text('Taking a frame and solving…'), matching: find.byType(StatusBlink)), findsOneWidget);
+      solver.hold!.complete();
+      await tester.pump();
+    });
+
+    testWidgets('the Check answer is a live region for screen readers', (tester) async {
+      final handle = tester.ensureSemantics();
+      final (_, _, solver, _) = await _pump(tester, _wire());
+      solver.answer = const VerifyPositionResult(success: false, exposureSeconds: 2);
+      await tester.tap(find.byKey(const Key('simple-mount-check')));
+      await tester.pump();
+      await tester.pump();
+      final live = find.ancestor(
+        of: find.text("Couldn't solve this frame"),
+        matching: find.byWidgetPredicate((w) => w is Semantics && (w.properties.liveRegion ?? false)),
+      );
+      expect(live, findsOneWidget);
+      handle.dispose();
+    });
+
+    testWidgets('pad cells grow with the text size', (tester) async {
+      await _pump(tester, _wire());
+      final normal = tester.getSize(find.byKey(const Key('simple-mount-pad-n'))).width;
+      await _pump(tester, _wire(), textScale: 2, width: 1400);
+      final large = tester.getSize(find.byKey(const Key('simple-mount-pad-n'))).width;
+      expect(large, greaterThan(normal));
+      expect(tester.takeException(), isNull, reason: 'Stop fits its cell at 2x');
+    });
+
+    testWidgets('a 409 offers the camera settings whatever its words', (tester) async {
+      final (_, _, solver, _) = await _pump(tester, _wire());
+      solver.error = const PlateSolveException('Busy right now.', statusCode: 409);
+      await tester.tap(find.byKey(const Key('simple-mount-check')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Camera settings'), findsOneWidget);
     });
   });
 

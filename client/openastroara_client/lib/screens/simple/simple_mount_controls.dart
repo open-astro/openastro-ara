@@ -3,7 +3,8 @@ import 'dart:math' as math;
 
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show KeyDownEvent, KeyUpEvent, LogicalKeyboardKey;
+import 'package:flutter/services.dart'
+    show KeyDownEvent, KeyUpEvent, LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
@@ -24,8 +25,9 @@ import '../../theme/ara_metrics.dart';
 import '../../util/apparent_place.dart';
 import '../../util/friendly_error.dart';
 import '../../util/slew_rates.dart';
+import '../../widgets/status_indicator.dart' show StatusBlink;
 import 'simple_device_windows.dart' show SimpleWindowButton;
-import 'simple_shell.dart' show SimpleSegments;
+import 'simple_shell.dart' show SimpleSegments, simpleRailScale;
 
 /// Simple Mode's Mount window controls for moving the mount by hand (#1649)
 /// and checking where it points (#1650): the direction pad and the Pointing
@@ -36,7 +38,8 @@ import 'simple_shell.dart' show SimpleSegments;
 const int kSimplePadLeaseMs = 1000;
 const Duration kSimplePadRenew = Duration(milliseconds: 300);
 
-/// One pad cell, over Simple Mode's 44 pt touch minimum.
+/// One pad cell at 1x text, over Simple Mode's 44 pt touch minimum; it grows
+/// with the text as the window does ([simpleRailScale]).
 const double kSimplePadCell = 60;
 
 /// The pad's speeds: Slow, Medium and Fast are the options nearest 5 %, 25 %
@@ -47,9 +50,8 @@ List<(String, double)> simplePadSpeeds(List<SlewRateOption> options) {
   if (options.isEmpty) return const [];
   final rates = [for (final o in options) o.rateDegPerSec]..sort();
   final top = rates.last;
-  double nearest(double want) => rates.reduce(
-    (a, b) => (a - want).abs() <= (b - want).abs() ? a : b,
-  );
+  double nearest(double want) =>
+      rates.reduce((a, b) => (a - want).abs() <= (b - want).abs() ? a : b);
   final picks = <double>[];
   for (final want in [top * 0.05, top * 0.25, top]) {
     final r = nearest(want);
@@ -108,7 +110,8 @@ double _arcmin(double ra1, double dec1, double ra2, double dec2) {
   const r = math.pi / 180;
   final a = dec1 * r, b = dec2 * r;
   // Haversine: well behaved at the tiny separations compared here.
-  final h = math.pow(math.sin((b - a) / 2), 2) +
+  final h =
+      math.pow(math.sin((b - a) / 2), 2) +
       math.cos(a) * math.cos(b) * math.pow(math.sin((ra1 - ra2) * r / 2), 2);
   return 2 * math.asin(math.sqrt(h).clamp(0.0, 1.0)) / r * 60;
 }
@@ -160,7 +163,13 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
   /// One refusal pill per press (a diagonal's two starts share it).
   bool _refusalShown = false;
 
-  final _focus = FocusNode(debugLabel: 'simple-mount-pad');
+  late final _focus = FocusNode(
+    debugLabel: 'simple-mount-pad',
+    onKeyEvent: _key,
+  );
+
+  /// Keyboard focus is on the pad: a ring says the arrow keys move the mount.
+  bool _focused = false;
 
   /// Read on the first send: dispose may still need it to stop a held move,
   /// and ref is gone by then.
@@ -171,8 +180,9 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
     return ids.contains('medium') ? 'medium' : ids[(ids.length - 1) ~/ 2];
   }
 
-  double get _rate =>
-      widget.speeds.firstWhere((s) => s.$1 == _speed, orElse: () => widget.speeds.first).$2;
+  double get _rate => widget.speeds
+      .firstWhere((s) => s.$1 == _speed, orElse: () => widget.speeds.first)
+      .$2;
 
   @override
   void initState() {
@@ -252,12 +262,12 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
   // per press; stop legs stay silent (the lease and Stop back them up).
   void _send(int axis, double rate, {int? lease}) {
     try {
-      _mount
-          .moveAxis(axis: axis, rate: rate, leaseMs: lease)
-          .catchError((Object e) {
-            if (rate != 0 && mounted) _refuse(e);
-            return false;
-          });
+      _mount.moveAxis(axis: axis, rate: rate, leaseMs: lease).catchError((
+        Object e,
+      ) {
+        if (rate != 0 && mounted) _refuse(e);
+        return false;
+      });
     } catch (_) {
       // ref.read during teardown; the lease is the backstop.
     }
@@ -302,8 +312,10 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final off = widget.blocker != null;
+    final size = kSimplePadCell * simpleRailScale(context);
     Widget cell(String dir, String label, String semantics) => _PadCell(
       key: Key('simple-mount-pad-$dir'),
+      size: size,
       label: label,
       semantics: semantics,
       held: _held == dir,
@@ -313,13 +325,21 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
         if (_held == dir) _release();
       },
     );
-    final n = l10n.padNorth, s = l10n.padSouth, e = l10n.padEast, w = l10n.padWest;
+    final n = l10n.padNorth,
+        s = l10n.padSouth,
+        e = l10n.padEast,
+        w = l10n.padWest;
     final rows = [
-      [cell('nw', '$n$w', l10n.padMoveNorthWest), cell('n', n, l10n.padMoveNorth), cell('ne', '$n$e', l10n.padMoveNorthEast)],
+      [
+        cell('nw', '$n$w', l10n.padMoveNorthWest),
+        cell('n', n, l10n.padMoveNorth),
+        cell('ne', '$n$e', l10n.padMoveNorthEast),
+      ],
       [
         cell('w', w, l10n.padMoveWest),
         _PadCell(
           key: const Key('simple-mount-pad-stop'),
+          size: size,
           label: l10n.deviceStop,
           semantics: l10n.padStopMount,
           stop: true,
@@ -329,16 +349,30 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
         ),
         cell('e', e, l10n.padMoveEast),
       ],
-      [cell('sw', '$s$w', l10n.padMoveSouthWest), cell('s', s, l10n.padMoveSouth), cell('se', '$s$e', l10n.padMoveSouthEast)],
+      [
+        cell('sw', '$s$w', l10n.padMoveSouthWest),
+        cell('s', s, l10n.padMoveSouth),
+        cell('se', '$s$e', l10n.padMoveSouthEast),
+      ],
     ];
-    return Focus(
+    final width = size * 3 + AraSpace.s8 * 2;
+    return FocusableActionDetector(
       focusNode: _focus,
-      onKeyEvent: _key,
+      onShowFocusHighlight: (v) => setState(() => _focused = v),
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTapDown: (_) => _focus.requestFocus(),
-        child: SizedBox(
-          width: kSimplePadCell * 3 + AraSpace.s8 * 2,
+        child: Container(
+          key: _focused ? const Key('simple-mount-pad-focus') : null,
+          width: width,
+          // The rotator's and dome's dials' ring, outside the cells so
+          // nothing moves (2 pt Info Blue).
+          foregroundDecoration: _focused
+              ? BoxDecoration(
+                  border: Border.all(color: AraColors.accentInfo, width: 2),
+                  borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+                )
+              : null,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             spacing: AraSpace.s8,
@@ -353,7 +387,7 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
                       textAlign: TextAlign.center,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: AraText.caption,
+                      style: kSimpleCaption,
                     ),
                   ),
                 )
@@ -399,11 +433,13 @@ class _PadCell extends StatelessWidget {
     required this.semantics,
     required this.onDown,
     required this.onUp,
+    required this.size,
     this.held = false,
     this.small = false,
     this.stop = false,
   });
 
+  final double size;
   final String label;
   final String semantics;
   final VoidCallback? onDown;
@@ -432,8 +468,8 @@ class _PadCell extends StatelessWidget {
         onPointerUp: (_) => onUp(),
         onPointerCancel: (_) => onUp(),
         child: Container(
-          width: kSimplePadCell,
-          height: kSimplePadCell,
+          width: size,
+          height: size,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: held ? AraColors.selectionBg : AraColors.tileFill,
@@ -443,7 +479,9 @@ class _PadCell extends StatelessWidget {
           child: Text(
             label,
             style: kSimpleText.copyWith(
-              fontSize: small ? 13 : 18,
+              fontSize: small
+                  ? AraFontSize.simpleUnit
+                  : AraFontSize.simplePadLetter,
               fontWeight: FontWeight.w600,
               color: stop
                   ? AraColors.errorText
@@ -486,7 +524,8 @@ class SimplePointing {
   final bool synced;
 
   bool get working =>
-      phase == SimplePointingPhase.solving || phase == SimplePointingPhase.centring;
+      phase == SimplePointingPhase.solving ||
+      phase == SimplePointingPhase.centring;
 }
 
 /// The Mount window's Check / Centre / Sync, kept while the window is open
@@ -508,18 +547,22 @@ class SimplePointingNotifier extends Notifier<SimplePointing> {
     final api = ref.read(plateSolveApiProvider);
     if (api == null || state.working) return;
     final l10n = _l10n;
-    state = SimplePointing(phase: SimplePointingPhase.solving, result: state.result);
+    state = SimplePointing(
+      phase: SimplePointingPhase.solving,
+      result: state.result,
+    );
     try {
       final r = await api.verifyPosition(exposureSeconds: exposureSeconds);
       if (!ref.mounted) return;
       state = SimplePointing(phase: SimplePointingPhase.result, result: r);
     } on PlateSolveException catch (e) {
       if (!ref.mounted) return;
+      // 409 is the camera; a 422 names the optics or the solver (#1650).
       final m = e.message.toLowerCase();
       state = SimplePointing(
         phase: SimplePointingPhase.error,
         error: e.message,
-        fix: m.contains('camera')
+        fix: e.statusCode == 409
             ? ('eq.camera', l10n.pointingOpenCamera)
             : m.contains('focal') || m.contains('pixel') || m.contains('optic')
             ? ('img.optics', l10n.pointingOpenOptics)
@@ -540,7 +583,10 @@ class SimplePointingNotifier extends Notifier<SimplePointing> {
     final api = ref.read(centerApiProvider);
     if (api == null || state.working) return;
     final l10n = _l10n;
-    state = SimplePointing(phase: SimplePointingPhase.centring, result: state.result);
+    state = SimplePointing(
+      phase: SimplePointingPhase.centring,
+      result: state.result,
+    );
     try {
       final job = await api.start(raDeg / 15, decDeg);
       if (!ref.mounted) return;
@@ -569,10 +615,16 @@ class SimplePointingNotifier extends Notifier<SimplePointing> {
     _job = null;
     switch (job.state) {
       case 'complete':
-        state = SimplePointing(phase: SimplePointingPhase.result, result: state.result);
+        state = SimplePointing(
+          phase: SimplePointingPhase.result,
+          result: state.result,
+        );
         await check();
       case 'cancelled':
-        state = SimplePointing(phase: SimplePointingPhase.result, result: state.result);
+        state = SimplePointing(
+          phase: SimplePointingPhase.result,
+          result: state.result,
+        );
       default:
         state = SimplePointing(
           phase: SimplePointingPhase.error,
@@ -647,7 +699,9 @@ class SimpleMountPointingRow extends ConsumerWidget {
     final solved = r != null && r.success && r.solvedRaHours != null;
     final ra = solved ? r.solvedRaHours : mount.rightAscensionHours;
     final dec = solved ? r.solvedDecDegrees : mount.declinationDegrees;
-    final exposure = ref.watch(exposureControllerProvider.select((e) => e.exposure));
+    final exposure = ref.watch(
+      exposureControllerProvider.select((e) => e.exposure),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s4,
@@ -667,7 +721,7 @@ class SimpleMountPointingRow extends ConsumerWidget {
                     children: [
                       Text(
                         solved ? l10n.pointingSolved : l10n.pointingLabel,
-                        style: AraText.caption,
+                        style: kSimpleCaption,
                       ),
                       Text(
                         '${formatRaHours(ra)} · ${formatDecDegrees(dec)}',
@@ -689,14 +743,20 @@ class SimpleMountPointingRow extends ConsumerWidget {
                       ? null
                       : () => ref
                             .read(simplePointingProvider.notifier)
-                            .check(exposureSeconds: exposure.inMilliseconds / 1000),
+                            .check(
+                              exposureSeconds: exposure.inMilliseconds / 1000,
+                            ),
                 ),
               ),
             ],
           ),
         ),
         if (busy case final why?)
-          Text(why, key: const Key('simple-mount-check-why'), style: AraText.caption),
+          Text(
+            why,
+            key: const Key('simple-mount-check-why'),
+            style: kSimpleCaption,
+          ),
       ],
     );
   }
@@ -727,12 +787,20 @@ class SimpleMountPointingResult extends ConsumerWidget {
     final working = kSimpleText.copyWith(color: AraColors.accentConnected);
     final children = <Widget>[
       if (p.phase == SimplePointingPhase.solving)
-        Text(l10n.pointingSolving, style: working),
+        StatusBlink(
+          on: true,
+          child: Text(l10n.pointingSolving, style: working),
+        ),
       if (p.phase == SimplePointingPhase.centring)
         Row(
           spacing: AraSpace.s8,
           children: [
-            Expanded(child: Text(l10n.pointingCentring, style: working)),
+            Expanded(
+              child: StatusBlink(
+                on: true,
+                child: Text(l10n.pointingCentring, style: working),
+              ),
+            ),
             SimpleWindowButton(
               key: const Key('simple-mount-centre-cancel'),
               label: l10n.deviceCancel,
@@ -759,11 +827,16 @@ class SimpleMountPointingResult extends ConsumerWidget {
       if (p.phase == SimplePointingPhase.result && p.result != null)
         ..._answer(context, ref, l10n, p),
     ];
-    return Column(
-      key: const Key('simple-mount-pointing'),
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      spacing: AraSpace.s4,
-      children: children,
+    // Announced as it changes, as the pills are.
+    return Semantics(
+      liveRegion: true,
+      container: true,
+      child: Column(
+        key: const Key('simple-mount-pointing'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: AraSpace.s4,
+        children: children,
+      ),
     );
   }
 
@@ -781,7 +854,7 @@ class SimpleMountPointingResult extends ConsumerWidget {
           key: const Key('simple-mount-pointing-unsolved'),
           style: kSimpleText,
         ),
-        if (r.note case final note?) Text(note, style: AraText.caption),
+        if (r.note case final note?) Text(note, style: kSimpleCaption),
       ];
     }
     final target = simpleIntendedJ2000(r);
@@ -806,7 +879,11 @@ class SimpleMountPointingResult extends ConsumerWidget {
           notify(l10n.pointingSyncedPill);
         }
       } catch (e) {
-        notify(l10n.pointingCouldntSync, detail: failureReason(l10n, e), error: true);
+        notify(
+          l10n.pointingCouldntSync,
+          detail: failureReason(l10n, e),
+          error: true,
+        );
       }
     }
 
@@ -852,7 +929,7 @@ class SimpleMountPointingResult extends ConsumerWidget {
         Text(
           captions.join(' · '),
           key: const Key('simple-mount-pointing-captions'),
-          style: AraText.caption,
+          style: kSimpleCaption,
         ),
     ];
   }
