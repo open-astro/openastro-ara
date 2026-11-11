@@ -2114,6 +2114,7 @@ void main() {
   Future<void> pickMode(WidgetTester tester, String mode) async {
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
+    await tester.ensureVisible(find.byKey(Key('simple-mode-$mode'))); // a short window scrolls the grid
     await tester.tap(find.byKey(Key('simple-mode-$mode')));
     await tester.pump();
   }
@@ -2129,6 +2130,47 @@ void main() {
       expect(find.byKey(const Key('simple-run-tracker')), findsOneWidget, reason: mode);
       expect(tester.getRect(find.byKey(const Key('simple-run-tracker'))), queue, reason: mode);
     }
+  });
+
+  // Large text, or a window too short for both: the squares sit beside the right rail, never over its
+  // settings chip.
+  for (final (size, scale) in const [(Size(1024, 768), 2.0), (Size(932, 430), 1.0)]) {
+    testWidgets('at $size and ${scale}x text the plan squares stay clear of the right rail on every Screen',
+        (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _pump(tester, size, plan: squaresRun);
+      // Focus and Polar align leave out: their Bahtinov row overflows at 2x on its own.
+      for (final mode in const ['preview', 'guide', 'calibration', 'plan']) {
+        await pickMode(tester, mode);
+        if (mode == 'plan') {
+          await tester.tap(find.byKey(const Key('simple-settings'))); // puts Plan's sheet away
+          await tester.pump();
+        }
+        final squares = tester.getRect(find.byKey(const Key('simple-run-tracker')));
+        final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
+        expect(squares.overlaps(rail), isFalse, reason: '$mode: squares $squares, rail $rail');
+        final stop = tester.getRect(find.byType(EmergencyStopButton));
+        expect(squares.bottom, closeTo(stop.top - kSimpleInset, 0.01), reason: '$mode: still just above Stop');
+      }
+    });
+  }
+
+  testWidgets("the sky's pick sits above the plan squares, not over them", (tester) async {
+    final container = await _pump(tester, const Size(1024, 768),
+        plan: SimpleRun(sequenceId: 'seq-1', targets: [
+          for (var i = 1; i <= 10; i++)
+            SimpleTarget(name: 'M$i', steps: const [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+        ]));
+    await tester.tap(find.text('Sky'));
+    await tester.pump();
+    container.read(planetariumSelectionProvider.notifier).set(const PlanetariumSelection(
+        name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27,
+        altDeg: 62.4, maxAltDeg: 74.2));
+    await tester.pump();
+    final pick = _panelOf(tester, find.byKey(const Key('simple-sky-image-this')));
+    final squares = tester.getRect(find.byKey(const Key('simple-run-tracker')));
+    expect(pick.bottom, lessThanOrEqualTo(squares.top - kSimpleInset), reason: 'pick $pick, squares $squares');
   });
 
   testWidgets('a plan square tapped off Queue opens the queue panel', (tester) async {
