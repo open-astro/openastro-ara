@@ -597,7 +597,7 @@ void main() {
       expect(find.text(en.focusOffsetsNeedsMotorisedWheel), findsOneWidget);
     });
 
-    testWidgets('the picker ticks every named filter but a dark; the reference is shown and can\'t be unticked',
+    testWidgets("the picker ticks every named filter but a dark; the reference is shown and can't be unticked",
         (tester) async {
       await offsets(tester);
       FilterChip chip(int p) => tester.widget<FilterChip>(find.byKey(Key('simple-offsets-pick-$p')));

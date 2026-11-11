@@ -929,7 +929,7 @@ Future<bool> _tabToLabel(WidgetTester tester, String label, {int max = 60}) asyn
 }
 
 void main() {
-  testWidgets('a calibration run waiting for the lens cap asks in a pill with Resume; the Plan\'s own pause does not (#1563)', (tester) async {
+  testWidgets("a calibration run waiting for the lens cap asks in a pill with Resume; the Plan's own pause does not (#1563)", (tester) async {
     const lensCap = SequenceRunStateInfo(
         sequenceId: 'cal-run',
         state: SequenceRunState.pausedAwaitingUser,

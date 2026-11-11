@@ -309,7 +309,7 @@ void main() {
     expect(tester.getRect(_slot(0)).width, window.width, reason: 'each row fills the window');
   });
 
-  testWidgets('the filter in place\'s saved offset shows under its slot line, only once any offset is non-zero (#1675)',
+  testWidgets("the filter in place's saved offset shows under its slot line, only once any offset is non-zero (#1675)",
       (tester) async {
     Map<String, dynamic> wire(int ha) => {
           ..._wire(current: 1),

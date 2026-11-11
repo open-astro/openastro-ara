@@ -476,7 +476,7 @@ void main() {
     });
   });
 
-  test('a Calibration block counts its loops\' frames and exposure time', () {
+  test("a Calibration block counts its loops' frames and exposure time", () {
     Map<String, dynamic> loop(double exp, int n) => withConditions(
         withChildren(instructionForType(sequentialContainerType)!.build(), [
           instructionForType(takeExposureType)!.build()..['ExposureTime'] = exp,

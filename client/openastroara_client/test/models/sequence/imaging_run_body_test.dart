@@ -523,7 +523,7 @@ void main() {
           rig: rig,
         );
 
-    test('#1757 a Flat row shoots the panel\'s auto-exposure flats for its filter; a Light row is unchanged', () {
+    test("#1757 a Flat row shoots the panel's auto-exposure flats for its filter; a Light row is unchanged", () {
       const light = FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30);
       final before = block(RigCapabilities.everything, plan: const [light]);
       final mixed = block(RigCapabilities.everything,
