@@ -5389,5 +5389,77 @@
   "monitorLinkLostShort": "Lost contact with the rig",
   "@monitorLinkLostShort": {
     "description": "Monitor: what a screen reader announces when the link to the rig is lost (no age)"
+  },
+  "rigSetupTitle": "Rig setup",
+  "@rigSetupTitle": {
+    "description": "Simple Mode: title of the first-time Rig setup sheet and of its Settings menu row"
+  },
+  "rigSetupIntro": "Before a first night, Ara needs a few facts about this rig.",
+  "@rigSetupIntro": {
+    "description": "Simple Mode: one line under the Rig setup title"
+  },
+  "rigSetupSite": "Site",
+  "@rigSetupSite": {
+    "description": "Rig setup line: where the rig stands"
+  },
+  "rigSetupSiteMissing": "Latitude and longitude are not set.",
+  "@rigSetupSiteMissing": {
+    "description": "Rig setup line: what is missing for the site"
+  },
+  "rigSetupSiteAction": "Set site",
+  "@rigSetupSiteAction": {
+    "description": "Rig setup: button that opens the place where latitude and longitude are set"
+  },
+  "rigSetupOptics": "Main camera and telescope",
+  "@rigSetupOptics": {
+    "description": "Rig setup line: the sensor and the focal length"
+  },
+  "rigSetupOpticsMissing": "The sensor or the focal length is not set.",
+  "@rigSetupOpticsMissing": {
+    "description": "Rig setup line: what is missing for the main camera and telescope"
+  },
+  "rigSetupOpticsAction": "Set up optics",
+  "@rigSetupOpticsAction": {
+    "description": "Rig setup: button that opens the optics panel"
+  },
+  "rigSetupGuideScope": "Guide scope",
+  "@rigSetupGuideScope": {
+    "description": "Rig setup line: the guide focal length and the Guide Camera's pixel size"
+  },
+  "rigSetupGuideScopeMissing": "The guide focal length or the Guide Camera's pixel size is not set.",
+  "@rigSetupGuideScopeMissing": {
+    "description": "Rig setup line: what is missing for the guide scope"
+  },
+  "rigSetupGuideScopeAction": "Set guide scope",
+  "@rigSetupGuideScopeAction": {
+    "description": "Rig setup: button that opens the guide focal length and pixel size"
+  },
+  "rigSetupCalibration": "Guider calibration",
+  "@rigSetupCalibration": {
+    "description": "Rig setup line: the Guider's calibration"
+  },
+  "rigSetupCalibrationMissing": "Not calibrated yet, or Ara says to calibrate again.",
+  "@rigSetupCalibrationMissing": {
+    "description": "Rig setup line: what is missing for the Guider calibration"
+  },
+  "rigSetupCalibrationConnect": "Connect the Guider to check its calibration.",
+  "@rigSetupCalibrationConnect": {
+    "description": "Rig setup line: the Guider is not connected, so its calibration cannot be checked"
+  },
+  "rigSetupCalibrationAction": "Open Guider mode",
+  "@rigSetupCalibrationAction": {
+    "description": "Rig setup: button that closes the sheet and shows Guider mode"
+  },
+  "rigSetupItemDone": "Done",
+  "@rigSetupItemDone": {
+    "description": "Rig setup: what a screen reader says for a line with a tick"
+  },
+  "rigSetupNotNow": "Not now",
+  "@rigSetupNotNow": {
+    "description": "Rig setup: closes the sheet and keeps it closed for this rig on this device"
+  },
+  "rigSetupDonePill": "Rig set up",
+  "@rigSetupDonePill": {
+    "description": "Simple Mode result pill when the last Rig setup item is done"
   }
 }

@@ -11362,6 +11362,8 @@ If AlpacaBridge isn't reachable at all (no discovery response, no devices discov
 - Wizard cannot advance past Screen 2 without a successful handshake. User can [Skip to manual entry] only if they need to point to a non-standard AlpacaBridge install (different host, custom port).
 - After first-run setup, if AlpacaBridge goes missing (uninstalled, service stopped), WILMA's Equipment screen shows a critical notification with the same install command + `systemctl status alpaca-bridge` diagnostic snippet.
 
+**Zero devices (#1580).** An AlpacaBridge that answers but has no devices yet is a fresh install: it does not add plugged-in gear on its own, so Retry detection alone cannot help. When the daemon can read the bridge's device catalog (`GET /equipment/alpacabridge/catalog`, API_CONTRACT 2026-11-11), the "found, no devices yet" summary on Screen 2 gains an **Add your devices** action beside Retry detection and Next. The action is offered only when that read succeeds, so reachability stays the only gate (§68.1): a non-AlpacaBridge server, or an AlpacaBridge too old to have the catalog, gets today's message with no button. The missing-bridge panel above is unchanged. *(Client flow: pending the board's review of `design/preview/alpacabridge-add-devices-mock.html`; the daemon routes ship first.)*
+
 ### 68.3 Upgrade path
 
 **Today:** apt-managed. ARA Core's .deb lists `alpaca-bridge` in `Recommends`, so `apt install openastroara-server` pulls it in by default. Updates flow naturally via `sudo apt upgrade`. Subject to the apt-mid-session safety policy in §34.7 — AlpacaBridge restart during a capture is gated by the same lock file mechanism (the sequence.lock check covers any service that integrates with ARA mid-flight).
@@ -12838,12 +12840,14 @@ users reach everything through disclosures, not extra steps.
   camera. Autofocus, imaging defaults, safety thresholds, and site
   preferences take thoughtful defaults and live in Options — the wizard never mentions them.
 
+**Adding a device writes through to AlpacaBridge (#1580).** On a fresh rig the wizard can create a device on the bridge (Screen 2, Add your devices): Ara sends the form the bridge's own catalog described and the bridge registers and stores the device. Ara keeps no copy of the device or of what each driver needs, so "device facts live in Alpaca" still holds: AlpacaBridge stores the device, Ara only sends the form. The attached camera a user picks fills the catalog's `serialNumber` and `cameraName` fields (the entry then binds by serial), never `cameraIndex`. *(Client parts pending the board's mock review.)*
+
 ### 76.2 The five screens
 
 | # | Screen | User does |
 |---|--------|-----------|
 | 1 | Welcome | Profile name; one-tap location (GPS, or mount site lat/long once connected) |
-| 2 | Connect | Tap the UDP-discovered AlpacaBridge ("Found rc91 · 9 devices"); manual host is the fallback path (§68.2 missing-bridge UX unchanged) |
+| 2 | Connect | Tap the UDP-discovered AlpacaBridge ("Found rc91 · 9 devices"); manual host is the fallback path (§68.2 missing-bridge UX unchanged). An AlpacaBridge with no devices yet offers **Add your devices** beside Retry detection (§68.2 zero-devices case): device type, then driver, then (ZWO cameras) the attached camera, then a form built from the bridge's catalog; Add creates the device on the bridge and the list refreshes. *(Client: pending the mock review.)* |
 | 3 | Your equipment | Confirm auto-assigned device cards (real names via `/management/v1/configureddevices`); fix gaps in AlpacaBridge via deep link + Recheck; per-card Details disclosure for Ara-only tunables |
 | 4 | Guiding | Guide scope (enter FL) vs OAG (inherits main FL); guide exposure min/max range (drives BOTH dark-library coverage and guider exposure bounds — one choice, two consumers, cannot disagree); "Build dark library now" toggle (default on, "cover the guide scope" prompt); Advanced disclosure: dither, settle, calibration cadence |
 | 5 | Save + Done | Save location (sensible default); Finish saves the profile, provisions the guider twin profile named after the wizard profile, pushes guider config, kicks off the darks build (§63.6) over the chosen range with live progress streamed via §63.8 ("Building dark library… 12/40 — you're all set, this finishes in the background") |

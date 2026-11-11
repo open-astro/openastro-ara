@@ -208,6 +208,9 @@ public static partial class EquipmentEndpoints {
             .WithName("GetDeviceDriver")
             .WithSummary("The selected device's driver, SDK and firmware versions.");
 
+        // #1580 — first-time setup of a fresh AlpacaBridge: catalog, attached cameras, add device.
+        equipment.MapAlpacaBridgeSetup();
+
         // ─── Camera ───
         var camera = equipment.MapGroup("/camera");
         camera.MapGet("", async (ICameraService svc, CancellationToken ct) => {

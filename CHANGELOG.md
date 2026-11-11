@@ -35,6 +35,11 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Added (first-time setup)
+
+- Simple Mode shows a **Rig setup** sheet the first time it opens on a rig that is missing something a first night needs: the site, the main camera and telescope, and, with a Guider, the guide scope and the Guider calibration. Each line has a button that opens the setting that fixes it, and the sheet closes itself with a "Rig set up" pill when nothing is missing. **Not now** keeps it closed for that rig on this device, and Settings then has a Rig setup row while anything is still missing (#1562).
+- The rig can add devices to a fresh AlpacaBridge for the setup wizard: `GET /equipment/alpacabridge/catalog` lists the built-in drivers and their fields, `GET /equipment/alpacabridge/cameras` lists the cameras plugged in for a vendor, and `POST /equipment/alpacabridge/devices` registers a device. A refusal carries AlpacaBridge's own message, and no answer says the device may or may not have been added. The wizard's Add your devices screens follow once the design is approved (#1580).
+
 ### Added (mount by hand)
 
 - Simple Mode's Mount window has a direction pad: eight directions around a center Stop, with Slow, Medium and Fast speeds taken from the mount's own rates. Hold a direction to move and let go to stop. The arrow keys drive it, and Escape stops. The pad is off, saying why, while the mount is parked, the plan is imaging, polar alignment runs or the Guider guides (#1649).
