@@ -55,8 +55,9 @@ namespace OpenAstroAra.Server.Services;
 ///
 /// <see cref="PauseAsync"/> / <see cref="ResumeAsync"/> are REAL: each run owns a
 /// <see cref="OpenAstroAra.Sequencer.Utility.PauseGate"/> attached to the root
-/// container; the execution strategies await it at every instruction boundary
-/// (the current instruction always finishes — NINA pause semantics). The run
+/// container; the execution strategies await it at every instruction boundary,
+/// and a user's pause also stops the instruction or trigger in progress, which
+/// runs again from its start on Resume (a frame or container finishes first). The run
 /// reports <c>Paused</c> and emits <c>sequence.paused</c> only when the engine
 /// ACTUALLY suspends (the gate's PauseEntered callback), never on the mere
 /// request; Abort/Stop win over an active pause via token cancellation.
@@ -273,9 +274,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
     public Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
         _unattendedShutdown?.NotifyUserActivity("sequencer.pause");
-        // Arm the run's instruction-boundary gate; the engine suspends at the next
-        // boundary (SequentialStrategy awaits the gate before each item, so the
-        // current instruction always finishes — NINA pause semantics). The state
+        // Arm the run's pause gate: the instruction or trigger in progress stops and
+        // runs again from its start on Resume (a frame or container finishes first),
+        // and the engine suspends at that boundary (SequentialStrategy). The state
         // flip to Paused + the sequence.paused event happen in OnPauseEntered when
         // the engine ACTUALLY suspends, never on the mere request. Idempotent, and
         // harmless for terminal/aborting runs (a cancelled token wins the gate).
@@ -469,8 +470,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     public Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(bool adoptable, CancellationToken ct) {
         // §35 safety pause — daemon-automated, so no NotifyUserActivity (an automated
         // reaction must never masquerade as the user coming back per §58.12). Same
-        // gate-arm semantics as PauseAsync: the engine suspends at the next instruction
-        // boundary, the state flip + sequence.paused event fire in OnPauseEntered.
+        // gate-arm semantics as PauseAsync: the work in progress stops (a frame finishes
+        // first) and the engine suspends; the state flip + sequence.paused event fire in OnPauseEntered.
         var paused = new System.Collections.Generic.List<Guid>();
         foreach (var id in _runs.Keys) {
             ct.ThrowIfCancellationRequested();

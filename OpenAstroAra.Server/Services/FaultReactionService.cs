@@ -175,9 +175,10 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
                 return;
             }
 
-            // Pause FIRST (§42.3 flagged decision): an instruction-boundary pause is graceful —
-            // the in-flight instruction completes — and a sequence must not keep exposing into a
-            // dead camera or slewing an unwatched mount while the ladder runs.
+            // Pause FIRST (§42.3 flagged decision): the pause lets a frame in progress finish
+            // and stops any other instruction, to run again on Resume — and a sequence must
+            // not keep exposing into a dead camera or slewing an unwatched mount while the
+            // ladder runs.
             IReadOnlyList<Guid> pausedRuns = plan.PauseWhileRecovering
                 ? await PauseActiveRunsAsync().ConfigureAwait(false)
                 : [];
