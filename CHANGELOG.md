@@ -35,6 +35,10 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Changed (device lifecycle)
+
+- The flat panel, observing conditions, switch and safety monitor now raise a fault when they stop answering or their essential read keeps failing, as the rotator and dome already did; a safety monitor whose first read fails goes to Error and reads as not safe. All six peripherals (those four plus filter wheel and focuser) share one connect, probe and disconnect module, and a device you disconnected yourself is left alone by recovery and the reconnector (#1696).
+
 ### Added (mount by hand)
 
 - Simple Mode's Mount window has a direction pad: eight directions around a center Stop, with Slow, Medium and Fast speeds taken from the mount's own rates. Hold a direction to move and let go to stop. The arrow keys drive it, and Escape stops. The pad is off, saying why, while the mount is parked, the plan is imaging, polar alignment runs or the Guider guides (#1649).

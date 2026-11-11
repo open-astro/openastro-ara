@@ -12,13 +12,10 @@
 
 #endregion "copyright"
 
-using ASCOM.Alpaca.Clients;
-using ASCOM.Common.Alpaca;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
 using System;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,8 +23,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
-/// First real Alpaca-backed equipment service (§14e). Replaces
-/// <c>PlaceholderSafetyMonitorService</c>: connects to a discovered Alpaca
+/// First real Alpaca-backed equipment service (§14e): connects to a discovered Alpaca
 /// SafetyMonitor (the host/port/device-number carried by the
 /// <see cref="DiscoveredDeviceDto"/> from <see cref="AlpacaEquipmentDiscoveryService"/>)
 /// and exposes its live connection state + <c>IsSafe</c> over the §6 REST surface.
@@ -36,122 +32,79 @@ namespace OpenAstroAra.Server.Services;
 /// transitions to <see cref="EquipmentConnectionState.Connecting"/> and does the actual
 /// Alpaca connect on a background task, so the endpoint returns immediately; callers poll
 /// <see cref="GetAsync"/> to observe <see cref="EquipmentConnectionState.Connected"/> /
-/// <see cref="EquipmentConnectionState.Error"/>.
+/// <see cref="EquipmentConnectionState.Error"/>. That lifecycle is the shared
+/// <see cref="DeviceLifecycle{TDevice}"/> (ADR 0011).
 ///
-/// §32.4 cache: a background timer reads the (blocking HTTP) <c>IsSafe</c> every
-/// <see cref="RefreshInterval"/> while Connected and caches it, so <see cref="GetAsync"/> and the
+/// §32.4 cache: the lifecycle's refresh reads the (blocking HTTP) <c>IsSafe</c> every
+/// refresh interval while Connected and this class caches it, so <see cref="GetAsync"/> and the
 /// mediator's <c>GetInfo</c> serve the value synchronously without a per-poll HTTP read (no
 /// thread-per-poll accumulation under aggressive polling).
+///
+/// ADR 0011 rule 3 — the failed-read threshold is one: the first failed <c>IsSafe</c> read trips the
+/// monitor to Error and reports it as not safe, and no safe verdict stands after a failed read.
 ///
 /// This class also serves the Sequencer's <c>ISafetyMonitorMediator</c> (so <c>WaitUntilSafe</c>
 /// reads the live device) — that surface lives in the <c>SafetyMonitorService.Mediator.cs</c>
 /// partial; one singleton is registered for both interfaces per playbook §8.1.
 /// </summary>
-public sealed partial class SafetyMonitorService : ISafetyMonitorService, IRetainedDeviceSource, IDisposable {
+public sealed partial class SafetyMonitorService : ISafetyMonitorService, IRetainedDeviceSource, IRecoverableDevice, IDisposable {
+
+    private readonly ILogger<SafetyMonitorService> _logger;
+    // ADR 0011 — connect, disconnect, forget, refresh, probe, read health and the desired state.
+    private readonly DeviceLifecycle<ISafetyMonitorDevice> _lifecycle;
+    private Func<DiscoveredDeviceDto, ISafetyMonitorDevice> _createDevice = AlpacaSafetyMonitorDevice.Create;
+    // Last IsSafe read from the device; refreshed by the lifecycle's tick while Connected and served
+    // (synchronously) by GetAsync/GetInfo. Only meaningful while Connected; guarded by the lifecycle's gate.
+    private bool _cachedSafe;
+
+    public SafetyMonitorService(ILogger<SafetyMonitorService>? logger = null, EquipmentEventPublisher? events = null,
+            IEquipmentFaultSink? faults = null) {
+        _logger = logger ?? NullLogger<SafetyMonitorService>.Instance;
+        // Threshold one, and a failed read trips (rule 3): the monitor goes to Error on the first failed read.
+        _lifecycle = new DeviceLifecycle<ISafetyMonitorDevice>(this, DeviceType.SafetyMonitor, "safety monitor",
+            d => _createDevice(d), ReadRuntime, ResetSessionLocked,
+            failedReadThreshold: 1, _logger, events, faults, failedReadTrips: true);
+    }
+
+    private object _gate => _lifecycle.Gate;
+
+    // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence. Init-only, never used by the daemon.
+    internal TimeSpan RefreshPeriod { init => _lifecycle.RefreshPeriod = value; }
+
+    // Test seam (ADR 0011 rule 4): the adapter the lifecycle builds for a selected device.
+    internal Func<DiscoveredDeviceDto, ISafetyMonitorDevice> DeviceFactory { init => _createDevice = value; }
 
     // #1127 — the record the card names. The remembered-selection store and this can diverge
     // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
-    public DiscoveredDeviceDto? RetainedDevice {
-        get {
-            lock (_gate) {
-                return _disposed ? null : _device;
-            }
-        }
-    }
+    public DiscoveredDeviceDto? RetainedDevice => _lifecycle.RetainedDevice;
 
+    public DesiredConnection? DesiredConnection => _lifecycle.Desired;
 
-    // §32.4 — how often the background loop refreshes the cached IsSafe while connected. The
-    // cache is therefore at most this stale; GetAsync/GetInfo serve it without a per-call HTTP read.
-    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
+    // #1246 — true once a refresh tick since the current connect read the essential read cleanly.
+    internal bool HasCleanReadSinceConnect => _lifecycle.HasCleanReadSinceConnect;
 
-    private readonly ILogger<SafetyMonitorService> _logger;
-    private readonly EquipmentEventPublisher? _events;
-    private readonly object _gate = new();
-    private readonly Timer _refreshTimer;
-    // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence so a fixture that
-    // needs "several ticks" waits milliseconds, not multiples of the 2 s production interval.
-    // Init-only (object initializer), so it can never re-arm a disposed timer; never used by the daemon.
-    internal TimeSpan RefreshPeriod { init => _refreshTimer.Change(value, value); }
-    private AlpacaSafetyMonitor? _client;
-    private DiscoveredDeviceDto? _device;
-    private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
-    private DateTimeOffset _lastTransition = DateTimeOffset.UtcNow;
-    // Last IsSafe read from the device; refreshed by the background loop while Connected and
-    // served (synchronously) by GetAsync/GetInfo. Only meaningful while _state == Connected.
-    private bool _cachedSafe;
-    // 0 = idle, 1 = a refresh read is in flight. Guards against overlapping reads if a read
-    // outruns the timer interval (Interlocked, not under _gate).
-    private int _refreshing;
-    // Bumped by every ConnectAsync/DisconnectAsync so a late-completing background connect can
-    // tell whether it is still the current attempt before adopting its client (supersede check).
-    private long _connectGeneration;
-    private bool _disposed;
+    public bool TryRecover(DiscoveredDeviceDto device) => _lifecycle.TryRecover(device);
 
-    public SafetyMonitorService(ILogger<SafetyMonitorService>? logger = null, EquipmentEventPublisher? events = null) {
-        _logger = logger ?? NullLogger<SafetyMonitorService>.Instance;
-        _events = events;
-        // The refresh loop runs for the service lifetime; each tick is a no-op unless Connected.
-        _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
-    }
-
-    // ct is unused by design: the value is served from the cache the background loop maintains
+    // ct is unused by design: the value is served from the cache the lifecycle maintains
     // (§32.4), so there is no per-call HTTP read to cancel. Kept to match the IEquipmentServices
     // contract. Returns a Task to satisfy the async interface without an await.
     public Task<SafetyMonitorDto?> GetAsync(CancellationToken ct) {
         lock (_gate) {
             // All public operations throw after Dispose() (uniform with Connect/Disconnect).
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_device is null) {
+            ObjectDisposedException.ThrowIf(_lifecycle.IsDisposed, this);
+            var device = _lifecycle.Device;
+            if (device is null) {
                 // No device has ever been selected — GET maps this to 404 at the endpoint.
                 return Task.FromResult<SafetyMonitorDto?>(null);
             }
             // Single consistent snapshot: device, state, cached IsSafe, and timestamp all under
-            // one lock. safe is only meaningful while Connected; the background loop keeps
-            // _cachedSafe at most RefreshInterval stale.
-            var state = _state;
+            // one lock. safe is only meaningful while Connected.
+            var state = _lifecycle.State;
             var safe = state == EquipmentConnectionState.Connected && _cachedSafe;
             var dto = new SafetyMonitorDto(
-                _device.UniqueId, _device.Name, state, safe,
-                _lastTransition.ToString("O", CultureInfo.InvariantCulture));
+                device.UniqueId, device.Name, state, safe,
+                _lifecycle.LastTransition.ToString("O", CultureInfo.InvariantCulture));
             return Task.FromResult<SafetyMonitorDto?>(dto);
-        }
-    }
-
-    private void RefreshTick(object? state) => RefreshCacheOnce();
-
-    // Reads IsSafe once and updates the cache. Used by BOTH the background timer and the
-    // connect-time seed; the _refreshing guard makes them mutually exclusive, so there is never
-    // more than one concurrent client.IsSafe read on the same AlpacaSafetyMonitor instance.
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Timer-callback boundary: an unhandled exception in a System.Threading.Timer callback crashes the process. ReadIsSafe already contains device-read failures, but this catch-all is a hard backstop so a refresh tick can never fault the daemon. CA1031's log-and-recover boundary applies.")]
-    private void RefreshCacheOnce() {
-        // Skip if a refresh read is already in flight (a slow read outran the interval, or the
-        // connect-time seed is racing a timer tick).
-        if (Interlocked.CompareExchange(ref _refreshing, 1, 0) != 0) {
-            return;
-        }
-        try {
-            AlpacaSafetyMonitor? client;
-            lock (_gate) {
-                if (_disposed || _state != EquipmentConnectionState.Connected) {
-                    return;
-                }
-                client = _client;
-            }
-            if (client is null) {
-                return;
-            }
-            var safe = ReadIsSafe(client); // bounded read; demotes to Error + returns false on throw
-            lock (_gate) {
-                // Only adopt the reading if this is still the live, Connected client.
-                if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
-                    _cachedSafe = safe;
-                }
-            }
-        } catch (Exception ex) {
-            LogIsSafeReadFailed(ex);
-        } finally {
-            Interlocked.Exchange(ref _refreshing, 0);
         }
     }
 
@@ -161,277 +114,46 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorService, IRetai
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.Device); // guard a null Device from a malformed body
-        var device = request.Device;
-        long generation;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            // Idempotent: connecting to the same device while already connecting/connected
-            // is a no-op accept (§60.5) — don't tear down a good connection.
-            if ((_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected)
-                && _device?.UniqueId == device.UniqueId) {
-                return Task.FromResult(Accepted("safety-monitor.connect", idempotencyKey));
-            }
-            DisposeClientLocked();
-            _device = device;
-            generation = ++_connectGeneration; // this attempt's id; later attempts/disconnects bump it
-            SetState(EquipmentConnectionState.Connecting);
-        }
-        // 202 contract: do the blocking Alpaca connect off-thread; GetAsync reports the outcome.
-        // CancellationToken.None: this is intentionally fire-and-forget, not tied to the request.
-        _ = Task.Run(() => ConnectInBackground(device, generation), CancellationToken.None);
-        return Task.FromResult(Accepted("safety-monitor.connect", idempotencyKey));
+        return _lifecycle.ConnectAsync(request.Device, idempotencyKey);
     }
 
     // ct is unused by design (see ConnectAsync): the 202 contract makes teardown fire-and-forget.
-    public async Task<bool> ForgetAsync(CancellationToken ct) {
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_device is null) {
-                return false;
-            }
-            if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
-                throw new InvalidOperationException("the safety monitor is connected — disconnect it before removing it");
-            }
-        }
-        // The SAME teardown as a disconnect — bump the connect generation, drop the client and hand
-        // it to SafeDisconnectDispose off-lock, publish Disconnected (the §60.9 transition while the
-        // device is still known to subscribers). An Error reached from Connected (§42.3 trip, a
-        // throwing property read) still holds a live, adopted client, and the card offers no
-        // Disconnect there any more — so Remove must release the driver itself (#1108 review).
-        await DisconnectAsync(null, ct).ConfigureAwait(false);
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_device is null) {
-                return false;
-            }
-            // A connect that raced in between the two locks is live again — refuse, don't drop.
-            if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
-                throw new InvalidOperationException("the safety monitor is connected — disconnect it before removing it");
-            }
-            var removed = _device;
-            _device = null;
-            // §60.9 — a second open client drops its card on this instead of waiting for its
-            // next poll (#1127); the lock-held publish is the same hand-off SetState makes.
-            _events?.Removed(DeviceType.SafetyMonitor, removed.UniqueId, removed.Name);
-            return true;
-        }
+    public Task<bool> ForgetAsync(CancellationToken ct) => _lifecycle.ForgetAsync();
+
+    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) =>
+        _lifecycle.DisconnectAsync(idempotencyKey);
+
+    // Caller holds the gate. Clear before the device reads Connected so we don't briefly serve a PRIOR
+    // device's IsSafe under the NEW device's identity during the seed window (a stale true could
+    // otherwise mislead WaitUntilSafe for one poll); a tripped or ended session is not safe either.
+    private void ResetSessionLocked() => _cachedSafe = false;
+
+    // The runtime read the lifecycle runs each tick. IsSafe is the essential read, and a failed one is
+    // NOT safe: the cache is cleared in the same commit that trips the monitor to Error (rule 3).
+    private DeviceRead ReadRuntime(ISafetyMonitorDevice client) {
+        var safe = ReadIsSafe(client, out var readError);
+        return new DeviceRead(readError, CommitLocked: () => _cachedSafe = safe);
     }
 
-    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) {
-        AlpacaSafetyMonitor? client;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            _connectGeneration++; // invalidate any in-flight connect so it won't adopt its client
-            client = _client;
-            _client = null;
-            if (_device is not null) {
-                SetState(EquipmentConnectionState.Disconnected);
-            }
-            // A connect still in flight will see the bumped generation on completion and dispose
-            // its own client (supersede check in ConnectInBackground).
-        }
-        if (client is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(client), CancellationToken.None);
-        }
-        return Task.FromResult(Accepted("safety-monitor.disconnect", idempotencyKey));
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Device-read boundary: an Alpaca IsSafe call can throw arbitrary driver/HTTP exceptions; any escape must demote the connection to Error and be contained, not fault the GET. CA1031's log-and-recover boundary applies.")]
-    private bool ReadIsSafe(AlpacaSafetyMonitor client) {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Device-read boundary: an Alpaca IsSafe call can throw arbitrary driver/HTTP exceptions; any escape must read as not safe and be reported as the essential read's failure, not fault the refresh. CA1031's log-and-recover boundary applies.")]
+    private bool ReadIsSafe(ISafetyMonitorDevice client, out string? readError) {
+        readError = null;
         try {
             return client.IsSafe;
         } catch (Exception ex) {
-            lock (_gate) {
-                // Only demote to Error if this is still the live connection. A concurrent
-                // DisconnectAsync sets Disconnected and disposes the client off-thread; the
-                // resulting disposed-client throw here must NOT clobber Disconnected back to
-                // Error. Guarding on the same client instance also covers a reconnect.
-                if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
-                    SetState(EquipmentConnectionState.Error); // we hold _gate here; keeps all transitions on one path
-                }
-            }
             LogIsSafeReadFailed(ex);
+            readError = ex.Message;
             return false;
         }
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Background connect boundary: constructing the Alpaca client and setting Connected can throw arbitrary driver/HTTP/socket exceptions; any escape must surface as the Error state and be contained, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
-        Justification = "Ownership of the AlpacaSafetyMonitor is managed explicitly: on every non-adopt path (supersede or exception) SafeDisconnectDispose disposes it; on the adopt path it is stored in _client (local set to null) and disposed later by DisconnectAsync/Dispose. CA2000 cannot follow the transfer through the lock + helper.")]
-    private void ConnectInBackground(DiscoveredDeviceDto device, long generation) {
-        AlpacaSafetyMonitor? client = null;
-        var adopted = false; // declared outside try so the catch can tell ownership already transferred
-        try {
-            var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
-            if (string.IsNullOrWhiteSpace(host)) {
-                throw new InvalidOperationException(
-                    $"discovered device '{device.Name}' carries neither an IP address nor a host name");
-            }
-            client = new AlpacaSafetyMonitor(
-                device.UseHttps ? ServiceType.Https : ServiceType.Http,
-                host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
-            // The blocking connect is bounded by AlpacaConnect.Timeout, so a black-holed device
-            // surfaces as Error rather than wedging the service in Connecting, and an unreachable
-            // one (connection refused) fails at once. (SafetyMonitorServiceTest's dead-port case
-            // verifies the fast-fail path.)
-            //
-            // Trust the setter: the Alpaca `Connected = true` PUT is authoritative and throws on
-            // a real connect failure. We deliberately do NOT re-GET `Connected` to confirm — a
-            // second round-trip can transiently read false on a slow device that already accepted
-            // the SET, which would falsely demote a good connection to Error while leaving the
-            // device connected on its side.
-            AlpacaConnect.Connect(client);
-            lock (_gate) {
-                // Adopt only if this is still the current attempt: a newer connect, a disconnect,
-                // or a Dispose() bumps the generation / sets _disposed, in which case this
-                // late-completing connect must not adopt (which would leak its client and/or
-                // resurrect a torn-down connection). The generation check also covers the
-                // connect -> disconnect -> reconnect-to-same-device sequence that a UniqueId
-                // comparison alone could not distinguish.
-                if (!_disposed && _connectGeneration == generation) {
-                    _client = client;
-                    // Clear before going Connected so we don't briefly serve a PRIOR device's
-                    // IsSafe under the NEW device's identity during the seed window (a stale
-                    // true could otherwise mislead WaitUntilSafe for one poll).
-                    _cachedSafe = false;
-                    SetState(EquipmentConnectionState.Connected);
-                    adopted = true;
-                }
-            }
-            if (!adopted) {
-                SafeDisconnectDispose(client);
-                return;
-            }
-            client = null; // ownership transferred to _client
-            // Seed the IsSafe cache immediately (so the first GetAsync/GetInfo after connect
-            // reflects the device, not a stale default), through the SAME guarded path as the
-            // timer — so the seed and a racing timer tick can never issue two concurrent IsSafe
-            // reads on the client.
-            RefreshCacheOnce();
-            // Only log "connected" if the seed read didn't fault the connection into Error
-            // (ReadIsSafe demotes on a throw); otherwise the failure is already logged.
-            bool stillConnected;
-            lock (_gate) {
-                stillConnected = _state == EquipmentConnectionState.Connected;
-                if (stillConnected) {
-                    // The Connected push went out before this seed read; tell clients the
-                    // details are cached so they re-read now.
-                    _events?.DetailsReady(DeviceType.SafetyMonitor, _device?.UniqueId, _device?.Name);
-                }
-            }
-            if (stillConnected) {
-                LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
-            }
-        } catch (Exception ex) {
-            // Once adopted, the connection is live and owned by _client; a later throw (today only
-            // LogConnected, which doesn't throw) must NOT tear it down or log a failure — just
-            // return. If not adopted, dispose this attempt's client, demote to Error when still
-            // current, and log the failure.
-            if (!adopted) {
-                if (client is not null) {
-                    SafeDisconnectDispose(client);
-                }
-                lock (_gate) {
-                    // No _client = null here: a non-adopted attempt never stored its client in
-                    // _client, and the generation guard ensures a newer connect's client is not
-                    // touched either.
-                    if (!_disposed && _connectGeneration == generation) {
-                        SetState(EquipmentConnectionState.Error);
-                    }
-                }
-                LogConnectFailed(ex, device.Name);
-            }
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort teardown: Connected = false can throw driver/HTTP exceptions, which must be swallowed so Dispose always runs and cleanup completes. CA1031's log-and-recover boundary applies.")]
-    private void SafeDisconnectDispose(AlpacaSafetyMonitor client) {
-        try {
-            client.Connected = false;
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
-        }
-        DisposeQuietly(client);
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort teardown: ASCOM/COM-backed clients have been known to throw from Dispose(); the throw must be swallowed (and logged) rather than escape into a fire-and-forget Task.Run as an unobserved exception. CA1031's log-and-recover boundary applies.")]
-    private void DisposeQuietly(AlpacaSafetyMonitor client) {
-        try {
-            client.Dispose();
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
-        }
-    }
-
-    // Caller holds _gate; offloads the blocking disconnect/dispose so we never do I/O under the
-    // lock. The discarded task is intentionally untracked — it may outlive the service instance,
-    // but SafeDisconnectDispose swallows everything, so there is no unobserved-fault risk.
-    private void DisposeClientLocked() {
-        var c = _client;
-        _client = null;
-        if (c is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
-        }
-    }
-
-    // Caller must hold _gate (every call site already does), so no inner lock here.
-    private void SetState(EquipmentConnectionState state) {
-        if (_state == state) {
-            return;
-        }
-        _state = state;
-        _lastTransition = DateTimeOffset.UtcNow;
-        // Callers hold the service lock; the publisher's synchronous part only
-        // serializes a small payload and hands off (see EquipmentEventPublisher).
-        _events?.StateChanged(DeviceType.SafetyMonitor, _device?.UniqueId, _device?.Name, state);
-    }
-
-    private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>
-        new(OperationId: Guid.NewGuid(),
-            OperationType: operationType,
-            AcceptedUtc: DateTimeOffset.UtcNow,
-            IdempotencyKey: idempotencyKey);
-
     public void Dispose() {
-        AlpacaSafetyMonitor? client;
-        lock (_gate) {
-            if (_disposed) {
-                return;
-            }
-            _disposed = true;
-            client = _client;
-            _client = null;
-        }
-        // Stop the refresh loop. Timer.Dispose() does not wait for an in-flight RefreshTick, but
-        // that tick re-checks _disposed/_client under the lock (and the ReferenceEquals guard), so
-        // it cannot write the cache or touch a disposed client after this point.
-        _refreshTimer.Dispose();
-        // Dispose the client directly (guarded) rather than via SafeDisconnectDispose: the
-        // courtesy "Connected = false" is a blocking HTTP call (up to the ASCOM ~3s
-        // establishConnectionTimeout) that would hang container shutdown if the device is
-        // unreachable. DisposeQuietly releases the HttpClient resources without network I/O and
-        // swallows any Dispose() throw so it can't escape IDisposable.Dispose() at shutdown.
-        if (client is not null) {
-            DisposeQuietly(client);
-        }
+        _lifecycle.Dispose();
         GC.SuppressFinalize(this);
     }
 
-    // Logged whenever an IsSafe read throws. Whether it demotes the connection to Error is
-    // conditional (only if it's still the live client), so the message doesn't claim it does.
+    // Logged whenever an IsSafe read throws; the lifecycle then trips the live monitor to Error.
     [LoggerMessage(Level = LogLevel.Warning, Message = "SafetyMonitor IsSafe read failed")]
     private partial void LogIsSafeReadFailed(Exception ex);
-
-    [LoggerMessage(Level = LogLevel.Information, Message = "SafetyMonitor connected: {Name} at {Host}:{Port}/{Device}")]
-    private partial void LogConnected(string name, string host, int port, int device);
-
-    [LoggerMessage(Level = LogLevel.Error, Message = "SafetyMonitor connect failed for {Name}")]
-    private partial void LogConnectFailed(Exception ex, string name);
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "ignored error while disconnecting SafetyMonitor during teardown")]
-    private partial void LogTeardownIgnored(Exception ex);
 }

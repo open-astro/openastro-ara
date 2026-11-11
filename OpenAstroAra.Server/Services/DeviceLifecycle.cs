@@ -76,6 +76,8 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
     private readonly Func<TDevice, DeviceRead> _read;
     private readonly Action _resetSessionLocked;
     private readonly Func<TDevice, Action>? _prepareSession;
+    private readonly Action? _onConnected;
+    private readonly bool _failedReadTrips;
     private readonly ILogger _logger;
     private readonly EquipmentEventPublisher? _events;
     private readonly IEquipmentFaultSink? _faults;
@@ -86,6 +88,7 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
     private DiscoveredDeviceDto? _device;
     private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
     private DesiredConnection? _desired;
+    private DateTimeOffset _lastTransition = DateTimeOffset.UtcNow;
     private bool _cleanReadSinceConnect;
     private int _refreshing;
     private long _connectGeneration;
@@ -99,11 +102,16 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
     /// <param name="failedReadThreshold">Consecutive failed essential reads that make the device degraded.</param>
     /// <param name="prepareSession">Optional read-once work (capabilities), off the gate after the connect;
     /// the action it returns runs under the gate on adopt, before the device reads Connected.</param>
+    /// <param name="onConnected">Optional, runs off the gate once a connect adopted and its seed read
+    /// finished, while the device still reads Connected (Switch: the late cooling-fan catch-up).</param>
+    /// <param name="failedReadTrips">A failed essential read is a lost connection: the device goes to Error
+    /// with a Disconnected fault on that read instead of a degraded episode after the threshold (SafetyMonitor,
+    /// ADR 0011 rule 3: a dead monitor is never read as safe).</param>
     public DeviceLifecycle(object owner, DeviceType type, string noun,
             Func<DiscoveredDeviceDto, TDevice> createDevice, Func<TDevice, DeviceRead> read,
             Action resetSessionLocked, int failedReadThreshold, ILogger logger,
             EquipmentEventPublisher? events, IEquipmentFaultSink? faults,
-            Func<TDevice, Action>? prepareSession = null) {
+            Func<TDevice, Action>? prepareSession = null, Action? onConnected = null, bool failedReadTrips = false) {
         _owner = owner;
         _type = type;
         _noun = noun;
@@ -111,6 +119,8 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
         _read = read;
         _resetSessionLocked = resetSessionLocked;
         _prepareSession = prepareSession;
+        _onConnected = onConnected;
+        _failedReadTrips = failedReadTrips;
         _logger = logger;
         _events = events;
         _faults = faults;
@@ -131,6 +141,9 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
     public DiscoveredDeviceDto? RetainedDevice { get { lock (Gate) { return _disposed ? null : _device; } } }
 
     public EquipmentConnectionState State { get { lock (Gate) { return _state; } } }
+
+    /// <summary>When the connection state last changed (the SafetyMonitor DTO reports it).</summary>
+    public DateTimeOffset LastTransition { get { lock (Gate) { return _lastTransition; } } }
 
     public DesiredConnection? Desired { get { lock (Gate) { return _device is null ? null : _desired; } } }
 
@@ -203,6 +216,11 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
             return;
         }
         DisposeClientLocked();
+        // §60.9 — a lost or failed device is torn down before the replacement's Connecting, so a WS
+        // subscriber sees a clean transition (Error → Disconnected → Connecting).
+        if (_state == EquipmentConnectionState.Error) {
+            SetState(EquipmentConnectionState.Disconnected);
+        }
         _device = device;
         var generation = ++_connectGeneration;
         SetState(EquipmentConnectionState.Connecting);
@@ -285,20 +303,28 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
             // disconnect-detection source; a consecutive-failure streak trips the device to Error.
             if (!ProbeConnected(client)) {
                 if (ObserveProbeIfLive(client, probeSucceeded: false) == ProbeVerdict.Lost) {
-                    TripConnectionLost(client);
+                    TripConnectionLost(client,
+                        $"stopped answering {DeviceConnectionProbe.DefaultLostThreshold} consecutive connection probes");
                 }
                 return; // the device didn't answer — skip this tick's reads
             }
             ObserveProbeIfLive(client, probeSucceeded: true);
             var read = _read(client);
             var committed = false;
+            var tripOnRead = false;
             lock (Gate) {
                 if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
                     read.CommitLocked();
-                    _health.Observe(read.EssentialReadError is null, read.EssentialReadError, _device);
+                    tripOnRead = _failedReadTrips && read.EssentialReadError is not null;
+                    if (!tripOnRead) {
+                        _health.Observe(read.EssentialReadError is null, read.EssentialReadError, _device);
+                    }
                     _cleanReadSinceConnect |= read.EssentialReadError is null;
                     committed = true;
                 }
+            }
+            if (tripOnRead) {
+                TripConnectionLost(client, $"its essential read failed: {read.EssentialReadError}");
             }
             if (committed) {
                 read.AfterCommit?.Invoke();
@@ -352,6 +378,7 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
             if (stillConnected) {
                 var host = AlpacaDeviceAddress.Host(device);
                 DeviceLifecycleLog.Connected(_logger, _type, device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
+                _onConnected?.Invoke();
             }
         } catch (Exception ex) {
             if (!adopted) {
@@ -419,10 +446,11 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
         }
     }
 
-    // §42.3 — declare the device lost: Connected → Error (keeps _device so a reconnect can find it)
-    // and publish the §42.2 fault. Re-checks the probed client under the gate: a reconnect between
-    // the probe and this trip must never flip the NEW, healthy session to Error.
-    private void TripConnectionLost(TDevice probed) {
+    /// <summary>§42.3 — declare the device lost: Connected → Error (keeps _device so a reconnect can find
+    /// it), desired state Faulted, and publish the §42.2 fault. Re-checks the probed client under the gate:
+    /// a reconnect between the read and this trip must never flip the NEW, healthy session to Error.
+    /// <paramref name="reason"/> is the user-facing fault text (the probe, a class's own detector).</summary>
+    public void TripConnectionLost(TDevice probed, string reason) {
         DiscoveredDeviceDto? device;
         lock (Gate) {
             if (_state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, probed)) {
@@ -437,9 +465,7 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
         }
         DeviceLifecycleLog.ConnectionLost(_logger, _type, device?.Name ?? "?");
         _faults?.Publish(new EquipmentFaultEvent(_type, device?.UniqueId, device?.Name,
-            EquipmentFaultKind.Disconnected,
-            $"stopped answering {DeviceConnectionProbe.DefaultLostThreshold} consecutive connection probes",
-            DateTimeOffset.UtcNow));
+            EquipmentFaultKind.Disconnected, reason, DateTimeOffset.UtcNow));
     }
 
     // Caller holds Gate; the publisher's synchronous part only serializes a small payload and hands off.
@@ -448,6 +474,7 @@ internal sealed class DeviceLifecycle<TDevice> : IDisposable where TDevice : cla
             return;
         }
         _state = state;
+        _lastTransition = DateTimeOffset.UtcNow;
         _events?.StateChanged(_type, _device?.UniqueId, _device?.Name, state);
     }
 

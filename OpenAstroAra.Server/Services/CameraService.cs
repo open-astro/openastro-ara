@@ -35,8 +35,8 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
-/// §14e — tenth real Alpaca-backed device service and the head of the capture path. Replaces
-/// <c>PlaceholderCameraService</c>: connects to a discovered Alpaca Camera, serves capabilities +
+/// §14e — tenth real Alpaca-backed device service and the head of the capture path.
+/// Connects to a discovered Alpaca Camera, serves capabilities +
 /// §32.4-cached runtime (state/temperature/cooler/progress), drives the cooler and exposure aborts,
 /// and — the substantive part — <see cref="StartExposureAsync"/> runs a REAL capture:
 /// pre-allocates the frame id and returns immediately (§60.5 async semantics: the preview URL 404s
