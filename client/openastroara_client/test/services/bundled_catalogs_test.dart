@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/bundled_catalogs.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
+import 'package:openastroara/state/album/album_matching.dart';
+import 'package:openastroara/util/common_names.dart';
 import 'package:openastroara/util/dedupe_catalog.dart';
 import 'package:openastroara/util/imaging_regions.dart';
 import 'package:openastroara/widgets/sky_atlas/tonight_sky_panel.dart';
@@ -242,10 +244,7 @@ void main() {
 
   group('Sky Album Books (#1516)', () {
     // The whole bundle as loadBundledCatalogs sees it: every asset, merged.
-    final bundle = mergeDuplicates(
-      [for (final a in bundledCatalogAssets) ...load(a.split('/').last)],
-      links: catalogTwinLinks,
-    );
+    final bundle = parseBundledCatalogs([for (final a in bundledCatalogAssets) File(a).readAsStringSync()]);
 
     test('the Messier Book has 110 cards, one row each', () {
       final rows = bundle.where((d) => d.messierNum != null).toList();
@@ -284,6 +283,97 @@ void main() {
       expect(planned, isNot(contains('M040')));
       expect(planned, isNot(contains('C041')));
       expect(planned, containsAll(['Mel022', 'C099', 'NGC0869', 'NGC5866', 'Sh2-155']));
+    });
+
+    // The published catalogue is RCW 1-182 without 116 (VizieR VII/216/rcw, 181 rows).
+    final rcwNumbers = {for (var n = 1; n <= 182; n++) if (n != 116) n};
+
+    test('rcw.csv is whole: 181 rows, 29 columns each, HII, a position, no shifted column (#1629)', () {
+      final lines = File('assets/catalogs/rcw.csv').readAsLinesSync();
+      final cols = lines.first.split(';');
+      expect(cols.length, 29);
+      expect(lines.length - 1, 181);
+      final names = <int>{};
+      for (final line in lines.skip(1)) {
+        final f = line.split(';');
+        expect(f.length, cols.length, reason: line);
+        final n = int.parse(RegExp(r'^RCW (\d+)$').firstMatch(f[cols.indexOf('Name')])!.group(1)!);
+        names.add(n);
+        expect(f[cols.indexOf('Type')], 'HII', reason: line);
+        expect(raToDeg(f[cols.indexOf('RA')]), isNotNull, reason: line);
+        expect(decToDeg(f[cols.indexOf('Dec')]), isNotNull, reason: line);
+        expect(f[cols.indexOf('Const')], matches(RegExp(r'^[A-Z][A-Za-z]{2}$')), reason: line);
+        expect(int.parse(f[cols.indexOf('MajAx')]), greaterThan(0), reason: line);
+      }
+      expect(names, rcwNumbers);
+    });
+
+    test('the RCW Book has a Card for every catalogue row, each with a position (#1629)', () {
+      final claimed = bookCatalog(bundle, AlbumBook.rcw);
+      expect({for (final d in claimed) rcwNumOf(d)}, rcwNumbers);
+      expect(claimed.length, 181);
+      expect([for (final d in claimed) if (d.raDeg == 0 && d.decDeg == 0) d.id], isEmpty);
+      // The Messier objects in the catalogue (M8, M16, M17, M20) and the Caldwell
+      // one (C 100) stay in their own Books.
+      final book = bookObjects(bundle, AlbumBook.rcw);
+      expect(book.length, 176);
+      expect([for (final d in book) if (d.messierNum != null || d.caldwellNum != null) d.id], isEmpty);
+      expect(bookObjects(bundle, AlbumBook.messier).length, 110);
+      expect(bookObjects(bundle, AlbumBook.caldwell).length, 109);
+    });
+
+    test('a Gum number or an NGC number finds its RCW object (#1629)', () {
+      // RCW 38 is Gum 22-24, no NGC/IC; RCW 127 is the Cat's Paw, NGC 6334.
+      expect(rcwNumOf(findCatalogObject(bundle, 'Gum 22')!), 38);
+      expect(rcwNumOf(findCatalogObject(bundle, 'gum23')!), 38);
+      expect(rcwNumOf(findCatalogObject(bundle, 'RCW 38')!), 38);
+      final paw = findCatalogObject(bundle, 'NGC 6334')!;
+      expect(rcwNumOf(paw), 127);
+      expect(paw.name, "Cat's Paw Nebula");
+      expect(searchSuggestions(bundle, 'RCW 38').first.dso.id, 'RCW 38');
+    });
+
+    test('the Catalogs overlay lists RCW next to Sharpless (#1629)', () {
+      final ids = catalogOverlayInfos().map((m) => m['id']).toList();
+      expect(ids, contains('rcw'));
+      expect(ids.indexOf('rcw'), ids.indexOf('sharpless') + 1);
+      expect(catalogOverlayObjects('rcw', bundle, limit: 100000)!.length, 181);
+    });
+
+    test("Tonight's Sky ranks RCW objects under the same cull (#1629)", () {
+      final planned = planningCull(bundle);
+      expect(planned.where((d) => rcwNumOf(d) != null), isNotEmpty);
+      expect(planned.map((d) => d.id), contains('RCW 38'));
+    });
+
+    test('search finds the Skull Nebula by its nickname and by C 56 (#1720)', () {
+      for (final q in ['Skull Nebula', 'skull', 'C 56', 'C56', 'NGC 246']) {
+        expect(findCatalogObject(bundle, q)!.id, 'NGC0246', reason: q);
+      }
+      expect(searchSuggestions(bundle, 'skull').first.dso.id, 'NGC0246');
+      expect(searchSuggestions(bundle, 'C 56').first.dso.id, 'NGC0246');
+      expect(findCatalogObject(bundle, 'Pinwheel')!.messierNum, 101);
+    });
+  });
+
+  group('common names (#1720)', () {
+    PlanningDso row(String id, String name, [List<String> aliases = const []]) =>
+        PlanningDso(id: id, name: name, type: 'PN', magnitude: null, raDeg: 1, decDeg: 2, aliases: aliases);
+
+    test('a name is added as an alias and never replaces a catalog name', () {
+      final out = applyCommonNames(
+        [row('A', 'A'), row('B', 'Catalog Name', ['C 1'])],
+        names: {'A': ['Nick'], 'B': ['Nick B']},
+      );
+      expect(out[0].name, 'Nick');
+      expect(out[0].aliases, ['Nick']);
+      expect(out[1].name, 'Catalog Name');
+      expect(out[1].aliases, ['C 1', 'Nick B']);
+    });
+
+    test('a name the row already answers to is not added twice', () {
+      final out = applyCommonNames([row('A', 'Nick', ['nick'])], names: {'A': ['Nick']});
+      expect(out.single.aliases, ['nick']);
     });
   });
 }

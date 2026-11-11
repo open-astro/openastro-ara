@@ -9,15 +9,52 @@ import '../../services/dso_catalog_service.dart';
 import '../../util/dedupe_catalog.dart';
 import 'album_frame.dart';
 
-enum AlbumBook { messier, caldwell }
+/// The Books in precedence order: an object belongs to the first Book that claims it
+/// (Caldwell excludes Messier by definition, RCW overlaps both), so a fourth Book is
+/// one more value here.
+enum AlbumBook { messier, caldwell, rcw }
 
 enum AlbumTier { bronze, silver, gold }
 
-/// A Book's objects from the full bundled catalog, in catalog-number order.
-List<PlanningDso> bookObjects(List<PlanningDso> catalog, AlbumBook book) {
-  int? numOf(PlanningDso d) => book == AlbumBook.messier ? d.messierNum : d.caldwellNum;
-  return [for (final d in catalog) if (numOf(d) != null) d]..sort((a, b) => numOf(a)!.compareTo(numOf(b)!));
+final RegExp _rcwDesignation = RegExp(r'^RCW (\d+)$');
+
+/// The RCW number of [d]: the lowest `RCW n` among its id and aliases (a nebula that
+/// carries two RCW numbers is one Card, labelled by the first), null without one.
+int? rcwNumOf(PlanningDso d) {
+  int? best;
+  for (final s in [d.id, ...d.aliases]) {
+    final n = int.tryParse(_rcwDesignation.firstMatch(s)?.group(1) ?? '');
+    if (n != null && (best == null || n < best)) best = n;
+  }
+  return best;
 }
+
+/// [d]'s catalog number in [book], null when the Book does not claim it.
+int? bookNumberOf(PlanningDso d, AlbumBook book) => switch (book) {
+      AlbumBook.messier => d.messierNum,
+      AlbumBook.caldwell => d.caldwellNum,
+      AlbumBook.rcw => rcwNumOf(d),
+    };
+
+/// The Card label: `M 31`, `C 14`, `RCW 32`.
+String bookLabel(PlanningDso d, AlbumBook book) => switch (book) {
+      AlbumBook.messier => 'M ${d.messierNum}',
+      AlbumBook.caldwell => 'C ${d.caldwellNum}',
+      AlbumBook.rcw => 'RCW ${rcwNumOf(d)}',
+    };
+
+/// Everything [book] claims in the full bundled catalog, in catalog-number order,
+/// whatever an earlier Book also claims: the Book's real size, the figure on a Card's back.
+List<PlanningDso> bookCatalog(List<PlanningDso> catalog, AlbumBook book) =>
+    [for (final d in catalog) if (bookNumberOf(d, book) != null) d]
+      ..sort((a, b) => bookNumberOf(a, book)!.compareTo(bookNumberOf(b, book)!));
+
+/// A Book's Cards: what it claims minus what any earlier Book claims, in catalog-number
+/// order. The grid, the shelf and the aggregates all read this, so their counts agree.
+List<PlanningDso> bookObjects(List<PlanningDso> catalog, AlbumBook book) => [
+      for (final d in bookCatalog(catalog, book))
+        if (!AlbumBook.values.take(book.index).any((earlier) => bookNumberOf(d, earlier) != null)) d,
+    ];
 
 /// Whether [f] contains [o]: the object lies within the frame's inscribed
 /// circle, half the short side across. Rotation-free, so corners never count.

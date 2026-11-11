@@ -117,7 +117,7 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
     final objects = <PlanningDso>[];
     for (final b in books) {
       final list = views[b]?.objects ?? bookObjects(catalog, b);
-      bookSize[b] = list.length;
+      bookSize[b] = bookCatalog(catalog, b).length;
       for (final d in list) {
         bookOf[d.id] = b;
         objects.add(d);
@@ -131,8 +131,8 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
 
     AlbumCardData cardFor(PlanningDso d) {
       final book = bookOf[d.id]!;
-      final n = (book == AlbumBook.messier ? d.messierNum : d.caldwellNum)!;
-      final label = book == AlbumBook.messier ? 'M $n' : 'C $n';
+      final n = bookNumberOf(d, book)!;
+      final label = bookLabel(d, book);
       return AlbumCardData(
         dso: d,
         label: label,
@@ -231,7 +231,12 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
             height: 44,
             child: FilterChip(
               label: Text(l.albumBookCount(
-                  b == AlbumBook.messier ? l.albumBookMessier : l.albumBookCaldwell, views[b]?.collected ?? 0)),
+                  switch (b) {
+                    AlbumBook.messier => l.albumBookMessier,
+                    AlbumBook.caldwell => l.albumBookCaldwell,
+                    AlbumBook.rcw => l.albumBookRcw,
+                  },
+                  views[b]?.collected ?? 0)),
               selected: _catalogs.contains(b),
               labelStyle: headerText,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,

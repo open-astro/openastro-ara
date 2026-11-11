@@ -336,6 +336,12 @@ void main() {
     expect(find.text('Caldwell · 0'), findsOneWidget);
   });
 
+  testWidgets('the Book switch has three segments: Messier, Caldwell, RCW (#1629)', (tester) async {
+    await _pump(tester, frames: _m31Frames);
+    expect(find.byType(FilterChip), findsNWidgets(3));
+    expect(find.text('RCW · 0'), findsOneWidget);
+  });
+
   testWidgets('with no catalog selected every catalog shows, Messier first', (tester) async {
     await _pump(tester, frames: _m31Frames);
     Finder inGrid(String t) => find.descendant(of: find.byType(SliverGrid), matching: find.text(t));

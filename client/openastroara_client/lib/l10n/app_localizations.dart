@@ -4857,6 +4857,12 @@ abstract class AppLocalizations {
   /// **'Caldwell'**
   String get albumBookCaldwell;
 
+  /// Sky Album: Book switch segment for the RCW catalog of southern emission nebulae (Rodgers, Campbell and Whiteoak); the abbreviation is the name in every language
+  ///
+  /// In en, this message translates to:
+  /// **'RCW'**
+  String get albumBookRcw;
+
   /// Deep-sky object type on a Sky Album card back's bio line
   ///
   /// In en, this message translates to:

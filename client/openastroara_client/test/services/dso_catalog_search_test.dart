@@ -137,4 +137,19 @@ void main() {
     expect(CatalogNameIndex(cat).lookup('north'), isNull, reason: 'no substring');
     expect(findCatalogObject(cat, 'north')!.id, 'NGC7000');
   });
+
+  test('the display form is designation (name) in the search row and the plan (#1720)', () {
+    expect(designationWithName('NGC0246', 'Skull Nebula'), 'NGC 246 (Skull Nebula)');
+    expect(designationWithName('Sh2-129', 'Sh2-129'), 'Sh2-129', reason: 'no other name');
+    expect(designationWithName('NGC7000', 'North America Nebula (NGC 7000)'), 'North America Nebula (NGC 7000)',
+        reason: 'the name already carries its designation');
+    expect(designationWithName('', 'Skull Nebula'), 'Skull Nebula');
+    final skull = PlanningDso(
+        id: 'NGC0246', name: 'Skull Nebula', type: 'PN', magnitude: 8, raDeg: 11.76, decDeg: -11.87,
+        aliases: const ['C 056', 'Skull Nebula']);
+    expect(suggestionTitle(searchSuggestions([skull], 'skull').single), 'NGC 246 (Skull Nebula)',
+        reason: 'a nickname matched: the title shows the designation, then the name');
+    expect(suggestionTitle(searchSuggestions([skull], 'C 56').single), 'C 56 (Skull Nebula)',
+        reason: 'a Caldwell number matched: it is the designation');
+  });
 }

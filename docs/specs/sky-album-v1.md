@@ -9,7 +9,7 @@ Status: slices 1 to 8 built. Revised 2026-11-05 by [#1535](https://github.com/op
 Add to `GLOSSARY.md` in the first implementation slice:
 
 - **Sky Album**: the screen that shows the Books.
-- **Book**: one catalog's complete set of Cards (Messier, Caldwell).
+- **Book**: one catalog's complete set of Cards (Messier, Caldwell, RCW).
 - **Card**: one catalog object's slot in a Book.
 - **Collected**: a Card at bronze or better.
 - **Tier**: bronze, silver or gold, derived from the lights the Card has recorded.
@@ -19,7 +19,7 @@ Add to `GLOSSARY.md` in the first implementation slice:
 
 ## Scope
 
-In v1: Messier (110) and Caldwell (109) Books; frames matched to catalog objects by field-of-view containment on the mount pointing saved per frame; tiers; a Simple Mode entry point; the Tonight's Sky tie-in; the catalog data fix that completes both Books; premade Art per Card with a collection cache on the client ([#1535](https://github.com/open-astro/openastro-ara/issues/1535)).
+In v1: Messier (110), Caldwell (109) and RCW (181, [#1629](https://github.com/open-astro/openastro-ara/issues/1629)) Books; frames matched to catalog objects by field-of-view containment on the mount pointing saved per frame; tiers; a Simple Mode entry point; the Tonight's Sky tie-in; the catalog data fix that completes both Books; premade Art per Card with a collection cache on the client ([#1535](https://github.com/open-astro/openastro-ara/issues/1535)).
 
 Out of scope, by decision of the map: a full UI entry point, difficulty or global rarity, sky-survey thumbnails, plate-solve refinement of the frame centre, custom books, AstroBin, sharing, cryptographically signed provenance, rig pointing measurement, re-keying the Stats Targets section.
 
@@ -107,8 +107,9 @@ The collection cache is decided in [ADR 0001](../adr/0001-collection-cache-is-a-
 Files: `screens/album/`, `state/album/`, `widgets/album/`. Nothing imported from `screens/simple/`; the only shell-specific behaviour arrives as the callback below.
 
 - App bar: the album icon and "Sky Album".
-- Catalog filter (decided 2026-11-06, replacing a one-Book switch that hid a card collected in the other Book): chips "Messier · n" and "Caldwell · n", multi-select, each with its own collected count. None selected shows every catalog, Messier first; any selected shows only those. Each card keeps its own catalog label and number over its catalog's size.
+- Catalog filter (decided 2026-11-06, replacing a one-Book switch that hid a card collected in the other Book): chips "Messier · n", "Caldwell · n" and "RCW · n" (third Book, [#1629](https://github.com/open-astro/openastro-ara/issues/1629)), multi-select, each with its own collected count. None selected shows every catalog, Messier first; any selected shows only those. Each card keeps its own catalog label and number over its catalog's size.
 - A filter on the same row, right of the catalogs: All / Collected / Missing (decided 2026-11-05). It narrows the grid only; the counts stay the catalogs shown, and the shelf hides under Collected.
+- Book precedence ([#1629](https://github.com/open-astro/openastro-ara/issues/1629)): the Book order (Messier, Caldwell, RCW) is the one precedence list. A Book shows what it claims minus what any earlier Book claims, so an object that is a Messier or Caldwell Card never shows again in RCW; the grid, the shelf and the aggregates all read that one rule (`bookObjects`). The set number on a Card's back is the Book's full size, not the shown count (`38 / 181`). The RCW Book claims an object by an `RCW n` designation or alias (an object folded into an NGC/IC row keeps `RCW n` as an alias; with several, the lowest number labels the Card); Gum numbers are aliases, so `Gum 15` fills the same Card. Cards without Art show the Placeholder. The published catalogue has 181 rows (RCW 1 to 182 without 116), not the 182 the issue counted.
 - Header line, below: `n / total collected` over the catalogs shown, with per-tier counts. Each line wraps on a narrow window or at large text.
 - Tonight shelf (see tie-in) above the grid when it has cards.
 - Binder grid: cards at 2.5:3.5, max about 130 px wide. Card front ([#1535](https://github.com/open-astro/openastro-ara/issues/1535)): the Card's Art filling the picture, in colour when Collected and dimmed to grey while missing; the Placeholder, a grey silhouette icon per object type, when the Card has no Art; catalog label (`M 31`, `C 14`); name. Border colour per tier, a subtle glow on gold, grey text on missing cards.
@@ -157,6 +158,7 @@ Search gains these objects as a side effect, and so does Tonight's Sky except M4
 - Client (pure Dart): containment on a synthetic frame (object at centre, at half the short side, just outside it, at a corner); alias fallback with `M31`, `M 31`, `Messier 31`; tier thresholds at the boundaries; aggregate fields; merge by `frame_id`, including a `since` response that only re-delivers cached rows. (The count reload rule is gone: the collection-cache bullet below replaces it.)
 - Album screen widget test with a fake callback and neither shell: a tap on a missing card's action calls the callback with that `PlanningDso`.
 - Catalog: after the data fix, the Messier Book has 110 cards and the Caldwell Book 109.
+- Catalog (#1629): the RCW Book claims 181 objects (every `rcw.csv` row, a position each), shows 176 after precedence (M8, M16, M17, M20 and C 100 stay in their Books); a Gum number finds its RCW object; `rcw.csv` fails on a short file or a shifted column.
 - Collection cache ([#1535](https://github.com/open-astro/openastro-ara/issues/1535), pure Dart): a newer `updated_utc` replaces a cached row; a full reply with fewer rows removes nothing; a Tier never drops; Night grouping across local midnight and on a spring-forward day; the sub column picks the most common exposure.
 - Card widgets: a Card with no Art shows the Placeholder; a missing Card shows dimmed Art; the back shows the latest four Nights and a totals row with the full count; every Card's credit is in the licence registry.
 

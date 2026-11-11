@@ -28,7 +28,13 @@ import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../services/dso_catalog_service.dart'
-    show DsoSuggestion, PlanningDso, designationKey, searchSuggestions;
+    show
+        DsoSuggestion,
+        PlanningDso,
+        designationKey,
+        designationWithName,
+        searchSuggestions,
+        suggestionTitle;
 import '../../state/sky_atlas/dso_catalog_state.dart'
     show bundledCatalogProvider;
 import '../../services/tonight_sky_api.dart';
@@ -1145,7 +1151,16 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            sel.name,
+                            designationWithName(
+                              // A catalog designation, not a SIMBAD "NAME ..." identifier.
+                              sel.designations
+                                      .where(
+                                        (d) => RegExp(r'^[A-Za-z]{1,4}[ -]?\d').hasMatch(d),
+                                      )
+                                      .firstOrNull ??
+                                  '',
+                              sel.name,
+                            ),
                             style: kSimpleText.copyWith(
                               fontWeight: FontWeight.w600,
                             ),
@@ -2045,7 +2060,6 @@ class SimpleSuggestion extends StatelessWidget {
   Widget build(BuildContext context) {
     final o = hit.dso;
     final detail = [
-      if (o.name.isNotEmpty && o.name != hit.label) o.name,
       if (o.magnitude != null)
         context.l10n.planMagnitude(o.magnitude!.toStringAsFixed(1)),
     ].join(' · ');
@@ -2064,9 +2078,14 @@ class SimpleSuggestion extends StatelessWidget {
                 size: 18,
                 color: AraColors.textSecondary,
               ),
-              Text(
-                hit.label,
-                style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+              Flexible(
+                flex: 3,
+                child: Text(
+                  suggestionTitle(hit),
+                  style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               if (detail.isNotEmpty)
                 Expanded(

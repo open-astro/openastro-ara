@@ -73,7 +73,7 @@ The screen that shows the Books.
 _Avoid_: collection, gallery
 
 **Book**:
-One catalog's complete set of Cards, such as Messier or Caldwell.
+One catalog's complete set of Cards, such as Messier, Caldwell or RCW. A Book shows only the objects no earlier Book claims, in that order.
 _Avoid_: page, list
 
 **Card**:

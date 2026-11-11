@@ -24,6 +24,20 @@ void main() {
     expect(albumArtId('M 31'), 'M31');
   });
 
+  test('each row carries its own credit and licence, so a photographer\'s picture sits beside ESO\'s (#1629)', () {
+    final rows = parseAlbumManifest('''[
+      {"id": "M31", "art": "m031.webp", "credit": "ESO", "licence": "CC BY 4.0", "source": "https://x"},
+      {"id": "RCW38", "art": "rcw038.webp", "credit": "Jane Example (own capture)", "licence": "CC BY 4.0",
+       "source": "https://example.invalid/rcw38"},
+      {"id": "RCW53", "art": null}
+    ]''');
+    final row = rows[albumArtId('RCW 38')]!;
+    expect((row.asset, row.creditLine), ('assets/album/art/rcw038.webp', 'Jane Example (own capture) · CC BY 4.0'));
+    expect((row.licenceUrl, row.source), ('https://creativecommons.org/licenses/by/4.0/', 'https://example.invalid/rcw38'));
+    expect(rows['M31']!.creditLine, 'ESO · CC BY 4.0');
+    expect(rows['RCW53']!.creditLine, isNull, reason: 'no Art: the Placeholder, no credit line');
+  });
+
   test('a row\'s Portuguese distance and trivia are used in Portuguese, English otherwise', () {
     final rows = parseAlbumManifest('''[
       {"id": "M31", "art": "m031.webp", "credit": "ESO", "licence": "CC BY 4.0", "source": "https://x",

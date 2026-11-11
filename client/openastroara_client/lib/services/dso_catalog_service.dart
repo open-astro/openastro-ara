@@ -358,6 +358,29 @@ List<DsoSuggestion> searchSuggestions(
   return [for (final r in ranked.take(limit)) r.$2];
 }
 
+/// A designation as people write it: OpenNGC's zero-padded "NGC0246" is "NGC 246", "C 056" is "C 56".
+String prettyDesignation(String id) => id.replaceFirstMapped(
+    RegExp(r'^(NGC|IC|C)\s?0*(\d+)$'), (m) => '${m[1]} ${m[2]}');
+
+/// #1720 display form `designation (name)`: "NGC 246 (Skull Nebula)". Just the
+/// designation when there is no other name; just the name when it already
+/// carries the designation or its own brackets ("Heart Nebula (IC 1805)").
+String designationWithName(String designation, String name) {
+  final d = prettyDesignation(designation.trim());
+  final n = name.trim();
+  if (d.isEmpty) return n;
+  if (n.isEmpty || designationKey(n) == designationKey(d)) return d;
+  if (n.contains('(')) return n;
+  return '$d ($n)';
+}
+
+/// A search suggestion's title: the designation that matched (or the id, when
+/// a nickname did) with the object's name in brackets.
+String suggestionTitle(DsoSuggestion s) {
+  final matchedDesignation = s.label == s.dso.id || RegExp(r'\d').hasMatch(s.label) && s.label != s.dso.name;
+  return designationWithName(matchedDesignation ? s.label : s.dso.id, s.dso.name);
+}
+
 PlanningDso? findCatalogObject(List<PlanningDso> catalog, String query) {
   // Two normalisations: a dash-PRESERVING one first, because designations
   // with a suffix collide with plain numbers once dashes go — "WR 2-1" and
