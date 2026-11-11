@@ -1,3 +1,5 @@
+import 'dart:ui' show Size;
+
 import 'package:flutter/foundation.dart' show TargetPlatform;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -88,5 +90,40 @@ void main() {
     await c.read(simpleModeFeatureProvider.future);
     await c.read(simpleModeProvider.future);
     expect(c.read(simpleModeActiveProvider), isFalse);
+  });
+
+  group('companionShortestSideProvider reads the live view', () {
+    Future<ProviderContainer> pump(WidgetTester t, Size physical) async {
+      t.view.devicePixelRatio = 1;
+      t.view.physicalSize = physical;
+      addTearDown(t.view.reset);
+      final c = ProviderContainer(
+        overrides: [
+          companionPlatformProvider.overrideWithValue(TargetPlatform.android),
+        ],
+      );
+      addTearDown(c.dispose);
+      return c;
+    }
+
+    testWidgets('a zero size is not a phone', (t) async {
+      final c = await pump(t, Size.zero);
+      expect(c.read(companionShortestSideProvider), double.infinity);
+      expect(c.read(companionModeProvider), isFalse);
+    });
+
+    testWidgets('a size change flips the provider', (t) async {
+      final c = await pump(t, const Size(390, 844));
+      expect(c.read(companionModeProvider), isTrue);
+      t.view.physicalSize = const Size(1200, 800);
+      await t.pump();
+      expect(c.read(companionModeProvider), isFalse);
+      t.view.physicalSize = const Size(0, 0);
+      await t.pump();
+      expect(c.read(companionModeProvider), isFalse);
+      t.view.physicalSize = const Size(800, 390);
+      await t.pump();
+      expect(c.read(companionModeProvider), isTrue);
+    });
   });
 }

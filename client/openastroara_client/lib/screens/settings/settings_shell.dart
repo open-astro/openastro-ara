@@ -77,8 +77,14 @@ class SettingsShell extends ConsumerWidget {
         Expanded(
           child: Column(
             children: [
-              _PanelHeader(info: hidden ? findPanelInfo('app.changelog') : selectedInfo),
-              Expanded(child: _PanelBody(panelId: hidden ? 'app.changelog' : selectedId)),
+              _PanelHeader(
+                info: hidden ? findPanelInfo('app.changelog') : selectedInfo,
+              ),
+              Expanded(
+                child: _PanelBody(
+                  panelId: hidden ? 'app.changelog' : selectedId,
+                ),
+              ),
             ],
           ),
         ),
@@ -116,11 +122,11 @@ class _SettingsTree extends StatelessWidget {
           ),
           for (final panel in group.panels)
             if (!(companion && panel.id == 'app.experimental'))
-            _PanelRow(
-              panel: panel,
-              selected: panel.id == selectedId,
-              onTap: () => onSelect(panel.id),
-            ),
+              _PanelRow(
+                panel: panel,
+                selected: panel.id == selectedId,
+                onTap: () => onSelect(panel.id),
+              ),
         ],
         const SizedBox(height: 24),
       ],

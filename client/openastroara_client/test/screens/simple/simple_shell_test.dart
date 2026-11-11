@@ -110,7 +110,8 @@ import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
-import 'package:openastroara/state/settings/settings_search.dart' show buildSearchIndex;
+import 'package:openastroara/state/settings/settings_search.dart'
+    show buildSearchIndex;
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/theme/ara_metrics.dart' show AraBlur, AraSpace;
 import 'package:openastroara/widgets/imaging/frame_viewer.dart' show FrameViewer;
@@ -192,11 +193,13 @@ final _someSteps = [
 
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
-    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases, Locale? locale, SimpleModePrefsService? modePrefs}) async {
+    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases, Locale? locale, SimpleModePrefsService? modePrefs, TargetPlatform platform = TargetPlatform.linux}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final container = ProviderContainer(overrides: [
+    // flutter_test runs as Android: not a phone unless a test says so.
+    companionPlatformProvider.overrideWithValue(platform),
     simpleModePrefsProvider.overrideWithValue(modePrefs ?? _MemPrefs()),
     if (feature) simpleModeFeaturePrefsProvider.overrideWithValue(_MemPrefs()),
     if (pier) simplePermanentPierPrefsProvider.overrideWithValue(_MemPrefs()..value = false),
@@ -2615,15 +2618,16 @@ void main() {
 
   group('Companion Mode (phone): no way into the full UI', () {
     final phone = <Override>[
-      companionPlatformProvider.overrideWithValue(TargetPlatform.iOS),
       companionShortestSideProvider.overrideWithValue(390),
     ];
 
-    testWidgets('390x844 with both prefs off: the Simple shell, no Full UI, no Experimental, nothing saved', (tester) async {
+    testWidgets('390x844 with both prefs off: Simple shell, no Full UI, '
+        'no Experimental, nothing saved', (tester) async {
       final saved = <bool>[];
       final prefs = _SavingPrefs(saved);
       final c = await _pump(tester, const Size(390, 844),
-          feature: true, modePrefs: prefs, gear: phone);
+          feature: true, modePrefs: prefs, gear: phone,
+          platform: TargetPlatform.iOS);
       await c.read(simpleModeFeatureProvider.notifier).set(false);
       await tester.pump();
       expect(c.read(simpleModeProvider).value, isFalse);
@@ -2646,28 +2650,29 @@ void main() {
       expect(find.text('Experimental'), findsNothing);
       expect(find.text('About'), findsWidgets);
       expect(
-        buildSearchIndex(companion: c.read(companionModeProvider)).any((e) => e.panelId == 'app.experimental'),
+        buildSearchIndex(companion: c.read(companionModeProvider))
+            .any((e) => e.panelId == 'app.experimental'),
         isFalse,
       );
       expect(saved, isEmpty, reason: 'the mode pref is never written');
     });
 
-    testWidgets('a tablet-size screen (768 px) keeps today: Full UI button leaves for the full UI', (tester) async {
+    testWidgets('a tablet-size screen keeps today: Full UI button leaves '
+        'for the full UI', (tester) async {
       final c = await _pump(tester, const Size(1024, 768), gear: [
-        companionPlatformProvider.overrideWithValue(TargetPlatform.iOS),
         companionShortestSideProvider.overrideWithValue(768),
-      ]);
+      ], platform: TargetPlatform.iOS);
       expect(c.read(companionModeProvider), isFalse);
       await tester.tap(find.byKey(const Key('simple-full-ui-button')));
       await tester.pump();
       expect(c.read(simpleModeProvider).value, isFalse);
     });
 
-    testWidgets('a desktop keeps today: the Experimental row shows in Settings', (tester) async {
+    testWidgets('a desktop keeps today: the Experimental row shows',
+        (tester) async {
       final c = await _pump(tester, const Size(1280, 800), gear: [
-        companionPlatformProvider.overrideWithValue(TargetPlatform.macOS),
         companionShortestSideProvider.overrideWithValue(390),
-      ]);
+      ], platform: TargetPlatform.macOS);
       expect(c.read(companionModeProvider), isFalse);
       expect(find.byKey(const Key('simple-full-ui-button')), findsOneWidget);
       tester.view.physicalSize = const Size(1280, 2400);
@@ -2677,7 +2682,10 @@ void main() {
       ));
       await tester.pump();
       expect(find.text('Experimental'), findsWidgets);
-      expect(buildSearchIndex().any((e) => e.panelId == 'app.experimental'), isTrue);
+      expect(
+        buildSearchIndex().any((e) => e.panelId == 'app.experimental'),
+        isTrue,
+      );
     });
   });
 

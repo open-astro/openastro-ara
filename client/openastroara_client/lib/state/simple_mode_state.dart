@@ -1,7 +1,7 @@
-import 'dart:ui' show PlatformDispatcher;
-
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform;
+import 'package:flutter/widgets.dart'
+    show WidgetsBindingObserver, WidgetsFlutterBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/simple_mode_prefs_service.dart';
@@ -70,15 +70,29 @@ final companionPlatformProvider = Provider<TargetPlatform>(
   (ref) => defaultTargetPlatform,
 );
 
-/// The view's shortest side in logical px; overridden in tests.
-// shortcut: read once at start, not reactive; a phone does not resize, and
-// the shortest side survives rotation. Make it reactive for split-screen.
+/// The view's shortest side in logical px; overridden in tests. Recomputed
+/// whenever the view metrics change (split-screen, foldables, Slide Over). A
+/// view that is missing or reports a zero size (Android and iOS can before the
+/// first frame) is "unknown" and reads as infinity, so a tablet is never taken
+/// for a phone.
 final companionShortestSideProvider = Provider<double>((ref) {
-  final view = PlatformDispatcher.instance.views.firstOrNull;
+  final binding = WidgetsFlutterBinding.ensureInitialized();
+  final observer = _MetricsObserver(ref.invalidateSelf);
+  binding.addObserver(observer);
+  ref.onDispose(() => binding.removeObserver(observer));
+  final view = binding.platformDispatcher.views.firstOrNull;
   if (view == null) return double.infinity;
   final logical = view.physicalSize / view.devicePixelRatio;
-  return logical.shortestSide;
+  final shortest = logical.shortestSide;
+  return shortest > 0 ? shortest : double.infinity;
 });
+
+class _MetricsObserver with WidgetsBindingObserver {
+  _MetricsObserver(this._onChange);
+  final void Function() _onChange;
+  @override
+  void didChangeMetrics() => _onChange();
+}
 
 /// Companion Mode: a phone (iOS or Android, shortest side under 600 logical
 /// px). Simple Mode is forced on and every way into the full UI is gone. It
