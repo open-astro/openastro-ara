@@ -3143,10 +3143,7 @@ class _SimpleFilterWheelWindowState
                             Text(
                               shownName,
                               maxLines: 1,
-                              style: kSimpleText.copyWith(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w600,
-                              ),
+                              style: kSimpleReading,
                             ),
                             if (inPlace != null && inPlace.name.isNotEmpty)
                               Text(
