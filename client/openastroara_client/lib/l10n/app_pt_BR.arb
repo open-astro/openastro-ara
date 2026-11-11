@@ -1110,5 +1110,19 @@
   "monitorTonight": "Esta noite",
   "monitorDarkSpan": "Escuro de {start} a {end} · {imaged} capturados",
   "monitorNoDark": "Defina o local para ver o escuro desta noite",
-  "monitorLinkLostShort": "Sem contato com o setup"
+  "monitorLinkLostShort": "Sem contato com o setup",
+  "calibrationMissingTonight": "Faltando para esta noite",
+  "calibrationFlats": "Flats",
+  "calibrationFlatsFor": "Flats para {filters}",
+  "calibrationDarks": "Darks",
+  "calibrationBias": "Bias",
+  "calibrationTakeFlats": "Fazer flats",
+  "calibrationTakeDarks": "Fazer darks",
+  "calibrationTakeFlatsAndDarks": "Fazer flats e darks",
+  "calibrationTaking": "Quadros de calibração · {done} de {total}",
+  "calibrationStopped": "Parado · {done} de {total}",
+  "calibrationDone": "Quadros de calibração concluídos",
+  "calibrationOnFile": "Flats, darks e bias já salvos",
+  "calibrationActionShoot": "iniciar os quadros de calibração",
+  "calibrationActionStop": "parar os quadros de calibração"
 }

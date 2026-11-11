@@ -20,6 +20,10 @@ class CalibrationSession {
   /// flats cool to it.
   final double? coolerSetpointC;
 
+  /// Every light was a snapshot outside a plan (Preview's shots, filed under
+  /// "Manual capture"): Simple Mode leaves these sessions out.
+  final bool manualCapture;
+
   const CalibrationSession({
     required this.id,
     required this.targetName,
@@ -31,6 +35,7 @@ class CalibrationSession {
     required this.matchingDarksAvailable,
     this.matchingBiasAvailable = false,
     this.coolerSetpointC,
+    this.manualCapture = false,
   });
 
   factory CalibrationSession.fromJson(Map<String, dynamic> json) {
@@ -50,6 +55,7 @@ class CalibrationSession {
       matchingDarksAvailable: json['matching_darks_available'] == true,
       matchingBiasAvailable: json['matching_bias_available'] == true,
       coolerSetpointC: (json['cooler_setpoint_c'] as num?)?.toDouble(),
+      manualCapture: json['manual_capture'] == true,
     );
   }
 }

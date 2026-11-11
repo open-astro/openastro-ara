@@ -5279,5 +5279,72 @@
   "monitorLinkLostShort": "Lost contact with the rig",
   "@monitorLinkLostShort": {
     "description": "Monitor: what a screen reader announces when the link to the rig is lost (no age)"
+  },
+  "calibrationMissingTonight": "Missing for tonight",
+  "@calibrationMissingTonight": {
+    "description": "Night done: tonight's lights lack calibration frames; the missing sets follow on the line under it"
+  },
+  "calibrationFlats": "Flats",
+  "@calibrationFlats": {
+    "description": "Night done / Calibration: flats are missing (the filters aren't known)"
+  },
+  "calibrationFlatsFor": "Flats for {filters}",
+  "@calibrationFlatsFor": {
+    "description": "Night done / Calibration: the filters whose lights have no flats, comma-separated",
+    "placeholders": {
+      "filters": {"type": "String", "example": "R, G, Ha"}
+    }
+  },
+  "calibrationDarks": "Darks",
+  "@calibrationDarks": {
+    "description": "Night done / Calibration: dark frames are missing"
+  },
+  "calibrationBias": "Bias",
+  "@calibrationBias": {
+    "description": "Night done / Calibration: bias frames are missing"
+  },
+  "calibrationTakeFlats": "Take flats",
+  "@calibrationTakeFlats": {
+    "description": "Night done button: shoot the missing flats"
+  },
+  "calibrationTakeDarks": "Take darks",
+  "@calibrationTakeDarks": {
+    "description": "Night done button: shoot the missing darks and bias (asks for the lens cap first)"
+  },
+  "calibrationTakeFlatsAndDarks": "Take flats and darks",
+  "@calibrationTakeFlatsAndDarks": {
+    "description": "Night done button: shoot the missing flats, then the darks and bias after the lens cap"
+  },
+  "calibrationTaking": "Calibration frames · {done} of {total}",
+  "@calibrationTaking": {
+    "description": "Night done: the calibration run in progress, frames taken of planned",
+    "placeholders": {
+      "done": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "calibrationStopped": "Stopped · {done} of {total}",
+  "@calibrationStopped": {
+    "description": "Night done: the calibration run was stopped part-way, frames taken of planned",
+    "placeholders": {
+      "done": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "calibrationDone": "Calibration frames done",
+  "@calibrationDone": {
+    "description": "Night done: the calibration run finished"
+  },
+  "calibrationOnFile": "Flats, darks and bias on file",
+  "@calibrationOnFile": {
+    "description": "Night done: tonight's lights already have every calibration set; nothing to offer"
+  },
+  "calibrationActionShoot": "start the calibration frames",
+  "@calibrationActionShoot": {
+    "description": "Simple Mode, after Couldn't: generating or starting the calibration run failed"
+  },
+  "calibrationActionStop": "stop the calibration frames",
+  "@calibrationActionStop": {
+    "description": "Simple Mode, after Couldn't: stopping the calibration run failed"
   }
 }

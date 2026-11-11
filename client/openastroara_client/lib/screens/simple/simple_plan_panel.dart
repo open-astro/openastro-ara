@@ -46,6 +46,7 @@ import '../../widgets/sequencer/run_completion_sheet.dart'
     show runFramesPerFilter;
 import 'simple_preflight.dart'
     show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
+import 'simple_calibration.dart' show SimpleNightCalibration;
 import 'simple_device_windows.dart' show SimpleGainSlider;
 import 'simple_preview_panel.dart'
     show
@@ -1816,6 +1817,9 @@ class _NightDone extends ConsumerWidget {
               ],
             ),
         ],
+        if (info.startedUtc case final from?)
+          if (info.completedUtc case final to?)
+            SimpleNightCalibration(startUtc: from, endUtc: to),
         SizedBox(
           width: double.infinity,
           child: FilledButton(

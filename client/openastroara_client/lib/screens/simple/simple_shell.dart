@@ -37,6 +37,7 @@ import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../state/night_mode_state.dart';
+import '../../models/sequence/sequence_summary.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/settings/cooling_fan_state.dart';
@@ -360,12 +361,59 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       }
     }, fireImmediately: true);
     _watchDeviceFailures();
+    // #1563 — a run that isn't the Plan's (calibration frames) waiting for the
+    // person; a frame late, as a pill changes a provider.
+    ref.listenManual(sequenceRunStateProvider, (_, next) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _syncAwaitingPill(next.value);
+      });
+    }, fireImmediately: true);
     // #1756 — a Guider start that failed after calibration began: the pill a quick failure shows.
     ref.listenManual(guideStartLateFailureProvider, (_, failed) {
       if (failed != null && mounted) {
         _messages.show(SimpleMessageKind.error, friendlyError(context.l10n, failed), origin: SimpleStatusOrigin.guide);
       }
     });
+  }
+
+  /// #1563 — the question pill of a run that isn't the Plan's, and its words.
+  int? _awaitingPill;
+  String? _awaitingText;
+
+  /// A run other than the Plan's paused for the person (put the lens cap on):
+  /// its words in a pill with Resume, since the shutter resumes only the
+  /// Plan's run. The pill goes when the run moves on.
+  void _syncAwaitingPill(SequenceRunStateInfo? info) {
+    final text =
+        info != null &&
+            info.state == SequenceRunState.pausedAwaitingUser &&
+            info.sequenceId != ref.read(simpleRunProvider).sequenceId
+        ? info.reasonText ?? info.currentInstructionDescription ?? ''
+        : null;
+    if (text == _awaitingText) return;
+    if (_awaitingPill case final id?) _messages.dismiss(id);
+    _awaitingPill = null;
+    _awaitingText = text;
+    if (text == null) return;
+    final l10n = context.l10n;
+    final id = info!.sequenceId;
+    _awaitingPill = _messages.show(
+      SimpleMessageKind.question,
+      text,
+      actions: [
+        SimpleMessageAction(l10n.planResume, () async {
+          try {
+            await ref.read(sequenceApiProvider)?.resume(id, recenter: false);
+          } catch (e) {
+            if (!mounted) return;
+            _messages.show(
+              SimpleMessageKind.error,
+              friendlyError(context.l10n, e, action: context.l10n.planActionResume),
+            );
+          }
+        }),
+      ],
+    );
   }
 
   /// #1559 — on a narrow window, the rig card opened from its bar.

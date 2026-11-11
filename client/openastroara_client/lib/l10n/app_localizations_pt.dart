@@ -4003,6 +4003,54 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get monitorLinkLostShort => 'Lost contact with the rig';
+
+  @override
+  String get calibrationMissingTonight => 'Missing for tonight';
+
+  @override
+  String get calibrationFlats => 'Flats';
+
+  @override
+  String calibrationFlatsFor(String filters) {
+    return 'Flats for $filters';
+  }
+
+  @override
+  String get calibrationDarks => 'Darks';
+
+  @override
+  String get calibrationBias => 'Bias';
+
+  @override
+  String get calibrationTakeFlats => 'Take flats';
+
+  @override
+  String get calibrationTakeDarks => 'Take darks';
+
+  @override
+  String get calibrationTakeFlatsAndDarks => 'Take flats and darks';
+
+  @override
+  String calibrationTaking(int done, int total) {
+    return 'Calibration frames · $done of $total';
+  }
+
+  @override
+  String calibrationStopped(int done, int total) {
+    return 'Stopped · $done of $total';
+  }
+
+  @override
+  String get calibrationDone => 'Calibration frames done';
+
+  @override
+  String get calibrationOnFile => 'Flats, darks and bias on file';
+
+  @override
+  String get calibrationActionShoot => 'start the calibration frames';
+
+  @override
+  String get calibrationActionStop => 'stop the calibration frames';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -8032,4 +8080,52 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get monitorLinkLostShort => 'Sem contato com o setup';
+
+  @override
+  String get calibrationMissingTonight => 'Faltando para esta noite';
+
+  @override
+  String get calibrationFlats => 'Flats';
+
+  @override
+  String calibrationFlatsFor(String filters) {
+    return 'Flats para $filters';
+  }
+
+  @override
+  String get calibrationDarks => 'Darks';
+
+  @override
+  String get calibrationBias => 'Bias';
+
+  @override
+  String get calibrationTakeFlats => 'Fazer flats';
+
+  @override
+  String get calibrationTakeDarks => 'Fazer darks';
+
+  @override
+  String get calibrationTakeFlatsAndDarks => 'Fazer flats e darks';
+
+  @override
+  String calibrationTaking(int done, int total) {
+    return 'Quadros de calibração · $done de $total';
+  }
+
+  @override
+  String calibrationStopped(int done, int total) {
+    return 'Parado · $done de $total';
+  }
+
+  @override
+  String get calibrationDone => 'Quadros de calibração concluídos';
+
+  @override
+  String get calibrationOnFile => 'Flats, darks e bias já salvos';
+
+  @override
+  String get calibrationActionShoot => 'iniciar os quadros de calibração';
+
+  @override
+  String get calibrationActionStop => 'parar os quadros de calibração';
 }

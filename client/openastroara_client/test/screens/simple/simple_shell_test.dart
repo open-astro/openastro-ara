@@ -21,6 +21,7 @@ import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/alarm/safety_alarm_state.dart';
+import 'package:openastroara/services/sequence_api.dart' show SequenceClient;
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
@@ -824,6 +825,28 @@ class _RunState extends SequenceRunStateNotifier {
   Future<SequenceRunStateInfo?> build() async => value;
 }
 
+/// The run state a test moves on.
+class _MovingRun extends SequenceRunStateNotifier {
+  _MovingRun(this.value);
+  SequenceRunStateInfo value;
+  @override
+  Future<SequenceRunStateInfo?> build() async => value;
+  void set(SequenceRunStateInfo v) => state = AsyncData(value = v);
+}
+
+/// The sequence routes: resume recorded.
+class _ResumeSeq implements SequenceClient {
+  final calls = <String>[];
+  @override
+  Future<String> resume(String id, {bool recenter = true, bool refocus = false}) async {
+    calls.add('resume $id recenter=$recenter');
+    return id;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
 const _queuedM31 = SimpleRun(sequenceId: 'seq-1', targets: [
   SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
 ]);
@@ -904,6 +927,42 @@ Future<bool> _tabToLabel(WidgetTester tester, String label, {int max = 60}) asyn
 }
 
 void main() {
+  testWidgets('a calibration run waiting for the lens cap asks in a pill with Resume; the Plan\'s own pause does not (#1563)', (tester) async {
+    const lensCap = SequenceRunStateInfo(
+        sequenceId: 'cal-run',
+        state: SequenceRunState.pausedAwaitingUser,
+        currentInstructionDescription: 'Put the lens cap on, then resume.');
+    final run = _MovingRun(lensCap);
+    final seq = _ResumeSeq();
+    final c = await _pump(tester, const Size(1024, 768), plan: _queuedM31, gear: [
+      sequenceRunStateProvider.overrideWith(() => run),
+      sequenceApiProvider.overrideWithValue(seq),
+    ]);
+    await tester.pump();
+    await tester.pump();
+
+    final asked = c.read(simpleMessagesProvider).single;
+    expect(asked.kind, SimpleMessageKind.question);
+    expect(asked.title, 'Put the lens cap on, then resume.');
+    asked.actions.single.onPressed();
+    await tester.pump();
+    expect(seq.calls, ['resume cal-run recenter=false']);
+
+    run.set(const SequenceRunStateInfo(sequenceId: 'cal-run', state: SequenceRunState.running));
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider).where((m) => m.kind == SimpleMessageKind.question), isEmpty,
+        reason: 'the run moved on');
+
+    run.set(const SequenceRunStateInfo(
+        sequenceId: 'seq-1', state: SequenceRunState.pausedAwaitingUser, currentInstructionDescription: 'Flip the mount'));
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider).where((m) => m.kind == SimpleMessageKind.question), isEmpty,
+        reason: "the Plan's pause keeps its amber pill and the shutter's Resume");
+  });
+
+
   for (final size in const [Size(1024, 768), Size(1024, 744), Size(1470, 854)]) {
     testWidgets('at $size: compact right rail (mode, settings, shutter), Stop below, left rail (Sky, Info, Library, Sky Album)',
         (tester) async {

@@ -6764,6 +6764,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Lost contact with the rig'**
   String get monitorLinkLostShort;
+
+  /// Night done: tonight's lights lack calibration frames; the missing sets follow on the line under it
+  ///
+  /// In en, this message translates to:
+  /// **'Missing for tonight'**
+  String get calibrationMissingTonight;
+
+  /// Night done / Calibration: flats are missing (the filters aren't known)
+  ///
+  /// In en, this message translates to:
+  /// **'Flats'**
+  String get calibrationFlats;
+
+  /// Night done / Calibration: the filters whose lights have no flats, comma-separated
+  ///
+  /// In en, this message translates to:
+  /// **'Flats for {filters}'**
+  String calibrationFlatsFor(String filters);
+
+  /// Night done / Calibration: dark frames are missing
+  ///
+  /// In en, this message translates to:
+  /// **'Darks'**
+  String get calibrationDarks;
+
+  /// Night done / Calibration: bias frames are missing
+  ///
+  /// In en, this message translates to:
+  /// **'Bias'**
+  String get calibrationBias;
+
+  /// Night done button: shoot the missing flats
+  ///
+  /// In en, this message translates to:
+  /// **'Take flats'**
+  String get calibrationTakeFlats;
+
+  /// Night done button: shoot the missing darks and bias (asks for the lens cap first)
+  ///
+  /// In en, this message translates to:
+  /// **'Take darks'**
+  String get calibrationTakeDarks;
+
+  /// Night done button: shoot the missing flats, then the darks and bias after the lens cap
+  ///
+  /// In en, this message translates to:
+  /// **'Take flats and darks'**
+  String get calibrationTakeFlatsAndDarks;
+
+  /// Night done: the calibration run in progress, frames taken of planned
+  ///
+  /// In en, this message translates to:
+  /// **'Calibration frames · {done} of {total}'**
+  String calibrationTaking(int done, int total);
+
+  /// Night done: the calibration run was stopped part-way, frames taken of planned
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped · {done} of {total}'**
+  String calibrationStopped(int done, int total);
+
+  /// Night done: the calibration run finished
+  ///
+  /// In en, this message translates to:
+  /// **'Calibration frames done'**
+  String get calibrationDone;
+
+  /// Night done: tonight's lights already have every calibration set; nothing to offer
+  ///
+  /// In en, this message translates to:
+  /// **'Flats, darks and bias on file'**
+  String get calibrationOnFile;
+
+  /// Simple Mode, after Couldn't: generating or starting the calibration run failed
+  ///
+  /// In en, this message translates to:
+  /// **'start the calibration frames'**
+  String get calibrationActionShoot;
+
+  /// Simple Mode, after Couldn't: stopping the calibration run failed
+  ///
+  /// In en, this message translates to:
+  /// **'stop the calibration frames'**
+  String get calibrationActionStop;
 }
 
 class _AppLocalizationsDelegate

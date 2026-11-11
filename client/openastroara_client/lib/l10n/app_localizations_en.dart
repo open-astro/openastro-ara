@@ -4003,4 +4003,52 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get monitorLinkLostShort => 'Lost contact with the rig';
+
+  @override
+  String get calibrationMissingTonight => 'Missing for tonight';
+
+  @override
+  String get calibrationFlats => 'Flats';
+
+  @override
+  String calibrationFlatsFor(String filters) {
+    return 'Flats for $filters';
+  }
+
+  @override
+  String get calibrationDarks => 'Darks';
+
+  @override
+  String get calibrationBias => 'Bias';
+
+  @override
+  String get calibrationTakeFlats => 'Take flats';
+
+  @override
+  String get calibrationTakeDarks => 'Take darks';
+
+  @override
+  String get calibrationTakeFlatsAndDarks => 'Take flats and darks';
+
+  @override
+  String calibrationTaking(int done, int total) {
+    return 'Calibration frames · $done of $total';
+  }
+
+  @override
+  String calibrationStopped(int done, int total) {
+    return 'Stopped · $done of $total';
+  }
+
+  @override
+  String get calibrationDone => 'Calibration frames done';
+
+  @override
+  String get calibrationOnFile => 'Flats, darks and bias on file';
+
+  @override
+  String get calibrationActionShoot => 'start the calibration frames';
+
+  @override
+  String get calibrationActionStop => 'stop the calibration frames';
 }
