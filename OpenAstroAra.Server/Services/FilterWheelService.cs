@@ -74,6 +74,9 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
     // profile policy (FilterWheelPolicyDto.HomeOnFirstConnect) the user can turn off.
     private readonly IProfileStore? _profileStore;
     private readonly FilterFocusOffset? _focusOffset; // #1667 — null in tests that don't exercise offsets
+    // #1675 — the saved offsets as the store's Changed last reported them: the store's getter takes the lock
+    // its writes hold across the disk write, so the status poll must not read it.
+    private volatile IReadOnlyList<FilterFocusOffsetDto>? _savedOffsets;
     // #1667 — the slot the focuser is compensated for; kept across an unconfirmed change so its retry still moves.
     private int? _focusBaseline;
     private AlpacaFilterWheel? _client;
@@ -120,8 +123,14 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
         _faults = faults;
         _health = new DeviceHealthWatch(DeviceType.FilterWheel, faults);
         _profileService = profileService;
+        if (_profileStore is not null) {
+            _profileStore.Changed += OnProfileChanged;
+            OnProfileChanged(null, EventArgs.Empty);
+        }
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
+
+    private void OnProfileChanged(object? sender, EventArgs e) => _savedOffsets = _profileStore?.GetFilterFocusOffsets()?.Offsets;
 
     public Task<FilterWheelDto?> GetAsync(CancellationToken ct) {
         FilterWheelDto dto;
@@ -137,7 +146,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
             var slots = (connected ? _slots : null) ?? Array.Empty<FilterSlotDto>();
             dto = new FilterWheelDto(_device.UniqueId, _device.Name, _state, runtime, slots);
         }
-        // #1675 — re-applied on every read (outside the gate: it reads the profile store) so a Save shows at once.
+        // #1675 — re-applied on every read so a Save shows at once.
         return Task.FromResult<FilterWheelDto?>(dto with { Slots = WithSavedOffsets(dto.Slots) });
     }
 
@@ -516,7 +525,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
     /// <summary>#1675 — each slot's effective offset: the one the offset calibration saved with the profile,
     /// else the driver's.</summary>
     private List<FilterSlotDto> WithSavedOffsets(IReadOnlyList<FilterSlotDto> slots) {
-        var saved = _profileStore?.GetFilterFocusOffsets()?.Offsets;
+        var saved = _savedOffsets;
         return slots.Select(s => saved?.LastOrDefault(o => o.Position == s.Position) is { } o ? s with { FocusOffset = o.Offset } : s).ToList();
     }
 
@@ -725,6 +734,9 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
             LogHomeNeverDecided(neverDecided);
         }
         _refreshTimer.Dispose();
+        if (_profileStore is not null) {
+            _profileStore.Changed -= OnProfileChanged;
+        }
         // Dispose the client directly (guarded), not via SafeDisconnectDispose: the courtesy
         // Connected=false is a blocking HTTP call (up to ~3s ASCOM timeout) that would hang
         // container shutdown if the device is unreachable. DisposeQuietly releases resources only.
