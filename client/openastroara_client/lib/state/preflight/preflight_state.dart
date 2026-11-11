@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/preflight_checklist.dart';
@@ -5,6 +7,8 @@ import '../../models/sequence/sequence_summary.dart';
 import '../../models/server.dart';
 import '../../services/preflight_api.dart';
 import '../../services/preflight_prefs_service.dart';
+import '../client_settings_state.dart';
+import '../prefs_sync.dart';
 import '../saved_server_state.dart';
 import '../sequencer/sequence_list_state.dart';
 import '../settings/site_settings_state.dart';
@@ -72,8 +76,40 @@ class PreflightPromptState {
 class PreflightPromptNotifier extends AsyncNotifier<PreflightPromptState> {
   Set<String> _acknowledged = const {};
 
+  // #1644 — the answered nights follow the user across devices: the union of
+  // this device's and the rig's, capped like the local file.
+  SyncedPref<Set<String>> get _synced {
+    final svc = ref.read(preflightPrefsProvider);
+    Set<String> union(Set<String> a, Set<String> b) => {...b, ...a};
+    return SyncedPref<Set<String>>(
+      key: 'preflight_nights',
+      readLocal: () async {
+        final nights = await svc.loadAcknowledgedNights();
+        return nights.isEmpty ? null : nights;
+      },
+      writeLocal: svc.saveAcknowledgedNights,
+      encode: (nights) => PreflightPrefsService.capped(nights),
+      decode: (raw) => raw is List ? raw.whereType<String>().toSet() : null,
+      pushOver: union,
+      applyOver: union,
+    );
+  }
+
+  Future<void> _syncFromRig() async {
+    final synced = await ref.read(prefsSyncProvider).reconcile(_synced);
+    if (synced == null || !ref.mounted || _acknowledged.containsAll(synced)) {
+      return;
+    }
+    // Nights another device answered: rebuild so the card stays away.
+    _acknowledged = {..._acknowledged, ...synced};
+    ref.invalidateSelf();
+  }
+
   @override
   Future<PreflightPromptState> build() async {
+    ref.listen(clientSettingsProvider, (_, next) {
+      if (next.hasValue) unawaited(_syncFromRig());
+    }, fireImmediately: true);
     // Merge, never replace: a rebuild that started before acknowledgeTonight()
     // and lands after it must not resurrect the card from a stale disk read.
     _acknowledged = {
@@ -112,9 +148,9 @@ class PreflightPromptNotifier extends AsyncNotifier<PreflightPromptState> {
     state = const AsyncData(
       PreflightPromptState(shouldPrompt: false, acknowledgedTonight: true),
     );
-    await ref
-        .read(preflightPrefsProvider)
-        .saveAcknowledgedNights(_acknowledged);
+    final nights = _acknowledged;
+    await ref.read(preflightPrefsProvider).saveAcknowledgedNights(nights);
+    if (ref.mounted) await ref.read(prefsSyncProvider).push(_synced, nights);
   }
 }
 

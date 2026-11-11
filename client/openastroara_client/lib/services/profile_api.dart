@@ -48,7 +48,36 @@ class ProfileApi {
               connectTimeout: const Duration(seconds: 3),
               receiveTimeout: const Duration(seconds: 5),
             ),
-          );
+          ) {
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onResponse: (res, handler) {
+          _noteOwnWrite(res.requestOptions.method, res.requestOptions.path);
+          handler.next(res);
+        },
+      ),
+    );
+  }
+
+  // #1644 — when this device last wrote each profile section. The daemon's
+  // `profile.updated` event for that write comes back to the writer too, and
+  // must not reset the screen the writer is still editing.
+  static final Map<String, DateTime> _ownWrites = {};
+
+  static void _noteOwnWrite(String method, String path) {
+    const prefix = '/api/v1/profile/';
+    if (method.toUpperCase() == 'GET' || !path.startsWith(prefix)) return;
+    _ownWrites[path.substring(prefix.length).split('/').first] = DateTime.now();
+  }
+
+  /// True when this device wrote [section] within [within] of now.
+  static bool wroteRecently(
+    String section, {
+    Duration within = const Duration(seconds: 3),
+  }) {
+    final at = _ownWrites[section];
+    return at != null && DateTime.now().difference(at) < within;
+  }
 
   /// §37 multi-profile — list the known profiles + which one is active
   /// (`GET /api/v1/profiles`).

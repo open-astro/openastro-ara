@@ -35,6 +35,11 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Added (preference sync and tonight's progress)
+
+- Planetarium layer and catalog toggles, planning noise tolerance and magnitude floor, the pre-sleep answered nights and the overnight-summary dismissals now follow you across devices through the rig. A change made offline is kept on the device and sent on the next start; an older rig keeps them on the device. The rig gains `PATCH /client-settings` (merge by top-level key) and the `profile.updated` and `client_settings.updated` events. (#1644)
+- Night Setup remembers tonight's focus run (read from the rig) and last polar alignment across an app relaunch, and "permanent pier" is now saved in the site profile so it follows you across devices. (#1565)
+
 ### Added (mount by hand)
 
 - Simple Mode's Mount window has a direction pad: eight directions around a center Stop, with Slow, Medium and Fast speeds taken from the mount's own rates. Hold a direction to move and let go to stop. The arrow keys drive it, and Escape stops. The pad is off, saying why, while the mount is parked, the plan is imaging, polar alignment runs or the Guider guides (#1649).

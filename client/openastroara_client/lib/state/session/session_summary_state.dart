@@ -13,6 +13,8 @@ import '../notifications/notifications_state.dart'
     show notificationsApiProvider;
 import '../sequencer/sequence_list_state.dart'
     show SequenceWsEvents, sequenceApiProvider;
+import '../client_settings_state.dart';
+import '../prefs_sync.dart';
 import '../ws/ws_providers.dart';
 
 final sessionSummaryPrefsProvider = Provider<SessionSummaryPrefsService>(
@@ -37,8 +39,43 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
   bool _inFlight = false;
   bool _rerun = false;
 
+  // #1644 — dismissals follow the user across devices: the union of this
+  // device's and the rig's, capped like the local file.
+  SyncedPref<Set<String>> get _synced {
+    final svc = ref.read(sessionSummaryPrefsProvider);
+    Set<String> union(Set<String> a, Set<String> b) => {...b, ...a};
+    return SyncedPref<Set<String>>(
+      key: 'session_dismissals',
+      readLocal: () async {
+        final ids = await svc.loadAcknowledged();
+        return ids.isEmpty ? null : ids;
+      },
+      writeLocal: svc.saveAcknowledged,
+      encode: (ids) => SessionSummaryPrefsService.capped(ids),
+      decode: (raw) => raw is List ? raw.whereType<String>().toSet() : null,
+      pushOver: union,
+      applyOver: union,
+    );
+  }
+
+  Future<void> _syncFromRig() async {
+    final synced = await ref.read(prefsSyncProvider).reconcile(_synced);
+    if (synced == null || !ref.mounted) return;
+    final ack = await _ack();
+    if (ack.containsAll(synced)) return;
+    // Dismissed on another device: this one keeps the card away too.
+    ack.addAll(synced);
+    final shown = state.asData?.value;
+    if (shown != null && ack.contains(shown.ackKey)) {
+      state = const AsyncData(null);
+    }
+  }
+
   @override
   Future<SessionSummary?> build() async {
+    ref.listen(clientSettingsProvider, (_, next) {
+      if (next.hasValue) unawaited(_syncFromRig());
+    }, fireImmediately: true);
     ref.listen<AsyncValue<WsConnectionState>>(wsConnectionStateProvider, (
       prev,
       next,
@@ -83,7 +120,12 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
   Future<void> _persistSeen(String ackKey) async {
     final ack = await _ack()
       ..add(ackKey);
+    await _saveAndSync(ack);
+  }
+
+  Future<void> _saveAndSync(Set<String> ack) async {
     await ref.read(sessionSummaryPrefsProvider).saveAcknowledged(ack);
+    if (ref.mounted) await ref.read(prefsSyncProvider).push(_synced, ack);
   }
 
   /// The inbox straight from the daemon: the cached notifier only refreshes on
@@ -189,7 +231,7 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
     if (ref.mounted && state.asData?.value?.ackKey == summary.ackKey) {
       state = const AsyncData(null);
     }
-    await ref.read(sessionSummaryPrefsProvider).saveAcknowledged(ack);
+    await _saveAndSync(ack);
   }
 }
 

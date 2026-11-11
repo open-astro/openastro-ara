@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
 
-import 'package:flutter/foundation.dart' show Factory, kDebugMode;
+import 'package:flutter/foundation.dart' show Factory, kDebugMode, mapEquals;
 import 'package:flutter/gestures.dart'
     show EagerGestureRecognizer, OneSequenceGestureRecognizer;
 import 'package:flutter/material.dart';
@@ -17,7 +17,10 @@ import '../../state/sky_atlas/plan_framing_state.dart';
 import '../../services/planetarium_overlay.dart';
 import '../../services/planetarium_prefs_service.dart';
 import '../../services/stellarium_server.dart';
+import '../../state/client_settings_state.dart';
 import '../../state/night_mode_state.dart';
+import '../../state/prefs_sync.dart';
+import '../../state/sky_atlas/planetarium_prefs_sync.dart';
 import '../../state/saved_server_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/settings/optics_settings_state.dart';
@@ -96,6 +99,10 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     unawaited(_init());
   }
 
+  Future<Map<String, bool>?> _syncPrefs() => ref
+      .read(prefsSyncProvider)
+      .reconcile(planetariumSyncedPref(_prefsService));
+
   Future<void> _init() async {
     // Pin the autoDispose site/server providers for the duration of init. Without
     // this, awaiting `siteLocationProvider.future` across the async gaps below
@@ -147,7 +154,14 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         // (empty on first run → the page keeps its defaults). The page applies
         // these on load and posts changes back via _onPageEvent, so a user's
         // layer + catalog choices survive relaunch.
-        final savedPrefs = await _prefsService.load();
+        // #1644: the rig's copy (when it answers within 2 s) lands first, so a
+        // second device opens on the sky the first one set up.
+        var savedPrefs = await _prefsService.load();
+        final synced = await _syncPrefs().timeout(
+          const Duration(seconds: 2),
+          onTimeout: () => null,
+        );
+        if (synced != null) savedPrefs = synced;
         if (!mounted) return;
         final query =
             {
@@ -290,7 +304,15 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         layers.forEach((k, v) {
           if (k is String && v is bool) prefs[k] = v;
         });
-        unawaited(_prefsService.save(prefs));
+        unawaited(
+          _prefsService.save(prefs).then((_) async {
+            if (mounted) {
+              await ref
+                  .read(prefsSyncProvider)
+                  .push(planetariumSyncedPref(_prefsService), prefs);
+            }
+          }),
+        );
       }
       return;
     }
@@ -548,6 +570,16 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
         'lon': site.longitudeDeg,
         'elev': site.elevationM,
       });
+    });
+    // #1644: a toggle changed on another device reaches the open page too.
+    ref.listen(clientSettingsProvider, (_, next) async {
+      if (!next.hasValue) return;
+      final before = await _prefsService.load();
+      final synced = await _syncPrefs();
+      if (synced == null || !mounted) return;
+      if (!mapEquals(before, {...before, ...synced})) {
+        _pushCmd({'type': 'prefs', 'prefs': synced});
+      }
     });
     ref.listen(opticsSettingsProvider, (_, next) {
       final optics = planetariumOpticsFor(next);

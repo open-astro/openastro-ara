@@ -82,6 +82,18 @@ class PlanningPrefsService {
     }
   }
 
+  /// The stored knobs, or null when this device has never saved any (the rig
+  /// sync seeds a rig from stored values only, never from defaults).
+  Future<PlanningPrefs?> loadStored() async {
+    try {
+      final f = await _file();
+      if (!await f.exists()) return null;
+      return PlanningPrefs.fromJson(jsonDecode(await f.readAsString()));
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> save(PlanningPrefs prefs) {
     final task = _chain.then((_) async {
       try {

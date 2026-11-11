@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../../helpers/fake_rig_settings.dart';
+import 'package:openastroara/state/client_settings_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/cursor_page.dart';
 import 'package:openastroara/models/ws_event.dart';
@@ -150,6 +152,7 @@ void main() {
     List<SequenceListItem> list = _daemonList,
     List<AraNotification> inbox = const [],
     bool inboxFails = false,
+    FakeRigSettings? rig,
   }) {
     link = StreamController<WsConnectionState>.broadcast();
     ws = StreamController<WsEvent>.broadcast();
@@ -177,6 +180,7 @@ void main() {
         notificationsApiProvider.overrideWithValue(feed),
         sessionSummaryPrefsProvider.overrideWithValue(prefs),
         sessionSummaryClockProvider.overrideWithValue(() => now),
+        if (rig != null) clientSettingsApiProvider.overrideWithValue(rig),
       ],
     );
     addTearDown(c.dispose);
@@ -513,5 +517,47 @@ void main() {
           'all nine ended runs were read, not the eight most recently edited',
     );
     expect(c.read(sessionSummaryProvider).asData?.value?.runId, 'r1');
+  });
+
+  test('#1644 a dismissal made on another device keeps the card away here', () async {
+    final rig = FakeRigSettings({
+      'session_dismissals': [SessionSummary.ackKeyFor('r1', SequenceRunState.completed)],
+    });
+    final c = make(rig: rig);
+    await c.read(sessionSummaryProvider.future);
+    await settle();
+    link.add(WsConnectionState.connected);
+    await settle();
+    expect(c.read(sessionSummaryProvider).asData?.value, isNull);
+    expect(prefs.acked, contains('r1:completed'), reason: 'the rig value landed in the local file too');
+  });
+
+  test('#1644 dismissing the card sends the key to the rig, next to the other device\'s', () async {
+    final rig = FakeRigSettings({
+      'session_dismissals': ['other:completed'],
+    });
+    final c = make(rig: rig);
+    await c.read(sessionSummaryProvider.future);
+    await settle();
+    link.add(WsConnectionState.connected);
+    await settle();
+    final shown = c.read(sessionSummaryProvider).asData!.value!;
+
+    await c.read(sessionSummaryProvider.notifier).acknowledge(shown);
+    await settle();
+
+    expect(rig.stored['session_dismissals'], containsAll(['other:completed', shown.ackKey]));
+  });
+
+  test('#1644 a later failure of the same run still shows after a synced "paused" dismissal', () async {
+    final rig = FakeRigSettings({
+      'session_dismissals': [SessionSummary.ackKeyFor('r1', SequenceRunState.pausedAwaitingUser)],
+    });
+    final c = make(rig: rig);
+    await c.read(sessionSummaryProvider.future);
+    await settle();
+    link.add(WsConnectionState.connected);
+    await settle();
+    expect(c.read(sessionSummaryProvider).asData?.value?.runId, 'r1', reason: 'completed is a new outcome');
   });
 }
