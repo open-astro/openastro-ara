@@ -928,6 +928,27 @@ void main() {
       expect(find.byKey(const Key('simple-run-suggestion-0')), findsNothing, reason: 'the list closes on a pick');
     });
 
+    testWidgets('the Skull Nebula shows as "NGC 246 (Skull Nebula)" in the suggestion row and the plan header', (tester) async {
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          overrides: [
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(id: 'NGC0246', name: 'Skull Nebula', type: 'PN', magnitude: 8, raDeg: 11.76, decDeg: -11.87, aliases: ['C 056']),
+                ]),
+          ]);
+      await tester.enterText(find.byKey(const Key('simple-run-search')), 'skull');
+      await tester.pump();
+      await tester.pump();
+      expect(find.descendant(of: find.byKey(const Key('simple-run-suggestion-0')), matching: find.text('NGC 246 (Skull Nebula)')),
+          findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-run-suggestion-0')));
+      await tester.pump();
+      expect(find.text('NGC 246 (Skull Nebula)'), findsOneWidget, reason: 'the plan header, the list is closed');
+    });
+
     testWidgets('Add to queue creates the run without starting it and keeps the sheet up for the next pick; again it appends',
         (tester) async {
       var created = 0;
