@@ -29,6 +29,7 @@ import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/guider/guider_calibration_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/simple_run_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 
 /// The rig's calibration routes: its sessions, and the matching-flats
 /// requests sent.
@@ -415,6 +416,18 @@ void main() {
       final ask = c.read(simpleMessagesProvider).single;
       expect(ask.kind, SimpleMessageKind.question);
       expect(ask.actions.map((a) => a.label), contains('Add to queue'));
+    });
+
+    testWidgets('Covered and Missing are outlined pills in their state colour, as in the mock', (tester) async {
+      await _pump(tester, [_session()], child: panel());
+      BoxDecoration outline(String word) => tester
+          .widget<Container>(find.ancestor(of: find.text(word).first, matching: find.byType(Container)).first)
+          .decoration! as BoxDecoration;
+      final missing = outline('Missing'), covered = outline('Covered');
+      expect((missing.border! as Border).top.color, AraColors.accentBusy);
+      expect((covered.border! as Border).top.color, AraColors.accentConnected);
+      expect(missing.borderRadius, BorderRadius.circular(10));
+      expect(missing.color, isNull, reason: 'an outline, not a fill');
     });
 
     testWidgets('Flats asks for flats only, from the panel when connected; Darks & bias for darks and bias only', (tester) async {

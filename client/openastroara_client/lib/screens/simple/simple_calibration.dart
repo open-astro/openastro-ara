@@ -334,15 +334,35 @@ Widget _setRow(
           ],
         ),
       ),
-      Text(
-        covered ? l.calibrationCovered : l.calibrationMissing,
-        style: kSimpleText.copyWith(
-          color: covered ? AraColors.accentConnected : AraColors.accentBusy,
-        ),
-      ),
+      SimpleSetTag(covered: covered),
     ],
   ),
 );
+
+/// A set's Covered or Missing in its state colour, outlined like a pill
+/// (mock `design/preview/simple-calibration-mock.html`): the outline, not a
+/// fill, so it reads over any frame without competing with the buttons.
+class SimpleSetTag extends StatelessWidget {
+  const SimpleSetTag({super.key, required this.covered});
+
+  final bool covered;
+
+  @override
+  Widget build(BuildContext context) {
+    final colour = covered ? AraColors.accentConnected : AraColors.accentBusy;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        border: Border.all(color: colour),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        covered ? context.l10n.calibrationCovered : context.l10n.calibrationMissing,
+        style: kSimpleCaption.copyWith(color: colour),
+      ),
+    );
+  }
+}
 
 /// Calibration actions need the main camera and no calibration run going.
 bool _canShoot(WidgetRef ref) =>
