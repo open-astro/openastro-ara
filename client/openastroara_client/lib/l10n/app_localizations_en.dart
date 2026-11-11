@@ -3704,6 +3704,184 @@ class AppLocalizationsEn extends AppLocalizations {
       'Type the rig\'s name or address, for example astro-pi.local or 192.0.2.24:5555.';
 
   @override
+  String get deviceMountPosition => 'Position';
+
+  @override
+  String get deviceTrackingSpeed => 'Tracking speed';
+
+  @override
+  String get trackingRateSidereal => 'Sidereal';
+
+  @override
+  String get trackingRateLunar => 'Lunar';
+
+  @override
+  String get trackingRateSolar => 'Solar';
+
+  @override
+  String get trackingRateKing => 'King';
+
+  @override
+  String deviceTrackingOffSidereal(String rate) {
+    return 'Tracking at the $rate rate. Back to Sidereal for stars and galaxies.';
+  }
+
+  @override
+  String get deviceCouldntSetTrackingSpeed =>
+      'Couldn\'t change the tracking speed';
+
+  @override
+  String get padSlow => 'Slow';
+
+  @override
+  String get padMedium => 'Medium';
+
+  @override
+  String get padFast => 'Fast';
+
+  @override
+  String get padSpeed => 'Speed';
+
+  @override
+  String get padNorth => 'N';
+
+  @override
+  String get padSouth => 'S';
+
+  @override
+  String get padEast => 'E';
+
+  @override
+  String get padWest => 'W';
+
+  @override
+  String get padMoveNorth => 'Move north';
+
+  @override
+  String get padMoveSouth => 'Move south';
+
+  @override
+  String get padMoveEast => 'Move east';
+
+  @override
+  String get padMoveWest => 'Move west';
+
+  @override
+  String get padMoveNorthEast => 'Move north-east';
+
+  @override
+  String get padMoveNorthWest => 'Move north-west';
+
+  @override
+  String get padMoveSouthEast => 'Move south-east';
+
+  @override
+  String get padMoveSouthWest => 'Move south-west';
+
+  @override
+  String get padStopMount => 'Stop the mount';
+
+  @override
+  String get padUnparkToMove => 'Unpark to move the mount';
+
+  @override
+  String get padPausePlan => 'Pause the plan to move the mount';
+
+  @override
+  String get padPolarRunning => 'Polar alignment is running';
+
+  @override
+  String get padStopGuiding => 'Stop guiding to move the mount';
+
+  @override
+  String get padSlewing => 'Moving to a target: Stop ends it';
+
+  @override
+  String get padNoRates => 'This mount can\'t be moved by hand';
+
+  @override
+  String get pointingLabel => 'Pointing';
+
+  @override
+  String get pointingSolved => 'Pointing (solved)';
+
+  @override
+  String get pointingCheck => 'Check';
+
+  @override
+  String get pointingCheckHint => 'Take a quick frame and plate-solve it';
+
+  @override
+  String get pointingSolving => 'Taking a frame and solving…';
+
+  @override
+  String pointingFrom(String separation, String target) {
+    return '$separation from $target';
+  }
+
+  @override
+  String pointingFromLastGoto(String separation) {
+    return '$separation from the last go-to';
+  }
+
+  @override
+  String get pointingOnTarget => 'On target';
+
+  @override
+  String pointingMountOff(String separation) {
+    return 'Mount reports $separation off';
+  }
+
+  @override
+  String pointingRotatorSynced(String angle) {
+    return 'Rotator synced to $angle';
+  }
+
+  @override
+  String get pointingCouldntSolve => 'Couldn\'t solve this frame';
+
+  @override
+  String get pointingCentre => 'Center';
+
+  @override
+  String get pointingCentring => 'Centering…';
+
+  @override
+  String get pointingSync => 'Sync';
+
+  @override
+  String get pointingSynced => 'Synced';
+
+  @override
+  String get pointingSyncedPill => 'The mount is synced to the solved position';
+
+  @override
+  String get pointingCouldntSync => 'Couldn\'t sync the mount';
+
+  @override
+  String get pointingCouldntCentre => 'Couldn\'t center';
+
+  @override
+  String get pointingOpenPlateSolving => 'Plate solving settings';
+
+  @override
+  String get pointingOpenOptics => 'Optics settings';
+
+  @override
+  String get pointingOpenCamera => 'Camera settings';
+
+  @override
+  String get devicePlanRunningHomeAnyway =>
+      'A plan is running. Send the mount home anyway?';
+
+  @override
+  String get deviceHomeAnyway => 'Home anyway';
+
+  @override
+  String get pointingNoCamera =>
+      'Connect the main camera to check where it points';
+
+  @override
   String get monitorTitle => 'Monitor';
 
   @override

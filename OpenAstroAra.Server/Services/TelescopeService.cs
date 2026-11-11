@@ -75,6 +75,12 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     internal SlewEventWatch SlewWatch { get; } = new();
     private readonly object _gate = new();
     private readonly Timer _refreshTimer;
+    // #1649 — leased direction-pad presses: an axis whose renewals stop is stopped by CheckLeases.
+    // The clock and the check cadence are init knobs for tests (a manual clock, no timer).
+    internal MoveAxisLease Lease { get; } = new();
+    internal TimeProvider LeaseClock { get; init; } = TimeProvider.System;
+    internal TimeSpan LeaseCheckInterval { get; init; } = TimeSpan.FromMilliseconds(100);
+    private readonly Timer _leaseTimer;
     // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence so a fixture that
     // needs "several ticks" waits milliseconds, not multiples of the 2 s production interval.
     // Init-only (object initializer), so it can never re-arm a disposed timer; never used by the daemon.
@@ -158,6 +164,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         _ws = ws;
         _profileService = profileService;
         _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
+        _leaseTimer = new Timer(_ => CheckLeases(), state: null, Timeout.Infinite, Timeout.Infinite);
     }
 
     public Task<TelescopeDto?> GetAsync(CancellationToken ct) {
@@ -243,6 +250,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             _connectGeneration++;
             client = _client;
             _client = null;
+            Lease.CancelAll();
             ForgetPushedSite();
             if (_device is not null) {
                 SetState(EquipmentConnectionState.Disconnected);
@@ -357,6 +365,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // Not-connected / disposed still throw synchronously (the endpoint and tests rely on it); only
         // the guider stop and the move itself are deferred.
         var client = RequireConnectedClient();
+        Lease.CancelAll();
         return ParkAfterGuidingStoppedAsync(client, idempotencyKey);
     }
 
@@ -413,7 +422,30 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         RefreshCacheOnce();
     }
 
-    public async Task MoveAxisAsync(int axis, double rate, CancellationToken ct) {
+    public async Task SetTrackingRateAsync(string rate, CancellationToken ct) {
+        var client = RequireConnectedClient();
+        if (!Enum.TryParse<DriveRate>(rate, ignoreCase: false, out var driveRate) || !Enum.IsDefined(driveRate)) {
+            throw new ArgumentException($"Unknown tracking rate '{rate}'.", nameof(rate));
+        }
+        IReadOnlyList<string>? offered;
+        lock (_gate) {
+            offered = _capabilities?.SupportedSiderealRates;
+        }
+        // An empty list means the mount didn't say; let the driver decide then.
+        if (offered is { Count: > 0 } && !offered.Contains(driveRate.ToString())) {
+            throw new InvalidOperationException($"This mount doesn't offer the {driveRate} tracking rate.");
+        }
+        try {
+            await Task.Run(() => client.TrackingRate = driveRate, CancellationToken.None).ConfigureAwait(false);
+        } catch (ASCOM.DriverException ex) {
+            // The driver's refusal (a mount that lists no rates lets it decide; InvalidValue and
+            // NotImplemented derive from DriverException) is a refusal with its words (409), not a crash.
+            throw new InvalidOperationException(ex.Message, ex);
+        }
+        RefreshCacheOnce();
+    }
+
+    public async Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct) {
         // ct is intentionally NOT honored — see the ITelescopeService.MoveAxisAsync contract: a stop
         // must always run to completion even if the request token cancelled, or a dropped token could
         // strand the mount in motion (the same panic-stop reasoning as AbortSlewAsync). Discarded
@@ -447,9 +479,73 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         if (rate != 0 && !double.IsNaN(rate) && effective != rate) {
             LogMoveAxisRateSnapped(_logger, axis, rate, effective);
         }
+        // #1649 — a stop or an unleased move ends any lease on this axis before the driver call; a
+        // leased move starts its deadline only once the mount took it. A renewal at the speed the
+        // axis already moves at only extends the lease: the driver is not asked again.
+        if (effective == 0 || leaseMs is null) {
+            Lease.Cancel(axis);
+        } else if (Lease.TryRenew(axis, effective, leaseMs.Value, LeaseClock.GetUtcNow())) {
+            return;
+        }
         NoteMountCommand(w => w.NoteMotionCommanded());
-        await Task.Run(() => client.MoveAxis(axisEnum, effective), CancellationToken.None).ConfigureAwait(false);
+        try {
+            await Task.Run(() => client.MoveAxis(axisEnum, effective), CancellationToken.None).ConfigureAwait(false);
+        } catch (ASCOM.DriverException ex) when (IsSuperseded(ex)) {
+            // A driver that queues motion (AlpacaBridge) replaced this move with a newer one before
+            // it reached the mount: the newer command decides, so this is not a failure (rig,
+            // 2026-11-11: a short pad press read "Couldn't move the mount").
+            LogMoveAxisSuperseded(_logger, axis, effective);
+            return;
+        }
+        if (effective != 0 && leaseMs is int ms) {
+            Lease.Renew(axis, effective, ms, LeaseClock.GetUtcNow());
+            ArmLeaseTimer(true);
+        }
         RefreshCacheOnce();
+    }
+
+    internal static bool IsSuperseded(Exception ex) =>
+        ex.Message.Contains("superseded", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>#1649 — stops every leased axis whose renewals stopped (the timer's tick; internal for tests).</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Timer-callback boundary: the expired-lease stop is a blocking ASCOM MoveAxis(0) that can throw arbitrary driver/HTTP exceptions; an exception escaping a timer callback crashes the process. The failure is logged and the next axis is still stopped. CA1031's log-and-recover boundary applies.")]
+    internal void CheckLeases() {
+        var expired = Lease.TakeExpired(LeaseClock.GetUtcNow());
+        if (!Lease.Any) {
+            ArmLeaseTimer(false);
+        }
+        if (expired.Count == 0) {
+            return;
+        }
+        AlpacaTelescope? client;
+        lock (_gate) {
+            client = _state == EquipmentConnectionState.Connected ? _client : null;
+        }
+        if (client is null) {
+            return;
+        }
+        foreach (var axis in expired) {
+            try {
+                NoteMountCommand(w => w.NoteMotionCommanded());
+                client.MoveAxis((TelescopeAxis)axis, 0);
+                LogMoveAxisLeaseExpired(_logger, axis);
+            } catch (Exception ex) {
+                LogMoveAxisLeaseStopFailed(_logger, ex, axis);
+            }
+        }
+        RefreshCacheOnce();
+    }
+
+    private void ArmLeaseTimer(bool on) {
+        lock (_gate) {
+            // Re-checked under the gate: a renewal racing this tick's "nothing left" must keep the timer.
+            if (_disposed || (!on && Lease.Any)) {
+                return;
+            }
+            var period = on ? LeaseCheckInterval : Timeout.InfiniteTimeSpan;
+            _leaseTimer.Change(period, period);
+        }
     }
 
     /// <summary>#1078 — the bands the nudge on <paramref name="axis"/> is snapped into: the axis's own
@@ -538,6 +634,18 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         Message = "MoveAxis rate {Requested} deg/s on axis {Axis} is outside the mount's rate bands; snapped to {Effective} deg/s.")]
     private static partial void LogMoveAxisRateSnapped(ILogger logger, int axis, double requested, double effective);
 
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Debug,
+        Message = "MoveAxis {Rate} deg/s on axis {Axis} was superseded by a newer motion command before it reached the mount.")]
+    private static partial void LogMoveAxisSuperseded(ILogger logger, int axis, double rate);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning,
+        Message = "MoveAxis lease on axis {Axis} expired with no renewal; stopped the axis (#1649).")]
+    private static partial void LogMoveAxisLeaseExpired(ILogger logger, int axis);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Error,
+        Message = "MoveAxis lease on axis {Axis} expired, but stopping the axis failed (#1649).")]
+    private static partial void LogMoveAxisLeaseStopFailed(ILogger logger, Exception ex, int axis);
+
     public async Task AbortSlewAsync(CancellationToken ct) {
         var client = RequireConnectedClient();
         // §57 panic stop: issue AbortSlew immediately (universal — every mount supports it).
@@ -553,6 +661,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Fire-and-forget abort boundary (rethrow=false): the watchdog's StopSlew must never throw into the flip-recovery path; the failure is logged. The throwing path (rethrow=true) re-raises after the lifecycle bookkeeping. CA1031's log-and-recover boundary applies.")]
     private async Task AbortSlewCoreAsync(AlpacaTelescope client, string reason, bool rethrow) {
+        Lease.CancelAll();
         NoteMountCommand(w => w.NoteMotionCommanded());
         // §57.5 — measure issue latency (request-received → device call returned) per Stop Mount
         // incident so the panic budget is tunable from the logs. The tap→request network leg is
@@ -971,6 +1080,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         try { targetRa = c.TargetRightAscension; } catch (Exception) { targetRa = null; }
         double? targetDec;
         try { targetDec = c.TargetDeclination; } catch (Exception) { targetDec = null; }
+        // #1649 — the drive rate, best-effort like the targets (many mounts NotImplement it).
+        string? trackingRate;
+        try { trackingRate = c.TrackingRate.ToString(); } catch (Exception) { trackingRate = null; }
         var tracking = Read(() => c.Tracking, false);
         var parked = Read(() => c.AtPark, false);
         var atHome = Read(() => c.AtHome, false);
@@ -980,7 +1092,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // the shared helper so the precedence (incl. the parked-over-slewing
         // contradiction guard) is unit-tested in one place.
         var state = ResolveRuntimeState(slewing, parked, tracking);
-        return new TelescopeStateDto(state, ra, dec, tracking, parked, atHome, targetRa, targetDec);
+        return new TelescopeStateDto(state, ra, dec, tracking, parked, atHome, targetRa, targetDec, trackingRate);
     }
 
     // #1229 — the mount's SideOfPier (ASCOM PointingState), per-field best-effort like ReadRuntime:
@@ -1583,6 +1695,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             _client = null;
         }
         _refreshTimer.Dispose();
+        _leaseTimer.Dispose();
         // Dispose the client directly (guarded), not via SafeDisconnectDispose: the courtesy
         // AbortSlew/Connected=false are blocking HTTP calls (up to ~3s ASCOM timeout) that would hang
         // container shutdown if the device is unreachable. DisposeQuietly releases resources only.

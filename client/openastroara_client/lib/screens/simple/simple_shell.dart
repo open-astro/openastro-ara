@@ -120,6 +120,9 @@ const double kSimpleRailWidth = 72;
 /// A device window's width (at 1x text), and the widest rail menu's (the
 /// mode grid with its padding): together they say whether both fit.
 const double kSimpleDeviceWindowWidth = 360;
+
+/// The Mount window holds its rows and the direction pad side by side (#1649).
+const double kSimpleMountWindowWidth = 640;
 const double kSimpleWidestPopover = 316;
 
 /// The status pill's widest (top-left under the strip); Info starts right of
@@ -1500,9 +1503,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   bottom: _device == 'eq.guider'
                                       ? kSimpleInset
                                       : aboveRow,
-                                  width:
-                                      kSimpleDeviceWindowWidth *
-                                      simpleRailScale(context),
+                                  // Never wider than the screen beside it: a
+                                  // narrow one puts the Mount pad under its rows.
+                                  width: math.min(
+                                    (_device == 'eq.mount'
+                                            ? kSimpleMountWindowWidth
+                                            : kSimpleDeviceWindowWidth) *
+                                        simpleRailScale(context),
+                                    width -
+                                        _topLeftOverlayLeft(context) -
+                                        kSimpleInset,
+                                  ),
                                   child: Align(
                                     alignment: Alignment.topLeft,
                                     child: SimplePanel(

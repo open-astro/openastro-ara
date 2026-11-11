@@ -26,6 +26,21 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-11 — #1649/#1650 a leased MoveAxis, the mount's tracking rate, and the solve's angle in Verify Position
+
+**Endpoint(s) or area:** `POST /api/v1/equipment/telescope/moveaxis` (optional `lease_ms`); new `POST /api/v1/equipment/telescope/trackingrate`; `GET /api/v1/equipment/telescope` (`runtime.tracking_rate`); `POST /api/v1/platesolve/verify-position` (`position_angle_degrees`, `rotator_synced_degrees`, and a rotator sync).
+
+**Decision:**
+- `moveaxis` takes an optional `lease_ms`, clamped to 250–5000. A non-zero rate with a lease starts or renews a deadline for that axis. When the deadline passes with no renewal, the daemon sends MoveAxis with rate 0 for that axis and logs it. A rate-0 request, a request without `lease_ms`, AbortSlew, a park and a disconnect cancel the deadline. A request without `lease_ms` behaves as before. Validation and the 400/409 refusals are unchanged.
+- `trackingrate` takes `{ "rate": "Sidereal" | "Lunar" | "Solar" | "King" }` in any case. Any other value is a 400 before the driver. Not connected, or a rate missing from the capability's `supported_sidereal_rates` (when that list is not empty), is a 409 with the daemon's sentence. It sets ASCOM `TrackingRate` only: tracking on/off is unchanged. `runtime.tracking_rate` reports the current rate by the same name, null when the mount can't say.
+- `verify-position` returns the solve's `position_angle_degrees` (null when the solve failed). On a good solve it syncs a connected, still rotator to that angle, as Center and Rotate does, and reports the angle in `rotator_synced_degrees` (null when no rotator was synced). The mount is still never synced or moved.
+
+**Reasoning:** Simple Mode's direction pad must stop the mount when the link drops mid-press (a sleeping iPad, lost Wi-Fi): only the rig can do that. The tracking rate had no REST surface; only a plan's Set Tracking step reached it. Syncing the rotator moves nothing and keeps its sky angle honest, whereas a mount sync stays a deliberate user action (Sync after Check).
+
+**Spec ref:** `Services/MoveAxisLease.cs`; `Services/TelescopeService.cs` (`MoveAxisAsync`, `CheckLeases`, `SetTrackingRateAsync`, `ReadRuntime`); `Endpoints/EquipmentEndpoints.cs` (`MoveAxisAsync`, `SetTrackingRateAsync`); `Services/VerifyPositionService.cs` (`SyncRotator`, `Describe`). Tests `TelescopeMoveAxisLeaseTest`, `TelescopeTrackingRateTest`, `VerifyPositionServiceTest`.
+
+---
+
 ## 2026-11-11 — #1765 a copy marker names its drive, and an erase through ARA voids it
 
 **Endpoint(s) or area:** `GET /api/v1/storage/contents` (`frames_not_copied`); `POST /api/v1/storage/configure` with `format: true`; the `.ara-last-copy` marker the disk-to-disk copy leaves on the store.

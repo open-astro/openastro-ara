@@ -11,6 +11,7 @@ import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/site_settings_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../util/slew_rates.dart';
+import '../../../util/tracking_rate_words.dart';
 import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/editable_field.dart';
@@ -176,6 +177,43 @@ class _MountBody extends ConsumerWidget {
               ),
             ],
           ),
+        // #1649 — the drive rate, when the mount offers more than one.
+        if (_rates(caps) case final rates when rates.length > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              children: [
+                Text(context.l10n.deviceTrackingSpeed),
+                const Spacer(),
+                SegmentedButton<String>(
+                  key: const Key('mount_tracking_rate'),
+                  showSelectedIcon: false,
+                  emptySelectionAllowed: true,
+                  segments: [
+                    for (final r in rates)
+                      ButtonSegment(
+                        value: r,
+                        label: Text(trackingRateWord(context.l10n, r)),
+                      ),
+                  ],
+                  selected: {?s.trackingRate},
+                  onSelectionChanged: s.parked
+                      ? null
+                      : (v) {
+                          if (v.isEmpty) return;
+                          _run(
+                            context,
+                            ref,
+                            'set the tracking speed',
+                            () => ref
+                                .read(mountProvider.notifier)
+                                .setTrackingRate(v.first),
+                          );
+                        },
+                ),
+              ],
+            ),
+          ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,
@@ -233,6 +271,11 @@ class _MountBody extends ConsumerWidget {
       ],
     );
   }
+
+  static List<String> _rates(MountCapabilities? caps) => [
+    for (final r in kTrackingRateOrder)
+      if (caps?.trackingRates.contains(r) ?? false) r,
+  ];
 
   static String _formatLatitude(double v) =>
       '${v.abs().toStringAsFixed(2)}° ${v >= 0 ? 'N' : 'S'}';

@@ -18,6 +18,11 @@ class VerifyPositionResult {
   /// J2000. The offsets already account for it; the raw lines say so.
   final String? mountEpoch;
 
+  /// The solve's position angle (degrees), and the angle a still rotator was
+  /// synced to by this check; null when none (#1650).
+  final double? positionAngleDegrees;
+  final double? rotatorSyncedDegrees;
+
   const VerifyPositionResult({
     required this.success,
     this.solvedRaHours,
@@ -31,6 +36,8 @@ class VerifyPositionResult {
     required this.exposureSeconds,
     this.note,
     this.mountEpoch,
+    this.positionAngleDegrees,
+    this.rotatorSyncedDegrees,
   });
 
   factory VerifyPositionResult.fromJson(Map<String, dynamic> json) {
@@ -48,6 +55,8 @@ class VerifyPositionResult {
       exposureSeconds: d('exposure_seconds') ?? 0,
       note: json['note'] as String?,
       mountEpoch: json['mount_epoch'] as String?,
+      positionAngleDegrees: d('position_angle_degrees'),
+      rotatorSyncedDegrees: d('rotator_synced_degrees'),
     );
   }
 

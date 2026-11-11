@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-11T14:46:09+13:00",
+  "generatedAt": "2026-11-11T20:26:07+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -758,6 +758,14 @@
       "description": "Top-right pill, one per thing happening: status dot (blinks green while working, a blue ring while changing), label, dim detail, an optional progress line along its foot; at most 300 px scaled with the text, up to two lines; stays at least 1 s, then fades over 200 ms. A pill that ends past the third clears at once; the popovers below start 8 pt under the top pill, measured. A new state of the same kind gets its own 1 s minimum.",
       "html": "<div class=\"ds-spill-stack\"><div class=\"ds-spill\"><i class=\"ds-dot ds-dot-work\"></i><span>Plan <em>Cooling camera to -10 °C</em></span><b style=\"width:40%\"></b></div><div class=\"ds-spill\"><i class=\"ds-dot ds-dot-ring\"></i><span>Parking</span></div></div>",
       "css": ".ds-spill-stack{display:flex;flex-direction:column;gap:8px;align-items:flex-end;padding:24px;border-radius:10px;background:radial-gradient(ellipse at 50% 45%,#5a5a5a 0,#2a2a2a 45%,#0d0d0d 80%)} .ds-spill{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;position:relative;display:flex;align-items:center;gap:8px;height:48px;max-width:300px;box-sizing:border-box;padding:0 16px;background:rgba(26,26,26,.90);-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px);border-radius:10px;color:#E0E0E0;font-size:14px;cursor:pointer} .ds-spill span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .ds-spill em{font-style:normal;color:#A0A0A0;margin-left:8px} .ds-spill b{position:absolute;left:16px;bottom:10px;height:3px;border-radius:2px;background:#42A5F5} .ds-spill:focus-visible{outline:2px solid #42A5F5;outline-offset:2px} .ds-dot{flex:none;width:10px;height:10px;border-radius:50%;box-sizing:border-box} .ds-dot-work{background:#4CAF50;animation:ds-blink .7s ease-in-out infinite alternate} .ds-dot-ring{border:2px solid #42A5F5} @keyframes ds-blink{to{opacity:.35}} @media (prefers-reduced-motion:reduce){.ds-dot-work{animation:none}}"
+    },
+    {
+      "name": "Direction Pad (Simple Mode)",
+      "kind": "custom",
+      "refersTo": "simple-mount-pad",
+      "description": "The Mount window's pad: three rows of 60 pt tile cells growing with the text (N, S, E, W in 18 pt 600, diagonals in 13 pt; W left, E right as in the full UI), Slow / Medium / Fast segments above (the reason it is off takes their place), a held cell in Selection Blue, its bottom level with the Pointing row's Check. The centre is Home (a house glyph), the red stop square while the mount moves on its own. Hold to move on a lease the rig ends itself; let go to stop (#1649).",
+      "html": "<div class=\"ds-pad\"><div class=\"ds-pad-speed\"><b>Slow</b><b class=\"on\">Medium</b><b>Fast</b></div><div class=\"ds-pad-grid\"><i class=\"s\">NW</i><i>N</i><i class=\"s\">NE</i><i>W</i><i class=\"home\">⌂</i><i>E</i><i class=\"s\">SW</i><i>S</i><i class=\"s\">SE</i></div></div>",
+      "css": ".ds-pad{display:inline-flex;flex-direction:column;gap:8px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif} .ds-pad-speed{display:flex;background:rgba(56,56,56,.55);border-radius:8px} .ds-pad-speed b{flex:1;text-align:center;font-weight:400;font-size:15px;color:#A0A0A0;padding:12px 0;border-radius:8px} .ds-pad-speed b.on{background:#1976D2;color:#fff} .ds-pad-grid{display:grid;grid-template-columns:repeat(3,60px);gap:8px} .ds-pad-grid i{height:60px;display:grid;place-items:center;font-style:normal;font-weight:600;font-size:18px;color:#E0E0E0;background:rgba(56,56,56,.55);border-radius:10px} .ds-pad-grid i.s{font-size:13px;color:#A0A0A0} .ds-pad-grid i.home{font-size:24px}"
     },
     {
       "name": "Focus Knobs (Simple Mode)",

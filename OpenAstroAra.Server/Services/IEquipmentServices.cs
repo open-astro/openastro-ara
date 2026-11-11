@@ -102,13 +102,19 @@ public interface ITelescopeService {
     Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct);
     Task SetTrackingAsync(bool enabled, CancellationToken ct);
 
+    /// <summary>#1649 — set the drive rate (an ASCOM DriveRate name). Throws InvalidOperationException
+    /// when not connected or when the mount doesn't list the rate.</summary>
+    Task SetTrackingRateAsync(string rate, CancellationToken ct);
+
     /// <summary>Start (rate != 0) or stop (rate 0) constant-rate motion on one mount axis
     /// (0 = primary/RA-Az, 1 = secondary/Dec-Alt). CONTRACT: the underlying device call MUST run
     /// to completion regardless of <paramref name="ct"/> — a cancelled request must never leave the
     /// mount running. Implementations therefore treat the stop as unconditional (the request token
     /// is intentionally not honored); a future implementor wiring <paramref name="ct"/> into the
-    /// device call would break that safety invariant.</summary>
-    Task MoveAxisAsync(int axis, double rate, CancellationToken ct);
+    /// device call would break that safety invariant. #1649 — a non-zero rate with
+    /// <paramref name="leaseMs"/> (clamped to 250–5000) is stopped by the service itself when no
+    /// renewal arrives within the lease; null keeps the move running until a stop.</summary>
+    Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct);
     Task AbortSlewAsync(CancellationToken ct);
 
     /// <summary>#1246 — true once a refresh tick since the current connect read the runtime with

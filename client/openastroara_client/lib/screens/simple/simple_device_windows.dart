@@ -19,6 +19,7 @@ import '../../models/weather_status.dart';
 import '../../widgets/equipment/cooling_fan_picker.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../models/guider_status.dart';
+import '../../models/mount_status.dart';
 import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/equipment/filter_wheel_command_state.dart';
 import '../../state/equipment/dome_state.dart';
@@ -37,6 +38,8 @@ import '../../state/focus/autofocus_live_state.dart';
 import '../../state/settings/autofocus_settings_state.dart';
 import '../../state/imaging/exposure_state.dart';
 import '../../state/equipment/mount_state.dart';
+import '../../state/imaging/main_camera_state.dart';
+import '../../state/polar_align/polar_align_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/safety_policies_state.dart';
 import '../../state/profile_management_state.dart';
@@ -63,6 +66,8 @@ import '../../widgets/equipment/equipment_glyphs.dart' show EquipmentGlyph;
 import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot;
 import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment, SimpleSegments, simpleRailScale;
+import 'simple_mount_controls.dart';
+import '../../util/tracking_rate_words.dart';
 import '../../util/friendly_error.dart';
 
 /// One window per device in Simple Mode (design/briefs/simple-mode-settings.md):
@@ -711,8 +716,65 @@ final simpleMountMotionProvider =
       SimpleMountMotionNotifier.new,
     );
 
-/// The mount's window: tracking (On / Off), Parked / Unparked, and the
-/// automatic meridian flip (the profile's, so plans flip by it too).
+/// Home asked in the Mount window (#1649), from the tap until the mount stops
+/// moving, as the Dome window's asks: the window and the status pill read
+/// Finding home…. Nothing moving within a few seconds (already home, or a
+/// fast mount between two reads) clears it.
+class SimpleMountHomeNotifier extends Notifier<bool> {
+  bool _moved = false;
+  Timer? _still;
+
+  @override
+  bool build() {
+    ref.onDispose(() => _still?.cancel());
+    ref.listen(mountProvider.select((s) => s.value), (_, m) {
+      if (!state) return;
+      if (m == null || !m.isConnected) return clear();
+      if (m.isBusy) {
+        _moved = true;
+        _still?.cancel();
+        _still = null;
+      } else if (_moved) {
+        clear();
+      }
+    });
+    return false;
+  }
+
+  /// Sends the mount home; true when it took the ask (it throws why not).
+  Future<bool> home() async {
+    state = true;
+    _moved = false;
+    _still?.cancel();
+    _still = Timer(const Duration(seconds: 3), () {
+      if (!_moved) clear();
+    });
+    try {
+      final ok = await ref.read(mountProvider.notifier).findHome();
+      if (!ok) clear();
+      return ok;
+    } catch (_) {
+      clear();
+      rethrow;
+    }
+  }
+
+  void clear() {
+    _still?.cancel();
+    _still = null;
+    state = false;
+  }
+}
+
+final simpleMountHomeProvider = NotifierProvider<SimpleMountHomeNotifier, bool>(
+  SimpleMountHomeNotifier.new,
+);
+
+/// The mount's window: tracking (On / Off) and its speed, Parked / Unparked
+/// / Home, the automatic meridian flip (the profile's, so plans flip by it
+/// too), and beside them the direction pad, its bottom level with the
+/// Pointing row's Check (#1649, #1650); on a narrow window the pad sits under
+/// the rows.
 class SimpleMountWindow extends ConsumerStatefulWidget {
   const SimpleMountWindow({super.key, this.inSettings = false});
 
@@ -723,9 +785,29 @@ class SimpleMountWindow extends ConsumerStatefulWidget {
   ConsumerState<SimpleMountWindow> createState() => _SimpleMountWindowState();
 }
 
+/// Wide enough for the rows and the pad side by side.
+const double kSimpleMountWideWidth = 560;
+
 class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
-  /// Parked tapped while a plan runs: the window asks first.
-  bool _asking = false;
+  /// Parked (false: Home) tapped while a plan runs: the window asks first.
+  bool? _asking;
+
+  /// Read up front: dispose clears the Check answer, and ref is gone by then.
+  late final SimplePointingNotifier _pointing;
+
+  @override
+  void initState() {
+    super.initState();
+    _pointing = ref.read(simplePointingProvider.notifier)..opened();
+  }
+
+  @override
+  void dispose() {
+    // After this frame: a provider can't change while the tree is finalized.
+    final pointing = _pointing;
+    Future.microtask(pointing.closed);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -768,52 +850,134 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
           ),
         );
       }
+      final rates = [
+        for (final r in kTrackingRateOrder)
+          if (caps?.trackingRates.contains(r) ?? false) r,
+      ];
+      if (rates.length > 1) {
+        final rate = m.trackingRate;
+        children.add(
+          simpleWindowRow(
+            context.l10n.deviceTrackingSpeed,
+            id: 'Tracking speed',
+            SimpleSegments<String>(
+              keyPrefix: 'simple-mount-rate',
+              group: context.l10n.deviceTrackingSpeed,
+              expand: false,
+              shrinkToFit: true,
+              options: [
+                for (final r in rates)
+                  (r, trackingRateWord(context.l10n, r), r.toLowerCase()),
+              ],
+              selected: rate,
+              onPick: m.parked || moving
+                  ? null
+                  : (r) => _run(
+                      context,
+                      () => notifier.setTrackingRate(r),
+                      failure: context.l10n.deviceCouldntSetTrackingSpeed,
+                    ),
+            ),
+          ),
+        );
+        if (rate != null && rate != 'Sidereal' && rates.contains(rate)) {
+          children.add(
+            Text(
+              context.l10n.deviceTrackingOffSidereal(
+                rate == 'King'
+                    ? trackingRateWord(context.l10n, rate)
+                    : trackingRateWord(context.l10n, rate).toLowerCase(),
+              ),
+              key: const Key('simple-mount-rate-caption'),
+              style: kSimpleCaption,
+            ),
+          );
+        }
+      }
+      final homing = ref.watch(simpleMountHomeProvider);
+      final canHome = caps?.canFindHome ?? false;
+      final position = m.parked ? 'parked' : 'unparked';
       children.add(
         simpleWindowRow(
-          context.l10n.devicePark,
-          id: 'Park',
-          moving
+          // Home is the pad's centre now; the row still says where it is.
+          m.atHome && canHome && !homing
+              ? '${context.l10n.deviceMountPosition} · ${context.l10n.deviceAtHome}'
+              : context.l10n.deviceMountPosition,
+          id: 'Position',
+          moving || homing
               ? SizedBox(
                   height: 44,
                   child: Center(
-                    child: Text(
-                      (parking ?? !m.parked)
+                    child: StatusBlink(
+                      // The mount moving is working: blinking green, as the
+                      // Dome window's Parking… (user, 2026-11-11).
+                      on: true,
+                      child: Text(
+                      homing
+                          ? context.l10n.deviceFindingHome
+                          : (parking ?? !m.parked)
                           ? context.l10n.deviceParking
                           : context.l10n.deviceUnparking,
-                      style: kSimpleText.copyWith(color: AraColors.accentInfo),
+                      style: kSimpleText.copyWith(
+                        color: AraColors.accentConnected,
+                      ),
+                    ),
                     ),
                   ),
                 )
-              : _OnOff(
-                  id: 'simple-mount-park',
-                  ids: const ('parked', 'unparked'),
-                  labels: (
-                    context.l10n.deviceParked,
-                    context.l10n.deviceUnparked,
+              : DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AraColors.tileFill,
+                    borderRadius: BorderRadius.circular(AraRadius.container),
                   ),
-                  on: m.parked,
-                  enabled: m.parked
-                      ? caps?.canUnpark ?? false
-                      : caps?.canPark ?? false,
-                  onChanged: (park) {
-                    if (park && planRunning) {
-                      setState(() => _asking = true);
-                    } else {
-                      _park(context, park);
-                    }
-                  },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final (id, word, enabled, onTap) in [
+                        (
+                          'parked',
+                          context.l10n.deviceParked,
+                          caps?.canPark ?? false,
+                          () => planRunning
+                              ? setState(() => _asking = true)
+                              : _park(context, true),
+                        ),
+                        (
+                          'unparked',
+                          context.l10n.deviceUnparked,
+                          !m.parked || (caps?.canUnpark ?? false),
+                          () => _park(context, false),
+                        ),
+                      ])
+                        Flexible(
+                          child: SimpleSegment(
+                            key: Key('simple-mount-park-$id'),
+                            label: word,
+                            group: context.l10n.deviceMountPosition,
+                            shrinkToFit: true,
+                            selected: position == id,
+                            radius: AraRadius.container,
+                            onTap: position == id || !enabled ? null : onTap,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
         ),
       );
-      if (_asking) {
+      if (_asking case final park?) {
         children.add(
           simpleWindowConfirm(
-            question: context.l10n.devicePlanRunningParkAnyway,
-            confirm: context.l10n.deviceParkAnyway,
-            onCancel: () => setState(() => _asking = false),
+            question: park
+                ? context.l10n.devicePlanRunningParkAnyway
+                : context.l10n.devicePlanRunningHomeAnyway,
+            confirm: park
+                ? context.l10n.deviceParkAnyway
+                : context.l10n.deviceHomeAnyway,
+            onCancel: () => setState(() => _asking = null),
             onConfirm: () {
-              setState(() => _asking = false);
-              _park(context, true);
+              setState(() => _asking = null);
+              park ? _park(context, true) : _home(context);
             },
           ),
         );
@@ -831,6 +995,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
           ),
         ),
       );
+      _addPadAndPointing(context, children, m, planRunning: planRunning);
     }
     if (widget.inSettings) {
       children.addAll(
@@ -845,12 +1010,119 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     );
   }
 
+  /// Lays the rows built so far (after the header) out with the pad and the
+  /// Pointing row: side by side when wide, the pad's bottom level with Check;
+  /// the pad under the rows when narrow. Check's answer goes under both.
+  void _addPadAndPointing(
+    BuildContext context,
+    List<Widget> children,
+    MountStatus m, {
+    required bool planRunning,
+  }) {
+    final l10n = context.l10n;
+    final caps = m.capabilities;
+    final scale = simpleRailScale(context);
+    final run = ref.watch(sequenceRunStateProvider).value?.state;
+    final planImaging = (run?.isActive ?? false) && !run!.isAnyPaused;
+    final guiding =
+        ref.watch(guiderStatusProvider).value?.stopEndsPhase ?? false;
+    final polar = ref.watch(polarAlignLiveProvider).isActive;
+    final cameraOn =
+        ref.watch(cameraStatusProvider).asData?.value?.isConnected ?? false;
+    final speeds = (caps?.canMoveAxis ?? false)
+        ? simplePadSpeeds(caps?.padRateBands ?? const [])
+        : const <(String, double)>[];
+    final pad = speeds.isEmpty
+        ? SizedBox(
+            width: kSimplePadCell * scale * 3 + AraSpace.s8 * 2,
+            child: Text(
+              l10n.padNoRates,
+              key: const Key('simple-mount-pad-none'),
+              textAlign: TextAlign.center,
+              style: kSimpleCaption,
+            ),
+          )
+        : SimpleMountPad(
+            speeds: speeds,
+            // The centre: Home, and Stop while the mount moves on its own
+            // (a Home, a GoTo, a park); a pad move stops on letting go.
+            moving:
+                ref.watch(simpleMountHomeProvider) ||
+                (m.isBusy && !ref.watch(simplePadMovingProvider)),
+            canHome: caps?.canFindHome ?? false,
+            onHome: m.parked || m.isBusy
+                ? null
+                : () => planRunning
+                      ? setState(() => _asking = false)
+                      : _home(context),
+            blocker: simplePadBlocker(
+              l10n,
+              m,
+              planImaging: planImaging,
+              polarAligning: polar,
+              guiding: guiding,
+              padMoving: ref.watch(simplePadMovingProvider),
+            ),
+          );
+    final checkBusy = !cameraOn
+        ? l10n.pointingNoCamera
+        : polar
+        ? l10n.padPolarRunning
+        : ref.watch(mainCameraBusyProvider)
+        ? l10n.shellMainCameraBusy
+        : null;
+    final pointing = SimpleMountPointingRow(mount: m, busy: checkBusy);
+    const divider = Divider(height: AraSpace.s12, color: AraColors.border);
+    final rows = children.sublist(1);
+    children.removeRange(1, children.length);
+    children
+      ..add(
+        LayoutBuilder(
+          builder: (context, box) => box.maxWidth >= kSimpleMountWideWidth * scale
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  spacing: AraSpace.s16,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        spacing: AraSpace.s4,
+                        children: [...rows, divider, pointing],
+                      ),
+                    ),
+                    pad,
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  spacing: AraSpace.s4,
+                  children: [
+                    ...rows,
+                    divider,
+                    Center(child: pad),
+                    divider,
+                    pointing,
+                  ],
+                ),
+        ),
+      )
+      ..add(
+        SimpleMountPointingResult(
+          busy: checkBusy,
+          idle: !planRunning && !guiding && !m.isBusy && !m.parked,
+        ),
+      );
+  }
+
   void _park(BuildContext context, bool park, {bool thenTrack = false}) => _run(
     context,
     () => ref
         .read(simpleMountMotionProvider.notifier)
         .park(park, thenTrack: thenTrack),
   );
+
+  void _home(BuildContext context) =>
+      _run(context, () => ref.read(simpleMountHomeProvider.notifier).home());
 
   /// Set once: the profile keeps it.
   Future<void> _setFlip(BuildContext context, bool on) async {
@@ -871,11 +1143,13 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     }
   }
 
-  /// False when the mount refused (a pill says why).
+  /// False when the mount refused (a pill says why: [failure], or that it
+  /// couldn't move).
   Future<bool> _run(
     BuildContext context,
-    Future<bool> Function() action,
-  ) async {
+    Future<bool> Function() action, {
+    String? failure,
+  }) async {
     final notify = userNotifier(context, origin: SimpleStatusOrigin.mount);
     final l10n = context.l10n;
     try {
@@ -884,7 +1158,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
       return performed;
     } catch (e) {
       notify(
-        l10n.deviceCouldntMoveMount,
+        failure ?? l10n.deviceCouldntMoveMount,
         detail: failureReason(l10n, e),
         error: true,
       );
@@ -2448,7 +2722,7 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
       final target = _target == null ? null : simpleDegrees(_target!);
       children.addAll([
         const SizedBox(height: AraSpace.s12),
-        _RotatorButton(
+        SimpleWindowButton(
           key: const Key('simple-rotator-sync'),
           label: target == null ? l10n.deviceSync : l10n.deviceSyncTo(target),
           onTap: enabled && _target != null
@@ -2473,10 +2747,11 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
   }
 }
 
-/// Sync under the rotator's dial, full width, carrying the target ("Sync to
-/// 75°"); dimmed and taking no tap with no target.
-class _RotatorButton extends StatelessWidget {
-  const _RotatorButton({super.key, required this.label, required this.onTap});
+/// A window's plain button: Sync under the rotator's dial, full width,
+/// carrying the target ("Sync to 75°"; dimmed and taking no tap with no
+/// target), the Dome's Park and Home, the Mount window's Check, Center and Sync.
+class SimpleWindowButton extends StatelessWidget {
+  const SimpleWindowButton({super.key, required this.label, required this.onTap});
 
   final String label;
   final VoidCallback? onTap;
@@ -4434,7 +4709,7 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
       final buttons = [
         if (caps?.canPark ?? false)
           Expanded(
-            child: _RotatorButton(
+            child: SimpleWindowButton(
               key: const Key('simple-dome-park'),
               label: l10n.devicePark,
               onTap: locked ? null : () => send(_DomeMove.park),
@@ -4442,7 +4717,7 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
           ),
         if (caps?.canFindHome ?? false)
           Expanded(
-            child: _RotatorButton(
+            child: SimpleWindowButton(
               key: const Key('simple-dome-home'),
               label: l10n.deviceHome,
               onTap: locked ? null : () => send(_DomeMove.home),
@@ -4461,7 +4736,7 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
       // window keeps its size.
       if (!rotates) {
         children.add(
-          _RotatorButton(
+          SimpleWindowButton(
             key: const Key('simple-dome-stop'),
             label: l10n.deviceStop,
             onTap: s.isBusy ? _stop : null,

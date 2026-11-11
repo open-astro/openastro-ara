@@ -18,6 +18,7 @@ using NUnit.Framework;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Model.Equipment;
+using OpenAstroAra.Equipment.Equipment.MyRotator;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
@@ -70,6 +71,46 @@ namespace OpenAstroAra.Test {
             var noMount = VerifyPositionService.Describe(new PlateSolveResult { Success = true, Coordinates = null }, null, null, 2);
             Assert.That(noMount.Success, Is.False, "success without coordinates is a failure");
             Assert.That(noMount.Note, Does.Contain("not connected"));
+        }
+
+        [Test]
+        public void A_good_solve_syncs_a_connected_still_rotator_and_reports_the_angle() {
+            // #1650 — Simple Mode's Check corrects the rotator's sky angle as Centre and Rotate does.
+            var solved = new PlateSolveResult { Success = true, Coordinates = C(1, 2), PositionAngle = 87.4 };
+            var still = new Mock<IRotatorMediator>();
+            still.Setup(r => r.GetInfo()).Returns(new RotatorInfo { Connected = true, IsMoving = false });
+            Assert.That(VerifyPositionService.SyncRotator(solved, still.Object), Is.EqualTo(87.4).Within(1e-4));
+            still.Verify(r => r.Sync(87.4f), Times.Once);
+
+            var dto = VerifyPositionService.Describe(solved, C(1, 2), null, 2, rotatorSyncedDegrees: 87.4);
+            Assert.That(dto.PositionAngleDegrees, Is.EqualTo(87.4).Within(1e-9));
+            Assert.That(dto.RotatorSyncedDegrees, Is.EqualTo(87.4).Within(1e-9));
+        }
+
+        [Test]
+        public void A_rotator_that_refuses_the_sync_keeps_the_check_answer() {
+            var solved = new PlateSolveResult { Success = true, Coordinates = C(1, 2), PositionAngle = 87.4 };
+            var refusing = new Mock<IRotatorMediator>();
+            refusing.Setup(r => r.GetInfo()).Returns(new RotatorInfo { Connected = true, IsMoving = false });
+            refusing.Setup(r => r.Sync(It.IsAny<float>())).Throws(new InvalidOperationException("rotator busy"));
+            Assert.That(VerifyPositionService.SyncRotator(solved, refusing.Object), Is.Null);
+        }
+
+        [Test]
+        public void No_rotator_sync_when_it_is_moving_disconnected_absent_or_the_solve_failed() {
+            var solved = new PlateSolveResult { Success = true, Coordinates = C(1, 2), PositionAngle = 87.4 };
+            var moving = new Mock<IRotatorMediator>();
+            moving.Setup(r => r.GetInfo()).Returns(new RotatorInfo { Connected = true, IsMoving = true });
+            var offline = new Mock<IRotatorMediator>();
+            offline.Setup(r => r.GetInfo()).Returns(new RotatorInfo { Connected = false });
+            Assert.That(VerifyPositionService.SyncRotator(solved, moving.Object), Is.Null);
+            Assert.That(VerifyPositionService.SyncRotator(solved, offline.Object), Is.Null);
+            Assert.That(VerifyPositionService.SyncRotator(solved, null), Is.Null);
+            Assert.That(VerifyPositionService.SyncRotator(new PlateSolveResult { Success = false }, moving.Object), Is.Null);
+            moving.Verify(r => r.Sync(It.IsAny<float>()), Times.Never);
+            offline.Verify(r => r.Sync(It.IsAny<float>()), Times.Never);
+            var failed = VerifyPositionService.Describe(new PlateSolveResult { Success = false, PositionAngle = 3 }, C(1, 2), null, 2);
+            Assert.That(failed.PositionAngleDegrees, Is.Null);
         }
 
         [Test]
