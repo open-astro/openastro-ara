@@ -149,6 +149,18 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "license": "BSD-3-Clause",
         "copyright": "Copyright 2017 The Chromium Authors",
     },
+    "battery_plus": {
+        # 7.1.2 verified 2026-11-11 against the package's own LICENSE (BSD-3-Clause, The Chromium Authors).
+        "version": "7.1.2",
+        "license": "BSD-3-Clause",
+        "copyright": "Copyright 2017 The Chromium Authors",
+    },
+    "wakelock_plus": {
+        # 1.8.0 verified 2026-11-11 against the package's own LICENSE (BSD-3-Clause).
+        "version": "1.8.0",
+        "license": "BSD-3-Clause",
+        "copyright": "Copyright (c) 2020-2023, creativecreatorormaybenot",
+    },
     "collection": {
         "version": "1.19.1",
         "license": "BSD-3-Clause",

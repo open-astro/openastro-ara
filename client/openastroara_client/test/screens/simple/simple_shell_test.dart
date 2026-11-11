@@ -122,6 +122,7 @@ import 'package:openastroara/services/night_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/screens/simple/simple_message_pills.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
+import 'package:openastroara/services/monitor_device_service.dart';
 import 'package:openastroara/widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import 'package:openastroara/widgets/night_hotkey.dart';
 import 'package:openastroara/theme/ara_colors.dart';
@@ -180,7 +181,7 @@ final _someSteps = [
 
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
-    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases}) async {
+    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases, Locale? locale}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -218,6 +219,9 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
   await tester.pumpWidget(UncontrolledProviderScope(
     container: container,
     child: MaterialApp(
+      locale: locale,
+      localizationsDelegates: locale == null ? null : AppLocalizations.localizationsDelegates,
+      supportedLocales: locale == null ? const [Locale('en', 'US')] : AppLocalizations.supportedLocales,
       builder: (context, child) => SimpleSafetyAlarmLayer(child: child!),
       home: const SimpleShell(planetarium: SizedBox(key: Key('sky'))),
     ),
@@ -258,6 +262,12 @@ class _Camera extends CameraStatusNotifier with _Calls<CameraStatus> {
   final EquipmentConnectionState state0;
   @override
   Future<CameraStatus?> build() async => CameraStatus.fromJson(_wire('ASI2600MM', state0));
+
+  /// What the camera reports next ("exposing", "downloading", "idle").
+  void report(String runtime, {double? pct}) => state = AsyncData(CameraStatus.fromJson({
+        ..._wire('ASI2600MM', state0),
+        'runtime': {'state': runtime, 'exposure_progress_pct': ?pct},
+      }));
 }
 
 class _Focuser extends FocuserNotifier with _Calls<FocuserStatus> {
@@ -786,6 +796,27 @@ class _ManualAlarm extends SafetyAlarmController {
   void silence() => state = state.copyWith(pending: false, ringing: false);
 }
 
+class _WeatherAll extends WeatherNotifier {
+  @override
+  Future<WeatherStatus?> build() async => WeatherStatus.fromJson({
+        ..._wire('Station', EquipmentConnectionState.connected),
+        'cloud_cover_pct': 1, 'sky_quality_mag_arcsec2': 19.2, 'temperature_c': 6.0, 'dew_point_c': -2.9,
+        'humidity_pct': 53, 'rain_rate': 0.0, 'wind_speed_ms': 0.6, 'wind_gust_ms': 4.2, 'wind_direction_deg': 180,
+      });
+}
+
+class _Awake extends KeepAwake {
+  final calls = <bool>[];
+  @override
+  Future<void> set(bool on) async => calls.add(on);
+}
+
+class _SafetyMon extends SafetyMonitorNotifier {
+  @override
+  Future<SafetyMonitorStatus?> build() async =>
+      SafetyMonitorStatus.fromJson({..._wire('Cloudwatcher', EquipmentConnectionState.connected), 'safe': true});
+}
+
 class _RunState extends SequenceRunStateNotifier {
   _RunState(this.value);
   final SequenceRunStateInfo value;
@@ -802,6 +833,9 @@ Future<void> _openEditOfM31(WidgetTester tester) async {
   await tester.tap(find.byKey(const Key('simple-mode')));
   await tester.pump();
   await tester.tap(find.text('Plan').first);
+  await tester.pump();
+  // Picking Plan opens its sheet, which hides the plan squares: the chip puts it away.
+  await tester.tap(find.byKey(const Key('simple-settings')));
   await tester.pump();
   await tester.tap(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('M31')));
   await tester.pump();
@@ -894,7 +928,7 @@ void main() {
       expect(right.bottom, lessThan(stop.top));
       final left = _panelOf(tester, find.byKey(const Key('simple-sky')));
       expect(left.left, kSimpleInset);
-      for (final key in ['simple-info', 'simple-library', 'simple-album']) {
+      for (final key in ['simple-library', 'simple-album']) {
         expect(_panelOf(tester, find.byKey(Key(key))), left, reason: '$key on the left rail');
       }
     });
@@ -958,11 +992,8 @@ void main() {
     await tester.pump();
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'Plan stays in Simple Mode');
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Plan')), findsOneWidget);
-    // Picking Plan opens nothing; the chip opens its sheet, which with nothing
+    // Picking Plan opens its sheet (user, 2026-11-11), which with nothing
     // picked asks for a target.
-    expect(find.text('Search, or pick in the sky.'), findsNothing);
-    await tester.tap(find.byKey(const Key('simple-settings')));
-    await tester.pump();
     expect(find.text('Search, or pick in the sky.'), findsOneWidget);
     // The chip reads the plan's total imaging time: 60 frames at the 5 s default.
     expect(find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.text('5 min')), findsOneWidget);
@@ -1004,8 +1035,6 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-mode')));
       await tester.pump();
       await tester.tap(find.text('Focus'));
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('simple-settings')));
       await tester.pump();
       final scroll = find.ancestor(of: find.byType(SimpleFocusPanel), matching: find.byType(Scrollable)).first;
       expect(tester.state<ScrollableState>(scroll).position.maxScrollExtent, 0, reason: 'everything in view');
@@ -1072,8 +1101,6 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mode-plan')));
     await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-settings')));
-    await tester.pump();
     expect(find.byType(SimpleRunSheet), findsOneWidget);
     expect(find.text("Tonight's plan"), findsNothing);
   });
@@ -1087,8 +1114,6 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mode-plan')));
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
     wheel.report({'state': 'awaiting_user', 'current_slot': 1, 'pending_slot': 2}, manual: true);
     await tester.pump();
@@ -1146,8 +1171,6 @@ void main() {
         reason: 'the modes menu stays by the rail');
     await tester.tap(find.byKey(const Key('simple-mode-focus')));
     await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-settings')));
-    await tester.pump();
     expect(_panelOf(tester, find.text('Fit the mask, then Start')).top, rail.top, reason: 'Focus on its own: by the rail');
   });
 
@@ -1164,8 +1187,6 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mode-guide')));
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     final panel = tester.getRect(find.byKey(const Key('simple-guide-panel')));
@@ -1195,8 +1216,6 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mode-guide')));
     await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-settings')));
-    await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     final panel = tester.getRect(find.byKey(const Key('simple-guide-panel')));
     final row = tester.getRect(find.byKey(const Key('simple-histogram')));
@@ -1211,8 +1230,6 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mode-guide')));
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     final panel = tester.getRect(find.byKey(const Key('simple-guide-panel')));
@@ -1230,12 +1247,34 @@ void main() {
     // The mode holds the guider's settings, so it reads Guider (user, 2026-11-06).
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Guider')), findsOneWidget);
     expect(find.byType(SimpleGuideShutter), findsOneWidget);
-    await tester.tap(find.byKey(const Key('simple-settings')));
-    await tester.pump();
     expect(find.byType(SimpleGuidePanel), findsOneWidget);
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
     expect(tester.getRect(find.byKey(const Key('simple-guide-panel'))).right, rail.left - kSimpleInset,
         reason: 'left of the rail, like every mode panel');
+  });
+
+  testWidgets('picking another mode from the grid opens its panel; Preview and the mode in hand open nothing (user, 2026-11-11)',
+      (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    Future<void> pick(String mode) async {
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      await tester.tap(find.byKey(Key('simple-mode-$mode')));
+      await tester.pump();
+    }
+
+    await pick('focus');
+    expect(find.byType(SimpleFocusPanel), findsOneWidget, reason: 'no second tap on the chip');
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    expect(find.byType(SimpleFocusPanel), findsNothing, reason: 'the chip still hides it');
+    await pick('focus');
+    expect(find.byType(SimpleFocusPanel), findsNothing, reason: 'the mode in hand only closes the grid');
+    await pick('polarAlign');
+    expect(find.byType(SimplePolarPanel), findsOneWidget);
+    await pick('preview');
+    expect(find.byType(SimplePolarPanel), findsNothing);
+    expect(find.text('Exposure'), findsNothing, reason: 'Preview keeps the frame clear');
   });
 
   testWidgets('Focus stays in Simple Mode: the rail reads Focus, its panel opens left of the rail; the chip is the Focus chip',
@@ -1247,10 +1286,7 @@ void main() {
     await tester.pump();
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Focus')), findsOneWidget);
-    expect(find.text('Fit the mask, then Start'), findsNothing, reason: 'picking a mode opens nothing');
-    // Picking a mode only switches it; the chip opens its panel.
-    await tester.tap(find.byKey(const Key('simple-settings')));
-    await tester.pump();
+    // Picking another mode opens its panel (user, 2026-11-11).
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
     final panel = _panelOf(tester, find.text('Fit the mask, then Start'));
     expect(panel.right, rail.left - kSimpleInset, reason: 'left of the rail');
@@ -1287,9 +1323,7 @@ void main() {
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('P.A.')), findsOneWidget);
     final chip = find.byKey(const Key('simple-settings'));
-    expect(find.byKey(const Key('simple-polar-exposure')), findsNothing, reason: 'picking a mode opens nothing');
-    await tester.tap(chip);
-    await tester.pump();
+    // Picking another mode opens its panel (user, 2026-11-11).
     expect(find.descendant(of: chip, matching: find.text('1 s\nLoop')), findsOneWidget);
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
     final panel = _panelOf(tester, find.byKey(const Key('simple-polar-exposure')));
@@ -1578,7 +1612,7 @@ void main() {
       expect(find.text('Preflight'), findsNWidgets(2), reason: 'the modes are open, beside the rail');
       await tap(find.ancestor(of: find.text('Focus'), matching: find.byType(InkWell)).first);
       expect(find.byKey(const Key('preflight-strip')), findsNothing, reason: 'Focus picked: Preflight left');
-      expect(find.byType(SimpleFocusPanel), findsNothing, reason: 'picking a mode opens nothing');
+      expect(find.byType(SimpleFocusPanel), findsOneWidget, reason: 'picking another mode opens its panel');
     });
   }
 
@@ -1629,8 +1663,6 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-mode')));
       await tester.pump();
       await tester.tap(find.text('Plan').first);
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('simple-settings')));
       await tester.pump();
       final scroll = find.descendant(of: find.byType(SimpleRunSheet), matching: find.byType(Scrollable)).first;
       expect(tester.state<ScrollableState>(scroll).position.maxScrollExtent, 0, reason: 'everything shows');
@@ -1741,6 +1773,9 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.text('Plan').first);
+    await tester.pump();
+    // Picking Plan opens its sheet, which hides the plan squares: the chip puts it away.
+    await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
     await tester.tap(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('M31')));
     await tester.pump();
@@ -1931,6 +1966,9 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Plan').first);
     await tester.pump();
+    // Picking Plan opens its sheet, which hides the plan squares: the chip puts it away.
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
     final square = tester.getRect(find.byKey(const Key('simple-run-tracker')));
     expect(square.right, 1024 - kSimpleInset, reason: 'in the corner, from the first frame (no slide from the offer)');
     final stop = tester.getRect(find.byType(EmergencyStopButton));
@@ -1952,8 +1990,6 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-mode')));
       await tester.pump();
       await tester.tap(find.text('Plan').first);
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('simple-settings')));
       await tester.pump();
       final sheet = tester.getRect(find.byType(SimpleRunSheet));
       expect(sheet.top, greaterThanOrEqualTo(kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight + 8),
@@ -2011,12 +2047,12 @@ void main() {
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     final container = await _pump(tester, const Size(1024, 768));
     await _frame(tester, container);
-    await tester.tap(find.byKey(const Key('simple-info')));
+    container.read(simpleInfoShownProvider.notifier).toggle();
     await tester.pump();
     // Labels follow the user's size all the way; nothing caps them at 1.3x.
     final library = tester.element(find.text('Library'));
     expect(MediaQuery.textScalerOf(library).scale(1), 2);
-    expect(tester.getSize(find.byKey(const Key('simple-info'))).width, greaterThan(60),
+    expect(tester.getSize(find.byKey(const Key('simple-library'))).width, greaterThan(60),
         reason: 'the rail button grows past its 1x width');
     // The facts read as one list, label and value per line, not 72 px tiles.
     expect(find.byKey(const Key('simple-facts-list')), findsOneWidget);
@@ -2053,10 +2089,36 @@ void main() {
     expect(find.text("Tap the shutter for the guide camera's frames"), findsNothing);
   });
 
+  testWidgets("Info leaves the rail; Preview's settings panel turns it on and off (user, 2026-11-11)", (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    await _frame(tester, container);
+    expect(find.byKey(const Key('simple-info')), findsNothing, reason: 'Monitor watches the night; the rail has no Info');
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-info-on')));
+    await tester.pump();
+    expect(find.byType(SimpleInfoPanel), findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-info-off')));
+    await tester.pump();
+    expect(find.byType(SimpleInfoPanel), findsNothing);
+  });
+
+  testWidgets("Focus's panel turns Info on too", (tester) async {
+    final container = await _pump(tester, const Size(1024, 768));
+    await _frame(tester, container);
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mode-focus')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-info-on')));
+    await tester.pump();
+    expect(container.read(simpleInfoShownProvider), isTrue);
+  });
+
   testWidgets('Info shows the last frame facts as tiles in the bottom-left corner', (tester) async {
     final container = await _pump(tester, const Size(1024, 768));
     await _frame(tester, container);
-    await tester.tap(find.byKey(const Key('simple-info')));
+    container.read(simpleInfoShownProvider.notifier).toggle();
     await tester.pump();
     final row = tester.getRect(find.byType(SimpleInfoPanel));
     expect(row.left, tileLeft, reason: 'hugs the corner');
@@ -2067,7 +2129,7 @@ void main() {
     }
     // HFR nearest the corner.
     expect(tester.getRect(find.text('HFR')).center.dx, lessThan(tester.getRect(find.text('Clipped')).center.dx));
-    await tester.tap(find.byKey(const Key('simple-info')));
+    container.read(simpleInfoShownProvider.notifier).toggle();
     await tester.pump();
     expect(find.byType(SimpleInfoPanel), findsNothing);
   });
@@ -2333,6 +2395,26 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     c.dispose();
     await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets("the running-plan warning wraps to the Ara sheet's width instead of widening it (user, 2026-11-11)",
+      (tester) async {
+    Future<double> width(SequenceRunStateInfo? run) async {
+      final c = await _pump(tester, const Size(1024, 768),
+          server: const AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro'), runState: run);
+      await tester.tap(find.byKey(const Key('simple-ara-mark')));
+      await tester.pump();
+      await tester.pump();
+      final w = tester.getSize(find.byKey(const Key('simple-ara-sheet'))).width;
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+      await tester.pump(const Duration(seconds: 5));
+      return w;
+    }
+
+    final idle = await width(null);
+    final running = await width(const SequenceRunStateInfo(sequenceId: 'seq-1', runId: 'r1', state: SequenceRunState.running));
+    expect(running, idle);
   });
 
   testWidgets('the Ara sheet grows with a long rig name up to 420 px, then wraps it (#1602)', (tester) async {
@@ -2821,11 +2903,14 @@ void main() {
               raDeg: 10.7, decDeg: 41.3),
         ]));
     await _frame(tester, c);
-    await tester.tap(find.byKey(const Key('simple-info'))); // the Info tiles
+    c.read(simpleInfoShownProvider.notifier).toggle(); // the Info tiles
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.text('Plan').first); // the plan squares
+    await tester.pump();
+    // Picking Plan opens its sheet, which hides the plan squares: the chip puts it away.
+    await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
     c.read(simpleMessagesProvider.notifier)
       ..show(SimpleMessageKind.error, "Couldn't start imaging")
@@ -2870,8 +2955,6 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.text('Plan').first);
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     final sheet = tester.getRect(find.byType(SimpleRunSheet));
@@ -3207,7 +3290,7 @@ void main() {
     expect(window, findsNothing, reason: 'the dot again closes it');
 
     await cameraDot();
-    await tester.tap(find.byKey(const Key('simple-info')));
+    c.read(simpleInfoShownProvider.notifier).toggle();
     await tester.pump();
     expect(find.byType(SimpleInfoPanel), findsOneWidget, reason: 'one tap opens Info');
     expect(window, findsOneWidget, reason: 'they don\'t overlap, so both stay');
@@ -3247,7 +3330,7 @@ void main() {
     c.read(selectedSettingsPanelProvider.notifier).select('eq.camera');
     c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('simple-info')));
+    c.read(simpleInfoShownProvider.notifier).toggle();
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     expect(find.byKey(const Key('simple-device-camera')), findsOneWidget);
@@ -3662,6 +3745,20 @@ void main() {
     expect(find.byKey(const Key('simple-menu-nav-Switches')), findsNothing);
   });
 
+  testWidgets('the Guider window may reach down over the guiding bar, so its options fit without scrolling (user, 2026-11-11)',
+      (tester) async {
+    final c = await _pump(tester, const Size(1440, 900), linkUp: true, gear: [guiderStatusProvider.overrideWith(() => _GuiderUp())]);
+    c.read(selectedSettingsPanelProvider.notifier).select('eq.guider');
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+    expect(find.byWidgetPredicate((w) => w.runtimeType.toString() == '_GuidingBar'), findsOneWidget, reason: 'guiding: the stats row shows');
+    final room = tester.widget<Positioned>(
+        find.ancestor(of: find.byKey(const Key('simple-device-guider')), matching: find.byType(Positioned)).first);
+    expect(room.bottom, kSimpleInset);
+  });
+
   testWidgets('the guider\'s dot opens the Guider window; Settings lists it under Devices', (tester) async {
     final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
       guiderStatusProvider.overrideWith(() => _GuiderUp()),
@@ -3873,7 +3970,7 @@ void main() {
     final container = await _pump(tester, const Size(1024, 768), steps: _someSteps,
         gear: [guiderStatusProvider.overrideWith(() => guider)]);
     await _frame(tester, container);
-    await tester.tap(find.byKey(const Key('simple-info')));
+    container.read(simpleInfoShownProvider.notifier).toggle();
     await tester.pump(const Duration(milliseconds: 300));
     const above = 768 - kSimpleInset * 2 - kSimpleBarHeight;
     expect(tester.getRect(find.byType(SimpleInfoPanel)).bottom, above, reason: 'just above the guiding row');
@@ -4163,6 +4260,96 @@ void main() {
             reasonCode: 'meridian', reasonText: 'Passing meridian — 00:10:00'));
     await tester.pump();
     expect(pill(), contains('Passing meridian — 00:10:00'));
+  });
+
+  group('a plan waiting for the meridian flip (#1747)', () {
+    String pill() => find
+        .descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText))
+        .evaluate()
+        .map((e) => (e.widget as RichText).text.toPlainText())
+        .join();
+    const plan = SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+      SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+    ]);
+    const waiting = SequenceRunStateInfo(
+        sequenceId: 'seq-1', state: SequenceRunState.running, currentInstructionDescription: 'Taking frames',
+        reasonCode: 'meridian', reasonText: 'Passing meridian — 00:04:32', meridianWaitSecondsLeft: 272);
+
+    Future<void> toPlan(WidgetTester tester) async {
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-mode-plan')));
+      await tester.pump();
+    }
+
+    testWidgets('the Plan pill says so in a blue ring with the countdown, not as imaging', (tester) async {
+      await _pump(tester, const Size(1024, 768), plan: plan, runState: waiting);
+      await tester.pump();
+      expect(pill(), contains('Waiting for the meridian flip · 04:32'));
+      expect(pill(), isNot(contains('Passing meridian')));
+      final pillBox = find.byType(SimpleStatusPill);
+      final dot = tester.widget<StatusDot>(find.descendant(of: pillBox, matching: find.byType(StatusDot)).first);
+      expect((dot.color, dot.ring), (AraColors.accentInfo, true));
+      expect(tester.widget<StatusBlink>(find.descendant(of: pillBox, matching: find.byType(StatusBlink)).first).on, isFalse);
+    });
+
+    testWidgets('the Plan tab says Waiting for flip and the shutter Pause after the flip', (tester) async {
+      final handle = tester.ensureSemantics();
+      await _pump(tester, const Size(1024, 768), plan: plan, runState: waiting);
+      await toPlan(tester);
+      expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('Waiting for flip')),
+          findsOneWidget);
+      expect(find.bySemanticsLabel('Pause after the flip'), findsOneWidget);
+      expect(find.bySemanticsLabel('Pause after this frame'), findsNothing);
+      handle.dispose();
+    });
+
+    testWidgets('a pause asked during the wait shows Pausing', (tester) async {
+      await _pump(tester, const Size(1024, 768),
+          plan: SimpleRun(sequenceId: 'seq-1', started: true, pausing: true, targets: plan.targets), runState: waiting);
+      await toPlan(tester);
+      final tracker = find.byKey(const Key('simple-run-tracker'));
+      expect(find.descendant(of: tracker, matching: find.text('Pausing…')), findsOneWidget);
+      expect(find.descendant(of: tracker, matching: find.text('Waiting for flip')), findsNothing);
+    });
+
+    testWidgets('a refused flip shows its text with no countdown', (tester) async {
+      await _pump(tester, const Size(1024, 768), plan: plan,
+          runState: const SequenceRunStateInfo(
+              sequenceId: 'seq-1', state: SequenceRunState.pausedAwaitingUser,
+              reasonCode: 'meridian_refused', reasonText: 'Flip refused: the target is too low.'));
+      await tester.pump();
+      expect(pill(), contains('Flip refused: the target is too low.'));
+      expect(pill(), isNot(contains('Waiting for the meridian flip')));
+    });
+
+    testWidgets('a pause on its way: the Plan pill says the plan is being paused, in a blue ring (user, 2026-11-11)',
+        (tester) async {
+      await _pump(tester, const Size(1024, 768),
+          plan: SimpleRun(sequenceId: 'seq-1', started: true, pausing: true, targets: plan.targets),
+          runState: const SequenceRunStateInfo(
+              sequenceId: 'seq-1', state: SequenceRunState.running, currentInstructionDescription: 'Taking frames'));
+      await tester.pump();
+      expect(pill(), contains('Pausing after this frame'));
+      final dot = tester.widget<StatusDot>(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(StatusDot)).first);
+      expect((dot.color, dot.ring), (AraColors.accentInfo, true));
+    });
+
+    testWidgets('an older daemon (the code, no seconds) keeps its reason text', (tester) async {
+      await _pump(tester, const Size(1024, 768), plan: plan,
+          runState: const SequenceRunStateInfo(
+              sequenceId: 'seq-1', state: SequenceRunState.running, currentInstructionDescription: 'Taking frames',
+              reasonCode: 'meridian', reasonText: 'Passing meridian — 00:10:00'));
+      await tester.pump();
+      expect(pill(), contains('Passing meridian — 00:10:00'));
+      expect(pill(), isNot(contains('Waiting for the meridian flip')));
+    });
+
+    testWidgets('in Portuguese', (tester) async {
+      await _pump(tester, const Size(1024, 768), plan: plan, runState: waiting, locale: const Locale('pt', 'BR'));
+      await tester.pump();
+      expect(pill(), contains('Aguardando a virada de meridiano · 04:32'));
+    });
   });
 
   testWidgets('#1596 the plan pill keeps the reason a run skipped its only target', (tester) async {
@@ -4611,7 +4798,7 @@ void main() {
       }
       final words = tester.getRect(pill);
       final covered = [
-        for (final k in ['simple-sky', 'simple-info', 'simple-library', 'simple-album'])
+        for (final k in ['simple-sky', 'simple-library', 'simple-album'])
           tester.getCenter(find.byKey(Key(k))),
       ].where(words.contains).toList();
       expect(covered, isNotEmpty, reason: 'precondition: the rail runs behind the words');
@@ -5108,6 +5295,99 @@ void main() {
     expect(find.descendant(of: pill, matching: find.textContaining('Focuser')), findsNothing, reason: 'stopped');
   });
 
+  group('status pills follow the main camera (#1755)', () {
+    const exposing = SequenceRunStateInfo(
+        runId: 'r1', state: SequenceRunState.running, currentInstructionDescription: 'Exposure 5 s LIGHT');
+
+    Finder bars(Finder pill) => find.descendant(of: pill, matching: find.byType(LinearProgressIndicator));
+    Finder pillOf(String text) => find.ancestor(of: find.textContaining(text), matching: find.byKey(const Key('simple-status-pill')));
+
+    Future<_Camera> pumpCamera(WidgetTester tester, {SequenceRunStateInfo? runState, List<Override> gear = const []}) async {
+      final camera = _Camera(EquipmentConnectionState.connected);
+      await _pump(tester, const Size(1024, 768),
+          linkUp: true, runState: runState, gear: [cameraStatusProvider.overrideWith(() => camera), ...gear]);
+      await tester.pump();
+      return camera;
+    }
+
+    testWidgets("a plan's exposure step fills the Plan pill's bar from the camera", (tester) async {
+      final camera = await pumpCamera(tester, runState: exposing);
+      camera.report('exposing', pct: 40);
+      await tester.pump();
+      final plan = pillOf('Exposure 5 s LIGHT');
+      expect(tester.widget<LinearProgressIndicator>(bars(plan)).value, closeTo(0.4, 1e-9));
+      expect(find.textContaining('Exposing'), findsNothing, reason: 'the plan explains the frame: no camera pill');
+    });
+
+    testWidgets("a step's own progress wins over the camera's", (tester) async {
+      final camera = await pumpCamera(tester, runState: const SequenceRunStateInfo(
+          runId: 'r1', state: SequenceRunState.running, currentInstructionDescription: 'Exposure 5 s LIGHT',
+          currentInstructionProgress: 0.7));
+      camera.report('exposing', pct: 40);
+      await tester.pump();
+      expect(tester.widget<LinearProgressIndicator>(bars(pillOf('Exposure 5 s LIGHT'))).value, 0.7);
+    });
+
+    testWidgets('a paused plan shows no frame progress', (tester) async {
+      final camera = await pumpCamera(tester, runState: const SequenceRunStateInfo(
+          runId: 'r1', state: SequenceRunState.paused, currentInstructionDescription: 'Exposure 5 s LIGHT'));
+      camera.report('exposing', pct: 40);
+      await tester.pump();
+      expect(bars(pillOf('Exposure 5 s LIGHT')), findsNothing);
+    });
+
+    testWidgets("another client's frame shows a camera pill with its bar, gone when it ends", (tester) async {
+      final camera = await pumpCamera(tester);
+      await _letPillLeave(tester);
+      camera.report('exposing', pct: 40);
+      await tester.pump();
+      final pill = pillOf('Exposing');
+      expect(find.descendant(of: pill, matching: find.textContaining('Camera')), findsOneWidget);
+      expect(tester.widget<LinearProgressIndicator>(bars(pill)).value, closeTo(0.4, 1e-9));
+      final dot = tester.widget<StatusDot>(find.descendant(of: pill, matching: find.byType(StatusDot)));
+      expect((dot.color, dot.ring), (AraColors.accentConnected, false));
+      camera.report('idle');
+      await tester.pump();
+      await _letPillLeave(tester);
+      expect(find.textContaining('Exposing'), findsNothing);
+    });
+
+    testWidgets('downloading is changing: a blue ring', (tester) async {
+      final camera = await pumpCamera(tester);
+      camera.report('downloading');
+      await tester.pump();
+      final dot = tester.widget<StatusDot>(find.descendant(of: pillOf('Downloading'), matching: find.byType(StatusDot)));
+      expect((dot.color, dot.ring), (AraColors.accentInfo, true));
+    });
+
+    testWidgets('no progress reported: the camera pill has no bar', (tester) async {
+      final camera = await pumpCamera(tester);
+      camera.report('exposing');
+      await tester.pump();
+      expect(bars(pillOf('Exposing')), findsNothing);
+    });
+
+    testWidgets('own shot: no camera pill', (tester) async {
+      final camera = await pumpCamera(tester);
+      final c = ProviderScope.containerOf(tester.element(find.byType(SimpleShell)));
+      c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
+      camera.report('exposing', pct: 40);
+      await tester.pump();
+      expect(find.textContaining('Exposing'), findsNothing);
+      c.read(captureProgressProvider.notifier).reset();
+      await _letPillLeave(tester);
+    });
+
+    testWidgets('Live View: no camera pill', (tester) async {
+      final camera = await pumpCamera(tester);
+      final c = ProviderScope.containerOf(tester.element(find.byType(SimpleShell)));
+      c.read(liveViewControllerProvider.notifier).set(true);
+      camera.report('exposing', pct: 40);
+      await tester.pump();
+      expect(find.textContaining('Exposing'), findsNothing);
+    });
+  });
+
   testWidgets('the rotator turning shows in the status pill, blinking green, until it stops; a tap opens its window',
       (tester) async {
     final rotator = _Rotator(EquipmentConnectionState.connected);
@@ -5418,6 +5698,259 @@ void main() {
     });
   }
 
+  group('Monitor (#1724)', () {
+    Future<(ProviderContainer, _Awake)> openMonitor(WidgetTester tester,
+        {Size size = const Size(1024, 768), bool manualAlarm = false, List<Override> gear = const [],
+        SimpleRun? plan, SequenceRunStateInfo? runState}) async {
+      final awake = _Awake();
+      final c = await _pump(tester, size, linkUp: true, manualAlarm: manualAlarm, plan: plan, runState: runState, gear: [
+        keepAwakeProvider.overrideWithValue(awake),
+        deviceBatteryProvider.overrideWith((ref) => Stream.value((level: 64, charging: false))),
+        ...gear,
+      ]);
+      await tester.tap(find.byKey(const Key('simple-monitor-open')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      return (c, awake);
+    }
+
+    Future<void> close(WidgetTester tester) async {
+      await tester.tap(find.byKey(const Key('simple-monitor-back')));
+      // A running plan's pills blink, so the shell never settles.
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+    }
+
+    testWidgets('the rail item opens Monitor, awake while it shows, and Back closes it', (tester) async {
+      final (_, awake) = await openMonitor(tester);
+      expect(find.byKey(const Key('simple-monitor')), findsOneWidget);
+      expect(find.text('Rig ready · no plan running'), findsOneWidget);
+      expect(find.byKey(const Key('simple-monitor-battery')), findsOneWidget);
+      expect(awake.calls, [true]);
+      await close(tester);
+      expect(find.byKey(const Key('simple-monitor')), findsNothing);
+      expect(find.byType(SimpleShell), findsOneWidget);
+      expect(awake.calls, [true, false], reason: 'awake only while Monitor shows');
+    });
+
+    testWidgets('Monitor leaves by Back at its top left, as the Sky Album does; no × (user, 2026-11-11)', (tester) async {
+      await openMonitor(tester);
+      final monitor = find.byKey(const Key('simple-monitor'));
+      expect(find.descendant(of: monitor, matching: find.byType(BackButton)), findsOneWidget);
+      expect(find.descendant(of: monitor, matching: find.byIcon(Icons.close)), findsNothing);
+      expect(tester.getRect(find.byKey(const Key('simple-monitor-back'))).center.dx,
+          lessThan(tester.getRect(find.byKey(const Key('simple-monitor-verdict'))).left), reason: 'before the top line');
+      await close(tester);
+      expect(monitor, findsNothing);
+    });
+
+    testWidgets('not offered below 900 pt wide', (tester) async {
+      await _pump(tester, const Size(860, 768), linkUp: true);
+      expect(find.byKey(const Key('simple-monitor-open')), findsNothing);
+    });
+
+    testWidgets('Emergency Stop is on screen, the shared button at 108 pt', (tester) async {
+      await openMonitor(tester);
+      final stop = find.descendant(of: find.byKey(const Key('simple-monitor')), matching: find.byType(EmergencyStopButton));
+      expect(tester.widget<EmergencyStopButton>(stop).large, isTrue);
+      expect(tester.getSize(stop), const Size(108, 108));
+      await close(tester);
+    });
+
+    testWidgets('a tile tap closes Monitor and opens the window that owns it', (tester) async {
+      await openMonitor(tester, gear: [
+        safetyMonitorProvider.overrideWith(() => _SafetyMon()),
+      ]);
+      await tester.tap(find.byKey(const Key('simple-monitor-safety')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byKey(const Key('simple-monitor')), findsNothing);
+      expect(find.byKey(const Key('simple-device-safety')), findsOneWidget);
+    });
+
+    testWidgets('the safety alarm shows over it', (tester) async {
+      final (c, _) = await openMonitor(tester, manualAlarm: true);
+      (c.read(safetyAlarmProvider.notifier) as _ManualAlarm).raise('Safety monitor: unsafe (rain)');
+      await tester.pump();
+      expect(find.byKey(const Key('simple-safety-alarm')).hitTestable(), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-safety-silence')));
+      await tester.pump();
+      await close(tester);
+    });
+
+    testWidgets("the Weather tile's readings carry the Weather window's icons (user, 2026-11-11)", (tester) async {
+      await openMonitor(tester, gear: [weatherProvider.overrideWith(() => _WeatherAll())]);
+      final tile = find.byKey(const Key('simple-monitor-weather'));
+      expect(find.descendant(of: tile, matching: find.byIcon(Icons.cloud_outlined)), findsNWidgets(2), reason: 'the header and Cloud');
+      for (final icon in [Icons.auto_awesome_outlined, Icons.thermostat, Icons.water_drop_outlined, CupertinoIcons.cloud_rain, Icons.air]) {
+        expect(find.descendant(of: tile, matching: find.byIcon(icon)), findsOneWidget, reason: '$icon');
+      }
+      expect(find.descendant(of: tile, matching: find.byType(EquipmentGlyph)), findsOneWidget, reason: 'the dew mark');
+      await close(tester);
+    });
+
+    const fullPlan = SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+      SimpleTarget(name: 'Orion Nebula', tag: 'M 42', steps: [
+        FilterPlanStep(filterName: 'L', exposureSeconds: 180, frameCount: 24),
+        FilterPlanStep(filterName: 'R', exposureSeconds: 180, frameCount: 24),
+        FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 24),
+      ]),
+    ]);
+    const fullRun = SequenceRunStateInfo(
+        sequenceId: 'seq-1', runId: 'r1', state: SequenceRunState.running, framesCaptured: 30,
+        currentInstructionDescription: 'Taking frames', estimatedRemainingSeconds: 9000,
+        meridianFlip: MeridianFlipInfo(state: 'auto_flip_off'));
+
+    for (final (locale, scale) in const [(Locale('pt', 'BR'), 1.0), (Locale('en'), 1.5), (Locale('pt', 'BR'), 2.0)]) {
+      testWidgets('at 900 pt, $locale and ${scale}x text nothing overflows (audit)', (tester) async {
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final awake = _Awake();
+        await _pump(tester, const Size(900, 700), linkUp: true, plan: fullPlan, runState: fullRun, locale: locale, gear: [
+          keepAwakeProvider.overrideWithValue(awake),
+          deviceBatteryProvider.overrideWith((ref) => Stream.value((level: 64, charging: false))),
+          safetyMonitorProvider.overrideWith(() => _SafetyMon()),
+          weatherProvider.overrideWith(() => _WeatherAll()),
+        ]);
+        await tester.tap(find.byKey(const Key('simple-monitor-open')));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        expect(tester.takeException(), isNull);
+        await close(tester);
+      });
+    }
+
+    testWidgets('a question on the top line shows its whole text with its answers under it (audit)', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final (c, _) = await openMonitor(tester, size: const Size(900, 700));
+      var answered = false;
+      c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.question, 'Another app asks to take control of the rig',
+          detail: 'It is a phone on the same network',
+          actions: [SimpleMessageAction('Keep connected', () {}), SimpleMessageAction('Allow', () => answered = true)]);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      final title = tester.widget<Text>(find.byKey(const Key('simple-monitor-verdict')));
+      expect(title.maxLines, isNull, reason: 'the whole question, however long');
+      final text = tester.getRect(find.byKey(const Key('simple-monitor-verdict')));
+      final allow = tester.getRect(find.widgetWithText(FilledButton, 'Allow'));
+      expect(allow.top, greaterThanOrEqualTo(text.bottom), reason: 'the answers go under it');
+      expect(find.byType(SimpleMessagePills), findsNothing, reason: 'no pills drawn over Monitor');
+      await tester.tap(find.widgetWithText(FilledButton, 'Allow'));
+      await tester.pump();
+      expect(answered, isTrue);
+      await close(tester);
+    });
+
+    for (final size in const [Size(900, 700), Size(1024, 768)]) {
+      testWidgets('at $size and 2x text a question stays answerable: its words scroll, its answers stay put (re-audit)', (tester) async {
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final (c, _) = await openMonitor(tester, size: size);
+        var answered = false;
+        c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.question, 'Another app asks to take control of the rig',
+            detail: 'It is a phone on the same network',
+            actions: [SimpleMessageAction('Keep connected', () {}), SimpleMessageAction('Allow', () => answered = true)]);
+        await tester.pump();
+        expect(tester.takeException(), isNull);
+        final allow = find.widgetWithText(FilledButton, 'Allow');
+        // The words scroll; the answers stay on screen under them (re-audit 3).
+        expect(allow.hitTestable(), findsOneWidget);
+        expect(find.widgetWithText(TextButton, 'Keep connected').hitTestable(), findsOneWidget);
+        await tester.tap(allow);
+        await tester.pump();
+        expect(answered, isTrue);
+        await close(tester);
+      });
+    }
+
+    testWidgets("Emergency Stop's outcome shows on Monitor's top line, and Dismiss clears it (re-audit)", (tester) async {
+      final (c, _) = await openMonitor(tester);
+      c.read(simpleMessagesProvider.notifier)
+          .show(SimpleMessageKind.warning, 'Emergency Stop: done', detail: 'Check the rig', sticky: true);
+      await tester.pump();
+      expect(find.text('Emergency Stop: done'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-monitor-dismiss')));
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider), isEmpty);
+      await close(tester);
+    });
+
+    testWidgets('a scope torn down with Monitor open throws nothing (re-audit)', (tester) async {
+      final (c, _) = await openMonitor(tester);
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the top line announces its state once, not each second of a countdown (audit)', (tester) async {
+      final handle = tester.ensureSemantics();
+      await openMonitor(tester,
+          plan: fullPlan,
+          runState: const SequenceRunStateInfo(
+              sequenceId: 'seq-1', runId: 'r1', state: SequenceRunState.running, currentInstructionDescription: 'x',
+              reasonCode: 'meridian', reasonText: 'Passing meridian — 00:04:32', meridianWaitSecondsLeft: 272));
+      final live = find.byWidgetPredicate((w) => w is Semantics && (w.properties.liveRegion ?? false));
+      final labels = [for (final e in live.evaluate()) (e.widget as Semantics).properties.label];
+      expect(labels, isNot(contains(matches(RegExp(r'\d\d:\d\d')))), reason: 'no countdown in the announced text');
+      expect(labels, contains('Waiting for flip'));
+      handle.dispose();
+      await close(tester);
+    });
+
+    testWidgets('no dimming layer over the tiles; the timeline reads its blocks to a screen reader (audit)', (tester) async {
+      final handle = tester.ensureSemantics();
+      await openMonitor(tester, plan: fullPlan, runState: fullRun);
+      expect(find.descendant(of: find.byKey(const Key('simple-monitor')), matching: find.byType(Opacity)), findsNothing,
+          reason: 'frozen, a 0.55 opacity took text contrast under 3:1; Last known and grey dots say it instead');
+      expect(tester.getSemantics(find.byKey(const Key('simple-monitor-night'))).label, contains('M 42'));
+      handle.dispose();
+      await close(tester);
+    });
+
+    testWidgets("the daemon's own step text stays small; the big words are Monitor's own", (tester) async {
+      const solver = '46 stars, 167 quads selected in the image. 103 database stars, 376 database quads required '
+          'for the 0.27d square search window. Step size 0.15d. Oversize 1.74';
+      await openMonitor(tester,
+          plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+            SimpleTarget(name: 'M 5', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 5, frameCount: 60)]),
+          ]),
+          runState: const SequenceRunStateInfo(
+              sequenceId: 'seq-1', runId: 'r1', state: SequenceRunState.running, currentInstructionDescription: solver));
+      final now = find.byKey(const Key('simple-monitor-now'));
+      final step = tester.widget<Text>(find.descendant(of: now, matching: find.text(solver)));
+      expect(step.style!.fontSize, lessThanOrEqualTo(kSimpleText.fontSize!), reason: 'a solver line at 44 pt fills the tile (user, 2026-11-11)');
+      expect(step.maxLines, 2);
+      expect(find.descendant(of: now, matching: find.text('Running')), findsWidgets);
+      await close(tester);
+    });
+
+    testWidgets('at 2x text nothing overflows: a tile scrolls inside itself', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await openMonitor(tester,
+          size: const Size(1366, 1024),
+          plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+            SimpleTarget(name: 'Orion Nebula', tag: 'M 42', steps: [
+              FilterPlanStep(filterName: 'L', exposureSeconds: 180, frameCount: 24),
+              FilterPlanStep(filterName: 'R', exposureSeconds: 180, frameCount: 24),
+            ]),
+            SimpleTarget(name: 'IC 434', steps: [FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 30)]),
+          ]),
+          runState: const SequenceRunStateInfo(
+              sequenceId: 'seq-1', runId: 'r1', state: SequenceRunState.running, framesCaptured: 30,
+              currentInstructionDescription: 'Taking frames', estimatedRemainingSeconds: 9000),
+          gear: [
+            safetyMonitorProvider.overrideWith(() => _SafetyMon()),
+            cameraStatusProvider.overrideWith(() => _Camera(EquipmentConnectionState.connected)),
+          ]);
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(const Key('simple-monitor-now')), findsOneWidget);
+      await close(tester);
+    });
+  });
+
   testWidgets('the safety alarm shows over a screen pushed over Simple Mode (the Image Library, full Settings)',
       (tester) async {
     final container = await _pump(tester, const Size(1024, 768), manualAlarm: true);
@@ -5592,6 +6125,14 @@ void main() {
     expect(lo, inInclusiveRange(15, 20));
     expect(hi, inInclusiveRange(39, 45));
     expect(histogramRange(const []), (0, 0));
+  });
+
+  test('a countdown reads mm:ss under an hour and h:mm:ss from an hour up (#1747)', () {
+    expect(simpleCountdown(272), '04:32');
+    expect(simpleCountdown(3599), '59:59');
+    expect(simpleCountdown(3600), '1:00:00');
+    expect(simpleCountdown(3872), '1:04:32');
+    expect(simpleCountdown(-3), '00:00');
   });
 
   test('System figures read like the rest of Simple Mode', () {

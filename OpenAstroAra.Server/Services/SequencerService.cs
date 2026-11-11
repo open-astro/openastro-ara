@@ -55,8 +55,9 @@ namespace OpenAstroAra.Server.Services;
 ///
 /// <see cref="PauseAsync"/> / <see cref="ResumeAsync"/> are REAL: each run owns a
 /// <see cref="OpenAstroAra.Sequencer.Utility.PauseGate"/> attached to the root
-/// container; the execution strategies await it at every instruction boundary
-/// (the current instruction always finishes — NINA pause semantics). The run
+/// container; the execution strategies await it at every instruction boundary,
+/// and a user's pause also stops the instruction or trigger in progress, which
+/// runs again from its start on Resume (a frame, flat set or container finishes first). The run
 /// reports <c>Paused</c> and emits <c>sequence.paused</c> only when the engine
 /// ACTUALLY suspends (the gate's PauseEntered callback), never on the mere
 /// request; Abort/Stop win over an active pause via token cancellation.
@@ -273,9 +274,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
     public Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
         _unattendedShutdown?.NotifyUserActivity("sequencer.pause");
-        // Arm the run's instruction-boundary gate; the engine suspends at the next
-        // boundary (SequentialStrategy awaits the gate before each item, so the
-        // current instruction always finishes — NINA pause semantics). The state
+        // Arm the run's pause gate: the instruction or trigger in progress stops and
+        // runs again from its start on Resume (a frame, flat set or container finishes first),
+        // and the engine suspends at that boundary (SequentialStrategy). The state
         // flip to Paused + the sequence.paused event happen in OnPauseEntered when
         // the engine ACTUALLY suspends, never on the mere request. Idempotent, and
         // harmless for terminal/aborting runs (a cancelled token wins the gate).
@@ -469,8 +470,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     public Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(bool adoptable, CancellationToken ct) {
         // §35 safety pause — daemon-automated, so no NotifyUserActivity (an automated
         // reaction must never masquerade as the user coming back per §58.12). Same
-        // gate-arm semantics as PauseAsync: the engine suspends at the next instruction
-        // boundary, the state flip + sequence.paused event fire in OnPauseEntered.
+        // gate-arm semantics as PauseAsync: the work in progress stops (a frame finishes
+        // first) and the engine suspends; the state flip + sequence.paused event fire in OnPauseEntered.
         var paused = new System.Collections.Generic.List<Guid>();
         foreach (var id in _runs.Keys) {
             ct.ThrowIfCancellationRequested();
@@ -966,9 +967,12 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     // Tree-derived status first, so the instruction's own report wins.
                     RefreshLiveStatus(run);
                     // #1596 — only the executor's wait / refusal report is a reason; any other flip report
-                    // (the flip proper, its closing empty one) ends it.
+                    // (the flip proper, its closing empty one) ends it. #1747 — the wait carries its seconds
+                    // left, and a refusal has its own code so no client reads it as a wait.
                     if (status.Source == MeridianFlipExecutor.WaitSource) {
-                        run.SetReason("meridian", status.Status);
+                        run.SetReason("meridian", status.Status, (status as MeridianFlipExecutor.WaitStatus)?.SecondsLeft);
+                    } else if (status.Source == MeridianFlipExecutor.RefusedSource) {
+                        run.SetReason("meridian_refused", status.Status);
                     } else if (status.Source == "MeridianFlip") {
                         run.SetReason(null, null);
                     }
@@ -1277,6 +1281,11 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                 ["frames_captured"] = run.FramesCaptured,
                 ["stop_after_frame"] = run.StopAfterFrame,
             };
+            // #1747 — the meridian wait starts mid-run, so its reason rides the progress frame too.
+            var (reasonCode, reasonText, meridianWaitSecondsLeft) = run.Reason;
+            payload["reason_code"] = reasonCode;
+            payload["reason_text"] = reasonText;
+            payload["meridian_wait_seconds_left"] = meridianWaitSecondsLeft;
             var (estimatedTotal, estimatedRemaining) = run.EstimatedSeconds();
             payload["estimated_total_seconds"] = estimatedTotal;
             payload["estimated_remaining_seconds"] = estimatedRemaining;
@@ -1648,14 +1657,20 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
         private string? _reasonCode;
         private string? _reasonText;
+        private int? _meridianWaitSecondsLeft;
 
-        public void SetReason(string? code, string? text) {
+        public (string? Code, string? Text, int? MeridianWaitSecondsLeft) Reason {
+            get { lock (_gate) { return (_reasonCode, _reasonText, _meridianWaitSecondsLeft); } }
+        }
+
+        public void SetReason(string? code, string? text, int? meridianWaitSecondsLeft = null) {
             lock (_gate) {
                 // #1596 — progress reports are posted to the pool and can land after the run ended; a clear always applies.
                 if (code is not null && (IsTerminal(State) || State == SequenceRunState.Aborting)) {
                     return;
                 }
-                (_reasonCode, _reasonText) = code is null ? (null, null) : (code, text);
+                (_reasonCode, _reasonText, _meridianWaitSecondsLeft) =
+                    code is null ? (null, null, null) : (code, text, meridianWaitSecondsLeft);
             }
         }
 
@@ -1770,7 +1785,8 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
                     EstimatedRemainingSeconds: remaining,
                     CurrentInstructionProgress: CurrentInstructionProgress,
                     ReasonCode: _reasonCode,
-                    ReasonText: _reasonText);
+                    ReasonText: _reasonText,
+                    MeridianWaitSecondsLeft: _meridianWaitSecondsLeft);
             }
             return dto with { MeridianFlip = MeridianFlipStatus() };
         }

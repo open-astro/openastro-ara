@@ -335,6 +335,8 @@ namespace OpenAstroAra.Test {
                 return new PlateSolveResult { Success = true };
             });
             await PauseAtBoundaryAsync(svc, id);
+            // A pause stops the wait in progress (2026-11-11), so count from the pause itself.
+            var atPause = (await svc.GetRunStateAsync(id, CancellationToken.None))!.InstructionsCompleted;
 
             await svc.ResumeAsync(id, null, null, CancellationToken.None);
             Assert.That(await solveStarted.WaitAsync(TimeSpan.FromSeconds(5)), Is.True);
@@ -344,7 +346,7 @@ namespace OpenAstroAra.Test {
             await Task.Delay(300);
             var during = await svc.GetRunStateAsync(id, CancellationToken.None);
             Assert.That(during!.State, Is.EqualTo(SequenceRunState.Running));
-            Assert.That(during.InstructionsCompleted, Is.EqualTo(1),
+            Assert.That(during.InstructionsCompleted, Is.EqualTo(atPause),
                 "the engine must still be suspended at the boundary — the safety resume must not release the held gate");
 
             solveHold.Release();

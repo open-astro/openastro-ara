@@ -62,6 +62,10 @@ _Avoid_: Night Setup, Guided Run, Autopilot
 One of Simple Mode's five views (Preview, Focus, Polar align, Guide, Queue). Preflight is not a Screen; it chooses which Screen shows.
 _Avoid_: mode, panel, page
 
+**Monitor**:
+Simple Mode's full-screen, read-only view of the Session, opened from the left rail. Not a Screen.
+_Avoid_: Cockpit, Night Watch, Dashboard
+
 ### Sky Album
 
 **Sky Album**:

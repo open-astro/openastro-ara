@@ -1896,6 +1896,32 @@ void main() {
       expect(seq.calls.last, 'resume seq-1');
     });
 
+    testWidgets('while the pause is on its way the shutter is greyed out, and another tap says so (user, 2026-11-11)',
+        (tester) async {
+      final (c, seq) = await run(tester);
+      await create(tester);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      await imaging(tester, c, seq, _imaging(23));
+      Color ring() => ((tester.widget<Container>(find.byKey(const Key('simple-shutter'))).decoration! as BoxDecoration)
+              .border! as Border)
+          .top
+          .color;
+      final imagingRing = ring();
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      expect(ring(), AraColors.textDisabled, reason: 'greyed out after the first pause (user, 2026-11-11)');
+      expect(tester.widget<Icon>(find.descendant(of: find.byKey(const Key('simple-shutter')), matching: find.byType(Icon))).color,
+          AraColors.textDisabled);
+      expect(ring(), isNot(imagingRing));
+      final calls = seq.calls.length;
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pump();
+      expect(seq.calls.length, calls, reason: 'nothing more is sent');
+      expect(c.read(simpleMessagesProvider).map((m) => m.title), contains('Pausing after this frame'));
+      await tester.pump(kSimpleResultLife);
+    });
+
     testWidgets('a slowish tap (0.6 s: gloves, cold hands) still pauses', (tester) async {
       final (c, seq) = await run(tester);
       await create(tester);

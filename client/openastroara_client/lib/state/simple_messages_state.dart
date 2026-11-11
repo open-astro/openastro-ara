@@ -41,6 +41,8 @@ enum SimpleStatusOrigin {
   plan,
   mount,
   camera,
+  // The main camera's exposure that nothing in this app started (#1755).
+  mainCameraExposure,
   focuser,
   filterWheel,
   rotator,

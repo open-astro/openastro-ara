@@ -598,6 +598,12 @@
       "hint-simple": {
         "displayName": "Hint (Simple Mode)",
         "purpose": "The \"Tap the shutter to take a frame\" line over the empty sky."
+      },
+      "monitor": {
+        "verdict": "600 20px",
+        "countdown": "200 120px (96px from 10 min up)",
+        "word": "300 44px",
+        "note": "Monitor only, outside the ramp on purpose (#1724)"
       }
     },
     "shadows": [],
@@ -870,6 +876,14 @@
       "kind": "custom",
       "refersTo": "panel-simple",
       "description": "#1559: centred over the wallpaper while the rig link is down. Title at the reading size (22 px semibold), one line on what happened, the session's rig with a filled Reconnect, then every other rig once (Found in Link Blue, Saved, not seen now in amber) with outlined Connect, then Add by address. A rig that does not answer gets a light-red line. One list, mock design/preview/simple-no-rig-card-mock.html B (user 2026-11-11). Found means seen in the last two rescans; an unreadable address gets the field's error text; the no-answer line is a live region; headings use the Section style. It keeps between the rails, under the strip and above Stop; a window too narrow for 288 px there folds it into a bar beside Stop (Rig not connected in amber, filled Connect) that opens it over the rails with a × to fold it back. Add by address's Connect says Connecting… while it runs. A row under 260 px (scaled with the text) puts its button under the words. Focus moves to × when the bar opens the card and back to the bar's Connect on ×; section headings are screen-reader headings."
+    },
+    {
+      "name": "Monitor",
+      "kind": "screen",
+      "refersTo": "client/openastroara_client/lib/screens/simple/simple_monitor_screen.dart",
+      "description": "Simple Mode's full-screen read-only view of the Session (#1724): a top line with the single most important condition, tiles from the rig's profile (Now, Target, Meridian flip, Safety strip, Weather, Guider, Last frame), tonight's timeline and a 108 pt Emergency Stop. No green dots or blinking; green status words while a device works. Frozen while the link is lost, never dimmed. Fixed sizes: flip tile 150 pt tall, Guider/Last frame row 170 pt, Up next 190 pt, Guider readings 220 pt, Weather icons 22 pt, large Stop label 22 pt. Stale state is 'Last known' with grey dots, never dimming; a question stacks whole on the top line with its answers under it; no message pills over Monitor.",
+      "html": "<section class=\"monitor\"><header class=\"verdict\">All good · imaging M 42</header><div class=\"grid\"><article class=\"tile now\"></article><article class=\"tile target\"></article><article class=\"tile flip\"></article></div><button class=\"stop\">STOP</button></section>",
+      "css": ".monitor .grid{display:grid;gap:8px;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 244px 244px}.monitor .tile{border-radius:10px;box-shadow:inset 0 0 0 1px #404040}.monitor .verdict{font-size:20px;font-weight:600}.monitor .stop{width:108px;height:108px}"
     }
   ],
   "narrative": {
@@ -934,6 +948,10 @@
         "name": "The Drawings Stay Grey Rule",
         "body": "The device windows' drawings (the Dome window's clamshell and dial, the Flat panel window's face) are painted in their own grey ramp (`AraColors.dome*`, `AraColors.flatPanel*`), apart from the UI tokens on purpose: they picture hardware, so they never mark a state, and Night mode's red filter covers them like everything else (#1690 audit, 2026-11-08). State on a drawing comes only from the status tokens (a moving shell's edge in Info Blue, a target in Connected Green).",
         "section": "colors"
+      },
+      {
+        "name": "The Back Rule (Simple Mode)",
+        "body": "A full-screen page pushed over Simple Mode (Sky Album, Image Library, Monitor) leaves by a Back button at its top left, the platform back arrow; never an ×. An × closes what sits over the image and keeps you in place."
       }
     ],
     "dos": [

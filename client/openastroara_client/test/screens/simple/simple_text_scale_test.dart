@@ -203,9 +203,6 @@ void main() {
               name: 'M31', kind: 'Galaxy', raHours: 0.73, decDeg: 41.4, raJ2000Hours: 0.71, decJ2000Deg: 41.27,
               altDeg: 62, maxAltDeg: 74));
           await tester.pump();
-          // Picking Plan opens nothing; the chip opens the sheet.
-          await tester.tap(find.byKey(const Key('simple-settings')), warnIfMissed: false);
-          await tester.pump();
           // (The one-third width has no sheet layout yet: phone layout, ALP-4865.)
           if (size.width >= 768) {
             expect(find.textContaining(l.planTonightsBest), findsOneWidget, reason: 'the sheet with its suggestions');
@@ -301,7 +298,7 @@ void main() {
           if (size.width >= 768) expect(strip, findsOneWidget);
           whole(strip);
         } else if (open.startsWith('Focus') || open == 'Polar adjusting' || open == 'Guide') {
-          // A mode panel: the mode from the grid, then its chip shows the panel.
+          // A mode panel: picking the mode from the grid opens it.
           final focus = open.startsWith('Focus');
           final guide = open == 'Guide';
           await tester.tap(find.byKey(const Key('simple-mode')), warnIfMissed: false);
@@ -312,8 +309,6 @@ void main() {
                   ? find.byKey(const Key('simple-mode-guide'))
                   : find.text(focus ? l.shellModeFocus : l.shellModePolarAlign).first,
               warnIfMissed: false);
-          await tester.pump();
-          await tester.tap(find.byKey(const Key('simple-settings')), warnIfMissed: false);
           await tester.pump();
           final panel = find.byType(focus ? SimpleFocusPanel : guide ? SimpleGuidePanel : SimplePolarPanel);
           // (The one-third width has no panel layout yet: phone layout, ALP-4865.)

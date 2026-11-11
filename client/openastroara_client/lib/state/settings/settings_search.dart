@@ -367,7 +367,7 @@ const List<SettingsSearchEntry> _actionEntries = <SettingsSearchEntry>[
     actionId: 'action.run.pause',
     label: 'Pause or resume the sequence (Space)',
     groupLabel: 'Actions',
-    description: 'Pauses a running sequence at its next instruction boundary, or resumes a paused one.',
+    description: 'Pauses a running sequence (a frame or flat set in progress finishes first), or resumes a paused one.',
     keywords: ['pause', 'resume', 'hold', 'space', 'sequence', 'running', 'shortcut'],
   ),
   // #1154 item 11 — the session planner, from anywhere.

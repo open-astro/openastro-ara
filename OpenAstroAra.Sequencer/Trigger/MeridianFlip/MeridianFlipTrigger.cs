@@ -284,6 +284,9 @@ namespace OpenAstroAra.Sequencer.Trigger.MeridianFlip {
             return TimeSpan.FromHours(timeToMeridianFlipHours);
         }
 
+        /// <summary>A flip is never cut short by a pause: the mount is mid-move and tracking may be off.</summary>
+        protected override bool RunsThroughPause => true;
+
         public override bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             if (!AutoFlip) {
                 EarliestFlipTime = DateTime.MinValue;

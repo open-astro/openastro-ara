@@ -147,6 +147,18 @@ void main() {
     expect(c.read(polarAlignActionProvider), (busy: false, error: 'Couldn\'t start: no camera'));
   });
 
+  test('a Stop that ends first leaves the module busy while an earlier call is still in flight (#1770 review)', () async {
+    final action = c.read(polarAlignActionProvider.notifier);
+    c.listen(polarAlignActionProvider, (_, _) {});
+    final save = Completer<void>();
+    final saving = action.run((_) => save.future, describe: (_) => null);
+    expect(await action.run((_) async {}, describe: (_) => null), isTrue, reason: 'the Stop');
+    expect(c.read(polarAlignActionProvider).busy, isTrue, reason: 'the save still runs, so Start stays held');
+    save.complete();
+    await saving;
+    expect(c.read(polarAlignActionProvider).busy, isFalse);
+  });
+
   test('an exposure is more than 0 and at most 60 seconds', () {
     expect(polarExposureValid(null), isFalse);
     expect(polarExposureValid(0), isFalse);

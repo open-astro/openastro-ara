@@ -4335,37 +4335,26 @@ class _WeatherTile extends StatelessWidget {
   }
 }
 
-/// The weather readings past the rig's safety limits, as the daemon checks
-/// them (§35.1): the worse of wind speed and gust, humidity, and the air's
-/// margin over the dew point. A reading the station doesn't report, or a NaN,
-/// breaches nothing.
+/// The weather readings past the rig's safety limits ([weatherBreaches]), in
+/// words.
 List<String> simpleWeatherBreaches(
   AppLocalizations l10n,
   WeatherStatus w,
   SafetyPolicies p,
+) => [for (final b in weatherBreaches(w, p)) simpleWeatherBreachText(l10n, b)];
+
+/// One breach in words: "Wind 41 km/h, over the 36 km/h limit".
+String simpleWeatherBreachText(
+  AppLocalizations l10n,
+  ({WeatherBreach kind, double value, double limit}) b,
 ) {
-  bool ok(double? v) => v != null && v.isFinite;
   String n(double v) =>
       v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
-  final speed = w.windSpeedMs, gust = w.windGustMs;
-  final nan =
-      (speed != null && !speed.isFinite) || (gust != null && !gust.isFinite);
-  final wind = nan
-      ? null
-      : ok(speed) && ok(gust)
-      ? math.max(speed!, gust!)
-      : ok(speed)
-      ? speed
-      : gust;
-  final t = w.temperatureC, dew = w.dewPointC, hum = w.humidityPct;
-  return [
-    if (wind != null && wind * 3.6 > p.maxWindKmh)
-      l10n.deviceWindOverLimit((wind * 3.6).toStringAsFixed(0), p.maxWindKmh),
-    if (ok(hum) && hum! > p.maxHumidityPct)
-      l10n.deviceHumidityOverLimit(hum.toStringAsFixed(0), p.maxHumidityPct),
-    if (ok(t) && ok(dew) && t! - dew! < p.minDewDeltaC)
-      l10n.deviceDewUnderMargin(n(t - dew), n(p.minDewDeltaC)),
-  ];
+  return switch (b.kind) {
+    WeatherBreach.wind => l10n.deviceWindOverLimit(b.value.toStringAsFixed(0), b.limit.round()),
+    WeatherBreach.humidity => l10n.deviceHumidityOverLimit(b.value.toStringAsFixed(0), b.limit.round()),
+    WeatherBreach.dewMargin => l10n.deviceDewUnderMargin(n(b.value), n(b.limit)),
+  };
 }
 
 /// A local time of day as the windows and pills show it: 24 h, "02:14".

@@ -120,9 +120,12 @@ public sealed record SequenceRunStateDto(
     // autofocus); null otherwise. Cleared when the next instruction starts.
     double? CurrentInstructionProgress = null,
     // #1596 — why the run ended without imaging ("target_skipped") or is waiting on the meridian
-    // ("meridian"); code is for clients to branch on, text is shown as-is. Both null otherwise.
+    // ("meridian"), or a flip the flight check refused ("meridian_refused", #1747); code is for clients to
+    // branch on, text is shown as-is. Both null otherwise.
     string? ReasonCode = null,
     string? ReasonText = null,
+    // #1747 — whole seconds left on the meridian wait; set only with ReasonCode "meridian", null otherwise.
+    int? MeridianWaitSecondsLeft = null,
     // #1597 — the next meridian flip as the run's trigger sees it; null when no run is active.
     MeridianFlipStatusDto? MeridianFlip = null,
     // #1557 — the run ends as Stopped once the exposure in progress is filed.

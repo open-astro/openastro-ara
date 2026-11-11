@@ -24,7 +24,7 @@ import '../../state/setup/setup_readiness.dart';
 import 'simple_preflight.dart'
     show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
 import 'simple_preview_panel.dart'
-    show SimpleShutterButton, kSimpleText;
+    show SimpleInfoToggle, SimpleShutterButton, kSimpleText;
 import 'simple_device_windows.dart' show simpleCelsius;
 import 'simple_shell.dart'
     show SimplePanel, SimpleSegments, kSimpleGoStyle, simpleStackText;
@@ -370,6 +370,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   ),
               ],
             ),
+            const SimpleInfoToggle(),
             if (scope == SimpleFocusScope.guide)
               ..._guide(l10n, guide)
             else if (_askMask)

@@ -283,6 +283,9 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
       _ => AraColors.selectionBg,
     };
     String? stateWord() => switch (phase) {
+      // #1747: no frame in hand while the rig waits out the meridian.
+      SimpleRunPhase.imaging when info?.meridianWaitLeft != null =>
+        context.l10n.planWaitingForFlip,
       SimpleRunPhase.pausing => context.l10n.planPausing,
       SimpleRunPhase.paused => context.l10n.planPaused,
       SimpleRunPhase.done => context.l10n.planDone,
@@ -605,6 +608,10 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
     );
     final camera = ref.watch(cameraStatusProvider).value;
     final exposing = camera?.runtimeState == 'exposing';
+    // #1747: a pause asked during the meridian wait lands after the flip.
+    final flipWait = ref.watch(
+      sequenceRunStateProvider.select((s) => s.value?.meridianWaitLeft != null),
+    );
     final holdable = _holdable(phase);
     ref.watch(planetariumSelectionProvider);
     // A picked target with no plan yet starts like a ready plan; a plan
@@ -627,6 +634,9 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
       // White like every mode's ring; the paused colour while paused.
       SimpleRunPhase.ready || SimpleRunPhase.none => AraColors.textPrimary,
       SimpleRunPhase.paused => simplePausedColour(ref),
+      // Greyed out once the pause is asked: the frame in hand finishes first
+      // (user, 2026-11-11).
+      SimpleRunPhase.pausing => AraColors.textDisabled,
       _ => AraColors.textPrimary.withValues(alpha: 0.25),
     };
     final pauseBars =
@@ -641,6 +651,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
         _ when idle => context.l10n.planPickTargetFirst,
         SimpleRunPhase.ready ||
         SimpleRunPhase.none => context.l10n.planStartImaging,
+        SimpleRunPhase.imaging when flipWait => context.l10n.planPauseAfterFlip,
         SimpleRunPhase.imaging => context.l10n.planPauseAfterFrame,
         SimpleRunPhase.pausing => context.l10n.planPausingLabel,
         SimpleRunPhase.paused => context.l10n.planResume,
@@ -675,10 +686,12 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
           _hold.value = 0;
           if (!_held && (quick || !holdable)) {
             // Greyed out: a tap says why (user, 2026-11-04).
-            tap == null && (idle || waiting)
+            tap == null && (idle || waiting || phase == SimpleRunPhase.pausing)
                 ? simpleSayWhy(
                     context,
-                    waiting
+                    phase == SimpleRunPhase.pausing
+                        ? context.l10n.planPausingAfterFrame
+                        : waiting
                         ? context.l10n.planRisesAtCap(
                             _hhmm(run.targets.first.rise!.toLocal()),
                           )
@@ -713,7 +726,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
                 child: Icon(
                   pauseBars ? Icons.pause : Icons.play_arrow,
                   size: 40,
-                  color: idle ? AraColors.textDisabled : AraColors.textPrimary,
+                  color: idle || phase == SimpleRunPhase.pausing ? AraColors.textDisabled : AraColors.textPrimary,
                 ),
               ),
               // The frame exposing, or the hold to stop over it.

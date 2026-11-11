@@ -85,6 +85,15 @@ class AraFontSize {
   static const double simpleUnit = 13;
   static const double simpleReading = 22;
   static const double simpleReadingLarge = 30;
+
+  /// Monitor's top line (#1724).
+  static const double monitorVerdict = 20;
+
+  /// Monitor's frame countdown, read from across the room; the smaller size
+  /// from ten minutes up, and a wait in words in place of a countdown.
+  static const double monitorCountdown = 120;
+  static const double monitorCountdownLong = 96;
+  static const double monitorWord = 44;
 }
 
 /// Simple Mode's caption: a tile's label, a window's secondary line.

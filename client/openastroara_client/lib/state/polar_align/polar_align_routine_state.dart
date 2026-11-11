@@ -124,6 +124,10 @@ class PolarAlignActionNotifier extends Notifier<PolarAlignAction> {
   @override
   PolarAlignAction build() => (busy: false, error: null);
 
+  /// Calls in flight: Stop runs alongside another call (#1770), so busy ends
+  /// only with the last of them.
+  int _inFlight = 0;
+
   /// Run [op] against the rig; [describe] words a failure, or returns null
   /// when the caller says it elsewhere. True when the rig took it.
   Future<bool> run(
@@ -132,6 +136,7 @@ class PolarAlignActionNotifier extends Notifier<PolarAlignAction> {
   }) async {
     final api = ref.read(polarAlignApiProvider);
     if (api == null) return false;
+    _inFlight++;
     state = (busy: true, error: null);
     try {
       await op(api);
@@ -140,7 +145,8 @@ class PolarAlignActionNotifier extends Notifier<PolarAlignAction> {
       if (ref.mounted) state = (busy: state.busy, error: describe(e));
       return false;
     } finally {
-      if (ref.mounted) state = (busy: false, error: state.error);
+      _inFlight--;
+      if (ref.mounted) state = (busy: _inFlight > 0, error: state.error);
     }
   }
 
