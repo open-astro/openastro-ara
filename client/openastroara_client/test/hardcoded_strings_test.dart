@@ -36,14 +36,16 @@ Map<String, List<HardcodedString>> _scanLib() {
           .listSync(recursive: true)
           .whereType<File>()
           .where(
-            (f) => f.path.endsWith('.dart') && !f.path.startsWith('lib/l10n/'),
+            (f) =>
+                f.path.endsWith('.dart') &&
+                !ratchetKey(f.path).startsWith('lib/l10n/'),
           )
           .toList()
         ..sort((a, b) => a.path.compareTo(b.path));
   for (final f in files) {
     final hits = scanHardcodedStrings(f.readAsStringSync());
     if (hits.isNotEmpty) {
-      found[f.path] = hits;
+      found[ratchetKey(f.path)] = hits;
     }
   }
   return found;
@@ -66,6 +68,11 @@ void main() {
     }
     final problems = ratchetProblems(found, _readRatchet());
     expect(problems, isEmpty, reason: '\n${problems.join('\n\n')}\n');
+  });
+
+  test('a backslash path maps to the forward-slash ratchet key', () {
+    expect(ratchetKey(r'lib\help\registry.dart'), 'lib/help/registry.dart');
+    expect(ratchetKey('lib/a.dart'), 'lib/a.dart');
   });
 
   group('the ratchet', () {

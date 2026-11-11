@@ -231,6 +231,10 @@ bool _inDisplayPosition(List<_Tok> toks, int k) {
   return false;
 }
 
+/// The ratchet key for a file path: forward slashes on every platform
+/// (Windows lists `lib\help\registry.dart`).
+String ratchetKey(String path) => path.replaceAll(r'\', '/');
+
 /// The problems of [found] against the per-file counts in [allowed]: a file
 /// over its count, a file under it (lower the entry), a stale entry.
 List<String> ratchetProblems(
