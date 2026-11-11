@@ -7275,18 +7275,6 @@ abstract class AppLocalizations {
   /// **'No flats'**
   String get calibrationNoFlats;
 
-  /// Calibration panel, Flats: a flat panel is connected, so flats use it
-  ///
-  /// In en, this message translates to:
-  /// **'Flats use the flat panel.'**
-  String get calibrationFlatsPanel;
-
-  /// Calibration panel, Flats: no flat panel, so flats wait for twilight
-  ///
-  /// In en, this message translates to:
-  /// **'No flat panel: flats use the twilight sky.'**
-  String get calibrationFlatsSky;
-
   /// Calibration panel, Flats: shoot the missing flats
   ///
   /// In en, this message translates to:
@@ -7706,6 +7694,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'focus offsets filter offsets calibrate'**
   String get searchFocusOffsetsWords;
+
+  /// Calibration panel, Flats: where the flats' light comes from (screen reader name of the two segments)
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get calibrationLightGroup;
+
+  /// Calibration panel, Flats: an even light in front of the scope: a flat panel, a tablet screen or a light box
+  ///
+  /// In en, this message translates to:
+  /// **'Panel or screen'**
+  String get calibrationLightFront;
+
+  /// Calibration panel, Flats: the flats wait for twilight and use the sky
+  ///
+  /// In en, this message translates to:
+  /// **'Twilight sky'**
+  String get calibrationLightSky;
+
+  /// Calibration panel, Flats: a flat panel is connected, so the run turns it on
+  ///
+  /// In en, this message translates to:
+  /// **'The flat panel lights itself.'**
+  String get calibrationLightPanelNote;
+
+  /// Calibration panel, Flats: no panel device, so a hand-held light (a tablet, a light box) is asked for before the flats
+  ///
+  /// In en, this message translates to:
+  /// **'No flat panel connected: the run asks you to put a screen or light box over the scope first.'**
+  String get calibrationLightScreenNote;
+
+  /// Calibration panel, Flats: twilight sky flats
+  ///
+  /// In en, this message translates to:
+  /// **'The flats wait for twilight and use the sky.'**
+  String get calibrationLightSkyNote;
+
+  /// The calibration run's first step with no flat panel: the question its pill asks before the flats
+  ///
+  /// In en, this message translates to:
+  /// **'Put the screen or light box over the scope, then press Resume to take the flats.'**
+  String get calibrationLightPrompt;
 }
 
 class _AppLocalizationsDelegate

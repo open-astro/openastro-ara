@@ -1196,8 +1196,6 @@
   "calibrationMissing": "Faltando",
   "calibrationFlatsFrom": "Flats de {date}",
   "calibrationNoFlats": "Sem flats",
-  "calibrationFlatsPanel": "Os flats usam o painel de flat.",
-  "calibrationFlatsSky": "Sem painel de flat: os flats usam o céu do crepúsculo.",
   "calibrationShootFlats": "Fazer flats",
   "calibrationReshootFlats": "Refazer flats",
   "calibrationCoverNote": "A tampa do painel fecha sobre o telescópio antes.",
@@ -1267,5 +1265,12 @@
   "focusOffsetsDiscard": "Descartar",
   "focusOffsetsSaved": "Offsets salvos. O foco automático após a troca de filtro já pode ser desligado.",
   "deviceFocusOffset": "Offset de {offset} passos",
-  "searchFocusOffsetsWords": "offsets de foco offsets de filtro calibrar focus offsets filter offsets"
+  "searchFocusOffsetsWords": "offsets de foco offsets de filtro calibrar focus offsets filter offsets",
+  "calibrationLightGroup": "Luz",
+  "calibrationLightFront": "Painel ou tela",
+  "calibrationLightSky": "Céu do crepúsculo",
+  "calibrationLightPanelNote": "O painel de flat acende sozinho.",
+  "calibrationLightScreenNote": "Nenhum painel de flat conectado: a sessão pede para colocar uma tela ou caixa de luz sobre o telescópio antes.",
+  "calibrationLightSkyNote": "Os flats esperam o crepúsculo e usam o céu.",
+  "calibrationLightPrompt": "Coloque a tela ou caixa de luz sobre o telescópio e toque em Retomar para fazer os flats."
 }

@@ -196,8 +196,8 @@ function calPanel() {
   if (S.tab === 'flats') {
     body = `<div class="sect">Flats for tonight's lights · NGC 7000</div>`
       + filters.map(([f,s,c,why]) => `<div class="r"><div class="l">${f}<small>${ready ? 'Flats from tonight · 0° rotator' : why}</small></div><span class="st ${ready?'ok':c}">${ready?'Covered':s}</span>${(ready||c==='ok')?'<button class="txt">Reshoot</button>':''}</div>`).join('')
-      + `<div class="sect">Light source</div><div class="segrow"><span class="on">Panel</span><span>Sky</span></div>
-         <p class="hint">25 frames per filter · exposure set to Target ADU 30 000. Panel is connected, so flats use it.</p>
+      + `<div class="sect">Light</div><div class="segrow new"><span class="on">Panel or screen</span><span>Twilight sky</span></div>
+         <p class="hint">No flat panel connected: the run asks you to put a screen or light box over the scope first. Exposure set to Target ADU 30 000.</p>
          <div class="acts"><button class="act" ${running||st==='planrun'?'disabled':''}>Shoot flats</button></div>`;
   } else if (S.tab === 'darks') {
     if (st === 'nolights') {

@@ -4284,13 +4284,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get calibrationNoFlats => 'No flats';
 
   @override
-  String get calibrationFlatsPanel => 'Flats use the flat panel.';
-
-  @override
-  String get calibrationFlatsSky =>
-      'No flat panel: flats use the twilight sky.';
-
-  @override
   String get calibrationShootFlats => 'Shoot flats';
 
   @override
@@ -4541,6 +4534,30 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get searchFocusOffsetsWords =>
       'focus offsets filter offsets calibrate';
+
+  @override
+  String get calibrationLightGroup => 'Light';
+
+  @override
+  String get calibrationLightFront => 'Panel or screen';
+
+  @override
+  String get calibrationLightSky => 'Twilight sky';
+
+  @override
+  String get calibrationLightPanelNote => 'The flat panel lights itself.';
+
+  @override
+  String get calibrationLightScreenNote =>
+      'No flat panel connected: the run asks you to put a screen or light box over the scope first.';
+
+  @override
+  String get calibrationLightSkyNote =>
+      'The flats wait for twilight and use the sky.';
+
+  @override
+  String get calibrationLightPrompt =>
+      'Put the screen or light box over the scope, then press Resume to take the flats.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -8852,13 +8869,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get calibrationNoFlats => 'Sem flats';
 
   @override
-  String get calibrationFlatsPanel => 'Os flats usam o painel de flat.';
-
-  @override
-  String get calibrationFlatsSky =>
-      'Sem painel de flat: os flats usam o céu do crepúsculo.';
-
-  @override
   String get calibrationShootFlats => 'Fazer flats';
 
   @override
@@ -9107,4 +9117,28 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get searchFocusOffsetsWords =>
       'offsets de foco offsets de filtro calibrar focus offsets filter offsets';
+
+  @override
+  String get calibrationLightGroup => 'Luz';
+
+  @override
+  String get calibrationLightFront => 'Painel ou tela';
+
+  @override
+  String get calibrationLightSky => 'Céu do crepúsculo';
+
+  @override
+  String get calibrationLightPanelNote => 'O painel de flat acende sozinho.';
+
+  @override
+  String get calibrationLightScreenNote =>
+      'Nenhum painel de flat conectado: a sessão pede para colocar uma tela ou caixa de luz sobre o telescópio antes.';
+
+  @override
+  String get calibrationLightSkyNote =>
+      'Os flats esperam o crepúsculo e usam o céu.';
+
+  @override
+  String get calibrationLightPrompt =>
+      'Coloque a tela ou caixa de luz sobre o telescópio e toque em Retomar para fazer os flats.';
 }

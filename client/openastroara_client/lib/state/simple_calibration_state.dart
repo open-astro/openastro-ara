@@ -65,11 +65,12 @@ class SimpleCalibrationNotifier extends Notifier<SimpleCalibrationRun?> {
   @override
   SimpleCalibrationRun? build() => null;
 
-  /// Generates the run for [need] on [session] and starts it. Flats use the
-  /// panel when one is connected, else the twilight sky; darks and bias wait
-  /// for the lens cap (a panel's cover closes instead). [reshoot] takes flats
-  /// for filters already covered too. False when it failed, with a pill
-  /// saying why.
+  /// Generates the run for [need] on [session] and starts it. Flats come
+  /// from [simpleFlatLightProvider]'s light: in front of the scope (a panel
+  /// lights itself; a screen or light box is put there by hand, and the run
+  /// asks for it first) or the twilight sky. Darks and bias wait for the lens
+  /// cap (a panel's cover closes instead). [reshoot] takes flats for filters
+  /// already covered too. False when it failed, with a pill saying why.
   Future<bool> shoot(
     CalibrationSession session,
     CalibrationNeed need, {
@@ -79,6 +80,7 @@ class SimpleCalibrationNotifier extends Notifier<SimpleCalibrationRun?> {
     final sequences = ref.read(sequenceApiProvider);
     if (api == null || sequences == null) return false;
     final panel = ref.read(flatPanelProvider).value?.isConnected ?? false;
+    final sky = ref.read(simpleFlatLightProvider) == SimpleFlatLight.sky;
     try {
       final generated = await api.generateMatchingFlats(
         session.id,
@@ -87,10 +89,23 @@ class SimpleCalibrationNotifier extends Notifier<SimpleCalibrationRun?> {
         includeBias: need.bias,
         pauseForLensCap: true,
         includeCoveredFilters: reshoot,
-        flavor: panel ? 'panel' : 'sky',
+        // The rig's panel flats solve the exposure with or without a panel.
+        flavor: sky ? 'sky' : 'panel',
       );
       final id = generated.generatedSequenceId;
       if (id == null) throw StateError('the rig saved no calibration run');
+      if (need.flats && !sky && !panel) {
+        // A light held over the scope by hand: asked for before the first flat.
+        final l = l10nFor(ref.read(appLocaleProvider));
+        final body = (await sequences.getSequenceDetail(id)).body;
+        await sequences.updateSequence(
+          id,
+          body: withChildren(body, [
+            withLensCap(l.calibrationLightPrompt),
+            ...childrenOf(body),
+          ]),
+        );
+      }
       await sequences.start(id);
       state = (
         sequenceId: id,
@@ -207,6 +222,22 @@ class SimpleCalibrationNotifier extends Notifier<SimpleCalibrationRun?> {
           friendlyError(l, e, action: action(l)),
         );
   }
+}
+
+/// Where flats get their light: something in front of the scope (a flat
+/// panel, or a tablet or light box held there) or the twilight sky. Not
+/// assumed from the rig: a light box is no device (user, 2026-11-11).
+enum SimpleFlatLight { front, sky }
+
+final simpleFlatLightProvider =
+    NotifierProvider<SimpleFlatLightNotifier, SimpleFlatLight>(
+      SimpleFlatLightNotifier.new,
+    );
+
+class SimpleFlatLightNotifier extends Notifier<SimpleFlatLight> {
+  @override
+  SimpleFlatLight build() => SimpleFlatLight.front;
+  void set(SimpleFlatLight v) => state = v;
 }
 
 /// Darks per exposure in a dark library Simple Mode builds.

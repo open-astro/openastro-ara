@@ -5527,14 +5527,6 @@
   "@calibrationNoFlats": {
     "description": "Calibration panel, Flats: this filter has no flats at all"
   },
-  "calibrationFlatsPanel": "Flats use the flat panel.",
-  "@calibrationFlatsPanel": {
-    "description": "Calibration panel, Flats: a flat panel is connected, so flats use it"
-  },
-  "calibrationFlatsSky": "No flat panel: flats use the twilight sky.",
-  "@calibrationFlatsSky": {
-    "description": "Calibration panel, Flats: no flat panel, so flats wait for twilight"
-  },
   "calibrationShootFlats": "Shoot flats",
   "@calibrationShootFlats": {
     "description": "Calibration panel, Flats: shoot the missing flats"
@@ -5872,5 +5864,33 @@
   "searchFocusOffsetsWords": "focus offsets filter offsets calibrate",
   "@searchFocusOffsetsWords": {
     "description": "Simple Mode search: words (never shown) that find the Focus offsets routine; space-separated, lower case"
+  },
+  "calibrationLightGroup": "Light",
+  "@calibrationLightGroup": {
+    "description": "Calibration panel, Flats: where the flats' light comes from (screen reader name of the two segments)"
+  },
+  "calibrationLightFront": "Panel or screen",
+  "@calibrationLightFront": {
+    "description": "Calibration panel, Flats: an even light in front of the scope: a flat panel, a tablet screen or a light box"
+  },
+  "calibrationLightSky": "Twilight sky",
+  "@calibrationLightSky": {
+    "description": "Calibration panel, Flats: the flats wait for twilight and use the sky"
+  },
+  "calibrationLightPanelNote": "The flat panel lights itself.",
+  "@calibrationLightPanelNote": {
+    "description": "Calibration panel, Flats: a flat panel is connected, so the run turns it on"
+  },
+  "calibrationLightScreenNote": "No flat panel connected: the run asks you to put a screen or light box over the scope first.",
+  "@calibrationLightScreenNote": {
+    "description": "Calibration panel, Flats: no panel device, so a hand-held light (a tablet, a light box) is asked for before the flats"
+  },
+  "calibrationLightSkyNote": "The flats wait for twilight and use the sky.",
+  "@calibrationLightSkyNote": {
+    "description": "Calibration panel, Flats: twilight sky flats"
+  },
+  "calibrationLightPrompt": "Put the screen or light box over the scope, then press Resume to take the flats.",
+  "@calibrationLightPrompt": {
+    "description": "The calibration run's first step with no flat panel: the question its pill asks before the flats"
   }
 }

@@ -358,6 +358,7 @@ class _FlatsTab extends ConsumerWidget {
     final session = simpleLatestCalibrationSession(ref);
     if (session == null) return Text(l.calibrationNoLightsYet, style: _dim);
     final panel = ref.watch(flatPanelProvider).value?.isConnected ?? false;
+    final light = ref.watch(simpleFlatLightProvider);
     final missing = !session.matchingFlatsAvailable;
     final can = _canShoot(ref);
     return Column(
@@ -378,7 +379,24 @@ class _FlatsTab extends ConsumerWidget {
             covered: f.matchingFlatFrames > 0,
             key: Key('simple-calibration-flat-${f.filterName}'),
           ),
-        Text(panel ? l.calibrationFlatsPanel : l.calibrationFlatsSky, style: _dim),
+        SimpleSegments<SimpleFlatLight>(
+          keyPrefix: 'simple-calibration-light',
+          group: l.calibrationLightGroup,
+          options: [
+            (SimpleFlatLight.front, l.calibrationLightFront, 'front'),
+            (SimpleFlatLight.sky, l.calibrationLightSky, 'sky'),
+          ],
+          selected: light,
+          onPick: ref.read(simpleFlatLightProvider.notifier).set,
+        ),
+        Text(
+          light == SimpleFlatLight.sky
+              ? l.calibrationLightSkyNote
+              : panel
+              ? l.calibrationLightPanelNote
+              : l.calibrationLightScreenNote,
+          style: _dim,
+        ),
         FilledButton.tonal(
           key: const Key('simple-calibration-shoot-flats'),
           onPressed: can

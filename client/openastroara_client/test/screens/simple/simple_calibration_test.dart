@@ -252,8 +252,9 @@ Future<(ProviderContainer, _Calibration, _Seq, _Run)> _pump(
 }
 
 void main() {
-  testWidgets('Night done: flats and darks missing offers both, flats first, and starts the run (#1563)', (tester) async {
+  testWidgets('Night done: flats and darks missing offers both, flats first; with no panel the run asks for the screen first (#1563)', (tester) async {
     final (_, cal, seq, _) = await _pump(tester, [_session()]);
+    seq.bodies['cal-run'] = withChildren(instructionForType(sequentialContainerType)!.build(), const []);
 
     expect(find.text('Missing for tonight'), findsOneWidget);
     expect(find.text('Flats for R, G, Ha · Darks · Bias'), findsOneWidget);
@@ -261,13 +262,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(cal.requests, [
-      {'session': 'tonight', 'flats': true, 'darks': true, 'bias': true, 'lensCap': true, 'flavor': 'sky'},
-    ], reason: 'no panel connected: the dawn sky');
-    expect(seq.calls, ['start cal-run']);
+      {'session': 'tonight', 'flats': true, 'darks': true, 'bias': true, 'lensCap': true, 'flavor': 'panel'},
+    ], reason: 'a tablet or light box needs no device: the rig solves the exposure (user, 2026-11-11)');
+    expect(seq.calls, ['update cal-run', 'start cal-run']);
+    final ask = childrenOf(seq.bodies['cal-run']!).first;
+    expect(ask[r'$type'], waitForUserType);
+    expect(ask['Text'], 'Put the screen or light box over the scope, then press Resume to take the flats.');
   });
 
-  testWidgets('Night done: only flats missing asks for flats alone, from the panel when one is connected', (tester) async {
-    final (_, cal, _, _) = await _pump(tester, [_session(darks: true, bias: true)], panel: true);
+  testWidgets('Night done: only flats missing asks for flats alone; a connected panel lights itself, so nothing is asked', (tester) async {
+    final (_, cal, seq, _) = await _pump(tester, [_session(darks: true, bias: true)], panel: true);
 
     expect(find.text('Flats for R, G, Ha'), findsOneWidget);
     await tester.tap(find.text('Take flats'));
@@ -275,6 +279,18 @@ void main() {
 
     expect(cal.requests.single, containsPair('flavor', 'panel'));
     expect(cal.requests.single, allOf(containsPair('flats', true), containsPair('darks', false), containsPair('bias', false)));
+    expect(seq.calls, ['start cal-run']);
+  });
+
+  testWidgets('Night done: with the twilight sky picked, the flats wait for it and nothing is asked', (tester) async {
+    final (c, cal, seq, _) = await _pump(tester, [_session(darks: true, bias: true)]);
+    c.read(simpleFlatLightProvider.notifier).set(SimpleFlatLight.sky);
+
+    await tester.tap(find.text('Take flats'));
+    await tester.pumpAndSettle();
+
+    expect(cal.requests.single, containsPair('flavor', 'sky'));
+    expect(seq.calls, ['start cal-run']);
   });
 
   testWidgets('Night done: flats on file (Plan shot them) offers darks only', (tester) async {
@@ -374,7 +390,7 @@ void main() {
     });
 
     testWidgets('the shutter shoots everything missing in one request, then starts it', (tester) async {
-      final (_, cal, seq, _) = await _pump(tester, [_session()], child: const SimpleCalibrationShutter());
+      final (_, cal, seq, _) = await _pump(tester, [_session()], panel: true, child: const SimpleCalibrationShutter());
       tester.widget<SimpleShutterButton>(find.byType(SimpleShutterButton)).onPressed!();
       await tester.pumpAndSettle();
       expect(cal.requests.single, allOf(containsPair('flats', true), containsPair('darks', true), containsPair('bias', true)));

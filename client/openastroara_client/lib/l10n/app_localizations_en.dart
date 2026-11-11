@@ -4284,13 +4284,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get calibrationNoFlats => 'No flats';
 
   @override
-  String get calibrationFlatsPanel => 'Flats use the flat panel.';
-
-  @override
-  String get calibrationFlatsSky =>
-      'No flat panel: flats use the twilight sky.';
-
-  @override
   String get calibrationShootFlats => 'Shoot flats';
 
   @override
@@ -4541,4 +4534,28 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get searchFocusOffsetsWords =>
       'focus offsets filter offsets calibrate';
+
+  @override
+  String get calibrationLightGroup => 'Light';
+
+  @override
+  String get calibrationLightFront => 'Panel or screen';
+
+  @override
+  String get calibrationLightSky => 'Twilight sky';
+
+  @override
+  String get calibrationLightPanelNote => 'The flat panel lights itself.';
+
+  @override
+  String get calibrationLightScreenNote =>
+      'No flat panel connected: the run asks you to put a screen or light box over the scope first.';
+
+  @override
+  String get calibrationLightSkyNote =>
+      'The flats wait for twilight and use the sky.';
+
+  @override
+  String get calibrationLightPrompt =>
+      'Put the screen or light box over the scope, then press Resume to take the flats.';
 }
