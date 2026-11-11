@@ -45,8 +45,10 @@ public interface IVerifyPositionService {
 /// §57.4 — after the user taps Stop Mount, "Verify Position — show me an image": one quick snapshot
 /// (2 s by default, never catalogued), solved with the mount's reported position as the hint, reported
 /// beside what the mount says and where the last slew was aimed, so the user can confirm the mount is
-/// somewhere sane before any further movement. One attempt, no sync, no slew: this only LOOKS. Serialised
-/// like centering (both drive the camera); a second caller waits.
+/// somewhere sane before any further movement. One attempt, no mount sync, no slew: this only LOOKS at
+/// the mount. #1650 — a good solve does sync a connected, still rotator's sky angle (as Centre and
+/// Rotate does), which moves nothing. Serialised like centering (both drive the camera); a second
+/// caller waits.
 /// </summary>
 public sealed class VerifyPositionService : IVerifyPositionService, IDisposable {
     public const double DefaultExposureSeconds = 2.0;
@@ -55,6 +57,7 @@ public sealed class VerifyPositionService : IVerifyPositionService, IDisposable 
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly MainCameraPointingSolver _solver;
+    private readonly Func<IRotatorMediator?> _rotator;
 
     public VerifyPositionService(
             IProfileService profileService,
@@ -68,8 +71,9 @@ public sealed class VerifyPositionService : IVerifyPositionService, IDisposable 
             filterWheelMediator, profileStore, camera)) {
     }
 
-    public VerifyPositionService(MainCameraPointingSolver solver) {
+    public VerifyPositionService(MainCameraPointingSolver solver, Func<IRotatorMediator?>? rotator = null) {
         _solver = solver;
+        _rotator = rotator ?? (() => null);
     }
 
     public async Task<VerifyPositionResultDto> VerifyAsync(double? exposureSeconds, CancellationToken ct) {
@@ -89,11 +93,23 @@ public sealed class VerifyPositionService : IVerifyPositionService, IDisposable 
         var intended = _solver.MountTarget();
         // The main-camera capture-and-solve is shared with the polar-align coarse stage.
         var result = await _solver.CaptureAndSolveRawAsync(exposure, mount, blindFailover: true, "Cannot verify the position", ct).ConfigureAwait(false);
-        return Describe(result, mount, intended, exposure);
+        return Describe(result, mount, intended, exposure, SyncRotator(result, _rotator()));
+    }
+
+    /// <summary>#1650 — syncs a connected, still rotator to a good solve's position angle; the angle
+    /// synced to, or null when nothing was. Internal static for tests.</summary>
+    internal static double? SyncRotator(PlateSolveResult result, IRotatorMediator? rotator) {
+        if (!result.Success || result.Coordinates is null || !double.IsFinite(result.PositionAngle)
+                || rotator?.GetInfo() is not { Connected: true, IsMoving: false }) {
+            return null;
+        }
+        rotator.Sync((float)result.PositionAngle);
+        return result.PositionAngle;
     }
 
     /// <summary>The pure half: the solve beside the mount's own figures. Internal static for tests.</summary>
-    internal static VerifyPositionResultDto Describe(PlateSolveResult result, Coordinates? mount, Coordinates? intended, double exposure) {
+    internal static VerifyPositionResultDto Describe(PlateSolveResult result, Coordinates? mount, Coordinates? intended, double exposure,
+            double? rotatorSyncedDegrees = null) {
         var solved = result.Success ? result.Coordinates : null;
         var ok = solved is not null;
         string? note = ok ? null
@@ -111,7 +127,9 @@ public sealed class VerifyPositionService : IVerifyPositionService, IDisposable 
             SolvedToIntendedArcmin: Arcmin(solved, intended),
             ExposureSeconds: exposure,
             Note: note,
-            MountEpoch: (mount ?? intended)?.Epoch.ToString());
+            MountEpoch: (mount ?? intended)?.Epoch.ToString(),
+            PositionAngleDegrees: ok && double.IsFinite(result.PositionAngle) ? result.PositionAngle : null,
+            RotatorSyncedDegrees: rotatorSyncedDegrees);
     }
 
     private static double? Arcmin(Coordinates? a, Coordinates? b) =>
