@@ -1,0 +1,227 @@
+/// Finds string literals written straight into user-visible positions of a
+/// Dart source: a `Text(...)`, a `text:` span, a tooltip, a snack bar message,
+/// a named label/title/message/hint/semantics argument, or the `action:` of
+/// `friendlyError`. Such text belongs in the `.arb` catalogue (issue #1751).
+///
+/// A literal is allowed when its line ends in [optOutMarker]: product names,
+/// units and language names that read the same in every language.
+library;
+
+const optOutMarker = 'l10n-ok';
+
+/// One literal found in a user-visible position.
+class HardcodedString {
+  const HardcodedString(this.line, this.value);
+  final int line;
+  final String value;
+}
+
+/// Constructors whose first positional argument is shown to a person.
+const _textConstructors = {'Text', 'SelectableText'};
+
+/// Named arguments whose string value is shown to a person.
+const _labelNames = {
+  'text',
+  'label',
+  'labelText',
+  'title',
+  'subtitle',
+  'message',
+  'tooltip',
+  'hint',
+  'hintText',
+  'helperText',
+  'errorText',
+  'semanticLabel',
+  'semanticsLabel',
+  'description',
+  'caption',
+  'summary',
+  'heading',
+  'placeholder',
+  'prefixText',
+  'suffixText',
+  'counterText',
+  'action',
+};
+
+class _Tok {
+  _Tok(this.kind, this.text, this.line, [this.value = '']);
+  final String kind; // 'id' | 'p' | 's'
+  final String text;
+  final int line;
+  final String value; // for 's': the raw literal body
+}
+
+bool _isIdStart(String c) => RegExp(r'[A-Za-z_]').hasMatch(c);
+bool _isIdPart(String c) => RegExp(r'[A-Za-z0-9_]').hasMatch(c);
+
+List<_Tok> _lex(String src) {
+  final out = <_Tok>[];
+  var i = 0;
+  var line = 1;
+
+  // Returns the index just past the literal opening at [start] (a quote, or an
+  // r-prefixed one); adjusts [line] for newlines inside it.
+  int skipString(int start, List<String> body) {
+    var j = start;
+    var raw = false;
+    if (src[j] == 'r') {
+      raw = true;
+      j++;
+    }
+    final q = src[j];
+    final triple = src.startsWith(q * 3, j);
+    j += triple ? 3 : 1;
+    final b = StringBuffer();
+    while (j < src.length) {
+      final c = src[j];
+      if (c == '\n') {
+        line++;
+      }
+      if (!raw && c == r'\') {
+        b.write(src.substring(j, j + 2 > src.length ? src.length : j + 2));
+        if (j + 1 < src.length && src[j + 1] == '\n') {
+          line++;
+        }
+        j += 2;
+        continue;
+      }
+      if (triple ? src.startsWith(q * 3, j) : c == q) {
+        j += triple ? 3 : 1;
+        body.add(b.toString());
+        return j;
+      }
+      if (!raw && c == r'$' && j + 1 < src.length && src[j + 1] == '{') {
+        var depth = 1;
+        b.write(r'${');
+        j += 2;
+        while (j < src.length && depth > 0) {
+          final d = src[j];
+          if (d == "'" || d == '"') {
+            final nested = <String>[];
+            j = skipString(j, nested);
+            b.write("''");
+            continue;
+          }
+          if (d == '\n') {
+            line++;
+          }
+          if (d == '{') {
+            depth++;
+          } else if (d == '}') {
+            depth--;
+          }
+          b.write(d);
+          j++;
+        }
+        continue;
+      }
+      b.write(c);
+      j++;
+    }
+    body.add(b.toString());
+    return j;
+  }
+
+  while (i < src.length) {
+    final c = src[i];
+    if (c == '\n') {
+      line++;
+      i++;
+    } else if (c == ' ' || c == '\t' || c == '\r') {
+      i++;
+    } else if (src.startsWith('//', i)) {
+      while (i < src.length && src[i] != '\n') {
+        i++;
+      }
+    } else if (src.startsWith('/*', i)) {
+      final end = src.indexOf('*/', i + 2);
+      final stop = end < 0 ? src.length : end + 2;
+      line += '\n'.allMatches(src.substring(i, stop)).length;
+      i = stop;
+    } else if (c == "'" ||
+        c == '"' ||
+        (c == 'r' &&
+            i + 1 < src.length &&
+            (src[i + 1] == "'" || src[i + 1] == '"'))) {
+      final startLine = line;
+      final body = <String>[];
+      i = skipString(i, body);
+      out.add(_Tok('s', '', startLine, body.single));
+    } else if (_isIdStart(c)) {
+      final s = i;
+      while (i < src.length && _isIdPart(src[i])) {
+        i++;
+      }
+      out.add(_Tok('id', src.substring(s, i), line));
+    } else {
+      out.add(_Tok('p', c, line));
+      i++;
+    }
+  }
+  return out;
+}
+
+/// The prose of a literal body: interpolations removed.
+String _prose(String body) => body
+    .replaceAll(RegExp(r'\$\{(?:[^{}]|\{[^{}]*\})*\}'), '')
+    .replaceAll(RegExp(r'\$[A-Za-z_][A-Za-z0-9_]*'), '');
+
+/// Every literal of [source] in a user-visible position that does not carry
+/// [optOutMarker] on its line.
+List<HardcodedString> scanHardcodedStrings(String source) {
+  final toks = _lex(source);
+  final lines = source.split('\n');
+  final found = <HardcodedString>[];
+  for (var k = 0; k < toks.length; k++) {
+    final t = toks[k];
+    if (t.kind != 's' || !RegExp(r'[A-Za-z]').hasMatch(_prose(t.value))) {
+      continue;
+    }
+    if (!_inDisplayPosition(toks, k)) {
+      continue;
+    }
+    if (t.line - 1 < lines.length && lines[t.line - 1].contains(optOutMarker)) {
+      continue;
+    }
+    found.add(HardcodedString(t.line, t.value));
+  }
+  return found;
+}
+
+bool _inDisplayPosition(List<_Tok> toks, int k) {
+  var depth = 0;
+  var j = k - 1;
+  for (; j >= 0; j--) {
+    final t = toks[j];
+    if (t.kind != 'p') {
+      continue;
+    }
+    if (')]}'.contains(t.text)) {
+      depth++;
+    } else if ('([{'.contains(t.text)) {
+      if (depth == 0) {
+        break;
+      }
+      depth--;
+    } else if (depth == 0 && (t.text == ',' || t.text == ';')) {
+      break;
+    }
+  }
+  // [j] is the opener or separator that begins this argument (or -1).
+  final start = j + 1;
+  if (start < toks.length &&
+      toks[start].kind == 'id' &&
+      start + 1 < toks.length &&
+      toks[start + 1].kind == 'p' &&
+      toks[start + 1].text == ':' &&
+      _labelNames.contains(toks[start].text)) {
+    return true;
+  }
+  if (j >= 1 && toks[j].text == '(' && toks[j - 1].kind == 'id') {
+    // First positional argument of Text( / SelectableText( / Text.rich-free.
+    return _textConstructors.contains(toks[j - 1].text);
+  }
+  return false;
+}
