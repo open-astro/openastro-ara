@@ -24,9 +24,7 @@ class _Rig extends ProfileApi {
         longitudeDeg: 151.215297,
         permanentPier: pier,
       ),
-      super(
-        const AraServer(hostname: '192.0.2.10', port: 5000),
-      );
+      super(const AraServer(hostname: '192.0.2.10', port: 5000));
   SiteSettings site;
   bool failPut = false;
   int puts = 0;

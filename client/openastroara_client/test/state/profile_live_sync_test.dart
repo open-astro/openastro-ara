@@ -51,15 +51,20 @@ const _server = AraServer(hostname: 'host', port: 5555);
 class _Cache extends ProfileCacheService {
   int listSaves = 0;
   @override
-  Future<void> saveList(String? activeId, List<({String id, String name})> profiles) async => listSaves++;
+  Future<void> saveList(
+    String? activeId,
+    List<({String id, String name})> profiles,
+  ) async => listSaves++;
 }
 
 ProviderContainer _container(_Rig rig, {_Cache? cache}) {
   final api = ProfileApi(_server, dio: Dio()..httpClientAdapter = rig);
-  final c = ProviderContainer(overrides: [
-    profileApiProvider.overrideWithValue(api),
-    if (cache != null) profileCacheServiceProvider.overrideWithValue(cache),
-  ]);
+  final c = ProviderContainer(
+    overrides: [
+      profileApiProvider.overrideWithValue(api),
+      if (cache != null) profileCacheServiceProvider.overrideWithValue(cache),
+    ],
+  );
   addTearDown(c.dispose);
   return c;
 }
@@ -74,22 +79,33 @@ void main() {
     await applyProfileUpdated(c, 'site');
 
     expect(c.read(siteSettingsProvider).siteName, 'Seen on the other device');
-    expect(cache.listSaves, 1, reason: 'the offline profile cache is refreshed too');
+    expect(
+      cache.listSaves,
+      1,
+      reason: 'the offline profile cache is refreshed too',
+    );
   });
 
-  test("this device's own write is not read back over what it is still editing", () async {
-    final rig = _Rig()..siteName = 'Saved';
-    final c = _container(rig);
-    // The write this device just made (the event for it comes back too).
-    await c.read(profileApiProvider)!.putSiteSettings(const SiteSettings(siteName: 'Saved'));
-    c.read(siteSettingsProvider.notifier).setSiteName('Typing after the save');
-    final reads = rig.siteReads;
+  test(
+    "this device's own write is not read back over what it is still editing",
+    () async {
+      final rig = _Rig()..siteName = 'Saved';
+      final c = _container(rig);
+      // The write this device just made (the event for it comes back too).
+      await c
+          .read(profileApiProvider)!
+          .putSiteSettings(const SiteSettings(siteName: 'Saved'));
+      c
+          .read(siteSettingsProvider.notifier)
+          .setSiteName('Typing after the save');
+      final reads = rig.siteReads;
 
-    await applyProfileUpdated(c, 'site');
+      await applyProfileUpdated(c, 'site');
 
-    expect(c.read(siteSettingsProvider).siteName, 'Typing after the save');
-    expect(rig.siteReads, reads);
-  });
+      expect(c.read(siteSettingsProvider).siteName, 'Typing after the save');
+      expect(rig.siteReads, reads);
+    },
+  );
 
   test('a section no screen holds is ignored without error', () async {
     final c = _container(_Rig());
