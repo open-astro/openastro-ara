@@ -611,7 +611,7 @@ Map<String, dynamic> calibrationQueueBody(Map<String, dynamic> block) =>
     withChildren(
       _item(sequentialContainerType)..['Name'] = kCalibrationBlockName,
       [block],
-    );
+    )..['schemaVersion'] = sequenceSchemaVersion;
 
 /// Flats per set Simple Mode shoots.
 const kSimpleFlatFrames = 25;

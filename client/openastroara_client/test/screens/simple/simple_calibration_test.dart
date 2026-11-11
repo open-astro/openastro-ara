@@ -20,6 +20,7 @@ import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
+import 'package:openastroara/models/sequence/slew_target_body.dart' show sequenceSchemaVersion;
 import 'package:openastroara/models/sequence/condition_catalog.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimpleShutterButton;
 import 'package:openastroara/screens/simple/simple_device_windows.dart' show SimpleWindowButton;
@@ -648,6 +649,13 @@ void main() {
     final t = calibrationBlockTime(block);
     expect(t.frames, 50);
     expect(t.seconds, closeTo(6000.03, 1e-6));
+  });
+
+  test('a queue of its own carries the schema version the rig requires (rig 2026-11-12)', () {
+    // The rig refused it: "sequence body missing required field 'schemaVersion'".
+    final body = calibrationQueueBody(calibrationBlockFrom(_container('run')));
+    expect(body['schemaVersion'], sequenceSchemaVersion);
+    expect(childrenOf(body).single['Name'], kCalibrationBlockName);
   });
 
   test('the dawn stop leaves the Calibration and end-of-night Flats blocks alone: they need no dark sky', () {
