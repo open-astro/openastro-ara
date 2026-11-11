@@ -4706,6 +4706,13 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get calibrationLibraryNoCamera => 'camera not recorded';
+
+  @override
+  String get calibrationStartQueue =>
+      'The calibration frames are in the queue after your targets. Start the queue now?';
+
+  @override
+  String get calibrationStartQueueNow => 'Start queue';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -9438,4 +9445,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get calibrationLibraryNoCamera => 'câmera não registrada';
+
+  @override
+  String get calibrationStartQueue =>
+      'Os quadros de calibração estão na fila após os seus alvos. Iniciar a fila agora?';
+
+  @override
+  String get calibrationStartQueueNow => 'Iniciar fila';
 }

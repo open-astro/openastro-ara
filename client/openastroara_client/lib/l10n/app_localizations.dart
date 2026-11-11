@@ -7898,6 +7898,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'camera not recorded'**
   String get calibrationLibraryNoCamera;
+
+  /// Question pill: calibration was added to a queue whose targets haven't started
+  ///
+  /// In en, this message translates to:
+  /// **'The calibration frames are in the queue after your targets. Start the queue now?'**
+  String get calibrationStartQueue;
+
+  /// Question pill action: start the queue (targets first, then the calibration frames)
+  ///
+  /// In en, this message translates to:
+  /// **'Start queue'**
+  String get calibrationStartQueueNow;
 }
 
 class _AppLocalizationsDelegate

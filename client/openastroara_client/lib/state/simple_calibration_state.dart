@@ -115,32 +115,45 @@ class SimpleCalibrationNotifier extends Notifier<SimpleCalibrationRun?> {
         );
         final id = generated.generatedSequenceId;
         if (id == null) throw StateError('the rig saved no calibration run');
+        // The rig's run becomes a block in the queue (a plan square, like
+        // everything that takes a while: user, 2026-11-12); its own copy goes.
+        var body = (await sequences.getSequenceDetail(id)).body;
         if (need.flats && !sky && !panel) {
           // A light held over the scope by hand: asked for before the first flat.
           final l = l10nFor(ref.read(appLocaleProvider));
-          final body = (await sequences.getSequenceDetail(id)).body;
-          await sequences.updateSequence(
-            id,
-            body: withChildren(body, [
-              withLensCap(l.calibrationLightPrompt),
-              ...childrenOf(body),
-            ]),
-          );
+          body = withChildren(body, [
+            withLensCap(l.calibrationLightPrompt),
+            ...childrenOf(body),
+          ]);
         }
-        await sequences.start(id);
-        state = (
-          sequenceId: id,
+        try {
+          await sequences.deleteSequence(id);
+        } catch (_) {}
+        return await _throughQueue(
+          calibrationBlockFrom(body),
           total:
               generated.totalFlatFrames +
               generated.totalBiasFrames +
               generated.totalDarkFrames,
         );
-        return true;
       } catch (e) {
         _fail(e, (l) => l.calibrationActionShoot);
         return false;
       }
     });
+  }
+
+  /// Runs [block] through the queue; when it started a queue of its own,
+  /// this run's progress follows it. False when nothing was queued.
+  Future<bool> _throughQueue(
+    Map<String, dynamic> block, {
+    required int total,
+  }) async {
+    final queue = ref.read(simpleRunProvider.notifier);
+    final before = ref.read(simpleRunProvider).targets.length;
+    final own = await queue.runCalibration(block);
+    if (own != null) state = (sequenceId: own, total: total);
+    return own != null || ref.read(simpleRunProvider).targets.length > before;
   }
 
   /// The camera's library run for [need]: darks for [exposures] at the plan's
@@ -197,7 +210,7 @@ class SimpleCalibrationNotifier extends Notifier<SimpleCalibrationRun?> {
         return false;
       }
       try {
-        final (id, _) = await _libraryRun(
+        final (id, body) = await _libraryRun(
           need,
           exposures,
           bias: bias,
@@ -205,14 +218,15 @@ class SimpleCalibrationNotifier extends Notifier<SimpleCalibrationRun?> {
           cover: false,
           lensCapPrompt: lensCapPrompt,
         );
-        await ref.read(sequenceApiProvider)!.start(id);
-        state = (
-          sequenceId: id,
+        try {
+          await ref.read(sequenceApiProvider)!.deleteSequence(id);
+        } catch (_) {}
+        return await _throughQueue(
+          calibrationBlockFrom(body),
           total:
               exposures.length * kSimpleLibraryFrames +
               (bias ? kSimpleBiasFrames : 0),
         );
-        return true;
       } catch (e) {
         _fail(e, (l) => l.calibrationActionBuildLibrary);
         return false;

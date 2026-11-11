@@ -6056,5 +6056,13 @@
   "calibrationLibraryNoCamera": "camera not recorded",
   "@calibrationLibraryNoCamera": {
     "description": "Calibration library row: a set from before the rig recorded which camera took it; it counts for any camera"
+  },
+  "calibrationStartQueue": "The calibration frames are in the queue after your targets. Start the queue now?",
+  "@calibrationStartQueue": {
+    "description": "Question pill: calibration was added to a queue whose targets haven't started"
+  },
+  "calibrationStartQueueNow": "Start queue",
+  "@calibrationStartQueueNow": {
+    "description": "Question pill action: start the queue (targets first, then the calibration frames)"
   }
 }

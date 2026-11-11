@@ -958,6 +958,28 @@ Future<bool> _tabToLabel(WidgetTester tester, String label, {int max = 60}) asyn
 }
 
 void main() {
+  testWidgets("the queue's own Calibration block waiting for the lens cap asks with Resume, without a recentre (#1757)", (tester) async {
+    const queue = SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+      SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
+      SimpleTarget(name: kCalibrationBlockName, calibration: true,
+          steps: [FilterPlanStep(filterName: '', exposureSeconds: 60, frameCount: 50)]),
+    ]);
+    final seq = _ResumeSeq();
+    final c = await _pump(tester, const Size(1024, 768), plan: queue,
+        runState: const SequenceRunStateInfo(
+            sequenceId: 'seq-1',
+            state: SequenceRunState.pausedAwaitingUser,
+            framesCaptured: 30,
+            currentInstructionDescription: 'Put the lens cap on the scope, then press Resume to take the darks.'),
+        gear: [sequenceApiProvider.overrideWithValue(seq)]);
+    await tester.pump();
+    await tester.pump();
+    final asked = c.read(simpleMessagesProvider).firstWhere((m) => m.kind == SimpleMessageKind.question);
+    asked.actions.single.onPressed();
+    await tester.pump();
+    expect(seq.calls, ['resume seq-1 recenter=false'], reason: 'no target to recentre on a calibration block');
+  });
+
   testWidgets('the calibration run is never the selected sequence: its own poll brings the lens-cap pill (rig 2026-11-12)', (tester) async {
     final seq = _ResumeSeq();
     final c = await _pump(tester, const Size(1024, 768), plan: _queuedM31,

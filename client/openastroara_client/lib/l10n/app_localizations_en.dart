@@ -4706,4 +4706,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get calibrationLibraryNoCamera => 'camera not recorded';
+
+  @override
+  String get calibrationStartQueue =>
+      'The calibration frames are in the queue after your targets. Start the queue now?';
+
+  @override
+  String get calibrationStartQueueNow => 'Start queue';
 }

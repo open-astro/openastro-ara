@@ -387,22 +387,32 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   int? _awaitingPill;
   String? _awaitingText;
 
-  /// A run other than the Plan's paused for the person (put the lens cap on):
-  /// its words in a pill with Resume, since the shutter resumes only the
-  /// Plan's run. The pill goes when the run moves on.
+  /// A calibration run paused for the person (put the lens cap on): its words
+  /// in a pill with Resume and no recentre. The pill goes when the run moves
+  /// on.
   void _syncAwaitingPill() {
+    // A run other than the Plan's, or the Plan's own on a calibration block
+    // (the lens cap, a screen): the shutter there is calibration's, not
+    // the Plan's.
+    bool calibrationNow(SequenceRunStateInfo i) {
+      final run = ref.read(simpleRunProvider);
+      if (i.sequenceId != run.sequenceId) return true;
+      final t = run.targets;
+      return t.isNotEmpty && t[simpleCurrentTarget(t, i.framesCaptured)].calibration;
+    }
+
     bool waiting(SequenceRunStateInfo? i) =>
-        i?.state == SequenceRunState.pausedAwaitingUser &&
-        i?.sequenceId != ref.read(simpleRunProvider).sequenceId;
+        i?.state == SequenceRunState.pausedAwaitingUser && calibrationNow(i!);
     final calibration = ref.read(simpleCalibrationRunStateProvider).value;
     final selected = ref.read(sequenceRunStateProvider).value;
-    final info = waiting(calibration) ? calibration : selected;
-    final text =
-        info != null &&
-            info.state == SequenceRunState.pausedAwaitingUser &&
-            info.sequenceId != ref.read(simpleRunProvider).sequenceId
-        ? info.reasonText ?? info.currentInstructionDescription ?? ''
+    final info = waiting(calibration)
+        ? calibration
+        : waiting(selected)
+        ? selected
         : null;
+    final text = info == null
+        ? null
+        : info.reasonText ?? info.currentInstructionDescription ?? '';
     if (text == _awaitingText) return;
     if (_awaitingPill case final id?) _messages.dismiss(id);
     _awaitingPill = null;

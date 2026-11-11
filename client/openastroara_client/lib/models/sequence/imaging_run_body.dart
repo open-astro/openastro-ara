@@ -606,6 +606,13 @@ Map<String, dynamic> withDawnStop(Map<String, dynamic> root, String? dawn) =>
             : c,
     ]);
 
+/// A queue of its own for a calibration [block] started with nothing queued.
+Map<String, dynamic> calibrationQueueBody(Map<String, dynamic> block) =>
+    withChildren(
+      _item(sequentialContainerType)..['Name'] = kCalibrationBlockName,
+      [block],
+    );
+
 /// Flats per set Simple Mode shoots.
 const kSimpleFlatFrames = 25;
 
@@ -691,8 +698,9 @@ Map<String, dynamic> biasSet({
 Map<String, dynamic> withLensCap(String text) =>
     _item(waitForUserType)..['Text'] = text;
 
-/// The frames a Calibration block takes and their exposure time: each loop's
-/// iterations times its exposures. Pure — unit-tested.
+/// The frames a Calibration block takes and their time: each loop's
+/// iterations times its exposures, and each flat set's frames. Pure —
+/// unit-tested.
 ({int frames, double seconds}) calibrationBlockTime(Map<String, dynamic> block) {
   var frames = 0;
   var seconds = 0.0;
@@ -706,6 +714,14 @@ Map<String, dynamic> withLensCap(String text) =>
       if (child[r'$type'] == takeExposureType) {
         frames += times;
         seconds += times * ((child['ExposureTime'] as num?)?.toDouble() ?? 0);
+      } else if (child[r'$type'] == flatPanelFlatsType ||
+          child[r'$type'] == skyFlatsType) {
+        // An auto-exposure flat set: a few seconds a frame, its solve included.
+        // shortcut: one guess for every panel and filter; read the rig's flat
+        // training if the time shown is visibly off.
+        final n = times * ((child['FrameCount'] as num?)?.toInt() ?? 0);
+        frames += n;
+        seconds += n * 3;
       } else if (isContainer(child)) {
         walk(child, times);
       }

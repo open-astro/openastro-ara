@@ -136,6 +136,21 @@ class _Seq implements SequenceClient {
   }
 
   @override
+  Future<SequenceDetail> addRunItem(String id, {required List<int> parentPath, int? index, required Map<String, dynamic> item}) async {
+    calls.add('add-live $id');
+    final kids = childrenOf(bodies[id]!)..insert(index ?? childrenOf(bodies[id]!).length, item);
+    bodies[id] = withChildren(bodies[id]!, kids);
+    return SequenceDetail(id: id, body: bodies[id]!);
+  }
+
+  @override
+  Future<String> create(String name, Map<String, dynamic> body, {String? description, String? idempotencyKey}) async {
+    calls.add('create $name');
+    bodies['queue-cal'] = body;
+    return 'queue-cal';
+  }
+
+  @override
   Future<bool> deleteSequence(String id) async {
     calls.add('delete $id');
     return bodies.remove(id) != null;
@@ -152,7 +167,7 @@ class _Run extends SequenceRunStateNotifier {
   @override
   Future<SequenceRunStateInfo?> build() async => null;
   void set(SequenceRunStateInfo s) =>
-      s.sequenceId == 'cal-run' ? calibration.set(s) : state = AsyncData(s);
+      s.sequenceId == 'queue-cal' ? calibration.set(s) : state = AsyncData(s);
 }
 
 class _CalRun extends SimpleCalibrationRunStateNotifier {
@@ -315,7 +330,7 @@ void main() {
   group('Night done (#1563, round 2)', () {
     testWidgets('flats and darks missing: two rows; Take flats asks for flats only and, with no panel, the screen first', (tester) async {
       final (_, cal, seq, _) = await _pump(tester, [_session()]);
-      seq.bodies['cal-run'] = _container('run');
+      seq.bodies['cal-run'] = _container('run', [_container('Flats L')]);
 
       expect(find.text('Flats missing'), findsOneWidget);
       expect(find.text('R, G, Ha'), findsOneWidget);
@@ -324,8 +339,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(cal.requests.single, allOf(containsPair('flats', true), containsPair('darks', false), containsPair('flavor', 'panel')));
-      expect(seq.calls, ['update cal-run', 'start cal-run']);
-      expect(childrenOf(seq.bodies['cal-run']!).first['Text'],
+      expect(seq.calls, ['delete cal-run', 'create Calibration', 'start queue-cal'],
+          reason: 'a queue of its own, so it has a plan square (user, 2026-11-12)');
+      final block = childrenOf(seq.bodies['queue-cal']!).single;
+      expect(block['Name'], kCalibrationBlockName);
+      expect(childrenOf(block).first['Text'],
           'Put the screen or light box over the scope, then press Resume to take the flats.');
     });
 
@@ -342,7 +360,8 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-calibration-take-flats')));
       await tester.pumpAndSettle();
       expect(cal.requests.single, containsPair('flavor', 'panel'));
-      expect(seq.calls, ['start cal-run']);
+      expect(seq.calls, ['delete cal-run', 'create Calibration', 'start queue-cal']);
+      expect(childrenOf(childrenOf(seq.bodies['queue-cal']!).single), isEmpty, reason: 'nothing asked');
     });
 
     testWidgets('with the twilight sky picked, the flats wait for it and nothing is asked', (tester) async {
@@ -351,7 +370,7 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-calibration-take-flats')));
       await tester.pumpAndSettle();
       expect(cal.requests.single, containsPair('flavor', 'sky'));
-      expect(seq.calls, ['start cal-run']);
+      expect(childrenOf(childrenOf(seq.bodies['queue-cal']!).single), isEmpty, reason: 'nothing asked');
     });
 
     testWidgets('everything on file says so and offers nothing', (tester) async {
@@ -381,19 +400,19 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-calibration-take-flats')));
       await tester.pumpAndSettle();
 
-      run.set(const SequenceRunStateInfo(sequenceId: 'cal-run', state: SequenceRunState.running, framesCaptured: 46));
+      run.set(const SequenceRunStateInfo(sequenceId: 'queue-cal', state: SequenceRunState.running, framesCaptured: 46));
       await tester.pump();
       expect(find.text('Calibration frames · 46 of 205'), findsOneWidget);
       await tester.tap(find.byKey(const Key('simple-calibration-stop')));
       await tester.pumpAndSettle();
-      expect(seq.calls.last, 'stop cal-run');
+      expect(seq.calls.last, 'stop queue-cal');
 
-      run.set(const SequenceRunStateInfo(sequenceId: 'cal-run', state: SequenceRunState.stopped, framesCaptured: 121));
+      run.set(const SequenceRunStateInfo(sequenceId: 'queue-cal', state: SequenceRunState.stopped, framesCaptured: 121));
       await tester.pump();
       expect(find.text('Stopped · 121 of 205'), findsOneWidget);
       expect(find.byKey(const Key('simple-calibration-take-flats')), findsOneWidget);
 
-      run.set(const SequenceRunStateInfo(sequenceId: 'cal-run', state: SequenceRunState.completed, framesCaptured: 205));
+      run.set(const SequenceRunStateInfo(sequenceId: 'queue-cal', state: SequenceRunState.completed, framesCaptured: 205));
       await tester.pump();
       expect(find.text('Calibration frames done'), findsOneWidget);
     });
@@ -439,7 +458,7 @@ void main() {
       button(tester).onPressed!();
       await tester.pumpAndSettle();
       expect(cal.requests.single, allOf(containsPair('flats', true), containsPair('darks', false), containsPair('bias', false)));
-      expect(seq.calls, ['start cal-run']);
+      expect(seq.calls, ['delete cal-run', 'create Calibration', 'start queue-cal']);
     });
 
     testWidgets('a disconnected camera turns the shutter off and says why', (tester) async {
@@ -448,14 +467,17 @@ void main() {
       expect(button(tester).whyOff, 'Connect the camera first.');
     });
 
-    testWidgets('while the Plan runs, the shutter asks first and sends nothing', (tester) async {
-      final (c, cal, _, run) = await _pump(tester, [_session()], plan: _queued(), child: shutter());
+    testWidgets('while the Plan images, the shutter puts the flats in its queue after the targets', (tester) async {
+      final (c, cal, seq, run) = await _pump(tester, [_session()], panel: true, plan: _queued(), child: shutter());
+      seq.bodies['queue-1'] = _container('Queue', [_container('NGC 7000')]);
       run.set(const SequenceRunStateInfo(sequenceId: 'queue-1', state: SequenceRunState.running));
       await tester.pump();
       button(tester).onPressed!();
       await tester.pumpAndSettle();
-      expect(cal.requests, isEmpty);
-      expect(c.read(simpleMessagesProvider).single.kind, SimpleMessageKind.question);
+      expect(cal.requests.single, containsPair('flats', true));
+      expect(seq.calls, ['delete cal-run', 'add-live queue-1'], reason: 'no second run: the running queue takes it');
+      expect(childrenOf(seq.bodies['queue-1']!).last['Name'], kCalibrationBlockName);
+      expect(c.read(simpleRunProvider).targets.last.calibration, isTrue, reason: 'a plan square');
     });
 
     testWidgets('Covered and Missing are outlined pills in their state colour, as in the mock', (tester) async {
@@ -481,6 +503,7 @@ void main() {
             generatedSequenceId: null, entries: darks, biasEntries: bias ?? [_bias]);
         r.$1.invalidate(darkLibraryStatusProvider);
         r.$3.bodies['lib-run'] = _container('Dark library', [_container('Darks 120 s')]);
+        r.$3.bodies['queue-1'] = _container('Queue', [_container('NGC 7000')]);
         await tester.pumpAndSettle();
         return r;
       }
@@ -503,7 +526,7 @@ void main() {
       });
 
       testWidgets("a gap: the plan's missing exposure is named, and the shutter builds just that at the plan's gain and temperature", (tester) async {
-        final (_, cal, seq, _) = await library(tester, [_dark(300)],
+        final (c, cal, seq, _) = await library(tester, [_dark(300)],
             extra: const [FilterPlanStep(filterName: 'Ha', exposureSeconds: 120, frameCount: 20)], child: shutter());
         expect(find.text('Build 2 min'), findsOneWidget);
         button(tester).onPressed!();
@@ -513,8 +536,12 @@ void main() {
         expect(b.gainList, [100]);
         expect(b.targetTemperatureCList, [-10.0]);
         expect(b.reuseExistingFrames, isTrue);
-        expect(seq.calls, ['update lib-run', 'start lib-run']);
-        expect(childrenOf(seq.bodies['lib-run']!).first[r'$type'], waitForUserType, reason: 'the lens cap first');
+        expect(seq.calls, ['update lib-run', 'delete lib-run', 'update queue-1'],
+            reason: 'after the queued target, as a plan square');
+        final block = childrenOf(seq.bodies['queue-1']!).last;
+        expect(childrenOf(block).first[r'$type'], waitForUserType, reason: 'the lens cap first');
+        expect(c.read(simpleMessagesProvider).single.title,
+            'The calibration frames are in the queue after your targets. Start the queue now?');
       });
 
       testWidgets('old darks: an amber Old pill, and the shutter refreshes them (no reuse)', (tester) async {
@@ -531,7 +558,7 @@ void main() {
         expect(find.text('Build bias'), findsOneWidget);
         button(tester).onPressed!();
         await tester.pumpAndSettle();
-        final kids = childrenOf(seq.bodies['lib-run']!);
+        final kids = childrenOf(childrenOf(seq.bodies['queue-1']!).last);
         expect(kids[0][r'$type'], waitForUserType);
         expect(kids[1]['Name'], startsWith('Bias'));
       });

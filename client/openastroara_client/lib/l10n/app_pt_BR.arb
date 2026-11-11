@@ -1299,5 +1299,7 @@
   "planFlatsAfterTarget": "Após o alvo",
   "planFlatsEndOfNight": "Fim da noite",
   "planFlatsHint": "Após o alvo: logo após o último quadro, no ângulo do rotador. Fim da noite: após o último alvo. Sem painel a sessão pede uma tela antes.",
-  "calibrationLibraryNoCamera": "câmera não registrada"
+  "calibrationLibraryNoCamera": "câmera não registrada",
+  "calibrationStartQueue": "Os quadros de calibração estão na fila após os seus alvos. Iniciar a fila agora?",
+  "calibrationStartQueueNow": "Iniciar fila"
 }

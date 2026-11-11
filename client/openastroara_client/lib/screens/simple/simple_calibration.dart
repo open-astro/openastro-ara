@@ -331,26 +331,10 @@ void _askGuideCover(
       );
 }
 
-/// Runs [job], or, while the Plan runs, asks first and offers the Queue (the
-/// rig runs one sequence at a time).
-void _runJob(BuildContext context, WidgetRef ref, SimpleCalibrationJob job) {
-  final run = job.run;
-  if (run == null) return;
-  if (!_planRunning(ref)) return run();
-  final l = context.l10n;
-  ref
-      .read(simpleMessagesProvider.notifier)
-      .show(
-        SimpleMessageKind.question,
-        l.calibrationPlanRunning,
-        origin: SimpleStatusOrigin.calibration,
-        actions: [
-          SimpleMessageAction(l.calibrationNotNow, () {}),
-          if (job.queue case final queue?)
-            SimpleMessageAction(l.calibrationAddToQueue, queue),
-        ],
-      );
-}
+/// Runs [job]. A sequence run goes through the queue (after a running
+/// plan's targets), so nothing needs asking first.
+void _runJob(BuildContext context, WidgetRef ref, SimpleCalibrationJob job) =>
+    job.run?.call();
 
 /// The settings chip: the current tab's state.
 String simpleCalibrationSummary(BuildContext context, WidgetRef ref) =>

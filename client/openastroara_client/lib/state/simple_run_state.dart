@@ -857,6 +857,68 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     state = state.copyWith(targets: targets);
   }
 
+  /// #1757 — runs a calibration [block] through the queue, so it has a plan
+  /// square like everything that takes a while (user, 2026-11-12). With no
+  /// queue, or a finished one, it is a queue of its own and starts. Queued
+  /// targets not started yet go first: it joins them and asks whether to
+  /// start. A queue imaging takes it after its targets. Returns the sequence
+  /// it runs in when it started a queue of its own, else null.
+  Future<String?> runCalibration(Map<String, dynamic> block) async {
+    final api = ref.read(sequenceApiProvider);
+    if (api == null || state.busy) return null;
+    final phase = simpleRunPhase(state, ref.read(sequenceRunStateProvider).value);
+    if (state.sequenceId == null || phase == SimpleRunPhase.done) {
+      state = const SimpleRun().copyWith(busy: true);
+      try {
+        final id = await api.create(
+          kCalibrationBlockName,
+          calibrationQueueBody(block),
+        );
+        ref.read(selectedSequenceIdProvider.notifier).select(id);
+        final time = calibrationBlockTime(block);
+        state = SimpleRun(
+          sequenceId: id,
+          targets: [_calibrationTarget(time)],
+        );
+        return await start() ? id : null;
+      } catch (e) {
+        _fail(_why(e, (l) => l.calibrationActionShoot), undo: const SimpleRun());
+        return null;
+      }
+    }
+    if (!await addCalibration(block)) return null;
+    if (phase == SimpleRunPhase.ready) {
+      final l = l10nFor(ref.read(appLocaleProvider));
+      ref
+          .read(simpleMessagesProvider.notifier)
+          .show(
+            SimpleMessageKind.question,
+            l.calibrationStartQueue,
+            origin: SimpleStatusOrigin.plan,
+            actions: [
+              SimpleMessageAction(l.calibrationNotNow, () {}),
+              SimpleMessageAction(l.calibrationStartQueueNow, () => startQueue()),
+            ],
+          );
+    }
+    return null;
+  }
+
+  SimpleTarget _calibrationTarget(({int frames, double seconds}) time) =>
+      SimpleTarget(
+        name: kCalibrationBlockName,
+        calibration: true,
+        steps: [
+          FilterPlanStep(
+            filterName: '',
+            exposureSeconds: time.frames == 0
+                ? 1
+                : math.max(0.001, time.seconds / time.frames),
+            frameCount: math.max(1, time.frames),
+          ),
+        ],
+      );
+
   /// #1757 — puts the Calibration [block] after the queue's targets: live
   /// while it runs. The queue holds one; a second is refused with the reason.
   /// True once on the rig.
@@ -868,7 +930,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       _fail(l.calibrationNoQueue);
       return false;
     }
-    if (state.targets.any((t) => t.calibration)) {
+    if (state.targets.any((t) => t.name == kCalibrationBlockName)) {
       _fail(l.calibrationAlreadyQueued);
       return false;
     }
@@ -885,24 +947,8 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       } else {
         await api.updateSequence(id, body: appendTargetToRunBody(body, block));
       }
-      final time = calibrationBlockTime(block);
       state = state.copyWith(
-        targets: [
-          ...state.targets,
-          SimpleTarget(
-            name: kCalibrationBlockName,
-            calibration: true,
-            steps: [
-              FilterPlanStep(
-                filterName: '',
-                exposureSeconds: time.frames == 0
-                    ? 1
-                    : math.max(0.001, time.seconds / time.frames),
-                frameCount: math.max(1, time.frames),
-              ),
-            ],
-          ),
-        ],
+        targets: [...state.targets, _calibrationTarget(calibrationBlockTime(block))],
         busy: false,
       );
       return true;
