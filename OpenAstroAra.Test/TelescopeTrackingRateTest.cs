@@ -121,6 +121,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_rate_the_driver_refuses_is_a_refusal_not_a_crash() {
+            // A mount that lists no rates lets the driver decide; its refusal must reach the
+            // client as a 409 with the driver's words, not a 500.
+            await using var box = ScriptedAlpacaDevice.Start(
+                path => path.EndsWith("/trackingrates", StringComparison.Ordinal) ? "[]" : Mount()(path),
+                path => path.EndsWith("/trackingrate", StringComparison.Ordinal) ? ScriptedAlpacaDevice.Error("Lunar is not supported") : null);
+            using var svc = new TelescopeService { RefreshPeriod = TimeSpan.FromMilliseconds(100) };
+            await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
+            await WaitForAsync(svc, d => d?.Capabilities is not null, "capabilities never published");
+
+            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.SetTrackingRateAsync("Lunar", CancellationToken.None));
+            Assert.That(ex!.Message, Does.Contain("Lunar is not supported"));
+        }
+
+        [Test]
         public async Task A_rate_the_mount_does_not_offer_is_refused() {
             await using var box = ScriptedAlpacaDevice.Start(Mount());
             using var svc = new TelescopeService { RefreshPeriod = TimeSpan.FromMilliseconds(100) };

@@ -435,7 +435,13 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         if (offered is { Count: > 0 } && !offered.Contains(driveRate.ToString())) {
             throw new InvalidOperationException($"This mount doesn't offer the {driveRate} tracking rate.");
         }
-        await Task.Run(() => client.TrackingRate = driveRate, CancellationToken.None).ConfigureAwait(false);
+        try {
+            await Task.Run(() => client.TrackingRate = driveRate, CancellationToken.None).ConfigureAwait(false);
+        } catch (ASCOM.DriverException ex) {
+            // The driver's refusal (a mount that lists no rates lets it decide; InvalidValue and
+            // NotImplemented derive from DriverException) is a refusal with its words (409), not a crash.
+            throw new InvalidOperationException(ex.Message, ex);
+        }
         RefreshCacheOnce();
     }
 

@@ -408,6 +408,16 @@ void main() {
       await tester.pump(const Duration(seconds: 4)); // the pad's "still moving" settle
     });
 
+    testWidgets('closing the window mid-press lets the pad-moving flag settle', (tester) async {
+      final (c, _, _, _) = await _pump(tester, _wire());
+      await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-mount-pad-w'))));
+      await tester.pump();
+      expect(c.read(simplePadMovingProvider), isTrue);
+      await tester.pumpWidget(UncontrolledProviderScope(container: c, child: const SizedBox()));
+      await tester.pump(const Duration(seconds: 4));
+      expect(c.read(simplePadMovingProvider), isFalse, reason: 'a later GoTo must still block the pad and show Stop');
+    });
+
     testWidgets('while the plan images the pad says why and sends nothing', (tester) async {
       final (_, mount, _, _) = await _pump(tester, _wire(), imaging: true);
       expect(find.text('Pause the plan to move the mount'), findsOneWidget);

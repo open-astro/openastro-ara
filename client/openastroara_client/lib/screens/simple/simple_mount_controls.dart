@@ -268,6 +268,9 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
       for (final (axis, _) in _padMoves[dir]!) {
         _mount.moveAxis(axis: axis, rate: 0).catchError((Object _) => false);
       }
+      // Arms the settle timer only, so the flag can't stay on after the
+      // window goes (a later GoTo must still block the pad).
+      _moving.released();
     }
     _focus.dispose();
     super.dispose();
