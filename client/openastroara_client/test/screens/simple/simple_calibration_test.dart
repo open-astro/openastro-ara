@@ -324,7 +324,7 @@ void main() {
       expect(cal.requests.single, allOf(containsPair('flats', false), containsPair('darks', true), containsPair('bias', true)));
     });
 
-    testWidgets('the library has tonight\'s darks: flats only, and a connected panel lights itself', (tester) async {
+    testWidgets("the library has tonight's darks: flats only, and a connected panel lights itself", (tester) async {
       final (_, cal, seq, _) = await _pump(tester, [_session(darks: true, bias: true)], panel: true);
       expect(find.byKey(const Key('simple-calibration-take-darks')), findsNothing, reason: 'darks come from the library');
       await tester.tap(find.byKey(const Key('simple-calibration-take-flats')));
@@ -405,7 +405,7 @@ void main() {
     Widget shutter() => const SimpleCalibrationShutter();
     SimpleShutterButton button(WidgetTester tester) => tester.widget<SimpleShutterButton>(find.byType(SimpleShutterButton));
 
-    testWidgets('Flats: the chip counts the filters without flats; Ready when covered; No lights with only Preview snapshots', (tester) async {
+    testWidgets('Flats: the chip counts the filters without flats', (tester) async {
       await _pump(tester, [_session()], child: chip());
       expect(find.text('3 missing'), findsOneWidget);
     });
@@ -487,10 +487,10 @@ void main() {
         c.invalidate(darkLibraryStatusProvider);
         await tester.pumpAndSettle();
         expect(find.text('ZWO ASI533MC Pro · reused for months'), findsOneWidget);
-        expect(find.textContaining('camera not recorded'), findsWidgets, reason: 'legacy sets count for any camera');
+        expect(find.textContaining('camera not recorded'), findsNWidgets(2), reason: 'the legacy dark and bias sets count for any camera');
       });
 
-      testWidgets('a gap: the plan\'s missing exposure is named, and the shutter builds just that at the plan\'s gain and temperature', (tester) async {
+      testWidgets("a gap: the plan's missing exposure is named, and the shutter builds just that at the plan's gain and temperature", (tester) async {
         final (_, cal, seq, _) = await library(tester, [_dark(300)],
             extra: const [FilterPlanStep(filterName: 'Ha', exposureSeconds: 120, frameCount: 20)], child: shutter());
         expect(find.text('Build 2 min'), findsOneWidget);
@@ -514,7 +514,7 @@ void main() {
         expect(cal.builds.single.reuseExistingFrames, isFalse);
       });
 
-      testWidgets('no bias at the plan\'s gain: the build shoots bias first, after the lens cap', (tester) async {
+      testWidgets("no bias at the plan's gain: the build shoots bias first, after the lens cap", (tester) async {
         final (_, _, seq, _) = await library(tester, [_dark(300)], bias: const [], child: shutter());
         expect(find.text('Build bias'), findsOneWidget);
         button(tester).onPressed!();
@@ -598,7 +598,7 @@ void main() {
         isTrue);
   });
 
-  test('a Calibration block counts its loops\' frames and exposure time', () {
+  test("a Calibration block counts its loops' frames and exposure time", () {
     Map<String, dynamic> loop(double exp, int n) => withConditions(
         withChildren(instructionForType(sequentialContainerType)!.build(), [
           instructionForType(takeExposureType)!.build()..['ExposureTime'] = exp,
