@@ -5283,18 +5283,6 @@ abstract class AppLocalizations {
   /// **'None'**
   String get planFlatsNone;
 
-  /// Plan sheet flats choice
-  ///
-  /// In en, this message translates to:
-  /// **'Sky'**
-  String get planFlatsSky;
-
-  /// Plan sheet flats choice
-  ///
-  /// In en, this message translates to:
-  /// **'Panel'**
-  String get planFlatsPanel;
-
   /// Simple Mode Storage block: heading while the first read is out
   ///
   /// In en, this message translates to:
@@ -7095,24 +7083,6 @@ abstract class AppLocalizations {
   /// **'Lost contact with the rig'**
   String get monitorLinkLostShort;
 
-  /// Night done: tonight's lights lack calibration frames; the missing sets follow on the line under it
-  ///
-  /// In en, this message translates to:
-  /// **'Missing for tonight'**
-  String get calibrationMissingTonight;
-
-  /// Night done / Calibration: flats are missing (the filters aren't known)
-  ///
-  /// In en, this message translates to:
-  /// **'Flats'**
-  String get calibrationFlats;
-
-  /// Night done / Calibration: the filters whose lights have no flats, comma-separated
-  ///
-  /// In en, this message translates to:
-  /// **'Flats for {filters}'**
-  String calibrationFlatsFor(String filters);
-
   /// Night done / Calibration: dark frames are missing
   ///
   /// In en, this message translates to:
@@ -7137,12 +7107,6 @@ abstract class AppLocalizations {
   /// **'Take darks'**
   String get calibrationTakeDarks;
 
-  /// Night done button: shoot the missing flats, then the darks and bias after the lens cap
-  ///
-  /// In en, this message translates to:
-  /// **'Take flats and darks'**
-  String get calibrationTakeFlatsAndDarks;
-
   /// Night done: the calibration run in progress, frames taken of planned
   ///
   /// In en, this message translates to:
@@ -7161,12 +7125,6 @@ abstract class AppLocalizations {
   /// **'Calibration frames done'**
   String get calibrationDone;
 
-  /// Night done: tonight's lights already have every calibration set; nothing to offer
-  ///
-  /// In en, this message translates to:
-  /// **'Flats, darks and bias on file'**
-  String get calibrationOnFile;
-
   /// Simple Mode, after Couldn't: generating or starting the calibration run failed
   ///
   /// In en, this message translates to:
@@ -7178,24 +7136,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'stop the calibration frames'**
   String get calibrationActionStop;
-
-  /// Plan sheet: a filter row shoots lights (the night's frames of the target) (#1757)
-  ///
-  /// In en, this message translates to:
-  /// **'Light'**
-  String get planLight;
-
-  /// Plan sheet: a filter row shoots flats with the panel instead of lights (#1757)
-  ///
-  /// In en, this message translates to:
-  /// **'Flat'**
-  String get planFlat;
-
-  /// Plan sheet: a flat row's exposure, set by the panel's flats to the Target ADU
-  ///
-  /// In en, this message translates to:
-  /// **'Auto'**
-  String get planExposureAuto;
 
   /// Calibration mode (#1757): flats, darks and bias for the main camera and the Guide Camera's dark library; the mode grid's tile and the rail's name
   ///
@@ -7269,53 +7209,11 @@ abstract class AppLocalizations {
   /// **'Flats from {date}'**
   String calibrationFlatsFrom(String date);
 
-  /// Calibration panel, Flats: shoot the missing flats
-  ///
-  /// In en, this message translates to:
-  /// **'Shoot flats'**
-  String get calibrationShootFlats;
-
-  /// Calibration panel, Flats: every filter is covered; shoot them all again
-  ///
-  /// In en, this message translates to:
-  /// **'Reshoot flats'**
-  String get calibrationReshootFlats;
-
-  /// Calibration panel, Darks & bias: a motorised panel cover keeps light out, so the run needs no one
-  ///
-  /// In en, this message translates to:
-  /// **'The panel\'s cover closes over the scope first.'**
-  String get calibrationCoverNote;
-
-  /// Calibration panel, Darks & bias: no panel cover, so the run pauses for the lens cap
-  ///
-  /// In en, this message translates to:
-  /// **'The run asks for the lens cap first.'**
-  String get calibrationLensCapNote;
-
-  /// Calibration panel, Darks & bias: shoot the missing darks and bias now
-  ///
-  /// In en, this message translates to:
-  /// **'Shoot now'**
-  String get calibrationShootNow;
-
   /// Calibration: put the darks and bias in the Queue as one Calibration block after the last target
   ///
   /// In en, this message translates to:
   /// **'Add to queue'**
   String get calibrationAddToQueue;
-
-  /// Calibration panel, dark library: the gain and sensor temperature the darks are taken at
-  ///
-  /// In en, this message translates to:
-  /// **'Gain {gain} · {temperature}'**
-  String calibrationLibraryGainTemp(int gain, String temperature);
-
-  /// Calibration panel, Darks & bias with no lights: shoot darks for the picked exposures
-  ///
-  /// In en, this message translates to:
-  /// **'Build dark library'**
-  String get calibrationBuildLibrary;
 
   /// The dark library run's first step: the question its pill asks
   ///
@@ -7346,12 +7244,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Connect the camera first.'**
   String get calibrationConnectCamera;
-
-  /// Calibration shutter's spoken label when idle
-  ///
-  /// In en, this message translates to:
-  /// **'Shoot what\'s missing'**
-  String get calibrationShutterShoot;
 
   /// Calibration shutter's spoken label while its run goes
   ///
@@ -7394,12 +7286,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Use while guiding'**
   String get calibrationGuideUse;
-
-  /// Calibration panel, Guide Camera: build the dark library or bad-pixel map
-  ///
-  /// In en, this message translates to:
-  /// **'Build'**
-  String get calibrationGuideBuild;
 
   /// Calibration panel, Guide Camera: build it again (after a gain or temperature change)
   ///
@@ -7764,20 +7650,8 @@ abstract class AppLocalizations {
   /// Calibration panel, Flats: the section heading over the filter rows, naming the latest plan's target
   ///
   /// In en, this message translates to:
-  /// **'Flats for tonight\'s lights · {target}'**
+  /// **'Tonight\'s filters · {target}'**
   String calibrationFlatsForSession(String target);
-
-  /// Calibration panel, Darks & bias: the bias row, under the Bias heading
-  ///
-  /// In en, this message translates to:
-  /// **'For the lights\' gain and offset'**
-  String get calibrationBiasForLights;
-
-  /// Calibration panel, dark library: the heading over the exposure chips
-  ///
-  /// In en, this message translates to:
-  /// **'Exposures'**
-  String get calibrationLibraryExposures;
 
   /// Calibration panel, Guide Camera: the outlined pill of a dark library or bad-pixel map that exists
   ///
@@ -7797,12 +7671,6 @@ abstract class AppLocalizations {
   /// **'Build bad-pixel map'**
   String get calibrationGuideBuildDefects;
 
-  /// Calibration panel, Guide Camera: build the bad-pixel map again
-  ///
-  /// In en, this message translates to:
-  /// **'Rebuild bad-pixel map'**
-  String get calibrationGuideRebuildDefects;
-
   /// Calibration panel, Guide Camera: the line under the build buttons
   ///
   /// In en, this message translates to:
@@ -7814,6 +7682,216 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Built'**
   String get calibrationGuideReady;
+
+  /// Night done: tonight's lights lack flats; the filters follow under it
+  ///
+  /// In en, this message translates to:
+  /// **'Flats missing'**
+  String get calibrationFlatsMissing;
+
+  /// Night done: every filter of tonight's lights has flats
+  ///
+  /// In en, this message translates to:
+  /// **'Flats on file'**
+  String get calibrationFlatsOnFile;
+
+  /// Night done: the camera's library has no darks (or bias) matching tonight's lights, e.g. a new exposure, gain or temperature
+  ///
+  /// In en, this message translates to:
+  /// **'Darks missing from the library'**
+  String get calibrationDarksMissingFromLibrary;
+
+  /// Calibration chip on Darks & bias: no plan rows to say which darks are needed
+  ///
+  /// In en, this message translates to:
+  /// **'No plan'**
+  String get calibrationChipNoPlan;
+
+  /// Calibration chip on Darks & bias: dark sets the plan needs that are older than six months
+  ///
+  /// In en, this message translates to:
+  /// **'{count} old'**
+  String calibrationChipOld(int count);
+
+  /// Calibration chip on Guide Camera: the Guider isn't connected
+  ///
+  /// In en, this message translates to:
+  /// **'No guider'**
+  String get calibrationChipNoGuider;
+
+  /// Calibration shutter caption on Flats: what the shutter does
+  ///
+  /// In en, this message translates to:
+  /// **'Shoot flats'**
+  String get calibrationCapShootFlats;
+
+  /// Calibration shutter caption and button on Darks & bias: builds the darks (by exposure) and/or bias the plan needs
+  ///
+  /// In en, this message translates to:
+  /// **'Build {what}'**
+  String calibrationCapBuild(String what);
+
+  /// Calibration shutter caption and button on Darks & bias: shoots old dark sets again
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh {what}'**
+  String calibrationCapRefresh(String what);
+
+  /// Calibration panel, Darks & bias: no plan rows, so coverage can't be judged
+  ///
+  /// In en, this message translates to:
+  /// **'Queue a target to see which darks its plan needs.'**
+  String get calibrationLibraryNoPlan;
+
+  /// Calibration panel, Flats: shoot the filters that have no flats
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Shoot 1 missing flat set} other{Shoot {count} missing flat sets}}'**
+  String calibrationShootMissingFlats(int count);
+
+  /// Calibration panel, Flats: every filter is covered; shoot all of them again
+  ///
+  /// In en, this message translates to:
+  /// **'Reshoot all'**
+  String get calibrationReshootAll;
+
+  /// Calibration panel, Flats: the line under Reshoot all
+  ///
+  /// In en, this message translates to:
+  /// **'Reshoot all keeps what you have and shoots every filter again.'**
+  String get calibrationReshootAllNote;
+
+  /// Calibration library: how old a set is, in days (followed by 'old')
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{today} =1{1 day} other{{count} days}}'**
+  String calibrationAgeDays(int count);
+
+  /// Calibration library: how old a set is, in weeks
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 week} other{{count} weeks}}'**
+  String calibrationAgeWeeks(int count);
+
+  /// Calibration library: how old a set is, in months
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 month} other{{count} months}}'**
+  String calibrationAgeMonths(int count);
+
+  /// Calibration library: a set's camera gain
+  ///
+  /// In en, this message translates to:
+  /// **'gain {gain}'**
+  String calibrationGain(int gain);
+
+  /// Calibration library: a bias set's camera offset
+  ///
+  /// In en, this message translates to:
+  /// **'offset {offset}'**
+  String calibrationOffset(int offset);
+
+  /// Calibration panel, Darks & bias: the heading naming the camera the library belongs to
+  ///
+  /// In en, this message translates to:
+  /// **'{camera} · reused for months'**
+  String calibrationLibraryCamera(String camera);
+
+  /// Calibration panel, Darks & bias: the library has darks and bias for every exposure the queued plan uses
+  ///
+  /// In en, this message translates to:
+  /// **'Covers your plan'**
+  String get calibrationLibraryCovers;
+
+  /// Calibration panel, Darks & bias: the darks (by exposure) and/or bias the library lacks for the queued plan
+  ///
+  /// In en, this message translates to:
+  /// **'Your plan needs {what}'**
+  String calibrationLibraryNeeds(String what);
+
+  /// Calibration panel, Darks & bias: the plan is covered by dark sets older than six months
+  ///
+  /// In en, this message translates to:
+  /// **'Covers your plan, but the {what} darks are old'**
+  String calibrationLibraryOld(String what);
+
+  /// Calibration panel, Darks & bias: under the old-darks line
+  ///
+  /// In en, this message translates to:
+  /// **'Darks drift as a sensor ages. Refresh them when you can.'**
+  String get calibrationLibraryOldNote;
+
+  /// Calibration panel, Darks & bias: the camera's library is empty
+  ///
+  /// In en, this message translates to:
+  /// **'No darks or bias for this camera yet'**
+  String get calibrationLibraryEmpty;
+
+  /// Calibration panel, Darks & bias: under the empty-library line
+  ///
+  /// In en, this message translates to:
+  /// **'Build them once on a cloudy night; they last months.'**
+  String get calibrationLibraryEmptyNote;
+
+  /// Calibration panel, Darks & bias: no darks (or no bias) in the library
+  ///
+  /// In en, this message translates to:
+  /// **'None yet.'**
+  String get calibrationLibraryNone;
+
+  /// Calibration library row: how old the set is and how many frames it holds
+  ///
+  /// In en, this message translates to:
+  /// **'{age} old · {frames} frames'**
+  String calibrationLibraryAge(String age, int frames);
+
+  /// Calibration library: the outlined pill of a dark set older than six months
+  ///
+  /// In en, this message translates to:
+  /// **'Old'**
+  String get calibrationOld;
+
+  /// Calibration panel, Darks & bias: the heading over the exposure chips
+  ///
+  /// In en, this message translates to:
+  /// **'Build or refresh'**
+  String get calibrationLibraryBuildSection;
+
+  /// Calibration panel, Darks & bias: the settings the library build uses
+  ///
+  /// In en, this message translates to:
+  /// **'At {settings}, from the plan. Bias at the same gain. The run asks for the lens cap first.'**
+  String calibrationLibraryNote(String settings);
+
+  /// Calibration panel, Darks & bias: build darks for the exposures picked by hand
+  ///
+  /// In en, this message translates to:
+  /// **'Build picked'**
+  String get calibrationBuildPicked;
+
+  /// Plan sheet, Flats row: the target's filters the flats are for
+  ///
+  /// In en, this message translates to:
+  /// **'For {filters}'**
+  String planFlatsFor(String filters);
+
+  /// Plan sheet, Flats row: flats for this target's filters right after its last frame (#1757)
+  ///
+  /// In en, this message translates to:
+  /// **'After target'**
+  String get planFlatsAfterTarget;
+
+  /// Plan sheet, Flats row: flats for this target's filters after the queue's last target (#1757)
+  ///
+  /// In en, this message translates to:
+  /// **'End of night'**
+  String get planFlatsEndOfNight;
+
+  /// Plan sheet, Flats row: what the two choices do
+  ///
+  /// In en, this message translates to:
+  /// **'After target: right after its last frame, at its rotator angle. End of night: after the last target. With no panel the run asks for a screen first.'**
+  String get planFlatsHint;
 }
 
 class _AppLocalizationsDelegate

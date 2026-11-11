@@ -3086,12 +3086,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planFlatsNone => 'None';
 
   @override
-  String get planFlatsSky => 'Sky';
-
-  @override
-  String get planFlatsPanel => 'Panel';
-
-  @override
   String get shellStorageReading => 'Checking the disk…';
 
   @override
@@ -4183,17 +4177,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get monitorLinkLostShort => 'Lost contact with the rig';
 
   @override
-  String get calibrationMissingTonight => 'Missing for tonight';
-
-  @override
-  String get calibrationFlats => 'Flats';
-
-  @override
-  String calibrationFlatsFor(String filters) {
-    return 'Flats for $filters';
-  }
-
-  @override
   String get calibrationDarks => 'Darks';
 
   @override
@@ -4204,9 +4187,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get calibrationTakeDarks => 'Take darks';
-
-  @override
-  String get calibrationTakeFlatsAndDarks => 'Take flats and darks';
 
   @override
   String calibrationTaking(int done, int total) {
@@ -4222,22 +4202,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get calibrationDone => 'Calibration frames done';
 
   @override
-  String get calibrationOnFile => 'Flats, darks and bias on file';
-
-  @override
   String get calibrationActionShoot => 'start the calibration frames';
 
   @override
   String get calibrationActionStop => 'stop the calibration frames';
-
-  @override
-  String get planLight => 'Light';
-
-  @override
-  String get planFlat => 'Flat';
-
-  @override
-  String get planExposureAuto => 'Auto';
 
   @override
   String get shellModeCalibration => 'Calibration';
@@ -4281,31 +4249,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get calibrationShootFlats => 'Shoot flats';
-
-  @override
-  String get calibrationReshootFlats => 'Reshoot flats';
-
-  @override
-  String get calibrationCoverNote =>
-      'The panel\'s cover closes over the scope first.';
-
-  @override
-  String get calibrationLensCapNote => 'The run asks for the lens cap first.';
-
-  @override
-  String get calibrationShootNow => 'Shoot now';
-
-  @override
   String get calibrationAddToQueue => 'Add to queue';
-
-  @override
-  String calibrationLibraryGainTemp(int gain, String temperature) {
-    return 'Gain $gain · $temperature';
-  }
-
-  @override
-  String get calibrationBuildLibrary => 'Build dark library';
 
   @override
   String get calibrationLensCapPrompt =>
@@ -4324,9 +4268,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get calibrationConnectCamera => 'Connect the camera first.';
-
-  @override
-  String get calibrationShutterShoot => 'Shoot what\'s missing';
 
   @override
   String get calibrationShutterStop => 'Stop calibration';
@@ -4351,9 +4292,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get calibrationGuideUse => 'Use while guiding';
-
-  @override
-  String get calibrationGuideBuild => 'Build';
 
   @override
   String get calibrationGuideRebuild => 'Rebuild';
@@ -4581,14 +4519,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String calibrationFlatsForSession(String target) {
-    return 'Flats for tonight\'s lights · $target';
+    return 'Tonight\'s filters · $target';
   }
-
-  @override
-  String get calibrationBiasForLights => 'For the lights\' gain and offset';
-
-  @override
-  String get calibrationLibraryExposures => 'Exposures';
 
   @override
   String get calibrationOnFileTag => 'On file';
@@ -4600,12 +4532,175 @@ class AppLocalizationsEn extends AppLocalizations {
   String get calibrationGuideBuildDefects => 'Build bad-pixel map';
 
   @override
-  String get calibrationGuideRebuildDefects => 'Rebuild bad-pixel map';
-
-  @override
   String get calibrationGuideCoverNote =>
       'Building asks you to cover the guide scope first.';
 
   @override
   String get calibrationGuideReady => 'Built';
+
+  @override
+  String get calibrationFlatsMissing => 'Flats missing';
+
+  @override
+  String get calibrationFlatsOnFile => 'Flats on file';
+
+  @override
+  String get calibrationDarksMissingFromLibrary =>
+      'Darks missing from the library';
+
+  @override
+  String get calibrationChipNoPlan => 'No plan';
+
+  @override
+  String calibrationChipOld(int count) {
+    return '$count old';
+  }
+
+  @override
+  String get calibrationChipNoGuider => 'No guider';
+
+  @override
+  String get calibrationCapShootFlats => 'Shoot flats';
+
+  @override
+  String calibrationCapBuild(String what) {
+    return 'Build $what';
+  }
+
+  @override
+  String calibrationCapRefresh(String what) {
+    return 'Refresh $what';
+  }
+
+  @override
+  String get calibrationLibraryNoPlan =>
+      'Queue a target to see which darks its plan needs.';
+
+  @override
+  String calibrationShootMissingFlats(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Shoot $count missing flat sets',
+      one: 'Shoot 1 missing flat set',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get calibrationReshootAll => 'Reshoot all';
+
+  @override
+  String get calibrationReshootAllNote =>
+      'Reshoot all keeps what you have and shoots every filter again.';
+
+  @override
+  String calibrationAgeDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days',
+      one: '1 day',
+      zero: 'today',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calibrationAgeWeeks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count weeks',
+      one: '1 week',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calibrationAgeMonths(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count months',
+      one: '1 month',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calibrationGain(int gain) {
+    return 'gain $gain';
+  }
+
+  @override
+  String calibrationOffset(int offset) {
+    return 'offset $offset';
+  }
+
+  @override
+  String calibrationLibraryCamera(String camera) {
+    return '$camera · reused for months';
+  }
+
+  @override
+  String get calibrationLibraryCovers => 'Covers your plan';
+
+  @override
+  String calibrationLibraryNeeds(String what) {
+    return 'Your plan needs $what';
+  }
+
+  @override
+  String calibrationLibraryOld(String what) {
+    return 'Covers your plan, but the $what darks are old';
+  }
+
+  @override
+  String get calibrationLibraryOldNote =>
+      'Darks drift as a sensor ages. Refresh them when you can.';
+
+  @override
+  String get calibrationLibraryEmpty => 'No darks or bias for this camera yet';
+
+  @override
+  String get calibrationLibraryEmptyNote =>
+      'Build them once on a cloudy night; they last months.';
+
+  @override
+  String get calibrationLibraryNone => 'None yet.';
+
+  @override
+  String calibrationLibraryAge(String age, int frames) {
+    return '$age old · $frames frames';
+  }
+
+  @override
+  String get calibrationOld => 'Old';
+
+  @override
+  String get calibrationLibraryBuildSection => 'Build or refresh';
+
+  @override
+  String calibrationLibraryNote(String settings) {
+    return 'At $settings, from the plan. Bias at the same gain. The run asks for the lens cap first.';
+  }
+
+  @override
+  String get calibrationBuildPicked => 'Build picked';
+
+  @override
+  String planFlatsFor(String filters) {
+    return 'For $filters';
+  }
+
+  @override
+  String get planFlatsAfterTarget => 'After target';
+
+  @override
+  String get planFlatsEndOfNight => 'End of night';
+
+  @override
+  String get planFlatsHint =>
+      'After target: right after its last frame, at its rotator angle. End of night: after the last target. With no panel the run asks for a screen first.';
 }

@@ -21,7 +21,6 @@ import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/models/sequence/condition_catalog.dart';
-import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimpleShutterButton;
 import 'package:openastroara/screens/simple/simple_device_windows.dart' show SimpleWindowButton;
 import 'package:openastroara/state/simple_calibration_state.dart';
@@ -39,6 +38,26 @@ class _Calibration implements CalibrationClient {
   final List<CalibrationSession> sessions;
   final requests = <Map<String, Object?>>[];
   bool fails = false;
+
+  /// The camera's library, and the builds asked for.
+  DarkLibraryState library = const DarkLibraryState(
+      status: 'idle', totalCombinations: 0, completedCombinations: 0, generatedSequenceId: null, entries: []);
+  final builds = <DarkLibraryBuildRequest>[];
+
+  @override
+  Future<DarkLibraryState> darkLibraryStatus() async => library;
+
+  @override
+  Future<void> buildDarkLibrary(DarkLibraryBuildRequest request) async {
+    builds.add(request);
+    library = DarkLibraryState(
+        status: 'pending',
+        totalCombinations: request.exposureSecondsList.length,
+        completedCombinations: 0,
+        generatedSequenceId: 'lib-run',
+        entries: library.entries,
+        biasEntries: library.biasEntries);
+  }
 
   @override
   Future<CursorPage<CalibrationSession>> listSessions({int limit = 200, String? cursor}) async =>
@@ -173,9 +192,17 @@ class _Guider extends GuiderStatusNotifier {
 }
 
 class _GuiderCal extends GuiderCalibrationNotifier {
+  _GuiderCal([this.status]);
+  final CalibrationStatus? status;
   final calls = <String>[];
   @override
-  Future<CalibrationStatusResponse?> build() async => const CalibrationStatusResponse(connected: true, status: null);
+  Future<CalibrationStatusResponse?> build() async => CalibrationStatusResponse(connected: true, status: status);
+  @override
+  Future<void> buildDefectMap({int exposureMs = 3000, int frameCount = 10, String? notes, bool loadAfter = true}) async =>
+      calls.add('build defects');
+  @override
+  Future<void> deleteCalibrationFiles({bool darks = true, bool defectmap = true}) async =>
+      calls.add('delete darks=$darks defectmap=$defectmap');
   @override
   Future<void> buildDarkLibrary({
     int frameCount = 5,
@@ -253,170 +280,170 @@ Future<(ProviderContainer, _Calibration, _Seq, _Run)> _pump(
   return (c, cal, seq, run);
 }
 
-void main() {
-  testWidgets('Night done: flats and darks missing offers both, flats first; with no panel the run asks for the screen first (#1563)', (tester) async {
-    final (_, cal, seq, _) = await _pump(tester, [_session()]);
-    seq.bodies['cal-run'] = withChildren(instructionForType(sequentialContainerType)!.build(), const []);
+/// A dark set in the camera's library.
+DarkLibraryEntry _dark(double exposure, {int gain = 100, double temp = -10, int ageDays = 21}) => DarkLibraryEntry(
+    id: '$exposure', exposureSeconds: exposure, gain: gain, temperatureC: temp, frameCount: 30,
+    capturedUtc: DateTime.now().toUtc().subtract(Duration(days: ageDays)), fileSizeBytes: 1);
 
-    expect(find.text('Missing for tonight'), findsOneWidget);
-    expect(find.text('Flats for R, G, Ha · Darks · Bias'), findsOneWidget);
-    await tester.tap(find.text('Take flats and darks'));
-    await tester.pumpAndSettle();
+final _bias = BiasLibraryEntry(
+    id: 'b', gain: 100, offset: null, bin: 1, frameCount: 50, capturedUtc: DateTime.now().toUtc().subtract(const Duration(days: 21)), fileSizeBytes: 1);
 
-    expect(cal.requests, [
-      {'session': 'tonight', 'flats': true, 'darks': true, 'bias': true, 'lensCap': true, 'flavor': 'panel'},
-    ], reason: 'a tablet or light box needs no device: the rig solves the exposure (user, 2026-11-11)');
-    expect(seq.calls, ['update cal-run', 'start cal-run']);
-    final ask = childrenOf(seq.bodies['cal-run']!).first;
-    expect(ask[r'$type'], waitForUserType);
-    expect(ask['Text'], 'Put the screen or light box over the scope, then press Resume to take the flats.');
-  });
-
-  testWidgets('Night done: only flats missing asks for flats alone; a connected panel lights itself, so nothing is asked', (tester) async {
-    final (_, cal, seq, _) = await _pump(tester, [_session(darks: true, bias: true)], panel: true);
-
-    expect(find.text('Flats for R, G, Ha'), findsOneWidget);
-    await tester.tap(find.text('Take flats'));
-    await tester.pumpAndSettle();
-
-    expect(cal.requests.single, containsPair('flavor', 'panel'));
-    expect(cal.requests.single, allOf(containsPair('flats', true), containsPair('darks', false), containsPair('bias', false)));
-    expect(seq.calls, ['start cal-run']);
-  });
-
-  testWidgets('Night done: with the twilight sky picked, the flats wait for it and nothing is asked', (tester) async {
-    final (c, cal, seq, _) = await _pump(tester, [_session(darks: true, bias: true)]);
-    c.read(simpleFlatLightProvider.notifier).set(SimpleFlatLight.sky);
-
-    await tester.tap(find.text('Take flats'));
-    await tester.pumpAndSettle();
-
-    expect(cal.requests.single, containsPair('flavor', 'sky'));
-    expect(seq.calls, ['start cal-run']);
-  });
-
-  testWidgets('Night done: flats on file (Plan shot them) offers darks only', (tester) async {
-    final (_, cal, _, _) = await _pump(tester, [_session(flats: true)]);
-
-    expect(find.text('Darks · Bias'), findsOneWidget);
-    await tester.tap(find.text('Take darks'));
-    await tester.pumpAndSettle();
-
-    expect(cal.requests.single, allOf(containsPair('flats', false), containsPair('darks', true), containsPair('bias', true)));
-  });
-
-  testWidgets('Night done: everything on file says so and offers nothing', (tester) async {
-    await _pump(tester, [_session(flats: true, darks: true, bias: true)]);
-
-    expect(find.text('Flats, darks and bias on file'), findsOneWidget);
-    expect(find.byKey(const Key('simple-calibration-take')), findsNothing);
-  });
-
-  testWidgets('Night done: no session for the run shows no calibration row', (tester) async {
-    await _pump(tester, [_session(start: DateTime.utc(2026, 11, 8, 9))]);
-
-    expect(find.byKey(const Key('simple-calibration')), findsNothing);
-  });
-
-  testWidgets("Night done: Preview's snapshots are not lights to calibrate (user, 2026-11-11)", (tester) async {
-    await _pump(tester, [_session(id: 'preview', manual: true)]);
-
-    expect(find.byKey(const Key('simple-calibration')), findsNothing);
-  });
-
-  testWidgets('Night done: the newest session in the run counts, not an older one', (tester) async {
-    final (_, cal, _, _) = await _pump(tester, [
-      _session(id: 'earlier', start: _night.start.subtract(const Duration(hours: 2))),
-      _session(id: 'tonight', flats: true),
+/// A queued plan at gain 100: L and Ha at 300 s, and [extra] more rows.
+SimpleRun _queued([List<FilterPlanStep> extra = const []]) => SimpleRun(sequenceId: 'queue-1', targets: [
+      SimpleTarget(name: 'NGC 7000', gain: 100, steps: [
+        const FilterPlanStep(filterName: 'L', exposureSeconds: 300, frameCount: 40),
+        ...extra,
+      ]),
     ]);
 
-    await tester.tap(find.byKey(const Key('simple-calibration-take')));
-    await tester.pumpAndSettle();
+Map<String, dynamic> _container(String name, [List<Map<String, dynamic>> kids = const []]) =>
+    withChildren(instructionForType(sequentialContainerType)!.build()..['Name'] = name, kids);
 
-    expect(cal.requests.single['session'], 'tonight');
-  });
+void main() {
+  group('Night done (#1563, round 2)', () {
+    testWidgets('flats and darks missing: two rows; Take flats asks for flats only and, with no panel, the screen first', (tester) async {
+      final (_, cal, seq, _) = await _pump(tester, [_session()]);
+      seq.bodies['cal-run'] = _container('run');
 
-  testWidgets('Night done: the run shows n of N with a Stop, then done; a stopped one offers what is still missing', (tester) async {
-    final (_, _, seq, run) = await _pump(tester, [_session()]);
-    await tester.tap(find.byKey(const Key('simple-calibration-take')));
-    await tester.pumpAndSettle();
+      expect(find.text('Flats missing'), findsOneWidget);
+      expect(find.text('R, G, Ha'), findsOneWidget);
+      expect(find.text('Darks missing from the library'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-calibration-take-flats')));
+      await tester.pumpAndSettle();
 
-    run.set(const SequenceRunStateInfo(sequenceId: 'cal-run', state: SequenceRunState.running, framesCaptured: 46));
-    await tester.pump();
-    expect(find.text('Calibration frames · 46 of 205'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('simple-calibration-stop')));
-    await tester.pumpAndSettle();
-    expect(seq.calls.last, 'stop cal-run');
-
-    run.set(const SequenceRunStateInfo(sequenceId: 'cal-run', state: SequenceRunState.stopped, framesCaptured: 121));
-    await tester.pump();
-    expect(find.text('Stopped · 121 of 205'), findsOneWidget);
-    expect(find.text('Take flats and darks'), findsOneWidget, reason: 'the rig asks only for what is still uncovered');
-
-    run.set(const SequenceRunStateInfo(sequenceId: 'cal-run', state: SequenceRunState.completed, framesCaptured: 205));
-    await tester.pump();
-    expect(find.text('Calibration frames done'), findsOneWidget);
-  });
-
-  testWidgets('Night done: a run that fails to start says why in an error pill', (tester) async {
-    final (c, cal, seq, _) = await _pump(tester, [_session()]);
-    cal.fails = true;
-
-    await tester.tap(find.byKey(const Key('simple-calibration-take')));
-    await tester.pumpAndSettle();
-
-    final pill = c.read(simpleMessagesProvider).single;
-    expect(pill.kind, SimpleMessageKind.error);
-    expect(pill.title, 'Camera is not connected', reason: "the rig's own words name the cause");
-    expect(seq.calls, isEmpty);
-  });
-
-  group('Calibration mode (#1757)', () {
-    Widget panel() => const SingleChildScrollView(child: SimpleCalibrationPanel());
-
-    Widget chip() => Consumer(builder: (context, ref, _) => Text(simpleCalibrationSummary(ref, context.l10n)));
-
-    testWidgets('the chip says how many sets are missing', (tester) async {
-      await _pump(tester, [_session()], child: chip());
-      expect(find.text('5 missing'), findsOneWidget, reason: 'flats for R, G and Ha, darks, bias');
+      expect(cal.requests.single, allOf(containsPair('flats', true), containsPair('darks', false), containsPair('flavor', 'panel')));
+      expect(seq.calls, ['update cal-run', 'start cal-run']);
+      expect(childrenOf(seq.bodies['cal-run']!).first['Text'],
+          'Put the screen or light box over the scope, then press Resume to take the flats.');
     });
 
-    testWidgets('the chip says Ready when every set is covered', (tester) async {
-      await _pump(tester, [_session(flats: true, darks: true, bias: true)], child: chip());
+    testWidgets('Take darks asks for the darks and bias the library lacks for tonight', (tester) async {
+      final (_, cal, _, _) = await _pump(tester, [_session(flats: true)]);
+      await tester.tap(find.byKey(const Key('simple-calibration-take-darks')));
+      await tester.pumpAndSettle();
+      expect(cal.requests.single, allOf(containsPair('flats', false), containsPair('darks', true), containsPair('bias', true)));
+    });
+
+    testWidgets('the library has tonight\'s darks: flats only, and a connected panel lights itself', (tester) async {
+      final (_, cal, seq, _) = await _pump(tester, [_session(darks: true, bias: true)], panel: true);
+      expect(find.byKey(const Key('simple-calibration-take-darks')), findsNothing, reason: 'darks come from the library');
+      await tester.tap(find.byKey(const Key('simple-calibration-take-flats')));
+      await tester.pumpAndSettle();
+      expect(cal.requests.single, containsPair('flavor', 'panel'));
+      expect(seq.calls, ['start cal-run']);
+    });
+
+    testWidgets('with the twilight sky picked, the flats wait for it and nothing is asked', (tester) async {
+      final (c, cal, seq, _) = await _pump(tester, [_session(darks: true, bias: true)]);
+      c.read(simpleFlatLightProvider.notifier).set(SimpleFlatLight.sky);
+      await tester.tap(find.byKey(const Key('simple-calibration-take-flats')));
+      await tester.pumpAndSettle();
+      expect(cal.requests.single, containsPair('flavor', 'sky'));
+      expect(seq.calls, ['start cal-run']);
+    });
+
+    testWidgets('everything on file says so and offers nothing', (tester) async {
+      await _pump(tester, [_session(flats: true, darks: true, bias: true)]);
+      expect(find.text('Flats on file'), findsOneWidget);
+      expect(find.byType(FilledButton), findsNothing);
+      expect(find.byType(OutlinedButton), findsNothing);
+    });
+
+    testWidgets('no session for the run, or only Preview snapshots, shows no calibration rows', (tester) async {
+      await _pump(tester, [_session(start: DateTime.utc(2026, 11, 8, 9)), _session(id: 'preview', manual: true)]);
+      expect(find.byKey(const Key('simple-calibration')), findsNothing);
+    });
+
+    testWidgets('the newest session in the run counts, not an older one', (tester) async {
+      final (_, cal, _, _) = await _pump(tester, [
+        _session(id: 'earlier', start: _night.start.subtract(const Duration(hours: 2))),
+        _session(id: 'tonight', darks: true, bias: true),
+      ]);
+      await tester.tap(find.byKey(const Key('simple-calibration-take-flats')));
+      await tester.pumpAndSettle();
+      expect(cal.requests.single['session'], 'tonight');
+    });
+
+    testWidgets('the run shows n of N with a Stop, then done; a stopped one offers what is still missing', (tester) async {
+      final (_, _, seq, run) = await _pump(tester, [_session(darks: true, bias: true)], panel: true);
+      await tester.tap(find.byKey(const Key('simple-calibration-take-flats')));
+      await tester.pumpAndSettle();
+
+      run.set(const SequenceRunStateInfo(sequenceId: 'cal-run', state: SequenceRunState.running, framesCaptured: 46));
+      await tester.pump();
+      expect(find.text('Calibration frames · 46 of 205'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-calibration-stop')));
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'stop cal-run');
+
+      run.set(const SequenceRunStateInfo(sequenceId: 'cal-run', state: SequenceRunState.stopped, framesCaptured: 121));
+      await tester.pump();
+      expect(find.text('Stopped · 121 of 205'), findsOneWidget);
+      expect(find.byKey(const Key('simple-calibration-take-flats')), findsOneWidget);
+
+      run.set(const SequenceRunStateInfo(sequenceId: 'cal-run', state: SequenceRunState.completed, framesCaptured: 205));
+      await tester.pump();
+      expect(find.text('Calibration frames done'), findsOneWidget);
+    });
+
+    testWidgets('a run that fails to start says why in an error pill', (tester) async {
+      final (c, cal, seq, _) = await _pump(tester, [_session()]);
+      cal.fails = true;
+      await tester.tap(find.byKey(const Key('simple-calibration-take-flats')));
+      await tester.pumpAndSettle();
+      final pill = c.read(simpleMessagesProvider).single;
+      expect(pill.kind, SimpleMessageKind.error);
+      expect(pill.title, 'Camera is not connected', reason: "the rig's own words name the cause");
+      expect(seq.calls, isEmpty);
+    });
+  });
+
+  group('Calibration mode (#1757, round 2)', () {
+    Widget panel() => const SingleChildScrollView(child: SimpleCalibrationPanel());
+    Widget panelView() => panel();
+    Widget chip() => Consumer(builder: (context, ref, _) => Text(simpleCalibrationSummary(context, ref)));
+    Widget shutter() => const SimpleCalibrationShutter();
+    SimpleShutterButton button(WidgetTester tester) => tester.widget<SimpleShutterButton>(find.byType(SimpleShutterButton));
+
+    testWidgets('Flats: the chip counts the filters without flats; Ready when covered; No lights with only Preview snapshots', (tester) async {
+      await _pump(tester, [_session()], child: chip());
+      expect(find.text('3 missing'), findsOneWidget);
+    });
+
+    testWidgets('Flats: the chip says Ready when every filter is covered', (tester) async {
+      await _pump(tester, [_session(flats: true)], child: chip());
       expect(find.text('Ready'), findsOneWidget);
     });
 
-    testWidgets("the chip says No lights when only Preview's snapshots were taken", (tester) async {
+    testWidgets("Flats: the chip says No lights when only Preview's snapshots were taken", (tester) async {
       await _pump(tester, [_session(manual: true)], child: chip());
       expect(find.text('No lights'), findsOneWidget);
     });
 
-    testWidgets('the shutter shoots everything missing in one request, then starts it', (tester) async {
-      final (_, cal, seq, _) = await _pump(tester, [_session()], panel: true, child: const SimpleCalibrationShutter());
-      tester.widget<SimpleShutterButton>(find.byType(SimpleShutterButton)).onPressed!();
+    testWidgets('Flats: the shutter shoots the missing flats only, its caption says so', (tester) async {
+      final (_, cal, seq, _) = await _pump(tester, [_session()], panel: true, child: shutter());
+      expect(find.byKey(const Key('simple-calibration-shutter-caption')), findsOneWidget);
+      expect(find.text('Shoot flats'), findsOneWidget);
+      button(tester).onPressed!();
       await tester.pumpAndSettle();
-      expect(cal.requests.single, allOf(containsPair('flats', true), containsPair('darks', true), containsPair('bias', true)));
+      expect(cal.requests.single, allOf(containsPair('flats', true), containsPair('darks', false), containsPair('bias', false)));
       expect(seq.calls, ['start cal-run']);
     });
 
     testWidgets('a disconnected camera turns the shutter off and says why', (tester) async {
-      await _pump(tester, [_session()], camera: false, child: const SimpleCalibrationShutter());
-      final shutter = tester.widget<SimpleShutterButton>(find.byType(SimpleShutterButton));
-      expect(shutter.onPressed, isNull);
-      expect(shutter.whyOff, 'Connect the camera first.');
+      await _pump(tester, [_session()], camera: false, child: shutter());
+      expect(button(tester).onPressed, isNull);
+      expect(button(tester).whyOff, 'Connect the camera first.');
     });
 
     testWidgets('while the Plan runs, the shutter asks first and sends nothing', (tester) async {
-      const queued = SimpleRun(sequenceId: 'queue-1', targets: [SimpleTarget(name: 'M31')]);
-      final (c, cal, _, run) = await _pump(tester, [_session()], plan: queued, child: const SimpleCalibrationShutter());
+      final (c, cal, _, run) = await _pump(tester, [_session()], plan: _queued(), child: shutter());
       run.set(const SequenceRunStateInfo(sequenceId: 'queue-1', state: SequenceRunState.running));
       await tester.pump();
-      tester.widget<SimpleShutterButton>(find.byType(SimpleShutterButton)).onPressed!();
+      button(tester).onPressed!();
       await tester.pumpAndSettle();
       expect(cal.requests, isEmpty);
-      final ask = c.read(simpleMessagesProvider).single;
-      expect(ask.kind, SimpleMessageKind.question);
-      expect(ask.actions.map((a) => a.label), contains('Add to queue'));
+      expect(c.read(simpleMessagesProvider).single.kind, SimpleMessageKind.question);
     });
 
     testWidgets('Covered and Missing are outlined pills in their state colour, as in the mock', (tester) async {
@@ -432,82 +459,136 @@ void main() {
       expect(find.text('No flats'), findsNothing, reason: 'the Missing pill already says it (user, 2026-11-11)');
     });
 
-    testWidgets('Flats asks for flats only, from the panel when connected; Darks & bias for darks and bias only', (tester) async {
-      final (c, cal, _, _) = await _pump(tester, [_session()], panel: true, child: panel());
-      await tester.tap(find.byKey(const Key('simple-calibration-shoot-flats')));
-      await tester.pumpAndSettle();
-      expect(cal.requests.last, allOf(containsPair('flats', true), containsPair('darks', false), containsPair('bias', false), containsPair('flavor', 'panel')));
+    group('Darks & bias: the camera\'s library', () {
+      Future<(ProviderContainer, _Calibration, _Seq, _Run)> library(WidgetTester tester, List<DarkLibraryEntry> darks,
+          {List<BiasLibraryEntry>? bias, List<FilterPlanStep> extra = const [], Widget? child, bool panel = false}) async {
+        final r = await _pump(tester, [_session()], panel: panel, plan: _queued(extra), child: child ?? panelView(), overrides: [
+          simpleCalibrationTabProvider.overrideWith(_DarksTab.new),
+        ]);
+        r.$2.library = DarkLibraryState(status: 'idle', totalCombinations: 0, completedCombinations: 0,
+            generatedSequenceId: null, entries: darks, biasEntries: bias ?? [_bias]);
+        r.$1.invalidate(darkLibraryStatusProvider);
+        r.$3.bodies['lib-run'] = _container('Dark library', [_container('Darks 120 s')]);
+        await tester.pumpAndSettle();
+        return r;
+      }
 
-      c.read(simpleCalibrationProvider.notifier).state = null;
-      c.read(simpleCalibrationTabProvider.notifier).set(SimpleCalibrationTab.darks);
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('simple-calibration-shoot-darks')));
-      await tester.pumpAndSettle();
-      expect(cal.requests.last, allOf(containsPair('flats', false), containsPair('darks', true), containsPair('bias', true)));
+      testWidgets('covers the plan: says so, lists what is on file with its age, and the shutter has nothing to do', (tester) async {
+        await library(tester, [_dark(300)]);
+        expect(find.text('Covers your plan'), findsOneWidget);
+        expect(find.text('3 weeks old · 30 frames'), findsWidgets);
+        expect(find.textContaining('ASI2600MM'), findsOneWidget, reason: 'the library belongs to the camera');
+      });
+
+      testWidgets('a gap: the plan\'s missing exposure is named, and the shutter builds just that at the plan\'s gain and temperature', (tester) async {
+        final (_, cal, seq, _) = await library(tester, [_dark(300)],
+            extra: const [FilterPlanStep(filterName: 'Ha', exposureSeconds: 120, frameCount: 20)], child: shutter());
+        expect(find.text('Build 2 min'), findsOneWidget);
+        button(tester).onPressed!();
+        await tester.pumpAndSettle();
+        final b = cal.builds.single;
+        expect(b.exposureSecondsList, [120.0]);
+        expect(b.gainList, [100]);
+        expect(b.targetTemperatureCList, [-10.0]);
+        expect(b.reuseExistingFrames, isTrue);
+        expect(seq.calls, ['update lib-run', 'start lib-run']);
+        expect(childrenOf(seq.bodies['lib-run']!).first[r'$type'], waitForUserType, reason: 'the lens cap first');
+      });
+
+      testWidgets('old darks: an amber Old pill, and the shutter refreshes them (no reuse)', (tester) async {
+        final (_, cal, _, _) = await library(tester, [_dark(300, ageDays: 220)], child: Column(children: [shutter(), Expanded(child: panel())]));
+        expect(find.text('Old'), findsOneWidget);
+        expect(find.text('Refresh 5 min'), findsWidgets);
+        button(tester).onPressed!();
+        await tester.pumpAndSettle();
+        expect(cal.builds.single.reuseExistingFrames, isFalse);
+      });
+
+      testWidgets('no bias at the plan\'s gain: the build shoots bias first, after the lens cap', (tester) async {
+        final (_, _, seq, _) = await library(tester, [_dark(300)], bias: const [], child: shutter());
+        expect(find.text('Build bias'), findsOneWidget);
+        button(tester).onPressed!();
+        await tester.pumpAndSettle();
+        final kids = childrenOf(seq.bodies['lib-run']!);
+        expect(kids[0][r'$type'], waitForUserType);
+        expect(kids[1]['Name'], startsWith('Bias'));
+      });
+
+      testWidgets('Add to queue puts the library run in the Queue as its Calibration block, closing the cover, without starting', (tester) async {
+        final (c, cal, seq, _) = await library(tester, [], panel: true);
+        seq.bodies['queue-1'] = _container('Queue', [_container('NGC 7000')]);
+        await tester.ensureVisible(find.byKey(const Key('simple-calibration-queue-library')));
+        await tester.tap(find.byKey(const Key('simple-calibration-queue-library')));
+        await tester.pumpAndSettle();
+        expect(cal.builds.single.exposureSecondsList, [300.0]);
+        expect(seq.calls, ['update lib-run', 'delete lib-run', 'update queue-1'], reason: 'no start');
+        final block = childrenOf(seq.bodies['queue-1']!).last;
+        expect(block['Name'], kCalibrationBlockName);
+        expect(childrenOf(block).first[r'$type'], closeFlatPanelCoverType);
+        expect(c.read(simpleRunProvider).targets.last.calibration, isTrue);
+      });
     });
 
-    testWidgets('Add to queue puts one Calibration block after the targets, closing the cover, without starting; a second is refused', (tester) async {
-      Map<String, dynamic> container(String name, List<Map<String, dynamic>> kids) =>
-          withChildren(instructionForType(sequentialContainerType)!.build()..['Name'] = name, kids);
-      final darks = withConditions(container('Darks 300 s', [
-        instructionForType(takeExposureType)!.build()..['ExposureTime'] = 300.0,
-      ]), [conditionForType(loopConditionType)!.build()..['Iterations'] = 20]);
-      const queued = SimpleRun(sequenceId: 'queue-1', targets: [SimpleTarget(name: 'M31')]);
-      final (c, cal, seq, _) = await _pump(tester, [_session(flats: true)], panel: true, plan: queued, child: panel());
-      seq.bodies['queue-1'] = container('Queue', [container('M31', const [])]);
-      seq.bodies['cal-run'] = container('Darks — NGC 7000', [darks]);
-      c.read(simpleCalibrationTabProvider.notifier).set(SimpleCalibrationTab.darks);
-      await tester.pumpAndSettle();
+    group('Guide Camera', () {
+      const built = CalibrationStatus(darkLibraryExists: true, defectMapExists: true, darkLibraryLoaded: true, defectMapLoaded: true);
 
-      await tester.tap(find.byKey(const Key('simple-calibration-queue-darks')));
-      await tester.pumpAndSettle();
+      testWidgets('building asks for the guide scope cover first', (tester) async {
+        final cal = _GuiderCal();
+        final (c, _, _, _) = await _pump(tester, [], child: panel(), overrides: [
+          guiderStatusProvider.overrideWith(() => _Guider('stopped')),
+          guiderCalibrationProvider.overrideWith(() => cal),
+          simpleCalibrationTabProvider.overrideWith(_GuideTab.new),
+        ]);
+        await tester.tap(find.byKey(const Key('simple-calibration-guide-build-darks')));
+        await tester.pumpAndSettle();
+        final ask = c.read(simpleMessagesProvider).single;
+        expect(ask.title, 'Cover the guide scope, then build.');
+        expect(cal.calls, isEmpty, reason: 'nothing is shot before the cover goes on');
+        ask.actions.last.onPressed();
+        await tester.pump();
+        expect(cal.calls, ['build darks']);
+      });
 
-      expect(cal.requests.single, allOf(containsPair('flats', false), containsPair('darks', true), containsPair('lensCap', false)),
-          reason: 'the cover closes instead of asking for the lens cap');
-      expect(seq.calls, ['delete cal-run', 'update queue-1'], reason: 'no start; the run the generator saved goes');
-      final block = childrenOf(seq.bodies['queue-1']!).last;
-      expect(block['Name'], kCalibrationBlockName);
-      expect(childrenOf(block).first[r'$type'], closeFlatPanelCoverType);
-      final target = c.read(simpleRunProvider).targets.last;
-      expect(target.calibration, isTrue);
-      expect(simplePlanTotal(target.steps), 20);
+      testWidgets('no build while guiding, and it says why', (tester) async {
+        await _pump(tester, [], child: panel(), overrides: [
+          guiderStatusProvider.overrideWith(() => _Guider('guiding')),
+          guiderCalibrationProvider.overrideWith(_GuiderCal.new),
+          simpleCalibrationTabProvider.overrideWith(_GuideTab.new),
+        ]);
+        expect(tester.widget<SimpleWindowButton>(find.byKey(const Key('simple-calibration-guide-build-darks'))).onTap, isNull);
+        expect(find.text('Stop guiding to build: a plan would lose its guide star.'), findsOneWidget);
+      });
 
-      await tester.tap(find.byKey(const Key('simple-calibration-queue-darks')));
-      await tester.pumpAndSettle();
-      expect(c.read(simpleMessagesProvider).first.title, 'The queue already has its calibration frames.');
-    });
-
-    testWidgets('Guide Camera: building asks for the guide scope cover first', (tester) async {
-      final cal = _GuiderCal();
-      final (c, _, _, _) = await _pump(tester, [], child: panel(), overrides: [
-        guiderStatusProvider.overrideWith(() => _Guider('stopped')),
-        guiderCalibrationProvider.overrideWith(() => cal),
-      ]);
-      c.read(simpleCalibrationTabProvider.notifier).set(SimpleCalibrationTab.guide);
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('simple-calibration-guide-build-darks')));
-      await tester.pumpAndSettle();
-      final ask = c.read(simpleMessagesProvider).single;
-      expect(ask.title, 'Cover the guide scope, then build.');
-      expect(cal.calls, isEmpty, reason: 'nothing is shot before the cover goes on');
-      ask.actions.last.onPressed();
-      await tester.pump();
-      expect(cal.calls, ['build darks']);
-    });
-
-    testWidgets('Guide Camera: no build while guiding, and it says why', (tester) async {
-      final (c, _, _, _) = await _pump(tester, [], child: panel(), overrides: [
-        guiderStatusProvider.overrideWith(() => _Guider('guiding')),
-        guiderCalibrationProvider.overrideWith(_GuiderCal.new),
-      ]);
-      c.read(simpleCalibrationTabProvider.notifier).set(SimpleCalibrationTab.guide);
-      await tester.pumpAndSettle();
-      expect(tester.widget<SimpleWindowButton>(find.byKey(const Key('simple-calibration-guide-build-darks'))).onTap, isNull);
-      expect(find.text('Stop guiding to build: a plan would lose its guide star.'), findsOneWidget);
+      testWidgets('the bad-pixel map has Delete like the dark library, and each deletes only its own file', (tester) async {
+        final cal = _GuiderCal(built);
+        await _pump(tester, [], child: panel(), overrides: [
+          guiderStatusProvider.overrideWith(() => _Guider('stopped')),
+          guiderCalibrationProvider.overrideWith(() => cal),
+          simpleCalibrationTabProvider.overrideWith(_GuideTab.new),
+        ]);
+        await tester.ensureVisible(find.byKey(const Key('simple-calibration-guide-delete-defects')));
+        await tester.tap(find.byKey(const Key('simple-calibration-guide-delete-defects')));
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('simple-calibration-guide-delete-darks')));
+        await tester.pump();
+        expect(cal.calls, ['delete darks=false defectmap=true', 'delete darks=true defectmap=false']);
+      });
     });
   });
 
-  test("a Calibration block counts its loops' frames and exposure time", () {
+  test('the library covers a plan within 1 °C at its gain; older than six months is old; bias is matched by gain', () {
+    final lib = DarkLibraryState(status: 'idle', totalCombinations: 0, completedCombinations: 0, generatedSequenceId: null,
+        entries: [_dark(300, temp: -10.6), _dark(180, gain: 200), _dark(60, ageDays: 200)], biasEntries: [_bias]);
+    final cover = libraryCover(lib, (exposures: [60, 120, 180, 300], gain: 100, offset: 50, temperatureC: -10),
+        DateTime.now().toUtc());
+    expect(cover.missing, [120, 180], reason: '180 s is at another gain');
+    expect(cover.old, [60]);
+    expect(cover.biasMissing, isFalse);
+    expect(libraryCover(lib, (exposures: [300], gain: 200, offset: null, temperatureC: null), DateTime.now().toUtc()).biasMissing,
+        isTrue);
+  });
+
+  test('a Calibration block counts its loops\' frames and exposure time', () {
     Map<String, dynamic> loop(double exp, int n) => withConditions(
         withChildren(instructionForType(sequentialContainerType)!.build(), [
           instructionForType(takeExposureType)!.build()..['ExposureTime'] = exp,
@@ -520,11 +601,22 @@ void main() {
     expect(t.seconds, closeTo(6000.03, 1e-6));
   });
 
-  test('the dawn stop leaves the Calibration block alone: darks need no dark sky', () {
+  test('the dawn stop leaves the Calibration and end-of-night Flats blocks alone: they need no dark sky', () {
     Map<String, dynamic> named(String n) => instructionForType(sequentialContainerType)!.build()..['Name'] = n;
-    final root = withChildren(named('Queue'), [named('M31'), named(kCalibrationBlockName)]);
+    final root = withChildren(named('Queue'), [named('M31'), named(kEndFlatsBlockName), named(kCalibrationBlockName)]);
     final stopped = childrenOf(withDawnStop(root, 'Astronomical Dawn'));
-    expect(conditionsOf(stopped.first), isNotEmpty);
-    expect(conditionsOf(stopped.last), isEmpty);
+    expect(conditionsOf(stopped[0]), isNotEmpty);
+    expect(conditionsOf(stopped[1]), isEmpty);
+    expect(conditionsOf(stopped[2]), isEmpty);
   });
+}
+
+class _DarksTab extends SimpleCalibrationTabNotifier {
+  @override
+  SimpleCalibrationTab build() => SimpleCalibrationTab.darks;
+}
+
+class _GuideTab extends SimpleCalibrationTabNotifier {
+  @override
+  SimpleCalibrationTab build() => SimpleCalibrationTab.guide;
 }

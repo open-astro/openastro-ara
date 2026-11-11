@@ -4132,14 +4132,6 @@
   "@planFlatsNone": {
     "description": "Plan sheet flats choice: no flats this run"
   },
-  "planFlatsSky": "Sky",
-  "@planFlatsSky": {
-    "description": "Plan sheet flats choice"
-  },
-  "planFlatsPanel": "Panel",
-  "@planFlatsPanel": {
-    "description": "Plan sheet flats choice"
-  },
   "shellStorageReading": "Checking the disk…",
   "@shellStorageReading": {
     "description": "Simple Mode Storage block: heading while the first read is out"
@@ -5390,21 +5382,6 @@
   "@monitorLinkLostShort": {
     "description": "Monitor: what a screen reader announces when the link to the rig is lost (no age)"
   },
-  "calibrationMissingTonight": "Missing for tonight",
-  "@calibrationMissingTonight": {
-    "description": "Night done: tonight's lights lack calibration frames; the missing sets follow on the line under it"
-  },
-  "calibrationFlats": "Flats",
-  "@calibrationFlats": {
-    "description": "Night done / Calibration: flats are missing (the filters aren't known)"
-  },
-  "calibrationFlatsFor": "Flats for {filters}",
-  "@calibrationFlatsFor": {
-    "description": "Night done / Calibration: the filters whose lights have no flats, comma-separated",
-    "placeholders": {
-      "filters": {"type": "String", "example": "R, G, Ha"}
-    }
-  },
   "calibrationDarks": "Darks",
   "@calibrationDarks": {
     "description": "Night done / Calibration: dark frames are missing"
@@ -5420,10 +5397,6 @@
   "calibrationTakeDarks": "Take darks",
   "@calibrationTakeDarks": {
     "description": "Night done button: shoot the missing darks and bias (asks for the lens cap first)"
-  },
-  "calibrationTakeFlatsAndDarks": "Take flats and darks",
-  "@calibrationTakeFlatsAndDarks": {
-    "description": "Night done button: shoot the missing flats, then the darks and bias after the lens cap"
   },
   "calibrationTaking": "Calibration frames · {done} of {total}",
   "@calibrationTaking": {
@@ -5445,10 +5418,6 @@
   "@calibrationDone": {
     "description": "Night done: the calibration run finished"
   },
-  "calibrationOnFile": "Flats, darks and bias on file",
-  "@calibrationOnFile": {
-    "description": "Night done: tonight's lights already have every calibration set; nothing to offer"
-  },
   "calibrationActionShoot": "start the calibration frames",
   "@calibrationActionShoot": {
     "description": "Simple Mode, after Couldn't: generating or starting the calibration run failed"
@@ -5456,18 +5425,6 @@
   "calibrationActionStop": "stop the calibration frames",
   "@calibrationActionStop": {
     "description": "Simple Mode, after Couldn't: stopping the calibration run failed"
-  },
-  "planLight": "Light",
-  "@planLight": {
-    "description": "Plan sheet: a filter row shoots lights (the night's frames of the target) (#1757)"
-  },
-  "planFlat": "Flat",
-  "@planFlat": {
-    "description": "Plan sheet: a filter row shoots flats with the panel instead of lights (#1757)"
-  },
-  "planExposureAuto": "Auto",
-  "@planExposureAuto": {
-    "description": "Plan sheet: a flat row's exposure, set by the panel's flats to the Target ADU"
   },
   "shellModeCalibration": "Calibration",
   "@shellModeCalibration": {
@@ -5523,41 +5480,9 @@
       "date": {"type": "String", "example": "Nov 9"}
     }
   },
-  "calibrationShootFlats": "Shoot flats",
-  "@calibrationShootFlats": {
-    "description": "Calibration panel, Flats: shoot the missing flats"
-  },
-  "calibrationReshootFlats": "Reshoot flats",
-  "@calibrationReshootFlats": {
-    "description": "Calibration panel, Flats: every filter is covered; shoot them all again"
-  },
-  "calibrationCoverNote": "The panel's cover closes over the scope first.",
-  "@calibrationCoverNote": {
-    "description": "Calibration panel, Darks & bias: a motorised panel cover keeps light out, so the run needs no one"
-  },
-  "calibrationLensCapNote": "The run asks for the lens cap first.",
-  "@calibrationLensCapNote": {
-    "description": "Calibration panel, Darks & bias: no panel cover, so the run pauses for the lens cap"
-  },
-  "calibrationShootNow": "Shoot now",
-  "@calibrationShootNow": {
-    "description": "Calibration panel, Darks & bias: shoot the missing darks and bias now"
-  },
   "calibrationAddToQueue": "Add to queue",
   "@calibrationAddToQueue": {
     "description": "Calibration: put the darks and bias in the Queue as one Calibration block after the last target"
-  },
-  "calibrationLibraryGainTemp": "Gain {gain} · {temperature}",
-  "@calibrationLibraryGainTemp": {
-    "description": "Calibration panel, dark library: the gain and sensor temperature the darks are taken at",
-    "placeholders": {
-      "gain": {"type": "int"},
-      "temperature": {"type": "String", "example": "-10 °C"}
-    }
-  },
-  "calibrationBuildLibrary": "Build dark library",
-  "@calibrationBuildLibrary": {
-    "description": "Calibration panel, Darks & bias with no lights: shoot darks for the picked exposures"
   },
   "calibrationLensCapPrompt": "Put the lens cap on the scope, then press Resume to take the darks.",
   "@calibrationLensCapPrompt": {
@@ -5578,10 +5503,6 @@
   "calibrationConnectCamera": "Connect the camera first.",
   "@calibrationConnectCamera": {
     "description": "Calibration shutter: why it is off with no main camera"
-  },
-  "calibrationShutterShoot": "Shoot what's missing",
-  "@calibrationShutterShoot": {
-    "description": "Calibration shutter's spoken label when idle"
   },
   "calibrationShutterStop": "Stop calibration",
   "@calibrationShutterStop": {
@@ -5614,10 +5535,6 @@
   "calibrationGuideUse": "Use while guiding",
   "@calibrationGuideUse": {
     "description": "Calibration panel, Guide Camera: the Guider subtracts the darks / skips the bad pixels"
-  },
-  "calibrationGuideBuild": "Build",
-  "@calibrationGuideBuild": {
-    "description": "Calibration panel, Guide Camera: build the dark library or bad-pixel map"
   },
   "calibrationGuideRebuild": "Rebuild",
   "@calibrationGuideRebuild": {
@@ -5923,20 +5840,12 @@
       "what": {"type": "String", "example": "Dark library"}
     }
   },
-  "calibrationFlatsForSession": "Flats for tonight's lights · {target}",
+  "calibrationFlatsForSession": "Tonight's filters · {target}",
   "@calibrationFlatsForSession": {
     "description": "Calibration panel, Flats: the section heading over the filter rows, naming the latest plan's target",
     "placeholders": {
       "target": {"type": "String", "example": "NGC 7000"}
     }
-  },
-  "calibrationBiasForLights": "For the lights' gain and offset",
-  "@calibrationBiasForLights": {
-    "description": "Calibration panel, Darks & bias: the bias row, under the Bias heading"
-  },
-  "calibrationLibraryExposures": "Exposures",
-  "@calibrationLibraryExposures": {
-    "description": "Calibration panel, dark library: the heading over the exposure chips"
   },
   "calibrationOnFileTag": "On file",
   "@calibrationOnFileTag": {
@@ -5950,10 +5859,6 @@
   "@calibrationGuideBuildDefects": {
     "description": "Calibration panel, Guide Camera: build the Guider's bad-pixel map"
   },
-  "calibrationGuideRebuildDefects": "Rebuild bad-pixel map",
-  "@calibrationGuideRebuildDefects": {
-    "description": "Calibration panel, Guide Camera: build the bad-pixel map again"
-  },
   "calibrationGuideCoverNote": "Building asks you to cover the guide scope first.",
   "@calibrationGuideCoverNote": {
     "description": "Calibration panel, Guide Camera: the line under the build buttons"
@@ -5961,5 +5866,191 @@
   "calibrationGuideReady": "Built",
   "@calibrationGuideReady": {
     "description": "Calibration panel, Guide Camera: the dark library or bad-pixel map exists (its row, beside the On file pill)"
+  },
+  "calibrationFlatsMissing": "Flats missing",
+  "@calibrationFlatsMissing": {
+    "description": "Night done: tonight's lights lack flats; the filters follow under it"
+  },
+  "calibrationFlatsOnFile": "Flats on file",
+  "@calibrationFlatsOnFile": {
+    "description": "Night done: every filter of tonight's lights has flats"
+  },
+  "calibrationDarksMissingFromLibrary": "Darks missing from the library",
+  "@calibrationDarksMissingFromLibrary": {
+    "description": "Night done: the camera's library has no darks (or bias) matching tonight's lights, e.g. a new exposure, gain or temperature"
+  },
+  "calibrationChipNoPlan": "No plan",
+  "@calibrationChipNoPlan": {
+    "description": "Calibration chip on Darks & bias: no plan rows to say which darks are needed"
+  },
+  "calibrationChipOld": "{count} old",
+  "@calibrationChipOld": {
+    "description": "Calibration chip on Darks & bias: dark sets the plan needs that are older than six months",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "calibrationChipNoGuider": "No guider",
+  "@calibrationChipNoGuider": {
+    "description": "Calibration chip on Guide Camera: the Guider isn't connected"
+  },
+  "calibrationCapShootFlats": "Shoot flats",
+  "@calibrationCapShootFlats": {
+    "description": "Calibration shutter caption on Flats: what the shutter does"
+  },
+  "calibrationCapBuild": "Build {what}",
+  "@calibrationCapBuild": {
+    "description": "Calibration shutter caption and button on Darks & bias: builds the darks (by exposure) and/or bias the plan needs",
+    "placeholders": {
+      "what": {"type": "String", "example": "120 s + bias"}
+    }
+  },
+  "calibrationCapRefresh": "Refresh {what}",
+  "@calibrationCapRefresh": {
+    "description": "Calibration shutter caption and button on Darks & bias: shoots old dark sets again",
+    "placeholders": {
+      "what": {"type": "String", "example": "300 s"}
+    }
+  },
+  "calibrationLibraryNoPlan": "Queue a target to see which darks its plan needs.",
+  "@calibrationLibraryNoPlan": {
+    "description": "Calibration panel, Darks & bias: no plan rows, so coverage can't be judged"
+  },
+  "calibrationShootMissingFlats": "{count, plural, =1{Shoot 1 missing flat set} other{Shoot {count} missing flat sets}}",
+  "@calibrationShootMissingFlats": {
+    "description": "Calibration panel, Flats: shoot the filters that have no flats",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "calibrationReshootAll": "Reshoot all",
+  "@calibrationReshootAll": {
+    "description": "Calibration panel, Flats: every filter is covered; shoot all of them again"
+  },
+  "calibrationReshootAllNote": "Reshoot all keeps what you have and shoots every filter again.",
+  "@calibrationReshootAllNote": {
+    "description": "Calibration panel, Flats: the line under Reshoot all"
+  },
+  "calibrationAgeDays": "{count, plural, =0{today} =1{1 day} other{{count} days}}",
+  "@calibrationAgeDays": {
+    "description": "Calibration library: how old a set is, in days (followed by 'old')",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "calibrationAgeWeeks": "{count, plural, =1{1 week} other{{count} weeks}}",
+  "@calibrationAgeWeeks": {
+    "description": "Calibration library: how old a set is, in weeks",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "calibrationAgeMonths": "{count, plural, =1{1 month} other{{count} months}}",
+  "@calibrationAgeMonths": {
+    "description": "Calibration library: how old a set is, in months",
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "calibrationGain": "gain {gain}",
+  "@calibrationGain": {
+    "description": "Calibration library: a set's camera gain",
+    "placeholders": {
+      "gain": {"type": "int"}
+    }
+  },
+  "calibrationOffset": "offset {offset}",
+  "@calibrationOffset": {
+    "description": "Calibration library: a bias set's camera offset",
+    "placeholders": {
+      "offset": {"type": "int"}
+    }
+  },
+  "calibrationLibraryCamera": "{camera} · reused for months",
+  "@calibrationLibraryCamera": {
+    "description": "Calibration panel, Darks & bias: the heading naming the camera the library belongs to",
+    "placeholders": {
+      "camera": {"type": "String", "example": "ZWO ASI533MC Pro"}
+    }
+  },
+  "calibrationLibraryCovers": "Covers your plan",
+  "@calibrationLibraryCovers": {
+    "description": "Calibration panel, Darks & bias: the library has darks and bias for every exposure the queued plan uses"
+  },
+  "calibrationLibraryNeeds": "Your plan needs {what}",
+  "@calibrationLibraryNeeds": {
+    "description": "Calibration panel, Darks & bias: the darks (by exposure) and/or bias the library lacks for the queued plan",
+    "placeholders": {
+      "what": {"type": "String", "example": "120 s + bias"}
+    }
+  },
+  "calibrationLibraryOld": "Covers your plan, but the {what} darks are old",
+  "@calibrationLibraryOld": {
+    "description": "Calibration panel, Darks & bias: the plan is covered by dark sets older than six months",
+    "placeholders": {
+      "what": {"type": "String", "example": "300 s"}
+    }
+  },
+  "calibrationLibraryOldNote": "Darks drift as a sensor ages. Refresh them when you can.",
+  "@calibrationLibraryOldNote": {
+    "description": "Calibration panel, Darks & bias: under the old-darks line"
+  },
+  "calibrationLibraryEmpty": "No darks or bias for this camera yet",
+  "@calibrationLibraryEmpty": {
+    "description": "Calibration panel, Darks & bias: the camera's library is empty"
+  },
+  "calibrationLibraryEmptyNote": "Build them once on a cloudy night; they last months.",
+  "@calibrationLibraryEmptyNote": {
+    "description": "Calibration panel, Darks & bias: under the empty-library line"
+  },
+  "calibrationLibraryNone": "None yet.",
+  "@calibrationLibraryNone": {
+    "description": "Calibration panel, Darks & bias: no darks (or no bias) in the library"
+  },
+  "calibrationLibraryAge": "{age} old · {frames} frames",
+  "@calibrationLibraryAge": {
+    "description": "Calibration library row: how old the set is and how many frames it holds",
+    "placeholders": {
+      "age": {"type": "String", "example": "3 weeks"},
+      "frames": {"type": "int"}
+    }
+  },
+  "calibrationOld": "Old",
+  "@calibrationOld": {
+    "description": "Calibration library: the outlined pill of a dark set older than six months"
+  },
+  "calibrationLibraryBuildSection": "Build or refresh",
+  "@calibrationLibraryBuildSection": {
+    "description": "Calibration panel, Darks & bias: the heading over the exposure chips"
+  },
+  "calibrationLibraryNote": "At {settings}, from the plan. Bias at the same gain. The run asks for the lens cap first.",
+  "@calibrationLibraryNote": {
+    "description": "Calibration panel, Darks & bias: the settings the library build uses",
+    "placeholders": {
+      "settings": {"type": "String", "example": "gain 100 · -10 °C"}
+    }
+  },
+  "calibrationBuildPicked": "Build picked",
+  "@calibrationBuildPicked": {
+    "description": "Calibration panel, Darks & bias: build darks for the exposures picked by hand"
+  },
+  "planFlatsFor": "For {filters}",
+  "@planFlatsFor": {
+    "description": "Plan sheet, Flats row: the target's filters the flats are for",
+    "placeholders": {
+      "filters": {"type": "String", "example": "L, R, G, Ha"}
+    }
+  },
+  "planFlatsAfterTarget": "After target",
+  "@planFlatsAfterTarget": {
+    "description": "Plan sheet, Flats row: flats for this target's filters right after its last frame (#1757)"
+  },
+  "planFlatsEndOfNight": "End of night",
+  "@planFlatsEndOfNight": {
+    "description": "Plan sheet, Flats row: flats for this target's filters after the queue's last target (#1757)"
+  },
+  "planFlatsHint": "After target: right after its last frame, at its rotator angle. End of night: after the last target. With no panel the run asks for a screen first.",
+  "@planFlatsHint": {
+    "description": "Plan sheet, Flats row: what the two choices do"
   }
 }

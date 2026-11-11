@@ -1,19 +1,15 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../models/calibration/calibration_models.dart';
-import '../../models/sequence/imaging_run_body.dart' show PlanFrameType;
 import '../../models/sequence/sequence_summary.dart';
+import '../../state/calibration/calibration_state.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../state/equipment/flat_panel_state.dart';
 import '../../state/guider/guider_calibration_state.dart';
 import '../../state/guider/guider_state.dart';
-import '../../state/imaging/exposure_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
-import '../../state/settings/imaging_defaults_state.dart';
 import '../../state/simple_calibration_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_run_state.dart';
@@ -26,36 +22,19 @@ import 'simple_shell.dart' show SimplePanel, SimpleSegments;
 
 TextStyle get _dim => kSimpleText.copyWith(color: AraColors.textSecondary);
 
-/// The button's words for what [need] holds.
-String calibrationTakeLabel(AppLocalizations l, CalibrationNeed need) =>
-    need.flats && (need.darks || need.bias)
-    ? l.calibrationTakeFlatsAndDarks
-    : need.flats
-    ? l.calibrationTakeFlats
-    : l.calibrationTakeDarks;
+String _secs(double s) =>
+    formatExposure(Duration(milliseconds: (s * 1000).round()));
 
-/// What [session] still lacks, in a line: the filters without flats, then
-/// darks and bias.
-String calibrationMissingLine(
-  AppLocalizations l,
-  CalibrationSession session,
-  CalibrationNeed need,
-) {
-  final noFlats = [
-    for (final f in session.filtersUsed)
-      if (f.matchingFlatFrames == 0) f.filterName,
-  ];
-  return [
-    if (need.flats)
-      noFlats.isEmpty ? l.calibrationFlats : l.calibrationFlatsFor(noFlats.join(', ')),
-    if (need.darks) l.calibrationDarks,
-    if (need.bias) l.calibrationBias,
-  ].join(' · ');
-}
+/// The filters of [session] whose lights have no flats.
+List<String> _noFlats(CalibrationSession session) => [
+  for (final f in session.filtersUsed)
+    if (f.matchingFlatFrames == 0) f.filterName,
+];
 
-/// Night done's calibration row (#1563): what tonight's lights are missing
-/// and one button that shoots it, flats first; its progress while it runs.
-/// Nothing when the rig has no calibration session for the run.
+/// Night done's calibration rows (#1563, round 2): flats every night, and
+/// darks only when the camera's library lacks tonight's; each with its own
+/// button, then the run's progress. Nothing when the rig has no calibration
+/// session for the run.
 class SimpleNightCalibration extends ConsumerWidget {
   const SimpleNightCalibration({
     super.key,
@@ -81,37 +60,8 @@ class SimpleNightCalibration extends ConsumerWidget {
     final ours = run != null && info?.sequenceId == run.sequenceId;
     final need = calibrationNeed(session);
 
-    Widget take() => FilledButton.tonal(
-      key: const Key('simple-calibration-take'),
-      onPressed: () => calibration.shoot(session, need),
-      child: Text(calibrationTakeLabel(l, need)),
-    );
-
-    final (String line, String? sub, Widget? action) = switch (info?.state) {
-      final s? when ours && s.isActive => (
-        l.calibrationTaking(info!.framesCaptured, run.total),
-        null,
-        OutlinedButton(
-          key: const Key('simple-calibration-stop'),
-          onPressed: calibration.stop,
-          child: Text(l.deviceStop),
-        ),
-      ),
-      SequenceRunState.completed when ours => (l.calibrationDone, null, null),
-      _ when ours => (
-        l.calibrationStopped(info!.framesCaptured, run.total),
-        need.any ? calibrationMissingLine(l, session, need) : null,
-        need.any ? take() : null,
-      ),
-      _ when need.any => (
-        l.calibrationMissingTonight,
-        calibrationMissingLine(l, session, need),
-        take(),
-      ),
-      _ => (l.calibrationOnFile, null, null),
-    };
-    return Row(
-      key: const Key('simple-calibration'),
+    Widget row(String line, String? sub, Widget? action, {Key? key}) => Row(
+      key: key,
       spacing: AraSpace.s12,
       children: [
         Expanded(
@@ -124,6 +74,73 @@ class SimpleNightCalibration extends ConsumerWidget {
           ),
         ),
         ?action,
+      ],
+    );
+
+    if (ours && (info?.state?.isActive ?? false)) {
+      return row(
+        l.calibrationTaking(info!.framesCaptured, run.total),
+        null,
+        OutlinedButton(
+          key: const Key('simple-calibration-stop'),
+          onPressed: calibration.stop,
+          child: Text(l.deviceStop),
+        ),
+        key: const Key('simple-calibration'),
+      );
+    }
+    if (ours && info?.state == SequenceRunState.completed) {
+      return row(
+        l.calibrationDone,
+        null,
+        null,
+        key: const Key('simple-calibration'),
+      );
+    }
+    final darks = need.darks || need.bias;
+    return Column(
+      key: const Key('simple-calibration'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
+      children: [
+        if (ours)
+          Text(
+            l.calibrationStopped(info?.framesCaptured ?? 0, run.total),
+            style: _dim,
+          ),
+        if (need.flats)
+          row(
+            l.calibrationFlatsMissing,
+            _noFlats(session).join(', '),
+            FilledButton.tonal(
+              key: const Key('simple-calibration-take-flats'),
+              onPressed: () => calibration.shoot(session, (
+                flats: true,
+                darks: false,
+                bias: false,
+              )),
+              child: Text(l.calibrationTakeFlats),
+            ),
+          )
+        else
+          row(l.calibrationFlatsOnFile, null, null),
+        if (darks)
+          row(
+            l.calibrationDarksMissingFromLibrary,
+            [
+              if (need.darks) l.calibrationDarks,
+              if (need.bias) l.calibrationBias,
+            ].join(' · '),
+            OutlinedButton(
+              key: const Key('simple-calibration-take-darks'),
+              onPressed: () => calibration.shoot(session, (
+                flats: false,
+                darks: need.darks,
+                bias: need.bias,
+              )),
+              child: Text(l.calibrationTakeDarks),
+            ),
+          ),
       ],
     );
   }
@@ -147,16 +164,6 @@ class SimpleCalibrationTabNotifier extends Notifier<SimpleCalibrationTab> {
 CalibrationSession? simpleLatestCalibrationSession(WidgetRef ref) =>
     ref.watch(simpleCalibrationSessionsProvider)?.firstOrNull;
 
-/// How many sets [session] lacks: each filter without flats, then darks and
-/// bias. Pure — unit-tested.
-int calibrationMissingCount(CalibrationSession session) {
-  final need = calibrationNeed(session);
-  final noFlats = session.filtersUsed.where((f) => f.matchingFlatFrames == 0).length;
-  return (need.flats ? math.max(1, noFlats) : 0) +
-      (need.darks ? 1 : 0) +
-      (need.bias ? 1 : 0);
-}
-
 /// The calibration run Simple Mode started, while it runs: frames taken and
 /// planned.
 ({int done, int total})? simpleCalibrationProgress(WidgetRef ref) {
@@ -170,17 +177,6 @@ int calibrationMissingCount(CalibrationSession session) {
   return (done: info!.framesCaptured, total: run.total);
 }
 
-/// The settings chip: the progress, what is missing, or Ready.
-String simpleCalibrationSummary(WidgetRef ref, AppLocalizations l) {
-  if (simpleCalibrationProgress(ref) case final p?) {
-    return '${p.done} / ${p.total}';
-  }
-  final session = simpleLatestCalibrationSession(ref);
-  if (session == null) return l.calibrationChipNoLights;
-  final missing = calibrationMissingCount(session);
-  return missing == 0 ? l.calibrationChipReady : l.calibrationChipMissing(missing);
-}
-
 /// Whether the Plan's own run is going: calibration would have to wait for it.
 bool _planRunning(WidgetRef ref) {
   final info = ref.watch(sequenceRunStateProvider).value;
@@ -188,21 +184,159 @@ bool _planRunning(WidgetRef ref) {
       info?.sequenceId == ref.watch(simpleRunProvider).sequenceId;
 }
 
-/// Shoots [need] for [session], or, while the Plan runs, asks first and
-/// offers the Queue for the darks and bias instead (the rig runs one sequence
-/// at a time).
-Future<void> simpleCalibrationShoot(
+/// What the Calibration mode does on its current tab: the chip's words, the
+/// shutter's caption, the action (null: nothing to do, with [whyOff] saying
+/// why) and, while the Plan runs, the Queue as the alternative.
+typedef SimpleCalibrationJob = ({
+  String chip,
+  String caption,
+  VoidCallback? run,
+  String? whyOff,
+  VoidCallback? queue,
+});
+
+/// The current tab's job, the same one the shutter and the tab's main button
+/// do (round 2 mock, approved 2026-11-12).
+SimpleCalibrationJob simpleCalibrationJob(BuildContext context, WidgetRef ref) {
+  final l = context.l10n;
+  final calibration = ref.read(simpleCalibrationProvider.notifier);
+  SimpleCalibrationJob idle(String chip, String why) =>
+      (chip: chip, caption: why, run: null, whyOff: why, queue: null);
+  if (simpleCalibrationProgress(ref) case final p?) {
+    return (
+      chip: '${p.done} / ${p.total}',
+      caption: l.calibrationShutterStop,
+      run: calibration.stop,
+      whyOff: null,
+      queue: null,
+    );
+  }
+  final camera = ref.watch(cameraStatusProvider).value?.isConnected ?? false;
+  switch (ref.watch(simpleCalibrationTabProvider)) {
+    case SimpleCalibrationTab.flats:
+      final session = simpleLatestCalibrationSession(ref);
+      if (session == null) {
+        return idle(l.calibrationChipNoLights, l.calibrationNoLightsYet);
+      }
+      final missing = _noFlats(session).length;
+      if (session.matchingFlatsAvailable) {
+        return idle(l.calibrationChipReady, l.calibrationNothingMissing);
+      }
+      if (!camera) {
+        return idle(l.calibrationChipMissing(missing), l.calibrationConnectCamera);
+      }
+      return (
+        chip: l.calibrationChipMissing(missing),
+        caption: l.calibrationCapShootFlats,
+        run: () => calibration.shoot(session, (
+          flats: true,
+          darks: false,
+          bias: false,
+        )),
+        whyOff: null,
+        queue: null,
+      );
+    case SimpleCalibrationTab.darks:
+      final need = ref.watch(simpleLibraryNeedProvider);
+      final lib = ref.watch(darkLibraryStatusProvider).value;
+      if (need == null) {
+        return idle(l.calibrationChipNoPlan, l.calibrationLibraryNoPlan);
+      }
+      if (lib == null) return idle('…', l.calibrationLibraryNoPlan);
+      final cover = libraryCover(lib, need, DateTime.now().toUtc());
+      final refresh = cover.missing.isEmpty && cover.old.isNotEmpty;
+      final exposures = cover.missing.isNotEmpty ? cover.missing : cover.old;
+      if (exposures.isEmpty && !cover.biasMissing) {
+        return idle(l.calibrationChipReady, l.calibrationNothingMissing);
+      }
+      final what = [
+        if (exposures.isNotEmpty) exposures.map(_secs).join(' · '),
+        if (cover.biasMissing) l.calibrationBias.toLowerCase(),
+      ].join(' + ');
+      final chip = cover.missing.isNotEmpty
+          ? l.calibrationChipMissing(cover.missing.length)
+          : refresh
+          ? l.calibrationChipOld(cover.old.length)
+          : l.calibrationChipMissing(1);
+      if (!camera) return idle(chip, l.calibrationConnectCamera);
+      final prompt = l.calibrationLensCapPrompt;
+      return (
+        chip: chip,
+        caption: refresh
+            ? l.calibrationCapRefresh(what)
+            : l.calibrationCapBuild(what),
+        run: () => calibration.buildLibrary(
+          need,
+          exposures,
+          bias: cover.biasMissing,
+          refresh: refresh,
+          lensCapPrompt: prompt,
+        ),
+        whyOff: null,
+        queue: () => calibration.queueLibrary(
+          need,
+          exposures,
+          bias: cover.biasMissing,
+          refresh: refresh,
+          lensCapPrompt: prompt,
+        ),
+      );
+    case SimpleCalibrationTab.guide:
+      final guider = ref.watch(guiderStatusProvider).value;
+      if (guider == null || !guider.isConnected) {
+        return idle(l.calibrationChipNoGuider, l.calibrationGuideNoGuider);
+      }
+      final status = ref.watch(guiderCalibrationProvider).value?.status;
+      final darks = status?.darkLibraryExists ?? false;
+      final defects = status?.defectMapExists ?? false;
+      if (darks && defects) {
+        return idle(l.calibrationChipReady, l.calibrationNothingMissing);
+      }
+      final chip = l.calibrationChipMissing((darks ? 0 : 1) + (defects ? 0 : 1));
+      if (guider.isBusy) return idle(chip, l.calibrationGuideStopFirst);
+      final notifier = ref.read(guiderCalibrationProvider.notifier);
+      return (
+        chip: chip,
+        caption: darks
+            ? l.calibrationGuideBuildDefects
+            : l.calibrationGuideBuildDarks,
+        run: () => _askGuideCover(
+          context,
+          ref,
+          darks ? notifier.buildDefectMap : notifier.buildDarkLibrary,
+        ),
+        whyOff: null,
+        queue: null,
+      );
+  }
+}
+
+/// A Guide Camera build shoots darks with the guide scope: covered first.
+void _askGuideCover(
   BuildContext context,
   WidgetRef ref,
-  CalibrationSession session,
-  CalibrationNeed need, {
-  bool reshoot = false,
-}) async {
-  final calibration = ref.read(simpleCalibrationProvider.notifier);
-  if (!_planRunning(ref)) {
-    await calibration.shoot(session, need, reshoot: reshoot);
-    return;
-  }
+  Future<void> Function() build,
+) {
+  final l = context.l10n;
+  ref
+      .read(simpleMessagesProvider.notifier)
+      .show(
+        SimpleMessageKind.question,
+        l.calibrationGuideCover,
+        origin: SimpleStatusOrigin.calibration,
+        actions: [
+          SimpleMessageAction(l.calibrationNotNow, () {}),
+          SimpleMessageAction(l.calibrationGuideCovered, build),
+        ],
+      );
+}
+
+/// Runs [job], or, while the Plan runs, asks first and offers the Queue (the
+/// rig runs one sequence at a time).
+void _runJob(BuildContext context, WidgetRef ref, SimpleCalibrationJob job) {
+  final run = job.run;
+  if (run == null) return;
+  if (!_planRunning(ref)) return run();
   final l = context.l10n;
   ref
       .read(simpleMessagesProvider.notifier)
@@ -212,47 +346,56 @@ Future<void> simpleCalibrationShoot(
         origin: SimpleStatusOrigin.calibration,
         actions: [
           SimpleMessageAction(l.calibrationNotNow, () {}),
-          if (need.darks || need.bias)
-            SimpleMessageAction(
-              l.calibrationAddToQueue,
-              () => calibration.queue(session, need),
-            ),
+          if (job.queue case final queue?)
+            SimpleMessageAction(l.calibrationAddToQueue, queue),
         ],
       );
 }
 
-/// The Calibration mode's shutter: shoots everything missing; its red square
-/// stops it.
+/// The settings chip: the current tab's state.
+String simpleCalibrationSummary(BuildContext context, WidgetRef ref) =>
+    simpleCalibrationJob(context, ref).chip;
+
+/// The Calibration mode's shutter: the current tab's job, its caption under
+/// it; its red square stops a run.
 class SimpleCalibrationShutter extends ConsumerWidget {
   const SimpleCalibrationShutter({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l = context.l10n;
+    final job = simpleCalibrationJob(context, ref);
     final running = simpleCalibrationProgress(ref) != null;
-    final session = simpleLatestCalibrationSession(ref);
-    final need = session == null ? null : calibrationNeed(session);
-    final camera = ref.watch(cameraStatusProvider).value?.isConnected ?? false;
-    return SimpleShutterButton(
-      start: true,
-      running: running,
-      label: running ? l.calibrationShutterStop : l.calibrationShutterShoot,
-      whyOff: !camera
-          ? l.calibrationConnectCamera
-          : session == null
-          ? l.calibrationNoLightsYet
-          : l.calibrationNothingMissing,
-      onPressed: running
-          ? ref.read(simpleCalibrationProvider.notifier).stop
-          : !camera || session == null || !need!.any
-          ? null
-          : () => simpleCalibrationShoot(context, ref, session, need),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      spacing: 4,
+      children: [
+        SimpleShutterButton(
+          start: true,
+          running: running,
+          label: job.caption,
+          whyOff: job.whyOff,
+          onPressed: job.run == null ? null : () => _runJob(context, ref, job),
+        ),
+        ExcludeSemantics(
+          child: SizedBox(
+            width: 64,
+            child: Text(
+              job.caption,
+              key: const Key('simple-calibration-shutter-caption'),
+              textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: kSimpleCaption.copyWith(fontSize: 11),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
 
-/// The Calibration mode's panel beside the rail (#1757): Flats, Darks & bias
-/// and Guide Camera, each shooting only its own sets.
+/// The Calibration mode's panel beside the rail (#1757, round 2): Flats for
+/// the night, the camera's Darks & bias library, and the Guide Camera's own.
 class SimpleCalibrationPanel extends ConsumerWidget {
   const SimpleCalibrationPanel({super.key});
 
@@ -279,9 +422,14 @@ class SimpleCalibrationPanel extends ConsumerWidget {
               style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
             ),
             if (progress != null) ...[
-              Text(l.calibrationTaking(progress.done, progress.total), style: kSimpleText),
+              Text(
+                l.calibrationTaking(progress.done, progress.total),
+                style: kSimpleText,
+              ),
               LinearProgressIndicator(
-                value: progress.total == 0 ? null : progress.done / progress.total,
+                value: progress.total == 0
+                    ? null
+                    : progress.done / progress.total,
               ),
             ],
             if (_planRunning(ref))
@@ -314,7 +462,8 @@ class SimpleCalibrationPanel extends ConsumerWidget {
 }
 
 /// A section's dim label over its rows (the mock's `.sect`).
-Widget _section(String text) => Padding(
+Widget _section(String text, {Key? key}) => Padding(
+  key: key,
   padding: const EdgeInsets.only(top: AraSpace.s8),
   child: Text(text, style: kSimpleCaption),
 );
@@ -333,14 +482,12 @@ Widget _rows(List<Widget> rows) => Column(
   ],
 );
 
-/// A set's row: what it is, the line under it, its pill and, when given, an
-/// action after it.
+/// A set's row: what it is, the line under it and its pill.
 Widget _setRow(
   String name,
   String? why, {
   required bool covered,
   String? tag,
-  Widget? trailing,
   Key? key,
 }) => Semantics(
   key: key,
@@ -360,7 +507,6 @@ Widget _setRow(
           ),
         ),
         SimpleSetTag(covered: covered, label: tag),
-        ?trailing,
       ],
     ),
   ),
@@ -399,7 +545,7 @@ class SimpleSetTag extends StatelessWidget {
 
   final bool covered;
 
-  /// Words other than Covered / Missing ("On file").
+  /// Words other than Covered / Missing ("On file", "Old").
   final String? label;
 
   @override
@@ -437,8 +583,8 @@ class _FlatsTab extends ConsumerWidget {
     if (session == null) return Text(l.calibrationNoLightsYet, style: _dim);
     final panel = ref.watch(flatPanelProvider).value?.isConnected ?? false;
     final light = ref.watch(simpleFlatLightProvider);
-    final missing = !session.matchingFlatsAvailable;
-    final can = _canShoot(ref);
+    final missing = _noFlats(session).length;
+    final job = simpleCalibrationJob(context, ref);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
@@ -481,177 +627,250 @@ class _FlatsTab extends ConsumerWidget {
               : l.calibrationLightScreenNote,
           style: _dim,
         ),
-        SimpleWindowButton(
-          key: const Key('simple-calibration-shoot-flats'),
-          label: missing ? l.calibrationShootFlats : l.calibrationReshootFlats,
-          onTap: can
-              ? () => simpleCalibrationShoot(
-                  context,
-                  ref,
-                  session,
-                  (flats: true, darks: false, bias: false),
-                  reshoot: !missing,
-                )
-              : null,
-        ),
+        if (missing > 0 && !session.matchingFlatsAvailable)
+          SimpleWindowButton(
+            key: const Key('simple-calibration-shoot-flats'),
+            label: l.calibrationShootMissingFlats(missing),
+            onTap: job.run == null ? null : () => _runJob(context, ref, job),
+          )
+        else ...[
+          SimpleWindowButton(
+            key: const Key('simple-calibration-shoot-flats'),
+            label: l.calibrationReshootAll,
+            onTap: _canShoot(ref)
+                ? () => ref
+                      .read(simpleCalibrationProvider.notifier)
+                      .shoot(session, (
+                        flats: true,
+                        darks: false,
+                        bias: false,
+                      ), reshoot: true)
+                : null,
+          ),
+          Text(l.calibrationReshootAllNote, style: _dim),
+        ],
       ],
     );
   }
 }
 
-class _DarksTab extends ConsumerWidget {
+/// The camera's library (round 2): darks and bias on file, how old, whether
+/// they cover the queued plan, and Build or Refresh. Darks and bias last
+/// months and belong to the camera, not the night (user, 2026-11-11).
+class _DarksTab extends ConsumerStatefulWidget {
   const _DarksTab();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l = context.l10n;
-    final session = simpleLatestCalibrationSession(ref);
-    if (session == null) return const _DarkLibraryBuilder();
-    final need = calibrationNeed(session);
-    final darks = (flats: false, darks: need.darks, bias: need.bias);
-    final can = _canShoot(ref) && darks.any;
-    final panel = ref.watch(flatPanelProvider).value;
-    final cover = (panel?.isConnected ?? false) && panel!.hasCover;
-    final exposures = {
-      for (final f in session.filtersUsed) f.meanExposureSeconds,
-    }.toList()..sort();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      spacing: AraSpace.s8,
-      children: [
-        _section(l.calibrationDarks),
-        _rows([
-          _setRow(
-            exposures
-                .map(
-                  (s) => formatExposure(
-                    Duration(milliseconds: (s * 1000).round()),
-                  ),
-                )
-                .join(' · '),
-            session.coolerSetpointC == null
-                ? null
-                : '${session.coolerSetpointC!.toStringAsFixed(0)} °C',
-            covered: !need.darks,
-            key: const Key('simple-calibration-darks'),
-          ),
-        ]),
-        _section(l.calibrationBias),
-        _rows([
-          _setRow(
-            l.calibrationBiasForLights,
-            null,
-            covered: !need.bias,
-            key: const Key('simple-calibration-bias'),
-          ),
-        ]),
-        Text(
-          cover ? l.calibrationCoverNote : l.calibrationLensCapNote,
-          style: _dim,
-        ),
-        Row(
-          spacing: AraSpace.s8,
-          children: [
-            Expanded(
-              child: SimpleWindowButton(
-                key: const Key('simple-calibration-shoot-darks'),
-                label: l.calibrationShootNow,
-                onTap: can
-                    ? () => simpleCalibrationShoot(context, ref, session, darks)
-                    : null,
-              ),
-            ),
-            Expanded(
-              child: SimpleWindowButton(
-                key: const Key('simple-calibration-queue-darks'),
-                outlined: true,
-                label: l.calibrationAddToQueue,
-                onTap: darks.any
-                    ? () => ref
-                          .read(simpleCalibrationProvider.notifier)
-                          .queue(session, darks)
-                    : null,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
+  ConsumerState<_DarksTab> createState() => _DarksTabState();
 }
 
-/// No plan lights yet: darks for exposures picked here, prefilled from the
-/// queued plan, at the profile's cooler target (a dark library reused for
-/// weeks).
-class _DarkLibraryBuilder extends ConsumerStatefulWidget {
-  const _DarkLibraryBuilder();
-
-  @override
-  ConsumerState<_DarkLibraryBuilder> createState() =>
-      _DarkLibraryBuilderState();
-}
-
-class _DarkLibraryBuilderState extends ConsumerState<_DarkLibraryBuilder> {
+class _DarksTabState extends ConsumerState<_DarksTab> {
   static const _choices = [30.0, 60.0, 120.0, 180.0, 300.0, 600.0];
+
+  /// The exposures picked by hand; null: what the plan needs.
   Set<double>? _picked;
+
+  String _age(AppLocalizations l, DateTime at) {
+    final d = DateTime.now().toUtc().difference(at);
+    return d.inDays < 14
+        ? l.calibrationAgeDays(d.inDays)
+        : d.inDays < 60
+        ? l.calibrationAgeWeeks(d.inDays ~/ 7)
+        : l.calibrationAgeMonths(d.inDays ~/ 30);
+  }
 
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
-    final queued = {
-      for (final s in ref.watch(simpleRunProvider).steps)
-        if (s.frameType == PlanFrameType.light) s.exposureSeconds,
+    final lib = ref.watch(darkLibraryStatusProvider).value;
+    final need = ref.watch(simpleLibraryNeedProvider);
+    final camera = ref.watch(cameraStatusProvider).value;
+    final now = DateTime.now().toUtc();
+    final cover = lib == null || need == null
+        ? null
+        : libraryCover(lib, need, now);
+    final job = simpleCalibrationJob(context, ref);
+    final darks = lib?.entries ?? const <DarkLibraryEntry>[];
+    final bias = lib?.biasEntries ?? const <BiasLibraryEntry>[];
+    final planExposures = need?.exposures ?? const <double>[];
+    final picked =
+        _picked ??
+        {
+          ...?cover?.missing,
+          ...?cover?.old,
+          if (cover != null && cover.missing.isEmpty && cover.old.isEmpty)
+            ...planExposures,
+        };
+    final temp = need?.temperatureC;
+    String settings(int? gain, double? t) => [
+      if (gain != null) l.calibrationGain(gain),
+      if (t != null) '${t.toStringAsFixed(0)} °C',
+    ].join(' · ');
+    final old = <DarkLibraryEntry>{
+      for (final d in darks)
+        if (now.difference(d.capturedUtc) > kSimpleLibraryOldAfter) d,
     };
-    final picked = _picked ?? (queued.isEmpty ? {120.0, 300.0} : queued);
-    final gain =
-        ref.watch(simpleRunGainProvider) ??
-        ref.watch(exposureControllerProvider).gain;
-    final temp = ref.watch(imagingDefaultsProvider).coolerTargetC;
-    final options = {..._choices, ...picked}.toList()..sort();
+    final (String head, String? detail, bool ok) = switch (cover) {
+      null => (l.calibrationLibraryNoPlan, null, false),
+      _ when darks.isEmpty && bias.isEmpty => (
+        l.calibrationLibraryEmpty,
+        l.calibrationLibraryEmptyNote,
+        false,
+      ),
+      (missing: final m, old: _, biasMissing: final b) when m.isNotEmpty || b =>
+        (
+          l.calibrationLibraryNeeds(
+            [
+              if (m.isNotEmpty) m.map(_secs).join(' · '),
+              if (b) l.calibrationBias.toLowerCase(),
+            ].join(' + '),
+          ),
+          settings(need!.gain, temp),
+          false,
+        ),
+      (missing: _, old: final o, biasMissing: _) when o.isNotEmpty => (
+        l.calibrationLibraryOld(o.map(_secs).join(' · ')),
+        l.calibrationLibraryOldNote,
+        false,
+      ),
+      _ => (
+        l.calibrationLibraryCovers,
+        '${planExposures.map(_secs).join(' · ')} · ${settings(need!.gain, temp)}',
+        true,
+      ),
+    };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        Text(l.calibrationNoLightsYet, style: _dim),
-        _section(l.calibrationLibraryExposures),
-        Wrap(
-          spacing: AraSpace.s8,
-          runSpacing: AraSpace.s8,
-          children: [
-            for (final s in options)
-              FilterChip(
-                key: Key('simple-calibration-exposure-${s.round()}'),
-                label: Text(
-                  formatExposure(Duration(milliseconds: (s * 1000).round())),
-                ),
-                selected: picked.contains(s),
-                showCheckmark: false,
-                selectedColor: AraColors.selectionBg,
-                onSelected: (on) => setState(
-                  () =>
-                      _picked = on ? {...picked, s} : ({...picked}..remove(s)),
+        _section(
+          l.calibrationLibraryCamera(camera?.name ?? l.calibrationTabDarks),
+          key: const Key('simple-calibration-library-camera'),
+        ),
+        Container(
+          key: const Key('simple-calibration-library-cover'),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            border: Border.all(color: AraColors.border),
+            borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                head,
+                style: kSimpleText.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: ok ? AraColors.accentConnected : AraColors.accentBusy,
                 ),
               ),
-          ],
+              if (detail != null) Text(detail, style: _dim),
+            ],
+          ),
         ),
-        Text(
-          l.calibrationLibraryGainTemp(gain, '${temp.toStringAsFixed(0)} °C'),
-          style: _dim,
-        ),
-        SimpleWindowButton(
-          key: const Key('simple-calibration-build-library'),
-          label: l.calibrationBuildLibrary,
-          onTap: _canShoot(ref) && picked.isNotEmpty
-              ? () => ref
-                    .read(simpleCalibrationProvider.notifier)
-                    .buildLibrary(
-                      exposures: picked.toList()..sort(),
-                      gain: gain,
-                      temperatureC: temp,
-                      lensCapPrompt: l.calibrationLensCapPrompt,
-                    )
-              : null,
-        ),
+        _section(l.calibrationDarks),
+        if (darks.isEmpty)
+          Text(l.calibrationLibraryNone, style: _dim)
+        else
+          _rows([
+            for (final d in [...darks]
+              ..sort((a, b) => b.exposureSeconds.compareTo(a.exposureSeconds)))
+              _setRow(
+                [_secs(d.exposureSeconds), settings(d.gain, d.temperatureC)]
+                    .where((s) => s.isNotEmpty)
+                    .join(' · '),
+                l.calibrationLibraryAge(_age(l, d.capturedUtc), d.frameCount),
+                covered: !old.contains(d),
+                tag: old.contains(d) ? l.calibrationOld : l.calibrationOnFileTag,
+              ),
+          ]),
+        _section(l.calibrationBias),
+        if (bias.isEmpty)
+          Text(l.calibrationLibraryNone, style: _dim)
+        else
+          _rows([
+            for (final b in bias)
+              _setRow(
+                [
+                  if (b.gain != null) l.calibrationGain(b.gain!),
+                  if (b.offset != null) l.calibrationOffset(b.offset!),
+                  '${b.bin}×${b.bin}',
+                ].join(' · '),
+                l.calibrationLibraryAge(_age(l, b.capturedUtc), b.frameCount),
+                covered: true,
+                tag: l.calibrationOnFileTag,
+              ),
+          ]),
+        if (need != null) ...[
+          _section(l.calibrationLibraryBuildSection),
+          Wrap(
+            spacing: AraSpace.s8,
+            runSpacing: AraSpace.s8,
+            children: [
+              for (final s in {..._choices, ...planExposures}.toList()..sort())
+                FilterChip(
+                  key: Key('simple-calibration-exposure-${s.round()}'),
+                  label: Text(_secs(s)),
+                  selected: picked.contains(s),
+                  showCheckmark: false,
+                  selectedColor: AraColors.selectionBg,
+                  onSelected: (on) => setState(
+                    () => _picked = on
+                        ? {...picked, s}
+                        : ({...picked}..remove(s)),
+                  ),
+                ),
+            ],
+          ),
+          Text(
+            l.calibrationLibraryNote(settings(need.gain, temp)),
+            style: _dim,
+          ),
+          Row(
+            spacing: AraSpace.s8,
+            children: [
+              Expanded(
+                child: SimpleWindowButton(
+                  key: const Key('simple-calibration-build-library'),
+                  label: _picked == null
+                      ? job.caption
+                      : l.calibrationBuildPicked,
+                  onTap: !_canShoot(ref) || picked.isEmpty
+                      ? null
+                      : _picked == null
+                      ? (job.run == null ? null : () => _runJob(context, ref, job))
+                      : () => ref
+                            .read(simpleCalibrationProvider.notifier)
+                            .buildLibrary(
+                              need,
+                              picked.toList()..sort(),
+                              bias: cover?.biasMissing ?? true,
+                              refresh: true,
+                              lensCapPrompt: l.calibrationLensCapPrompt,
+                            ),
+                ),
+              ),
+              Expanded(
+                child: SimpleWindowButton(
+                  key: const Key('simple-calibration-queue-library'),
+                  outlined: true,
+                  label: l.calibrationAddToQueue,
+                  onTap: picked.isEmpty
+                      ? null
+                      : () => ref
+                            .read(simpleCalibrationProvider.notifier)
+                            .queueLibrary(
+                              need,
+                              picked.toList()..sort(),
+                              bias: cover?.biasMissing ?? true,
+                              refresh: _picked != null,
+                              lensCapPrompt: l.calibrationLensCapPrompt,
+                            ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -674,18 +893,6 @@ class _GuideCameraTab extends ConsumerWidget {
     final notifier = ref.read(guiderCalibrationProvider.notifier);
     final busy = cal.isLoading;
     final guiding = guider.isBusy;
-    // Building covers the guide scope and shoots with it: never under guiding.
-    void ask(Future<void> Function() build) => ref
-        .read(simpleMessagesProvider.notifier)
-        .show(
-          SimpleMessageKind.question,
-          l.calibrationGuideCover,
-          origin: SimpleStatusOrigin.calibration,
-          actions: [
-            SimpleMessageAction(l.calibrationNotNow, () {}),
-            SimpleMessageAction(l.calibrationGuideCovered, build),
-          ],
-        );
     final darks = status?.darkLibraryExists ?? false;
     final defects = status?.defectMapExists ?? false;
     final min = status?.darkMinExposureSecondsLoaded,
@@ -694,6 +901,37 @@ class _GuideCameraTab extends ConsumerWidget {
     final covers = min != null && max != null && min <= max
         ? l.calibrationGuideCovers(_secs(min), _secs(max))
         : l.calibrationGuideReady;
+    // Building covers the guide scope and shoots with it: never under guiding.
+    VoidCallback? build(Future<void> Function() action) => busy || guiding
+        ? null
+        : () => _askGuideCover(context, ref, action);
+    Widget pair(String id, String rebuild, VoidCallback? onBuild, {required bool exists, required bool darksFile}) =>
+        Row(
+          spacing: AraSpace.s8,
+          children: [
+            Expanded(
+              child: SimpleWindowButton(
+                key: Key('simple-calibration-guide-build-$id'),
+                label: rebuild,
+                onTap: onBuild,
+              ),
+            ),
+            if (exists)
+              Expanded(
+                child: SimpleWindowButton(
+                  key: Key('simple-calibration-guide-delete-$id'),
+                  outlined: true,
+                  label: l.calibrationGuideDelete,
+                  onTap: busy
+                      ? null
+                      : () => notifier.deleteCalibrationFiles(
+                          darks: darksFile,
+                          defectmap: !darksFile,
+                        ),
+                ),
+              ),
+          ],
+        );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
@@ -716,32 +954,12 @@ class _GuideCameraTab extends ConsumerWidget {
               onPick: busy ? null : notifier.setDarkLibraryEnabled,
             ),
         ]),
-        Row(
-          spacing: AraSpace.s8,
-          children: [
-            Expanded(
-              child: SimpleWindowButton(
-                key: const Key('simple-calibration-guide-build-darks'),
-                label: darks
-                    ? l.calibrationGuideRebuild
-                    : l.calibrationGuideBuildDarks,
-                onTap: busy || guiding
-                    ? null
-                    : () => ask(notifier.buildDarkLibrary),
-              ),
-            ),
-            if (darks)
-              Expanded(
-                child: SimpleWindowButton(
-                  key: const Key('simple-calibration-guide-delete-darks'),
-                  outlined: true,
-                  label: l.calibrationGuideDelete,
-                  onTap: busy
-                      ? null
-                      : () => notifier.deleteCalibrationFiles(defectmap: false),
-                ),
-              ),
-          ],
+        pair(
+          'darks',
+          darks ? l.calibrationGuideRebuild : l.calibrationGuideBuildDarks,
+          build(notifier.buildDarkLibrary),
+          exists: darks,
+          darksFile: true,
         ),
         _section(l.calibrationGuideDefect),
         _rows([
@@ -761,12 +979,12 @@ class _GuideCameraTab extends ConsumerWidget {
               onPick: busy ? null : notifier.setDefectMapEnabled,
             ),
         ]),
-        SimpleWindowButton(
-          key: const Key('simple-calibration-guide-build-defects'),
-          label: defects
-              ? l.calibrationGuideRebuildDefects
-              : l.calibrationGuideBuildDefects,
-          onTap: busy || guiding ? null : () => ask(notifier.buildDefectMap),
+        pair(
+          'defects',
+          defects ? l.calibrationGuideRebuild : l.calibrationGuideBuildDefects,
+          build(notifier.buildDefectMap),
+          exists: defects,
+          darksFile: false,
         ),
         Text(
           guiding ? l.calibrationGuideStopFirst : l.calibrationGuideCoverNote,
@@ -782,7 +1000,4 @@ class _GuideCameraTab extends ConsumerWidget {
       ],
     );
   }
-
-  static String _secs(double s) =>
-      formatExposure(Duration(milliseconds: (s * 1000).round()));
 }

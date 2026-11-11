@@ -9,8 +9,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../state/settings/safety_policies_state.dart';
-import '../../state/simple_flats_choice_state.dart';
 import '../../models/sequence/imaging_run_body.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../state/equipment/camera_state.dart';
@@ -779,10 +777,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
 
 TextStyle get _dim => kSimpleText.copyWith(color: AraColors.textSecondary);
 
-/// A panel flat's time in the sheet's estimate, its exposure solve included.
-// shortcut: one guess for every panel and filter; read the daemon's flat
-// training if the estimate is visibly off.
-const kSimpleFlatSecondsEstimate = 5.0;
+
 TextStyle get _head =>
     kSimpleText.copyWith(fontSize: 16, fontWeight: FontWeight.w600);
 
@@ -945,17 +940,8 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final filters = ref.watch(filterSetProvider).filters;
     final seconds = steps.fold(
       0.0,
-      (t, s) =>
-          t +
-          (s.frameType == PlanFrameType.flat
-                  ? kSimpleFlatSecondsEstimate
-                  : s.exposureSeconds) *
-              s.frameCount,
+      (t, s) => t + s.exposureSeconds * s.frameCount,
     );
-    // A row shoots flats from a panel or a screen held over the scope: no
-    // panel needed (user, 2026-11-11). A rig that can't change filters has
-    // one nameless row and nothing to flat by filter.
-    final canFlat = steps.first.filterName.isNotEmpty;
     final k =
         ref.watch(skyModelCalibrationProvider).value?.appliedK ?? const {};
     final suggested = [
@@ -1224,32 +1210,14 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             spacing: AraSpace.s8,
             children: [
-              // #1757 — a row can shoot flats instead.
-              if (canFlat)
-                Expanded(
-                  child: SimplePresetTile<PlanFrameType>(
-                    key: Key('simple-run-type-$i'),
-                    label: steps[i].filterName.isEmpty
-                        ? '—'
-                        : steps[i].filterName,
-                    value: steps[i].frameType,
-                    options: PlanFrameType.values,
-                    format: (t) => switch (t) {
-                      PlanFrameType.light => context.l10n.planLight,
-                      PlanFrameType.flat => context.l10n.planFlat,
-                    },
-                    onSelected: (t) => plan.setFrameType(i, t),
-                  ),
-                )
-              else
-                SizedBox(
-                  width: nameWidth,
-                  child: Text(
-                    steps[i].filterName.isEmpty ? '—' : steps[i].filterName,
-                    style: nameStyle,
-                    maxLines: 1,
-                  ),
+              SizedBox(
+                width: nameWidth,
+                child: Text(
+                  steps[i].filterName.isEmpty ? '—' : steps[i].filterName,
+                  style: nameStyle,
+                  maxLines: 1,
                 ),
+              ),
               Expanded(
                 child: SimplePresetTile<Duration>(
                   key: Key('simple-run-exposure-$i'),
@@ -1260,15 +1228,11 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                     ...exposurePresets(minSec: 1, maxSec: 0),
                     dur(suggested[i]),
                   }.toList()..sort(),
-                  // A flat row exposes to the Target ADU on its own.
-                  format: (d) => steps[i].frameType == PlanFrameType.flat
-                      ? context.l10n.planExposureAuto
-                      : d == dur(suggested[i])
+                  format: (d) => d == dur(suggested[i])
                       ? context.l10n.planExposureSuggested(formatExposure(d))
                       : formatExposure(d),
-                  onSelected: steps[i].frameType == PlanFrameType.flat
-                      ? null
-                      : (d) => plan.setExposure(i, d.inMilliseconds / 1000),
+                  onSelected: (d) =>
+                      plan.setExposure(i, d.inMilliseconds / 1000),
                 ),
               ),
               Expanded(
@@ -1337,7 +1301,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             style: kSimpleText.copyWith(color: AraColors.accentConnected),
           ),
         if (run.error != null || run.noStorage) _RunError(run),
-        if (editing == null && !imaging) const _FlatsChoice(),
+        if (editing == null) const _TargetFlats(),
         if (inPreflight && editing == null)
           Text(context.l10n.preflightImagingStartsAfter, style: _dim)
         else if (editing == null && !imaging) ...[
@@ -1871,37 +1835,51 @@ class _NightDone extends ConsumerWidget {
   }
 }
 
-/// A profile set to ask about flats answers here, before the run starts: Simple
-/// Mode has no popups. A profile with its own setting needs no answer.
-class _FlatsChoice extends ConsumerWidget {
-  const _FlatsChoice();
+/// The target's flats (#1757, round 2): none, right after its last frame (at
+/// its rotator angle), or with the queue's end-of-night flats. Shot from a
+/// panel, or a screen the run asks for first.
+class _TargetFlats extends ConsumerWidget {
+  const _TargetFlats();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final ask = ref.watch(
-      safetyPoliciesProvider.select(
-        (s) => s.calibrationCaptureDefault == CalibrationCaptureDefault.ask,
-      ),
-    );
-    if (!ask) return const SizedBox.shrink();
     final l10n = context.l10n;
-    return Row(
-      spacing: AraSpace.s12,
+    final filters = [
+      for (final s in ref.watch(simpleRunPlanProvider))
+        if (s.filterName.isNotEmpty) s.filterName,
+    ];
+    if (filters.isEmpty) return const SizedBox.shrink();
+    return Column(
+      key: const Key('simple-run-flats'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
       children: [
-        Text(l10n.planFlats, style: _dim),
-        Expanded(
-          child: SimpleSegments<String>(
-            keyPrefix: 'simple-run-flats',
-            group: l10n.planFlats,
-            options: [
-              ('later', l10n.planFlatsNone, 'none'),
-              ('sky_at_twilight', l10n.planFlatsSky, 'sky'),
-              ('panel_at_end', l10n.planFlatsPanel, 'panel'),
-            ],
-            selected: ref.watch(simpleFlatsChoiceProvider),
-            onPick: ref.read(simpleFlatsChoiceProvider.notifier).set,
-          ),
+        Row(
+          children: [
+            Text(l10n.planFlats, style: kSimpleText),
+            const SizedBox(width: AraSpace.s8),
+            Expanded(
+              child: Text(
+                l10n.planFlatsFor(filters.join(', ')),
+                style: _dim,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
+        SimpleSegments<SimpleTargetFlats>(
+          keyPrefix: 'simple-run-flats',
+          group: l10n.planFlats,
+          options: [
+            (SimpleTargetFlats.none, l10n.planFlatsNone, 'none'),
+            (SimpleTargetFlats.afterTarget, l10n.planFlatsAfterTarget, 'after'),
+            (SimpleTargetFlats.endOfNight, l10n.planFlatsEndOfNight, 'end'),
+          ],
+          selected: ref.watch(simpleRunFlatsProvider),
+          onPick: ref.read(simpleRunFlatsProvider.notifier).set,
+        ),
+        if (ref.watch(simpleRunFlatsProvider) != SimpleTargetFlats.none)
+          Text(l10n.planFlatsHint, style: _dim),
       ],
     );
   }

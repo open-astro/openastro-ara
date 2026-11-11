@@ -27,7 +27,7 @@ class SimpleCalibrationScreen extends SimpleScreen {
 
   @override
   String caption(BuildContext context, WidgetRef ref) =>
-      simpleCalibrationSummary(ref, context.l10n);
+      simpleCalibrationSummary(context, ref);
 
   /// A Guide Camera build ends on the rig long after its tap: how it ended,
   /// as a message, whichever mode shows.

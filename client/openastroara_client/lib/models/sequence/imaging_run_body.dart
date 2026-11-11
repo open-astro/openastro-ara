@@ -123,6 +123,8 @@ Map<String, dynamic> buildImagingRunBody({
   String? stopAtDawn,
   // #1560 — park the mount once the last target is done (before the warm-up).
   bool parkAtEnd = false,
+  // #1757 — see [buildTargetBlock].
+  bool flatsAfter = false,
 }) {
   // #1577 — nothing regulates a set-point on this camera: no Cool Camera step.
   if (!rig.coolerRegulates) coolToC = null;
@@ -148,6 +150,7 @@ Map<String, dynamic> buildImagingRunBody({
     rig: rig,
     unguidedOptions: unguidedOptions,
     trackingPriorSeconds: trackingPriorSeconds,
+    flatsAfter: flatsAfter,
     coolToC: coolToC,
     alwaysCenter: alwaysCenter,
     stopAtDawn: stopAtDawn,
@@ -183,24 +186,15 @@ Map<String, dynamic> buildImagingRunBody({
 /// One step of a filter-aware target plan: image [filterName] for
 /// [frameCount] subs of [exposureSeconds] each. Built by the Run tab's plan
 /// chooser (SHO / LRGB / single filter) from the user's planning filter set.
-/// What a plan row shoots (#1757). Darks and bias are never rows: they don't
-/// depend on the filter.
-enum PlanFrameType { light, flat }
-
 class FilterPlanStep {
   final String filterName;
   final double exposureSeconds;
   final int frameCount;
 
-  /// A flat row ignores [exposureSeconds]: the panel's flats expose to the
-  /// Target ADU on their own.
-  final PlanFrameType frameType;
-
   const FilterPlanStep({
     required this.filterName,
     required this.exposureSeconds,
     required this.frameCount,
-    this.frameType = PlanFrameType.light,
   });
 }
 
@@ -246,6 +240,9 @@ Map<String, dynamic> buildTargetBlock({
   bool alwaysCenter = false,
   // #1560 — see [buildImagingRunBody].
   String? stopAtDawn,
+  // #1757 — flats for the plan's filters right after its last frame, at its
+  // rotator angle.
+  bool flatsAfter = false,
 }) {
   // #1577 — nothing regulates a set-point on this camera: no Cool Camera step.
   if (!rig.coolerRegulates) coolToC = null;
@@ -508,21 +505,6 @@ Map<String, dynamic> buildTargetBlock({
     if (plan != null)
       for (var i = 0; i < plan.length; i++) ...[
         if (i > 0) ?switchTo(plan[i].filterName),
-        // No panel: a screen or light box goes over the scope by hand first.
-        if (plan[i].frameType == PlanFrameType.flat && !rig.flatPanel)
-          _item(waitForUserType)
-            ..['Text'] =
-                'Put the screen or light box over the scope for the '
-                '${plan[i].filterName.trim()} flats, then press Resume.',
-        if (plan[i].frameType == PlanFrameType.flat)
-          // The matching-flats generator's own flat set: the panel exposes to
-          // the Target ADU (it solves the exposure without a panel too) and
-          // files FLATs.
-          _item(flatPanelFlatsType)
-            ..['FrameCount'] = plan[i].frameCount
-            ..['Gain'] = gain
-            ..['Offset'] = offset
-        else
           imagingLoop(
             name: '${plan[i].filterName.trim()} Imaging',
             expSeconds: plan[i].exposureSeconds,
@@ -535,6 +517,8 @@ Map<String, dynamic> buildTargetBlock({
         expSeconds: exposureSeconds,
         count: frameCount,
       ),
+    if (flatsAfter && plan != null)
+      ...flatSets([for (final p in plan) p.filterName], rig, gain: gain, offset: offset),
   ];
 
   var block = _item(sequentialContainerType);
@@ -615,10 +599,53 @@ Map<String, dynamic> withDawnStop(Map<String, dynamic> root, String? dawn) =>
     withChildren(root, [
       for (final c in childrenOf(root))
         // Darks and bias need no dark sky: the Calibration block runs after it.
-        isContainer(c) && c['Name'] != kCalibrationBlockName
+        isContainer(c) &&
+                c['Name'] != kCalibrationBlockName &&
+                c['Name'] != kEndFlatsBlockName
             ? _blockDawn(c, dawn)
             : c,
     ]);
+
+/// Flats per set Simple Mode shoots.
+const kSimpleFlatFrames = 25;
+
+/// The name of the Queue's end-of-night flats block (#1757, ADR 0010 rule 4).
+const kEndFlatsBlockName = 'Flats';
+
+/// One auto-exposure flat set per filter in [filters] (the generator's
+/// FlatPanelFlats: it solves the exposure with or without a panel). With no
+/// panel the run first asks for a screen or light box over the scope.
+List<Map<String, dynamic>> flatSets(
+  List<String> filters,
+  RigCapabilities rig, {
+  int gain = -1,
+  int offset = -1,
+  int frames = kSimpleFlatFrames,
+}) => [
+  if (!rig.flatPanel)
+    _item(waitForUserType)
+      ..['Text'] =
+          'Put the screen or light box over the scope for the flats, then press Resume.',
+  for (final f in {for (final f in filters) f.trim()}.where((f) => f.isNotEmpty)) ...[
+    if (rig.filterWheel) _item(switchFilterType)..['Filter'] = buildFilterInfo(f),
+    _item(flatPanelFlatsType)
+      ..['FrameCount'] = frames
+      ..['Gain'] = gain
+      ..['Offset'] = offset,
+  ],
+];
+
+/// The Queue's end-of-night flats: [flatSets] for [filters] under one
+/// container named [kEndFlatsBlockName], with no slew or dawn stop.
+Map<String, dynamic> endFlatsBlock(
+  List<String> filters,
+  RigCapabilities rig, {
+  int gain = -1,
+  int offset = -1,
+}) => withChildren(
+  _item(sequentialContainerType)..['Name'] = kEndFlatsBlockName,
+  flatSets(filters, rig, gain: gain, offset: offset),
+);
 
 /// The name of the Queue's one Calibration block (#1757, ADR 0010 rule 4):
 /// the rig finds a block by its name.
@@ -639,6 +666,25 @@ Map<String, dynamic> calibrationBlockFrom(
     ...childrenOf(root),
   ]);
   return block;
+}
+
+/// [frames] bias frames at [gain] / [offset] (-1: the camera's): the shortest
+/// exposure with the shutter closed, as the rig's own generator writes them.
+Map<String, dynamic> biasSet({
+  required int gain,
+  int? offset,
+  required int frames,
+}) {
+  final exposure = _item(takeExposureType)
+    ..['ExposureTime'] = 0.001
+    ..['ImageType'] = 'BIAS'
+    ..['Gain'] = gain
+    ..['Offset'] = offset ?? -1;
+  var set = _item(sequentialContainerType)..['Name'] = 'Bias ($frames×)';
+  set = withChildren(set, [exposure]);
+  return withConditions(set, [
+    conditionForType(loopConditionType)!.build()..['Iterations'] = frames,
+  ]);
 }
 
 /// A Wait for User asking [text]: the lens cap goes on before darks.
