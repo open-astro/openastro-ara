@@ -56,14 +56,14 @@ class _Tok {
 bool _isIdStart(String c) => RegExp(r'[A-Za-z_]').hasMatch(c);
 bool _isIdPart(String c) => RegExp(r'[A-Za-z0-9_]').hasMatch(c);
 
-List<_Tok> _lex(String src) {
+List<_Tok> _lex(String src, [int startLine = 1]) {
   final out = <_Tok>[];
   var i = 0;
-  var line = 1;
+  var line = startLine;
 
   // Returns the index just past the literal opening at [start] (a quote, or an
   // r-prefixed one); adjusts [line] for newlines inside it.
-  int skipString(int start, List<String> body) {
+  int skipString(int start, List<String> body, List<_Tok> nested) {
     var j = start;
     var raw = false;
     if (src[j] == 'r') {
@@ -96,11 +96,12 @@ List<_Tok> _lex(String src) {
         var depth = 1;
         b.write(r'${');
         j += 2;
+        final exprStart = j;
+        final exprLine = line;
         while (j < src.length && depth > 0) {
           final d = src[j];
           if (d == "'" || d == '"') {
-            final nested = <String>[];
-            j = skipString(j, nested);
+            j = skipString(j, <String>[], <_Tok>[]);
             b.write("''");
             continue;
           }
@@ -115,6 +116,8 @@ List<_Tok> _lex(String src) {
           b.write(d);
           j++;
         }
+        // Lex the body so a literal inside `${}` is seen too (issue #1751).
+        nested.addAll(_lex(src.substring(exprStart, j - 1), exprLine));
         continue;
       }
       b.write(c);
@@ -147,8 +150,10 @@ List<_Tok> _lex(String src) {
             (src[i + 1] == "'" || src[i + 1] == '"'))) {
       final startLine = line;
       final body = <String>[];
-      i = skipString(i, body);
+      final nested = <_Tok>[];
+      i = skipString(i, body, nested);
       out.add(_Tok('s', '', startLine, body.single));
+      out.addAll(nested); // after the outer token: same argument context
     } else if (_isIdStart(c)) {
       final s = i;
       while (i < src.length && _isIdPart(src[i])) {
@@ -224,4 +229,41 @@ bool _inDisplayPosition(List<_Tok> toks, int k) {
     return _textConstructors.contains(toks[j - 1].text);
   }
   return false;
+}
+
+/// The problems of [found] against the per-file counts in [allowed]: a file
+/// over its count, a file under it (lower the entry), a stale entry.
+List<String> ratchetProblems(
+  Map<String, List<HardcodedString>> found,
+  Map<String, int> allowed,
+) {
+  final problems = <String>[];
+  for (final e in found.entries) {
+    final limit = allowed[e.key] ?? 0;
+    if (e.value.length > limit) {
+      problems.add(
+        '${e.key}: ${e.value.length} hard-coded strings, ratchet allows $limit. '
+        'Move the text to app_en.arb (and app_pt_BR.arb), or mark a language-neutral one `// $optOutMarker`:\n'
+        '${e.value.map((h) => _show(e.key, h)).join('\n')}',
+      );
+    } else if (e.value.length < limit) {
+      problems.add(
+        '${e.key}: ratchet allows $limit but only ${e.value.length} are left. '
+        'Lower the entry to ${e.value.length} (UPDATE_RATCHET=1).',
+      );
+    }
+  }
+  for (final k in allowed.keys) {
+    if (!found.containsKey(k)) {
+      problems.add(
+        '$k: ratchet entry is stale, the file has no hard-coded strings left. Delete the entry.',
+      );
+    }
+  }
+  return problems;
+}
+
+String _show(String path, HardcodedString h) {
+  final v = h.value.length > 80 ? '${h.value.substring(0, 80)}…' : h.value;
+  return '  $path:${h.line}  "$v"';
 }

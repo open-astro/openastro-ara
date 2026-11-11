@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'helpers/hardcoded_string_scan.dart';
+import '../../../scripts/l10n/hardcoded_strings.dart';
 
 /// Ratchet for #1751 (every string in pt-BR): text shown to a person belongs in
 /// `lib/l10n/*.arb`, not in a Dart literal. [scanHardcodedStrings] finds the
@@ -47,41 +47,6 @@ Map<String, List<HardcodedString>> _scanLib() {
     }
   }
   return found;
-}
-
-List<String> ratchetProblems(
-  Map<String, List<HardcodedString>> found,
-  Map<String, int> allowed,
-) {
-  final problems = <String>[];
-  for (final e in found.entries) {
-    final limit = allowed[e.key] ?? 0;
-    if (e.value.length > limit) {
-      problems.add(
-        '${e.key}: ${e.value.length} hard-coded strings, ratchet allows $limit. '
-        'Move the text to app_en.arb (and app_pt_BR.arb), or mark a language-neutral one `// $optOutMarker`:\n'
-        '${e.value.map((h) => _show(e.key, h)).join('\n')}',
-      );
-    } else if (e.value.length < limit) {
-      problems.add(
-        '${e.key}: ratchet allows $limit but only ${e.value.length} are left. '
-        'Lower the entry to ${e.value.length} (UPDATE_RATCHET=1).',
-      );
-    }
-  }
-  for (final k in allowed.keys) {
-    if (!found.containsKey(k)) {
-      problems.add(
-        '$k: ratchet entry is stale, the file has no hard-coded strings left. Delete the entry.',
-      );
-    }
-  }
-  return problems;
-}
-
-String _show(String path, HardcodedString h) {
-  final v = h.value.length > 80 ? '${h.value.substring(0, 80)}…' : h.value;
-  return '  $path:${h.line}  "$v"';
 }
 
 void main() {
@@ -150,12 +115,14 @@ void main() {
 
   group('the scanner', () {
     test('flags a literal in Text, a tooltip, a snack bar and friendlyError action', () {
-      const src = '''
+      const src = r'''
 Widget a() => Text('Hello there');
 Widget b() => IconButton(tooltip: 'Close it', onPressed: null);
 void c() => showSnackBar(SnackBar(content: Text('Saved')));
 String d() => friendlyError(l, e, action: 'save that');
 Widget e() => Text(ok ? 'Yes' : 'No');
+Widget f() => Text('${ok ? 'Maybe' : 'Never'}');
+String g() => 'Guider: ${friendlyError(l, e, action: 'push it')}';
 ''';
       expect(scanHardcodedStrings(src).map((h) => h.value), [
         'Hello there',
@@ -164,6 +131,9 @@ Widget e() => Text(ok ? 'Yes' : 'No');
         'save that',
         'Yes',
         'No',
+        'Maybe',
+        'Never',
+        'push it',
       ]);
     });
 
