@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-11T13:04:04+13:00",
+  "generatedAt": "2026-11-11T14:29:55+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -940,6 +940,10 @@
         "name": "The Drawings Stay Grey Rule",
         "body": "The device windows' drawings (the Dome window's clamshell and dial, the Flat panel window's face) are painted in their own grey ramp (`AraColors.dome*`, `AraColors.flatPanel*`), apart from the UI tokens on purpose: they picture hardware, so they never mark a state, and Night mode's red filter covers them like everything else (#1690 audit, 2026-11-08). State on a drawing comes only from the status tokens (a moving shell's edge in Info Blue, a target in Connected Green).",
         "section": "colors"
+      },
+      {
+        "name": "The Back Rule (Simple Mode)",
+        "body": "A full-screen page pushed over Simple Mode (Sky Album, Image Library, Monitor) leaves by a Back button at its top left, the platform back arrow; never an ×. An × closes what sits over the image and keeps you in place."
       }
     ],
     "dos": [

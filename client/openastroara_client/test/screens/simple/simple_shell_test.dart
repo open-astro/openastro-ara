@@ -5683,13 +5683,13 @@ void main() {
     }
 
     Future<void> close(WidgetTester tester) async {
-      await tester.tap(find.byKey(const Key('simple-monitor-close')));
+      await tester.tap(find.byKey(const Key('simple-monitor-back')));
       // A running plan's pills blink, so the shell never settles.
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
     }
 
-    testWidgets('the rail item opens Monitor, awake while it shows, and × closes it', (tester) async {
+    testWidgets('the rail item opens Monitor, awake while it shows, and Back closes it', (tester) async {
       final (_, awake) = await openMonitor(tester);
       expect(find.byKey(const Key('simple-monitor')), findsOneWidget);
       expect(find.text('Rig ready · no plan running'), findsOneWidget);
@@ -5699,6 +5699,17 @@ void main() {
       expect(find.byKey(const Key('simple-monitor')), findsNothing);
       expect(find.byType(SimpleShell), findsOneWidget);
       expect(awake.calls, [true, false], reason: 'awake only while Monitor shows');
+    });
+
+    testWidgets('Monitor leaves by Back at its top left, as the Sky Album does; no × (user, 2026-11-11)', (tester) async {
+      await openMonitor(tester);
+      final monitor = find.byKey(const Key('simple-monitor'));
+      expect(find.descendant(of: monitor, matching: find.byType(BackButton)), findsOneWidget);
+      expect(find.descendant(of: monitor, matching: find.byIcon(Icons.close)), findsNothing);
+      expect(tester.getRect(find.byKey(const Key('simple-monitor-back'))).center.dx,
+          lessThan(tester.getRect(find.byKey(const Key('simple-monitor-verdict'))).left), reason: 'before the top line');
+      await close(tester);
+      expect(monitor, findsNothing);
     });
 
     testWidgets('not offered below 900 pt wide', (tester) async {

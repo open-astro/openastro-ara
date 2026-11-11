@@ -4815,10 +4815,6 @@
   "@monitorTitle": {
     "description": "Simple Mode's full-screen read-only view of the Session (#1724); left rail item"
   },
-  "monitorClose": "Close Monitor",
-  "@monitorClose": {
-    "description": "Monitor's close button tooltip"
-  },
   "monitorBattery": "This device's battery: {level} %",
   "@monitorBattery": {
     "description": "Monitor: screen-reader label of this device's battery",

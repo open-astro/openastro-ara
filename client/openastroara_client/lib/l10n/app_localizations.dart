@@ -6273,12 +6273,6 @@ abstract class AppLocalizations {
   /// **'Monitor'**
   String get monitorTitle;
 
-  /// Monitor's close button tooltip
-  ///
-  /// In en, this message translates to:
-  /// **'Close Monitor'**
-  String get monitorClose;
-
   /// Monitor: screen-reader label of this device's battery
   ///
   /// In en, this message translates to:

@@ -1029,7 +1029,6 @@
   "simpleRigAddressHint": "astro-pi.local ou 192.0.2.24",
   "simpleRigAddressInvalid": "Digite o nome ou o endereço do setup, por exemplo astro-pi.local ou 192.0.2.24:5555.",
   "monitorTitle": "Monitor",
-  "monitorClose": "Fechar o Monitor",
   "monitorBattery": "Bateria deste aparelho: {level} %",
   "monitorLastKnown": "Último conhecido",
   "monitorLinkLost": "Sem contato com o setup · há {age}",

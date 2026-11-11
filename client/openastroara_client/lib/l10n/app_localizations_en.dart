@@ -3707,9 +3707,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get monitorTitle => 'Monitor';
 
   @override
-  String get monitorClose => 'Close Monitor';
-
-  @override
   String monitorBattery(int level) {
     return 'This device\'s battery: $level %';
   }

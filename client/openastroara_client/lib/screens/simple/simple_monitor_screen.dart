@@ -136,7 +136,10 @@ class _TopLine extends ConsumerWidget {
       constraints: BoxConstraints(minHeight: 64, maxHeight: math.max(64, MediaQuery.sizeOf(context).height / 2)),
       child: Row(
         children: [
-          const SizedBox(width: AraSpace.s12),
+          // Back, at the top left, as the Sky Album leaves (DESIGN.md: Simple
+          // Mode's full-screen pages).
+          const BackButton(key: Key('simple-monitor-back'), color: AraColors.textSecondary),
+          const SizedBox(width: AraSpace.s4),
           if (_dot(v.status) case final dot?) ...[dot, const SizedBox(width: AraSpace.s12)],
           Expanded(
             child: SingleChildScrollView(
@@ -204,13 +207,6 @@ class _TopLine extends ConsumerWidget {
             selectedIcon: const Icon(Icons.dark_mode, color: AraColors.accentInfo),
             icon: const Icon(Icons.dark_mode_outlined),
             onPressed: () => ref.read(nightModeProvider.notifier).set(!night),
-          ),
-          IconButton(
-            key: const Key('simple-monitor-close'),
-            tooltip: l10n.monitorClose,
-            color: AraColors.textSecondary,
-            icon: const Icon(Icons.close),
-            onPressed: () => Navigator.of(context).maybePop(),
           ),
         ],
       ),
