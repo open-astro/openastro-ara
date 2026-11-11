@@ -9,10 +9,12 @@ of the RCW objects, then writes the OpenNGC column layout the client parses
 
     python3 scripts/build-rcw-catalog.py [--nebula-types-from NGC.csv]
 
-Cross-identifications come from the catalogue's own IDs column (NGC/IC numbers
-and Gum numbers, "G n"). An NGC/IC id is kept only when the OpenNGC row is a
-nebula and no earlier RCW row already claims it, because the client folds a row
-that names another row's id into that row.
+Gum numbers ("G n") come from the catalogue's own IDs column. The NGC/IC
+cross-id is SIMBAD's identifier of the same object (the VizieR IDs cell also
+lists neighbours, e.g. NGC 3324 beside RCW 53 = NGC 3372). It is kept when the
+OpenNGC catalogue has that row, whatever its type, and no earlier RCW row claims
+it, because the client folds a row that names another row's id into that row.
+An RCW object SIMBAD gives no NGC/IC falls back to the IDs cell, nebulae only.
 """
 import argparse
 import csv
@@ -23,6 +25,8 @@ import sys
 import urllib.parse
 import urllib.request
 
+NEBULA_TYPES = {"HII", "EmN", "Neb", "Cl+N", "RfN", "SNR"}
+
 VIZIER = "https://vizier.cfa.harvard.edu/viz-bin/asu-tsv"
 SIMBAD = "https://simbad.cfa.harvard.edu/simbad/sim-tap/sync"
 HEADER = (
@@ -30,7 +34,6 @@ HEADER = (
     "Pm-RA;Pm-Dec;RadVel;Redshift;Cstar U-Mag;Cstar B-Mag;Cstar V-Mag;M;NGC;IC;Cstar Names;"
     "Identifiers;Common names"
 )
-NEBULA_TYPES = {"HII", "EmN", "Neb", "Cl+N", "RfN", "SNR"}
 
 
 def get(url, params):
@@ -151,6 +154,22 @@ def main():
         rcw, nm = (x.strip().strip('"') for x in line.split("\t"))
         nm = re.sub(r"^NAME (the )?", "", nm)
         names.setdefault(int(rcw.split()[1]), []).append(nm)
+    links = {}  # RCW number -> SIMBAD NGC/IC designations of the same object
+    simbad = get(
+        SIMBAD,
+        {
+            "request": "doQuery",
+            "lang": "adql",
+            "format": "tsv",
+            "query": "select i1.id as rcw, i2.id as nm from ident as i1 join ident as i2 on i1.oidref=i2.oidref "
+            "where i1.id like 'RCW %' and (i2.id like 'NGC %' or i2.id like 'IC %')",
+        },
+    )
+    for line in simbad.splitlines()[1:]:
+        rcw, nm = (x.strip().strip('"') for x in line.split("\t"))
+        kind, num = nm.split()
+        links.setdefault(int(re.match(r"\d+", rcw.split()[1]).group(0)), []).append((kind, num))
+    simbad_keys = {f"{k}{int(v):04d}" for ids in links.values() for k, v in ids}
     types = openngc_types(args.nebula_types_from)
 
     # The published tables hold 181 rows: numbers 1-182 without 116 (VizieR VII/216/rcw, "181 rows").
@@ -162,9 +181,15 @@ def main():
         ra, dec = float(r["_RAJ2000"]), float(r["_DEJ2000"])
         ngc, gum = parse_ids(r["IDs"])
         kept = None
-        for kind, num in ngc:
-            key = f"{kind}{int(num):04d}" if kind == "NGC" else f"{kind}{int(num):04d}"
-            if kept is None and types.get(key) in NEBULA_TYPES and key not in claimed:
+        if n in links:
+            cand = sorted(links[n], key=lambda x: (x[0] != "NGC", int(x[1])))
+            ok = lambda key: key in types
+        else:  # SIMBAD lists no NGC/IC for it: the IDs cell, nebulae only, never another row's SIMBAD id
+            cand = ngc
+            ok = lambda key: types.get(key) in NEBULA_TYPES and key not in simbad_keys
+        for kind, num in cand:
+            key = f"{kind}{int(num):04d}"
+            if kept is None and ok(key) and key not in claimed:
                 kept = (kind, num, key)
             else:
                 dropped.append((n, kind + num, types.get(key), key in claimed))

@@ -316,7 +316,7 @@ void main() {
       // The Messier objects in the catalogue (M8, M16, M17, M20) and the Caldwell
       // one (C 100) stay in their own Books.
       final book = bookObjects(bundle, AlbumBook.rcw);
-      expect(book.length, 176);
+      expect(book.length, 174);
       expect([for (final d in book) if (d.messierNum != null || d.caldwellNum != null) d.id], isEmpty);
       expect(bookObjects(bundle, AlbumBook.messier).length, 110);
       expect(bookObjects(bundle, AlbumBook.caldwell).length, 109);
@@ -331,6 +331,19 @@ void main() {
       expect(rcwNumOf(paw), 127);
       expect(paw.name, "Cat's Paw Nebula");
       expect(searchSuggestions(bundle, 'RCW 38').first.dso.id, 'RCW 38');
+    });
+
+    test('RCW 53 and RCW 124 are the Carina and Bug nebulae, not NGC 3324 (#1629)', () {
+      // SIMBAD: RCW 53 = NGC 3372 (C 92), RCW 124 = NGC 6302 (C 69); they stay in the Caldwell Book.
+      expect(findCatalogObject(bundle, 'Carina Nebula')!.caldwellNum, 92);
+      expect(rcwNumOf(findCatalogObject(bundle, 'C 92')!), 53);
+      expect(rcwNumOf(findCatalogObject(bundle, 'C 69')!), 124);
+      expect(findCatalogObject(bundle, 'NGC 3324')!.name, 'NGC3324');
+      // RCW 131 and NGC 6357 are one row.
+      final war = findCatalogObject(bundle, 'NGC 6357')!;
+      expect(rcwNumOf(war), 131);
+      expect(findCatalogObject(bundle, 'RCW 131')!.id, war.id);
+      expect(searchSuggestions(bundle, 'War and Peace').length, 1);
     });
 
     test('the Catalogs overlay lists RCW next to Sharpless (#1629)', () {
