@@ -741,20 +741,19 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
       String label,
       bool on,
       ValueChanged<bool> onSelected,
-    ) =>
-        FilterChip(
-          key: key,
-          label: Text(
-            label,
-            style: kSimpleText.copyWith(
-              color: on ? AraColors.selectionFg : AraColors.textPrimary,
-            ),
-          ),
-          selected: on,
-          showCheckmark: false,
-          selectedColor: AraColors.selectionBg,
-          onSelected: onSelected,
-        );
+    ) => FilterChip(
+      key: key,
+      label: Text(
+        label,
+        style: kSimpleText.copyWith(
+          color: on ? AraColors.selectionFg : AraColors.textPrimary,
+        ),
+      ),
+      selected: on,
+      showCheckmark: false,
+      selectedColor: AraColors.selectionBg,
+      onSelected: onSelected,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
@@ -859,9 +858,7 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
               Expanded(
                 child: SimpleWindowButton(
                   key: const Key('simple-calibration-build-library'),
-                  label: !byHand
-                      ? job.caption
-                      : l.calibrationBuildPicked,
+                  label: !byHand ? job.caption : l.calibrationBuildPicked,
                   onTap: !_canShoot(ref) || !canBuild
                       ? null
                       : !byHand
@@ -872,7 +869,9 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
                               need,
                               picked.toList()..sort(),
                               bias: biasOn,
-                              refresh: true,
+                              // As Add to queue: only exposures picked by
+                              // hand are shot again.
+                              refresh: _picked != null,
                               lensCapPrompt: l.calibrationLensCapPrompt,
                             ),
                 ),

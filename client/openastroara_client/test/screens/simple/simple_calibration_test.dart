@@ -638,6 +638,14 @@ void main() {
         expect(kids.any((k) => (k['Name'] as String?)?.startsWith('Bias') ?? false), isTrue, reason: 'the bias set is shot again');
       });
 
+      testWidgets('only Bias touched: Build reuses the darks on file, as Add to queue does', (tester) async {
+        final (_, cal, _, _) = await library(tester);
+        await tapKey(tester, 'simple-calibration-bias');
+        await tapKey(tester, 'simple-calibration-build-library');
+        expect(cal.builds.single.exposureSecondsList, [300.0]);
+        expect(cal.builds.single.reuseExistingFrames, isTrue, reason: 'the exposures were not picked by hand');
+      });
+
       testWidgets('Bias alone: a bias-only run through the queue, no dark library build asked of the rig', (tester) async {
         final (c, cal, seq, _) = await library(tester);
         await tapKey(tester, 'simple-calibration-exposure-300'); // unpick the plan's exposure
