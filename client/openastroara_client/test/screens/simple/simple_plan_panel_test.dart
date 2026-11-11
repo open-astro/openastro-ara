@@ -1582,7 +1582,7 @@ void main() {
     expect(simpleCurrentTarget([a, b], 99), 1, reason: 'the last once all are full');
   });
 
-  test('After target flats count in the target\'s plan squares: the next target waits for them', () {
+  test('After target flats count in the plan squares of their target: the next target waits for them', () {
     const a = SimpleTarget(
       name: 'M31',
       flats: SimpleTargetFlats.afterTarget,
