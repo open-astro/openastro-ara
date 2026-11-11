@@ -4581,4 +4581,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String calibrationGuideBuilt(String what) {
     return '$what built';
   }
+
+  @override
+  String calibrationFlatsForSession(String target) {
+    return 'Flats for tonight\'s lights · $target';
+  }
+
+  @override
+  String get calibrationBiasForLights => 'For the lights\' gain and offset';
+
+  @override
+  String get calibrationLibraryExposures => 'Exposures';
+
+  @override
+  String get calibrationOnFileTag => 'On file';
+
+  @override
+  String get calibrationGuideBuildDarks => 'Build dark library';
+
+  @override
+  String get calibrationGuideBuildDefects => 'Build bad-pixel map';
+
+  @override
+  String get calibrationGuideRebuildDefects => 'Rebuild bad-pixel map';
+
+  @override
+  String get calibrationGuideCoverNote =>
+      'Building asks you to cover the guide scope first.';
+
+  @override
+  String get calibrationGuideReady => 'Built';
 }

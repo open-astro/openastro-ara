@@ -23,6 +23,7 @@ import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/models/sequence/condition_catalog.dart';
 import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimpleShutterButton;
+import 'package:openastroara/screens/simple/simple_device_windows.dart' show SimpleWindowButton;
 import 'package:openastroara/state/simple_calibration_state.dart';
 import 'package:openastroara/services/guider_api.dart' show GuiderClient;
 import 'package:openastroara/state/equipment/camera_state.dart';
@@ -500,7 +501,7 @@ void main() {
       ]);
       c.read(simpleCalibrationTabProvider.notifier).set(SimpleCalibrationTab.guide);
       await tester.pumpAndSettle();
-      expect(tester.widget<FilledButton>(find.byKey(const Key('simple-calibration-guide-build-darks'))).onPressed, isNull);
+      expect(tester.widget<SimpleWindowButton>(find.byKey(const Key('simple-calibration-guide-build-darks'))).onTap, isNull);
       expect(find.text('Stop guiding to build: a plan would lose its guide star.'), findsOneWidget);
     });
   });

@@ -21,6 +21,7 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import 'simple_preview_panel.dart' show SimpleShutterButton, formatExposure;
+import 'simple_device_windows.dart' show SimpleWindowButton;
 import 'simple_shell.dart' show SimplePanel, SimpleSegments;
 
 TextStyle get _dim => kSimpleText.copyWith(color: AraColors.textSecondary);
@@ -312,40 +313,94 @@ class SimpleCalibrationPanel extends ConsumerWidget {
   }
 }
 
-/// A set's line: what it is, why, and Covered or Missing.
+/// A section's dim label over its rows (the mock's `.sect`).
+Widget _section(String text) => Padding(
+  padding: const EdgeInsets.only(top: AraSpace.s8),
+  child: Text(text, style: kSimpleCaption),
+);
+
+/// [rows] with a hairline between them, as the mock lists its sets.
+Widget _rows(List<Widget> rows) => Column(
+  crossAxisAlignment: CrossAxisAlignment.stretch,
+  children: [
+    for (var i = 0; i < rows.length; i++) ...[
+      if (i > 0) const Divider(height: 1, color: AraColors.border),
+      ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: Align(alignment: Alignment.centerLeft, child: rows[i]),
+      ),
+    ],
+  ],
+);
+
+/// A set's row: what it is, the line under it, its pill and, when given, an
+/// action after it.
 Widget _setRow(
-  AppLocalizations l,
   String name,
   String? why, {
   required bool covered,
+  String? tag,
+  Widget? trailing,
   Key? key,
 }) => Semantics(
   key: key,
   container: true,
-  child: Row(
-    spacing: AraSpace.s8,
-    children: [
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(name, style: kSimpleText),
-            if (why != null) Text(why, style: _dim),
-          ],
+  child: Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(
+      spacing: AraSpace.s8,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(name, style: kSimpleText),
+              if (why != null) Text(why, style: _dim),
+            ],
+          ),
         ),
-      ),
-      SimpleSetTag(covered: covered),
-    ],
+        SimpleSetTag(covered: covered, label: tag),
+        ?trailing,
+      ],
+    ),
   ),
+);
+
+/// A row with a label and an On / Off pair (DESIGN.md: an on/off is a pair
+/// of named segments, never a bare toggle).
+Widget _onOffRow(
+  AppLocalizations l,
+  String label, {
+  required String id,
+  required bool on,
+  required ValueChanged<bool>? onPick,
+}) => Row(
+  spacing: AraSpace.s8,
+  children: [
+    Expanded(child: Text(label, style: kSimpleText)),
+    SizedBox(
+      width: 140,
+      child: SimpleSegments<bool>(
+        keyPrefix: id,
+        group: label,
+        options: [(true, l.deviceOn, 'on'), (false, l.deviceOff, 'off')],
+        selected: on,
+        onPick: onPick,
+      ),
+    ),
+  ],
 );
 
 /// A set's Covered or Missing in its state colour, outlined like a pill
 /// (mock `design/preview/simple-calibration-mock.html`): the outline, not a
 /// fill, so it reads over any frame without competing with the buttons.
 class SimpleSetTag extends StatelessWidget {
-  const SimpleSetTag({super.key, required this.covered});
+  const SimpleSetTag({super.key, required this.covered, this.label});
 
   final bool covered;
+
+  /// Words other than Covered / Missing ("On file").
+  final String? label;
 
   @override
   Widget build(BuildContext context) {
@@ -357,7 +412,10 @@ class SimpleSetTag extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
-        covered ? context.l10n.calibrationCovered : context.l10n.calibrationMissing,
+        label ??
+            (covered
+                ? context.l10n.calibrationCovered
+                : context.l10n.calibrationMissing),
         style: kSimpleCaption.copyWith(color: colour),
       ),
     );
@@ -385,20 +443,25 @@ class _FlatsTab extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        for (final f in session.filtersUsed)
-          _setRow(
-            l,
-            f.filterName.isEmpty ? '—' : f.filterName,
-            f.flatsNote ??
-                switch (f.matchingFlatsNewestUtc) {
-                  final at? => l.calibrationFlatsFrom(
-                    MaterialLocalizations.of(context).formatShortMonthDay(at.toLocal()),
-                  ),
-                  null => l.calibrationNoFlats,
-                },
-            covered: f.matchingFlatFrames > 0,
-            key: Key('simple-calibration-flat-${f.filterName}'),
-          ),
+        _section(l.calibrationFlatsForSession(session.targetName)),
+        _rows([
+          for (final f in session.filtersUsed)
+            _setRow(
+              f.filterName.isEmpty ? '—' : f.filterName,
+              f.flatsNote ??
+                  switch (f.matchingFlatsNewestUtc) {
+                    final at? => l.calibrationFlatsFrom(
+                      MaterialLocalizations.of(
+                        context,
+                      ).formatShortMonthDay(at.toLocal()),
+                    ),
+                    null => l.calibrationNoFlats,
+                  },
+              covered: f.matchingFlatFrames > 0,
+              key: Key('simple-calibration-flat-${f.filterName}'),
+            ),
+        ]),
+        _section(l.calibrationLightGroup),
         SimpleSegments<SimpleFlatLight>(
           keyPrefix: 'simple-calibration-light',
           group: l.calibrationLightGroup,
@@ -417,9 +480,10 @@ class _FlatsTab extends ConsumerWidget {
               : l.calibrationLightScreenNote,
           style: _dim,
         ),
-        FilledButton.tonal(
+        SimpleWindowButton(
           key: const Key('simple-calibration-shoot-flats'),
-          onPressed: can
+          label: missing ? l.calibrationShootFlats : l.calibrationReshootFlats,
+          onTap: can
               ? () => simpleCalibrationShoot(
                   context,
                   ref,
@@ -428,7 +492,6 @@ class _FlatsTab extends ConsumerWidget {
                   reshoot: !missing,
                 )
               : null,
-          child: Text(missing ? l.calibrationShootFlats : l.calibrationReshootFlats),
         ),
       ],
     );
@@ -455,37 +518,58 @@ class _DarksTab extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        _setRow(
-          l,
-          l.calibrationDarks,
-          [
-            exposures.map((s) => formatExposure(Duration(milliseconds: (s * 1000).round()))).join(' · '),
-            if (session.coolerSetpointC case final t?) '${t.toStringAsFixed(0)} °C',
-          ].join(' · '),
-          covered: !need.darks,
-          key: const Key('simple-calibration-darks'),
+        _section(l.calibrationDarks),
+        _rows([
+          _setRow(
+            exposures
+                .map(
+                  (s) => formatExposure(
+                    Duration(milliseconds: (s * 1000).round()),
+                  ),
+                )
+                .join(' · '),
+            session.coolerSetpointC == null
+                ? null
+                : '${session.coolerSetpointC!.toStringAsFixed(0)} °C',
+            covered: !need.darks,
+            key: const Key('simple-calibration-darks'),
+          ),
+        ]),
+        _section(l.calibrationBias),
+        _rows([
+          _setRow(
+            l.calibrationBiasForLights,
+            null,
+            covered: !need.bias,
+            key: const Key('simple-calibration-bias'),
+          ),
+        ]),
+        Text(
+          cover ? l.calibrationCoverNote : l.calibrationLensCapNote,
+          style: _dim,
         ),
-        _setRow(l, l.calibrationBias, null, covered: !need.bias, key: const Key('simple-calibration-bias')),
-        Text(cover ? l.calibrationCoverNote : l.calibrationLensCapNote, style: _dim),
         Row(
           spacing: AraSpace.s8,
           children: [
             Expanded(
-              child: FilledButton.tonal(
+              child: SimpleWindowButton(
                 key: const Key('simple-calibration-shoot-darks'),
-                onPressed: can
+                label: l.calibrationShootNow,
+                onTap: can
                     ? () => simpleCalibrationShoot(context, ref, session, darks)
                     : null,
-                child: Text(l.calibrationShootNow),
               ),
             ),
             Expanded(
-              child: OutlinedButton(
+              child: SimpleWindowButton(
                 key: const Key('simple-calibration-queue-darks'),
-                onPressed: darks.any
-                    ? () => ref.read(simpleCalibrationProvider.notifier).queue(session, darks)
+                outlined: true,
+                label: l.calibrationAddToQueue,
+                onTap: darks.any
+                    ? () => ref
+                          .read(simpleCalibrationProvider.notifier)
+                          .queue(session, darks)
                     : null,
-                child: Text(l.calibrationAddToQueue),
               ),
             ),
           ],
@@ -502,7 +586,8 @@ class _DarkLibraryBuilder extends ConsumerStatefulWidget {
   const _DarkLibraryBuilder();
 
   @override
-  ConsumerState<_DarkLibraryBuilder> createState() => _DarkLibraryBuilderState();
+  ConsumerState<_DarkLibraryBuilder> createState() =>
+      _DarkLibraryBuilderState();
 }
 
 class _DarkLibraryBuilderState extends ConsumerState<_DarkLibraryBuilder> {
@@ -517,7 +602,9 @@ class _DarkLibraryBuilderState extends ConsumerState<_DarkLibraryBuilder> {
         if (s.frameType == PlanFrameType.light) s.exposureSeconds,
     };
     final picked = _picked ?? (queued.isEmpty ? {120.0, 300.0} : queued);
-    final gain = ref.watch(simpleRunGainProvider) ?? ref.watch(exposureControllerProvider).gain;
+    final gain =
+        ref.watch(simpleRunGainProvider) ??
+        ref.watch(exposureControllerProvider).gain;
     final temp = ref.watch(imagingDefaultsProvider).coolerTargetC;
     final options = {..._choices, ...picked}.toList()..sort();
     return Column(
@@ -525,6 +612,7 @@ class _DarkLibraryBuilderState extends ConsumerState<_DarkLibraryBuilder> {
       spacing: AraSpace.s8,
       children: [
         Text(l.calibrationNoLightsYet, style: _dim),
+        _section(l.calibrationLibraryExposures),
         Wrap(
           spacing: AraSpace.s8,
           runSpacing: AraSpace.s8,
@@ -532,20 +620,27 @@ class _DarkLibraryBuilderState extends ConsumerState<_DarkLibraryBuilder> {
             for (final s in options)
               FilterChip(
                 key: Key('simple-calibration-exposure-${s.round()}'),
-                label: Text(formatExposure(Duration(milliseconds: (s * 1000).round()))),
+                label: Text(
+                  formatExposure(Duration(milliseconds: (s * 1000).round())),
+                ),
                 selected: picked.contains(s),
                 showCheckmark: false,
                 selectedColor: AraColors.selectionBg,
                 onSelected: (on) => setState(
-                  () => _picked = on ? {...picked, s} : ({...picked}..remove(s)),
+                  () =>
+                      _picked = on ? {...picked, s} : ({...picked}..remove(s)),
                 ),
               ),
           ],
         ),
-        Text(l.calibrationLibraryGainTemp(gain, '${temp.toStringAsFixed(0)} °C'), style: _dim),
-        FilledButton.tonal(
+        Text(
+          l.calibrationLibraryGainTemp(gain, '${temp.toStringAsFixed(0)} °C'),
+          style: _dim,
+        ),
+        SimpleWindowButton(
           key: const Key('simple-calibration-build-library'),
-          onPressed: _canShoot(ref) && picked.isNotEmpty
+          label: l.calibrationBuildLibrary,
+          onTap: _canShoot(ref) && picked.isNotEmpty
               ? () => ref
                     .read(simpleCalibrationProvider.notifier)
                     .buildLibrary(
@@ -555,14 +650,14 @@ class _DarkLibraryBuilderState extends ConsumerState<_DarkLibraryBuilder> {
                       lensCapPrompt: l.calibrationLensCapPrompt,
                     )
               : null,
-          child: Text(l.calibrationBuildLibrary),
         ),
       ],
     );
   }
 }
 
-/// The Guider's own calibration: its dark library and bad-pixel map.
+/// The Guider's own calibration: its dark library and bad-pixel map, laid
+/// out as the mock's Guide Camera tab.
 class _GuideCameraTab extends ConsumerWidget {
   const _GuideCameraTab();
 
@@ -592,74 +687,92 @@ class _GuideCameraTab extends ConsumerWidget {
         );
     final darks = status?.darkLibraryExists ?? false;
     final defects = status?.defectMapExists ?? false;
-    final min = status?.darkMinExposureSecondsLoaded, max = status?.darkMaxExposureSecondsLoaded;
+    final min = status?.darkMinExposureSecondsLoaded,
+        max = status?.darkMaxExposureSecondsLoaded;
+    // The guider reports 9999 / -9999 with nothing loaded.
+    final covers = min != null && max != null && min <= max
+        ? l.calibrationGuideCovers(_secs(min), _secs(max))
+        : l.calibrationGuideReady;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
       children: [
-        _setRow(
-          l,
-          l.calibrationGuideDarks,
-          !darks
-              ? l.calibrationGuideNotBuilt
-              : min != null && max != null
-              ? l.calibrationGuideCovers(_secs(min), _secs(max))
-              : null,
-          covered: darks,
-          key: const Key('simple-calibration-guide-darks'),
-        ),
-        if (darks)
-          SwitchListTile(
-            key: const Key('simple-calibration-guide-darks-use'),
-            contentPadding: EdgeInsets.zero,
-            title: Text(l.calibrationGuideUse, style: kSimpleText),
-            value: status!.darkLibraryLoaded,
-            onChanged: busy ? null : notifier.setDarkLibraryEnabled,
+        _section(l.calibrationGuideDarks),
+        _rows([
+          _setRow(
+            darks ? covers : l.calibrationGuideNotBuilt,
+            null,
+            covered: darks,
+            tag: darks ? l.calibrationOnFileTag : null,
+            key: const Key('simple-calibration-guide-darks'),
           ),
+          if (darks)
+            _onOffRow(
+              l,
+              l.calibrationGuideUse,
+              id: 'simple-calibration-guide-darks-use',
+              on: status!.darkLibraryLoaded,
+              onPick: busy ? null : notifier.setDarkLibraryEnabled,
+            ),
+        ]),
         Row(
           spacing: AraSpace.s8,
           children: [
             Expanded(
-              child: FilledButton.tonal(
+              child: SimpleWindowButton(
                 key: const Key('simple-calibration-guide-build-darks'),
-                onPressed: busy || guiding ? null : () => ask(notifier.buildDarkLibrary),
-                child: Text(darks ? l.calibrationGuideRebuild : l.calibrationGuideBuild),
+                label: darks
+                    ? l.calibrationGuideRebuild
+                    : l.calibrationGuideBuildDarks,
+                onTap: busy || guiding
+                    ? null
+                    : () => ask(notifier.buildDarkLibrary),
               ),
             ),
             if (darks)
               Expanded(
-                child: OutlinedButton(
+                child: SimpleWindowButton(
                   key: const Key('simple-calibration-guide-delete-darks'),
-                  onPressed: busy
+                  outlined: true,
+                  label: l.calibrationGuideDelete,
+                  onTap: busy
                       ? null
                       : () => notifier.deleteCalibrationFiles(defectmap: false),
-                  child: Text(l.calibrationGuideDelete),
                 ),
               ),
           ],
         ),
-        _setRow(
-          l,
-          l.calibrationGuideDefect,
-          defects ? null : l.calibrationGuideNotBuilt,
-          covered: defects,
-          key: const Key('simple-calibration-guide-defects'),
-        ),
-        if (defects)
-          SwitchListTile(
-            key: const Key('simple-calibration-guide-defects-use'),
-            contentPadding: EdgeInsets.zero,
-            title: Text(l.calibrationGuideUse, style: kSimpleText),
-            value: status!.defectMapLoaded,
-            onChanged: busy ? null : notifier.setDefectMapEnabled,
+        _section(l.calibrationGuideDefect),
+        _rows([
+          _setRow(
+            defects ? l.calibrationGuideReady : l.calibrationGuideNotBuilt,
+            null,
+            covered: defects,
+            tag: defects ? l.calibrationOnFileTag : null,
+            key: const Key('simple-calibration-guide-defects'),
           ),
-        FilledButton.tonal(
+          if (defects)
+            _onOffRow(
+              l,
+              l.calibrationGuideUse,
+              id: 'simple-calibration-guide-defects-use',
+              on: status!.defectMapLoaded,
+              onPick: busy ? null : notifier.setDefectMapEnabled,
+            ),
+        ]),
+        SimpleWindowButton(
           key: const Key('simple-calibration-guide-build-defects'),
-          onPressed: busy || guiding ? null : () => ask(notifier.buildDefectMap),
-          child: Text(defects ? l.calibrationGuideRebuild : l.calibrationGuideBuild),
+          label: defects
+              ? l.calibrationGuideRebuildDefects
+              : l.calibrationGuideBuildDefects,
+          onTap: busy || guiding ? null : () => ask(notifier.buildDefectMap),
         ),
-        if (guiding)
-          Text(l.calibrationGuideStopFirst, style: kSimpleText.copyWith(color: AraColors.accentBusy)),
+        Text(
+          guiding ? l.calibrationGuideStopFirst : l.calibrationGuideCoverNote,
+          style: guiding
+              ? kSimpleText.copyWith(color: AraColors.accentBusy)
+              : _dim,
+        ),
         if (cal.hasError)
           Text(
             friendlyError(l, cal.error!, action: l.calibrationActionGuide),

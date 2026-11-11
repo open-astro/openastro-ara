@@ -1277,5 +1277,14 @@
   "calibrationGuideBuilding": "Montando…",
   "calibrationGuideBuildProgress": "Montando · {done} de {total}",
   "calibrationGuideBuildFailed": "{what}: falha ao montar",
-  "calibrationGuideBuilt": "{what}: pronto"
+  "calibrationGuideBuilt": "{what}: pronto",
+  "calibrationFlatsForSession": "Flats para os lights desta noite · {target}",
+  "calibrationBiasForLights": "Para o ganho e o offset dos lights",
+  "calibrationLibraryExposures": "Exposições",
+  "calibrationOnFileTag": "Salvo",
+  "calibrationGuideBuildDarks": "Montar biblioteca de darks",
+  "calibrationGuideBuildDefects": "Montar mapa de pixels ruins",
+  "calibrationGuideRebuildDefects": "Remontar mapa de pixels ruins",
+  "calibrationGuideCoverNote": "Montar pede para tampar a luneta guia antes.",
+  "calibrationGuideReady": "Disponível"
 }

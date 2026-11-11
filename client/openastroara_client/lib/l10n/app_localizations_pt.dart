@@ -4581,6 +4581,36 @@ class AppLocalizationsPt extends AppLocalizations {
   String calibrationGuideBuilt(String what) {
     return '$what built';
   }
+
+  @override
+  String calibrationFlatsForSession(String target) {
+    return 'Flats for tonight\'s lights · $target';
+  }
+
+  @override
+  String get calibrationBiasForLights => 'For the lights\' gain and offset';
+
+  @override
+  String get calibrationLibraryExposures => 'Exposures';
+
+  @override
+  String get calibrationOnFileTag => 'On file';
+
+  @override
+  String get calibrationGuideBuildDarks => 'Build dark library';
+
+  @override
+  String get calibrationGuideBuildDefects => 'Build bad-pixel map';
+
+  @override
+  String get calibrationGuideRebuildDefects => 'Rebuild bad-pixel map';
+
+  @override
+  String get calibrationGuideCoverNote =>
+      'Building asks you to cover the guide scope first.';
+
+  @override
+  String get calibrationGuideReady => 'Built';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -9187,4 +9217,34 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String calibrationGuideBuilt(String what) {
     return '$what: pronto';
   }
+
+  @override
+  String calibrationFlatsForSession(String target) {
+    return 'Flats para os lights desta noite · $target';
+  }
+
+  @override
+  String get calibrationBiasForLights => 'Para o ganho e o offset dos lights';
+
+  @override
+  String get calibrationLibraryExposures => 'Exposições';
+
+  @override
+  String get calibrationOnFileTag => 'Salvo';
+
+  @override
+  String get calibrationGuideBuildDarks => 'Montar biblioteca de darks';
+
+  @override
+  String get calibrationGuideBuildDefects => 'Montar mapa de pixels ruins';
+
+  @override
+  String get calibrationGuideRebuildDefects => 'Remontar mapa de pixels ruins';
+
+  @override
+  String get calibrationGuideCoverNote =>
+      'Montar pede para tampar a luneta guia antes.';
+
+  @override
+  String get calibrationGuideReady => 'Disponível';
 }

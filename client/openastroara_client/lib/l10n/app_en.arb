@@ -5926,5 +5926,44 @@
     "placeholders": {
       "what": {"type": "String", "example": "Dark library"}
     }
+  },
+  "calibrationFlatsForSession": "Flats for tonight's lights · {target}",
+  "@calibrationFlatsForSession": {
+    "description": "Calibration panel, Flats: the section heading over the filter rows, naming the latest plan's target",
+    "placeholders": {
+      "target": {"type": "String", "example": "NGC 7000"}
+    }
+  },
+  "calibrationBiasForLights": "For the lights' gain and offset",
+  "@calibrationBiasForLights": {
+    "description": "Calibration panel, Darks & bias: the bias row, under the Bias heading"
+  },
+  "calibrationLibraryExposures": "Exposures",
+  "@calibrationLibraryExposures": {
+    "description": "Calibration panel, dark library: the heading over the exposure chips"
+  },
+  "calibrationOnFileTag": "On file",
+  "@calibrationOnFileTag": {
+    "description": "Calibration panel, Guide Camera: the outlined pill of a dark library or bad-pixel map that exists"
+  },
+  "calibrationGuideBuildDarks": "Build dark library",
+  "@calibrationGuideBuildDarks": {
+    "description": "Calibration panel, Guide Camera: build the Guider's dark library"
+  },
+  "calibrationGuideBuildDefects": "Build bad-pixel map",
+  "@calibrationGuideBuildDefects": {
+    "description": "Calibration panel, Guide Camera: build the Guider's bad-pixel map"
+  },
+  "calibrationGuideRebuildDefects": "Rebuild bad-pixel map",
+  "@calibrationGuideRebuildDefects": {
+    "description": "Calibration panel, Guide Camera: build the bad-pixel map again"
+  },
+  "calibrationGuideCoverNote": "Building asks you to cover the guide scope first.",
+  "@calibrationGuideCoverNote": {
+    "description": "Calibration panel, Guide Camera: the line under the build buttons"
+  },
+  "calibrationGuideReady": "Built",
+  "@calibrationGuideReady": {
+    "description": "Calibration panel, Guide Camera: the dark library or bad-pixel map exists (its row, beside the On file pill)"
   }
 }

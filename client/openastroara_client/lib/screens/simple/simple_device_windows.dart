@@ -2755,10 +2755,18 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
 /// carrying the target ("Sync to 75°"; dimmed and taking no tap with no
 /// target), the Dome's Park and Home, the Mount window's Check, Center and Sync.
 class SimpleWindowButton extends StatelessWidget {
-  const SimpleWindowButton({super.key, required this.label, required this.onTap});
+  const SimpleWindowButton({
+    super.key,
+    required this.label,
+    required this.onTap,
+    this.outlined = false,
+  });
 
   final String label;
   final VoidCallback? onTap;
+
+  /// The second of a pair (Delete beside Rebuild): a Hairline outline, no fill.
+  final bool outlined;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -2769,8 +2777,13 @@ class SimpleWindowButton extends StatelessWidget {
     child: Opacity(
       opacity: onTap == null ? 0.4 : 1,
       child: Material(
-        color: AraColors.tileFill,
-        borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+        color: outlined ? Colors.transparent : AraColors.tileFill,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+          side: outlined
+              ? const BorderSide(color: AraColors.border)
+              : BorderSide.none,
+        ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,

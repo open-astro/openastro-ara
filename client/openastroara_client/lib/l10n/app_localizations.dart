@@ -7766,6 +7766,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{what} built'**
   String calibrationGuideBuilt(String what);
+
+  /// Calibration panel, Flats: the section heading over the filter rows, naming the latest plan's target
+  ///
+  /// In en, this message translates to:
+  /// **'Flats for tonight\'s lights · {target}'**
+  String calibrationFlatsForSession(String target);
+
+  /// Calibration panel, Darks & bias: the bias row, under the Bias heading
+  ///
+  /// In en, this message translates to:
+  /// **'For the lights\' gain and offset'**
+  String get calibrationBiasForLights;
+
+  /// Calibration panel, dark library: the heading over the exposure chips
+  ///
+  /// In en, this message translates to:
+  /// **'Exposures'**
+  String get calibrationLibraryExposures;
+
+  /// Calibration panel, Guide Camera: the outlined pill of a dark library or bad-pixel map that exists
+  ///
+  /// In en, this message translates to:
+  /// **'On file'**
+  String get calibrationOnFileTag;
+
+  /// Calibration panel, Guide Camera: build the Guider's dark library
+  ///
+  /// In en, this message translates to:
+  /// **'Build dark library'**
+  String get calibrationGuideBuildDarks;
+
+  /// Calibration panel, Guide Camera: build the Guider's bad-pixel map
+  ///
+  /// In en, this message translates to:
+  /// **'Build bad-pixel map'**
+  String get calibrationGuideBuildDefects;
+
+  /// Calibration panel, Guide Camera: build the bad-pixel map again
+  ///
+  /// In en, this message translates to:
+  /// **'Rebuild bad-pixel map'**
+  String get calibrationGuideRebuildDefects;
+
+  /// Calibration panel, Guide Camera: the line under the build buttons
+  ///
+  /// In en, this message translates to:
+  /// **'Building asks you to cover the guide scope first.'**
+  String get calibrationGuideCoverNote;
+
+  /// Calibration panel, Guide Camera: the dark library or bad-pixel map exists (its row, beside the On file pill)
+  ///
+  /// In en, this message translates to:
+  /// **'Built'**
+  String get calibrationGuideReady;
 }
 
 class _AppLocalizationsDelegate
