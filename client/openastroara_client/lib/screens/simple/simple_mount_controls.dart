@@ -77,19 +77,22 @@ List<(String, double)> simplePadSpeeds(List<SlewRateBand> bands) {
 }
 
 /// Why the pad's directions can't move the mount now, first match wins; null
-/// when they can. A GoTo under way leaves Stop working. Pure — unit-tested.
+/// when they can. A GoTo under way leaves Stop working; while the pad itself
+/// moves the mount ([padMoving]) the mount's Slewing is the pad's own move
+/// (ASCOM sets it during MoveAxis), not a GoTo. Pure — unit-tested.
 String? simplePadBlocker(
   AppLocalizations l10n,
   MountStatus m, {
   required bool planImaging,
   required bool polarAligning,
   required bool guiding,
+  bool padMoving = false,
 }) {
   if (m.parked) return l10n.padUnparkToMove;
   if (planImaging) return l10n.padPausePlan;
   if (polarAligning) return l10n.padPolarRunning;
   if (guiding) return l10n.padStopGuiding;
-  if (m.isBusy) return l10n.padSlewing;
+  if (m.isBusy && !padMoving) return l10n.padSlewing;
   return null;
 }
 
@@ -126,6 +129,33 @@ double _arcmin(double ra1, double dec1, double ra2, double dec2) {
       math.cos(a) * math.cos(b) * math.pow(math.sin((ra1 - ra2) * r / 2), 2);
   return 2 * math.asin(math.sqrt(h).clamp(0.0, 1.0)) / r * 60;
 }
+
+/// The pad moves the mount: from a press until a few seconds after it is let
+/// go (the mount slows down after the stop). The window reads it so the
+/// mount's Slewing during a pad move doesn't block the pad (#1649).
+class SimplePadMovingNotifier extends Notifier<bool> {
+  Timer? _settle;
+
+  @override
+  bool build() {
+    ref.onDispose(() => _settle?.cancel());
+    return false;
+  }
+
+  void pressed() {
+    _settle?.cancel();
+    state = true;
+  }
+
+  void released() {
+    _settle?.cancel();
+    _settle = Timer(const Duration(seconds: 3), () => state = false);
+  }
+}
+
+final simplePadMovingProvider = NotifierProvider<SimplePadMovingNotifier, bool>(
+  SimplePadMovingNotifier.new,
+);
 
 /// The eight directions as (axis, sign) moves, the full UI pad's mapping:
 /// the primary axis (RA/azimuth) is W − / E +, the secondary (Dec/altitude)
@@ -182,6 +212,9 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
   /// Read on the first send: dispose may still need it to stop a held move,
   /// and ref is gone by then.
   late final MountNotifier _mount = ref.read(mountProvider.notifier);
+  late final SimplePadMovingNotifier _moving = ref.read(
+    simplePadMovingProvider.notifier,
+  );
 
   String _defaultSpeed() {
     final ids = [for (final (id, _) in widget.speeds) id];
@@ -228,6 +261,7 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
     if (widget.blocker != null) return;
     if (_held != null) _release();
     ref.read(simplePointingProvider.notifier).moved();
+    _moving.pressed();
     setState(() => _held = dir);
     _refusalShown = false;
     _start();
@@ -255,6 +289,7 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
       _send(axis, 0);
     }
     _mount.refresh().ignore();
+    _moving.released();
   }
 
   void _stopAll() {
@@ -562,6 +597,9 @@ class SimplePointingNotifier extends Notifier<SimplePointing> {
   Timer? _poll;
   String? _job;
 
+  /// The mount moved while the frame was taken: its answer is already old.
+  bool _movedDuringCheck = false;
+
   @override
   SimplePointing build() {
     ref.onDispose(() => _poll?.cancel());
@@ -580,7 +618,9 @@ class SimplePointingNotifier extends Notifier<SimplePointing> {
   /// write an old solve into the mount's model. A centring moves the mount
   /// itself and keeps going.
   void moved() {
-    if (!state.working && state.phase != SimplePointingPhase.idle) {
+    if (state.phase == SimplePointingPhase.solving) {
+      _movedDuringCheck = true;
+    } else if (!state.working && state.phase != SimplePointingPhase.idle) {
       state = const SimplePointing();
     }
   }
@@ -596,10 +636,13 @@ class SimplePointingNotifier extends Notifier<SimplePointing> {
       phase: SimplePointingPhase.solving,
       result: state.result,
     );
+    _movedDuringCheck = false;
     try {
       final r = await api.verifyPosition(exposureSeconds: exposureSeconds);
       if (!ref.mounted) return;
-      state = SimplePointing(phase: SimplePointingPhase.result, result: r);
+      state = _movedDuringCheck
+          ? const SimplePointing()
+          : SimplePointing(phase: SimplePointingPhase.result, result: r);
     } on PlateSolveException catch (e) {
       if (!ref.mounted) return;
       // 409 is the camera; a 422 names the optics or the solver (#1650).

@@ -1050,6 +1050,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
               planImaging: planImaging,
               polarAligning: polar,
               guiding: guiding,
+              padMoving: ref.watch(simplePadMovingProvider),
             ),
           );
     final checkBusy = !cameraOn

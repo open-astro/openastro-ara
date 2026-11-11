@@ -14,6 +14,7 @@
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Model.Equipment;
+using OpenAstroAra.Core.Utility;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Equipment.Model;
 using OpenAstroAra.PlateSolving;
@@ -97,14 +98,22 @@ public sealed class VerifyPositionService : IVerifyPositionService, IDisposable 
     }
 
     /// <summary>#1650 — syncs a connected, still rotator to a good solve's position angle; the angle
-    /// synced to, or null when nothing was. Internal static for tests.</summary>
+    /// synced to, or null when nothing was (a refused sync is logged). Internal static for tests.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort side step: a rotator sync that throws (driver or HTTP error) must not lose the good solve the caller asked for; logged and reported as no sync. CA1031's log-and-recover boundary applies.")]
     internal static double? SyncRotator(PlateSolveResult result, IRotatorMediator? rotator) {
         if (!result.Success || result.Coordinates is null || !double.IsFinite(result.PositionAngle)
                 || rotator?.GetInfo() is not { Connected: true, IsMoving: false }) {
             return null;
         }
-        rotator.Sync((float)result.PositionAngle);
-        return result.PositionAngle;
+        try {
+            rotator.Sync((float)result.PositionAngle);
+            return result.PositionAngle;
+        } catch (Exception ex) {
+            // The check's answer matters more than the rotator's sync: keep it.
+            Logger.Warning($"Verify Position: the rotator refused the sync to {result.PositionAngle:0.##}°: {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>The pure half: the solve beside the mount's own figures. Internal static for tests.</summary>

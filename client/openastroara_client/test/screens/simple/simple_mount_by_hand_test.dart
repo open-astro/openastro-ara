@@ -272,6 +272,11 @@ void main() {
       expect(simplePadBlocker(l10n, m(runtime: 'slewing'), planImaging: false, polarAligning: false, guiding: false),
           'Moving to a target: Stop ends it');
       expect(simplePadBlocker(l10n, m(), planImaging: false, polarAligning: false, guiding: false), isNull);
+      expect(
+          simplePadBlocker(l10n, m(runtime: 'slewing'),
+              planImaging: false, polarAligning: false, guiding: false, padMoving: true),
+          isNull,
+          reason: 'the pad\'s own MoveAxis reads as slewing (ASCOM Slewing is true during MoveAxis)');
     });
 
     test('separations read in seconds, minutes or degrees, rounding at the edges', () {
@@ -304,6 +309,25 @@ void main() {
       mount.calls.clear();
       await tester.pump(const Duration(seconds: 1));
       expect(mount.calls, isEmpty, reason: 'no renewals after letting go');
+      await tester.pump(const Duration(seconds: 4)); // the pad's "still moving" settle
+    });
+
+    testWidgets('the mount reporting the pad move as slewing never stops the press', (tester) async {
+      final (_, mount, _, _) = await _pump(tester, _wire());
+      final g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-mount-pad-n'))));
+      await tester.pump();
+      mount.set(_wire(runtime: 'slewing')); // ASCOM: Slewing is true while MoveAxis runs
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 650));
+      expect(mount.calls.where((c) => c == 'move 1 0.0'), isEmpty, reason: 'still held');
+      expect(find.text('Moving to a target: Stop ends it'), findsNothing);
+      await g.up();
+      await tester.pump();
+      expect(mount.calls.last, 'move 1 0.0');
+      expect(find.text('Moving to a target: Stop ends it'), findsNothing, reason: 'the mount is still slowing down');
+      await tester.pump(const Duration(seconds: 4));
+      expect(find.text('Moving to a target: Stop ends it'), findsOneWidget, reason: 'still slewing long after: a GoTo');
+      await tester.pump(const Duration(seconds: 4)); // the pad's "still moving" settle
     });
 
     testWidgets('a diagonal moves both axes, and E/W use the full UI pad signs', (tester) async {
@@ -313,6 +337,7 @@ void main() {
       mount.calls.clear();
       await _hold(tester, 'e', () async {});
       expect(mount.calls, ['move 0 $_medium lease 1000', 'move 0 0.0']);
+      await tester.pump(const Duration(seconds: 4)); // the pad's "still moving" settle
     });
 
     testWidgets('Slow and Fast pick the other speeds', (tester) async {
@@ -321,6 +346,7 @@ void main() {
       await tester.pump();
       await _hold(tester, 's', () async {});
       expect(mount.calls.first, 'move 1 -4.0 lease 1000');
+      await tester.pump(const Duration(seconds: 4)); // the pad's "still moving" settle
     });
 
     testWidgets('the centre Stop aborts every axis', (tester) async {
@@ -342,6 +368,7 @@ void main() {
       expect(mount.calls, isEmpty);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await g.up();
+      await tester.pump(const Duration(seconds: 4)); // the pad's "still moving" settle
     });
 
     testWidgets('closing the window mid-press stops the move', (tester) async {
@@ -350,6 +377,7 @@ void main() {
       await tester.pump();
       await tester.pumpWidget(const SizedBox());
       expect(mount.calls.last, 'move 0 0.0');
+      await tester.pump(const Duration(seconds: 4)); // the pad's "still moving" settle
     });
 
     testWidgets('while the plan images the pad says why and sends nothing', (tester) async {
@@ -358,6 +386,7 @@ void main() {
       expect(find.byKey(const Key('simple-mount-speed-medium')), findsNothing, reason: 'the reason takes its place');
       await _hold(tester, 'n', () async {});
       expect(mount.calls, isEmpty);
+      await tester.pump(const Duration(seconds: 4)); // the pad's "still moving" settle
     });
 
     testWidgets('parked, the pad says Unpark to move the mount', (tester) async {
@@ -374,6 +403,7 @@ void main() {
       expect(c.read(simpleMessagesProvider), hasLength(1));
       expect(c.read(simpleMessagesProvider).single.title, "Couldn't move the mount");
       expect(mount.calls.where((s) => s.contains('lease')), hasLength(2), reason: 'no renewals after the refusal');
+      await tester.pump(const Duration(seconds: 4)); // the pad's "still moving" settle
     });
 
     testWidgets('a mount with no manual rates says so instead of a dead pad', (tester) async {
@@ -396,6 +426,7 @@ void main() {
       await tester.sendKeyDownEvent(LogicalKeyboardKey.escape);
       await tester.pump();
       expect(mount.calls, ['abort']);
+      await tester.pump(const Duration(seconds: 4)); // the pad's "still moving" settle
     });
 
     testWidgets('screen readers hear each direction', (tester) async {
@@ -434,6 +465,7 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-mount-pad-stop')));
       await tester.pump();
       expect(find.byKey(const Key('simple-mount-pad-focus')), findsNothing, reason: 'the next pointer hides it');
+      await tester.pump(const Duration(seconds: 4)); // the pad's "still moving" settle
     });
 
     testWidgets('Finding home… and Taking a frame and solving… blink', (tester) async {
@@ -605,6 +637,24 @@ void main() {
       await tester.pump();
       expect(find.byKey(const Key('simple-mount-sync')), findsNothing, reason: 'a slew moved the mount');
       expect(mount.calls.where((c) => c.startsWith('sync')), isEmpty);
+      await tester.pump(const Duration(seconds: 4)); // the pad's "still moving" settle
+    });
+
+    testWidgets('a nudge during Check drops its answer too', (tester) async {
+      final (_, mount, solver, _) = await _pump(tester, _wire());
+      solver.answer = solved;
+      solver.hold = Completer<void>();
+      await tester.tap(find.byKey(const Key('simple-mount-check')));
+      await tester.pump();
+      await _hold(tester, 'n', () async {});
+      solver.hold!.complete();
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('simple-mount-sync')), findsNothing);
+      expect(find.text('Pointing'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 4));
+      expect(mount.calls.where((c) => c.startsWith('sync')), isEmpty);
+      await tester.pump(const Duration(seconds: 4)); // the pad's "still moving" settle
     });
 
     testWidgets('no Target matched reads from the last go-to; within 1′ is On target with no Center', (tester) async {

@@ -88,6 +88,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_rotator_that_refuses_the_sync_keeps_the_check_answer() {
+            var solved = new PlateSolveResult { Success = true, Coordinates = C(1, 2), PositionAngle = 87.4 };
+            var refusing = new Mock<IRotatorMediator>();
+            refusing.Setup(r => r.GetInfo()).Returns(new RotatorInfo { Connected = true, IsMoving = false });
+            refusing.Setup(r => r.Sync(It.IsAny<float>())).Throws(new InvalidOperationException("rotator busy"));
+            Assert.That(VerifyPositionService.SyncRotator(solved, refusing.Object), Is.Null);
+        }
+
+        [Test]
         public void No_rotator_sync_when_it_is_moving_disconnected_absent_or_the_solve_failed() {
             var solved = new PlateSolveResult { Success = true, Coordinates = C(1, 2), PositionAngle = 87.4 };
             var moving = new Mock<IRotatorMediator>();
