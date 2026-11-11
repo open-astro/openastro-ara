@@ -758,6 +758,50 @@ void main() {
       expectBlocks(2, 'restore');
     });
 
+    test('editing a queued target keeps its After target flats on the rig and in the queue', () async {
+      final (c, seq) = await queue();
+      c.read(simpleRunFlatsProvider.notifier).set(SimpleTargetFlats.afterTarget);
+      final n = c.read(simpleRunProvider.notifier);
+      expect(await n.create(), isTrue);
+      const l20 = [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 20)];
+      expect(await n.edit(0, l20), isTrue);
+      final block = childrenOf(seq.bodies.values.single).firstWhere((b) => b['Name'] == 'M31');
+      expect([for (final k in childrenOf(block)) k[r'$type']], contains(flatPanelFlatsType));
+      final t = c.read(simpleRunProvider).targets.single;
+      expect(t.flats, SimpleTargetFlats.afterTarget);
+      expect(t.steps.single.frameCount, 20);
+    });
+
+    test('editing an End of night target moves its filters in the Flats block at once', () async {
+      final (c, seq) = await queue();
+      c.read(simpleRunFlatsProvider.notifier).set(SimpleTargetFlats.endOfNight);
+      c.read(simpleRunPlanProvider.notifier).load(const [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 10)]);
+      final n = c.read(simpleRunProvider.notifier);
+      expect(await n.create(), isTrue);
+      List<Object?> endFilters() {
+        final end = childrenOf(seq.bodies.values.single).firstWhere((b) => b['Name'] == kEndFlatsBlockName);
+        return [for (final k in childrenOf(end)) if (k[r'$type'] == switchFilterType) (k['Filter'] as Map)['_name']];
+      }
+
+      expect(endFilters(), ['L']);
+      const ha = [FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 20)];
+      expect(await n.edit(0, ha), isTrue);
+      expect(endFilters(), ['Ha'], reason: 'no other target joined: the edit alone re-syncs the block');
+    });
+
+    test('removing the last End of night target takes its Flats block and the empty queue with it', () async {
+      final (c, seq) = await queue();
+      c.read(simpleRunFlatsProvider.notifier).set(SimpleTargetFlats.endOfNight);
+      c.read(simpleRunPlanProvider.notifier).load(const [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 10)]);
+      final n = c.read(simpleRunProvider.notifier);
+      expect(await n.create(), isTrue);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', kEndFlatsBlockName]);
+      await n.remove(0);
+      expect(c.read(simpleRunProvider).sequenceId, isNull, reason: 'no empty sequence left selected');
+      expect(c.read(simpleRunProvider).targets, isEmpty);
+      expect(seq.calls, contains('delete seq-1'));
+    });
+
     test('Add to queue reads the picked target itself: one block on the rig, one Target queued', () async {
       final (c, seq) = await queue();
       expect(await c.read(simpleRunProvider.notifier).create(), isTrue);
@@ -1533,6 +1577,26 @@ void main() {
     expect(simpleCurrentTarget([a, b], 9), 0);
     expect(simpleCurrentTarget([a, b], 10), 1);
     expect(simpleCurrentTarget([a, b], 99), 1, reason: 'the last once all are full');
+  });
+
+  test('After target flats count in the plan squares of their target: the next target waits for them', () {
+    const a = SimpleTarget(
+      name: 'M31',
+      flats: SimpleTargetFlats.afterTarget,
+      steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 10)],
+    );
+    const b = SimpleTarget(name: 'M42', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 10)]);
+    // The daemon counts every frame of the session, flats included.
+    expect(simpleCurrentTarget([a, b], 10 + 24), 0, reason: 'A is still shooting its flats');
+    expect(simpleCurrentTarget([a, b], 10 + kSimpleFlatFrames), 1);
+    expect(simpleTargetProgress([a, b], 10 + kSimpleFlatFrames + 3), [
+      [10],
+      [3],
+    ], reason: 'the flats take their frames off the count, B starts after them');
+    expect(simpleTargetProgress([a, b], 10 + 25), [
+      [10],
+      [0],
+    ], reason: 'B does not read done');
   });
 
   group('the queue', () {

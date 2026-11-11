@@ -325,6 +325,12 @@ class SimpleTarget {
   final String? tag;
   final List<FilterPlanStep> steps;
 
+  /// The frames its After target flats add to the session's count: one set
+  /// per filter row, as the block shoots them.
+  int get flatFrames => flats == SimpleTargetFlats.afterTarget
+      ? steps.where((s) => s.filterName.isNotEmpty).length * kSimpleFlatFrames
+      : 0;
+
   /// J2000.
   final double raDeg;
   final double decDeg;
@@ -345,25 +351,30 @@ class SimpleTarget {
 // run tree if that matters.
 List<List<int>> simpleTargetProgress(List<SimpleTarget> targets, int captured) {
   var left = captured;
-  return [
-    for (final t in targets)
-      [
-        for (final s in t.steps)
-          () {
-            final done = math.min(left, s.frameCount);
-            left -= done;
-            return done;
-          }(),
-      ],
-  ];
+  final out = <List<int>>[];
+  for (final t in targets) {
+    final rows = <int>[];
+    for (final s in t.steps) {
+      final done = math.min(left, s.frameCount);
+      left -= done;
+      rows.add(done);
+    }
+    // The daemon counts every frame of the session: the target's own After
+    // target flats come off the count before the next target's lights.
+    left -= math.min(left, t.flatFrames);
+    out.add(rows);
+  }
+  return out;
 }
 
-/// The target the run is on: the first not yet full, else the last. Pure —
-/// unit-tested.
+/// The target the run is on: the first not yet full (its flats included),
+/// else the last. Pure — unit-tested.
 int simpleCurrentTarget(List<SimpleTarget> targets, int captured) {
-  final done = simpleTargetProgress(targets, captured);
+  var left = captured;
   for (var i = 0; i < targets.length; i++) {
-    if (simplePlanTotal(targets[i].steps) > done[i].fold(0, (a, b) => a + b)) return i;
+    final total = simplePlanTotal(targets[i].steps) + targets[i].flatFrames;
+    if (left < total) return i;
+    left -= total;
   }
   return math.max(0, targets.length - 1);
 }
@@ -656,6 +667,8 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         gain: gain,
         stopAtDawn: state.dawnStop,
         recalibrateGuider: true,
+        // parkAtEnd only shapes a new queue root; an append (this) never uses it.
+        flatsAfterTarget: t.flats == SimpleTargetFlats.afterTarget,
       );
       if (r == null || r.draft || r.sequenceId != id) {
         throw StateError("the rig didn't take the edited plan");
@@ -669,11 +682,14 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         decDeg: t.decDeg,
         rise: t.rise,
         gain: gain,
+        flats: t.flats,
       );
       state = state.copyWith(
         targets: [...state.targets]..[i] = edited,
         busy: false,
       );
+      // Its filters may have changed: the end-of-night flats follow them.
+      if (t.flats == SimpleTargetFlats.endOfNight) await _syncEndFlats();
       return true;
     } catch (e) {
       _fail(
@@ -968,14 +984,13 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     try {
       await _removeBlock(api, id, name);
       final gone = state.targets[i];
-      final left = [...state.targets]..removeAt(i);
-      if (left.isEmpty && !state.started) {
+      state = state.copyWith(targets: [...state.targets]..removeAt(i));
+      // The last End of night target takes the Flats block with it.
+      if (gone.flats == SimpleTargetFlats.endOfNight) await _syncEndFlats();
+      if (state.targets.isEmpty && !state.started) {
         // Nothing left to run: the empty sequence goes too.
         await api.deleteSequence(id);
         state = const SimpleRun();
-      } else {
-        state = state.copyWith(targets: left);
-        if (gone.flats == SimpleTargetFlats.endOfNight) await _syncEndFlats();
       }
     } catch (e) {
       _fail(_why(e, (l) => l.planActionRemove));
