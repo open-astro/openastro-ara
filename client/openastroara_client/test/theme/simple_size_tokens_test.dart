@@ -41,6 +41,7 @@ const _allowed = <String, String>{
   'lib/screens/simple/simple_plan_panel.dart:radius:3': 'the progress bar: round ends on a 6 px bar',
   'lib/screens/simple/simple_plan_panel.dart:fontSize:11.5': "AraText.caption's size on a plan square's small line",
   'lib/screens/simple/simple_plan_panel.dart:fontSize:16': "Plan sheet's heading, used once",
+  'lib/screens/simple/simple_calibration.dart:fontSize:11': "the calibration shutter's caption under its button, like Preflight's step label",
   'lib/screens/simple/simple_preflight.dart:fontSize:11': "a Preflight step's label under its icon, used once",
   'lib/screens/simple/simple_preview_panel.dart:radius:2': 'the histogram bars: a hairline clip',
   'lib/screens/simple/simple_preview_panel.dart:radius:36': "an InkResponse's splash radius, not a corner",

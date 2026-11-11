@@ -539,7 +539,7 @@ class SimpleSetTag extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         border: Border.all(color: colour),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(AraRadius.simplePanel),
       ),
       child: Text(
         label ??
