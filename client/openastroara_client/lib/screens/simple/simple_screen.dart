@@ -5,14 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_preflight_state.dart';
+import 'simple_calibration_screen.dart';
 import 'simple_focus_screen.dart';
 import 'simple_guide_screen.dart';
 import 'simple_polar_screen.dart';
 import 'simple_preview_screen.dart';
 import 'simple_queue_screen.dart';
 
-/// One of Simple Mode's five Screens (Preview, Focus, Polar align, Guide,
-/// Queue): the parts the shell renders for whichever one shows (#1593).
+/// One of Simple Mode's six Screens (Preview, Focus, Polar align, Guide,
+/// Calibration, Queue): the parts the shell renders for whichever one shows (#1593).
 /// Preflight is not a Screen; it chooses which Screen shows.
 abstract class SimpleScreen {
   const SimpleScreen();
@@ -21,6 +22,7 @@ abstract class SimpleScreen {
     SimpleModeScreen.focus => const SimpleFocusScreen(),
     SimpleModeScreen.polarAlign => const SimplePolarScreen(),
     SimpleModeScreen.guide => const SimpleGuideScreen(),
+    SimpleModeScreen.calibration => const SimpleCalibrationScreen(),
     SimpleModeScreen.plan => const SimpleQueueScreen(),
     // Preflight before its first step shows Preview.
     SimpleModeScreen.preview || SimpleModeScreen.preflight =>
@@ -75,6 +77,7 @@ abstract class SimpleScreen {
     SimpleFocusScreen(),
     SimplePolarScreen(),
     SimpleGuideScreen(),
+    SimpleCalibrationScreen(),
     SimpleQueueScreen(),
   ];
 }

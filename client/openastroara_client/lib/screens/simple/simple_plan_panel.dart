@@ -1555,6 +1555,8 @@ class _QueueList extends ConsumerWidget {
     final notifier = ref.read(simpleRunProvider.notifier);
     // A target that hasn't started can be edited, removed and moved.
     bool open(int i) => !run.started || i > cur;
+    // The Calibration block has no rows to edit and stays last.
+    bool editable(int i) => open(i) && !run.targets[i].calibration;
 
     Future<void> remove(int i) async {
       final t = run.targets[i];
@@ -1588,7 +1590,7 @@ class _QueueList extends ConsumerWidget {
           SizedBox(
             width: 28,
             height: 44,
-            child: open(i)
+            child: editable(i)
                 ? ReorderableDragStartListener(
                     index: i,
                     child: Semantics(
@@ -1609,7 +1611,7 @@ class _QueueList extends ConsumerWidget {
             child: InkWell(
               key: Key('simple-run-edit-$i'),
               borderRadius: BorderRadius.circular(AraRadius.container),
-              onTap: open(i) ? () => onEdit(i) : null,
+              onTap: editable(i) ? () => onEdit(i) : null,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

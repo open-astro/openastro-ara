@@ -2,12 +2,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/l10n.dart';
 import '../models/calibration/calibration_models.dart';
+import '../models/sequence/imaging_run_body.dart';
+import '../models/sequence/nina_dom.dart' show childrenOf, withChildren;
 import '../util/friendly_error.dart';
 import 'app_locale_state.dart';
 import 'calibration/calibration_state.dart';
 import 'equipment/flat_panel_state.dart';
 import 'sequencer/sequence_list_state.dart';
 import 'simple_messages_state.dart';
+import 'simple_run_state.dart';
 
 /// What a calibration session still lacks (#1563, #1757).
 typedef CalibrationNeed = ({bool flats, bool darks, bool bias});
@@ -64,9 +67,14 @@ class SimpleCalibrationNotifier extends Notifier<SimpleCalibrationRun?> {
 
   /// Generates the run for [need] on [session] and starts it. Flats use the
   /// panel when one is connected, else the twilight sky; darks and bias wait
-  /// for the lens cap (a panel's cover closes instead). False when it failed,
-  /// with a pill saying why.
-  Future<bool> shoot(CalibrationSession session, CalibrationNeed need) async {
+  /// for the lens cap (a panel's cover closes instead). [reshoot] takes flats
+  /// for filters already covered too. False when it failed, with a pill
+  /// saying why.
+  Future<bool> shoot(
+    CalibrationSession session,
+    CalibrationNeed need, {
+    bool reshoot = false,
+  }) async {
     final api = ref.read(calibrationApiProvider);
     final sequences = ref.read(sequenceApiProvider);
     if (api == null || sequences == null) return false;
@@ -78,6 +86,7 @@ class SimpleCalibrationNotifier extends Notifier<SimpleCalibrationRun?> {
         includeDarks: need.darks,
         includeBias: need.bias,
         pauseForLensCap: true,
+        includeCoveredFilters: reshoot,
         flavor: panel ? 'panel' : 'sky',
       );
       final id = generated.generatedSequenceId;
@@ -93,6 +102,87 @@ class SimpleCalibrationNotifier extends Notifier<SimpleCalibrationRun?> {
       return true;
     } catch (e) {
       _fail(e, (l) => l.calibrationActionShoot);
+      return false;
+    }
+  }
+
+  /// [session]'s missing darks and bias as the Queue's Calibration block,
+  /// after the last target. With a panel cover the block closes it and needs
+  /// no one; without one it asks for the lens cap. True once queued.
+  Future<bool> queue(CalibrationSession session, CalibrationNeed need) async {
+    final api = ref.read(calibrationApiProvider);
+    final sequences = ref.read(sequenceApiProvider);
+    if (api == null || sequences == null) return false;
+    final panel = ref.read(flatPanelProvider).value;
+    final cover = (panel?.isConnected ?? false) && panel!.hasCover;
+    try {
+      // The generator builds the sets (each at its lights' temperature, filed
+      // with them); the block takes its steps and the run it saved goes.
+      final generated = await api.generateMatchingFlats(
+        session.id,
+        includeFlats: false,
+        includeDarks: need.darks,
+        includeBias: need.bias,
+        pauseForLensCap: !cover,
+        parkMountAfter: false,
+      );
+      final id = generated.generatedSequenceId;
+      if (id == null) throw StateError('the rig saved no calibration run');
+      final Map<String, dynamic> body;
+      try {
+        body = (await sequences.getSequenceDetail(id)).body;
+      } finally {
+        try {
+          await sequences.deleteSequence(id);
+        } catch (_) {}
+      }
+      return await ref
+          .read(simpleRunProvider.notifier)
+          .addCalibration(calibrationBlockFrom(body, closeCover: cover));
+    } catch (e) {
+      _fail(e, (l) => l.calibrationActionQueue);
+      return false;
+    }
+  }
+
+  /// No plan lights yet: a dark library for [exposures] at [gain] and
+  /// [temperatureC], reused for weeks. The rig's library run gets the
+  /// lens-cap question first ([lensCapPrompt]) and starts.
+  Future<bool> buildLibrary({
+    required List<double> exposures,
+    required int gain,
+    required double temperatureC,
+    required String lensCapPrompt,
+    int frames = kSimpleLibraryFrames,
+  }) async {
+    final api = ref.read(calibrationApiProvider);
+    final sequences = ref.read(sequenceApiProvider);
+    if (api == null || sequences == null) return false;
+    try {
+      await api.buildDarkLibrary(
+        DarkLibraryBuildRequest(
+          exposureSecondsList: exposures,
+          gainList: [gain],
+          targetTemperatureCList: [temperatureC],
+          framesPerCombination: frames,
+          reuseExistingFrames: true,
+        ),
+      );
+      final id = (await api.darkLibraryStatus()).generatedSequenceId;
+      if (id == null) throw StateError('the rig saved no dark library run');
+      final body = (await sequences.getSequenceDetail(id)).body;
+      await sequences.updateSequence(
+        id,
+        body: withChildren(body, [
+          withLensCap(lensCapPrompt),
+          ...childrenOf(body),
+        ]),
+      );
+      await sequences.start(id);
+      state = (sequenceId: id, total: exposures.length * frames);
+      return true;
+    } catch (e) {
+      _fail(e, (l) => l.calibrationActionBuildLibrary);
       return false;
     }
   }
@@ -118,6 +208,9 @@ class SimpleCalibrationNotifier extends Notifier<SimpleCalibrationRun?> {
         );
   }
 }
+
+/// Darks per exposure in a dark library Simple Mode builds.
+const kSimpleLibraryFrames = 25;
 
 final simpleCalibrationProvider =
     NotifierProvider<SimpleCalibrationNotifier, SimpleCalibrationRun?>(

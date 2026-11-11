@@ -4060,6 +4060,173 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get planExposureAuto => 'Auto';
+
+  @override
+  String get shellModeCalibration => 'Calibration';
+
+  @override
+  String get calibrationTabsGroup => 'Calibration tabs';
+
+  @override
+  String get calibrationTabFlats => 'Flats';
+
+  @override
+  String get calibrationTabDarks => 'Darks & bias';
+
+  @override
+  String get calibrationTabGuide => 'Guide Camera';
+
+  @override
+  String calibrationChipMissing(int count) {
+    return '$count missing';
+  }
+
+  @override
+  String get calibrationChipReady => 'Ready';
+
+  @override
+  String get calibrationChipNoLights => 'No lights';
+
+  @override
+  String get calibrationNoLightsYet =>
+      'No plan lights yet. Build a dark library to reuse for weeks.';
+
+  @override
+  String get calibrationCovered => 'Covered';
+
+  @override
+  String get calibrationMissing => 'Missing';
+
+  @override
+  String calibrationFlatsFrom(String date) {
+    return 'Flats from $date';
+  }
+
+  @override
+  String get calibrationNoFlats => 'No flats';
+
+  @override
+  String get calibrationFlatsPanel => 'Flats use the flat panel.';
+
+  @override
+  String get calibrationFlatsSky =>
+      'No flat panel: flats use the twilight sky.';
+
+  @override
+  String get calibrationShootFlats => 'Shoot flats';
+
+  @override
+  String get calibrationReshootFlats => 'Reshoot flats';
+
+  @override
+  String get calibrationCoverNote =>
+      'The panel\'s cover closes over the scope first.';
+
+  @override
+  String get calibrationLensCapNote => 'The run asks for the lens cap first.';
+
+  @override
+  String get calibrationShootNow => 'Shoot now';
+
+  @override
+  String get calibrationAddToQueue => 'Add to queue';
+
+  @override
+  String calibrationLibraryGainTemp(int gain, String temperature) {
+    return 'Gain $gain · $temperature';
+  }
+
+  @override
+  String get calibrationBuildLibrary => 'Build dark library';
+
+  @override
+  String get calibrationLensCapPrompt =>
+      'Put the lens cap on the scope, then press Resume to take the darks.';
+
+  @override
+  String get calibrationPlanRunning =>
+      'A plan is running. Calibration would have to wait for it: add the darks and bias to the queue instead?';
+
+  @override
+  String get calibrationPlanRunningNote =>
+      'A plan is running: calibration frames go in the queue.';
+
+  @override
+  String get calibrationNotNow => 'Not now';
+
+  @override
+  String get calibrationConnectCamera => 'Connect the camera first.';
+
+  @override
+  String get calibrationShutterShoot => 'Shoot what\'s missing';
+
+  @override
+  String get calibrationShutterStop => 'Stop calibration';
+
+  @override
+  String get calibrationNothingMissing => 'Nothing missing.';
+
+  @override
+  String get calibrationGuideNoGuider =>
+      'Connect the Guider to build its dark library and bad-pixel map.';
+
+  @override
+  String get calibrationGuideDarks => 'Dark library';
+
+  @override
+  String calibrationGuideCovers(String min, String max) {
+    return 'Covers $min to $max';
+  }
+
+  @override
+  String get calibrationGuideNotBuilt => 'Not built';
+
+  @override
+  String get calibrationGuideUse => 'Use while guiding';
+
+  @override
+  String get calibrationGuideBuild => 'Build';
+
+  @override
+  String get calibrationGuideRebuild => 'Rebuild';
+
+  @override
+  String get calibrationGuideDelete => 'Delete';
+
+  @override
+  String get calibrationGuideDefect => 'Bad-pixel map';
+
+  @override
+  String get calibrationGuideCover => 'Cover the guide scope, then build.';
+
+  @override
+  String get calibrationGuideCovered => 'Covered, build';
+
+  @override
+  String get calibrationGuideStopFirst =>
+      'Stop guiding to build: a plan would lose its guide star.';
+
+  @override
+  String get calibrationNoQueue =>
+      'Queue a target first: the darks and bias run after it.';
+
+  @override
+  String get calibrationAlreadyQueued =>
+      'The queue already has its calibration frames.';
+
+  @override
+  String get calibrationActionQueue =>
+      'add the calibration frames to the queue';
+
+  @override
+  String get calibrationActionBuildLibrary => 'build the dark library';
+
+  @override
+  String get calibrationActionGuide => 'change the guide camera\'s calibration';
+
+  @override
+  String get searchCalibrationWords =>
+      'flats darks bias calibration frames dark library';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -8146,4 +8313,171 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get planExposureAuto => 'Auto';
+
+  @override
+  String get shellModeCalibration => 'Calibração';
+
+  @override
+  String get calibrationTabsGroup => 'Abas de calibração';
+
+  @override
+  String get calibrationTabFlats => 'Flats';
+
+  @override
+  String get calibrationTabDarks => 'Darks e bias';
+
+  @override
+  String get calibrationTabGuide => 'Câmera guia';
+
+  @override
+  String calibrationChipMissing(int count) {
+    return '$count faltando';
+  }
+
+  @override
+  String get calibrationChipReady => 'Pronto';
+
+  @override
+  String get calibrationChipNoLights => 'Sem lights';
+
+  @override
+  String get calibrationNoLightsYet =>
+      'Nenhum light de plano ainda. Monte uma biblioteca de darks para usar por semanas.';
+
+  @override
+  String get calibrationCovered => 'Coberto';
+
+  @override
+  String get calibrationMissing => 'Faltando';
+
+  @override
+  String calibrationFlatsFrom(String date) {
+    return 'Flats de $date';
+  }
+
+  @override
+  String get calibrationNoFlats => 'Sem flats';
+
+  @override
+  String get calibrationFlatsPanel => 'Os flats usam o painel de flat.';
+
+  @override
+  String get calibrationFlatsSky =>
+      'Sem painel de flat: os flats usam o céu do crepúsculo.';
+
+  @override
+  String get calibrationShootFlats => 'Fazer flats';
+
+  @override
+  String get calibrationReshootFlats => 'Refazer flats';
+
+  @override
+  String get calibrationCoverNote =>
+      'A tampa do painel fecha sobre o telescópio antes.';
+
+  @override
+  String get calibrationLensCapNote => 'A sessão pede a tampa da lente antes.';
+
+  @override
+  String get calibrationShootNow => 'Fazer agora';
+
+  @override
+  String get calibrationAddToQueue => 'Adicionar à fila';
+
+  @override
+  String calibrationLibraryGainTemp(int gain, String temperature) {
+    return 'Ganho $gain · $temperature';
+  }
+
+  @override
+  String get calibrationBuildLibrary => 'Montar biblioteca de darks';
+
+  @override
+  String get calibrationLensCapPrompt =>
+      'Coloque a tampa da lente no telescópio e toque em Retomar para fazer os darks.';
+
+  @override
+  String get calibrationPlanRunning =>
+      'Um plano está rodando. A calibração teria que esperar: adicionar os darks e bias à fila?';
+
+  @override
+  String get calibrationPlanRunningNote =>
+      'Um plano está rodando: os quadros de calibração vão para a fila.';
+
+  @override
+  String get calibrationNotNow => 'Agora não';
+
+  @override
+  String get calibrationConnectCamera => 'Conecte a câmera antes.';
+
+  @override
+  String get calibrationShutterShoot => 'Fazer o que falta';
+
+  @override
+  String get calibrationShutterStop => 'Parar calibração';
+
+  @override
+  String get calibrationNothingMissing => 'Nada faltando.';
+
+  @override
+  String get calibrationGuideNoGuider =>
+      'Conecte o guia para montar a biblioteca de darks e o mapa de pixels ruins.';
+
+  @override
+  String get calibrationGuideDarks => 'Biblioteca de darks';
+
+  @override
+  String calibrationGuideCovers(String min, String max) {
+    return 'Cobre de $min a $max';
+  }
+
+  @override
+  String get calibrationGuideNotBuilt => 'Não montado';
+
+  @override
+  String get calibrationGuideUse => 'Usar ao guiar';
+
+  @override
+  String get calibrationGuideBuild => 'Montar';
+
+  @override
+  String get calibrationGuideRebuild => 'Remontar';
+
+  @override
+  String get calibrationGuideDelete => 'Apagar';
+
+  @override
+  String get calibrationGuideDefect => 'Mapa de pixels ruins';
+
+  @override
+  String get calibrationGuideCover => 'Tampe a luneta guia e depois monte.';
+
+  @override
+  String get calibrationGuideCovered => 'Tampada, montar';
+
+  @override
+  String get calibrationGuideStopFirst =>
+      'Pare de guiar para montar: o plano perderia a estrela guia.';
+
+  @override
+  String get calibrationNoQueue =>
+      'Coloque um alvo na fila antes: os darks e bias rodam depois dele.';
+
+  @override
+  String get calibrationAlreadyQueued =>
+      'A fila já tem seus quadros de calibração.';
+
+  @override
+  String get calibrationActionQueue =>
+      'adicionar os quadros de calibração à fila';
+
+  @override
+  String get calibrationActionBuildLibrary => 'montar a biblioteca de darks';
+
+  @override
+  String get calibrationActionGuide => 'alterar a calibração da câmera guia';
+
+  @override
+  String get searchCalibrationWords =>
+      'flats darks bias quadros de calibração biblioteca de darks';
 }

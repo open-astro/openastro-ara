@@ -296,9 +296,14 @@ class SimpleTarget {
     this.decDeg = 0,
     this.rise,
     this.gain,
+    this.calibration = false,
   });
 
   final String name;
+
+  /// #1757 — the Queue's one Calibration block: darks and bias after the
+  /// targets, with no sky (ADR 0010 rule 4). It stays last.
+  final bool calibration;
 
   /// The plan's own gain (seeded from the camera's when the sheet opened);
   /// null: the profile's default. Fixed once queued: changing the camera's
@@ -560,6 +565,17 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
           targets: [target, ...state.targets],
           busy: false,
         );
+      } else if (state.targets.lastOrNull?.calibration ?? false) {
+        // The Calibration block stays after the last target.
+        await _moveBefore(queue, target.name, kCalibrationBlockName);
+        state = state.copyWith(
+          targets: [
+            ...state.targets.take(state.targets.length - 1),
+            target,
+            state.targets.last,
+          ],
+          busy: false,
+        );
       } else {
         state = state.copyWith(
           targets: [...state.targets, target],
@@ -747,6 +763,10 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         to >= n) {
       return false;
     }
+    // The Calibration block stays last: nothing moves after it, nor it.
+    if (state.targets.last.calibration && (from == n - 1 || to == n - 1)) {
+      return false;
+    }
     final wanted = [...state.targets];
     wanted.insert(to, wanted.removeAt(from));
     state = state.copyWith(busy: true);
@@ -767,6 +787,61 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
             ? null
             : state.copyWith(targets: await _asOnRig(api, id)),
       );
+      return false;
+    }
+  }
+
+  /// #1757 — puts the Calibration [block] after the queue's targets: live
+  /// while it runs. The queue holds one; a second is refused with the reason.
+  /// True once on the rig.
+  Future<bool> addCalibration(Map<String, dynamic> block) async {
+    final api = ref.read(sequenceApiProvider);
+    final id = state.sequenceId;
+    final l = l10nFor(ref.read(appLocaleProvider));
+    if (api == null || id == null || state.busy) {
+      _fail(l.calibrationNoQueue);
+      return false;
+    }
+    if (state.targets.any((t) => t.calibration)) {
+      _fail(l.calibrationAlreadyQueued);
+      return false;
+    }
+    state = state.copyWith(busy: true);
+    try {
+      final body = (await api.getSequenceDetail(id)).body;
+      if (ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false) {
+        await api.addRunItem(
+          id,
+          parentPath: const [],
+          index: liveAppendIndex(body),
+          item: block,
+        );
+      } else {
+        await api.updateSequence(id, body: appendTargetToRunBody(body, block));
+      }
+      final time = calibrationBlockTime(block);
+      state = state.copyWith(
+        targets: [
+          ...state.targets,
+          SimpleTarget(
+            name: kCalibrationBlockName,
+            calibration: true,
+            steps: [
+              FilterPlanStep(
+                filterName: '',
+                exposureSeconds: time.frames == 0
+                    ? 1
+                    : math.max(0.001, time.seconds / time.frames),
+                frameCount: math.max(1, time.frames),
+              ),
+            ],
+          ),
+        ],
+        busy: false,
+      );
+      return true;
+    } catch (e) {
+      _fail(_why(e, (l) => l.calibrationActionQueue));
       return false;
     }
   }

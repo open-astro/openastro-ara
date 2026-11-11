@@ -113,7 +113,9 @@ List<SimpleSearchHit> simpleSearch(
           SimpleSettingHit(title, section),
     ].take(limit),
     for (final m in SimpleModeScreen.values)
-      if (hit(m.labelOf(l10n))) SimpleModeHit(m),
+      if (hit(m.labelOf(l10n)) ||
+          (m == SimpleModeScreen.calibration && hit(l10n.searchCalibrationWords)))
+        SimpleModeHit(m),
     ...{
       for (final t in targets)
         if (hit(t)) t,

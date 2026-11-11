@@ -6866,6 +6866,300 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Auto'**
   String get planExposureAuto;
+
+  /// Calibration mode (#1757): flats, darks and bias for the main camera and the Guide Camera's dark library; the mode grid's tile and the rail's name
+  ///
+  /// In en, this message translates to:
+  /// **'Calibration'**
+  String get shellModeCalibration;
+
+  /// Calibration panel: the screen reader's name for the row of tabs
+  ///
+  /// In en, this message translates to:
+  /// **'Calibration tabs'**
+  String get calibrationTabsGroup;
+
+  /// Calibration panel tab: flats per filter
+  ///
+  /// In en, this message translates to:
+  /// **'Flats'**
+  String get calibrationTabFlats;
+
+  /// Calibration panel tab: darks and bias (no filters)
+  ///
+  /// In en, this message translates to:
+  /// **'Darks & bias'**
+  String get calibrationTabDarks;
+
+  /// Calibration panel tab: the Guider's dark library and bad-pixel map
+  ///
+  /// In en, this message translates to:
+  /// **'Guide Camera'**
+  String get calibrationTabGuide;
+
+  /// Calibration settings chip: how many calibration sets the latest plan's lights lack
+  ///
+  /// In en, this message translates to:
+  /// **'{count} missing'**
+  String calibrationChipMissing(int count);
+
+  /// Calibration settings chip: the latest plan's lights have every calibration set
+  ///
+  /// In en, this message translates to:
+  /// **'Ready'**
+  String get calibrationChipReady;
+
+  /// Calibration settings chip: no plan has taken lights yet
+  ///
+  /// In en, this message translates to:
+  /// **'No lights'**
+  String get calibrationChipNoLights;
+
+  /// Calibration panel: no plan has taken lights, so there is nothing to match; Darks & bias builds a dark library instead
+  ///
+  /// In en, this message translates to:
+  /// **'No plan lights yet. Build a dark library to reuse for weeks.'**
+  String get calibrationNoLightsYet;
+
+  /// Calibration panel: this set has matching calibration frames
+  ///
+  /// In en, this message translates to:
+  /// **'Covered'**
+  String get calibrationCovered;
+
+  /// Calibration panel: this set has no matching calibration frames
+  ///
+  /// In en, this message translates to:
+  /// **'Missing'**
+  String get calibrationMissing;
+
+  /// Calibration panel, Flats: when the flats that count for this filter were shot
+  ///
+  /// In en, this message translates to:
+  /// **'Flats from {date}'**
+  String calibrationFlatsFrom(String date);
+
+  /// Calibration panel, Flats: this filter has no flats at all
+  ///
+  /// In en, this message translates to:
+  /// **'No flats'**
+  String get calibrationNoFlats;
+
+  /// Calibration panel, Flats: a flat panel is connected, so flats use it
+  ///
+  /// In en, this message translates to:
+  /// **'Flats use the flat panel.'**
+  String get calibrationFlatsPanel;
+
+  /// Calibration panel, Flats: no flat panel, so flats wait for twilight
+  ///
+  /// In en, this message translates to:
+  /// **'No flat panel: flats use the twilight sky.'**
+  String get calibrationFlatsSky;
+
+  /// Calibration panel, Flats: shoot the missing flats
+  ///
+  /// In en, this message translates to:
+  /// **'Shoot flats'**
+  String get calibrationShootFlats;
+
+  /// Calibration panel, Flats: every filter is covered; shoot them all again
+  ///
+  /// In en, this message translates to:
+  /// **'Reshoot flats'**
+  String get calibrationReshootFlats;
+
+  /// Calibration panel, Darks & bias: a motorised panel cover keeps light out, so the run needs no one
+  ///
+  /// In en, this message translates to:
+  /// **'The panel\'s cover closes over the scope first.'**
+  String get calibrationCoverNote;
+
+  /// Calibration panel, Darks & bias: no panel cover, so the run pauses for the lens cap
+  ///
+  /// In en, this message translates to:
+  /// **'The run asks for the lens cap first.'**
+  String get calibrationLensCapNote;
+
+  /// Calibration panel, Darks & bias: shoot the missing darks and bias now
+  ///
+  /// In en, this message translates to:
+  /// **'Shoot now'**
+  String get calibrationShootNow;
+
+  /// Calibration: put the darks and bias in the Queue as one Calibration block after the last target
+  ///
+  /// In en, this message translates to:
+  /// **'Add to queue'**
+  String get calibrationAddToQueue;
+
+  /// Calibration panel, dark library: the gain and sensor temperature the darks are taken at
+  ///
+  /// In en, this message translates to:
+  /// **'Gain {gain} · {temperature}'**
+  String calibrationLibraryGainTemp(int gain, String temperature);
+
+  /// Calibration panel, Darks & bias with no lights: shoot darks for the picked exposures
+  ///
+  /// In en, this message translates to:
+  /// **'Build dark library'**
+  String get calibrationBuildLibrary;
+
+  /// The dark library run's first step: the question its pill asks
+  ///
+  /// In en, this message translates to:
+  /// **'Put the lens cap on the scope, then press Resume to take the darks.'**
+  String get calibrationLensCapPrompt;
+
+  /// Calibration: shooting asked while the Plan's run is going; the rig runs one at a time
+  ///
+  /// In en, this message translates to:
+  /// **'A plan is running. Calibration would have to wait for it: add the darks and bias to the queue instead?'**
+  String get calibrationPlanRunning;
+
+  /// Calibration panel: shown while the Plan's run is going
+  ///
+  /// In en, this message translates to:
+  /// **'A plan is running: calibration frames go in the queue.'**
+  String get calibrationPlanRunningNote;
+
+  /// Calibration question pill: leave it
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get calibrationNotNow;
+
+  /// Calibration shutter: why it is off with no main camera
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the camera first.'**
+  String get calibrationConnectCamera;
+
+  /// Calibration shutter's spoken label when idle
+  ///
+  /// In en, this message translates to:
+  /// **'Shoot what\'s missing'**
+  String get calibrationShutterShoot;
+
+  /// Calibration shutter's spoken label while its run goes
+  ///
+  /// In en, this message translates to:
+  /// **'Stop calibration'**
+  String get calibrationShutterStop;
+
+  /// Calibration shutter: why it is off when every set is covered
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing missing.'**
+  String get calibrationNothingMissing;
+
+  /// Calibration panel, Guide Camera: the Guider isn't connected
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the Guider to build its dark library and bad-pixel map.'**
+  String get calibrationGuideNoGuider;
+
+  /// Calibration panel, Guide Camera: the Guider's dark library
+  ///
+  /// In en, this message translates to:
+  /// **'Dark library'**
+  String get calibrationGuideDarks;
+
+  /// Calibration panel, Guide Camera: the guide exposures the loaded dark library covers
+  ///
+  /// In en, this message translates to:
+  /// **'Covers {min} to {max}'**
+  String calibrationGuideCovers(String min, String max);
+
+  /// Calibration panel, Guide Camera: no dark library or bad-pixel map yet
+  ///
+  /// In en, this message translates to:
+  /// **'Not built'**
+  String get calibrationGuideNotBuilt;
+
+  /// Calibration panel, Guide Camera: the Guider subtracts the darks / skips the bad pixels
+  ///
+  /// In en, this message translates to:
+  /// **'Use while guiding'**
+  String get calibrationGuideUse;
+
+  /// Calibration panel, Guide Camera: build the dark library or bad-pixel map
+  ///
+  /// In en, this message translates to:
+  /// **'Build'**
+  String get calibrationGuideBuild;
+
+  /// Calibration panel, Guide Camera: build it again (after a gain or temperature change)
+  ///
+  /// In en, this message translates to:
+  /// **'Rebuild'**
+  String get calibrationGuideRebuild;
+
+  /// Calibration panel, Guide Camera: delete the dark library
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get calibrationGuideDelete;
+
+  /// Calibration panel, Guide Camera: the Guider's defect map, so hot pixels aren't picked as guide stars
+  ///
+  /// In en, this message translates to:
+  /// **'Bad-pixel map'**
+  String get calibrationGuideDefect;
+
+  /// Calibration, Guide Camera: the question before a build (the frames must be dark)
+  ///
+  /// In en, this message translates to:
+  /// **'Cover the guide scope, then build.'**
+  String get calibrationGuideCover;
+
+  /// Calibration, Guide Camera question: the guide scope is covered; build
+  ///
+  /// In en, this message translates to:
+  /// **'Covered, build'**
+  String get calibrationGuideCovered;
+
+  /// Calibration panel, Guide Camera: builds are refused while guiding
+  ///
+  /// In en, this message translates to:
+  /// **'Stop guiding to build: a plan would lose its guide star.'**
+  String get calibrationGuideStopFirst;
+
+  /// Calibration, Add to queue with no queue
+  ///
+  /// In en, this message translates to:
+  /// **'Queue a target first: the darks and bias run after it.'**
+  String get calibrationNoQueue;
+
+  /// Calibration, Add to queue: the queue holds one Calibration block
+  ///
+  /// In en, this message translates to:
+  /// **'The queue already has its calibration frames.'**
+  String get calibrationAlreadyQueued;
+
+  /// Simple Mode, after Couldn't: queuing the Calibration block failed
+  ///
+  /// In en, this message translates to:
+  /// **'add the calibration frames to the queue'**
+  String get calibrationActionQueue;
+
+  /// Simple Mode, after Couldn't: building the dark library failed
+  ///
+  /// In en, this message translates to:
+  /// **'build the dark library'**
+  String get calibrationActionBuildLibrary;
+
+  /// Simple Mode, after Couldn't: a Guide Camera tab action failed
+  ///
+  /// In en, this message translates to:
+  /// **'change the guide camera\'s calibration'**
+  String get calibrationActionGuide;
+
+  /// Simple Mode search: words (never shown) that find the Calibration mode; space-separated, lower case
+  ///
+  /// In en, this message translates to:
+  /// **'flats darks bias calibration frames dark library'**
+  String get searchCalibrationWords;
 }
 
 class _AppLocalizationsDelegate

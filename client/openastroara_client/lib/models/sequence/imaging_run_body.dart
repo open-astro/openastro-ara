@@ -607,8 +607,61 @@ Map<String, dynamic> inheritDawnStop(
 Map<String, dynamic> withDawnStop(Map<String, dynamic> root, String? dawn) =>
     withChildren(root, [
       for (final c in childrenOf(root))
-        isContainer(c) ? _blockDawn(c, dawn) : c,
+        // Darks and bias need no dark sky: the Calibration block runs after it.
+        isContainer(c) && c['Name'] != kCalibrationBlockName
+            ? _blockDawn(c, dawn)
+            : c,
     ]);
+
+/// The name of the Queue's one Calibration block (#1757, ADR 0010 rule 4):
+/// the rig finds a block by its name.
+const kCalibrationBlockName = 'Calibration';
+
+/// The Calibration block from a generated darks-and-bias run's [root]: its
+/// steps under one container named [kCalibrationBlockName], with no slew,
+/// centring, autofocus or guiding. With [closeCover] the panel's cover
+/// closes first, so the run needs no one (the generator then asks for no lens
+/// cap).
+Map<String, dynamic> calibrationBlockFrom(
+  Map<String, dynamic> root, {
+  bool closeCover = false,
+}) {
+  var block = _item(sequentialContainerType)..['Name'] = kCalibrationBlockName;
+  block = withChildren(block, [
+    if (closeCover) _item(closeFlatPanelCoverType),
+    ...childrenOf(root),
+  ]);
+  return block;
+}
+
+/// A Wait for User asking [text]: the lens cap goes on before darks.
+Map<String, dynamic> withLensCap(String text) =>
+    _item(waitForUserType)..['Text'] = text;
+
+/// The frames a Calibration block takes and their exposure time: each loop's
+/// iterations times its exposures. Pure — unit-tested.
+({int frames, double seconds}) calibrationBlockTime(Map<String, dynamic> block) {
+  var frames = 0;
+  var seconds = 0.0;
+  void walk(Map<String, dynamic> node, int times) {
+    for (final c in conditionsOf(node)) {
+      if (c[r'$type'] == loopConditionType) {
+        times *= (c['Iterations'] as num?)?.toInt() ?? 1;
+      }
+    }
+    for (final child in childrenOf(node)) {
+      if (child[r'$type'] == takeExposureType) {
+        frames += times;
+        seconds += times * ((child['ExposureTime'] as num?)?.toDouble() ?? 0);
+      } else if (isContainer(child)) {
+        walk(child, times);
+      }
+    }
+  }
+
+  walk(block, 1);
+  return (frames: frames, seconds: seconds);
+}
 
 /// [block] and its child containers without their dawn conditions, then with
 /// [dawn]'s when given.
