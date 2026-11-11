@@ -404,7 +404,7 @@ class _CellState extends State<_Cell> {
                         gradient: RadialGradient(
                           center: Alignment(-0.32, -0.44),
                           radius: 0.9,
-                          colors: [Color(0x61FFFFFF), Colors.transparent],
+                          colors: [AraColors.glassGloss, Colors.transparent],
                           stops: [0, 0.5],
                         ),
                       ),

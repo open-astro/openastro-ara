@@ -176,11 +176,12 @@ class AraColors {
   static const glassGreen = Color(0xFF2F7D50);
   static const glassBlue = Color(0xFF2B5FB8);
   static const glassHa = Color(0xFF7C1622);
-  static const glassOiii = Color(0xFF17867F);
+  static const glassOiii = Color(0xFF15807A);
   static const glassSii = Color(0xFF5A1A3A);
   static const glassDualBand = Color(0xFF6A4596);
   static const glassDark = Color(0xFF0B0B0B);
   static const glassDarkLabel = Color(0xFFBBBBBB);
+  static const glassGloss = Color(0x61FFFFFF);
 
   /// A sequence instruction's category colour in the sequencer.
   static const instructionCamera = Color(0xFF64B5F6);
