@@ -286,7 +286,7 @@ void main() {
       expect(mount.calls, isEmpty, reason: 'no renewals after letting go');
     });
 
-    testWidgets('a diagonal moves both axes, and E/W use the full UI pad\'s signs', (tester) async {
+    testWidgets('a diagonal moves both axes, and E/W use the full UI pad signs', (tester) async {
       final (_, mount, _, _) = await _pump(tester, _wire());
       await _hold(tester, 'nw', () async {});
       expect(mount.calls, ['move 1 $_medium lease 1000', 'move 0 -$_medium lease 1000', 'move 1 0.0', 'move 0 0.0']);
@@ -387,7 +387,7 @@ void main() {
       handle.dispose();
     });
 
-    testWidgets('wide, the pad\'s bottom is level with Check; narrow, it sits under the rows', (tester) async {
+    testWidgets('wide, the pad bottom is level with Check; narrow, it sits under the rows', (tester) async {
       await _pump(tester, _wire());
       final pad = tester.getRect(find.byKey(const Key('simple-mount-pad-s')));
       final check = tester.getRect(find.byKey(const Key('simple-mount-check')));
@@ -443,7 +443,7 @@ void main() {
       await tester.pump(const Duration(seconds: 4)); // nothing moved: the ask clears
     });
 
-    testWidgets('Tracking speed lists the mount\'s rates and sets the one picked; off sidereal says so',
+    testWidgets('Tracking speed lists the mount rates and sets the one picked; off sidereal says so',
         (tester) async {
       final (_, mount, _, _) = await _pump(tester, _wire());
       expect(find.byKey(const Key('simple-mount-rate-king')), findsNothing, reason: 'not offered');
@@ -500,7 +500,7 @@ void main() {
       await tester.pump(const Duration(seconds: 12)); // the Synced pill fades
     });
 
-    testWidgets('no Target matched reads "from the last go-to"; within 1′ is On target with no Centre', (tester) async {
+    testWidgets('no Target matched reads from the last go-to; within 1′ is On target with no Center', (tester) async {
       final (_, _, solver, _) = await _pump(tester, _wire());
       solver.answer = const VerifyPositionResult(
         success: true,
@@ -535,7 +535,7 @@ void main() {
       expect(find.text('Too few stars.'), findsOneWidget);
     });
 
-    testWidgets('a solver that isn\'t set up says why and offers its settings', (tester) async {
+    testWidgets('a solver that is not set up says why and offers its settings', (tester) async {
       final (_, _, solver, _) = await _pump(tester, _wire());
       solver.error = const PlateSolveException('No star database is installed for ASTAP.');
       await tester.tap(find.byKey(const Key('simple-mount-check')));

@@ -267,7 +267,7 @@ void main() {
     expect(api.calls, contains('command:tracking:enabled=true'));
   });
 
-  testWidgets('Tracking speed lists the mount\'s rates and sets the one picked (#1649)', (tester) async {
+  testWidgets('Tracking speed lists the mount rates and sets the one picked (#1649)', (tester) async {
     await _pump(tester, _status());
     expect(find.byKey(const Key('mount_tracking_rate')), findsNothing, reason: 'one rate or none: no row');
     final api = await _pump(
