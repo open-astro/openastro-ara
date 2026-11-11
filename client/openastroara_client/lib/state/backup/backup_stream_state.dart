@@ -287,15 +287,15 @@ class BackupStreamController extends Notifier<BackupStreamState> {
     await _pollOnce();
   }
 
-  /// One claim attempt. On failure the stream stays enabled with a visible
-  /// problem — the next tick retries, so a slot freeing up or a server
-  /// connecting later is picked up without a manual off/on.
   /// [friendlyError] in the language picked in Settings.
   String _friendly(Object e, String Function(AppLocalizations l) action) {
     final l = l10nFor(ref.read(appLocaleProvider));
     return friendlyError(l, e, action: action(l));
   }
 
+  /// One claim attempt. On failure the stream stays enabled with a visible
+  /// problem — the next tick retries, so a slot freeing up or a server
+  /// connecting later is picked up without a manual off/on.
   Future<void> _claimOnce() async {
     if (_claiming) return;
     _claiming = true;
