@@ -328,6 +328,12 @@ void main() {
     expect(_slot(0), findsNothing);
   });
 
+  testWidgets('a wheel that reports no filters says so and draws no wheel', (tester) async {
+    await _pump(tester, _wire()..['slots'] = <Map<String, dynamic>>[]);
+    expect(find.text('This wheel reports no filters.'), findsOneWidget);
+    expect(find.byType(SimpleFilterWheel), findsNothing);
+  });
+
   testWidgets('an unnamed filter in place reads by its slot alone', (tester) async {
     await _pump(tester, _wire(current: 2));
     expect(find.descendant(of: find.byKey(const Key('simple-filterwheel-reading')), matching: find.text('Slot 2')), findsOneWidget);
