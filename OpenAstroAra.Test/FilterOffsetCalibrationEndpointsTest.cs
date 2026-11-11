@@ -50,6 +50,7 @@ namespace OpenAstroAra.Test {
         private static readonly string[] LrgbThenL = ["L", "R", "G", "B", "L"];
         private static readonly int[] Untouched4 = [0, 10, 20, 30];
         private static readonly int[] Untouched2 = [0, 10];
+        private static readonly FilterFocusOffsetDto[] SavedAfterFailedG = [new(0, 0), new(1, 40)];
 
         /// <summary>The rig behind the routes. Script: per slot, the best positions its autofocus runs return
         /// in order (null = the run fails).</summary>
@@ -300,6 +301,7 @@ namespace OpenAstroAra.Test {
             Assert.That(offsets[1], Is.EqualTo(40), "the measured filter is written");
             Assert.That(offsets[2], Is.EqualTo(20), "the failed filter keeps its offset");
             Assert.That(offsets[0], Is.EqualTo(0));
+            Assert.That(rig.Store.GetFilterFocusOffsets().Offsets, Is.EqualTo(SavedAfterFailedG), "Save persists the measured offsets with the profile");
             Assert.That(await rig.GetAsync(), Is.Null, "Save clears the results");
         }
 

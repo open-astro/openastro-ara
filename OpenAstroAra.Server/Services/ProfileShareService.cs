@@ -144,6 +144,7 @@ public sealed class ProfileShareService : IProfileShareService {
     ///   <item>Unguided — KEEP (guard thresholds and probe ladder: tuning judgement, no PII)</item>
     ///   <item>GuiderAdvanced — KEEP (guider tuning like aggressiveness: star detection, algorithms, limits; no path, network or identity)</item>
     ///   <item>CoolingFan — STRIP (a UniqueId names the donor's own switch; the recipient designates theirs)</item>
+    ///   <item>FilterFocusOffsets — STRIP all (measured on the donor's filters and focuser)</item>
     /// </list>
     /// </remarks>
     internal static ProfileSnapshotDto StripForShare(ProfileSnapshotDto s) => s with {
@@ -213,6 +214,8 @@ public sealed class ProfileShareService : IProfileShareService {
         EquipmentIdentity = EquipmentIdentityDto.Empty,
         // Strip the #1700 fan designation — it names the donor's switch; the recipient is asked for theirs.
         CoolingFan = null,
+        // Strip the #1675 focus offsets — measured on the donor's filters and focuser.
+        FilterFocusOffsets = FilterFocusOffsetsDto.Empty,
     };
 
     private static ProfileShareRigDescriptionDto BuildRigDescription(ProfileSnapshotDto s) =>

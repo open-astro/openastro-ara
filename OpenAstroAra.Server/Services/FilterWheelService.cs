@@ -124,6 +124,7 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
     }
 
     public Task<FilterWheelDto?> GetAsync(CancellationToken ct) {
+        FilterWheelDto dto;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
             // null ONLY when no device has ever been selected (-> 404); a retained device after
@@ -134,8 +135,10 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
             var connected = _state == EquipmentConnectionState.Connected;
             var runtime = connected ? _runtime : IdleRuntime;
             var slots = (connected ? _slots : null) ?? Array.Empty<FilterSlotDto>();
-            return Task.FromResult<FilterWheelDto?>(new FilterWheelDto(_device.UniqueId, _device.Name, _state, runtime, slots));
+            dto = new FilterWheelDto(_device.UniqueId, _device.Name, _state, runtime, slots);
         }
+        // #1675 — re-applied on every read (outside the gate: it reads the profile store) so a Save shows at once.
+        return Task.FromResult<FilterWheelDto?>(dto with { Slots = WithSavedOffsets(dto.Slots) });
     }
 
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) {
@@ -507,7 +510,14 @@ public sealed partial class FilterWheelService : IFilterWheelService, IRetainedD
             var offset = i < (offsets?.Length ?? 0) ? offsets![i] : 0;
             slots.Add(new FilterSlotDto(Position: i, Name: names[i] ?? string.Empty, FocusOffset: offset));
         }
-        return slots;
+        return WithSavedOffsets(slots);
+    }
+
+    /// <summary>#1675 — each slot's effective offset: the one the offset calibration saved with the profile,
+    /// else the driver's.</summary>
+    private List<FilterSlotDto> WithSavedOffsets(IReadOnlyList<FilterSlotDto> slots) {
+        var saved = _profileStore?.GetFilterFocusOffsets()?.Offsets;
+        return slots.Select(s => saved?.LastOrDefault(o => o.Position == s.Position) is { } o ? s with { FocusOffset = o.Offset } : s).ToList();
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

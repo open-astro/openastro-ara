@@ -199,6 +199,8 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(FilterWheelLabelsDto))]
 [JsonSerializable(typeof(FilterWheelPolicyDto))]
 [JsonSerializable(typeof(CoolingFanDto))]
+[JsonSerializable(typeof(FilterFocusOffsetsDto))]
+[JsonSerializable(typeof(FilterFocusOffsetDto))]
 [JsonSerializable(typeof(FilterKind))]
 // NEXTGEN §1 Tonight's Sky filter advice.
 [JsonSerializable(typeof(Phd2SettingsDto))]

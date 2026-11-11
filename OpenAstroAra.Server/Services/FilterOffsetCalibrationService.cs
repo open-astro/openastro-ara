@@ -169,8 +169,8 @@ public sealed class FilterOffsetCalibrationService {
         return _jobs.TryCancel(jobId);
     }
 
-    /// <summary>Write each measured offset into the profile's filter list (the one a filter change applies).
-    /// Failed and skipped filters keep theirs. False when there are no finished results.</summary>
+    /// <summary>Write each measured offset into the profile's filter list (the one a filter change applies) and
+    /// the profile's saved offsets. Failed and skipped filters keep theirs. False when there are no finished results.</summary>
     public bool TrySave() {
         FilterOffsetCalibrationDto results;
         lock (_gate) {
@@ -194,6 +194,11 @@ public sealed class FilterOffsetCalibrationService {
                 }
             }
         }
+        // Persisted with the profile too: the list above is rebuilt from the wheel on connect after a restart.
+        var measured = results.Filters.Where(r => r is { Status: "measured", Offset: int }).ToList();
+        var kept = _profiles.GetFilterFocusOffsets().Offsets.Where(o => !measured.Any(r => r.Position == o.Position));
+        _profiles.PutFilterFocusOffsets(new FilterFocusOffsetsDto(
+            kept.Concat(measured.Select(r => new FilterFocusOffsetDto(r.Position, r.Offset!.Value))).OrderBy(o => o.Position).ToList()));
         return TryDiscard();
     }
 

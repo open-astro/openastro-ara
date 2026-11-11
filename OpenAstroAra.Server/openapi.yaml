@@ -9806,6 +9806,33 @@ components:
             - integer
             - string
           format: int32
+    FilterFocusOffsetDto:
+      required:
+        - position
+        - offset
+      type: object
+      properties:
+        position:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        offset:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+    FilterFocusOffsetsDto:
+      required:
+        - offsets
+      type: object
+      properties:
+        offsets:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilterFocusOffsetDto'
     FilterInstalledRequestDto:
       required:
         - position
@@ -13752,6 +13779,10 @@ components:
           oneOf:
             - type: 'null'
             - $ref: '#/components/schemas/CoolingFanDto'
+        filter_focus_offsets:
+          oneOf:
+            - type: 'null'
+            - $ref: '#/components/schemas/FilterFocusOffsetsDto'
     QualityScoreBreakdownDto:
       required:
         - composite
