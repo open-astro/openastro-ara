@@ -251,12 +251,11 @@ String _sub(FilterPlanStep s) {
 }
 
 /// The plan squares in every Screen's bottom-right corner (the shell places
-/// them, #1789), for the queue's whole life, right to
-/// left in queue order: each target's tag, frames done of its total, the
-/// filter and sub length in hand, and the time (total before it starts, left
-/// while imaging). The target in hand is green ready, blue imaging, amber
-/// paused; the others green. Nothing without a plan. A tap on any square
-/// opens the queue panel.
+/// them, #1789), for the queue's whole life, right to left in queue order:
+/// each target's tag, frames done of its total, the filter and sub length in
+/// hand, and the time (total before it starts, left while imaging). The
+/// target in hand is green ready, blue imaging, amber paused; the others
+/// green. Nothing without a plan. A tap on any square opens the queue panel.
 class SimpleRunTracker extends ConsumerStatefulWidget {
   const SimpleRunTracker({super.key, required this.onTap});
 
