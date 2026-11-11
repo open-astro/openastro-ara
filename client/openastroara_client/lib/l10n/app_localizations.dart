@@ -7406,6 +7406,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'start copying frames'**
   String get actionStartCopyingFrames;
+
+  /// Backup stream panel: transient transport trouble; reason is the already-readable error sentence
+  ///
+  /// In en, this message translates to:
+  /// **'Backup stream hiccup: {reason}'**
+  String backupStreamHiccup(String reason);
+
+  /// Backup stream panel: one frame keeps failing; id is the frame id, reason the readable cause
+  ///
+  /// In en, this message translates to:
+  /// **'Backup of {id} failing: {reason}'**
+  String backupEntryFailing(String id, String reason);
+
+  /// GPS on this computer: the receiver gave a fix but the rig rejected the push; reason is the readable error sentence
+  ///
+  /// In en, this message translates to:
+  /// **'Fix read, but the rig refused it: {reason}'**
+  String gpsFixRefused(String reason);
+
+  /// GPS on this computer: appended to the refused-push message when the rig answers 422 (daemon too old); starts with a dash and a space
+  ///
+  /// In en, this message translates to:
+  /// **' — update Ara Server on the rig; this version predates GPS on this computer.'**
+  String get gpsDaemonTooOld;
 }
 
 class _AppLocalizationsDelegate

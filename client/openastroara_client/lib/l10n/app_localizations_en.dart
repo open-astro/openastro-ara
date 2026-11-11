@@ -4338,4 +4338,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get actionStartCopyingFrames => 'start copying frames';
+
+  @override
+  String backupStreamHiccup(String reason) {
+    return 'Backup stream hiccup: $reason';
+  }
+
+  @override
+  String backupEntryFailing(String id, String reason) {
+    return 'Backup of $id failing: $reason';
+  }
+
+  @override
+  String gpsFixRefused(String reason) {
+    return 'Fix read, but the rig refused it: $reason';
+  }
+
+  @override
+  String get gpsDaemonTooOld =>
+      ' — update Ara Server on the rig; this version predates GPS on this computer.';
 }

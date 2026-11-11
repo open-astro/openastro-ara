@@ -262,8 +262,8 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
               '${others.isEmpty ? '' : ' — the GPS may be on ${others.join(' or ')}; choose it in GPS on this computer.'}'
           // The read worked; the daemon refused the push. A 422 here is a rig running a
           // daemon that predates client-side GPS (it does not know source gps-client).
-          : 'Fix read, but the rig refused it: ${friendlyError(l, e, action: l.actionPushGpsFix)}'
-              '${e is DioException && e.response?.statusCode == 422 ? ' — update Ara Server on the rig; this daemon predates GPS on this computer.' : ''}';
+          : l.gpsFixRefused(friendlyError(l, e, action: l.actionPushGpsFix)) +
+              (e is DioException && e.response?.statusCode == 422 ? l.gpsDaemonTooOld : '');
       debugPrint('[client-gps] $error');
     }
     if (!ref.mounted) return fix; // the container went away mid-read (tests, hot restart)

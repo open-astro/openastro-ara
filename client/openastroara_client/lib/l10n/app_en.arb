@@ -5597,5 +5597,39 @@
   "actionStartCopyingFrames": "start copying frames",
   "@actionStartCopyingFrames": {
     "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "backupStreamHiccup": "Backup stream hiccup: {reason}",
+  "@backupStreamHiccup": {
+    "description": "Backup stream panel: transient transport trouble; reason is the already-readable error sentence",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "backupEntryFailing": "Backup of {id} failing: {reason}",
+  "@backupEntryFailing": {
+    "description": "Backup stream panel: one frame keeps failing; id is the frame id, reason the readable cause",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "gpsFixRefused": "Fix read, but the rig refused it: {reason}",
+  "@gpsFixRefused": {
+    "description": "GPS on this computer: the receiver gave a fix but the rig rejected the push; reason is the readable error sentence",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "gpsDaemonTooOld": " — update Ara Server on the rig; this version predates GPS on this computer.",
+  "@gpsDaemonTooOld": {
+    "description": "GPS on this computer: appended to the refused-push message when the rig answers 422 (daemon too old); starts with a dash and a space"
   }
 }

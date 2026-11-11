@@ -4338,6 +4338,25 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get actionStartCopyingFrames => 'start copying frames';
+
+  @override
+  String backupStreamHiccup(String reason) {
+    return 'Backup stream hiccup: $reason';
+  }
+
+  @override
+  String backupEntryFailing(String id, String reason) {
+    return 'Backup of $id failing: $reason';
+  }
+
+  @override
+  String gpsFixRefused(String reason) {
+    return 'Fix read, but the rig refused it: $reason';
+  }
+
+  @override
+  String get gpsDaemonTooOld =>
+      ' — update Ara Server on the rig; this version predates GPS on this computer.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -8703,4 +8722,23 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get actionStartCopyingFrames => 'começar a copiar os quadros';
+
+  @override
+  String backupStreamHiccup(String reason) {
+    return 'Falha momentânea no backup: $reason';
+  }
+
+  @override
+  String backupEntryFailing(String id, String reason) {
+    return 'Backup de $id falhando: $reason';
+  }
+
+  @override
+  String gpsFixRefused(String reason) {
+    return 'A posição foi lida, mas o setup a recusou: $reason';
+  }
+
+  @override
+  String get gpsDaemonTooOld =>
+      ' — atualize o Ara Server no setup; esta versão é anterior ao GPS deste computador.';
 }

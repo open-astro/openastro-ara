@@ -423,8 +423,9 @@ class BackupStreamController extends Notifier<BackupStreamState> {
           // ("checksum mismatch") — show it verbatim; friendlyError would
           // flatten it to a generic sentence and lose the cause.
           state = state.copyWith(
-            problem: 'Backup of ${entry.id} failing: '
-                '${error is String ? error : _friendly(error, (l) => l.actionBackUpEntry)}');
+            problem: l10nFor(ref.read(appLocaleProvider)).backupEntryFailing(
+                entry.id,
+                error is String ? error : _friendly(error, (l) => l.actionBackUpEntry)));
           // Failed attempts still moved bytes over the link (a checksum
           // mismatch is a full discarded transfer) — the cap must hold on
           // exactly the flaky links that produce failures, so pace the full
@@ -478,8 +479,8 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       // Transient transport trouble: surface it, keep the loop; the next
       // tick retries.
       state = state.copyWith(
-          problem: 'Backup stream hiccup: '
-              '${_friendly(e, (l) => l.actionKeepBackupGoing)}');
+          problem: l10nFor(ref.read(appLocaleProvider))
+              .backupStreamHiccup(_friendly(e, (l) => l.actionKeepBackupGoing)));
     } finally {
       _polling = false;
     }

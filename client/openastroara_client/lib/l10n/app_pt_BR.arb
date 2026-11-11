@@ -1217,5 +1217,9 @@
   "actionKeepBackupGoing": "manter o backup em andamento",
   "actionPushGpsFix": "enviar a posição do GPS",
   "actionRebuildStats": "refazer o catálogo de estatísticas",
-  "actionStartCopyingFrames": "começar a copiar os quadros"
+  "actionStartCopyingFrames": "começar a copiar os quadros",
+  "backupStreamHiccup": "Falha momentânea no backup: {reason}",
+  "backupEntryFailing": "Backup de {id} falhando: {reason}",
+  "gpsFixRefused": "A posição foi lida, mas o setup a recusou: {reason}",
+  "gpsDaemonTooOld": " — atualize o Ara Server no setup; esta versão é anterior ao GPS deste computador."
 }
