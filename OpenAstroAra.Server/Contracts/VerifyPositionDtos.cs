@@ -36,4 +36,8 @@ public record VerifyPositionResultDto(
     // The frame the mount's (and intended) figures are in: "J2000" or "JNOW". The solve is J2000; the
     // separations already account for the difference, but the raw lines can differ by ~20′ of
     // precession, so the client labels them. Null when no mount figures.
-    string? MountEpoch = null);
+    string? MountEpoch = null,
+    // #1650 — the solve's position angle (degrees east of north), null when the solve failed; and
+    // the angle a connected, still rotator was synced to, null when none was.
+    double? PositionAngleDegrees = null,
+    double? RotatorSyncedDegrees = null);

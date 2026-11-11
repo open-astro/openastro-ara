@@ -186,7 +186,7 @@ namespace OpenAstroAra.Test {
         public async Task MoveAxisAsync_when_not_connected_throws_InvalidOperation() {
             using var svc = new TelescopeService();
             await Assert.ThrowsAsync<InvalidOperationException>(
-                () => svc.MoveAxisAsync(0, 1.5, CancellationToken.None));
+                () => svc.MoveAxisAsync(0, 1.5, null, CancellationToken.None));
         }
 
         [Test]

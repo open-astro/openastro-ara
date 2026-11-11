@@ -14,6 +14,10 @@ class MountCapabilities {
   final bool canFindHome;
   final bool canMoveAxis;
 
+  /// The drive rates the mount offers, by their ASCOM names ("Sidereal",
+  /// "Lunar", "Solar", "King"); empty when it didn't say (#1649).
+  final List<String> trackingRates;
+
   /// Legacy endpoint list of the pad's MoveAxis rate bands (deg/sec,
   /// ascending): both ends of every band, a zero minimum dropped. Kept for
   /// daemons that predate [axisRateBands]; read through [padRateBands].
@@ -42,6 +46,7 @@ class MountCapabilities {
     required this.canSetTracking,
     required this.canFindHome,
     this.canMoveAxis = false,
+    this.trackingRates = const [],
     this.axisRatesDegPerSec = const [],
     this.axisRateBands = const [],
     this.specs,
@@ -66,6 +71,10 @@ class MountCapabilities {
         canSetTracking: json['can_set_tracking'] as bool? ?? false,
         canFindHome: json['can_find_home'] as bool? ?? false,
         canMoveAxis: json['can_move_axis'] as bool? ?? false,
+        trackingRates: [
+          for (final r in json['supported_sidereal_rates'] as List<dynamic>? ?? const [])
+            if (r is String) r,
+        ],
         specs: MountSpecSheet.fromJson(json['mount_specs']),
         focalLengthMm: _mm(json['focal_length_mm']),
         apertureMm: _mm(json['aperture_diameter_mm']),
@@ -108,6 +117,7 @@ class MountCapabilities {
           other.canSetTracking == canSetTracking &&
           other.canFindHome == canFindHome &&
           other.canMoveAxis == canMoveAxis &&
+          _listEq(other.trackingRates, trackingRates) &&
           _listEq(other.axisRatesDegPerSec, axisRatesDegPerSec) &&
           _listEq(other.axisRateBands, axisRateBands) &&
           other.specs == specs);
@@ -122,7 +132,8 @@ class MountCapabilities {
 
   @override
   int get hashCode => Object.hash(canSlew, canSync, canPark, canUnpark,
-      canSetTracking, canFindHome, canMoveAxis, Object.hashAll(axisRatesDegPerSec),
+      canSetTracking, canFindHome, canMoveAxis, Object.hashAll(trackingRates),
+      Object.hashAll(axisRatesDegPerSec),
       Object.hashAll(axisRateBands), specs);
 }
 
@@ -150,6 +161,10 @@ class MountStatus extends EquipmentDeviceStatus {
   final bool parked;
   final bool atHome;
 
+  /// The drive rate now ("Sidereal", "Lunar", …); null when the mount can't
+  /// say (#1649).
+  final String? trackingRate;
+
   MountStatus({
     required this.deviceId,
     required this.name,
@@ -163,6 +178,7 @@ class MountStatus extends EquipmentDeviceStatus {
     required this.tracking,
     required this.parked,
     required this.atHome,
+    this.trackingRate,
   });
 
   /// The mount is mid-slew (the only long-running motion; tracking is steady).
@@ -189,6 +205,7 @@ class MountStatus extends EquipmentDeviceStatus {
       tracking: r['tracking'] as bool? ?? false,
       parked: r['parked'] as bool? ?? false,
       atHome: r['at_home'] as bool? ?? false,
+      trackingRate: r['tracking_rate'] as String?,
     );
   }
 
@@ -207,13 +224,14 @@ class MountStatus extends EquipmentDeviceStatus {
           other.targetDeclinationDegrees == targetDeclinationDegrees &&
           other.tracking == tracking &&
           other.parked == parked &&
-          other.atHome == atHome);
+          other.atHome == atHome &&
+          other.trackingRate == trackingRate);
 
   @override
   int get hashCode => Object.hash(deviceId, name, connectionState, capabilities,
       runtimeState, rightAscensionHours, declinationDegrees,
       targetRightAscensionHours, targetDeclinationDegrees, tracking, parked,
-      atHome);
+      atHome, trackingRate);
 }
 
 /// Format right ascension (decimal hours, [0, 24)) as `HHh MMm SSs`. Clamped to

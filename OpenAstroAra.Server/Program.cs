@@ -241,7 +241,8 @@ public partial class Program {
         builder.Services.AddSingleton<OpenAstroAra.Server.Services.IPolarAlignMainCameraSolver>(sp =>
             sp.GetRequiredService<OpenAstroAra.Server.Services.MainCameraPointingSolver>());
         builder.Services.AddSingleton<OpenAstroAra.Server.Services.IVerifyPositionService>(sp =>
-            new OpenAstroAra.Server.Services.VerifyPositionService(sp.GetRequiredService<OpenAstroAra.Server.Services.MainCameraPointingSolver>()));
+            new OpenAstroAra.Server.Services.VerifyPositionService(sp.GetRequiredService<OpenAstroAra.Server.Services.MainCameraPointingSolver>(),
+                () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IRotatorMediator>()));
         // §58.4 — the real meridian-flip orchestration (stop guiding → pass meridian → flip slew → recenter →
         // resume guiding), replacing the throwing placeholder. Handed into the sequencer factory below so the
         // MeridianFlipTrigger prototype runs it. Mount-gated to live-validate.

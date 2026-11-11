@@ -47,6 +47,11 @@ class MountNotifier extends EquipmentDeviceNotifier<MountStatus> {
   Future<bool> setTracking(bool enabled) =>
       performAction((api) => api.command('tracking', {'enabled': enabled}));
 
+  /// The drive rate, by its ASCOM name ("Sidereal", "Lunar", …), one of
+  /// [MountCapabilities.trackingRates] (#1649). Tracking on/off is untouched.
+  Future<bool> setTrackingRate(String rate) =>
+      performAction((api) => api.command('trackingrate', {'rate': rate}));
+
   /// Park the mount (slew to the park position and stop tracking).
   Future<bool> park() => performAction((api) => api.command('park'));
 
@@ -92,10 +97,22 @@ class MountNotifier extends EquipmentDeviceNotifier<MountStatus> {
   /// and runs the client directly so the STOP can never be dropped while a start is
   /// still in flight — a dropped stop would leave the mount running. [abortSlew] is
   /// the backstop. Returns true if dispatched (false only when no active server).
-  Future<bool> moveAxis({required int axis, required double rate}) async {
+  ///
+  /// #1649 — with [leaseMs] the rig stops the axis by itself unless the move is
+  /// sent again within it (Simple Mode's pad renews while held); without, the
+  /// move runs until a stop (the full UI's pad).
+  Future<bool> moveAxis({
+    required int axis,
+    required double rate,
+    int? leaseMs,
+  }) async {
     final api = readClient();
     if (api == null) return false;
-    await api.command('moveaxis', {'axis': axis, 'rate': rate});
+    await api.command('moveaxis', {
+      'axis': axis,
+      'rate': rate,
+      'lease_ms': ?leaseMs,
+    });
     return true;
   }
 
