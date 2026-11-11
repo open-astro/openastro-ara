@@ -18,6 +18,7 @@ import '../../models/focuser_status.dart';
 import '../../models/switch_device.dart';
 import '../../models/weather_status.dart';
 import '../../widgets/equipment/cooling_fan_picker.dart';
+import '../../widgets/simple/filter_wheel.dart';
 import '../../state/equipment/camera_state.dart';
 import '../../models/guider_status.dart';
 import '../../models/mount_status.dart';
@@ -511,7 +512,9 @@ Widget simpleWindowStepper({
       onPressed: onTap,
       icon: Icon(
         icon,
-        semanticLabel: name == null ? label(context.l10n) : '$name, ${label(context.l10n)}',
+        semanticLabel: name == null
+            ? label(context.l10n)
+            : '$name, ${label(context.l10n)}',
       ),
     ),
   );
@@ -1063,15 +1066,15 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                       // Dome window's Parking… (user, 2026-11-11).
                       on: true,
                       child: Text(
-                      homing
-                          ? context.l10n.deviceFindingHome
-                          : (parking ?? !m.parked)
-                          ? context.l10n.deviceParking
-                          : context.l10n.deviceUnparking,
-                      style: kSimpleText.copyWith(
-                        color: AraColors.accentConnected,
+                        homing
+                            ? context.l10n.deviceFindingHome
+                            : (parking ?? !m.parked)
+                            ? context.l10n.deviceParking
+                            : context.l10n.deviceUnparking,
+                        style: kSimpleText.copyWith(
+                          color: AraColors.accentConnected,
+                        ),
                       ),
-                    ),
                     ),
                   ),
                 )
@@ -1228,7 +1231,8 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     children
       ..add(
         LayoutBuilder(
-          builder: (context, box) => box.maxWidth >= kSimpleMountWideWidth * scale
+          builder: (context, box) =>
+              box.maxWidth >= kSimpleMountWideWidth * scale
               ? Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   spacing: AraSpace.s16,
@@ -1638,10 +1642,7 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
                 spacing: 2,
                 children: [
                   Text(l10n.devicePosition, style: AraText.caption),
-                  Text(
-                    simpleSteps(pos),
-                    style: kSimpleReadingLarge,
-                  ),
+                  Text(simpleSteps(pos), style: kSimpleReadingLarge),
                   // Moving is working: blinking green (DESIGN.md status rule).
                   StatusBlink(
                     on: _target == null && s.isMoving,
@@ -2901,7 +2902,11 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
 /// carrying the target ("Sync to 75°"; dimmed and taking no tap with no
 /// target), the Dome's Park and Home, the Mount window's Check, Center and Sync.
 class SimpleWindowButton extends StatelessWidget {
-  const SimpleWindowButton({super.key, required this.label, required this.onTap});
+  const SimpleWindowButton({
+    super.key,
+    required this.label,
+    required this.onTap,
+  });
 
   final String label;
   final VoidCallback? onTap;
@@ -3011,10 +3016,12 @@ class _SimpleFilterWheelWindowState
       ? context.l10n.deviceSlot(slot.position)
       : context.l10n.deviceSlotFilter(slot.position, slot.name);
 
-  /// The filter in place with its position, as the full UI shows it.
-  String _placed(FilterSlot slot) => slot.name.isEmpty
-      ? context.l10n.deviceSlot(slot.position)
-      : context.l10n.deviceFilterInSlot(slot.name, slot.position);
+  /// A cell's own words: the filter's name when it fits (four letters), else
+  /// its slot number.
+  String _cellLabel(FilterSlot slot) =>
+      slot.name.isNotEmpty && slot.name.characters.length <= 4
+      ? slot.name
+      : '${slot.position}';
 
   @override
   Widget build(BuildContext context) {
@@ -3065,30 +3072,137 @@ class _SimpleFilterWheelWindowState
           : w.slots.where((s) => s.position == sentSlot).firstOrNull;
       final moving = sent != null || w.isMoving;
       final pending = w.isAwaitingUser ? w.pending : null;
-      children.add(
-        simpleWindowRow(
-          l10n.deviceFilter,
-          id: 'Filter',
-          // Moving is working: blinking green (DESIGN.md status rule).
-          StatusBlink(
-            on: moving,
-            child: Text(
-              sent != null
-                  ? l10n.deviceMovingTo(_name(sent))
-                  : w.isMoving
-                  ? l10n.deviceMoving
-                  : w.current == null
-                  ? '—'
-                  : _placed(w.current!),
-              style: kSimpleText.copyWith(
-                color: moving ? AraColors.accentConnected : null,
-              ),
-            ),
+      final shownSlot = sent ?? w.current;
+      final shownName = shownSlot == null ? '—' : _name(shownSlot);
+      // Moving is working: blinking green (DESIGN.md status rule); a hand
+      // swap waits in amber.
+      final status = sent != null
+          ? l10n.deviceMovingTo(_name(sent))
+          : w.isMoving
+          ? l10n.deviceMoving
+          : pending != null
+          ? l10n.deviceSwapIn(_name(pending))
+          : '';
+      final statusLine = StatusBlink(
+        on: moving,
+        child: Text(
+          status,
+          style: AraText.caption.copyWith(
+            color: pending != null && !moving
+                ? AraColors.accentBusy
+                : AraColors.accentConnected,
           ),
         ),
       );
-      if (command.phase == DeviceCommandPhase.asking && command.by == this) {
-        final cmd = ref.read(filterWheelCommandProvider.notifier);
+      final asked =
+          command.phase == DeviceCommandPhase.asking && command.by == this;
+      final cmd = ref.read(filterWheelCommandProvider.notifier);
+      if (w.slots.isEmpty) {
+        children.add(Text(l10n.deviceNoFilters, style: AraText.caption));
+      } else {
+        final large = w.slots.length > 8;
+        final scale = simpleRailScale(context);
+        FilterCellRing ringOf(int position) => sentSlot == position
+            ? FilterCellRing.moving
+            : asked && command.target == position
+            ? FilterCellRing.asked
+            : pending?.position == position
+            ? FilterCellRing.swap
+            : w.currentSlot == position && !moving
+            ? FilterCellRing.here
+            : FilterCellRing.none;
+        final inPlace = w.current;
+        children.add(
+          LayoutBuilder(
+            builder: (context, box) {
+              // 180 pt (260 with more than 8 slots), more with large text;
+              // the small wheel never more than about half a narrow window,
+              // so the reading keeps its room.
+              final size = large
+                  ? math.min(260 * scale, box.maxWidth)
+                  : math.min(180 * scale, box.maxWidth * 0.55);
+              final wheel = SimpleFilterWheel(
+                slots: w.slots,
+                size: size,
+                large: large,
+                pointAt: sentSlot ?? w.currentSlot,
+                ringOf: ringOf,
+                locked: moving || pending != null || asked,
+                semanticLabel: _labelled,
+                slotLabel: _cellLabel,
+                onPick: (position) => cmd.request(position, by: this),
+                hub: !large
+                    ? null
+                    // Scaled down as one block when the hub is small.
+                    : FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(l10n.deviceFilter, style: AraText.caption),
+                            Text(
+                              shownName,
+                              maxLines: 1,
+                              style: kSimpleText.copyWith(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (inPlace != null && inPlace.name.isNotEmpty)
+                              Text(
+                                l10n.deviceSlot(inPlace.position).toLowerCase(),
+                                style: AraText.caption,
+                              ),
+                          ],
+                        ),
+                      ),
+              );
+              if (large) {
+                return Column(
+                  spacing: AraSpace.s8,
+                  children: [
+                    wheel,
+                    Center(child: statusLine),
+                  ],
+                );
+              }
+              return Row(
+                spacing: AraSpace.s12,
+                children: [
+                  Expanded(
+                    child: Column(
+                      key: const Key('simple-filterwheel-reading'),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      spacing: 2,
+                      children: [
+                        Text(l10n.deviceFilter, style: AraText.caption),
+                        // Shrinks in a narrow window rather than wrap.
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: AlignmentDirectional.centerStart,
+                          child: Text(
+                            shownName,
+                            maxLines: 1,
+                            style: kSimpleReadingLarge,
+                          ),
+                        ),
+                        if (shownSlot != null && shownSlot.name.isNotEmpty)
+                          Text(
+                            l10n.deviceSlot(shownSlot.position),
+                            style: AraText.caption,
+                          ),
+                        statusLine,
+                      ],
+                    ),
+                  ),
+                  wheel,
+                ],
+              );
+            },
+          ),
+        );
+      }
+      if (asked) {
         children.add(
           simpleWindowConfirm(
             question: l10n.devicePlanRunningChangeFilter,
@@ -3099,11 +3213,7 @@ class _SimpleFilterWheelWindowState
         );
       }
       if (pending != null) {
-        children.addAll([
-          Text(
-            l10n.deviceSwapIn(_name(pending)),
-            style: kSimpleText.copyWith(color: AraColors.accentBusy),
-          ),
+        children.add(
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             spacing: AraSpace.s8,
@@ -3119,70 +3229,8 @@ class _SimpleFilterWheelWindowState
               ),
             ],
           ),
-        ]);
+        );
       }
-      children.add(
-        w.slots.isEmpty
-            ? Text(l10n.deviceNoFilters, style: AraText.caption)
-            : LayoutBuilder(
-                builder: (context, box) {
-                  // Full-width rows; the labels left-justified and centred as
-                  // a block, so the slot numbers line up.
-                  final scaler = MediaQuery.textScalerOf(context);
-                  final widest = w.slots
-                      .map((slot) {
-                        final painter = TextPainter(
-                          text: TextSpan(
-                            text: _labelled(slot),
-                            style: kSimpleText,
-                          ),
-                          textScaler: scaler,
-                          maxLines: 1,
-                          textDirection: Directionality.of(context),
-                        )..layout();
-                        final width = painter.width;
-                        painter.dispose();
-                        return width;
-                      })
-                      .reduce(math.max);
-                  final inset = math.max(14.0, (box.maxWidth - widest) / 2);
-                  return DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: AraColors.tileFill,
-                      borderRadius: BorderRadius.circular(AraRadius.container),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (final slot in w.slots)
-                          SimpleSegment(
-                            key: Key(
-                              'simple-filterwheel-slot-${slot.position}',
-                            ),
-                            alignment: Alignment.centerLeft,
-                            padding: EdgeInsetsDirectional.only(
-                              start: inset,
-                              end: 14,
-                            ),
-                            label: _labelled(slot),
-                            selected:
-                                (sentSlot ?? w.currentSlot) == slot.position,
-                            radius: AraRadius.container,
-                            onTap:
-                                moving ||
-                                    pending != null ||
-                                    slot.position == w.currentSlot
-                                ? null
-                                : () => ref
-                                      .read(filterWheelCommandProvider.notifier)
-                                      .request(slot.position, by: this),
-                          ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-      );
     }
     if (widget.inSettings) {
       children.addAll(
@@ -4106,9 +4154,7 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
         children.add(
           Text(
             l10n.deviceSafetyLimitsNotLoaded,
-            style: kSimpleCaption.copyWith(
-              color: AraColors.accentWarning,
-            ),
+            style: kSimpleCaption.copyWith(color: AraColors.accentWarning),
           ),
         );
       }
@@ -4456,10 +4502,7 @@ class _WeatherTile extends StatelessWidget {
                       children: [
                         TextSpan(text: value),
                         if (unitBeside && unit.isNotEmpty)
-                          TextSpan(
-                            text: ' $unit',
-                            style: kSimpleUnit,
-                          ),
+                          TextSpan(text: ' $unit', style: kSimpleUnit),
                       ],
                     ),
                     style: kSimpleReading.copyWith(
@@ -4515,9 +4558,18 @@ String simpleWeatherBreachText(
   String n(double v) =>
       v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
   return switch (b.kind) {
-    WeatherBreach.wind => l10n.deviceWindOverLimit(b.value.toStringAsFixed(0), b.limit.round()),
-    WeatherBreach.humidity => l10n.deviceHumidityOverLimit(b.value.toStringAsFixed(0), b.limit.round()),
-    WeatherBreach.dewMargin => l10n.deviceDewUnderMargin(n(b.value), n(b.limit)),
+    WeatherBreach.wind => l10n.deviceWindOverLimit(
+      b.value.toStringAsFixed(0),
+      b.limit.round(),
+    ),
+    WeatherBreach.humidity => l10n.deviceHumidityOverLimit(
+      b.value.toStringAsFixed(0),
+      b.limit.round(),
+    ),
+    WeatherBreach.dewMargin => l10n.deviceDewUnderMargin(
+      n(b.value),
+      n(b.limit),
+    ),
   };
 }
 

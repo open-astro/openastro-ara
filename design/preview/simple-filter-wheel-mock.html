@@ -1,0 +1,403 @@
+<title>Filter Wheel Window</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Layout: one iPad-sized stage with the Simple Mode Filter wheel window over the image and the status pill top right.
+     Single dark look on purpose: DESIGN.md tokens (lib/theme/ara_colors.dart), as the other design/preview mocks. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+    --ok: #4CAF50; --info: #42A5F5; --link: #64B5F6; --sel: #1976D2; --tile: #383838; --warn: #FFB300;
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @property --rot { syntax: "<angle>"; inherits: true; initial-value: 0deg; }
+  * { box-sizing: border-box; }
+  ::selection { background: rgba(25, 118, 210, .45); color: #fff; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys);
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+  body.night { filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(.75); }
+  .page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 80ch; }
+  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--warn); color: var(--warn); margin-left: 6px; vertical-align: 3px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  .group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible, .drum:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+  .auto { color: var(--warn); font-size: 12px; }
+
+  .stage-wrap { overflow-x: auto; }
+  .ipad { width: 1024px; height: 720px; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 62% 48%, #4a3438 0, #1a1418 40%, #08090c 100%); }
+  .strip { position: absolute; left: 16px; right: 16px; top: 16px; height: 56px; background: rgba(26,26,26,.9); border-radius: 10px;
+           display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 13px; color: var(--text2); }
+  .dot { display: inline-flex; align-items: center; gap: 6px; } .dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .dot.hot { outline: 1.5px solid var(--sel); outline-offset: 4px; border-radius: 6px; color: var(--text); }
+  .dot.off i { background: #666; }
+  .pill { position: absolute; right: 16px; top: 88px; max-width: 320px; background: rgba(26,26,26,.9); border-radius: 12px; padding: 6px 12px;
+          display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .pill i { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); flex: none; }
+  .pill.amber i { background: var(--warn); }
+
+  .win { position: absolute; left: 16px; top: 88px; width: 360px; max-height: 616px; overflow-y: auto; background: rgba(26,26,26,.9);
+         backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+  .head { display: flex; align-items: center; gap: 8px; font-weight: 600; min-height: 32px; }
+  .head i { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
+  .head.off i { background: #666; }
+  .caption { color: var(--text2); font-size: 12px; }
+  .blink { animation: blink 1s steps(2, start) infinite; }
+  @keyframes blink { to { visibility: hidden; } }
+
+  /* The reading, as the Focuser's Position and the Rotator's Sky angle */
+  .row { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
+  .reading { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+  .big { font-size: 30px; font-weight: 600; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sub { color: var(--text2); font-variant-numeric: tabular-nums; }
+  .status { font-size: 12px; min-height: 18px; color: var(--ok); }
+  .status.amber { color: var(--warn); }
+
+  /* The wheel: a knurled rim, the filter cells on its face, a fixed blue mark at the top over the light path */
+  .wheel { position: relative; flex: none; }
+  .mark { position: absolute; left: 50%; top: -4px; transform: translateX(-50%); width: 0; height: 0; z-index: 3;
+          border-left: 9px solid transparent; border-right: 9px solid transparent; border-top: 14px solid var(--info); pointer-events: none; }
+  .carrier { position: absolute; inset: 0; border-radius: 50%; transform: rotate(var(--rot));
+             background: repeating-conic-gradient(#454545 0 2deg, #333 2deg 4deg); }
+  .carrier::before { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: #2c2c2c; box-shadow: inset 0 1px 3px #0008; }
+  .cell { position: absolute; border-radius: 50%; border: 0; padding: 0; cursor: pointer; display: grid; place-items: center;
+          font: 600 12px var(--sys); color: var(--fg, #fff); transform: translate(-50%, -50%);
+          background: radial-gradient(circle at 34% 28%, rgba(255,255,255,.38), rgba(255,255,255,0) 46%), var(--glass, #2a2a2a);
+          box-shadow: inset 0 0 0 2px #1a1a1a, inset 0 -3px 6px #0006; transition: opacity .2s, box-shadow .2s; }
+  .cell span { transform: rotate(calc(var(--rot) * -1)); white-space: nowrap; text-shadow: 0 1px 2px var(--sh, #0009); }
+  .cell.here { box-shadow: inset 0 0 0 2px #1a1a1a, 0 0 0 2px var(--link); }
+  .cell.to { box-shadow: inset 0 0 0 2px #1a1a1a, 0 0 0 2px var(--ok); }
+  .cell.ask { box-shadow: inset 0 0 0 2px #1a1a1a, 0 0 0 2px var(--text2); }
+  .cell.swap { box-shadow: inset 0 0 0 2px #1a1a1a, 0 0 0 2px var(--warn); }
+  .cell:disabled { cursor: default; }
+  .cell.dim { opacity: .45; }
+  .eng { position: absolute; transform: translate(-50%, -50%); font: 600 10px var(--sys); color: #8a8a8a; pointer-events: none; font-variant-numeric: tabular-nums; }
+  .eng span { display: inline-block; transform: rotate(calc(var(--rot) * -1)); }
+  .hub { position: absolute; border-radius: 50%; background: var(--bg); border: 1px solid var(--border); z-index: 2;
+         display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; pointer-events: none; }
+  .hub .name { font-size: 22px; font-weight: 600; line-height: 1.1; max-width: 90%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* The drum: the wheel seen edge-on, rolled like the Focuser's knobs */
+  .drum { position: relative; flex: none; width: 132px; height: 184px; border-radius: 12px; overflow: hidden; touch-action: none; cursor: grab;
+          background: linear-gradient(#111 0, #2c2c2c 30%, #333 50%, #2c2c2c 70%, #111 100%); }
+  .drum.locked { cursor: default; }
+  .drum .it { position: absolute; left: 8px; right: 8px; top: 50%; height: 40px; margin-top: -20px; display: flex; align-items: center; gap: 8px;
+              padding: 0 10px; border-radius: 8px; white-space: nowrap; overflow: hidden; pointer-events: none; }
+  .drum .it b { width: 18px; height: 18px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1.5px #1a1a1a;
+                background: radial-gradient(circle at 34% 28%, rgba(255,255,255,.4), rgba(255,255,255,0) 50%), var(--glass, #2a2a2a); }
+  .drum .it em { font-style: normal; overflow: hidden; text-overflow: ellipsis; }
+  .drum .lens { position: absolute; left: 4px; right: 4px; top: 50%; height: 44px; margin-top: -22px; border-radius: 9px;
+                border: 2px solid var(--link); pointer-events: none; }
+  .drum .lens.to { border-color: var(--ok); }
+  .drum .tri { position: absolute; top: 50%; width: 0; height: 0; margin-top: -8px; border-top: 8px solid transparent; border-bottom: 8px solid transparent; pointer-events: none; }
+  .drum .tri.l { left: 0; border-left: 10px solid var(--info); }
+  .drum .tri.r { right: 0; border-right: 10px solid var(--info); }
+
+  /* Today's list (#1666) */
+  .list { background: var(--tile); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+  .list button { border: 0; background: transparent; color: var(--text); min-height: 44px; font: 14px var(--sys); text-align: left; padding: 0 14px 0 120px; cursor: pointer; }
+  .list button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  .list button:disabled:not([aria-pressed="true"]) { color: #777; cursor: default; }
+  .plainrow { display: flex; align-items: center; min-height: 44px; } .plainrow span:first-child { flex: 1; }
+
+  .cell:not(:disabled):hover { filter: brightness(1.18); }
+
+  .ask { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 0; }
+  .ask span { flex: 1 1 160px; color: var(--warn); }
+  .ask button { border: 0; background: transparent; color: var(--link); font: 600 14px var(--sys); padding: 8px; cursor: pointer; }
+
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .notes div { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+  .notes div.pick { border-color: var(--sel); }
+  .notes h2 { font-size: 14px; margin: 0 0 4px; }
+  .notes p { margin: 0; color: var(--text2); font-size: 13px; }
+  @media (prefers-reduced-motion: reduce) { .blink { animation: none; } .carrier { transition: none !important; } }
+</style>
+
+<div class="page">
+  <h1>Filter wheel window: the wheel itself <span class="tag">proposed</span></h1>
+  <p class="note">The Focuser got knobs and the Rotator got a dial, each shaped like the hardware, with the reading big on the left. These layouts give the Filter wheel the same treatment. Today's list (#1666) is here for comparison. Everything works: tap a filter (or roll the drum in C), switch to Plan running or a manual wheel to see the asks, and try 5, 7, 8 and 12 slots.</p>
+
+  <div class="controls">
+    <div class="group"><span class="lbl">Layout</span>
+      <div class="seg" role="group" aria-label="Layout" id="layout">
+        <button aria-pressed="true" data-v="a">A · Wheel beside the reading (chosen)</button>
+        <button aria-pressed="false" data-v="b">B · Big wheel, name in the hub</button>
+        <button aria-pressed="false" data-v="c">C · Drum, edge-on</button>
+        <button aria-pressed="false" data-v="list">Today · List (#1666)</button>
+      </div>
+      <span class="auto" id="auto" hidden>A has room for 8 cells; with 12 it shows as B.</span>
+    </div>
+    <div class="group"><span class="lbl">Slots</span>
+      <div class="seg" role="group" aria-label="Slots" id="slots">
+        <button aria-pressed="false" data-v="5">5</button>
+        <button aria-pressed="true" data-v="7">7</button>
+        <button aria-pressed="false" data-v="8">8 (one unnamed)</button>
+        <button aria-pressed="false" data-v="12">12</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">State</span>
+      <div class="seg" role="group" aria-label="State" id="state">
+        <button aria-pressed="true" data-v="on">Connected</button>
+        <button aria-pressed="false" data-v="plan">Plan running</button>
+        <button aria-pressed="false" data-v="manual">Manual wheel</button>
+        <button aria-pressed="false" data-v="off">Not connected</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">Glass</span>
+      <div class="seg" role="group" aria-label="Glass" id="glass">
+        <button aria-pressed="true" data-v="tint">Tinted by filter (chosen)</button>
+        <button aria-pressed="false" data-v="plain">Plain</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">View</span>
+      <div class="seg" role="group" aria-label="View" id="view">
+        <button aria-pressed="true" data-v="day">Normal</button>
+        <button aria-pressed="false" data-v="night">Night (red)</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-wrap">
+    <div class="ipad">
+      <div class="strip">
+        <span class="dot"><i></i>Main Camera</span><span class="dot"><i></i>Mount</span>
+        <span class="dot"><i></i>Focuser</span><span class="dot hot" id="stripDot"><i id="stripI"></i>Filter Wheel</span>
+        <span class="dot"><i></i>Rotator</span><span class="dot"><i></i>Guide Camera</span>
+      </div>
+      <div class="pill" id="pill" hidden></div>
+      <div class="win" id="win"></div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="pick"><h2>A · Wheel beside the reading, tinted (chosen 2026-11-07)</h2><p>The Focuser and Rotator layout: the filter in place big on the left ("Ha", "Slot 5" under it, then "Moving to OIII…" in blinking green), the wheel on the right at 180 pt. Each filter is a cell on the wheel's face, and the cells are the only way to pick one (user, 2026-11-07): tap one and the wheel turns the short way until that cell sits under the blue mark, where the light passes. The tap is the action, as today: no Start, because a filter change is one short move. Cells show the filter's name when it fits (four letters), otherwise the slot number. Up to 8 cells fit at 44 pt; a 12-slot wheel shows as B.</p></div>
+    <div><h2>B · Big wheel, name in the hub</h2><p>The wheel takes the window's width (260 pt), so 12 cells still get 44 pt targets. The filter in place sits in the hub, the slot numbers are engraved on the face beside the cells, and the status line runs under the wheel. Reads well but breaks the "reading left, control right" pattern the other two windows share.</p></div>
+    <div><h2>C · Drum, edge-on</h2><p>The wheel seen from the side, rolled like the Focuser's knobs: drag or scroll it until a filter sits between the blue marks, let go and it changes (tap a row to go straight there). It wraps round, as a wheel does. Closest to the knobs' feel, but rolling is slower than one tap, and only five filters show at once.</p></div>
+    <div><h2>Glass colours</h2><p>Tinted cells colour each filter as its glass (L clear, R red, Ha deep red, OIII teal…), from the name; an unknown name stays plain. The tint is content, like the image, never a state: the blue mark and ring say which filter is in, green says moving, amber says swap. Night mode reds everything anyway, and Plain is there if tints feel off-brand.</p></div>
+    <div><h2>Asks and manual wheels</h2><p>Unchanged from #1666, in the new place. While a plan runs, a tap rings the cell in grey and asks "A plan is running. Change the filter anyway?" with Cancel and Change anyway. A manual wheel rings the cell in amber with "Swap in Ha, then confirm." and Cancel swap / Ha is in; the wheel turns only once the user confirms.</p></div>
+    <div><h2>Access and text size</h2><p>Every cell is a button read as "5 · Ha" (selected for the one in place, disabled while the wheel turns), so the tab order and screen reader match today's list. The wheel and its cells grow with the text, as the knobs and dial do. Per-filter focus offsets stay out of the window: the daemon never applies them (#1667).</p></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const SETS = {
+    5: ['L', 'R', 'G', 'B', 'Ha'],
+    7: ['L', 'R', 'G', 'B', 'Ha', 'OIII', 'SII'],
+    8: ['L', 'R', 'G', 'B', 'Ha', 'OIII', 'SII', ''],
+    12: ['L', 'R', 'G', 'B', 'Ha', 'OIII', 'SII', 'Dual-band', 'UV/IR cut', 'Dark', '', ''],
+  };
+  // Glass tint and label colour by filter name; anything else stays plain.
+  const GLASS = {
+    L: ['#cfd6e2', '#1a1a1a', '#fff8'], 'UV/IR cut': ['#b9c4cf', '#1a1a1a', '#fff8'],
+    R: ['#b3342a', '#fff'], G: ['#2f7d50', '#fff'], B: ['#2b5fb8', '#fff'],
+    Ha: ['#7c1622', '#fff'], OIII: ['#17867f', '#fff'], SII: ['#5a1a3a', '#fff'],
+    'Dual-band': ['#6a4596', '#fff'], Dark: ['#0b0b0b', '#bbb'],
+  };
+  const S = { layout: 'a', n: 7, conn: 'on', tint: true, cur: 4, to: null, asking: null, pending: null, rot: 0, p: 4, preview: null };
+  const $ = s => document.querySelector(s);
+  const mod = (a, n) => ((a % n) + n) % n;
+  const names = () => SETS[S.n];
+  const nm = i => names()[i] || `Slot ${i + 1}`;
+  const short = i => { const s = names()[i]; return s && s.length <= 4 ? s : String(i + 1); };
+  const glass = i => {
+    const g = S.tint && GLASS[names()[i]];
+    return g ? `--glass:${g[0]};--fg:${g[1]};--sh:${g[2] || '#0009'}` : '--glass:#262626;--fg:#E0E0E0';
+  };
+  const lay = () => (S.layout === 'a' && S.n > 8 ? 'b' : S.layout);
+  const busy = () => S.to != null || S.pending != null || S.asking != null;
+  const step = () => 360 / S.n;
+
+  function seg(id, fn) {
+    $(id).addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      $(id).querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+      fn(b.dataset.v); render();
+    });
+  }
+  const reset = () => { S.to = null; S.asking = null; S.pending = null; S.preview = null; S.p = S.cur; S.rot = -S.cur * step(); };
+  seg('#layout', v => { S.layout = v; reset(); });
+  seg('#slots', v => { S.n = +v; S.cur = Math.min(S.cur, S.n - 1); reset(); });
+  seg('#state', v => { S.conn = v; reset(); });
+  seg('#glass', v => S.tint = v === 'tint');
+  seg('#view', v => document.body.classList.toggle('night', v === 'night'));
+
+  function statusLine() {
+    if (S.to != null) return `<span class="status blink">Moving to ${esc(nm(S.to))}…</span>`;
+    if (S.pending != null) return `<span class="status amber">Swap in ${esc(nm(S.pending))}, then confirm.</span>`;
+    if (S.preview != null && S.preview !== S.cur) return `<span class="status">Let go to change to ${esc(nm(S.preview))}</span>`;
+    return '<span class="status"></span>';
+  }
+  const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const reading = () => {
+    const named = !!names()[S.cur];
+    return `<div class="reading"><span class="caption">Filter</span>
+<span class="big" title="${esc(nm(S.cur))}">${esc(nm(S.cur))}</span>
+      ${named ? `<span class="sub">Slot ${S.cur + 1}</span>` : '<span class="sub">No name set</span>'}
+      ${statusLine()}</div>`;
+  };
+  const asks = () => {
+    if (S.asking != null) return `<div class="ask"><span>A plan is running. Change the filter anyway?</span><button id="no">Cancel</button><button id="yes">Change anyway</button></div>`;
+    if (S.pending != null) return `<div class="ask"><span></span><button id="cancelSwap">Cancel swap</button><button id="isIn">${esc(nm(S.pending))} is in</button></div>`;
+    return '';
+  };
+
+  // size: wheel diameter; ring: radius of the cell centres; engraved: slot numbers on the face
+  function wheel(size, engraved) {
+    const c = size / 2, hubR = size * (engraved ? 0.2 : 0.14), ring = engraved ? size * 0.37 : size * 0.33;
+    const d = Math.min(engraved ? 52 : 48, 2 * Math.PI * ring / S.n - 6);
+    let cells = '', eng = '';
+    for (let i = 0; i < S.n; i++) {
+      const a = i * step() * Math.PI / 180, x = c + Math.sin(a) * ring, y = c - Math.cos(a) * ring;
+      const cls = i === S.to ? 'to' : i === S.asking ? 'ask' : i === S.pending ? 'swap' : (i === S.cur && S.to == null) ? 'here' : '';
+      const dim = busy() && cls === '' && i !== S.cur;
+      cells += `<button class="cell ${cls} ${dim ? 'dim' : ''}" style="left:${x}px;top:${y}px;width:${d}px;height:${d}px;${glass(i)}"
+        data-i="${i}" aria-label="${i + 1} · ${esc(nm(i))}" ${i === S.cur ? 'aria-pressed="true"' : ''} ${busy() || i === S.cur ? 'disabled' : ''}><span>${esc(short(i))}</span></button>`;
+      if (engraved) {
+        const r2 = ring - d / 2 - 9;
+        eng += `<span class="eng" style="left:${c + Math.sin(a) * r2}px;top:${c - Math.cos(a) * r2}px"><span>${i + 1}</span></span>`;
+      }
+    }
+    const hub = engraved
+      ? `<div class="hub" style="inset:${c - hubR}px"><span class="caption">Filter</span><span class="name">${esc(nm(S.cur))}</span><span class="caption">${names()[S.cur] ? `slot ${S.cur + 1}` : ''}</span></div>`
+      : `<div class="hub" style="inset:${c - hubR}px"></div>`;
+    return `<div class="wheel" style="width:${size}px;height:${size}px" role="group" aria-label="Filters">
+      <div class="carrier" id="carrier" style="--rot:${S.rot}deg">${eng}${cells}</div><div class="mark"></div>${hub}</div>`;
+  }
+
+  function drumItems() {
+    let items = '';
+    const base = Math.round(S.p);
+    for (let k = -3; k <= 3; k++) {
+      const j = base + k, i = mod(j, S.n), th = (j - S.p) * 32 * Math.PI / 180;
+      if (Math.abs(th) >= Math.PI / 2) continue;
+      const y = Math.sin(th) * 74, sc = Math.cos(th);
+      items += `<div class="it" style="transform:translateY(${y}px) scaleY(${sc});opacity:${0.25 + 0.75 * sc * sc};${glass(i)}">
+        <b></b><em>${i + 1} · ${esc(nm(i))}</em></div>`;
+    }
+    return items + `<div class="lens ${S.to != null ? 'to' : ''}"></div><div class="tri l"></div><div class="tri r"></div>`;
+  }
+
+  function drum() {
+    const locked = S.to != null || S.pending != null || S.asking != null;
+    return `<div class="drum ${locked ? 'locked' : ''}" id="drum" tabindex="0" role="slider" aria-label="Filter"
+      aria-valuemin="1" aria-valuemax="${S.n}" aria-valuenow="${S.cur + 1}" aria-valuetext="${S.cur + 1} · ${esc(nm(S.cur))}" ${locked ? 'aria-disabled="true"' : ''}>
+      ${drumItems()}</div>`;
+  }
+
+  function render() {
+    $('#auto').hidden = !(S.layout === 'a' && S.n > 8);
+    $('#stripDot').classList.toggle('off', S.conn === 'off');
+    $('#stripI').classList.toggle('blink', S.to != null);
+    const pill = $('#pill');
+    pill.hidden = S.to == null && S.pending == null;
+    pill.className = 'pill' + (S.pending != null ? ' amber' : '');
+    pill.innerHTML = S.pending != null ? `<i></i><span><b>Filter wheel</b> · Swap in ${esc(nm(S.pending))}, then confirm.</span>` : '<i class="blink"></i><span><b>Filter wheel</b> · Moving…</span>';
+
+    const head = `<div class="head ${S.conn === 'off' ? 'off' : ''}"><i class="${S.to != null ? 'blink' : ''}"></i>Filter Wheel · EFW ${S.n}×36</div>`;
+    if (S.conn === 'off') { $('#win').innerHTML = head + '<div class="caption">Not connected</div>'; return; }
+    const L = lay();
+    if (L === 'a') $('#win').innerHTML = head + `<div class="row">${reading()}${wheel(180, false)}</div>` + asks();
+    else if (L === 'b') $('#win').innerHTML = head + `<div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0 2px">${wheel(260, true)}
+        <div style="text-align:center">${statusLine()}</div></div>` + asks();
+    else if (L === 'c') $('#win').innerHTML = head + `<div class="row">${reading()}${drum()}</div>` + asks();
+    else {
+      const cur = S.to != null ? `<span class="status blink" style="font-size:14px">Moving to ${esc(nm(S.to))}…</span>` : `<span>${esc(names()[S.cur] ? `${nm(S.cur)} (slot ${S.cur + 1})` : nm(S.cur))}</span>`;
+      $('#win').innerHTML = head + `<div class="plainrow"><span>Filter</span>${cur}</div>`
+        + (S.pending != null ? `<span class="status amber" style="font-size:14px">Swap in ${esc(nm(S.pending))}, then confirm.</span>` : '') + asks()
+        + `<div class="list">${names().map((_, i) => `<button data-i="${i}" aria-pressed="${(S.to ?? S.cur) === i}" ${busy() || i === S.cur ? 'disabled' : ''}>${i + 1}${names()[i] ? ` · ${esc(names()[i])}` : ''}</button>`).join('')}</div>`;
+    }
+    wire();
+  }
+
+  function pick(i) {
+    if (busy() || i === S.cur) return;
+    if (S.conn === 'plan') { S.asking = i; render(); return; }
+    if (S.conn === 'manual') { S.pending = i; render(); return; }
+    go(i);
+  }
+
+  function go(i, quick) {
+    S.asking = null; S.pending = null; S.preview = null;
+    let d = mod(i - S.cur, S.n); if (d > S.n / 2) d -= S.n;
+    const dur = quick ? 300 : 450 * Math.abs(d) + 250;
+    S.to = i; render();
+    const from = S.rot, target = S.rot - d * step();
+    const fromP = S.p, toP = S.cur + d + (S.p - S.cur);
+    const t0 = performance.now();
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    (function tick(now) {
+      const t = reduce ? 1 : Math.min(1, (now - t0) / dur), e = t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      S.rot = from + (target - from) * e;
+      S.p = fromP + (toP - fromP) * e;
+      const c = $('#carrier'); if (c) c.style.setProperty('--rot', `${S.rot}deg`);
+      if (lay() === 'c') { const dr = $('#drum'); if (dr) dr.innerHTML = drumItems(); }
+      if (t < 1) { requestAnimationFrame(tick); return; }
+      S.cur = i; S.to = null; S.rot = -i * step(); S.p = i; render();
+    })(t0);
+  }
+
+  function wire() {
+    document.querySelectorAll('.cell, .list button').forEach(b => b.addEventListener('click', () => pick(+b.dataset.i)));
+    const yes = $('#yes'), no = $('#no'), isIn = $('#isIn'), cs = $('#cancelSwap');
+    if (yes) yes.addEventListener('click', () => { const i = S.asking; S.asking = null; go(i); });
+    if (no) no.addEventListener('click', () => { S.asking = null; render(); });
+    if (isIn) isIn.addEventListener('click', () => go(S.pending, true));
+    if (cs) cs.addEventListener('click', () => { S.pending = null; render(); });
+    const dr = $('#drum'); if (dr) wireDrum(dr);
+  }
+
+  // Drum: 36 pt of drag rolls one filter; let go and it settles on the nearest, then changes to it.
+  function wireDrum(el) {
+    const host = el.parentElement;
+    let y0 = null, p0 = 0, moved = false, timer;
+    // Only the rows redraw, so the drag keeps its pointer capture.
+    const refresh = () => { el.innerHTML = drumItems(); const st = host.querySelector('.status'); if (st) st.outerHTML = statusLine(); };
+    const settle = () => {
+      const i = mod(Math.round(S.p), S.n);
+      S.p = S.cur; S.preview = null;
+      if (i === S.cur) { render(); return; }
+      pick(i);
+    };
+    const locked = () => S.to != null || S.pending != null || S.asking != null;
+    el.addEventListener('pointerdown', e => { if (locked()) return; el.setPointerCapture(e.pointerId); y0 = e.clientY; p0 = S.p; moved = false; });
+    el.addEventListener('pointermove', e => {
+      if (y0 == null) return;
+      const dy = e.clientY - y0; if (Math.abs(dy) > 4) moved = true;
+      S.p = p0 - dy / 36; S.preview = mod(Math.round(S.p), S.n); refresh();
+    });
+    const up = e => {
+      if (y0 == null) return; y0 = null;
+      if (!moved) { // a tap: the row under the finger
+        const b = el.getBoundingClientRect(), off = (e.clientY - b.top - b.height / 2);
+        const k = Math.round(Math.asin(Math.max(-1, Math.min(1, off / 74))) * 180 / Math.PI / 32);
+        S.preview = null; pick(mod(S.cur + k, S.n)); return;
+      }
+      settle();
+    };
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', () => { y0 = null; S.p = S.cur; S.preview = null; render(); });
+    el.addEventListener('wheel', e => {
+      if (locked()) return; e.preventDefault();
+      S.p += e.deltaY / 120; S.preview = mod(Math.round(S.p), S.n); refresh();
+      clearTimeout(timer); timer = setTimeout(settle, 450);
+    }, { passive: false });
+    el.addEventListener('keydown', e => {
+      if (locked()) return;
+      const d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key]; if (!d) return;
+      e.preventDefault(); pick(mod(S.cur + d, S.n));
+    });
+  }
+
+  S.rot = -S.cur * step();
+  render();
+})();
+</script>
+

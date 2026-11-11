@@ -163,6 +163,25 @@ class AraColors {
   /// The dome drawing's slit where it is now.
   static const domeSlit = Color(0xF26E6E6E);
 
+  /// The Filter wheel window's wheel (#1676): the knurled rim's two bands, the
+  /// face inside it, and each filter's glass (a cell's tint is content, like
+  /// the image, never a state) with its label colour.
+  static const wheelRimLight = Color(0xFF454545);
+  static const wheelRimDark = Color(0xFF333333);
+  static const wheelFace = Color(0xFF2C2C2C);
+  static const glassPlain = Color(0xFF262626);
+  static const glassClear = Color(0xFFCFD6E2);
+  static const glassUvIr = Color(0xFFB9C4CF);
+  static const glassRed = Color(0xFFB3342A);
+  static const glassGreen = Color(0xFF2F7D50);
+  static const glassBlue = Color(0xFF2B5FB8);
+  static const glassHa = Color(0xFF7C1622);
+  static const glassOiii = Color(0xFF17867F);
+  static const glassSii = Color(0xFF5A1A3A);
+  static const glassDualBand = Color(0xFF6A4596);
+  static const glassDark = Color(0xFF0B0B0B);
+  static const glassDarkLabel = Color(0xFFBBBBBB);
+
   /// A sequence instruction's category colour in the sequencer.
   static const instructionCamera = Color(0xFF64B5F6);
   static const instructionFilterWheel = Color(0xFFBA68C8);

@@ -44,6 +44,11 @@ at the top. This happens in the same commit that pushes the release tag.
 - The Mount window shows where the scope points, with Check beside it: one quick frame, plate-solved on the rig, then how far that is from the Target. Center slews and centers on it, and Sync writes the solve into the mount's model while nothing runs. A failed check says why and opens the setting that fixes it (#1650).
 - Verify Position syncs a connected, still rotator to the solved angle and reports the angle (#1650).
 
+### Added (device windows)
+
+- A camera with its own anti-dew heater (ZWO, ToupTek family, Player One) gets a Dew heater row in Simple Mode's Camera window: On / Off for an on/off heater, a slider with its level for one with power levels. The rig pairs the heater with the main camera by the serial number both report, never by name or order and never with the guide camera, and the row shows only while the heater's switch is connected. The camera status gains an optional `dew_heater` (`device_id`, `port_id`) (#1663).
+- Simple Mode's Filter wheel window is the wheel itself: the filter in place big on the left with its slot under it, and a wheel of glass cells on the right, each tinted the colour of that filter's glass, with a blue mark where the light passes. Tap a cell to change filter and the wheel turns the short way to it (it jumps with reduced motion). A wheel with more than 8 slots shows a bigger wheel with the name in the hub. The plan-running question and the manual swap work as before (#1676).
+
 ### Added (session watch)
 
 - **Monitor** in Simple Mode: a full-screen, read-only view of the Session, opened from the left rail on windows 900 pt wide or more. One line on top says whether all is well or names the most important problem. Tiles show what the rig is doing now with a frame countdown and Up next, the Target with its altitude tonight, the next meridian flip, safety, weather, Guiding and the last frame's quality with its trend, and tonight's timeline runs beside a large Emergency Stop. Tiles appear only for gear in the rig's profile. If the link to the rig is lost, the numbers freeze and say how old they are. Tapping a tile opens the window or panel that owns it. The screen stays awake while Monitor shows, and this device's battery shows beside the clock (#1724).

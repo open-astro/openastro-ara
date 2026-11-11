@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart';
-import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegment;
+import 'package:openastroara/widgets/simple/filter_wheel.dart' show SimpleFilterWheel;
 import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
@@ -60,6 +60,7 @@ Map<String, dynamic> _wire({
   bool manual = false,
   int? pending,
   String ha = 'Ha',
+  int extra = 0,
 }) =>
     {
       'device_id': 'w',
@@ -70,6 +71,7 @@ Map<String, dynamic> _wire({
         {'position': 0, 'name': 'L'},
         {'position': 1, 'name': ha},
         {'position': 2, 'name': ''},
+        for (var i = 0; i < extra; i++) {'position': 3 + i, 'name': 'F${3 + i}'},
       ],
       'runtime': {'state': runtime, 'current_slot': current, 'pending_slot': ?pending},
     };
@@ -81,7 +83,12 @@ class _Running extends SequenceRunStateNotifier {
 }
 
 Future<(ProviderContainer, _Wheel)> _pump(WidgetTester tester, Map<String, dynamic> wire,
-    {bool inSettings = false, DeviceDriver? driver, bool planRunning = false, double? width, bool alsoPicker = false}) async {
+    {bool inSettings = false,
+    DeviceDriver? driver,
+    bool planRunning = false,
+    double? width,
+    bool alsoPicker = false,
+    bool reduceMotion = false}) async {
   await tester.pumpWidget(const SizedBox());
   await tester.pump();
   final wheel = _Wheel(wire);
@@ -95,6 +102,10 @@ Future<(ProviderContainer, _Wheel)> _pump(WidgetTester tester, Map<String, dynam
   await tester.pumpWidget(UncontrolledProviderScope(
     container: c,
     child: MaterialApp(
+      builder: (context, child) => MediaQuery(
+        data: MediaQuery.of(context).copyWith(disableAnimations: reduceMotion),
+        child: child!,
+      ),
       home: Scaffold(
         body: Align(
           alignment: Alignment.topLeft,
@@ -119,18 +130,28 @@ Future<(ProviderContainer, _Wheel)> _pump(WidgetTester tester, Map<String, dynam
 Finder _slot(int p) => find.byKey(Key('simple-filterwheel-slot-$p'));
 
 void main() {
-  testWidgets('the filter in place by name; a tap on a filter moves the wheel to it', (tester) async {
+  testWidgets('the filter in place big with its slot under it; a tap on a cell moves the wheel to it', (tester) async {
+    final semantics = tester.ensureSemantics();
     final (_, wheel) = await _pump(tester, _wire());
     expect(find.text('Filter wheel · EFW 7'), findsOneWidget);
-    expect(find.text('L (slot 0)'), findsOneWidget, reason: 'the filter and its position, as the full UI shows it');
-    expect(tester.widget<SimpleSegment>(_slot(0)).selected, isTrue);
-    expect(find.text('Slot 2'), findsOneWidget, reason: 'an unnamed slot by its number');
-    // Each filter shows its position before it's tapped, as the full UI's list does.
-    expect(find.descendant(of: _slot(0), matching: find.text('0 · L')), findsOneWidget);
-    expect(find.descendant(of: _slot(1), matching: find.text('1 · Ha')), findsOneWidget);
+    expect(find.text('Filter'), findsOneWidget, reason: 'the reading caption');
+    expect(find.descendant(of: find.byKey(const Key('simple-filterwheel-reading')), matching: find.text('L')), findsOneWidget);
+    expect(find.text('Slot 0'), findsOneWidget, reason: 'the position under the name');
+    expect(tester.getSemantics(_slot(0)), isSemantics(isButton: true, isSelected: true, hasEnabledState: true, isEnabled: true, label: '0 · L'));
+    expect(tester.getSemantics(_slot(1)), isSemantics(isButton: true, hasEnabledState: true, isEnabled: true, label: '1 · Ha'));
+    expect(tester.getSemantics(_slot(2)), isSemantics(isButton: true, hasEnabledState: true, isEnabled: true, label: 'Slot 2'), reason: 'an unnamed slot by its number');
     await tester.tap(_slot(1));
     await tester.pump();
     expect(wheel.calls, ['change 1']);
+    await tester.pump(const Duration(seconds: 11));
+    semantics.dispose();
+  });
+
+  testWidgets('the cell in place takes no tap', (tester) async {
+    final (_, wheel) = await _pump(tester, _wire());
+    await tester.tap(_slot(0));
+    await tester.pump();
+    expect(wheel.calls, isEmpty);
   });
 
   testWidgets('it reads Moving to … until the wheel lands, and takes no tap meanwhile', (tester) async {
@@ -147,7 +168,8 @@ void main() {
     wheel.set(_wire(current: 1));
     await tester.pump();
     expect(find.text('Moving to Ha…'), findsNothing);
-    expect(tester.widget<SimpleSegment>(_slot(1)).selected, isTrue);
+    expect(find.descendant(of: find.byKey(const Key('simple-filterwheel-reading')), matching: find.text('Ha')), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
   });
 
   testWidgets('a move started elsewhere reads Moving…', (tester) async {
@@ -243,8 +265,9 @@ void main() {
 
   testWidgets('an unnamed filter in place reads by its slot alone', (tester) async {
     await _pump(tester, _wire(current: 2));
-    expect(find.text('Slot 2'), findsWidgets);
+    expect(find.descendant(of: find.byKey(const Key('simple-filterwheel-reading')), matching: find.text('Slot 2')), findsOneWidget);
     expect(find.textContaining('(slot 2)'), findsNothing);
+    expect(find.text('Slot 2'), findsOneWidget, reason: 'the slot alone, not twice');
   });
 
   testWidgets('a change accepted but never seen moving clears Moving to … and frees the filters', (tester) async {
@@ -255,7 +278,7 @@ void main() {
     expect(find.text('Moving to Ha…'), findsOneWidget);
     await tester.pump(const Duration(seconds: 11));
     expect(find.text('Moving to Ha…'), findsNothing);
-    expect(find.text('L (slot 0)'), findsOneWidget);
+    expect(find.text('Slot 0'), findsOneWidget);
     await tester.tap(_slot(1));
     await tester.pump();
     expect(wheel.calls, ['change 1', 'change 1'], reason: 'the filters take a tap again');
@@ -286,26 +309,74 @@ void main() {
     expect(tester.getTopLeft(find.text('Cancel')).dy, greaterThanOrEqualTo(question.bottom));
   });
 
-  testWidgets('a long filter name ends in an ellipsis, not a silent cut', (tester) async {
-    // #1666 audit P3.
-    await _pump(tester, _wire(ha: 'Hydrogen-alpha 3 nm narrowband 2 inch mounted'), width: 280);
-    final label = tester.widget<Text>(find.descendant(of: _slot(1), matching: find.byType(Text)));
-    expect(label.overflow, TextOverflow.ellipsis);
+  testWidgets('a long name shows the slot number in its cell and the full name in the reading', (tester) async {
+    const long = 'Hydrogen-alpha 3 nm narrowband';
+    await _pump(tester, _wire(ha: long, current: 1), width: 280);
+    expect(find.descendant(of: _slot(1), matching: find.text('1')), findsOneWidget);
+    expect(find.descendant(of: _slot(1), matching: find.text(long)), findsNothing);
+    expect(find.descendant(of: _slot(0), matching: find.text('L')), findsOneWidget, reason: 'a short name fits its cell');
+    final reading = tester.widget<Text>(find.descendant(of: find.byKey(const Key('simple-filterwheel-reading')), matching: find.text(long)));
+    expect(reading.data, long);
+    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('the filters are one list, labels lined up on the left and centred as a column', (tester) async {
-    await _pump(tester, _wire(), width: 400);
-    final first = tester.getRect(_slot(0));
-    final second = tester.getRect(_slot(1));
-    expect(second.top, greaterThanOrEqualTo(first.bottom), reason: 'one filter a line');
-    expect((second.left, second.width), (first.left, first.width), reason: 'all one width');
-    expect(tester.widget<SimpleSegment>(_slot(1)).alignment, Alignment.centerLeft);
-    // Labels line up on the left with each other, and the column of them sits centred.
-    Rect label(int p) => tester.getRect(find.descendant(of: _slot(p), matching: find.byType(Text)));
-    expect(label(1).left, label(0).left);
-    final window = tester.getRect(find.byKey(const Key('simple-device-filterwheel')));
-    final widest = [label(0), label(1), label(2)].reduce((a, b) => a.width >= b.width ? a : b);
-    expect(widest.center.dx, moreOrLessEquals(window.center.dx, epsilon: 1));
-    expect(tester.getRect(_slot(0)).width, window.width, reason: 'each row fills the window');
+  testWidgets('the cells cannot be tapped while a plan asks or a swap waits', (tester) async {
+    final (_, wheel) = await _pump(tester, _wire(), planRunning: true);
+    await tester.pump();
+    await tester.tap(_slot(1));
+    await tester.pump();
+    await tester.tap(_slot(2));
+    await tester.pump();
+    expect(wheel.calls, isEmpty, reason: 'asking: the other cell takes no tap');
+    await tester.tap(find.text('Cancel'));
+    await tester.pump();
+    final (_, manual) = await _pump(tester, _wire(manual: true, runtime: 'awaiting_user', pending: 1));
+    await tester.tap(_slot(2));
+    await tester.pump();
+    expect(manual.calls, isEmpty, reason: 'swapping');
+  });
+
+  testWidgets('a compact wheel for 8 slots, a large one for 9', (tester) async {
+    await _pump(tester, _wire(extra: 5), width: 360); // 8 slots
+    final compact = tester.getSize(find.byType(SimpleFilterWheel));
+    expect(find.byKey(const Key('simple-filterwheel-reading')), findsOneWidget);
+    expect(compact.width, 180);
+    await _pump(tester, _wire(extra: 6), width: 360); // 9 slots
+    final large = tester.getSize(find.byType(SimpleFilterWheel));
+    expect(find.byKey(const Key('simple-filterwheel-reading')), findsNothing, reason: 'the name moves into the hub');
+    expect(large.width, 260);
+    expect(find.descendant(of: find.byType(SimpleFilterWheel), matching: find.text('L')), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('every cell of a large wheel is at least a 44 pt target', (tester) async {
+    await _pump(tester, _wire(extra: 9), width: 360); // 12 slots
+    for (var p = 0; p < 12; p++) {
+      final size = tester.getSize(_slot(p));
+      expect(size.width, greaterThanOrEqualTo(44), reason: 'slot $p');
+      expect(size.height, greaterThanOrEqualTo(44), reason: 'slot $p');
+    }
+  });
+
+  testWidgets('the wheel turns to bring a slot under the mark, and jumps with reduced motion', (tester) async {
+    Offset under(Finder wheel) => Offset(tester.getRect(wheel).center.dx, tester.getRect(wheel).top);
+    final (_, motion) = await _pump(tester, _wire());
+    await tester.tap(_slot(1));
+    await tester.pump();
+    motion.set(_wire(current: 1));
+    await tester.pump();
+    final wheel = find.byType(SimpleFilterWheel);
+    expect((tester.getCenter(_slot(1)).dx - under(wheel).dx).abs(), greaterThan(5), reason: 'still turning');
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.getCenter(_slot(1)).dx, moreOrLessEquals(under(wheel).dx, epsilon: 1));
+    expect(tester.getCenter(_slot(1)).dy, lessThan(tester.getRect(wheel).center.dy));
+
+    final (_, still) = await _pump(tester, _wire(), reduceMotion: true);
+    await tester.tap(_slot(1));
+    await tester.pump();
+    still.set(_wire(current: 1));
+    await tester.pump();
+    expect(tester.getCenter(_slot(1)).dx, moreOrLessEquals(under(wheel).dx, epsilon: 1), reason: 'landed without turning');
+    await tester.pump(const Duration(seconds: 11));
   });
 }
