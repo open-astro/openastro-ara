@@ -128,6 +128,8 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(FilenamesSettingsDto))]
 [JsonSerializable(typeof(FilterChangeRequestDto))]
 [JsonSerializable(typeof(FilterInstalledRequestDto))]
+[JsonSerializable(typeof(FilterOffsetCalibrationRequestDto))]
+[JsonSerializable(typeof(FilterOffsetCalibrationDto))]
 [JsonSerializable(typeof(FilterSlotDto))]
 [JsonSerializable(typeof(FilterWheelDto))]
 [JsonSerializable(typeof(FilterWheelStateDto))]

@@ -360,7 +360,8 @@ public static partial class EquipmentEndpoints {
                 IBatchJobService jobs,
                 IProfileStore profiles,
                 AutofocusRunTracker tracker,
-                IBahtinovFocusService bahtinov) => RunAutofocus(autofocus, jobs, profiles, tracker, bahtinov))
+                IBahtinovFocusService bahtinov,
+                FilterOffsetCalibrationService offsets) => RunAutofocus(autofocus, jobs, profiles, tracker, bahtinov, offsets))
             .Produces<BatchJobDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("RunAutofocus");
@@ -390,6 +391,9 @@ public static partial class EquipmentEndpoints {
             CancelManualSwapAsync(router, ct))
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status409Conflict);
+        // #1675 — calibrate each filter's focus offset as a background job; the results wait on the daemon
+        // for Save or Discard.
+        MapOffsetCalibration(filterwheel);
 
         // ─── Rotator ───
         var rotator = equipment.MapGroup("/rotator");
@@ -819,6 +823,55 @@ public static partial class EquipmentEndpoints {
         return app;
     }
 
+    internal const string OffsetCalibrationRefusedTitle = "offset_calibration_refused";
+
+    /// <summary>#1675 — the focus offset calibration routes under <c>/equipment/filterwheel</c>.</summary>
+    internal static void MapOffsetCalibration(IEndpointRouteBuilder filterwheel) {
+        // 202 + the batch job; 400 for a slot the wheel does not have; 409 with the reason when a
+        // precondition fails (devices, manual wheel, relative focuser, a plan or another focus routine, nothing picked).
+        filterwheel.MapPost("/offsets/calibrate", ([FromBody] FilterOffsetCalibrationRequestDto request, FilterOffsetCalibrationService svc, CancellationToken ct) =>
+            StartOffsetCalibrationAsync(request, svc, ct))
+            .Produces<BatchJobDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("CalibrateFilterOffsets");
+        // The running calibration or its results waiting for Save or Discard; 404 when there are none.
+        filterwheel.MapGet("/offsets/calibration", (FilterOffsetCalibrationService svc) =>
+            svc.Snapshot() is { } calibration ? Results.Ok(calibration) : Results.NotFound())
+            .Produces<FilterOffsetCalibrationDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("GetFilterOffsetCalibration");
+        filterwheel.MapPost("/offsets/calibration/cancel", (FilterOffsetCalibrationService svc) =>
+            svc.TryCancel() ? Results.NoContent() : NothingToActOn("No offset calibration is running."))
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("CancelFilterOffsetCalibration");
+        filterwheel.MapPost("/offsets/calibration/save", (FilterOffsetCalibrationService svc) =>
+            svc.TrySave() ? Results.NoContent() : NothingToActOn("No finished offset calibration to save."))
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("SaveFilterOffsetCalibration");
+        filterwheel.MapPost("/offsets/calibration/discard", (FilterOffsetCalibrationService svc) =>
+            svc.TryDiscard() ? Results.NoContent() : NothingToActOn("No finished offset calibration to discard."))
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("DiscardFilterOffsetCalibration");
+    }
+
+    private static IResult NothingToActOn(string detail) =>
+        Results.Problem(title: "no_offset_calibration", detail: detail, statusCode: StatusCodes.Status409Conflict);
+
+    internal static async Task<IResult> StartOffsetCalibrationAsync(FilterOffsetCalibrationRequestDto request, FilterOffsetCalibrationService svc, CancellationToken ct) {
+        try {
+            var job = await svc.StartAsync(request.Positions, ct);
+            return Results.Accepted($"/api/v1/jobs/{job.JobId}", job);
+        } catch (ArgumentOutOfRangeException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        } catch (InvalidOperationException ex) when (ex is not ObjectDisposedException) {
+            return Results.Problem(title: OffsetCalibrationRefusedTitle, detail: ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
+    }
+
     /// <summary>The body of <c>POST /equipment/focuser/autofocus</c>: 409 while the Bahtinov readout runs, else
     /// the sweep enqueued as a background job (202).</summary>
     internal static IResult RunAutofocus(
@@ -826,7 +879,14 @@ public static partial class EquipmentEndpoints {
             IBatchJobService jobs,
             IProfileStore profiles,
             AutofocusRunTracker tracker,
-            IBahtinovFocusService bahtinov) {
+            IBahtinovFocusService bahtinov,
+            FilterOffsetCalibrationService? offsets = null) {
+        // #1675 — one focus routine at a time: the calibration moves the wheel and focuser between its runs.
+        if (offsets is { IsRunning: true }) {
+            return Results.Problem(title: OffsetCalibrationRefusedTitle,
+                detail: "A focus offset calibration is running. Stop it before running autofocus.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
         // #1299 — the Bahtinov readout has the camera, and the mask is probably still on: a sweep through
         // it would fit diffraction spikes. The user finishes (and takes the mask off) first.
         if (BahtinovFocusEndpoints.MaskOnConflict(bahtinov, "running autofocus") is { } refused) {
