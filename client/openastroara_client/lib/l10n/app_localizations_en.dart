@@ -4181,4 +4181,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get monitorLinkLostShort => 'Lost contact with the rig';
+
+  @override
+  String faultGroupCount(int count) {
+    return '$count times';
+  }
+
+  @override
+  String faultGroupSpan(String first, String last) {
+    return 'First $first · last $last';
+  }
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
 
@@ -14,7 +15,8 @@ import '../../state/library/library_state.dart';
 import '../../state/library/live_library_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../state/backup/backup_stream_state.dart';
-import '../../widgets/imaging/fault_panel.dart' show FaultHistoryTile;
+import '../../widgets/imaging/fault_panel.dart'
+    show FaultGroupTile, groupFaultRows;
 import '../../widgets/imaging/polar_error_rating.dart';
 import '../../widgets/library/bulk_action_bar.dart';
 import '../../widgets/library/mosaics_section.dart';
@@ -124,7 +126,9 @@ class ImageLibraryScreen extends ConsumerWidget {
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () async {
-                    await ref.read(liveLibrarySessionsProvider.notifier).refresh();
+                    await ref
+                        .read(liveLibrarySessionsProvider.notifier)
+                        .refresh();
                     await ref.read(mosaicProjectsProvider.notifier).refresh();
                   },
                   child: CustomScrollView(
@@ -229,9 +233,8 @@ class _CenteredNotice extends StatelessWidget {
             Text(
               detail!,
               textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: AraColors.textSecondary),
             ),
           ],
           if (action != null) ...[const SizedBox(height: 12), action!],
@@ -251,9 +254,8 @@ class _GroupLabel extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
       child: Text(
         label,
-        style: Theme.of(
-          context,
-        ).textTheme.titleSmall?.copyWith(color: AraColors.textSecondary),
+        style: Theme.of(context).textTheme.titleSmall
+            ?.copyWith(color: AraColors.textSecondary),
       ),
     );
   }
@@ -441,9 +443,8 @@ class _SearchFieldState extends ConsumerState<_SearchField> {
           isDense: true,
           contentPadding: EdgeInsets.zero,
           hintText: 'Search targets',
-          hintStyle: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: AraColors.textDisabled),
+          hintStyle: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: AraColors.textDisabled),
           prefixIcon: const Icon(
             Icons.search,
             size: 16,
@@ -508,9 +509,8 @@ class _FilterPill extends StatelessWidget {
             const SizedBox(width: 6),
             Text(
               label,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: color),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: color),
             ),
           ],
         ),
@@ -543,9 +543,8 @@ class _SessionHeader extends ConsumerWidget {
                   session.targetName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w600),
+                  style: Theme.of(context).textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -558,9 +557,8 @@ class _SessionHeader extends ConsumerWidget {
                   ].join(' · '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AraColors.textSecondary,
-                  ),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: AraColors.textSecondary),
                 ),
               ],
             ),
@@ -640,9 +638,13 @@ class _SessionHeader extends ConsumerWidget {
           openGeneratedSequence(context, ref, id);
         } on Exception catch (e) {
           if (!context.mounted) return;
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: 'resume the sequence'))));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                friendlyError(context.l10n, e, action: 'resume the sequence'),
+              ),
+            ),
+          );
         }
     }
   }
@@ -673,7 +675,8 @@ class _SessionPaResidualBadge extends ConsumerWidget {
             const SizedBox(width: 4),
             Text(
               'PA ≥ ${formatPoleOffset(error).$1}',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color),
+              style: Theme.of(context).textTheme.labelLarge
+                  ?.copyWith(color: color),
             ),
           ],
         ),
@@ -710,8 +713,9 @@ class _SessionFaultsBadge extends ConsumerWidget {
             width: 480,
             child: ListView.builder(
               shrinkWrap: true,
-              itemCount: rows.length,
-              itemBuilder: (context, i) => FaultHistoryTile(row: rows[i]),
+              itemCount: groupFaultRows(rows).length,
+              itemBuilder: (context, i) =>
+                  FaultGroupTile(group: groupFaultRows(rows)[i]),
             ),
           ),
           actions: [
@@ -763,9 +767,8 @@ class _SessionFramesGrid extends ConsumerWidget {
           padding: _padding,
           child: Text(
             friendlyError(context.l10n, e, action: 'load the frames'),
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: AraColors.textSecondary),
           ),
         ),
       ),
@@ -776,9 +779,8 @@ class _SessionFramesGrid extends ConsumerWidget {
               padding: _padding,
               child: Text(
                 'No frames recorded for this session.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: AraColors.textSecondary),
               ),
             ),
           );
@@ -791,9 +793,8 @@ class _SessionFramesGrid extends ConsumerWidget {
               padding: _padding,
               child: Text(
                 'No frames match the active filters.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: AraColors.textSecondary),
               ),
             ),
           );

@@ -4181,6 +4181,16 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get monitorLinkLostShort => 'Lost contact with the rig';
+
+  @override
+  String faultGroupCount(int count) {
+    return '$count times';
+  }
+
+  @override
+  String faultGroupSpan(String first, String last) {
+    return 'First $first · last $last';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -8389,4 +8399,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get monitorLinkLostShort => 'Sem contato com o setup';
+
+  @override
+  String faultGroupCount(int count) {
+    return '$count vezes';
+  }
+
+  @override
+  String faultGroupSpan(String first, String last) {
+    return 'Primeira $first · última $last';
+  }
 }

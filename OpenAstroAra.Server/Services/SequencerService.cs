@@ -376,6 +376,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         if (run.TryTransition(SequenceRunState.Running, target)
             || (target == SequenceRunState.PausedAwaitingUser
                 && run.TryTransition(SequenceRunState.Paused, SequenceRunState.PausedAwaitingUser))) {
+            run.SetDescription(PausedDescription); // #1784 — drop the last step's stale countdown
             _ = EmitAsync("sequence.paused", sequenceId, run);
             WriteCheckpointIfOwner(run, sequenceId);
             // §38.10 — snapshot which target the pause interrupted, so a later
@@ -1583,7 +1584,12 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
         public void SetDescription(string? description) {
             if (string.IsNullOrWhiteSpace(description)) return;
-            lock (_gate) { CurrentInstructionDescription = description; }
+            // #1784 — progress reports are posted to the pool and can land after the pause; a paused run keeps "Paused".
+            lock (_gate) {
+                if (State is SequenceRunState.Paused or SequenceRunState.PausedAwaitingUser
+                    && description != PausedDescription) return;
+                CurrentInstructionDescription = description;
+            }
         }
 
         /// <summary>The running instruction's own fraction done; cleared when the next leaf starts.</summary>

@@ -5389,5 +5389,15 @@
   "monitorLinkLostShort": "Lost contact with the rig",
   "@monitorLinkLostShort": {
     "description": "Monitor: what a screen reader announces when the link to the rig is lost (no age)"
+  },
+  "faultGroupCount": "{count} times",
+  "@faultGroupCount": {
+    "description": "Fault log: how many times one device dropped within one run of faults, shown on the collapsed row",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "faultGroupSpan": "First {first} · last {last}",
+  "@faultGroupSpan": {
+    "description": "Fault log: first and last time (clock strings) of the collapsed row",
+    "placeholders": { "first": { "type": "String" }, "last": { "type": "String" } }
   }
 }

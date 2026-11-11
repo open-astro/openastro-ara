@@ -7094,6 +7094,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Lost contact with the rig'**
   String get monitorLinkLostShort;
+
+  /// Fault log: how many times one device dropped within one run of faults, shown on the collapsed row
+  ///
+  /// In en, this message translates to:
+  /// **'{count} times'**
+  String faultGroupCount(int count);
+
+  /// Fault log: first and last time (clock strings) of the collapsed row
+  ///
+  /// In en, this message translates to:
+  /// **'First {first} · last {last}'**
+  String faultGroupSpan(String first, String last);
 }
 
 class _AppLocalizationsDelegate

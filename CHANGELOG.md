@@ -35,6 +35,15 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Fixed (run status)
+
+- While the first meridian flip on a profile waits out its 60 s confirmation window, the run status counts it down ("Meridian flip — first flip, starting in 0:42") instead of keeping the last exposure's text (#1783).
+- A run that enters Paused now reads "Paused" instead of keeping the last step's countdown, such as "Settling — 00:00:01" (#1784).
+
+### Changed (fault log)
+
+- The fault log folds consecutive rows for one device and fault type into one row with a count and the first and last time; tap it for every row. The daemon's log and `/api/v1/faults` still hold every event (#1767).
+
 ### Added (mount by hand)
 
 - Simple Mode's Mount window has a direction pad: eight directions around a center Stop, with Slow, Medium and Fast speeds taken from the mount's own rates. Hold a direction to move and let go to stop. The arrow keys drive it, and Escape stops. The pad is off, saying why, while the mount is parked, the plan is imaging, polar alignment runs or the Guider guides (#1649).
