@@ -572,7 +572,10 @@ class _PadCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cell = _cell();
-    return tooltip == null ? cell : Tooltip(message: tooltip!, child: cell);
+    // The label already names it for screen readers: the tooltip is for eyes.
+    return tooltip == null
+        ? cell
+        : Tooltip(message: tooltip!, excludeFromSemantics: true, child: cell);
   }
 
   Widget _cell() => Semantics(
@@ -589,37 +592,43 @@ class _PadCell extends StatelessWidget {
           },
     child: Opacity(
       opacity: onDown == null ? 0.35 : 1,
-      child: Listener(
-        onPointerDown: onDown == null || onRelease ? null : (_) => onDown!(),
-        onPointerUp: (_) => onRelease ? onDown?.call() : onUp(),
-        onPointerCancel: onRelease ? null : (_) => onUp(),
-        child: Container(
-          width: size,
-          height: size,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: held ? AraColors.selectionBg : AraColors.tileFill,
-            borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-          ),
-          child:
-              glyph ??
-              Text(
-                label,
-                style: kSimpleText.copyWith(
-                  fontSize: small
-                      ? AraFontSize.simpleUnit
-                      : AraFontSize.simplePadLetter,
-                  fontWeight: FontWeight.w600,
-                  color: held
-                      ? AraColors.selectionFg
-                      : small
-                      ? AraColors.textSecondary
-                      : AraColors.textPrimary,
-                ),
-              ),
-        ),
-      ),
+      // A tap, for Home: it loses the touch to a slide off or a scroll, so a
+      // swipe that starts on it sends nothing. Directions and Stop act on touch.
+      child: onRelease
+          ? GestureDetector(onTap: onDown, child: _face())
+          : Listener(
+              onPointerDown: onDown == null ? null : (_) => onDown!(),
+              onPointerUp: (_) => onUp(),
+              onPointerCancel: (_) => onUp(),
+              child: _face(),
+            ),
     ),
+  );
+
+  Widget _face() => Container(
+    width: size,
+    height: size,
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      color: held ? AraColors.selectionBg : AraColors.tileFill,
+      borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+    ),
+    child:
+        glyph ??
+        Text(
+          label,
+          style: kSimpleText.copyWith(
+            fontSize: small
+                ? AraFontSize.simpleUnit
+                : AraFontSize.simplePadLetter,
+            fontWeight: FontWeight.w600,
+            color: held
+                ? AraColors.selectionFg
+                : small
+                ? AraColors.textSecondary
+                : AraColors.textPrimary,
+          ),
+        ),
   );
 }
 

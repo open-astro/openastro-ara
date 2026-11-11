@@ -595,6 +595,30 @@ void main() {
       await tester.pump(const Duration(seconds: 4));
     });
 
+    testWidgets('a touch that slides off Home and lifts sends nothing', (tester) async {
+      final (_, mount, _, _) = await _pump(tester, _wire());
+      final g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-mount-pad-home'))));
+      await tester.pump();
+      await g.moveBy(const Offset(0, 120)); // off the cell, as a scroll swipe would
+      await tester.pump();
+      await g.up();
+      await tester.pump();
+      expect(mount.calls, isEmpty);
+    });
+
+    testWidgets('screen readers hear Home once', (tester) async {
+      final handle = tester.ensureSemantics();
+      await _pump(tester, _wire());
+      expect(find.bySemanticsLabel(RegExp(r'^Home$')), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp(r'Home\nHome|Home Home')), findsNothing);
+      // The tooltip wraps the cell: no node may carry Home as its label and its tooltip.
+      final both = find.semantics.byPredicate((n) => n.label == 'Home' && n.tooltip == 'Home');
+      final tipOnly = find.semantics.byPredicate((n) => n.tooltip == 'Home');
+      expect(both, findsNothing);
+      expect(tipOnly, findsNothing, reason: 'the house is named once, by its label');
+      handle.dispose();
+    });
+
     testWidgets('the Stop square grows with the pad cell', (tester) async {
       await _pump(tester, _wire(home: false));
       // getRect: the square is scaled by a FittedBox, so its drawn size is what counts.
