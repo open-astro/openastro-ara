@@ -326,6 +326,19 @@ void main() {
       expect(r.read().frozen, isTrue, reason: 'the numbers stay frozen');
     });
 
+    test("a Stop that went through (amber, sticky) waits behind link lost, a dropped device and Unsafe (re-audit 4)", () async {
+      final r = await _rig(run: _running(), safe: false);
+      final m = r.c.read(simpleMessagesProvider.notifier);
+      m.show(SimpleMessageKind.warning, 'Emergency Stop: done', detail: 'Check the rig', sticky: true);
+      expect(r.read().verdict.kind, MonitorVerdictKind.unsafe, reason: 'a done summary left up all night must not hide Unsafe');
+      final calm = await _rig(run: _running());
+      calm.c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.warning, 'Emergency Stop: done', sticky: true);
+      expect(calm.read().verdict.kind, MonitorVerdictKind.message, reason: 'with nothing worse it still shows');
+      calm.c.read(_link.notifier).set(false);
+      calm.read();
+      expect(calm.read().verdict.kind, MonitorVerdictKind.linkLost, reason: 'link lost keeps its age on the top line');
+    });
+
     test('a meridian flip in progress, the wait before it, a pause by Ara and the wait for dark', () async {
       final flipping = await _rig(run: _running(flip: const MeridianFlipInfo(state: 'flipping')));
       expect(flipping.read().verdict.kind, MonitorVerdictKind.flipping);

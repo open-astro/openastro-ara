@@ -531,12 +531,12 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       final since = last.frozenSince ?? down;
       // Messages are this device's own: a failed Stop still shows with the link
       // lost (re-audit 3).
-      final sticky = ref.watch(simpleMessagesProvider).where((m) => m.sticky).firstOrNull;
+      final failed = ref.watch(simpleMessagesProvider).where(monitorFailedSticky).firstOrNull;
       return MonitorSnapshot(
         asOf: last.asOf,
         frozenSince: since,
-        verdict: sticky != null
-            ? monitorMessageVerdict(sticky)
+        verdict: failed != null
+            ? monitorMessageVerdict(failed)
             : MonitorVerdict(MonitorVerdictKind.linkLost, MonitorStatus.fault, at: since),
         now: last.now,
         upNext: last.upNext,
@@ -632,10 +632,14 @@ class MonitorState extends Notifier<MonitorSnapshot> {
     final unsafeMonitor = safetyMon != null && safetyMon.isConnected && !safetyMon.safe;
     final question = messages.where((m) => m.kind == SimpleMessageKind.question).firstOrNull;
     // Newest first: the list is kept that way.
-    // A sticky message (Emergency Stop's outcome) leads; a passing error waits
-    // behind a dropped device and Unsafe (re-audit 3).
-    final sticky = messages.where((m) => m.sticky).firstOrNull;
-    final error = messages.where((m) => m.kind == SimpleMessageKind.error && !m.sticky).firstOrNull;
+    // A failure that waits to be read (a stop that failed or never reached
+    // the rig) leads; a stop that went through, or a passing error, waits
+    // behind a dropped device and Unsafe: a summary left up all night must not
+    // hide them (re-audit 3, 4).
+    final failed = messages.where(monitorFailedSticky).firstOrNull;
+    final error = messages
+        .where((m) => !monitorFailedSticky(m) && (m.sticky || m.kind == SimpleMessageKind.error))
+        .firstOrNull;
     final starLost = guider != null && guider.isConnected && guider.runtimeState == GuiderRuntimeState.starLost;
 
     // Low disk: the Queue's frames left need more than the drive has free,
@@ -651,8 +655,8 @@ class MonitorState extends Notifier<MonitorSnapshot> {
         free < framesLeft * lastDims.width! * lastDims.height! * 2;
     final cooler = coolerOff != null && now.difference(coolerOff) >= kMonitorCoolerHold;
 
-    final verdict = sticky != null
-        ? monitorMessageVerdict(sticky)
+    final verdict = failed != null
+        ? monitorMessageVerdict(failed)
         : droppedDevice != null
         ? MonitorVerdict(MonitorVerdictKind.deviceDropped, MonitorStatus.fault, device: droppedDevice)
         : unsafeMonitor || breaches.isNotEmpty
@@ -952,6 +956,9 @@ class MonitorState extends Notifier<MonitorSnapshot> {
 }
 
 final monitorProvider = NotifierProvider.autoDispose<MonitorState, MonitorSnapshot>(MonitorState.new);
+
+/// A sticky failure: a stop that failed a rung or never reached the rig.
+bool monitorFailedSticky(SimpleMessage m) => m.sticky && m.kind == SimpleMessageKind.error;
 
 /// A message on the top line: red for an error, amber otherwise.
 MonitorVerdict monitorMessageVerdict(SimpleMessage m) => MonitorVerdict(MonitorVerdictKind.message,
