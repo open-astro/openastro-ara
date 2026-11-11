@@ -4300,6 +4300,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get calibrationGuideDelete => 'Delete';
 
   @override
+  String get calibrationGuideDeleteDarksTitle => 'Delete the dark library?';
+
+  @override
+  String get calibrationGuideDeleteDefectsTitle => 'Delete the bad-pixel map?';
+
+  @override
+  String get calibrationGuideDeleteBody =>
+      'Building it again takes several minutes of frames with the guide scope covered.';
+
+  @override
   String get calibrationGuideDefect => 'Bad-pixel map';
 
   @override
@@ -9038,6 +9048,18 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get calibrationGuideDelete => 'Apagar';
+
+  @override
+  String get calibrationGuideDeleteDarksTitle =>
+      'Apagar a biblioteca de darks?';
+
+  @override
+  String get calibrationGuideDeleteDefectsTitle =>
+      'Apagar o mapa de pixels ruins?';
+
+  @override
+  String get calibrationGuideDeleteBody =>
+      'Montar de novo leva vários minutos de quadros com a luneta guia tampada.';
 
   @override
   String get calibrationGuideDefect => 'Mapa de pixels ruins';

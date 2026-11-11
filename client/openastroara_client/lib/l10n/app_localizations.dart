@@ -7299,6 +7299,24 @@ abstract class AppLocalizations {
   /// **'Delete'**
   String get calibrationGuideDelete;
 
+  /// Calibration, Guide Camera: the inline question before Delete removes the guider's dark library
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the dark library?'**
+  String get calibrationGuideDeleteDarksTitle;
+
+  /// Calibration, Guide Camera: the inline question before Delete removes the guider's bad-pixel map
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the bad-pixel map?'**
+  String get calibrationGuideDeleteDefectsTitle;
+
+  /// Calibration, Guide Camera: why Delete asks first
+  ///
+  /// In en, this message translates to:
+  /// **'Building it again takes several minutes of frames with the guide scope covered.'**
+  String get calibrationGuideDeleteBody;
+
   /// Calibration panel, Guide Camera: the Guider's defect map, so hot pixels aren't picked as guide stars
   ///
   /// In en, this message translates to:

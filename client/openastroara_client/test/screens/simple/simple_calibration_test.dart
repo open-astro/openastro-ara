@@ -616,12 +616,36 @@ void main() {
           guiderCalibrationProvider.overrideWith(() => cal),
           simpleCalibrationTabProvider.overrideWith(_GuideTab.new),
         ]);
-        await tester.ensureVisible(find.byKey(const Key('simple-calibration-guide-delete-defects')));
-        await tester.tap(find.byKey(const Key('simple-calibration-guide-delete-defects')));
-        await tester.pump();
+        for (final id in ['defects', 'darks']) {
+          await tester.ensureVisible(find.byKey(Key('simple-calibration-guide-delete-$id')));
+          await tester.tap(find.byKey(Key('simple-calibration-guide-delete-$id')));
+          await tester.pump();
+          await tester.ensureVisible(find.byKey(Key('simple-calibration-guide-delete-$id-ask-confirm')));
+          await tester.tap(find.byKey(Key('simple-calibration-guide-delete-$id-ask-confirm')));
+          await tester.pump();
+        }
+        expect(cal.calls, ['delete darks=false defectmap=true', 'delete darks=true defectmap=false']);
+      });
+
+      testWidgets('Delete asks in the block first, and Cancel keeps the file', (tester) async {
+        final cal = _GuiderCal(built);
+        await _pump(tester, [], child: panel(), overrides: [
+          guiderStatusProvider.overrideWith(() => _Guider('stopped')),
+          guiderCalibrationProvider.overrideWith(() => cal),
+          simpleCalibrationTabProvider.overrideWith(_GuideTab.new),
+        ]);
+        await tester.ensureVisible(find.byKey(const Key('simple-calibration-guide-delete-darks')));
         await tester.tap(find.byKey(const Key('simple-calibration-guide-delete-darks')));
         await tester.pump();
-        expect(cal.calls, ['delete darks=false defectmap=true', 'delete darks=true defectmap=false']);
+        expect(cal.calls, isEmpty, reason: 'a rebuild takes minutes with the scope covered: never on one tap');
+        expect(find.text('Delete the dark library?'), findsOneWidget);
+        expect(find.byKey(const Key('simple-calibration-guide-delete-defects-ask-confirm')), findsNothing,
+            reason: 'only the set tapped asks');
+        await tester.ensureVisible(find.byKey(const Key('simple-calibration-guide-delete-darks-ask-cancel')));
+        await tester.tap(find.byKey(const Key('simple-calibration-guide-delete-darks-ask-cancel')));
+        await tester.pump();
+        expect(cal.calls, isEmpty);
+        expect(find.text('Delete the dark library?'), findsNothing);
       });
     });
   });

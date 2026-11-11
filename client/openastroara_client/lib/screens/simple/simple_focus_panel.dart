@@ -794,13 +794,20 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
             for (final s in slots)
               FilterChip(
                 key: Key('simple-offsets-pick-${s.position}'),
+                // Picked: Plan's solid blue with white words and tick.
                 label: Text(
                   s.position == reference
                       ? l10n.focusOffsetsReferenceChip(named(s))
                       : named(s),
+                  style: kSimpleText.copyWith(
+                    color: picks.contains(s.position)
+                        ? AraColors.selectionFg
+                        : AraColors.textPrimary,
+                  ),
                 ),
                 selected: picks.contains(s.position),
                 selectedColor: AraColors.selectionBg,
+                checkmarkColor: AraColors.selectionFg,
                 // The reference is always measured.
                 onSelected: s.position == reference || live.busy
                     ? null

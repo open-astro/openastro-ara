@@ -11,6 +11,9 @@ import 'package:openastroara/state/server_state.dart' show discoveredServersProv
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/screens/simple/simple_guide_panel.dart' show SimpleGuidePanel;
+import 'package:openastroara/screens/simple/simple_calibration.dart' show SimpleCalibrationPanel, SimpleCalibrationShutter;
+import 'package:openastroara/models/calibration_status.dart';
+import 'package:openastroara/state/guider/guider_calibration_state.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
@@ -92,6 +95,13 @@ class _Focuser extends FocuserNotifier {
 }
 
 /// A guider guiding, so the bottom row's guiding bar shows.
+class _GuideBuilt extends GuiderCalibrationNotifier {
+  @override
+  Future<CalibrationStatusResponse?> build() async => const CalibrationStatusResponse(
+      connected: true,
+      status: CalibrationStatus(darkLibraryExists: true, defectMapExists: true, darkLibraryLoaded: true, defectMapLoaded: true));
+}
+
 class _Guiding extends GuiderStatusNotifier {
   @override
   Future<GuiderStatus?> build() async => GuiderStatus.fromJson(const {
@@ -151,7 +161,7 @@ void main() {
   final lang = locale.toLanguageTag();
   final l = lookupAppLocalizations(locale);
   for (final (scale, size) in cases) {
-    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Settings Focuser', 'Search', 'Wheels lat', 'Wheels lng', 'Wheels aperture', 'Wheels focal', 'Settings Guider', 'Guiding', 'Focus Auto', 'Focus Manual', 'Focus Guide', 'Focus Offsets', 'Focus Offsets results', 'Polar adjusting', 'Guide', 'Preflight']) {
+    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Settings Focuser', 'Search', 'Wheels lat', 'Wheels lng', 'Wheels aperture', 'Wheels focal', 'Settings Guider', 'Guiding', 'Focus Auto', 'Focus Manual', 'Focus Guide', 'Focus Offsets', 'Focus Offsets results', 'Polar adjusting', 'Guide', 'Preflight', 'Calibration flats', 'Calibration darks', 'Calibration guide']) {
       testWidgets('$lang text ${scale}x at ${size.width.toInt()}x${size.height.toInt()}, $open: nothing overflows',
           skip: !hasFonts, (tester) async {
         tester.view.physicalSize = size;
@@ -166,8 +176,11 @@ void main() {
           if (open == 'Camera') cameraStatusProvider.overrideWith(_Camera.new),
           if (open == 'Settings Focuser') focuserProvider.overrideWith(_Focuser.new),
           if (open == 'Search') liveLibrarySessionsProvider.overrideWith(_Sessions.new),
-          if (open == 'Settings Guider' || open == 'Guiding' || open == 'Focus Guide' || open == 'Guide')
+          if (open == 'Settings Guider' || open == 'Guiding' || open == 'Focus Guide' || open == 'Guide' ||
+              open == 'Calibration guide')
             guiderStatusProvider.overrideWith(_Guiding.new),
+          // Both guide sets on file, so their Delete pair and its question show.
+          if (open == 'Calibration guide') guiderCalibrationProvider.overrideWith(_GuideBuilt.new),
           if (open.startsWith('Focus')) focuserProvider.overrideWith(_Focuser.new),
           // #1675: the Offsets picker over a seven-filter wheel, and its results table.
           if (open.startsWith('Focus Offsets')) filterWheelProvider.overrideWith(_Wheel.new),
@@ -182,9 +195,11 @@ void main() {
         addTearDown(c.dispose);
         await c.read(simpleModeProvider.future);
         if (open == 'Settings Focuser') await c.read(focuserProvider.future);
-        if (open == 'Settings Guider' || open == 'Guiding' || open == 'Focus Guide' || open == 'Guide') {
+        if (open == 'Settings Guider' || open == 'Guiding' || open == 'Focus Guide' || open == 'Guide' ||
+            open == 'Calibration guide') {
           await c.read(guiderStatusProvider.future);
         }
+        if (open == 'Calibration guide') await c.read(guiderCalibrationProvider.future);
         if (open.startsWith('Focus')) await c.read(focuserProvider.future);
         if (open.startsWith('Focus Offsets')) await c.read(filterWheelProvider.future);
         await tester.pumpWidget(UncontrolledProviderScope(
@@ -340,6 +355,32 @@ void main() {
           // Every label whole: "Principal", "Manual", "Contínuo" were cut at 1.3x-2x.
           for (final p in tester.renderObjectList<RenderParagraph>(find.descendant(of: panel, matching: find.byType(RichText)))) {
             expect(p.didExceedMaxLines, isFalse, reason: '"${p.text.toPlainText()}" is cut off');
+          }
+        } else if (open.startsWith('Calibration')) {
+          // Each tab, the shutter's caption under it, and the guide Delete's question.
+          await tester.tap(find.byKey(const Key('simple-mode')), warnIfMissed: false);
+          await tester.pump();
+          await tester.tap(find.byKey(const Key('simple-mode-calibration')), warnIfMissed: false);
+          await tester.pump();
+          final panel = find.byType(SimpleCalibrationPanel);
+          // (The one-third width has no panel layout yet: phone layout, ALP-4865.)
+          if (size.width >= 768) {
+            expect(panel, findsOneWidget);
+            final tab = open.split(' ').last;
+            await tester.tap(find.byKey(Key('simple-calibration-tab-$tab')), warnIfMissed: false);
+            await tester.pump();
+            if (tab == 'guide') {
+              final delete = find.byKey(const Key('simple-calibration-guide-delete-darks'));
+              await tester.ensureVisible(delete);
+              await tester.tap(delete, warnIfMissed: false);
+              await tester.pump();
+              expect(find.byKey(const Key('simple-calibration-guide-delete-darks-ask-confirm')), findsOneWidget);
+            }
+            for (final of in [panel, find.byType(SimpleCalibrationShutter)]) {
+              for (final p in tester.renderObjectList<RenderParagraph>(find.descendant(of: of, matching: find.byType(RichText)))) {
+                expect(p.didExceedMaxLines, isFalse, reason: '"${p.text.toPlainText()}" is cut off');
+              }
+            }
           }
         } else if (open == 'Settings' || open == 'Rig') {
           await tester.tap(find.byTooltip(l.shellSettings));

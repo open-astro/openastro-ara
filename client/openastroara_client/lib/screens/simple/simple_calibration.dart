@@ -16,9 +16,10 @@ import '../../state/simple_run_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
+import '../../widgets/inline_choices.dart' show InlineConfirm;
 import 'simple_preview_panel.dart' show SimpleShutterButton, formatExposure;
 import 'simple_device_windows.dart' show SimpleWindowButton;
-import 'simple_shell.dart' show SimplePanel, SimpleSegments;
+import 'simple_shell.dart' show SimplePanel, SimpleSegments, simpleRailScale;
 
 TextStyle get _dim => kSimpleText.copyWith(color: AraColors.textSecondary);
 
@@ -360,19 +361,22 @@ class SimpleCalibrationShutter extends ConsumerWidget {
           whyOff: job.whyOff,
           onPressed: job.run == null ? null : () => _runJob(context, ref, job),
         ),
-        ExcludeSemantics(
-          child: SizedBox(
-            width: 64,
-            child: Text(
-              job.caption,
-              key: const Key('simple-calibration-shutter-caption'),
-              textAlign: TextAlign.center,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: kSimpleCaption.copyWith(fontSize: 11),
+        // What it will do, only when it can: the chip says the state, and a
+        // tap on an idle shutter says why in a pill, as the panel does.
+        if (job.run != null)
+          ExcludeSemantics(
+            // As wide as the rail at every text size, so large text wraps
+            // the same words to the same lines instead of cutting them.
+            child: SizedBox(
+              width: 64 * simpleRailScale(context),
+              child: Text(
+                job.caption,
+                key: const Key('simple-calibration-shutter-caption'),
+                textAlign: TextAlign.center,
+                style: kSimpleCaption,
+              ),
             ),
           ),
-        ),
       ],
     );
   }
@@ -411,6 +415,7 @@ class SimpleCalibrationPanel extends ConsumerWidget {
                 style: kSimpleText,
               ),
               LinearProgressIndicator(
+                semanticsLabel: l.calibrationTaking(progress.done, progress.total),
                 value: progress.total == 0
                     ? null
                     : progress.done / progress.total,
@@ -419,7 +424,7 @@ class SimpleCalibrationPanel extends ConsumerWidget {
             if (_planRunning(ref))
               Text(
                 l.calibrationPlanRunningNote,
-                style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                style: kSimpleText.copyWith(color: AraColors.accentInfo),
               ),
             SimpleSegments<SimpleCalibrationTab>(
               keyPrefix: 'simple-calibration-tab',
@@ -508,15 +513,15 @@ Widget _onOffRow(
   spacing: AraSpace.s8,
   children: [
     Expanded(child: Text(label, style: kSimpleText)),
-    SizedBox(
-      width: 140,
-      child: SimpleSegments<bool>(
-        keyPrefix: id,
-        group: label,
-        options: [(true, l.deviceOn, 'on'), (false, l.deviceOff, 'off')],
-        selected: on,
-        onPick: onPick,
-      ),
+    // As wide as its words (pt-BR's "Ligado" was cut in a fixed 140 px),
+    // as Focus's Measured stars.
+    SimpleSegments<bool>(
+      keyPrefix: id,
+      group: label,
+      expand: false,
+      options: [(true, l.deviceOn, 'on'), (false, l.deviceOff, 'off')],
+      selected: on,
+      onPick: onPick,
     ),
   ],
 );
@@ -800,7 +805,15 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
               for (final s in {..._choices, ...planExposures}.toList()..sort())
                 FilterChip(
                   key: Key('simple-calibration-exposure-${s.round()}'),
-                  label: Text(_secs(s)),
+                  // Picked: Plan's solid blue with white words.
+                  label: Text(
+                    _secs(s),
+                    style: kSimpleText.copyWith(
+                      color: picked.contains(s)
+                          ? AraColors.selectionFg
+                          : AraColors.textPrimary,
+                    ),
+                  ),
                   selected: picked.contains(s),
                   showCheckmark: false,
                   selectedColor: AraColors.selectionBg,
@@ -868,11 +881,19 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
 
 /// The Guider's own calibration: its dark library and bad-pixel map, laid
 /// out as the mock's Guide Camera tab.
-class _GuideCameraTab extends ConsumerWidget {
+class _GuideCameraTab extends ConsumerStatefulWidget {
   const _GuideCameraTab();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_GuideCameraTab> createState() => _GuideCameraTabState();
+}
+
+class _GuideCameraTabState extends ConsumerState<_GuideCameraTab> {
+  /// The set whose Delete is being asked about ('darks' or 'defects').
+  String? _deleteAsk;
+
+  @override
+  Widget build(BuildContext context) {
     final l = context.l10n;
     final guider = ref.watch(guiderStatusProvider).value;
     if (guider == null || !guider.isConnected) {
@@ -895,30 +916,47 @@ class _GuideCameraTab extends ConsumerWidget {
     VoidCallback? build(Future<void> Function() action) => busy || guiding
         ? null
         : () => _askGuideCover(context, ref, action);
+    // A rebuild takes minutes of frames with the scope covered: Delete asks
+    // first, in the block (no popups in Simple Mode).
     Widget pair(String id, String rebuild, VoidCallback? onBuild, {required bool exists, required bool darksFile}) =>
-        Row(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: AraSpace.s8,
           children: [
-            Expanded(
-              child: SimpleWindowButton(
-                key: Key('simple-calibration-guide-build-$id'),
-                label: rebuild,
-                onTap: onBuild,
-              ),
-            ),
-            if (exists)
-              Expanded(
-                child: SimpleWindowButton(
-                  key: Key('simple-calibration-guide-delete-$id'),
-                  outlined: true,
-                  label: l.calibrationGuideDelete,
-                  onTap: busy
-                      ? null
-                      : () => notifier.deleteCalibrationFiles(
-                          darks: darksFile,
-                          defectmap: !darksFile,
-                        ),
+            Row(
+              spacing: AraSpace.s8,
+              children: [
+                Expanded(
+                  child: SimpleWindowButton(
+                    key: Key('simple-calibration-guide-build-$id'),
+                    label: rebuild,
+                    onTap: onBuild,
+                  ),
                 ),
+                if (exists)
+                  Expanded(
+                    child: SimpleWindowButton(
+                      key: Key('simple-calibration-guide-delete-$id'),
+                      outlined: true,
+                      label: l.calibrationGuideDelete,
+                      onTap: busy ? null : () => setState(() => _deleteAsk = id),
+                    ),
+                  ),
+              ],
+            ),
+            if (exists && _deleteAsk == id)
+              InlineConfirm(
+                id: 'simple-calibration-guide-delete-$id-ask',
+                title: darksFile ? l.calibrationGuideDeleteDarksTitle : l.calibrationGuideDeleteDefectsTitle,
+                body: Text(l.calibrationGuideDeleteBody),
+                confirmLabel: l.calibrationGuideDelete,
+                cancelLabel: l.planCancel,
+                style: kSimpleText,
+                onConfirm: () {
+                  setState(() => _deleteAsk = null);
+                  notifier.deleteCalibrationFiles(darks: darksFile, defectmap: !darksFile);
+                },
+                onCancel: () => setState(() => _deleteAsk = null),
               ),
           ],
         );

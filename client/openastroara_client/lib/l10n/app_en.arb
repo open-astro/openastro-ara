@@ -5544,6 +5544,18 @@
   "@calibrationGuideDelete": {
     "description": "Calibration panel, Guide Camera: delete the dark library"
   },
+  "calibrationGuideDeleteDarksTitle": "Delete the dark library?",
+  "@calibrationGuideDeleteDarksTitle": {
+    "description": "Calibration, Guide Camera: the inline question before Delete removes the guider's dark library"
+  },
+  "calibrationGuideDeleteDefectsTitle": "Delete the bad-pixel map?",
+  "@calibrationGuideDeleteDefectsTitle": {
+    "description": "Calibration, Guide Camera: the inline question before Delete removes the guider's bad-pixel map"
+  },
+  "calibrationGuideDeleteBody": "Building it again takes several minutes of frames with the guide scope covered.",
+  "@calibrationGuideDeleteBody": {
+    "description": "Calibration, Guide Camera: why Delete asks first"
+  },
   "calibrationGuideDefect": "Bad-pixel map",
   "@calibrationGuideDefect": {
     "description": "Calibration panel, Guide Camera: the Guider's defect map, so hot pixels aren't picked as guide stars"

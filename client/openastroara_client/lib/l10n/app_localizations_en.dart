@@ -4300,6 +4300,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get calibrationGuideDelete => 'Delete';
 
   @override
+  String get calibrationGuideDeleteDarksTitle => 'Delete the dark library?';
+
+  @override
+  String get calibrationGuideDeleteDefectsTitle => 'Delete the bad-pixel map?';
+
+  @override
+  String get calibrationGuideDeleteBody =>
+      'Building it again takes several minutes of frames with the guide scope covered.';
+
+  @override
   String get calibrationGuideDefect => 'Bad-pixel map';
 
   @override
