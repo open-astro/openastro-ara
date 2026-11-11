@@ -68,6 +68,7 @@ import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment, SimpleSegments, simpleRailScale;
 import 'simple_mount_controls.dart';
 import '../../util/slew_rates.dart' show buildSlewRateOptionsFromBands;
+import '../../util/tracking_rate_words.dart';
 import '../../util/friendly_error.dart';
 
 /// One window per device in Simple Mode (design/briefs/simple-mode-settings.md):
@@ -770,16 +771,6 @@ final simpleMountHomeProvider = NotifierProvider<SimpleMountHomeNotifier, bool>(
   SimpleMountHomeNotifier.new,
 );
 
-/// The tracking speeds in the order they read (Sidereal first), as offered.
-const _trackingRateOrder = ['Sidereal', 'Lunar', 'Solar', 'King'];
-
-String _trackingRateWord(AppLocalizations l10n, String rate) => switch (rate) {
-  'Lunar' => l10n.trackingRateLunar,
-  'Solar' => l10n.trackingRateSolar,
-  'King' => l10n.trackingRateKing,
-  _ => l10n.trackingRateSidereal,
-};
-
 /// The mount's window: tracking (On / Off) and its speed, Parked / Unparked
 /// / Home, the automatic meridian flip (the profile's, so plans flip by it
 /// too), and beside them the direction pad, its bottom level with the
@@ -844,7 +835,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
         );
       }
       final rates = [
-        for (final r in _trackingRateOrder)
+        for (final r in kTrackingRateOrder)
           if (caps?.trackingRates.contains(r) ?? false) r,
       ];
       if (rates.length > 1) {
@@ -860,7 +851,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
               shrinkToFit: true,
               options: [
                 for (final r in rates)
-                  (r, _trackingRateWord(context.l10n, r), r.toLowerCase()),
+                  (r, trackingRateWord(context.l10n, r), r.toLowerCase()),
               ],
               selected: rate,
               onPick: m.parked || moving
@@ -878,8 +869,8 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
             Text(
               context.l10n.deviceTrackingOffSidereal(
                 rate == 'King'
-                    ? _trackingRateWord(context.l10n, rate)
-                    : _trackingRateWord(context.l10n, rate).toLowerCase(),
+                    ? trackingRateWord(context.l10n, rate)
+                    : trackingRateWord(context.l10n, rate).toLowerCase(),
               ),
               key: const Key('simple-mount-rate-caption'),
               style: AraText.caption,

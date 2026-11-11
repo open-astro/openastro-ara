@@ -117,6 +117,8 @@ MountStatus _status({
   String runtimeState = 'idle',
   double? targetRaHours,
   double? targetDecDegrees,
+  List<String> trackingRates = const [],
+  String? trackingRate,
 }) => MountStatus(
   deviceId: 'mount-0',
   name: 'EQ6-R',
@@ -131,6 +133,7 @@ MountStatus _status({
     canMoveAxis: canMoveAxis,
     axisRatesDegPerSec: axisRates,
     axisRateBands: axisRateBands,
+    trackingRates: trackingRates,
   ),
   runtimeState: runtimeState,
   rightAscensionHours: 5.5,
@@ -140,6 +143,7 @@ MountStatus _status({
   tracking: tracking,
   parked: parked,
   atHome: false,
+  trackingRate: trackingRate,
 );
 
 Future<void> _wideSurface(WidgetTester tester) async {
@@ -261,6 +265,19 @@ void main() {
     await tester.tap(find.byKey(const Key('mount_tracking_switch')));
     await tester.pumpAndSettle();
     expect(api.calls, contains('command:tracking:enabled=true'));
+  });
+
+  testWidgets('Tracking speed lists the mount\'s rates and sets the one picked (#1649)', (tester) async {
+    await _pump(tester, _status());
+    expect(find.byKey(const Key('mount_tracking_rate')), findsNothing, reason: 'one rate or none: no row');
+    final api = await _pump(
+      tester,
+      _status(trackingRates: const ['Sidereal', 'Lunar', 'Solar'], trackingRate: 'Sidereal'),
+    );
+    expect(find.text('King'), findsNothing);
+    await tester.tap(find.text('Lunar'));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('command:trackingrate:axis=null:rate=Lunar'));
   });
 
   testWidgets('Park sends the park command', (tester) async {
