@@ -167,4 +167,28 @@ void main() {
     expect(buildSearchIndex().where((e) => e.actionId?.startsWith(gotoActionPrefix) ?? false), isEmpty,
         reason: 'nothing dynamic without data');
   });
+
+  test('#1774 Companion Mode search has no hit that opens the full UI', () {
+    const fullUi = [
+      'action.library',
+      'action.calibration',
+      'action.stats',
+      'action.plan.tonight',
+    ];
+    bool template(SettingsSearchEntry e) =>
+        e.actionId?.startsWith(templateActionPrefix) ?? false;
+    final phone = buildSearchIndex(companion: true, templateNames: ['T']);
+    final ids = phone.map((e) => e.actionId).toSet();
+    for (final id in fullUi) {
+      expect(ids, isNot(contains(id)));
+    }
+    expect(phone.where(template), isEmpty);
+    expect(phone.where((e) => e.tabIndex != null), isEmpty);
+    expect(ids, containsAll(['action.wizard', 'action.mount.park']));
+
+    final desktop = buildSearchIndex(templateNames: ['T']);
+    expect(desktop.map((e) => e.actionId), containsAll(fullUi));
+    expect(desktop.where(template), isNotEmpty);
+    expect(desktop.where((e) => e.tabIndex != null), isNotEmpty);
+  });
 }

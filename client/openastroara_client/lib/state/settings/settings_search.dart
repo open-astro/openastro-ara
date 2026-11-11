@@ -448,6 +448,14 @@ List<SettingsSearchEntry> targetEntries(Iterable<(String id, String name, String
     ),
 ];
 
+/// #1774 — the action hits that open a full-UI screen or dialog.
+const Set<String> _fullUiActions = {
+  'action.library',
+  'action.calibration',
+  'action.stats',
+  'action.plan.tonight',
+};
+
 List<SettingsSearchEntry> buildSearchIndex({
   Iterable<String> templateNames = const [],
   Iterable<(String id, String name, String type)> targets = const [],
@@ -455,11 +463,16 @@ List<SettingsSearchEntry> buildSearchIndex({
 }) {
   final entries = <SettingsSearchEntry>[];
   // 0. §61.10 — tab navigation ("go to run", "planning", …) + actions.
-  entries.addAll(_navEntries);
-  entries.addAll(_actionEntries);
+  // #1774 — Companion Mode drops the hits that open a full-UI tab or screen.
+  if (!companion) entries.addAll(_navEntries);
+  entries.addAll(
+    companion
+        ? _actionEntries.where((e) => !_fullUiActions.contains(e.actionId))
+        : _actionEntries,
+  );
   entries.addAll(_equipmentActionEntries);
   // #1170 — what the daemon offers right now: templates and tonight's targets.
-  entries.addAll(templateEntries(templateNames));
+  if (!companion) entries.addAll(templateEntries(templateNames));
   entries.addAll(targetEntries(targets));
   // 1. Index panels.
   for (final group in settingsTree) {
