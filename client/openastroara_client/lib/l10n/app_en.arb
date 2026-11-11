@@ -449,6 +449,22 @@
   "@deviceCouldntStopDome": {
     "description": "Error message when the dome refused Stop"
   },
+  "deviceFollowsMount": "Follows the mount",
+  "@deviceFollowsMount": {
+    "description": "Dome window: the On / Off row that makes the dome keep its slit in front of the telescope"
+  },
+  "deviceFollowingMount": "Following the mount…",
+  "@deviceFollowingMount": {
+    "description": "Dome window: the moving line while the dome turns to follow the mount"
+  },
+  "deviceStoppedFollowingMount": "The dome no longer follows the mount",
+  "@deviceStoppedFollowingMount": {
+    "description": "Message pill: a dial turn, Park or Home turned following the mount off"
+  },
+  "deviceCouldntFollowMount": "Couldn't change whether the dome follows the mount",
+  "@deviceCouldntFollowMount": {
+    "description": "Error message when the daemon refused the Follows the mount On / Off"
+  },
   "deviceDomeReadFailed": "Dome read failed — check the device.",
   "@deviceDomeReadFailed": {
     "description": "Dome window: the daemon couldn't read the dome"

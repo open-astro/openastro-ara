@@ -27,6 +27,7 @@ import '../state/settings/plate_solve_settings_state.dart';
 import '../state/settings/safety_policies_state.dart';
 import '../state/settings/site_settings_state.dart';
 import '../state/settings/storage_settings_state.dart';
+import '../models/dome_settings.dart';
 import '../models/switch_device.dart' show CoolingFan;
 
 /// Client-side wrapper around §37 profile endpoints. Phase 12h.6a landed the
@@ -641,6 +642,21 @@ class ProfileApi {
       data: value.toJson(),
     );
     return CoolingFan.fromJson(res.data ?? const {});
+  }
+
+  /// GET the active profile's dome geometry and follow-the-mount setting (#1689).
+  Future<DomeSettings> getDomeSettings() async {
+    final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/dome');
+    return DomeSettings.fromJson(res.data ?? const {});
+  }
+
+  /// PUT the dome settings. The daemon refuses a scope outside the dome (422).
+  Future<DomeSettings> putDomeSettings(DomeSettings value) async {
+    final res = await _dio.put<Map<String, dynamic>>(
+      '/api/v1/profile/dome',
+      data: value.toJson(),
+    );
+    return DomeSettings.fromJson(res.data ?? const {});
   }
 
   /// GET the active profile's equipment auto-connect bools.

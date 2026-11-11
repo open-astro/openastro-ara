@@ -35,6 +35,10 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Added (dome follows the mount)
+
+- The dome follows the mount (#1689). With **Follows the mount** on, Ara turns the dome to keep its slit in front of the scope after a mount slew, after a meridian flip, and while tracking whenever the slit falls behind by more than the tolerance; exposures and the sequencer's Synchronize dome wait for the dome to arrive. Turn it on in Simple Mode's Dome window (it shows "Following the mount…" while it turns) or in the full UI's Dome panel, which also takes the dome geometry (radius, scope position, mount axis offsets, tolerance); a scope outside the dome is refused with a reason. Turning the dome by hand, parking it, sending it home, disconnecting it, or an unsafe-weather reaction turns following off. The setting is per profile and kept across restarts. New `POST /equipment/dome/follow`, `GET/PUT /profile/dome` and `runtime.following` on the dome status.
+
 ### Added (mount by hand)
 
 - Simple Mode's Mount window has a direction pad: eight directions around a center Stop, with Slow, Medium and Fast speeds taken from the mount's own rates. Hold a direction to move and let go to stop. The arrow keys drive it, and Escape stops. The pad is off, saying why, while the mount is parked, the plan is imaging, polar alignment runs or the Guider guides (#1649).

@@ -657,6 +657,30 @@ abstract class AppLocalizations {
   /// **'Couldn\'t stop the dome'**
   String get deviceCouldntStopDome;
 
+  /// Dome window: the On / Off row that makes the dome keep its slit in front of the telescope
+  ///
+  /// In en, this message translates to:
+  /// **'Follows the mount'**
+  String get deviceFollowsMount;
+
+  /// Dome window: the moving line while the dome turns to follow the mount
+  ///
+  /// In en, this message translates to:
+  /// **'Following the mount…'**
+  String get deviceFollowingMount;
+
+  /// Message pill: a dial turn, Park or Home turned following the mount off
+  ///
+  /// In en, this message translates to:
+  /// **'The dome no longer follows the mount'**
+  String get deviceStoppedFollowingMount;
+
+  /// Error message when the daemon refused the Follows the mount On / Off
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t change whether the dome follows the mount'**
+  String get deviceCouldntFollowMount;
+
   /// Dome window: the daemon couldn't read the dome
   ///
   /// In en, this message translates to:

@@ -501,10 +501,15 @@ class _OnOff extends StatelessWidget {
     this.enabled = true,
     this.fill = false,
     this.known = true,
+    this.group,
   });
 
   final String id;
   final bool on;
+
+  /// What the segments choose, read to a screen reader with each segment's
+  /// word and state ("Follows the mount, On, selected").
+  final String? group;
 
   /// False: the state isn't known (a faulted shutter), so neither segment
   /// reads as selected and both take a tap.
@@ -537,6 +542,7 @@ class _OnOff extends StatelessWidget {
             child: SimpleSegment(
               key: Key('$id-$key'),
               label: word,
+              group: group,
               selected: known && on == v,
               radius: AraRadius.container,
               onTap: (known && on == v) || !enabled ? null : () => onChanged(v),
@@ -4550,7 +4556,8 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
           ? StatusBlink(
               on: true,
               child: Text(
-                l10n.deviceMoving,
+                // The follower is turning it (#1689): not a move the user asked for.
+                s.following ? l10n.deviceFollowingMount : l10n.deviceMoving,
                 style: kSimpleText.copyWith(color: AraColors.accentConnected),
               ),
             )
@@ -4683,6 +4690,23 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
           },
         ),
       );
+      // Only a dome that can turn to an azimuth can follow the mount (#1689).
+      if (caps?.canSetAzimuth ?? false) {
+        children.add(const SizedBox(height: AraSpace.s12));
+        children.add(
+          simpleWindowRow(
+            l10n.deviceFollowsMount,
+            _OnOff(
+              id: 'simple-dome-follow',
+              on: s.following,
+              group: l10n.deviceFollowsMount,
+              onChanged: _follow,
+            ),
+            id: 'dome-follow',
+            labelInControl: true,
+          ),
+        );
+      }
       if (caps?.canSetShutter ?? false) {
         children.add(
           // Clear of the drawing's plinth (user, 2026-11-08).
@@ -4784,6 +4808,7 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
     final l10n = context.l10n;
     final asks = ref.read(simpleDomeAskProvider.notifier)
       ..ask((kind: SimpleDomeAskKind.turn, target: target));
+    final wasFollowing = ref.read(domeProvider).value?.following ?? false;
     try {
       final performed = await ref
           .read(domeProvider.notifier)
@@ -4791,6 +4816,9 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
       if (!performed) {
         asks.clear();
         _sayBusy(ref, l10n);
+      } else if (wasFollowing) {
+        // The daemon turned following off with the move: say so once.
+        notify(l10n.deviceStoppedFollowingMount);
       }
     } catch (e) {
       asks.clear();
@@ -4806,6 +4834,7 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
     final notify = userNotifier(context, origin: SimpleStatusOrigin.dome);
     final l10n = context.l10n;
     final n = ref.read(domeProvider.notifier);
+    final wasFollowing = ref.read(domeProvider).value?.following ?? false;
     if (move == _DomeMove.open || move == _DomeMove.close) {
       ref.read(domeShutterProvider.notifier).asked();
     }
@@ -4831,12 +4860,32 @@ class _SimpleDomeWindowState extends ConsumerState<SimpleDomeWindow> {
         asks.clear();
         ref.read(domeShutterProvider.notifier).cancelAsk();
         _sayBusy(ref, l10n);
+      } else if (wasFollowing &&
+          (move == _DomeMove.park || move == _DomeMove.home)) {
+        // The daemon turned following off with the move: say so once.
+        notify(l10n.deviceStoppedFollowingMount);
       }
     } catch (e) {
       asks.clear();
       ref.read(domeShutterProvider.notifier).cancelAsk();
       notify(
         l10n.deviceCouldntMoveDome,
+        detail: failureReason(l10n, e),
+        error: true,
+      );
+    }
+  }
+
+  /// The Follows the mount segments: the daemon says why when it can't.
+  Future<void> _follow(bool on) async {
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.dome);
+    final l10n = context.l10n;
+    try {
+      final performed = await ref.read(domeProvider.notifier).followMount(on);
+      if (!performed) _sayBusy(ref, l10n);
+    } catch (e) {
+      notify(
+        l10n.deviceCouldntFollowMount,
         detail: failureReason(l10n, e),
         error: true,
       );

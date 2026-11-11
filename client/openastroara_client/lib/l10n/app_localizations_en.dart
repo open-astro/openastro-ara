@@ -339,6 +339,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceCouldntStopDome => 'Couldn\'t stop the dome';
 
   @override
+  String get deviceFollowsMount => 'Follows the mount';
+
+  @override
+  String get deviceFollowingMount => 'Following the mount…';
+
+  @override
+  String get deviceStoppedFollowingMount =>
+      'The dome no longer follows the mount';
+
+  @override
+  String get deviceCouldntFollowMount =>
+      'Couldn\'t change whether the dome follows the mount';
+
+  @override
   String get deviceDomeReadFailed => 'Dome read failed — check the device.';
 
   @override

@@ -64,6 +64,10 @@ class DomeStatus extends EquipmentDeviceStatus {
   final bool atHome;
   final bool parked;
 
+  /// The dome follows the mount (#1689); with [runtimeState] `slewing` the
+  /// follower is turning it.
+  final bool following;
+
   DomeStatus({
     required this.deviceId,
     required this.name,
@@ -74,6 +78,7 @@ class DomeStatus extends EquipmentDeviceStatus {
     required this.shutterOpen,
     required this.atHome,
     required this.parked,
+    this.following = false,
   });
 
   /// The dome is mid-operation (rotating or moving the shutter).
@@ -95,6 +100,7 @@ class DomeStatus extends EquipmentDeviceStatus {
       shutterOpen: r['shutter_open'] as bool? ?? false,
       atHome: r['at_home'] as bool? ?? false,
       parked: r['parked'] as bool? ?? false,
+      following: r['following'] as bool? ?? false,
     );
   }
 
@@ -110,9 +116,10 @@ class DomeStatus extends EquipmentDeviceStatus {
           other.azimuthDeg == azimuthDeg &&
           other.shutterOpen == shutterOpen &&
           other.atHome == atHome &&
-          other.parked == parked);
+          other.parked == parked &&
+          other.following == following);
 
   @override
   int get hashCode => Object.hash(deviceId, name, connectionState, capabilities,
-      runtimeState, azimuthDeg, shutterOpen, atHome, parked);
+      runtimeState, azimuthDeg, shutterOpen, atHome, parked, following);
 }

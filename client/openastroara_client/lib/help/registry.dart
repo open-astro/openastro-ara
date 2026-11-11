@@ -2165,6 +2165,33 @@ const Map<String, Help> helpRegistry = {
         'Opening manually is fine for setup — just remember an open shutter with safety monitoring disabled means '
         'nothing will protect the telescope if weather turns.',
   ),
+  'eq.dome.follow': Help(
+    key: 'eq.dome.follow',
+    title: 'Follow the mount',
+    body:
+        'Ara turns the dome so the slit stays in front of the telescope: after a mount slew, after a meridian flip, '
+        'and while tracking whenever the slit falls behind by more than the tolerance. Turning the dome by hand, '
+        'parking it, sending it home or disconnecting it turns following off, and so does an unsafe-weather reaction. '
+        'It needs a dome that can turn to an azimuth and a dome radius in the geometry below. Roll-off roofs and '
+        'clamshells have nothing to turn.',
+  ),
+  'eq.dome.geometry': Help(
+    key: 'eq.dome.geometry',
+    title: 'Dome geometry',
+    body:
+        'Where the slit has to be depends on the radius of the dome, where the telescope sits inside it, and (on a '
+        'German equatorial mount) the mount axis offsets, because the telescope swings to a different spot on each '
+        'side of the pier. Measure from the centre of the dome: north, east and up are positive. A telescope placed '
+        'outside the radius of the dome is refused.',
+  ),
+  'eq.dome.tolerance': Help(
+    key: 'eq.dome.tolerance',
+    title: 'Dome tolerance',
+    body:
+        'How far the slit may fall behind the telescope before the dome turns again, in degrees. A larger value turns '
+        'the dome less often. With Turn during mount slews on, the dome starts turning while the mount is still '
+        'slewing; otherwise it turns once the mount has finished.',
+  ),
   'eq.rotator.reverse': Help(
     key: 'eq.rotator.reverse',
     title: 'Reverse direction',

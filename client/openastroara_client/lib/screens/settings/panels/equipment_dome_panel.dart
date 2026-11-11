@@ -3,9 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../widgets/status_indicator.dart' show StatusBlink;
+import '../../../models/dome_settings.dart';
 import '../../../models/dome_status.dart';
 import '../../../models/equipment_device_status.dart';
 import '../../../state/equipment/dome_state.dart';
+import '../../../state/settings/dome_settings_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/help_icon.dart';
@@ -51,21 +53,174 @@ class EquipmentDomePanel extends ConsumerWidget {
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.dome, v),
           hint: 'Off by default — dome connect actuates shutter',
         ),
-        const SettingsSectionHeader('Slaving'),
+        const SettingsSectionHeader('Following the mount'),
+        const _DomeFollowSection(),
+      ],
+    );
+  }
+}
+
+/// #1689 — the dome follows the mount: the switch, then the geometry that
+/// places the slit right (the scope's place in the dome and the mount's axis
+/// offsets), the tolerance and whether the dome also turns during a mount slew.
+/// The daemon refuses a scope outside the dome when it saves.
+class _DomeFollowSection extends ConsumerWidget {
+  const _DomeFollowSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(domeSettingsProvider).value;
+    if (settings == null) return const Text('Reading…');
+    final dome = ref.watch(domeProvider).value;
+    final canTurn = dome?.capabilities?.canSetAzimuth ?? false;
+
+    Future<void> save(DomeSettings next) async {
+      final messenger = ScaffoldMessenger.of(context);
+      final l10n = context.l10n;
+      try {
+        await ref.read(domeSettingsProvider.notifier).save(next);
+      } catch (e) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text("Couldn't save the dome: ${failureReason(l10n, e)}"),
+            backgroundColor: AraColors.accentError,
+          ),
+        );
+      }
+    }
+
+    Future<void> follow(bool on) async {
+      final messenger = ScaffoldMessenger.of(context);
+      final l10n = context.l10n;
+      try {
+        await ref.read(domeProvider.notifier).followMount(on);
+        ref.invalidate(domeSettingsProvider);
+      } catch (e) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              "Couldn't change following: ${failureReason(l10n, e)}",
+            ),
+            backgroundColor: AraColors.accentError,
+          ),
+        );
+      }
+    }
+
+    Widget number(
+      String label,
+      double value,
+      DomeSettings Function(double) apply, {
+      String? helpKey,
+    }) => EditableNumberRow(
+      label: label,
+      helpKey: helpKey,
+      currentValue: _num(value),
+      getCanonical: () => _num(value),
+      parse: (text) {
+        final v = double.tryParse(text.trim());
+        if (v != null && v != value) save(apply(v));
+      },
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(
-            'Dome slaving and shutter-on-park/unsafe follow the safety '
-            'policies and the mount park routine; there is no separate dome '
-            'setting.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+            'With this on, Ara turns the dome so its slit stays in front of '
+            'the telescope: after a mount slew, after a meridian flip, and '
+            'while tracking whenever the slit falls behind by more than the '
+            'tolerance. Turning the dome by hand, parking it, sending it home '
+            'or disconnecting it turns this off. The dome must be able to '
+            'turn to an azimuth.',
+            style: Theme.of(context).textTheme.bodySmall
+                ?.copyWith(color: AraColors.textSecondary),
           ),
+        ),
+        SettingsSwitchRow(
+          label: 'Follow the mount',
+          helpKey: 'eq.dome.follow',
+          value: settings.followMount,
+          onChanged: canTurn || settings.followMount ? follow : (_) {},
+          hint: canTurn || settings.followMount
+              ? null
+              : 'Connect a dome that can turn to an azimuth first',
+        ),
+        const SettingsSectionHeader('Geometry'),
+        SettingsDropdownRow<String>(
+          label: 'Mount type',
+          helpKey: 'eq.dome.geometry',
+          value: settings.mountType,
+          items: const {
+            'equatorial': 'German equatorial',
+            'fork_on_wedge': 'Fork or alt-az (on a wedge)',
+          },
+          onChanged: (v) {
+            if (v != null && v != settings.mountType) {
+              save(settings.copyWith(mountType: v));
+            }
+          },
+        ),
+        number(
+          'Dome radius (mm)',
+          settings.domeRadiusMm,
+          (v) => settings.copyWith(domeRadiusMm: v),
+          helpKey: 'eq.dome.geometry',
+        ),
+        number(
+          'Scope north of dome centre (mm)',
+          settings.scopePositionNorthSouthMm,
+          (v) => settings.copyWith(scopePositionNorthSouthMm: v),
+        ),
+        number(
+          'Scope east of dome centre (mm)',
+          settings.scopePositionEastWestMm,
+          (v) => settings.copyWith(scopePositionEastWestMm: v),
+        ),
+        number(
+          'Scope above dome centre (mm)',
+          settings.scopePositionUpDownMm,
+          (v) => settings.copyWith(scopePositionUpDownMm: v),
+        ),
+        if (settings.isEquatorial) ...[
+          number(
+            'Mount axis length (mm)',
+            settings.gemAxisMm,
+            (v) => settings.copyWith(gemAxisMm: v),
+          ),
+          number(
+            'Mount lateral offset (mm)',
+            settings.lateralAxisMm,
+            (v) => settings.copyWith(lateralAxisMm: v),
+          ),
+          number(
+            'Dec axis horizontal offset (mm)',
+            settings.decOffsetHorizontalMm,
+            (v) => settings.copyWith(decOffsetHorizontalMm: v),
+          ),
+        ],
+        number(
+          'Azimuth tolerance (°)',
+          settings.azimuthToleranceDegrees,
+          (v) => settings.copyWith(azimuthToleranceDegrees: v),
+          helpKey: 'eq.dome.tolerance',
+        ),
+        SettingsSwitchRow(
+          label: 'Turn during mount slews',
+          helpKey: 'eq.dome.tolerance',
+          value: settings.synchronizeDuringMountSlew,
+          onChanged: (v) =>
+              save(settings.copyWith(synchronizeDuringMountSlew: v)),
+          hint: 'Off: the dome turns when the mount has finished slewing',
         ),
       ],
     );
   }
+
+  static String _num(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
 }
 
 /// The connected dome's live body: shutter/azimuth/home/park state + shutter,
@@ -121,7 +276,9 @@ class _DomeBodyState extends ConsumerState<_DomeBody> {
             child: StatusBlink(
               on: s.runtimeState == 'slewing',
               child: Text(
-                s.runtimeState == 'slewing' ? 'Slewing…' : 'Shutter moving…',
+                s.runtimeState == 'slewing'
+                    ? (s.following ? 'Following the mount…' : 'Slewing…')
+                    : 'Shutter moving…',
                 style: TextStyle(
                   color: s.runtimeState == 'slewing'
                       ? AraColors.accentConnected

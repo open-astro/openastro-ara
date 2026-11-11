@@ -339,6 +339,20 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceCouldntStopDome => 'Couldn\'t stop the dome';
 
   @override
+  String get deviceFollowsMount => 'Follows the mount';
+
+  @override
+  String get deviceFollowingMount => 'Following the mount…';
+
+  @override
+  String get deviceStoppedFollowingMount =>
+      'The dome no longer follows the mount';
+
+  @override
+  String get deviceCouldntFollowMount =>
+      'Couldn\'t change whether the dome follows the mount';
+
+  @override
   String get deviceDomeReadFailed => 'Dome read failed — check the device.';
 
   @override
@@ -4518,6 +4532,20 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get deviceCouldntStopDome => 'Não foi possível parar a cúpula';
+
+  @override
+  String get deviceFollowsMount => 'Segue a montagem';
+
+  @override
+  String get deviceFollowingMount => 'Seguindo a montagem…';
+
+  @override
+  String get deviceStoppedFollowingMount =>
+      'A cúpula deixou de seguir a montagem';
+
+  @override
+  String get deviceCouldntFollowMount =>
+      'Não foi possível alterar se a cúpula segue a montagem';
 
   @override
   String get deviceDomeReadFailed =>
