@@ -39,7 +39,8 @@ public static partial class AlpacaBridgeSetupEndpoints {
     private const string AddRoute = "/devices";
 
     /// <summary>The add route's full path, for the stale-session guard test (the guard is middleware over every mutating
-    /// /api/v1 route). Built from the constants the route is mapped with, so the test checks the path the route serves.</summary>
+    /// /api/v1 route but server connect, disconnect and emergency stop). Built from the constants the route is mapped
+    /// with, so the test checks the path the route serves.</summary>
     internal const string AddPath = "/api/v1/equipment" + Group + AddRoute;
 
     public static void MapAlpacaBridgeSetup(this RouteGroupBuilder equipment) {
