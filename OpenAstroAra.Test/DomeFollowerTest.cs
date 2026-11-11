@@ -22,6 +22,7 @@ using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
@@ -49,6 +50,9 @@ namespace OpenAstroAra.Test {
             public bool Parked;
             public AscomShutter Shutter = AscomShutter.Open;
             public bool FailSlews;
+            // Set: a slew blocks in the driver until it is released (a move that holds the follower's gate).
+            public ManualResetEventSlim? Hold;
+            public int SlewCalls;
             public readonly List<double> Slews = new();
             public readonly List<string> Commands = new();
             public bool Slewing => IsSlewing;
@@ -63,6 +67,8 @@ namespace OpenAstroAra.Test {
             public bool CanFindHome => true;
             public bool CanSetPark => true;
             public void SlewToAzimuth(double azimuth) {
+                Interlocked.Increment(ref SlewCalls);
+                Hold?.Wait(TimeSpan.FromSeconds(10));
                 if (FailSlews) {
                     throw new InvalidOperationException("dome motor fault");
                 }
@@ -82,6 +88,10 @@ namespace OpenAstroAra.Test {
             public readonly List<(bool IsError, string? Header, string Message)> Seen = new();
             public void Notify(bool isError, string? header, string message) => Seen.Add((isError, header, message));
         }
+
+        // A pinned clock (local sidereal time about 12 h at the site), so 10h/-45 and 14h/-20 sit either side
+        // of the meridian, far more than the tolerance apart, whatever the time the suite runs.
+        private static readonly DateTime Now = new(2026, 4, 20, 12, 0, 0, DateTimeKind.Utc);
 
         private static readonly DiscoveredDeviceDto Device = new("uid", "Roll dome", OpenAstroAra.Server.Contracts.DeviceType.Dome, "127.0.0.1", "127.0.0.1", 1, 0, false);
 
@@ -113,6 +123,7 @@ namespace OpenAstroAra.Test {
             mount.Setup(m => m.GetInfo()).Returns(() => _mount);
             _follower = new DomeFollower(_svc, mount.Object, new DomeSynchronization(_profile), _profile, _store) {
                 WaitPollInterval = TimeSpan.FromMilliseconds(20),
+                UtcNow = () => Now,
             };
             await _svc.ConnectAsync(new ConnectRequestDto(Device), null, CancellationToken.None);
             await EventuallyAsync(() => ((IDomeMediator)_svc).GetInfo() is { Connected: true, CanSetAzimuth: true }, "the dome connect");
@@ -177,6 +188,7 @@ namespace OpenAstroAra.Test {
             await PlaceDomeAtAsync(Target());
             _mount.Slewing = true;
             _mount.Coordinates = new Coordinates(Angle.ByHours(14), Angle.ByDegree(-20), Epoch.JNOW);
+            Assert.That(Math.Abs(Target() - _dome.Az), Is.GreaterThan(20.0), "the new pointing is past the tolerance");
             await _follower.TickAsync();
             Assert.That(_dome.Slews, Has.Count.EqualTo(1));
         }
@@ -290,6 +302,69 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task An_emergency_stop_turns_following_off_before_the_mounts_slew_ends() {
+            await PlaceDomeAtAsync(Target());
+            _mount.Slewing = true;
+            await _follower.TickAsync();
+            var estop = new EmergencyStopService(domeFollower: () => _follower);
+            await estop.ExecuteAsync();
+            _mount.Slewing = false; // the stop aborted the slew
+            await _follower.TickAsync();
+            Assert.That(_store.GetDomeSettings().FollowMount, Is.False);
+            Assert.That(_dome.Slews, Is.Empty, "nothing turns after an emergency stop");
+        }
+
+        [Test]
+        public async Task Turning_it_off_while_a_tick_waits_for_another_move_keeps_the_follower_alive() {
+            await PlaceDomeAtAsync(Target() + 30);
+            using var hold = new ManualResetEventSlim(false);
+            _dome.Hold = hold;
+            // A plan's Synchronize dome holds the move gate while the dome turns.
+            var sync = _follower.TriggerTelescopeSync(CancellationToken.None);
+            await EventuallyAsync(() => Volatile.Read(ref _dome.SlewCalls) == 1, "the sync slew");
+            var tick = _follower.TickAsync();
+            await Task.Delay(50);
+            Assert.That(tick.IsCompleted, Is.False, "the tick waits for the gate");
+
+            await _svc.SetFollowingAsync(false, CancellationToken.None);
+            // An escaping cancellation would end the follower's loop for good.
+            await Assert.ThatAsync(() => tick.WaitAsync(TimeSpan.FromSeconds(5)), Throws.Nothing);
+            hold.Set();
+            await sync.WaitAsync(TimeSpan.FromSeconds(5));
+            _dome.Hold = null;
+
+            await _svc.SetFollowingAsync(true, CancellationToken.None);
+            await PlaceDomeAtAsync(Target() + 30);
+            var before = _dome.Slews.Count;
+            await _follower.TickAsync();
+            Assert.That(_dome.Slews, Has.Count.EqualTo(before + 1), "a later tick still turns the dome");
+        }
+
+        [Test]
+        public async Task A_geometry_that_puts_the_scope_outside_the_dome_shows_one_pill_and_stops_following() {
+            var sink = new RecordingSink();
+            Notifier.Use(sink);
+            // The validator accepts it (the mount sits at the centre of a 1 m dome), but the mount's 1.5 m axis
+            // puts the aperture outside the dome for every pointing.
+            _store.PutDomeSettings(_store.GetDomeSettings() with {
+                DomeRadiusMm = 1000,
+                ScopePositionNorthSouthMm = 0,
+                ScopePositionEastWestMm = 0,
+                ScopePositionUpDownMm = 0,
+                GemAxisMm = 1500,
+                LateralAxisMm = 0,
+                DecOffsetHorizontalMm = 0,
+            });
+            Assert.That(DomeSettingsValidator.Error(_store.GetDomeSettings()), Is.Null);
+            await _follower.TickAsync();
+            await _follower.TickAsync();
+            _ = _follower.IsSynchronized; // an exposure's wait polls this
+            Assert.That(sink.Seen.Count(s => s.IsError), Is.EqualTo(1), "one pill, not one per tick");
+            Assert.That(_store.GetDomeSettings().FollowMount, Is.False);
+            Assert.That(_dome.Slews, Is.Empty);
+        }
+
+        [Test]
         public void The_setting_is_restored_on_daemon_start() {
             // A second follower over the same store, as a restarted daemon builds it.
             using var restarted = new DomeFollower(_svc, new Mock<ITelescopeMediator>().Object,
@@ -379,9 +454,34 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Synchronize_dome_without_a_dome_radius_sends_nothing() {
+            // A profile that never set the geometry: a meridian flip's dome sync must not turn the dome to
+            // the azimuth a zero radius works out (due north or south).
+            _store.PutDomeSettings(DomeSettingsDto.Default);
+            await PlaceDomeAtAsync(90);
+            Assert.That(await _follower.TriggerTelescopeSync(CancellationToken.None), Is.False);
+            Assert.That(_dome.Slews, Is.Empty);
+        }
+
+        [Test]
         public void The_store_geometry_reaches_the_profile_the_math_reads() {
             Assert.That(_profile.ActiveProfile.DomeSettings.DomeRadiusMm, Is.EqualTo(2500));
             Assert.That(_profile.ActiveProfile.DomeSettings.AzimuthToleranceDegrees, Is.EqualTo(2.0));
+        }
+
+        [Test]
+        public void A_profile_put_keeps_the_stored_follow_setting() {
+            // A panel opened while following was on saves geometry after the dome was parked.
+            _store.PutDomeSettings(_store.GetDomeSettings() with { FollowMount = false });
+            var stale = _store.GetDomeSettings() with { FollowMount = true, AzimuthToleranceDegrees = 3 };
+            var result = ProfileEndpoints.PutDomeSettings(stale, _store);
+            Assert.That(result, Is.InstanceOf<Microsoft.AspNetCore.Http.HttpResults.Ok<DomeSettingsDto>>());
+            Assert.That(_store.GetDomeSettings().FollowMount, Is.False, "only the follow command turns it on");
+            Assert.That(_store.GetDomeSettings().AzimuthToleranceDegrees, Is.EqualTo(3), "the geometry is saved");
+
+            _store.PutDomeSettings(_store.GetDomeSettings() with { FollowMount = true });
+            ProfileEndpoints.PutDomeSettings(_store.GetDomeSettings() with { FollowMount = false }, _store);
+            Assert.That(_store.GetDomeSettings().FollowMount, Is.True, "nor off");
         }
 
         [Test]

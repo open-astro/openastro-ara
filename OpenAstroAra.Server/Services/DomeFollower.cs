@@ -57,13 +57,14 @@ public sealed partial class DomeFollower : IDomeFollower, IHostedService, IDispo
     private bool _mountWasSlewing;
     private PierSide? _lastPierSide;
     private bool _failureShown;
-    private bool _geometryFailureLogged;
     private bool _lastReportedFollowing;
 
     /// <summary>Tick cadence; production 2 s, tests drive <see cref="TickAsync"/> directly.</summary>
     internal TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(2);
     /// <summary>Poll inside <see cref="WaitForDomeSynchronization"/>.</summary>
     internal TimeSpan WaitPollInterval { get; set; } = TimeSpan.FromMilliseconds(500);
+    /// <summary>The clock the sidereal time is read from; tests pin it so two pointings are a known distance apart.</summary>
+    internal Func<DateTime> UtcNow { get; set; } = () => DateTime.UtcNow;
 
     public DomeFollower(DomeService dome, ITelescopeMediator telescope, IDomeSynchronization geometry,
             IProfileService profile, IProfileStore store, ILogger<DomeFollower>? logger = null) {
@@ -86,10 +87,10 @@ public sealed partial class DomeFollower : IDomeFollower, IHostedService, IDispo
             try {
                 var dome = _dome.GetInfo();
                 var tel = _telescope.GetInfo();
-                if (!IsFollowing || !dome.Connected || !tel.Connected || double.IsNaN(dome.Azimuth)) {
+                if (!IsFollowing || !dome.Connected || !tel.Connected || tel.Coordinates is null || double.IsNaN(dome.Azimuth)) {
                     return false;
                 }
-                return IsDomeWithinTolerance(Angle.ByDegree(dome.Azimuth), GetSynchronizedDomeCoordinates(tel));
+                return TryFollowTarget(tel, out var target) && IsDomeWithinTolerance(Angle.ByDegree(dome.Azimuth), target);
             } catch (InvalidOperationException) {
                 return false;
             }
@@ -173,17 +174,9 @@ public sealed partial class DomeFollower : IDomeFollower, IHostedService, IDispo
         if (tel.SideOfPier != PierSide.pierUnknown) {
             _lastPierSide = tel.SideOfPier;
         }
-        TopocentricCoordinates target;
-        try {
-            target = GetSynchronizedDomeCoordinates(tel);
-        } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) {
-            if (!_geometryFailureLogged) {
-                _geometryFailureLogged = true;
-                LogGeometryFailed(ex);
-            }
+        if (!TryFollowTarget(tel, out var target)) {
             return;
         }
-        _geometryFailureLogged = false;
         var force = !tel.Slewing && (_mountWasSlewing || flipped);
         if (!force && IsDomeWithinTolerance(Angle.ByDegree(dome.Azimuth), target)) {
             return;
@@ -198,11 +191,28 @@ public sealed partial class DomeFollower : IDomeFollower, IHostedService, IDispo
         }
     }
 
+    // The geometry math shows an error pill each time it fails (a scope outside the dome for this pointing), so
+    // the first failure turns following off: one pill, not one per tick or per wait poll.
+    private bool TryFollowTarget(TelescopeInfo tel, out TopocentricCoordinates target) {
+        try {
+            target = GetSynchronizedDomeCoordinates(tel);
+            return true;
+        } catch (Exception ex) when (ex is InvalidOperationException or ArgumentException) {
+            LogGeometryFailed(ex);
+            TurnOff("the dome geometry puts the scope outside the dome");
+            target = null!;
+            return false;
+        }
+    }
+
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Follow-slew boundary: the dome call can throw arbitrary driver/HTTP exceptions; a failure is logged and shown once as a message pill, and the next tick retries. Cancellation by TurnOff() is swallowed. CA1031's log-and-recover boundary applies.")]
     private async Task MoveAsync(double azimuth, string domeName, CancellationToken token) {
-        await _moveGate.WaitAsync(token).ConfigureAwait(false);
+        var acquired = false;
         try {
+            // Inside the try: TurnOff() while another move holds the gate must not end the follower loop.
+            await _moveGate.WaitAsync(token).ConfigureAwait(false);
+            acquired = true;
             await _dome.FollowSlewAsync(azimuth, token).ConfigureAwait(false);
             _failureShown = false;
         } catch (OperationCanceledException) {
@@ -216,7 +226,9 @@ public sealed partial class DomeFollower : IDomeFollower, IHostedService, IDispo
                     : domeName + " could not turn to follow the mount: " + ex.Message);
             }
         } finally {
-            _moveGate.Release();
+            if (acquired) {
+                _moveGate.Release();
+            }
         }
     }
 
@@ -248,7 +260,8 @@ public sealed partial class DomeFollower : IDomeFollower, IHostedService, IDispo
 
     public async Task<bool> SyncToScopeCoordinates(Coordinates coordinates, PierSide sideOfPier, CancellationToken cancellationToken) {
         var dome = _dome.GetInfo();
-        if (!dome.Connected || !dome.CanSetAzimuth) {
+        // No dome radius: the geometry was never set, and the math would send the dome due north or south.
+        if (!dome.Connected || !dome.CanSetAzimuth || _profile.ActiveProfile.DomeSettings.DomeRadiusMm <= 0) {
             return false;
         }
         var target = TargetFor(coordinates, sideOfPier);
@@ -270,7 +283,7 @@ public sealed partial class DomeFollower : IDomeFollower, IHostedService, IDispo
 
     private TopocentricCoordinates TargetFor(Coordinates coordinates, PierSide sideOfPier) {
         var site = _profile.ActiveProfile.AstrometrySettings;
-        var lst = AstroUtil.GetLocalSiderealTime(DateTime.UtcNow, site.Longitude);
+        var lst = AstroUtil.GetLocalSiderealTime(UtcNow(), site.Longitude);
         return _geometry.TargetDomeCoordinates(coordinates, lst, Angle.ByDegree(site.Latitude), Angle.ByDegree(site.Longitude), site.Elevation, sideOfPier);
     }
 

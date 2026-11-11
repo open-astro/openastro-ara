@@ -1,10 +1,10 @@
 /// The profile's dome (`GET/PUT /api/v1/profile/dome`, #1689): where the scope
-/// sits in the dome, how close the slit has to be, and whether the dome
-/// follows the mount. Distances are mm, angles degrees. An absent key reads
-/// as its default, so an older daemon's answer still parses.
+/// sits in the dome and how close the slit has to be. Whether the dome follows
+/// the mount is the dome status's `following`, changed by the follow command;
+/// the daemon keeps it on a PUT. Distances are mm, angles degrees. An absent
+/// key reads as its default, so an older daemon's answer still parses.
 class DomeSettings {
   const DomeSettings({
-    this.followMount = false,
     this.domeRadiusMm = 0,
     this.scopePositionNorthSouthMm = 0,
     this.scopePositionEastWestMm = 0,
@@ -18,7 +18,6 @@ class DomeSettings {
     this.domeSyncTimeoutSeconds = 120,
   });
 
-  final bool followMount;
   final double domeRadiusMm;
   final double scopePositionNorthSouthMm;
   final double scopePositionEastWestMm;
@@ -36,7 +35,6 @@ class DomeSettings {
   bool get isEquatorial => mountType != 'fork_on_wedge';
 
   factory DomeSettings.fromJson(Map<String, dynamic> j) => DomeSettings(
-    followMount: j['follow_mount'] as bool? ?? false,
     domeRadiusMm: (j['dome_radius_mm'] as num?)?.toDouble() ?? 0,
     scopePositionNorthSouthMm:
         (j['scope_position_north_south_mm'] as num?)?.toDouble() ?? 0,
@@ -58,7 +56,6 @@ class DomeSettings {
   );
 
   Map<String, dynamic> toJson() => {
-    'follow_mount': followMount,
     'dome_radius_mm': domeRadiusMm,
     'scope_position_north_south_mm': scopePositionNorthSouthMm,
     'scope_position_east_west_mm': scopePositionEastWestMm,
@@ -73,7 +70,6 @@ class DomeSettings {
   };
 
   DomeSettings copyWith({
-    bool? followMount,
     double? domeRadiusMm,
     double? scopePositionNorthSouthMm,
     double? scopePositionEastWestMm,
@@ -86,7 +82,6 @@ class DomeSettings {
     bool? synchronizeDuringMountSlew,
     int? domeSyncTimeoutSeconds,
   }) => DomeSettings(
-    followMount: followMount ?? this.followMount,
     domeRadiusMm: domeRadiusMm ?? this.domeRadiusMm,
     scopePositionNorthSouthMm:
         scopePositionNorthSouthMm ?? this.scopePositionNorthSouthMm,

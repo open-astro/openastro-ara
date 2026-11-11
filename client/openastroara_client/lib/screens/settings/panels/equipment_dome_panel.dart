@@ -73,6 +73,9 @@ class _DomeFollowSection extends ConsumerWidget {
     if (settings == null) return const Text('Reading…');
     final dome = ref.watch(domeProvider).value;
     final canTurn = dome?.capabilities?.canSetAzimuth ?? false;
+    // The dome status, not the saved settings: parking, a turn of the dial or
+    // a safety reaction turns following off on the daemon while this is open.
+    final following = dome?.following ?? false;
 
     Future<void> save(DomeSettings next) async {
       final messenger = ScaffoldMessenger.of(context);
@@ -94,7 +97,6 @@ class _DomeFollowSection extends ConsumerWidget {
       final l10n = context.l10n;
       try {
         await ref.read(domeProvider.notifier).followMount(on);
-        ref.invalidate(domeSettingsProvider);
       } catch (e) {
         messenger.showSnackBar(
           SnackBar(
@@ -142,9 +144,9 @@ class _DomeFollowSection extends ConsumerWidget {
         SettingsSwitchRow(
           label: 'Follow the mount',
           helpKey: 'eq.dome.follow',
-          value: settings.followMount,
-          onChanged: canTurn || settings.followMount ? follow : (_) {},
-          hint: canTurn || settings.followMount
+          value: following,
+          onChanged: canTurn || following ? follow : (_) {},
+          hint: canTurn || following
               ? null
               : 'Connect a dome that can turn to an azimuth first',
         ),

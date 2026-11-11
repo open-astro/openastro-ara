@@ -76,6 +76,7 @@ DomeStatus _status({
   bool canSetAzimuth = true,
   bool canPark = true,
   String runtimeState = 'idle',
+  bool following = false,
 }) => DomeStatus(
   deviceId: 'dome-0',
   name: 'Observatory',
@@ -92,6 +93,7 @@ DomeStatus _status({
   shutterOpen: true,
   atHome: false,
   parked: false,
+  following: following,
 );
 
 /// The text field of the settings row labelled [label].
@@ -196,6 +198,24 @@ void main() {
     await tester.tap(find.byType(Switch).at(1)); // after Auto-connect on boot
     await tester.pumpAndSettle();
     expect(api.calls, contains('command:follow:true'));
+  });
+
+  testWidgets('the Follow switch shows the dome status', (tester) async {
+    // The daemon turned following off (a park, the dial, a safety reaction):
+    // the status says so, and the switch follows it.
+    await _pump(
+      tester,
+      _status(),
+      profile: _FakeProfileApi(const DomeSettings()),
+    );
+    expect(tester.widget<Switch>(find.byType(Switch).at(1)).value, isFalse);
+
+    await _pump(
+      tester,
+      _status(following: true),
+      profile: _FakeProfileApi(const DomeSettings()),
+    );
+    expect(tester.widget<Switch>(find.byType(Switch).at(1)).value, isTrue);
   });
 
   testWidgets('a dome that cannot turn offers no Follow the mount', (

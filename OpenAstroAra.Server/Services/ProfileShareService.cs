@@ -156,10 +156,8 @@ public sealed class ProfileShareService : IProfileShareService {
         // Strip secrets — push/telegram credentials must never travel in a share file
         // (BOTH halves of each channel: token + user key, bot token + chat id).
         Notifications = s.Notifications with {
-            PushoverToken = "",
-            TelegramBotToken = "",
-            PushoverUserKey = "",
-            TelegramChatId = "",
+            PushoverToken = "", TelegramBotToken = "",
+            PushoverUserKey = "", TelegramChatId = "",
         },
         // §36 custom terrain horizon is location-revealing terrain data (a skyline
         // fingerprints the site) — strip it entirely, same stance as the coordinates.
