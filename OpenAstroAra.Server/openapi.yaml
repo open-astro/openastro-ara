@@ -14930,6 +14930,9 @@ components:
             - string
           format: double
           default: 0
+        permanent_pier:
+          type: boolean
+          default: false
     SkyModelCalibrationDto:
       required:
         - fitted_utc

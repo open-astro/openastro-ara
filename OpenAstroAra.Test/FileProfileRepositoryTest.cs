@@ -323,4 +323,29 @@ public class FileProfileRepositoryTest {
         // Re-init the SetUp fields so TearDown disposes the live objects.
         _repo = new FileProfileRepository(_dir, store2);
     }
+
+    [Test]
+    public void Permanent_pier_round_trips_through_the_store_and_defaults_false() {
+        _store.GetSiteSettings().PermanentPier.Should().BeFalse("off until someone sets it");
+        _store.PutSiteSettings(_store.GetSiteSettings() with { PermanentPier = true });
+        _repo.Dispose();
+
+        var store2 = new FileProfileStore(_dir);
+        using var repo2 = new FileProfileRepository(_dir, store2);
+        store2.GetSiteSettings().PermanentPier.Should().BeTrue();
+        _repo = new FileProfileRepository(_dir, store2);
+    }
+
+    [Test]
+    public void A_site_block_written_before_permanent_pier_existed_loads_false() {
+        const string old = """
+            {"site_name":"Old","latitude_deg":-33.856784,"longitude_deg":151.215297,"elevation_m":42,
+             "time_zone":"UTC","use_custom_horizon":false,"default_horizon_altitude_deg":20,"bortle_class":4,
+             "typical_seeing_arcsec":2,"twilight_definition":"astronomical"}
+            """;
+        var site = System.Text.Json.JsonSerializer.Deserialize(old, OpenAstroAra.Server.AraJsonSerializerContext.Default.SiteSettingsDto);
+        site!.PermanentPier.Should().BeFalse();
+        System.Text.Json.JsonSerializer.Serialize(site with { PermanentPier = true }, OpenAstroAra.Server.AraJsonSerializerContext.Default.SiteSettingsDto)
+            .Should().Contain("\"permanent_pier\":true");
+    }
 }

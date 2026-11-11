@@ -1886,6 +1886,43 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Stop_with_an_error_reading_records_the_last_result() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB);
+            using var svc = NewService(guider, solver, log: new RecordingLog());
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).LastResult, Is.Null, "none by default");
+
+            var before = DateTimeOffset.UtcNow;
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(status.LastResult, Is.Not.Null);
+            Assert.That(status.LastResult!.ErrorArcmin, Is.EqualTo(1.0).Within(0.2));
+            Assert.That(status.LastResult.CompletedUtc, Is.GreaterThanOrEqualTo(before));
+        }
+
+        [Test]
+        public async Task A_routine_that_never_produced_an_error_reading_records_no_last_result() {
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            var solver = new ScriptedSolver { Fallback = Unsolved };
+            var log = new RecordingLog();
+            using var svc = NewService(guider, solver, log: log);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await PollStateAsync(svc, "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).LastResult, Is.Null);
+        }
+
+        [Test]
         public async Task A_failed_routine_logs_a_failed_row_and_stop_does_not_add_another() {
             var paCalls = new ConcurrentQueue<bool>();
             await using var fake = StartFake(paCalls);
@@ -2459,6 +2496,8 @@ namespace OpenAstroAra.Test {
             Assert.That(status.CheckResult.Verdict, Is.EqualTo("excellent"));
             Assert.That(status.CheckResult.ConeHalfAngleDeg, Is.EqualTo(5.0).Within(1e-6));
             Assert.That(status.CheckResult.TurnMismatchDeg, Is.EqualTo(0.0).Within(1e-6));
+            Assert.That(status.LastResult, Is.Not.Null, "#1565: a finished check is the last result");
+            Assert.That(status.LastResult!.ErrorArcmin, Is.EqualTo(status.CheckResult.TotalErrorArcmin).Within(1e-6));
             Assert.That(status.CheckResult.FineErrorArcmin, Is.Null, "no fine stage ran");
             // Home, then off the axis, then two 30° turns the same way.
             var targets = slews.ToArray();
