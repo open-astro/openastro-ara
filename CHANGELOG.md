@@ -35,6 +35,11 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Changed (every string in pt-BR)
+
+- Brazilian Portuguese now covers the safety alert dialog, and the "Couldn't …" error sentences read wholly in the picked language: the action half (for example "start copying frames") comes from the catalogue instead of English text in code, in the library, calibration, storage, Settings, Support, time sync and backup-stream messages (#1751).
+- Contributors: a test (`test/hardcoded_strings_test.dart`) lists the text still written straight into the Dart code, file by file, and fails when a file gains one or when its entry is not lowered after a migration. A language-neutral literal ends its line with `// l10n-ok` (#1751).
+
 ### Added (mount by hand)
 
 - Simple Mode's Mount window has a direction pad: eight directions around a center Stop, with Slow, Medium and Fast speeds taken from the mount's own rates. Hold a direction to move and let go to stop. The arrow keys drive it, and Escape stops. The pad is off, saying why, while the mount is parked, the plan is imaging, polar alignment runs or the Guider guides (#1649).

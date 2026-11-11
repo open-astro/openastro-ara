@@ -57,7 +57,7 @@ class _DiagnosticsModePanelState extends ConsumerState<DiagnosticsModePanel> {
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text(friendlyError(context.l10n, e, action: 'save that'))),
+        SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionSave))),
       );
     }
   }

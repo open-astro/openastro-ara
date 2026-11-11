@@ -7094,6 +7094,318 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Lost contact with the rig'**
   String get monitorLinkLostShort;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'abort the capture'**
+  String get actionAbortCapture;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'apply that to the selected frames'**
+  String get actionApplyToFrames;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'build the calibration'**
+  String get actionBuildCalibration;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'cancel the copy'**
+  String get actionCancelCopy;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'check the disk for frames'**
+  String get actionCheckDisk;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'clean the preview cache'**
+  String get actionCleanPreviewCache;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'clean the sky photo cache'**
+  String get actionCleanSkyPhotoCache;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'clear the ceiling'**
+  String get actionClearCeiling;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'confirm the frame arrived'**
+  String get actionConfirmFrame;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'connect'**
+  String get actionConnect;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'download that'**
+  String get actionDownload;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'export those frames'**
+  String get actionExportFrames;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'export the stats'**
+  String get actionExportStats;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'generate the calibration'**
+  String get actionGenerateCalibration;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'list the folders'**
+  String get actionListFolders;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load the dark library'**
+  String get actionLoadDarkLibrary;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load the fault history'**
+  String get actionLoadFaults;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load the frames'**
+  String get actionLoadFrames;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load your library'**
+  String get actionLoadLibrary;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load the logs'**
+  String get actionLoadLogs;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load your notifications'**
+  String get actionLoadNotifications;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load older logs'**
+  String get actionLoadOlderLogs;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load the preview'**
+  String get actionLoadPreview;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load the sessions'**
+  String get actionLoadSessions;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load your saved settings'**
+  String get actionLoadSettings;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'look for equipment'**
+  String get actionLookForEquipment;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'push the guider profile'**
+  String get actionPushGuiderProfile;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'push the time'**
+  String get actionPushTime;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'rate the frame'**
+  String get actionRateFrame;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'read the camera'**
+  String get actionReadCamera;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'read the server clock state'**
+  String get actionReadClock;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'read the server\'s disks'**
+  String get actionReadServerDisks;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'re-arm safety'**
+  String get actionRearmSafety;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'refit the sky model'**
+  String get actionRefitSkyModel;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'restart your rig'**
+  String get actionRestartRig;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'resume the sequence'**
+  String get actionResumeSequence;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'save that'**
+  String get actionSave;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'save the horizon skyline'**
+  String get actionSaveHorizon;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'save the slot labels'**
+  String get actionSaveSlotLabels;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'send the calibration choice'**
+  String get actionSendCalibrationChoice;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'do that sequence action'**
+  String get actionSequenceAction;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'solve the frame'**
+  String get actionSolveFrame;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'work out which star database this rig needs'**
+  String get actionStarDatabase;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'start the copy'**
+  String get actionStartCopy;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'take that exposure'**
+  String get actionTakeExposure;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'take the verification image'**
+  String get actionTakeVerification;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'update the tag'**
+  String get actionUpdateTag;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'back up that entry'**
+  String get actionBackUpEntry;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'keep the backup stream going'**
+  String get actionKeepBackupGoing;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'push the GPS fix'**
+  String get actionPushGpsFix;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'rebuild the stats catalog'**
+  String get actionRebuildStats;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'start copying frames'**
+  String get actionStartCopyingFrames;
 }
 
 class _AppLocalizationsDelegate

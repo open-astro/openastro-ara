@@ -115,7 +115,7 @@ class StatsDashboardScreen extends ConsumerWidget {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(
-              content: Text(friendlyError(context.l10n, e, action: 'export the stats'))));
+              content: Text(friendlyError(context.l10n, e, action: context.l10n.actionExportStats))));
       return;
     }
     if (!context.mounted) return;

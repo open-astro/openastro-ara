@@ -444,7 +444,7 @@ Future<void> _persistLabels(BuildContext context, WidgetRef ref) async {
     if (context.mounted) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: 'save the slot labels'))));
+      ).showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionSaveSlotLabels))));
     }
   }
 }
