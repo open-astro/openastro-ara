@@ -567,6 +567,42 @@ void main() {
       await tester.pump(const Duration(seconds: 4));
     });
 
+    testWidgets('H sends the mount home from the keyboard', (tester) async {
+      final (_, mount, _, _) = await _pump(tester, _wire());
+      await tester.tap(find.byKey(const Key('simple-mount-pad-n'))); // focus the pad
+      await tester.pump();
+      mount.calls.clear();
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
+      await tester.pump();
+      expect(mount.calls, ['home']);
+      await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('Home starts on letting go, not on touch, and a slide off cancels it', (tester) async {
+      final (_, mount, _, _) = await _pump(tester, _wire());
+      expect(find.byTooltip('Home'), findsOneWidget, reason: 'the house has a name');
+      final home = tester.getCenter(find.byKey(const Key('simple-mount-pad-home')));
+      final brush = await tester.startGesture(home);
+      await tester.pump();
+      expect(mount.calls, isEmpty, reason: 'a touch alone sends nothing');
+      await brush.cancel();
+      await tester.pump();
+      expect(mount.calls, isEmpty, reason: 'a cancelled touch sends nothing');
+      final g = await tester.startGesture(home);
+      await g.up();
+      await tester.pump();
+      expect(mount.calls, ['home']);
+      await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('the Stop square grows with the pad cell', (tester) async {
+      await _pump(tester, _wire(home: false));
+      // getRect: the square is scaled by a FittedBox, so its drawn size is what counts.
+      final small = tester.getRect(find.byKey(const Key('simple-stop-square'))).width;
+      await _pump(tester, _wire(home: false), textScale: 2, width: 1400);
+      expect(tester.getRect(find.byKey(const Key('simple-stop-square'))).width, greaterThan(small));
+    });
+
     testWidgets('a Home that moves nothing clears after a few seconds', (tester) async {
       final (c, _, _, _) = await _pump(tester, _wire());
       await tester.tap(find.byKey(const Key('simple-mount-pad-home')));

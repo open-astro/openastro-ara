@@ -27,7 +27,7 @@ import '../../util/friendly_error.dart';
 import '../../util/slew_rates.dart';
 import '../../widgets/status_indicator.dart' show StatusBlink;
 import 'simple_device_windows.dart' show SimpleWindowButton;
-import 'simple_preview_panel.dart' show SimpleStopSquare;
+import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleStopSquare;
 import 'simple_shell.dart' show SimpleSegments, simpleRailScale;
 
 /// Simple Mode's Mount window controls for moving the mount by hand (#1649)
@@ -372,6 +372,14 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
       _stopAll();
       return KeyEventResult.handled;
     }
+    // H is the centre's Home, so the keyboard reaches it too (WCAG 2.1.1).
+    if (e.logicalKey == LogicalKeyboardKey.keyH) {
+      if (e is KeyDownEvent && widget.canHome && !widget.moving) {
+        _showKeyRing();
+        widget.onHome?.call();
+      }
+      return KeyEventResult.handled;
+    }
     final dir = keys[e.logicalKey];
     if (dir == null) return KeyEventResult.ignored;
     _showKeyRing();
@@ -418,6 +426,10 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
             size: size,
             label: l10n.deviceHome,
             semantics: l10n.deviceHome,
+            tooltip: l10n.deviceHome,
+            // A slew: started on letting go, so a brush doesn't send the
+            // mount home (Stop stays on touch).
+            onRelease: true,
             glyph: Icon(
               Icons.home_rounded,
               size: size * 0.45,
@@ -432,7 +444,11 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
             size: size,
             label: l10n.deviceStop,
             semantics: l10n.padStopMount,
-            glyph: const SimpleStopSquare(),
+            // The red square grows with the cell, as the house does.
+            glyph: SizedBox.square(
+              dimension: size * kSimpleStopSquare / kSimplePadCell,
+              child: const FittedBox(child: SimpleStopSquare()),
+            ),
             onDown: _stopAll,
             onUp: () {},
           ),
@@ -530,7 +546,16 @@ class _PadCell extends StatelessWidget {
     this.held = false,
     this.small = false,
     this.glyph,
+    this.tooltip,
+    this.onRelease = false,
   });
+
+  /// Named on hover and long press (Home's house).
+  final String? tooltip;
+
+  /// [onDown] runs on letting go instead, and not at all when the touch is
+  /// cancelled (Home: a move must not start on a brush).
+  final bool onRelease;
 
   final double size;
   final String label;
@@ -545,7 +570,12 @@ class _PadCell extends StatelessWidget {
   final bool small;
 
   @override
-  Widget build(BuildContext context) => Semantics(
+  Widget build(BuildContext context) {
+    final cell = _cell();
+    return tooltip == null ? cell : Tooltip(message: tooltip!, child: cell);
+  }
+
+  Widget _cell() => Semantics(
     button: true,
     enabled: onDown != null,
     label: semantics,
@@ -560,9 +590,9 @@ class _PadCell extends StatelessWidget {
     child: Opacity(
       opacity: onDown == null ? 0.35 : 1,
       child: Listener(
-        onPointerDown: onDown == null ? null : (_) => onDown!(),
-        onPointerUp: (_) => onUp(),
-        onPointerCancel: (_) => onUp(),
+        onPointerDown: onDown == null || onRelease ? null : (_) => onDown!(),
+        onPointerUp: (_) => onRelease ? onDown?.call() : onUp(),
+        onPointerCancel: onRelease ? null : (_) => onUp(),
         child: Container(
           width: size,
           height: size,
