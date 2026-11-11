@@ -33,7 +33,8 @@ class StatsDashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Stats'),
+        // Simple Mode shows the rail button's own (localized) name.
+        title: Text(simple ? context.l10n.shellStats : 'Stats'),
         actions: simple ? null : [
           Builder(
             builder: (context) => PopupMenuButton<String>(

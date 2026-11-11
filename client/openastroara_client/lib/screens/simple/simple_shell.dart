@@ -93,8 +93,8 @@ import '../../widgets/imaging/guiding_strip.dart';
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../../widgets/sky_atlas/stellarium_view.dart';
 import '../library/image_library_screen.dart';
-import '../stats/stats_dashboard_screen.dart';
 import '../settings/settings_shell.dart';
+import '../stats/stats_dashboard_screen.dart';
 import '../shell_listeners.dart';
 import 'simple_preflight.dart';
 import 'simple_device_windows.dart';
@@ -104,7 +104,8 @@ import '../../state/settings/phd2_settings_state.dart'
     show phd2SettingsProvider;
 import 'simple_message_pills.dart';
 import '../album/sky_album_screen.dart';
-import '../../state/sky_atlas/dso_catalog_state.dart' show bundledCatalogProvider;
+import '../../state/sky_atlas/dso_catalog_state.dart'
+    show bundledCatalogProvider;
 import '../../state/album/album_art.dart';
 import '../../state/album/album_matching.dart' show skyPickArt;
 import '../../widgets/album/album_card.dart' show albumCardAspect;
@@ -1685,7 +1686,7 @@ class _SkyPick extends ConsumerWidget {
                         art.asset!,
                         key: const Key('simple-sky-art'),
                         fit: BoxFit.cover,
-                        cacheWidth: 104,
+                        cacheWidth: 156, // 3x of 52 px (iPad)
                         errorBuilder: (_, _, _) => const SizedBox.shrink(),
                       ),
                     ),
@@ -2040,7 +2041,7 @@ class _RailButton extends StatelessWidget {
               ],
               Text(
                 label,
-                maxLines: icon == null && glyph == null || tall || twoLines ? 2 : 1,
+                maxLines: (icon == null && glyph == null) || tall || twoLines ? 2 : 1,
                 textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
                 style: AraText.caption.copyWith(color: color),
@@ -2099,7 +2100,12 @@ class _SkyChartPainter extends CustomPainter {
         ..strokeWidth = 2
         ..strokeJoin = StrokeJoin.round,
     );
-    const stars = [Offset(6, 15), Offset(9.5, 9), Offset(13, 12.5), Offset(17.5, 8.5)];
+    const stars = [
+      Offset(6, 15),
+      Offset(9.5, 9),
+      Offset(13, 12.5),
+      Offset(17.5, 8.5),
+    ];
     canvas.drawPath(
       Path()
         ..moveTo(stars[0].dx, stars[0].dy)
