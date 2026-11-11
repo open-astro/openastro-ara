@@ -6,9 +6,13 @@ name: Merge queue
 #
 # claude-review.yml cannot report it. The review runs against a PR's diff and has
 # no PR to read on a merge group, and the review action skips itself on any PR that
-# edits its workflow, so this stays a separate file. The real `review` check and
-# its verdict have already passed by the time a PR can enter the queue, and a
-# merge group holds nothing new for the bot to read.
+# edits its workflow, so this stays a separate file.
+#
+# On a merge group `review` is the merge gate (.github/scripts/merge-gate.sh): the
+# queued PR merges only when every check on its head ran green, not only the
+# required ones (a skipped job does not count), and the bot's latest verdict on
+# that head is "✅ Approved". A `review` that passes on a fork PR only because the
+# job was skipped there cannot get a PR with defects through the queue.
 #
 # The three jobs after `review` carry the names of the jobs in pr-body.yml. That
 # workflow reads the pull request body, which a merge group does not have, so
@@ -24,8 +28,23 @@ permissions: {}
 jobs:
   review:
     runs-on: ubuntu-latest
+    # Under the queue's 60-minute check timeout: the gate waits up to 50 for checks still running.
+    timeout-minutes: 55
+    permissions:
+      contents: read
+      checks: read
+      statuses: read
+      pull-requests: read
     steps:
-      - run: echo "Reviewed on the pull request; nothing to review on a merge group."
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x — pinned per zizmor immutable-ref policy
+        with:
+          persist-credentials: false
+      - name: Every check green and the review approved on the PR head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_REF: ${{ github.event.merge_group.head_ref }}
+        run: .github/scripts/merge-gate.sh "$REPO" "$HEAD_REF"
 
   falsified-by:
     name: falsified-by (PR body)

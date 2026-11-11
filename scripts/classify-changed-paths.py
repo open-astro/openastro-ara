@@ -155,6 +155,8 @@ GITHUB_RULES = {
     ".github/pull_request_template.md": NONE,
     # Run by the (ungated) Unicode scan job only.
     ".github/scripts/check-unicode.py": NONE,
+    # Run by merge-queue.yml on a merge group only.
+    ".github/scripts/merge-gate.sh": NONE,
 }
 
 

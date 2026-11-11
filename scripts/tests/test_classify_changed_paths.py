@@ -264,6 +264,7 @@ class ClassifyTest(unittest.TestCase):
             ".github/FUNDING.yml",
             ".github/pull_request_template.md",
             ".github/scripts/check-unicode.py",
+            ".github/scripts/merge-gate.sh",
             "scripts/adr_grammar.py",
             "scripts/check-adr-authorization.py",
             "scripts/check-adr-scope.py",
