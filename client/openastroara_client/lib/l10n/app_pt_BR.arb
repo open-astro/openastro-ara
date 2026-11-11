@@ -1195,7 +1195,6 @@
   "calibrationCovered": "Coberto",
   "calibrationMissing": "Faltando",
   "calibrationFlatsFrom": "Flats de {date}",
-  "calibrationNoFlats": "Sem flats",
   "calibrationShootFlats": "Fazer flats",
   "calibrationReshootFlats": "Refazer flats",
   "calibrationCoverNote": "A tampa do painel fecha sobre o telescópio antes.",

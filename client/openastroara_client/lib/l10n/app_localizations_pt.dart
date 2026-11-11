@@ -4281,9 +4281,6 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get calibrationNoFlats => 'No flats';
-
-  @override
   String get calibrationShootFlats => 'Shoot flats';
 
   @override
@@ -8917,9 +8914,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String calibrationFlatsFrom(String date) {
     return 'Flats de $date';
   }
-
-  @override
-  String get calibrationNoFlats => 'Sem flats';
 
   @override
   String get calibrationShootFlats => 'Fazer flats';

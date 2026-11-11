@@ -455,7 +455,8 @@ class _FlatsTab extends ConsumerWidget {
                         context,
                       ).formatShortMonthDay(at.toLocal()),
                     ),
-                    null => l.calibrationNoFlats,
+                    // The Missing pill says it; "No flats" beside it repeats it.
+                    null => null,
                   },
               covered: f.matchingFlatFrames > 0,
               key: Key('simple-calibration-flat-${f.filterName}'),

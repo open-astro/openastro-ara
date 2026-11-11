@@ -4281,9 +4281,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get calibrationNoFlats => 'No flats';
-
-  @override
   String get calibrationShootFlats => 'Shoot flats';
 
   @override

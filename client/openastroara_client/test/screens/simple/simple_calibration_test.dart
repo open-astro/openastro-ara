@@ -429,6 +429,7 @@ void main() {
       expect((covered.border! as Border).top.color, AraColors.accentConnected);
       expect(missing.borderRadius, BorderRadius.circular(10));
       expect(missing.color, isNull, reason: 'an outline, not a fill');
+      expect(find.text('No flats'), findsNothing, reason: 'the Missing pill already says it (user, 2026-11-11)');
     });
 
     testWidgets('Flats asks for flats only, from the panel when connected; Darks & bias for darks and bias only', (tester) async {

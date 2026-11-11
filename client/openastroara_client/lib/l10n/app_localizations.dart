@@ -7269,12 +7269,6 @@ abstract class AppLocalizations {
   /// **'Flats from {date}'**
   String calibrationFlatsFrom(String date);
 
-  /// Calibration panel, Flats: this filter has no flats at all
-  ///
-  /// In en, this message translates to:
-  /// **'No flats'**
-  String get calibrationNoFlats;
-
   /// Calibration panel, Flats: shoot the missing flats
   ///
   /// In en, this message translates to:

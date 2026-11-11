@@ -5523,10 +5523,6 @@
       "date": {"type": "String", "example": "Nov 9"}
     }
   },
-  "calibrationNoFlats": "No flats",
-  "@calibrationNoFlats": {
-    "description": "Calibration panel, Flats: this filter has no flats at all"
-  },
   "calibrationShootFlats": "Shoot flats",
   "@calibrationShootFlats": {
     "description": "Calibration panel, Flats: shoot the missing flats"
