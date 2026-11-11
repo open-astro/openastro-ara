@@ -143,6 +143,7 @@ public sealed class ProfileShareService : IProfileShareService {
     ///   <item>FilterSet — STRIP all (donor's physical filters; recipient declares their own)</item>
     ///   <item>Unguided — KEEP (guard thresholds and probe ladder: tuning judgement, no PII)</item>
     ///   <item>GuiderAdvanced — KEEP (guider tuning like aggressiveness: star detection, algorithms, limits; no path, network or identity)</item>
+    ///   <item>Dome — STRIP all (the donor's dome geometry and follow flag describe the donor's observatory)</item>
     ///   <item>CoolingFan — STRIP (a UniqueId names the donor's own switch; the recipient designates theirs)</item>
     /// </list>
     /// </remarks>
@@ -155,8 +156,10 @@ public sealed class ProfileShareService : IProfileShareService {
         // Strip secrets — push/telegram credentials must never travel in a share file
         // (BOTH halves of each channel: token + user key, bot token + chat id).
         Notifications = s.Notifications with {
-            PushoverToken = "", TelegramBotToken = "",
-            PushoverUserKey = "", TelegramChatId = "",
+            PushoverToken = "",
+            TelegramBotToken = "",
+            PushoverUserKey = "",
+            TelegramChatId = "",
         },
         // §36 custom terrain horizon is location-revealing terrain data (a skyline
         // fingerprints the site) — strip it entirely, same stance as the coordinates.
@@ -213,6 +216,8 @@ public sealed class ProfileShareService : IProfileShareService {
         EquipmentIdentity = EquipmentIdentityDto.Empty,
         // Strip the #1700 fan designation — it names the donor's switch; the recipient is asked for theirs.
         CoolingFan = null,
+        // Strip the #1689 dome block — the geometry measures the donor's dome; the recipient measures theirs.
+        Dome = null,
     };
 
     private static ProfileShareRigDescriptionDto BuildRigDescription(ProfileSnapshotDto s) =>

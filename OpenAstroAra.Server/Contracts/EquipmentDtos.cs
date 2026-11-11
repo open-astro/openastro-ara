@@ -398,7 +398,10 @@ public sealed record DomeCapabilitiesDto(
     // §25.5.5 — optional ctor default so pre-slice serialized shapes still deserialize.
     bool CanSetPark = false);
 
-public sealed record DomeStateDto(string State, double? AzimuthDeg, bool ShutterOpen, bool AtHome, bool Parked);
+// #1689 — Following: the dome is turning to keep the slit in front of the mount.
+public sealed record DomeStateDto(string State, double? AzimuthDeg, bool ShutterOpen, bool AtHome, bool Parked, bool Following = false);
+
+public sealed record DomeFollowRequestDto(bool Enabled);
 
 public sealed record DomeSlewRequestDto(double TargetAzimuthDeg);
 

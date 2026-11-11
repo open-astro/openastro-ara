@@ -102,6 +102,8 @@ public static class ProfileSnapshotNormalizer {
             FilterWheelPolicy = (FilterWheelPolicyDto?)snap.FilterWheelPolicy ?? FilterWheelPolicyDto.Default,
             EquipmentIdentity = NormalizeEquipmentIdentity(snap.EquipmentIdentity),
             SavedTargets = SavedTargetsValidator.NormalizeLenient(snap.SavedTargets),
+            // #1689 — a pre-#1689 file back-fills to the defaults (not following).
+            Dome = snap.Dome ?? DomeSettingsDto.Default,
         };
     }
 

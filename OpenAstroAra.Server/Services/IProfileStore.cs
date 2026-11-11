@@ -138,6 +138,10 @@ public interface IProfileStore {
     CoolingFanDto GetCoolingFan();
     void PutCoolingFan(CoolingFanDto value);
 
+    // #1689 — the dome's geometry and follow-the-mount setting.
+    DomeSettingsDto GetDomeSettings();
+    void PutDomeSettings(DomeSettingsDto value);
+
     /// <summary>§36 custom terrain horizon (sorted az/alt skyline; empty = none entered).</summary>
     CustomHorizonDto GetCustomHorizon();
     void PutCustomHorizon(CustomHorizonDto value);

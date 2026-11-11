@@ -525,6 +525,30 @@ public static class ProfileEndpoints {
             .WithName("PutCoolingFan")
             .WithSummary("Designate the active profile's cooling fan: a switch's device_id and port_id, or both null for none.");
 
+        // #1689 — the dome's geometry, tolerance and follow-the-mount setting.
+        profile.MapGet("/dome", (IProfileStore store) =>
+                Results.Ok(store.GetDomeSettings()))
+            .Produces<DomeSettingsDto>(StatusCodes.Status200OK)
+            .WithName("GetDomeSettings")
+            .WithSummary("Get the active profile's dome geometry and follow-the-mount setting.");
+
+        profile.MapPut("/dome", (DomeSettingsDto body, IProfileStore store) => {
+            if (DomeSettingsValidator.Error(body) is { } error) {
+                return Results.Problem(
+                    type: "https://openastro.net/errors/validation",
+                    title: "Invalid dome settings",
+                    statusCode: StatusCodes.Status422UnprocessableEntity,
+                    detail: error);
+            }
+            store.PutDomeSettings(body);
+            return Results.Ok(body);
+        })
+            .Accepts<DomeSettingsDto>("application/json")
+            .Produces<DomeSettingsDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("PutDomeSettings")
+            .WithSummary("Replace the active profile's dome settings; a scope outside the dome radius is refused with a reason.");
+
         profile.MapGet("/equipment-connection", (IProfileStore store) =>
                 Results.Ok(store.GetEquipmentConnection()))
             .Produces<EquipmentConnectionDto>(StatusCodes.Status200OK)

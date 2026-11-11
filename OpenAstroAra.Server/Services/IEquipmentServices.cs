@@ -195,6 +195,10 @@ public interface IDomeService {
     Task<OperationAcceptedDto> AbortSlewAsync(string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> SetParkAsync(string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> SyncToAzimuthAsync(DomeSlewRequestDto request, string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>#1689 — turn "the dome follows the mount" on or off; returns the resulting state.
+    /// Throws InvalidOperationException (→ 409) with the reason when it cannot be turned on.</summary>
+    Task<bool> SetFollowingAsync(bool enabled, CancellationToken ct);
 }
 
 public interface ISwitchService {

@@ -792,7 +792,9 @@ public partial class Program {
                 savedLights: sp.GetRequiredService<FrameSolveFeed>(),
                 // The rotator's mechanical angle for ROTATOR / the catalog row, so matching flats
                 // rotate back to it. Func<>: registered later in this file.
-                rotator: () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IRotatorMediator>()));
+                rotator: () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IRotatorMediator>(),
+                // #1689 — a light waits for the dome to reach the scope while it follows the mount.
+                domeFollower: () => sp.GetService<OpenAstroAra.Equipment.Interfaces.IDomeFollower>()));
         builder.Services.AddSingleton<ICameraService>(sp => sp.GetRequiredService<CameraService>());
         // §59 — the autofocus sweep's probe-capture seam rides the same singleton (same device
         // path + same in-flight capture gate as real captures; probes are never persisted).
@@ -997,7 +999,9 @@ public partial class Program {
                 // §35 auto-resume pointing — resolver (not a direct dep) for the same
                 // construction-cycle reason as the sequencer.
                 () => sp.GetService<ICenteringService>(),
-                sp.GetService<TargetRecenter>()));
+                sp.GetService<TargetRecenter>(),
+                // #1689 — an unsafe reaction turns dome following off (Func<>: registered later in this file).
+                () => sp.GetService<DomeFollower>()));
         // Hosted so the poll timer starts with the daemon and a shutdown cancels a
         // pending auto-resume countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<SafetyReactionService>());
@@ -1165,8 +1169,22 @@ public partial class Program {
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IWeatherDataMediator,
             OpenAstroAra.Server.Services.Equipment.HeadlessWeatherDataMediator>();
         // §38k-21 — IDomeFollower stub (non-mediator dome dependency of SynchronizeDome).
-        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.IDomeFollower,
-            OpenAstroAra.Server.Services.Equipment.HeadlessDomeFollower>();
+        // #1689 — the real follower (replaces the headless stub): turns the dome to keep the slit in front of the
+        // mount. Hosted so its poll starts with the daemon and attaches itself to the DomeService.
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.IDomeSynchronization>(sp =>
+            new OpenAstroAra.Equipment.Equipment.MyDome.DomeSynchronization(
+                sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>()));
+        builder.Services.AddSingleton<DomeFollower>(sp =>
+            new DomeFollower(
+                sp.GetRequiredService<DomeService>(),
+                sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
+                sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.IDomeSynchronization>(),
+                sp.GetRequiredService<OpenAstroAra.Profile.Interfaces.IProfileService>(),
+                sp.GetRequiredService<IProfileStore>(),
+                sp.GetService<Microsoft.Extensions.Logging.ILogger<DomeFollower>>()));
+        builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.IDomeFollower>(
+            sp => sp.GetRequiredService<DomeFollower>());
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<DomeFollower>());
         // §14e profile source-of-truth — StoreBackedProfileService (replaces the §38k-22
         // HeadlessProfileService stub): ActiveProfile hydrates from IProfileStore (profile.json,
         // the WILMA REST surface) at startup and on every settings PUT, so executing instructions

@@ -422,6 +422,15 @@ public static partial class EquipmentEndpoints {
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
         dome.MapPost("/slew", async ([FromBody] DomeSlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.SlewAsync(request, key, ct)));
+        // #1689 — turn "the dome follows the mount" on or off. 409 with the reason when it cannot (no dome,
+        // no settable azimuth, no geometry); 200 with the resulting state otherwise.
+        dome.MapPost("/follow", async ([FromBody] DomeFollowRequestDto request, IDomeService svc, CancellationToken ct) => {
+            try {
+                return Results.Ok(new DomeFollowRequestDto(await svc.SetFollowingAsync(request.Enabled, ct)));
+            } catch (InvalidOperationException ex) when (ex is not ObjectDisposedException) {
+                return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+            }
+        });
         dome.MapPost("/park", async ([FromHeader(Name = "Idempotency-Key")] string? key, IDomeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.ParkAsync(key, ct)));
         // §25.5.5 — the remaining dome motions (caps for all four already ride DomeCapabilitiesDto,

@@ -329,9 +329,8 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 new SlewDomeAzimuth(domeMediator),
                 new EnableDomeSynchronization(domeMediator, telescopeMediator),
                 new DisableDomeSynchronization(domeMediator, telescopeMediator),
-                // §38k-21 — SynchronizeDome was the one dome instruction deferred
-                // from §38k-18 (it also needs IDomeFollower). With the headless
-                // dome-follower stub it now registers, completing the dome set.
+                // §38k-21 — SynchronizeDome needs an IDomeFollower; the daemon passes the real
+                // DomeFollower (#1689), the factory default is the headless stub.
                 new SynchronizeDome(domeMediator, domeFollower, telescopeMediator),
                 // §38k-22 — filter-wheel instruction. SwitchFilter needs
                 // IProfileService (filter list) + IFilterWheelMediator.

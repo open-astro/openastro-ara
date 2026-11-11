@@ -49,6 +49,7 @@ public static class ProfileStoreSnapshot {
         GuiderAdvanced: s.GetGuiderAdvancedSettings(),
         FilterWheelPolicy: s.GetFilterWheelPolicy(),
         CoolingFan: s.GetCoolingFan(),
+        Dome: s.GetDomeSettings(),
         TrackingCalibration: s.GetTrackingCalibration(),
         SkyModelCalibration: s.GetSkyModelCalibration(),
         EquipmentIdentity: s.GetEquipmentIdentity(),
@@ -106,5 +107,7 @@ public static class ProfileStoreSnapshot {
         s.PutFilterWheelPolicy(snap.FilterWheelPolicy ?? FilterWheelPolicyDto.Default);
         // #1700 — selecting a profile with no designation must not inherit the previous rig's fan.
         s.PutCoolingFan(snap.CoolingFan ?? CoolingFanDto.None);
+        // #1689 — selecting a profile with no dome block must not inherit the previous rig's geometry or its follow flag.
+        s.PutDomeSettings(snap.Dome ?? DomeSettingsDto.Default);
     }
 }

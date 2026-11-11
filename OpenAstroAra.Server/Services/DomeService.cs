@@ -59,6 +59,26 @@ public sealed partial class DomeService : IDomeService, IRetainedDeviceSource, I
             DeviceHealthTracker.DefaultThreshold, _logger, events, faults);
     }
 
+    // #1689 — the follow-the-mount service; null until the composition root attaches it. A manual dome move
+    // from any client turns following off through it.
+    private DomeFollower? _follower;
+
+    internal void AttachFollower(DomeFollower follower) => _follower = follower;
+
+    private void StopFollowing(string reason) => _follower?.TurnOff(reason);
+
+    public async Task<bool> SetFollowingAsync(bool enabled, CancellationToken ct) {
+        if (_follower is not { } follower) {
+            throw new InvalidOperationException("Following the mount is not available.");
+        }
+        if (enabled) {
+            await follower.Start().ConfigureAwait(false);
+        } else {
+            follower.TurnOff("turned off");
+        }
+        return follower.IsFollowing;
+    }
+
     private object _gate => _lifecycle.Gate;
 
     // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence. Init-only, never used by the daemon.
@@ -94,7 +114,8 @@ public sealed partial class DomeService : IDomeService, IRetainedDeviceSource, I
                     c.CanSetShutter, c.CanSetAzimuth, c.CanSyncAzimuth, c.CanPark, c.CanFindHome, c.CanSetPark)
                 : null;
             return Task.FromResult<DomeDto?>(
-                new DomeDto(device.UniqueId, device.Name, state, caps, runtime));
+                new DomeDto(device.UniqueId, device.Name, state, caps,
+                    state == EquipmentConnectionState.Connected && _follower is { IsFollowing: true } ? runtime with { Following = true } : runtime));
         }
     }
 
@@ -106,8 +127,10 @@ public sealed partial class DomeService : IDomeService, IRetainedDeviceSource, I
 
     public Task<bool> ForgetAsync(CancellationToken ct) => _lifecycle.ForgetAsync();
 
-    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) =>
-        _lifecycle.DisconnectAsync(idempotencyKey);
+    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) {
+        StopFollowing("the dome was disconnected");
+        return _lifecycle.DisconnectAsync(idempotencyKey);
+    }
 
     // Caller holds the gate: a fresh, ended or tripped session forgets the last one's reads.
     private void ResetSessionLocked() {
@@ -129,12 +152,14 @@ public sealed partial class DomeService : IDomeService, IRetainedDeviceSource, I
             throw new InvalidOperationException("dome is not connected");
         }
         var target = request.TargetAzimuthDeg;
+        StopFollowing("the dome was turned by hand");
         RunControl("dome.slew", client, c => c.SlewToAzimuth(target));
         return Task.FromResult(Accepted("dome.slew", idempotencyKey));
     }
 
     public Task<OperationAcceptedDto> ParkAsync(string? idempotencyKey, CancellationToken ct) {
         var client = RequireConnectedClient();
+        StopFollowing("the dome was parked");
         RunControl("dome.park", client, c => c.Park());
         return Task.FromResult(Accepted("dome.park", idempotencyKey));
     }
@@ -155,6 +180,7 @@ public sealed partial class DomeService : IDomeService, IRetainedDeviceSource, I
     // through the same fire-and-forget RunControl (202 semantics, cache refresh on completion).
     public Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct) {
         var client = RequireConnectedClient();
+        StopFollowing("the dome was sent home");
         RunControl("dome.findhome", client, c => c.FindHome());
         return Task.FromResult(Accepted("dome.findhome", idempotencyKey));
     }
@@ -166,6 +192,7 @@ public sealed partial class DomeService : IDomeService, IRetainedDeviceSource, I
     // the abort and the dome would keep rotating.
     public async Task<OperationAcceptedDto> AbortSlewAsync(string? idempotencyKey, CancellationToken ct) {
         var client = RequireConnectedClient();
+        StopFollowing("the dome was stopped");
         await Task.Run(() => client.AbortSlew(), CancellationToken.None).ConfigureAwait(false);
         _lifecycle.Refresh();
         return Accepted("dome.abort", idempotencyKey);

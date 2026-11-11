@@ -694,6 +694,25 @@ public sealed record CoolingFanDto(string? DeviceId = null, int? PortId = null) 
     public static CoolingFanDto None { get; } = new();
 }
 
+/// <summary>#1689 — the active profile's dome: where the scope sits in the dome, how close the slit has
+/// to be, and whether the dome follows the mount. Distances are mm, angles degrees. MountType is
+/// <c>equatorial</c> or <c>fork_on_wedge</c> (an alt-az fork has no German-mount offsets).</summary>
+public sealed record DomeSettingsDto(
+    bool FollowMount = false,
+    double DomeRadiusMm = 0,
+    double ScopePositionNorthSouthMm = 0,
+    double ScopePositionEastWestMm = 0,
+    double ScopePositionUpDownMm = 0,
+    string MountType = "equatorial",
+    double GemAxisMm = 0,
+    double LateralAxisMm = 0,
+    double DecOffsetHorizontalMm = 0,
+    double AzimuthToleranceDegrees = 2.0,
+    bool SynchronizeDuringMountSlew = false,
+    int DomeSyncTimeoutSeconds = 120) {
+    public static DomeSettingsDto Default { get; } = new();
+}
+
 public sealed record CameraElectronicsDto(
     string SensorName = "",
     double ReadNoiseE = 0,
