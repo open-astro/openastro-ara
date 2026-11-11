@@ -4006,4 +4006,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get monitorNoDark => 'Set the site to see tonight\'s dark';
+
+  @override
+  String get monitorLinkLostShort => 'Lost contact with the rig';
 }

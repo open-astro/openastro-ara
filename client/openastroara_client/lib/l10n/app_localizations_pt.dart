@@ -4006,6 +4006,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get monitorNoDark => 'Set the site to see tonight\'s dark';
+
+  @override
+  String get monitorLinkLostShort => 'Lost contact with the rig';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -8038,4 +8041,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get monitorNoDark => 'Defina o local para ver o escuro desta noite';
+
+  @override
+  String get monitorLinkLostShort => 'Sem contato com o setup';
 }

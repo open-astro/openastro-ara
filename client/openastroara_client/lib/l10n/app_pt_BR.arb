@@ -1111,5 +1111,6 @@
   "monitorAutofocusSince": "Foco automático {time} · {delta} desde então",
   "monitorTonight": "Esta noite",
   "monitorDarkSpan": "Escuro de {start} a {end} · {imaged} capturados",
-  "monitorNoDark": "Defina o local para ver o escuro desta noite"
+  "monitorNoDark": "Defina o local para ver o escuro desta noite",
+  "monitorLinkLostShort": "Sem contato com o setup"
 }

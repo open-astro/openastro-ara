@@ -5283,5 +5283,9 @@
   "monitorNoDark": "Set the site to see tonight's dark",
   "@monitorNoDark": {
     "description": "Monitor Tonight tile with no site set"
+  },
+  "monitorLinkLostShort": "Lost contact with the rig",
+  "@monitorLinkLostShort": {
+    "description": "Monitor: what a screen reader announces when the link to the rig is lost (no age)"
   }
 }

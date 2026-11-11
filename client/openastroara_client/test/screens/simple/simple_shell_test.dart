@@ -5732,6 +5732,84 @@ void main() {
       await close(tester);
     });
 
+    const fullPlan = SimpleRun(sequenceId: 'seq-1', started: true, targets: [
+      SimpleTarget(name: 'Orion Nebula', tag: 'M 42', steps: [
+        FilterPlanStep(filterName: 'L', exposureSeconds: 180, frameCount: 24),
+        FilterPlanStep(filterName: 'R', exposureSeconds: 180, frameCount: 24),
+        FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 24),
+      ]),
+    ]);
+    const fullRun = SequenceRunStateInfo(
+        sequenceId: 'seq-1', runId: 'r1', state: SequenceRunState.running, framesCaptured: 30,
+        currentInstructionDescription: 'Taking frames', estimatedRemainingSeconds: 9000,
+        meridianFlip: MeridianFlipInfo(state: 'auto_flip_off'));
+
+    for (final (locale, scale) in const [(Locale('pt', 'BR'), 1.0), (Locale('en'), 1.5), (Locale('pt', 'BR'), 2.0)]) {
+      testWidgets('at 900 pt, $locale and ${scale}x text nothing overflows (audit)', (tester) async {
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final awake = _Awake();
+        await _pump(tester, const Size(900, 700), linkUp: true, plan: fullPlan, runState: fullRun, locale: locale, gear: [
+          keepAwakeProvider.overrideWithValue(awake),
+          deviceBatteryProvider.overrideWith((ref) => Stream.value((level: 64, charging: false))),
+          safetyMonitorProvider.overrideWith(() => _SafetyMon()),
+          weatherProvider.overrideWith(() => _WeatherAll()),
+        ]);
+        await tester.tap(find.byKey(const Key('simple-monitor-open')));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        expect(tester.takeException(), isNull);
+        await close(tester);
+      });
+    }
+
+    testWidgets('a question on the top line shows its whole text with its answers under it (audit)', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final (c, _) = await openMonitor(tester, size: const Size(900, 700));
+      var answered = false;
+      c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.question, 'Another app asks to take control of the rig',
+          detail: 'It is a phone on the same network',
+          actions: [SimpleMessageAction('Keep connected', () {}), SimpleMessageAction('Allow', () => answered = true)]);
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      final title = tester.widget<Text>(find.byKey(const Key('simple-monitor-verdict')));
+      expect(title.maxLines, isNull, reason: 'the whole question, however long');
+      final text = tester.getRect(find.byKey(const Key('simple-monitor-verdict')));
+      final allow = tester.getRect(find.widgetWithText(FilledButton, 'Allow'));
+      expect(allow.top, greaterThanOrEqualTo(text.bottom), reason: 'the answers go under it');
+      expect(find.byType(SimpleMessagePills), findsNothing, reason: 'no pills drawn over Monitor');
+      await tester.tap(find.widgetWithText(FilledButton, 'Allow'));
+      await tester.pump();
+      expect(answered, isTrue);
+      await close(tester);
+    });
+
+    testWidgets('the top line announces its state once, not each second of a countdown (audit)', (tester) async {
+      final handle = tester.ensureSemantics();
+      await openMonitor(tester,
+          plan: fullPlan,
+          runState: const SequenceRunStateInfo(
+              sequenceId: 'seq-1', runId: 'r1', state: SequenceRunState.running, currentInstructionDescription: 'x',
+              reasonCode: 'meridian', reasonText: 'Passing meridian — 00:04:32', meridianWaitSecondsLeft: 272));
+      final live = find.byWidgetPredicate((w) => w is Semantics && (w.properties.liveRegion ?? false));
+      final labels = [for (final e in live.evaluate()) (e.widget as Semantics).properties.label];
+      expect(labels, isNot(contains(matches(RegExp(r'\d\d:\d\d')))), reason: 'no countdown in the announced text');
+      expect(labels, contains('Waiting for flip'));
+      handle.dispose();
+      await close(tester);
+    });
+
+    testWidgets('no dimming layer over the tiles; the timeline reads its blocks to a screen reader (audit)', (tester) async {
+      final handle = tester.ensureSemantics();
+      await openMonitor(tester, plan: fullPlan, runState: fullRun);
+      expect(find.descendant(of: find.byKey(const Key('simple-monitor')), matching: find.byType(Opacity)), findsNothing,
+          reason: 'frozen, a 0.55 opacity took text contrast under 3:1; Last known and grey dots say it instead');
+      expect(tester.getSemantics(find.byKey(const Key('simple-monitor-night'))).label, contains('M 42'));
+      handle.dispose();
+      await close(tester);
+    });
+
     testWidgets("the daemon's own step text stays small; the big words are Monitor's own", (tester) async {
       const solver = '46 stars, 167 quads selected in the image. 103 database stars, 376 database quads required '
           'for the 0.27d square search window. Step size 0.15d. Oversize 1.74';

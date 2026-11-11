@@ -6770,6 +6770,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Set the site to see tonight\'s dark'**
   String get monitorNoDark;
+
+  /// Monitor: what a screen reader announces when the link to the rig is lost (no age)
+  ///
+  /// In en, this message translates to:
+  /// **'Lost contact with the rig'**
+  String get monitorLinkLostShort;
 }
 
 class _AppLocalizationsDelegate

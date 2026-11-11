@@ -360,6 +360,16 @@ const kMonitorCoolerMarginC = 1.0;
 /// ...for this long in a row.
 const kMonitorCoolerHold = Duration(minutes: 5);
 
+/// Monitor is on screen: the message pills over pushed pages stay off, as
+/// its top line carries the most important message and its question.
+class MonitorShowing extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void set(bool on) => state = on;
+}
+
+final monitorShowingProvider = NotifierProvider<MonitorShowing, bool>(MonitorShowing.new);
+
 /// Monitor's clock: one tick a second while Monitor shows.
 class MonitorClock extends Notifier<DateTime> {
   @override

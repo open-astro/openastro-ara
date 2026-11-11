@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
+import '../../state/simple_monitor_state.dart' show monitorShowingProvider;
 import '../../state/alarm/safety_alarm_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
@@ -31,7 +32,8 @@ class SimpleSafetyAlarmLayer extends ConsumerWidget {
       children: [
         child,
         // With the shell on top its own pills show; over a pushed page these do.
-        if (simple && !ref.watch(simpleShellOnTopProvider))
+        // Not over Monitor: its top line carries the message (#1724).
+        if (simple && !ref.watch(simpleShellOnTopProvider) && !ref.watch(monitorShowingProvider))
           const _MessagesOverRoutes(),
         if (simple) const SimpleSafetyAlarm(),
       ],

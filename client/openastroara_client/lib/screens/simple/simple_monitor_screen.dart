@@ -29,6 +29,10 @@ const double kMonitorMinWidth = 900;
 const double _kSide = 244;
 const double _kGap = 8;
 
+/// The grid's least height: the fixed rows (170 + 108) and room for the
+/// tiles above them; below it the grid scrolls.
+const double _kGridMinHeight = 560;
+
 /// Monitor (#1724): Simple Mode's full-screen, read-only view of the Session.
 /// It renders [monitorProvider] and nothing else; the safety alarm's layer
 /// sits above every route, so it still covers this one.
@@ -44,17 +48,21 @@ class SimpleMonitorScreen extends ConsumerStatefulWidget {
 
 class _SimpleMonitorScreenState extends ConsumerState<SimpleMonitorScreen> {
   late final KeepAwake _awake = ref.read(keepAwakeProvider);
+  late final MonitorShowing _showing = ref.read(monitorShowingProvider.notifier);
 
   @override
   void initState() {
     super.initState();
     // Awake only while Monitor shows.
     _awake.set(true);
+    // Not during the build that mounts this screen.
+    Future.microtask(() => _showing.set(true));
   }
 
   @override
   void dispose() {
     _awake.set(false);
+    Future.microtask(() => _showing.set(false));
     super.dispose();
   }
 
@@ -75,12 +83,9 @@ class _SimpleMonitorScreenState extends ConsumerState<SimpleMonitorScreen> {
                 children: [
                   _TopLine(s: s, clock: clock),
                   const SizedBox(height: _kGap),
-                  Expanded(
-                    child: Opacity(
-                      opacity: s.frozen ? 0.55 : 1,
-                      child: _Grid(s: s, onOpen: widget.onOpen),
-                    ),
-                  ),
+                  // Frozen, the tiles say Last known with grey dots; no dimming,
+                  // which took the last known values under 3:1.
+                  Expanded(child: _Grid(s: s, onOpen: widget.onOpen)),
                 ],
               ),
               const Positioned(
@@ -130,40 +135,45 @@ class _TopLine extends ConsumerWidget {
           const SizedBox(width: AraSpace.s12),
           if (_dot(v.status) case final dot?) ...[dot, const SizedBox(width: AraSpace.s12)],
           Expanded(
-            child: Semantics(
-              liveRegion: true,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(head,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Announced once per state: the visible line carries a
+                // countdown or an age that would re-announce every second.
+                Semantics(liveRegion: true, label: monitorVerdictAnnouncement(l10n, s, head), child: const SizedBox.shrink()),
+                Text(head,
                       key: const Key('simple-monitor-verdict'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                      // A question shows whole: it is what the person answers.
+                      maxLines: question == null ? 2 : null,
+                      overflow: question == null ? TextOverflow.ellipsis : null,
                       style: kSimpleText.copyWith(
                           fontSize: AraFontSize.monitorVerdict, fontWeight: FontWeight.w600, color: colour)),
-                  if (reason != null)
-                    Text(reason, maxLines: 1, overflow: TextOverflow.ellipsis, style: _dim),
-                ],
-              ),
+                if (reason != null)
+                  Text(reason,
+                      maxLines: question == null ? 2 : null,
+                      overflow: question == null ? TextOverflow.ellipsis : null,
+                      style: _dim),
+                // A question's answers, under its words: the only controls
+                // besides Stop, Night mode and close. The same actions as its
+                // pill, which Monitor doesn't draw.
+                if (question != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: AraSpace.s8, bottom: AraSpace.s8),
+                    child: Wrap(spacing: AraSpace.s8, runSpacing: AraSpace.s8, children: [
+                      for (var i = 0; i < question.actions.length; i++)
+                        (i == question.actions.length - 1 ? FilledButton.new : TextButton.new)(
+                          onPressed: () {
+                            ref.read(simpleMessagesProvider.notifier).dismiss(question.id);
+                            question.actions[i].onPressed();
+                          },
+                          child: Text(question.actions[i].label),
+                        ),
+                    ]),
+                  ),
+              ],
             ),
           ),
-          // A question's answers: the only controls besides Stop, Night mode
-          // and close. The same actions as its pill.
-          if (question != null)
-            for (var i = 0; i < question.actions.length; i++)
-              Padding(
-                padding: const EdgeInsets.only(left: AraSpace.s8),
-                child: (i == question.actions.length - 1
-                    ? FilledButton.new
-                    : TextButton.new)(
-                  onPressed: () {
-                    ref.read(simpleMessagesProvider.notifier).dismiss(question.id);
-                    question.actions[i].onPressed();
-                  },
-                  child: Text(question.actions[i].label),
-                ),
-              ),
           const SizedBox(width: AraSpace.s16),
           if (battery != null) ...[
             _Battery(level: battery.level, charging: battery.charging),
@@ -289,7 +299,18 @@ class _Grid extends StatelessWidget {
       ]);
     });
 
-    return Column(
+    // Short of room (a question stacked on the top line, large text), the
+    // grid keeps its least height and scrolls rather than crushing tiles.
+    return LayoutBuilder(
+      builder: (context, box) => box.maxHeight >= _kGridMinHeight
+          ? _grid(now, side, guider, focus, night)
+          : SingleChildScrollView(
+              child: SizedBox(height: _kGridMinHeight, child: _grid(now, side, guider, focus, night)),
+            ),
+    );
+  }
+
+  Widget _grid(Widget now, Widget side, Widget? guider, Widget focus, Widget night) => Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
@@ -312,7 +333,6 @@ class _Grid extends StatelessWidget {
         SizedBox(height: 108, child: Padding(padding: const EdgeInsets.only(right: 108 + _kGap), child: night)),
       ],
     );
-  }
 }
 
 /// A healthy tile has no dot, so any dot means something changed.
@@ -396,8 +416,14 @@ class _Tile extends StatelessWidget {
                           Icon(icon, size: 18, color: accent),
                           const SizedBox(width: 6),
                           Expanded(child: Text(name, style: _dim, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                          if (shown != null && shown.isNotEmpty) Text(shown, style: _dim.copyWith(color: wordColour)),
-                          if (_dot(status) case final dot?) ...[const SizedBox(width: 6), dot],
+                          // Flexible: a longer word (pt-BR) shortens, never overflows.
+                          if (shown != null && shown.isNotEmpty)
+                            Flexible(
+                              child: Text(shown,
+                                  maxLines: 1, overflow: TextOverflow.ellipsis, style: _dim.copyWith(color: wordColour)),
+                            ),
+                          // Stale numbers get a grey dot, as off gear does.
+                          if (_dot(frozen ? MonitorStatus.off : status) case final dot?) ...[const SizedBox(width: 6), dot],
                         ]),
                         ...children,
                       ],
@@ -465,6 +491,14 @@ class _Tile extends StatelessWidget {
       ),
   };
 }
+
+/// What a screen reader hears when the top line changes: the headline,
+/// without a countdown or an age that changes every second.
+String monitorVerdictAnnouncement(AppLocalizations l10n, MonitorSnapshot s, String head) => switch (s.verdict.kind) {
+      MonitorVerdictKind.linkLost => l10n.monitorLinkLostShort,
+      MonitorVerdictKind.waitingForFlip => l10n.planWaitingForFlip,
+      _ => head,
+    };
 
 /// "42 s", "3 min", "1 h 12 min".
 String _age(Duration d) {
@@ -580,8 +614,11 @@ class _NowTile extends StatelessWidget {
                   padding: const EdgeInsets.only(right: 10),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                     Row(children: [
-                      Expanded(child: Text(f.filter, style: kSimpleText.copyWith(fontWeight: FontWeight.w600))),
-                      Text('${f.done}/${f.total}', style: _dim),
+                      Expanded(
+                        child: Text(f.filter,
+                            maxLines: 1, overflow: TextOverflow.ellipsis, style: kSimpleText.copyWith(fontWeight: FontWeight.w600)),
+                      ),
+                      Flexible(child: Text('${f.done}/${f.total}', maxLines: 1, overflow: TextOverflow.ellipsis, style: _dim)),
                     ]),
                     const SizedBox(height: 3),
                     ClipRRect(
@@ -670,7 +707,7 @@ class _TargetTile extends StatelessWidget {
         value: l10n.monitorNoTarget,
         frozen: s.frozen,
         onTap: onTap,
-        children: [Text(l10n.monitorNoTarget, style: _dim.copyWith(color: AraColors.textDisabled))],
+        children: [Text(l10n.monitorNoTarget, style: _dim)],
       );
     }
     final lines = [
@@ -772,15 +809,25 @@ class _SafetyTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final safety = s.safety!;
-    final word = switch (safety.safe) {
-      true => l10n.deviceSafe,
-      false => l10n.deviceUnsafe,
-      null => l10n.monitorDisconnected,
-    };
-    final since = safety.since == null
+    // The same status colours and stale handling as every other tile.
+    final word = s.frozen
+        ? l10n.monitorLastKnown
+        : switch (safety.safe) {
+            true => l10n.deviceSafe,
+            false => l10n.deviceUnsafe,
+            null => l10n.monitorDisconnected,
+          };
+    final since = safety.since == null || s.frozen
         ? null
         : l10n.monitorSince(simpleClockTime(safety.since!), _age(s.asOf.difference(safety.since!)));
-    final colour = safety.status == MonitorStatus.normal ? AraColors.accentConnected : null;
+    final colour = s.frozen
+        ? AraColors.textSecondary
+        : switch (safety.status) {
+            MonitorStatus.normal => AraColors.accentConnected,
+            MonitorStatus.fault => AraColors.errorText,
+            MonitorStatus.warning => AraColors.accentWarning,
+            _ => AraColors.textSecondary,
+          };
     return Semantics(
       button: true,
       label: [l10n.shellSafetyMonitor, word, ?since].join(', '),
@@ -805,9 +852,15 @@ class _SafetyTile extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12),
             child: Row(children: [
-              Icon(Icons.shield_outlined, size: 22, color: colour ?? AraColors.accentWarning),
+              Icon(Icons.shield_outlined, size: 22, color: colour),
               const SizedBox(width: AraSpace.s8),
-              Text(word, style: kSimpleText.copyWith(fontWeight: FontWeight.w600, color: colour == null ? AraColors.accentWarning : null)),
+              Flexible(
+                child: Text(word,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: kSimpleText.copyWith(
+                        fontWeight: FontWeight.w600, color: colour == AraColors.accentConnected ? null : colour)),
+              ),
               const SizedBox(width: AraSpace.s8),
               if (since != null)
                 Expanded(child: Text(since, textAlign: TextAlign.right, maxLines: 1, overflow: TextOverflow.ellipsis, style: kSimpleCaption)),
@@ -882,6 +935,8 @@ class _WeatherTile extends StatelessWidget {
                       ),
                     ]),
                     Text(cell(c).$3,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: kSimpleUnit.copyWith(color: c.overLimit != null ? AraColors.accentWarning : null)),
                   ]),
                 ),
@@ -1048,11 +1103,17 @@ class _NightTile extends StatelessWidget {
       icon: Icons.nights_stay_outlined,
       name: l10n.monitorTonight,
       status: MonitorStatus.normal,
-      word: line,
-      value: line,
+      // The timeline is painted: a screen reader hears its blocks and markers.
+      value: [
+        line,
+        for (final b in n.blocks) '${b.name} ${simpleClockTime(b.start)}–${simpleClockTime(b.end)}',
+        if (n.flipAt != null) '${l10n.deviceMeridianFlip} ${simpleClockTime(n.flipAt!)}',
+        if (n.parkAt != null) '${l10n.monitorUpPark} ${simpleClockTime(n.parkAt!)}',
+      ].join(', '),
       frozen: s.frozen,
       onTap: onTap,
       children: [
+        Text(line, maxLines: 1, overflow: TextOverflow.ellipsis, style: kSimpleCaption),
         if (start != null && end != null)
           Expanded(
             child: CustomPaint(

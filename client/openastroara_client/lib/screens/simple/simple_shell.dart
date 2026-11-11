@@ -2031,7 +2031,10 @@ class _LeftRail extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SimplePanel(
     padding: const EdgeInsets.symmetric(vertical: AraSpace.s8, horizontal: 6),
-    child: Column(
+    // Scrolls when large text makes the items taller than the room (Monitor
+    // made it five).
+    child: SingleChildScrollView(
+      child: Column(
       mainAxisSize: MainAxisSize.min,
       spacing: 4,
       children: [
@@ -2071,6 +2074,7 @@ class _LeftRail extends StatelessWidget {
             onTap: onMonitor,
           ),
       ],
+      ),
     ),
   );
 }

@@ -404,7 +404,8 @@ class _QuestionAnswers extends StatelessWidget {
           return Row(
             spacing: _gap,
             children: [
-              for (var i = 0; i < labels.length; i++) Expanded(child: button(i)),
+              // Shared by need, so each label keeps the width it was measured at.
+              for (var i = 0; i < labels.length; i++) Expanded(flex: width(labels[i]).ceil(), child: button(i)),
             ],
           );
         }
