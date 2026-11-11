@@ -3682,6 +3682,184 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get simpleRigAddressInvalid =>
       'Type the rig\'s name or address, for example astro-pi.local or 192.0.2.24:5555.';
+
+  @override
+  String get deviceMountPosition => 'Position';
+
+  @override
+  String get deviceTrackingSpeed => 'Tracking speed';
+
+  @override
+  String get trackingRateSidereal => 'Sidereal';
+
+  @override
+  String get trackingRateLunar => 'Lunar';
+
+  @override
+  String get trackingRateSolar => 'Solar';
+
+  @override
+  String get trackingRateKing => 'King';
+
+  @override
+  String deviceTrackingOffSidereal(String rate) {
+    return 'Tracking at the $rate rate. Back to Sidereal for stars and galaxies.';
+  }
+
+  @override
+  String get deviceCouldntSetTrackingSpeed =>
+      'Couldn\'t change the tracking speed';
+
+  @override
+  String get padSlow => 'Slow';
+
+  @override
+  String get padMedium => 'Medium';
+
+  @override
+  String get padFast => 'Fast';
+
+  @override
+  String get padSpeed => 'Speed';
+
+  @override
+  String get padNorth => 'N';
+
+  @override
+  String get padSouth => 'S';
+
+  @override
+  String get padEast => 'E';
+
+  @override
+  String get padWest => 'W';
+
+  @override
+  String get padMoveNorth => 'Move north';
+
+  @override
+  String get padMoveSouth => 'Move south';
+
+  @override
+  String get padMoveEast => 'Move east';
+
+  @override
+  String get padMoveWest => 'Move west';
+
+  @override
+  String get padMoveNorthEast => 'Move north-east';
+
+  @override
+  String get padMoveNorthWest => 'Move north-west';
+
+  @override
+  String get padMoveSouthEast => 'Move south-east';
+
+  @override
+  String get padMoveSouthWest => 'Move south-west';
+
+  @override
+  String get padStopMount => 'Stop the mount';
+
+  @override
+  String get padUnparkToMove => 'Unpark to move the mount';
+
+  @override
+  String get padPausePlan => 'Pause the plan to move the mount';
+
+  @override
+  String get padPolarRunning => 'Polar alignment is running';
+
+  @override
+  String get padStopGuiding => 'Stop guiding to move the mount';
+
+  @override
+  String get padSlewing => 'Moving to a target: Stop ends it';
+
+  @override
+  String get padNoRates => 'This mount can\'t be moved by hand';
+
+  @override
+  String get pointingLabel => 'Pointing';
+
+  @override
+  String get pointingSolved => 'Pointing (solved)';
+
+  @override
+  String get pointingCheck => 'Check';
+
+  @override
+  String get pointingCheckHint => 'Take a quick frame and plate-solve it';
+
+  @override
+  String get pointingSolving => 'Taking a frame and solving…';
+
+  @override
+  String pointingFrom(String separation, String target) {
+    return '$separation from $target';
+  }
+
+  @override
+  String pointingFromLastGoto(String separation) {
+    return '$separation from the last go-to';
+  }
+
+  @override
+  String get pointingOnTarget => 'On target';
+
+  @override
+  String pointingMountOff(String separation) {
+    return 'Mount reports $separation off';
+  }
+
+  @override
+  String pointingRotatorSynced(String angle) {
+    return 'Rotator synced to $angle';
+  }
+
+  @override
+  String get pointingCouldntSolve => 'Couldn\'t solve this frame';
+
+  @override
+  String get pointingCentre => 'Center';
+
+  @override
+  String get pointingCentring => 'Centering…';
+
+  @override
+  String get pointingSync => 'Sync';
+
+  @override
+  String get pointingSynced => 'Synced';
+
+  @override
+  String get pointingSyncedPill => 'The mount is synced to the solved position';
+
+  @override
+  String get pointingCouldntSync => 'Couldn\'t sync the mount';
+
+  @override
+  String get pointingCouldntCentre => 'Couldn\'t center';
+
+  @override
+  String get pointingOpenPlateSolving => 'Plate solving settings';
+
+  @override
+  String get pointingOpenOptics => 'Optics settings';
+
+  @override
+  String get pointingOpenCamera => 'Camera settings';
+
+  @override
+  String get devicePlanRunningHomeAnyway =>
+      'A plan is running. Send the mount home anyway?';
+
+  @override
+  String get deviceHomeAnyway => 'Home anyway';
+
+  @override
+  String get pointingNoCamera =>
+      'Connect the main camera to check where it points';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -7390,4 +7568,183 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get simpleRigAddressInvalid =>
       'Digite o nome ou o endereço do setup, por exemplo astro-pi.local ou 192.0.2.24:5555.';
+
+  @override
+  String get deviceMountPosition => 'Posição';
+
+  @override
+  String get deviceTrackingSpeed => 'Velocidade de rastreio';
+
+  @override
+  String get trackingRateSidereal => 'Sideral';
+
+  @override
+  String get trackingRateLunar => 'Lunar';
+
+  @override
+  String get trackingRateSolar => 'Solar';
+
+  @override
+  String get trackingRateKing => 'King';
+
+  @override
+  String deviceTrackingOffSidereal(String rate) {
+    return 'Rastreando na velocidade $rate. Volte para Sideral para estrelas e galáxias.';
+  }
+
+  @override
+  String get deviceCouldntSetTrackingSpeed =>
+      'Não foi possível mudar a velocidade de rastreio';
+
+  @override
+  String get padSlow => 'Lenta';
+
+  @override
+  String get padMedium => 'Média';
+
+  @override
+  String get padFast => 'Rápida';
+
+  @override
+  String get padSpeed => 'Velocidade';
+
+  @override
+  String get padNorth => 'N';
+
+  @override
+  String get padSouth => 'S';
+
+  @override
+  String get padEast => 'L';
+
+  @override
+  String get padWest => 'O';
+
+  @override
+  String get padMoveNorth => 'Mover para o norte';
+
+  @override
+  String get padMoveSouth => 'Mover para o sul';
+
+  @override
+  String get padMoveEast => 'Mover para o leste';
+
+  @override
+  String get padMoveWest => 'Mover para o oeste';
+
+  @override
+  String get padMoveNorthEast => 'Mover para o nordeste';
+
+  @override
+  String get padMoveNorthWest => 'Mover para o noroeste';
+
+  @override
+  String get padMoveSouthEast => 'Mover para o sudeste';
+
+  @override
+  String get padMoveSouthWest => 'Mover para o sudoeste';
+
+  @override
+  String get padStopMount => 'Parar a montagem';
+
+  @override
+  String get padUnparkToMove => 'Libere a montagem para movê-la';
+
+  @override
+  String get padPausePlan => 'Pause o plano para mover a montagem';
+
+  @override
+  String get padPolarRunning => 'O alinhamento polar está em andamento';
+
+  @override
+  String get padStopGuiding => 'Pare o guiamento para mover a montagem';
+
+  @override
+  String get padSlewing => 'Indo para um alvo: Parar encerra';
+
+  @override
+  String get padNoRates => 'Esta montagem não pode ser movida à mão';
+
+  @override
+  String get pointingLabel => 'Apontando';
+
+  @override
+  String get pointingSolved => 'Apontando (resolvido)';
+
+  @override
+  String get pointingCheck => 'Verificar';
+
+  @override
+  String get pointingCheckHint => 'Fazer um quadro rápido e resolvê-lo';
+
+  @override
+  String get pointingSolving => 'Fazendo um quadro e resolvendo…';
+
+  @override
+  String pointingFrom(String separation, String target) {
+    return '$separation de $target';
+  }
+
+  @override
+  String pointingFromLastGoto(String separation) {
+    return '$separation do último go-to';
+  }
+
+  @override
+  String get pointingOnTarget => 'No alvo';
+
+  @override
+  String pointingMountOff(String separation) {
+    return 'A montagem indica $separation de diferença';
+  }
+
+  @override
+  String pointingRotatorSynced(String angle) {
+    return 'Rotador sincronizado em $angle';
+  }
+
+  @override
+  String get pointingCouldntSolve => 'Não foi possível resolver este quadro';
+
+  @override
+  String get pointingCentre => 'Centralizar';
+
+  @override
+  String get pointingCentring => 'Centralizando…';
+
+  @override
+  String get pointingSync => 'Sincronizar';
+
+  @override
+  String get pointingSynced => 'Sincronizada';
+
+  @override
+  String get pointingSyncedPill =>
+      'A montagem está sincronizada com a posição resolvida';
+
+  @override
+  String get pointingCouldntSync => 'Não foi possível sincronizar a montagem';
+
+  @override
+  String get pointingCouldntCentre => 'Não foi possível centralizar';
+
+  @override
+  String get pointingOpenPlateSolving => 'Configurações de plate solving';
+
+  @override
+  String get pointingOpenOptics => 'Configurações de óptica';
+
+  @override
+  String get pointingOpenCamera => 'Configurações da câmera';
+
+  @override
+  String get devicePlanRunningHomeAnyway =>
+      'Um plano está em andamento. Enviar a montagem para a posição inicial mesmo assim?';
+
+  @override
+  String get deviceHomeAnyway => 'Ir mesmo assim';
+
+  @override
+  String get pointingNoCamera =>
+      'Conecte a câmera principal para verificar para onde aponta';
 }

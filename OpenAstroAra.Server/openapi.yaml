@@ -449,6 +449,19 @@ paths:
       responses:
         '200':
           description: OK
+  /api/v1/equipment/telescope/trackingrate:
+    post:
+      tags:
+        - Equipment
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TelescopeTrackingRateRequestDto'
+        required: true
+      responses:
+        '200':
+          description: OK
   /api/v1/equipment/telescope/reconnect:
     post:
       tags:
@@ -12319,6 +12332,13 @@ components:
             - number
             - string
           format: double
+        lease_ms:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
     NotificationActionRequestDto:
       required:
         - reason
@@ -16079,6 +16099,13 @@ components:
           type:
             - 'null'
             - string
+    TelescopeTrackingRateRequestDto:
+      required:
+        - rate
+      type: object
+      properties:
+        rate:
+          type: string
     TelescopeTrackingRequestDto:
       required:
         - enabled
@@ -16498,6 +16525,20 @@ components:
           type:
             - 'null'
             - string
+        position_angle_degrees:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        rotator_synced_degrees:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     WsCatalogResponse:
       required:
         - events

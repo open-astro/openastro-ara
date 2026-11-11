@@ -119,7 +119,7 @@ void main() {
     await tester.pump();
     expect(c.read(safetyPoliciesProvider).meridianFlipAuto, isFalse, reason: 'kept in the profile');
     double row(String label) => tester.getSize(find.byKey(Key('simple-window-row-$label'))).height;
-    expect(row('Park'), row('Tracking'));
+    expect(row('Position'), row('Tracking'));
     expect(row('Meridian flip'), row('Tracking'));
   });
 

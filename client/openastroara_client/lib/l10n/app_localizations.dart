@@ -6230,6 +6230,336 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Type the rig\'s name or address, for example astro-pi.local or 192.0.2.24:5555.'**
   String get simpleRigAddressInvalid;
+
+  /// Mount window row: Parked / Unparked / Home (#1649)
+  ///
+  /// In en, this message translates to:
+  /// **'Position'**
+  String get deviceMountPosition;
+
+  /// Mount window row: the mount's drive rate (#1649)
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking speed'**
+  String get deviceTrackingSpeed;
+
+  /// Tracking speed segment: the stars' rate
+  ///
+  /// In en, this message translates to:
+  /// **'Sidereal'**
+  String get trackingRateSidereal;
+
+  /// Tracking speed segment: the Moon's rate
+  ///
+  /// In en, this message translates to:
+  /// **'Lunar'**
+  String get trackingRateLunar;
+
+  /// Tracking speed segment: the Sun's rate
+  ///
+  /// In en, this message translates to:
+  /// **'Solar'**
+  String get trackingRateSolar;
+
+  /// Tracking speed segment: the King rate (sidereal corrected for refraction)
+  ///
+  /// In en, this message translates to:
+  /// **'King'**
+  String get trackingRateKing;
+
+  /// Mount window caption under Tracking speed when it is not Sidereal; rate is lower case (lunar, solar, King)
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking at the {rate} rate. Back to Sidereal for stars and galaxies.'**
+  String deviceTrackingOffSidereal(String rate);
+
+  /// Message pill when the mount refused a tracking speed
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t change the tracking speed'**
+  String get deviceCouldntSetTrackingSpeed;
+
+  /// Direction pad speed: 5 % of the mount's top speed
+  ///
+  /// In en, this message translates to:
+  /// **'Slow'**
+  String get padSlow;
+
+  /// Direction pad speed: 25 % of the mount's top speed
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get padMedium;
+
+  /// Direction pad speed: the mount's top speed
+  ///
+  /// In en, this message translates to:
+  /// **'Fast'**
+  String get padFast;
+
+  /// Direction pad: what the speed segments choose (screen readers)
+  ///
+  /// In en, this message translates to:
+  /// **'Speed'**
+  String get padSpeed;
+
+  /// Direction pad button: north
+  ///
+  /// In en, this message translates to:
+  /// **'N'**
+  String get padNorth;
+
+  /// Direction pad button: south
+  ///
+  /// In en, this message translates to:
+  /// **'S'**
+  String get padSouth;
+
+  /// Direction pad button: east
+  ///
+  /// In en, this message translates to:
+  /// **'E'**
+  String get padEast;
+
+  /// Direction pad button: west
+  ///
+  /// In en, this message translates to:
+  /// **'W'**
+  String get padWest;
+
+  /// Direction pad button (screen readers)
+  ///
+  /// In en, this message translates to:
+  /// **'Move north'**
+  String get padMoveNorth;
+
+  /// Direction pad button (screen readers)
+  ///
+  /// In en, this message translates to:
+  /// **'Move south'**
+  String get padMoveSouth;
+
+  /// Direction pad button (screen readers)
+  ///
+  /// In en, this message translates to:
+  /// **'Move east'**
+  String get padMoveEast;
+
+  /// Direction pad button (screen readers)
+  ///
+  /// In en, this message translates to:
+  /// **'Move west'**
+  String get padMoveWest;
+
+  /// Direction pad button (screen readers)
+  ///
+  /// In en, this message translates to:
+  /// **'Move north-east'**
+  String get padMoveNorthEast;
+
+  /// Direction pad button (screen readers)
+  ///
+  /// In en, this message translates to:
+  /// **'Move north-west'**
+  String get padMoveNorthWest;
+
+  /// Direction pad button (screen readers)
+  ///
+  /// In en, this message translates to:
+  /// **'Move south-east'**
+  String get padMoveSouthEast;
+
+  /// Direction pad button (screen readers)
+  ///
+  /// In en, this message translates to:
+  /// **'Move south-west'**
+  String get padMoveSouthWest;
+
+  /// Direction pad centre button (screen readers)
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the mount'**
+  String get padStopMount;
+
+  /// Direction pad: why it is off while the mount is parked
+  ///
+  /// In en, this message translates to:
+  /// **'Unpark to move the mount'**
+  String get padUnparkToMove;
+
+  /// Direction pad: why it is off while the plan is imaging
+  ///
+  /// In en, this message translates to:
+  /// **'Pause the plan to move the mount'**
+  String get padPausePlan;
+
+  /// Direction pad and Check: why they are off while polar alignment runs
+  ///
+  /// In en, this message translates to:
+  /// **'Polar alignment is running'**
+  String get padPolarRunning;
+
+  /// Direction pad: why it is off while the Guider guides
+  ///
+  /// In en, this message translates to:
+  /// **'Stop guiding to move the mount'**
+  String get padStopGuiding;
+
+  /// Direction pad: directions are off during a GoTo, Stop still works
+  ///
+  /// In en, this message translates to:
+  /// **'Moving to a target: Stop ends it'**
+  String get padSlewing;
+
+  /// Mount window: the mount reports no manual rates
+  ///
+  /// In en, this message translates to:
+  /// **'This mount can\'t be moved by hand'**
+  String get padNoRates;
+
+  /// Mount window: caption over the mount's RA/Dec (#1650)
+  ///
+  /// In en, this message translates to:
+  /// **'Pointing'**
+  String get pointingLabel;
+
+  /// Mount window: caption over the solved RA/Dec after Check
+  ///
+  /// In en, this message translates to:
+  /// **'Pointing (solved)'**
+  String get pointingSolved;
+
+  /// Mount window button: take a quick frame and plate-solve it
+  ///
+  /// In en, this message translates to:
+  /// **'Check'**
+  String get pointingCheck;
+
+  /// Screen-reader hint of the Check button
+  ///
+  /// In en, this message translates to:
+  /// **'Take a quick frame and plate-solve it'**
+  String get pointingCheckHint;
+
+  /// Mount window: while Check runs
+  ///
+  /// In en, this message translates to:
+  /// **'Taking a frame and solving…'**
+  String get pointingSolving;
+
+  /// Mount window: how far the solve is from the Target ("2.4′ from M 31")
+  ///
+  /// In en, this message translates to:
+  /// **'{separation} from {target}'**
+  String pointingFrom(String separation, String target);
+
+  /// Mount window: how far the solve is from where the mount was sent, no Target matched
+  ///
+  /// In en, this message translates to:
+  /// **'{separation} from the last go-to'**
+  String pointingFromLastGoto(String separation);
+
+  /// Mount window: the solve is within 1′ of the Target
+  ///
+  /// In en, this message translates to:
+  /// **'On target'**
+  String get pointingOnTarget;
+
+  /// Mount window caption: the solve against the mount's own position
+  ///
+  /// In en, this message translates to:
+  /// **'Mount reports {separation} off'**
+  String pointingMountOff(String separation);
+
+  /// Mount window caption: Check synced the rotator's sky angle
+  ///
+  /// In en, this message translates to:
+  /// **'Rotator synced to {angle}'**
+  String pointingRotatorSynced(String angle);
+
+  /// Mount window: Check's solve failed
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t solve this frame'**
+  String get pointingCouldntSolve;
+
+  /// Mount window button: slew and center on the Target by repeated solves
+  ///
+  /// In en, this message translates to:
+  /// **'Center'**
+  String get pointingCentre;
+
+  /// Mount window: while Center runs
+  ///
+  /// In en, this message translates to:
+  /// **'Centering…'**
+  String get pointingCentring;
+
+  /// Mount window button: sync the mount to the solved position
+  ///
+  /// In en, this message translates to:
+  /// **'Sync'**
+  String get pointingSync;
+
+  /// Mount window: Sync done, until the next Check
+  ///
+  /// In en, this message translates to:
+  /// **'Synced'**
+  String get pointingSynced;
+
+  /// Result pill after Sync
+  ///
+  /// In en, this message translates to:
+  /// **'The mount is synced to the solved position'**
+  String get pointingSyncedPill;
+
+  /// Error pill when Sync was refused
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t sync the mount'**
+  String get pointingCouldntSync;
+
+  /// Mount window: Center failed
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t center'**
+  String get pointingCouldntCentre;
+
+  /// Mount window button after a solver error
+  ///
+  /// In en, this message translates to:
+  /// **'Plate solving settings'**
+  String get pointingOpenPlateSolving;
+
+  /// Mount window button after an optics error
+  ///
+  /// In en, this message translates to:
+  /// **'Optics settings'**
+  String get pointingOpenOptics;
+
+  /// Mount window button when no camera can take the frame
+  ///
+  /// In en, this message translates to:
+  /// **'Camera settings'**
+  String get pointingOpenCamera;
+
+  /// Mount window: asked when Home is tapped while a plan runs
+  ///
+  /// In en, this message translates to:
+  /// **'A plan is running. Send the mount home anyway?'**
+  String get devicePlanRunningHomeAnyway;
+
+  /// Mount window button: send the mount home even though a plan runs
+  ///
+  /// In en, this message translates to:
+  /// **'Home anyway'**
+  String get deviceHomeAnyway;
+
+  /// Mount window: why Check is off with no main camera
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the main camera to check where it points'**
+  String get pointingNoCamera;
 }
 
 class _AppLocalizationsDelegate

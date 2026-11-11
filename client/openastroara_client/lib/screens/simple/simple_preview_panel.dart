@@ -72,6 +72,7 @@ import 'simple_device_windows.dart'
         simpleDomeAskLabel,
         simpleDomeAskProvider,
         simpleWeatherBreaches,
+        simpleMountHomeProvider,
         simpleMountMotionProvider,
         simpleSwitchSettingProvider;
 import 'simple_shell.dart'
@@ -1399,6 +1400,8 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     _coolStart = cooling ? (_coolStart ?? ccd) : null;
     // A park or unpark asked for in Simple Mode, until the mount gets there.
     final parking = ref.watch(simpleMountMotionProvider);
+    // Home asked in the Mount window, from the tap (#1649).
+    final homing = ref.watch(simpleMountHomeProvider);
     // The filter wheel turning, or a manual wheel waiting for its hand swap.
     final wheel = ref.watch(filterWheelProvider).value;
     final swap = wheel != null && wheel.isAwaitingUser ? wheel.pending : null;
@@ -1559,6 +1562,14 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           null,
           AraColors.accentInfo,
           ring: true,
+        )
+      else if (homing)
+        _PillData(
+          SimpleStatusOrigin.mount,
+          l10n.deviceMount,
+          l10n.deviceFindingHome,
+          AraColors.accentConnected,
+          working: true,
         ),
       // Moving is working: blinking green, as the wheel's dot and window
       // show it (DESIGN.md status rule).
