@@ -1655,10 +1655,11 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
       if (parking != null)
         _PillData(
           SimpleStatusOrigin.mount,
-          parking ? l10n.previewParking : l10n.previewUnparking,
-          null,
-          AraColors.accentInfo,
-          ring: true,
+          // Moving is working: blinking green, as the Dome's (user, 2026-11-11).
+          l10n.deviceMount,
+          parking ? l10n.deviceParking : l10n.deviceUnparking,
+          AraColors.accentConnected,
+          working: true,
         )
       else if (homing)
         _PillData(

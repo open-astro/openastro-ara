@@ -24,6 +24,7 @@ import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/simple_run_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/util/slew_rates.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusBlink;
 
@@ -55,6 +56,12 @@ class _Mount extends MountNotifier {
   @override
   Future<bool> abortSlew() async {
     calls.add('abort');
+    return true;
+  }
+
+  @override
+  Future<bool> park() async {
+    calls.add('park');
     return true;
   }
 
@@ -547,6 +554,17 @@ void main() {
       expect(find.text('Position · At home'), findsOneWidget);
       expect(find.byKey(const Key('simple-mount-park-home')), findsNothing, reason: 'Parked / Unparked only');
       expect(c.read(simpleMountHomeProvider), isFalse);
+    });
+
+    testWidgets('Parking… blinks green, as Finding home… does', (tester) async {
+      await _pump(tester, _wire());
+      await tester.tap(find.byKey(const Key('simple-mount-park-parked')));
+      await tester.pump();
+      final blink = find.ancestor(of: find.text('Parking…'), matching: find.byType(StatusBlink));
+      expect(blink, findsOneWidget);
+      expect(tester.widget<StatusBlink>(blink).on, isTrue);
+      expect(tester.widget<Text>(find.text('Parking…')).style?.color, AraColors.accentConnected);
+      await tester.pump(const Duration(seconds: 4));
     });
 
     testWidgets('a Home that moves nothing clears after a few seconds', (tester) async {

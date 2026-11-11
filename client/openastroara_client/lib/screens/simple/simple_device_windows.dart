@@ -892,8 +892,9 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                   height: 44,
                   child: Center(
                     child: StatusBlink(
-                      // Working blinks green; Parking is a change (blue).
-                      on: homing,
+                      // The mount moving is working: blinking green, as the
+                      // Dome window's Parking… (user, 2026-11-11).
+                      on: true,
                       child: Text(
                       homing
                           ? context.l10n.deviceFindingHome
@@ -901,9 +902,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                           ? context.l10n.deviceParking
                           : context.l10n.deviceUnparking,
                       style: kSimpleText.copyWith(
-                        color: homing
-                            ? AraColors.accentConnected
-                            : AraColors.accentInfo,
+                        color: AraColors.accentConnected,
                       ),
                     ),
                     ),
