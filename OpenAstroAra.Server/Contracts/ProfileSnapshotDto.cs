@@ -97,4 +97,6 @@ public sealed record ProfileSnapshotDto(
     // pre-#1267 file) to the empty list and drops malformed entries.
     SavedTargetsDto? SavedTargets = null,
     // #1700 — the camera's cooling fan. Null (every pre-#1700 file) = no designation, no interlock.
-    CoolingFanDto? CoolingFan = null);
+    CoolingFanDto? CoolingFan = null,
+    // #1675 — the per-slot focus offsets the offset calibration saved. Null (every pre-#1675 file) = none saved.
+    FilterFocusOffsetsDto? FilterFocusOffsets = null);

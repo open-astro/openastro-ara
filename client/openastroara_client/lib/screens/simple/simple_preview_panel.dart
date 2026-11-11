@@ -21,6 +21,8 @@ import '../../state/imaging/live_view_state.dart';
 import '../../state/imaging/main_camera_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/simple_messages_state.dart';
+import '../../state/guider/guider_build_activity_state.dart';
+import 'simple_calibration.dart' show simpleCalibrationProgress;
 import '../../state/simple_preflight_state.dart'
     show SimpleModeScreen, SimplePreflightStep, SimplePreflightStepLabel, simplePreflightProvider, simpleShowingProvider;
 import '../../models/sequence/sequence_summary.dart';
@@ -29,6 +31,7 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../state/focus/autofocus_live_state.dart';
 import '../../state/focus/bahtinov_focus_state.dart';
+import '../../state/focus/filter_offset_calibration_state.dart';
 import '../../state/focus/guide_focus_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../widgets/equipment/guider_chip.dart' show guiderStatusLevel;
@@ -1528,6 +1531,18 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final guideFocus = ref.watch(
       guideFocusProvider.select((g) => g.status.active),
     );
+    final offsets = ref.watch(
+      filterOffsetCalibrationProvider.select((o) => o.calibration),
+    );
+    // #1757 — the calibration run Simple Mode started, else a Guide Camera
+    // build (its frames, once the rig reports them).
+    final calibrating = simpleCalibrationProgress(ref);
+    final builds = ref.watch(guiderBuildActivityProvider);
+    final building = [
+      for (final a in CalibrationArtifact.values)
+        if (builds[a] case final b? when b.phase == CalibrationBuildPhase.building)
+          (a, b),
+    ].firstOrNull;
     // One pill per thing happening, stacked in this order (user, 2026-11-04:
     // a frame hid the guider). Each says it once when it changes, not each
     // second of a countdown, a calibration step or an RMS update.
@@ -1708,7 +1723,8 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
       if (focuser != null &&
           focuser.isConnected &&
           focuser.isMoving &&
-          !af.isRunning)
+          !af.isRunning &&
+          !(offsets?.isRunning ?? false))
         _PillData(
           SimpleStatusOrigin.focuser,
           l10n.deviceFocuser,
@@ -1811,7 +1827,57 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         ),
       // Every mode's routine has a pill while it runs; a failure is a message
       // on the left that fades, posted by the shell (user, 2026-11-04).
-      if (af.isRunning)
+      // The offset calibration's autofocus runs are its own: one pill, the
+      // filter and which run of how many (#1675).
+      if (calibrating != null)
+        _PillData(
+          SimpleStatusOrigin.calibration,
+          l10n.shellModeCalibration,
+          l10n.calibrationPillProgress(calibrating.done, calibrating.total),
+          AraColors.accentConnected,
+          working: true,
+          spoken: l10n.shellModeCalibration,
+          footProgress: calibrating.total > 0
+              ? (calibrating.done / calibrating.total).clamp(0.0, 1.0)
+              : null,
+        )
+      else if (building case (final artifact, final b)?)
+        _PillData(
+          SimpleStatusOrigin.calibration,
+          artifact == CalibrationArtifact.darkLibrary
+              ? l10n.calibrationGuideDarks
+              : l10n.calibrationGuideDefect,
+          switch ((b.exposureIndex, b.exposureCount, b.frame, b.frameCount)) {
+            (final ei?, final ec?, final f?, final fc?) when ec > 0 && fc > 0 =>
+              l10n.calibrationGuideBuildProgress((ei - 1) * fc + f, ec * fc),
+            _ => l10n.calibrationGuideBuilding,
+          },
+          AraColors.accentConnected,
+          working: true,
+          spoken: l10n.calibrationGuideBuilding,
+          footProgress: b.fraction,
+        ),
+      if (offsets != null && offsets.isRunning)
+        _PillData(
+          SimpleStatusOrigin.focus,
+          l10n.focusOffsetsTitle,
+          offsets.runIndex == 0
+              ? l10n.focusOffsetsStarting
+              : l10n.focusOffsetsProgress(
+                  offsets.currentName ??
+                      l10n.deviceSlot(offsets.currentPosition ?? 0),
+                  offsets.runIndex,
+                  offsets.runCount,
+                ),
+          AraColors.accentConnected,
+          working: true,
+          spoken: l10n.focusOffsetsTitle,
+          footProgress: offsets.runCount > 0
+              ? ((offsets.runIndex - 1).clamp(0, offsets.runCount) /
+                    offsets.runCount)
+              : null,
+        )
+      else if (af.isRunning)
         _PillData(
           SimpleStatusOrigin.focus,
           l10n.shellModeFocus,

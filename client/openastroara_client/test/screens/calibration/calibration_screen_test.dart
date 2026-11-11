@@ -63,6 +63,7 @@ class _FakeCalibrationClient implements CalibrationClient {
     bool includeDarks = false,
     bool pauseForLensCap = false,
     bool includeFlats = true,
+    String flavor = 'panel',
   }) async {
     flatsSessionId = sessionId;
     flatsIncludeFlats = includeFlats;
