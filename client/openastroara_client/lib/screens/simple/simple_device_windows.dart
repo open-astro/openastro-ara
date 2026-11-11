@@ -792,6 +792,23 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
   /// Parked (false: Home) tapped while a plan runs: the window asks first.
   bool? _asking;
 
+  /// Read up front: dispose clears the Check answer, and ref is gone by then.
+  late final SimplePointingNotifier _pointing;
+
+  @override
+  void initState() {
+    super.initState();
+    _pointing = ref.read(simplePointingProvider.notifier);
+  }
+
+  @override
+  void dispose() {
+    // After this frame: a provider can't change while the tree is finalized.
+    final pointing = _pointing;
+    Future.microtask(pointing.closed);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final m = ref.watch(mountProvider).value;

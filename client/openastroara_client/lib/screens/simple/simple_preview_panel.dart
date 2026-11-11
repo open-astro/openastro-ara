@@ -75,6 +75,8 @@ import 'simple_device_windows.dart'
         simpleMountHomeProvider,
         simpleMountMotionProvider,
         simpleSwitchSettingProvider;
+import 'simple_mount_controls.dart'
+    show SimplePointingPhase, simplePointingProvider;
 import 'simple_shell.dart'
     show
         SimplePanel,
@@ -1468,6 +1470,9 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final parking = ref.watch(simpleMountMotionProvider);
     // Home asked in the Mount window, from the tap (#1649).
     final homing = ref.watch(simpleMountHomeProvider);
+    // The Mount window's Check or Center under way: the main camera takes a
+    // frame for it, so it has a pill as any frame does (#1650).
+    final pointing = ref.watch(simplePointingProvider.select((p) => p.phase));
     // The filter wheel turning, or a manual wheel waiting for its hand swap.
     final wheel = ref.watch(filterWheelProvider).value;
     final swap = wheel != null && wheel.isAwaitingUser ? wheel.pending : null;
@@ -1666,6 +1671,17 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           SimpleStatusOrigin.mount,
           l10n.deviceMount,
           l10n.deviceFindingHome,
+          AraColors.accentConnected,
+          working: true,
+        ),
+      if (pointing == SimplePointingPhase.solving ||
+          pointing == SimplePointingPhase.centring)
+        _PillData(
+          SimpleStatusOrigin.mount,
+          l10n.deviceMount,
+          pointing == SimplePointingPhase.solving
+              ? l10n.pointingSolving
+              : l10n.pointingCentring,
           AraColors.accentConnected,
           working: true,
         ),

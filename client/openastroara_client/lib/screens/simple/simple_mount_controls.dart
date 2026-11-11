@@ -663,7 +663,7 @@ class SimplePointing {
 }
 
 /// The Mount window's Check / Centre / Sync, kept while the window is open
-/// (auto-dispose: closing it throws the answer away).
+/// (it clears when the window closes; a check under way carries on).
 class SimplePointingNotifier extends Notifier<SimplePointing> {
   Timer? _poll;
   String? _job;
@@ -683,6 +683,12 @@ class SimplePointingNotifier extends Notifier<SimplePointing> {
       if (busy) moved();
     });
     return const SimplePointing();
+  }
+
+  /// The Mount window closed: its answer goes with it (a check or centring
+  /// under way carries on, and its pill with it).
+  void closed() {
+    if (ref.mounted && !state.working) state = const SimplePointing();
   }
 
   /// The mount moved since the check: drop the answer, so Sync can never
@@ -822,8 +828,10 @@ class SimplePointingNotifier extends Notifier<SimplePointing> {
   }
 }
 
+// Kept while the app runs (the status pill watches it); the window clears it
+// when it closes.
 final simplePointingProvider =
-    NotifierProvider.autoDispose<SimplePointingNotifier, SimplePointing>(
+    NotifierProvider<SimplePointingNotifier, SimplePointing>(
       SimplePointingNotifier.new,
     );
 
@@ -1011,7 +1019,8 @@ class SimpleMountPointingResult extends ConsumerWidget {
         Text(
           l10n.pointingCouldntSolve,
           key: const Key('simple-mount-pointing-unsolved'),
-          style: kSimpleText,
+          // Amber: the rig works, this frame didn't solve (user, 2026-11-11).
+          style: kSimpleText.copyWith(color: AraColors.accentWarning),
         ),
         if (r.note case final note?) Text(note, style: kSimpleCaption),
       ];

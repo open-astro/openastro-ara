@@ -12,7 +12,7 @@ import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/verify_position_result.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart';
 import 'package:openastroara/screens/simple/simple_mount_controls.dart';
-import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimpleStopSquare;
+import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimpleStatusPill, SimpleStopSquare;
 import 'package:openastroara/services/autofocus_api.dart';
 import 'package:openastroara/services/center_api.dart';
 import 'package:openastroara/services/plate_solve_api.dart';
@@ -197,6 +197,7 @@ Future<(ProviderContainer, _Mount, _Solver, _Centre)> _pump(
   double width = 640,
   bool imaging = false,
   double textScale = 1,
+  bool withPill = false,
 }) async {
   await tester.pumpWidget(const SizedBox());
   final mount = _Mount(wire);
@@ -226,7 +227,15 @@ Future<(ProviderContainer, _Mount, _Solver, _Centre)> _pump(
           body: SingleChildScrollView(
             child: Align(
               alignment: Alignment.topLeft,
-              child: SizedBox(width: width, child: const SimpleMountWindow()),
+              child: withPill
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SimpleStatusPill(),
+                        SizedBox(width: width, child: const SimpleMountWindow()),
+                      ],
+                    )
+                  : SizedBox(width: width, child: const SimpleMountWindow()),
             ),
           ),
         ),
@@ -778,6 +787,22 @@ void main() {
       expect(tester.widget<SimpleWindowButton>(find.byKey(const Key('simple-mount-check'))).onTap, isNull);
     });
 
+    testWidgets('a Check under way has a status pill, as any frame of the main camera does', (tester) async {
+      final (_, _, solver, _) = await _pump(tester, _wire(), withPill: true);
+      solver.answer = const VerifyPositionResult(success: false, exposureSeconds: 2);
+      solver.hold = Completer<void>();
+      await tester.tap(find.byKey(const Key('simple-mount-check')));
+      await tester.pump();
+      final pill = find.byType(SimpleStatusPill);
+      expect(find.descendant(of: pill, matching: find.textContaining('Taking a frame and solving')), findsOneWidget);
+      solver.hold!.complete();
+      await tester.pump();
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 100)); // the pill keeps its minimum, then fades
+      }
+      expect(find.descendant(of: pill, matching: find.textContaining('Taking a frame and solving')), findsNothing);
+    });
+
     testWidgets('a failed solve says so with the note', (tester) async {
       final (_, _, solver, _) = await _pump(tester, _wire());
       solver.answer = const VerifyPositionResult(success: false, exposureSeconds: 2, note: 'Too few stars.');
@@ -785,6 +810,8 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(find.text("Couldn't solve this frame"), findsOneWidget);
+      expect(tester.widget<Text>(find.text("Couldn't solve this frame")).style?.color, AraColors.accentWarning,
+          reason: 'amber: the rig works, this frame did not solve');
       expect(find.text('Too few stars.'), findsOneWidget);
     });
 
