@@ -508,9 +508,16 @@ Map<String, dynamic> buildTargetBlock({
     if (plan != null)
       for (var i = 0; i < plan.length; i++) ...[
         if (i > 0) ?switchTo(plan[i].filterName),
+        // No panel: a screen or light box goes over the scope by hand first.
+        if (plan[i].frameType == PlanFrameType.flat && !rig.flatPanel)
+          _item(waitForUserType)
+            ..['Text'] =
+                'Put the screen or light box over the scope for the '
+                '${plan[i].filterName.trim()} flats, then press Resume.',
         if (plan[i].frameType == PlanFrameType.flat)
           // The matching-flats generator's own flat set: the panel exposes to
-          // the Target ADU and files FLATs.
+          // the Target ADU (it solves the exposure without a panel too) and
+          // files FLATs.
           _item(flatPanelFlatsType)
             ..['FrameCount'] = plan[i].frameCount
             ..['Gain'] = gain

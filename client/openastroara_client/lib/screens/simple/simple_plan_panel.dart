@@ -14,7 +14,6 @@ import '../../state/simple_flats_choice_state.dart';
 import '../../models/sequence/imaging_run_body.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../state/equipment/camera_state.dart';
-import '../../state/equipment/flat_panel_state.dart';
 import '../../state/planning/sky_model_calibration_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sequencer/sequence_list_state.dart';
@@ -953,9 +952,10 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                   : s.exposureSeconds) *
               s.frameCount,
     );
-    final canFlat =
-        (ref.watch(flatPanelProvider).value?.isConnected ?? false) ||
-        steps.any((s) => s.frameType == PlanFrameType.flat);
+    // A row shoots flats from a panel or a screen held over the scope: no
+    // panel needed (user, 2026-11-11). A rig that can't change filters has
+    // one nameless row and nothing to flat by filter.
+    final canFlat = steps.first.filterName.isNotEmpty;
     final k =
         ref.watch(skyModelCalibrationProvider).value?.appliedK ?? const {};
     final suggested = [
@@ -1224,7 +1224,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             spacing: AraSpace.s8,
             children: [
-              // #1757 — with a flat panel a row can shoot flats instead.
+              // #1757 — a row can shoot flats instead.
               if (canFlat)
                 Expanded(
                   child: SimplePresetTile<PlanFrameType>(

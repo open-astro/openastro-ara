@@ -665,7 +665,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('#1757 with a flat panel each row is Light or Flat; new rows start Light and a Flat row queues panel flats', (tester) async {
+  testWidgets('#1757 with a flat panel each row is Light or Flat; new rows start Light and a Flat row queues panel flats with no pause', (tester) async {
     final (c, seq) = await run(tester, overrides: [flatPanelProvider.overrideWith(_Panel.new)]);
     expect(c.read(simpleRunPlanProvider).every((s) => s.frameType == PlanFrameType.light), isTrue);
 
@@ -680,9 +680,15 @@ void main() {
     expect(jsonEncode(seq.bodies.values.single), contains('FlatPanelFlats'));
   });
 
-  testWidgets('#1757 without a flat panel the rows have no Light / Flat choice', (tester) async {
-    await run(tester);
-    expect(find.byKey(const Key('simple-run-type-0')), findsNothing);
+  testWidgets('#1757 without a flat panel a row can still be Flat: the run asks for a screen or light box first', (tester) async {
+    final (c, seq) = await run(tester);
+    expect(find.byKey(const Key('simple-run-type-0')), findsOneWidget, reason: 'a tablet or light box needs no device (user, 2026-11-11)');
+    c.read(simpleRunPlanProvider.notifier).setFrameType(0, PlanFrameType.flat);
+    await tester.pump();
+    await create(tester);
+    final body = jsonEncode(seq.bodies.values.single);
+    expect(body, contains('Put the screen or light box over the scope for the L flats, then press Resume.'));
+    expect(body, contains('FlatPanelFlats'));
   });
 
   testWidgets('a plan on a rig with no filter wheel never stops to ask for a filter change', (tester) async {
