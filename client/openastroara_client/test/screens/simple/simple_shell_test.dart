@@ -6400,8 +6400,12 @@ void main() {
     testWidgets('facts that are not trusted yet (null) open nothing', (
       tester,
     ) async {
-      await pumpSetup(tester, null);
+      final (c, _, _) = await pumpSetup(tester, null);
       expect(find.byKey(const Key('simple-rig-setup')), findsNothing);
+      expect(c.read(rigSetupSheetProvider), isFalse, reason: 'no auto-open');
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pump();
+      expect(find.byKey(const Key('simple-menu-nav-RigSetup')), findsNothing);
       await end(tester);
     });
 
