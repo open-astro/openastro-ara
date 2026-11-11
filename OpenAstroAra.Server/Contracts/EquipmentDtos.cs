@@ -87,7 +87,14 @@ public sealed record CameraDto(
     string Name,
     EquipmentConnectionState State,
     CameraCapabilitiesDto? Capabilities,
-    CameraStateDto Runtime);
+    CameraStateDto Runtime,
+    // #1663 — the switch port that is THIS camera's own anti-dew heater (paired by serial, see
+    // DewHeaterPairing), or null: none, not connected, or not known. Additive; older clients ignore it.
+    DewHeaterDto? DewHeater = null);
+
+/// <summary>#1663 — a camera's heater: the switch's Alpaca UniqueId and the port's id. The level, range and
+/// write permission come from the switch list; writes use the switch set-value path.</summary>
+public sealed record DewHeaterDto(string DeviceId, int PortId);
 
 public sealed record CameraCapabilitiesDto(
     int SensorWidth, int SensorHeight,

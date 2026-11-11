@@ -112,6 +112,10 @@
   "@deviceCouldntSaveTarget": {
     "description": "Error message when the cooler target could not be saved to the profile"
   },
+  "deviceDewHeater": "Dew heater",
+  "@deviceDewHeater": {
+    "description": "Camera window: the row that switches the camera's own anti-dew heater; also the name in its error pill and for a screen reader"
+  },
   "deviceCouldntChangeCooler": "Couldn't change the cooler",
   "@deviceCouldntChangeCooler": {
     "description": "Error message when the camera refused a cooler change"

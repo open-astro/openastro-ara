@@ -10,6 +10,7 @@ import 'package:flutter/services.dart' show HapticFeedback, LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
+import '../../models/camera_status.dart' show DewHeaterRef;
 import '../../models/equipment_device_status.dart';
 import '../../services/equipment_driver_api.dart';
 import '../../models/filter_wheel_status.dart';
@@ -229,6 +230,10 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
           const ProfileCoolingFanPicker(style: kSimpleText),
         ]);
       }
+      // The camera's own heater, when the rig paired one by serial (#1663).
+      if (s.dewHeater != null) {
+        children.add(_DewHeaterRow(heater: s.dewHeater!));
+      }
       // The camera's gain, shared with Preview's chip.
       children.add(
         SimpleGainSlider(
@@ -305,6 +310,151 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
 
   static Widget _row(String id, String label, Widget value) =>
       simpleWindowRow(label, value, id: id);
+}
+
+/// The Camera window's Dew heater (#1663): the heater switch the rig paired
+/// with the main camera, as On / Off for an on/off port, else a slider with
+/// its level. Shown while that switch is connected and the port writable;
+/// the level and range come from the switch list, and a write goes through
+/// the Switches window's path (`switchListProvider`), rounded alike.
+class _DewHeaterRow extends ConsumerStatefulWidget {
+  const _DewHeaterRow({required this.heater});
+
+  final DewHeaterRef heater;
+
+  @override
+  ConsumerState<_DewHeaterRow> createState() => _DewHeaterRowState();
+}
+
+class _DewHeaterRowState extends ConsumerState<_DewHeaterRow> {
+  /// The value asked, until the rig answers: the control shows it meanwhile.
+  double? _asked;
+
+  /// A slider being dragged, and where.
+  double? _drag;
+
+  @override
+  void initState() {
+    super.initState();
+    // The list has no live updates: read it fresh as the row appears.
+    Future.microtask(() {
+      if (mounted) ref.read(switchListProvider.notifier).refresh();
+    });
+  }
+
+  SwitchPort? _port(List<SwitchDevice> devices) {
+    for (final d in devices) {
+      if (!d.isConnected || d.deviceId != widget.heater.deviceId) continue;
+      for (final p in d.ports) {
+        if (p.id == widget.heater.portId && p.canWrite && p.max > p.min) {
+          return p;
+        }
+      }
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final p = _port(ref.watch(switchListProvider).value ?? const []);
+    if (p == null) return const SizedBox.shrink();
+    final busy = _asked != null;
+    final shown = (_drag ?? _asked ?? p.value).clamp(p.min, p.max);
+    final level = _switchPercent(p, simpleSwitchRound(p, shown));
+    final Widget control;
+    if (p.isBoolean) {
+      control = Semantics(
+        label: l10n.deviceDewHeater,
+        value: shown >= 0.5 ? l10n.deviceOn : l10n.deviceOff,
+        container: true,
+        child: Opacity(
+          opacity: busy ? AraOpacity.locked : 1,
+          child: _OnOff(
+            id: 'simple-camera-dewheater',
+            on: shown >= 0.5,
+            enabled: !busy,
+            onChanged: (on) => _write(p, on ? p.max : p.min),
+          ),
+        ),
+      );
+    } else {
+      control = SizedBox(
+        width: kSimpleWindowControlWidth,
+        child: Row(
+          children: [
+            Expanded(
+              child: Opacity(
+                opacity: busy ? AraOpacity.locked : 1,
+                child: IgnorePointer(
+                  ignoring: busy,
+                  child: Semantics(
+                    label: l10n.deviceDewHeater,
+                    child: Slider(
+                      key: const Key('simple-camera-dewheater'),
+                      min: p.min,
+                      max: p.max,
+                      divisions: usableSwitchStep(p) == null
+                          ? null
+                          : switchSliderDivisions(p),
+                      value: shown,
+                      semanticFormatterCallback: (x) =>
+                          _switchPercent(p, simpleSwitchRound(p, x)),
+                      onChanged: (x) => setState(() => _drag = x),
+                      onChangeEnd: (x) {
+                        setState(() => _drag = null);
+                        _write(p, x);
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // The slider already reads its level to a screen reader.
+            ExcludeSemantics(
+              child: simpleSliderLevel(
+                context,
+                level,
+                key: const Key('simple-camera-dewheater-level'),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return simpleWindowRow(
+      l10n.deviceDewHeater,
+      control,
+      id: 'dewheater',
+      labelInControl: true,
+    );
+  }
+
+  Future<void> _write(SwitchPort p, double value) async {
+    final v = simpleSwitchRound(p, value);
+    final l10n = context.l10n;
+    final notify = userNotifier(context, origin: SimpleStatusOrigin.camera);
+    setState(() => _asked = v);
+    try {
+      // Re-reads the list once the rig takes it.
+      final performed = await ref
+          .read(switchListProvider.notifier)
+          .setValue(
+            deviceId: widget.heater.deviceId,
+            portId: widget.heater.portId,
+            value: v,
+          );
+      if (!performed && mounted) _sayBusy(ref, l10n);
+    } catch (e) {
+      notify(
+        l10n.deviceCouldntSetPort(l10n.deviceDewHeater),
+        detail: failureReason(l10n, e),
+        error: true,
+      );
+    } finally {
+      if (mounted) setState(() => _asked = null);
+    }
+  }
 }
 
 /// A tap the device's notifier dropped (its last command still running)
@@ -3081,6 +3231,16 @@ String _simpleLevel(double v) {
       : r.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '');
 }
 
+/// A switch port's value as it is sent: on the device's step (#1680); without
+/// one, whole numbers over a range of 10 or more, else to 0.01. The Switches
+/// window and the Camera window's Dew heater (#1663) round with this one
+/// function, so the two renderings of one port can't disagree.
+double simpleSwitchRound(SwitchPort p, double v) =>
+    snapToSwitchStep(p, v) ??
+    (p.max - p.min >= 10
+        ? (p.min + (v - p.min).roundToDouble()).clamp(p.min, p.max)
+        : (v * 100).roundToDouble() / 100);
+
 /// A slider port's level as a percent of its range ("50 %"); anything off
 /// the bottom reads at least 1 % and anything short of the top at most 99 %,
 /// so only the ends read 0 % and 100 %. The rig is still sent its own value.
@@ -3186,14 +3346,6 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
     // The list has no live updates: read it fresh as the window opens.
     Future.microtask(() => ref.read(switchListProvider.notifier).refresh());
   }
-
-  /// On the device's step (#1680); without one, whole numbers over a range of
-  /// 10 or more, else to 0.01.
-  static double _round(SwitchPort p, double v) =>
-      snapToSwitchStep(p, v) ??
-      (p.max - p.min >= 10
-          ? (p.min + (v - p.min).roundToDouble()).clamp(p.min, p.max)
-          : (v * 100).roundToDouble() / 100);
 
   @override
   Widget build(BuildContext context) {
@@ -3395,7 +3547,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
                           : switchSliderDivisions(p),
                       value: v,
                       semanticFormatterCallback: (x) =>
-                          _switchPercent(p, _round(p, x)),
+                          _switchPercent(p, simpleSwitchRound(p, x)),
                       // Locked: it takes nothing; once dimmed it fades as
                       // the segments do and takes no touch or screen-reader
                       // action, so a fast answer doesn't flash it.
@@ -3420,7 +3572,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
                 opacity: dimmed ? AraOpacity.locked : 1,
                 child: simpleSliderLevel(
                   context,
-                  _switchPercent(p, _round(p, v)),
+                  _switchPercent(p, simpleSwitchRound(p, v)),
                   key: Key('simple-switch-$id-level'),
                 ),
               ),
@@ -3439,7 +3591,7 @@ class _SimpleSwitchesWindowState extends ConsumerState<SimpleSwitchesWindow> {
   }
 
   Future<void> _write(SwitchDevice d, SwitchPort p, double value) async {
-    final v = _round(p, value);
+    final v = simpleSwitchRound(p, value);
     final l10n = context.l10n;
     final notify = userNotifier(context, origin: SimpleStatusOrigin.switches);
     final setting = ref.read(simpleSwitchSettingProvider.notifier);

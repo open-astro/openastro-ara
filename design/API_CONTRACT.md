@@ -1456,3 +1456,17 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Reasoning:** the Guider erases its calibration before it calibrates, so a failed run left none. An unattended plan should not end the night for that.
 
 **Spec ref:** `GuiderService.RecalibrateAndGuide`, `GuiderService.StartGuidingCalibratedTonight`, `MeridianFlipExecutor.MeridianFlip`, `FocuserService.HaltAsync`
+
+---
+
+## 2026-11-11 — The camera status names its own dew heater: `dew_heater` (#1663)
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/camera` gains `dew_heater` (`CameraDto`, new `DewHeaterDto`).
+
+**Decision:** `dew_heater` is `{device_id, port_id}` (the heater switch's Alpaca UniqueId and the port's id) or null. It is additive: a client that does not know it ignores it, and a body without it reads as null. The daemon fills it while the main camera is connected and a connected switch carries the same serial after `_SN_` in its UniqueId and a port named `DewHeater` (`ZWO_SN_x` with `ZWO_DEW_SN_x`, the ToupTek family's `TOUPTEK_THERMALSW_SN_x`, `PLAYERONE_SW_SN_x`). A missing serial on either side, no such port, a switch that is not connected, or a failed switch-list read gives null; the status itself never fails for it. Only the main camera is paired, never the guide camera, and never by name or order. The level, range and write permission stay on the switch list, and a write goes through `POST /equipment/switch/{id}/value`; the camera adds no write path.
+
+**Reasoning:** the heater is a separate Switch device and nothing said which camera it belongs to. Pairing by serial does not depend on the order devices were found in.
+
+**Spec ref:** `Services/DewHeaterPairing.cs`, `Endpoints/EquipmentEndpoints.cs` (`GetCameraWithHeaterAsync`), `OpenAstroAra.Test/DewHeaterPairingTest.cs`
+
+**Related:** #1651, #1065

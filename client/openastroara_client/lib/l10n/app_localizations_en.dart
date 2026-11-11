@@ -99,6 +99,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceCouldntSaveTarget => 'Couldn\'t save the target';
 
   @override
+  String get deviceDewHeater => 'Dew heater';
+
+  @override
   String get deviceCouldntChangeCooler => 'Couldn\'t change the cooler';
 
   @override

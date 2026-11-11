@@ -99,6 +99,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceCouldntSaveTarget => 'Couldn\'t save the target';
 
   @override
+  String get deviceDewHeater => 'Dew heater';
+
+  @override
   String get deviceCouldntChangeCooler => 'Couldn\'t change the cooler';
 
   @override
@@ -4275,6 +4278,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get deviceCouldntSaveTarget => 'Não foi possível salvar o alvo';
+
+  @override
+  String get deviceDewHeater => 'Aquecedor anti-orvalho';
 
   @override
   String get deviceCouldntChangeCooler =>

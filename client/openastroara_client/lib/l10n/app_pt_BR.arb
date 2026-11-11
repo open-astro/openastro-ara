@@ -23,6 +23,7 @@
   "deviceNoCooler": "Sem refrigeração",
   "deviceTarget": "Temperatura alvo",
   "deviceCouldntSaveTarget": "Não foi possível salvar o alvo",
+  "deviceDewHeater": "Aquecedor anti-orvalho",
   "deviceCouldntChangeCooler": "Não foi possível alterar a refrigeração",
   "deviceSdk": "SDK",
   "deviceDriver": "Driver",

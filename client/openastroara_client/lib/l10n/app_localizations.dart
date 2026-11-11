@@ -237,6 +237,12 @@ abstract class AppLocalizations {
   /// **'Couldn\'t save the target'**
   String get deviceCouldntSaveTarget;
 
+  /// Camera window: the row that switches the camera's own anti-dew heater; also the name in its error pill and for a screen reader
+  ///
+  /// In en, this message translates to:
+  /// **'Dew heater'**
+  String get deviceDewHeater;
+
   /// Error message when the camera refused a cooler change
   ///
   /// In en, this message translates to:
