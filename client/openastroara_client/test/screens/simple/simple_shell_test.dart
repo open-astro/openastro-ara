@@ -193,6 +193,9 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     if (linkUp) serverLinkUpProvider.overrideWithValue(true),
     // The Connect to your rig card scans while the link is down: no network in a test.
     discoveredServersProvider.overrideWith((ref) => const Stream<AraServer>.empty()),
+    // The Rig setup reads the profile once the link is up: no network either. The #1562
+    // group sets the facts itself; rig_setup_state_test covers the reads.
+    rigSetupHydratedProvider.overrideWith((ref) async => false),
     ...gear,
     if (versions != null) daemonVersionsProvider.overrideWith((ref) async => versions),
     if (starDatabases != null)
