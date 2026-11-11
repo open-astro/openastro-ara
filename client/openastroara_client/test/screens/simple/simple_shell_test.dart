@@ -123,6 +123,8 @@ import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/services/night_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/state/guider/guider_build_activity_state.dart';
+import 'package:openastroara/state/simple_calibration_state.dart';
 import 'package:openastroara/screens/simple/simple_message_pills.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
 import 'package:openastroara/services/monitor_device_service.dart';
@@ -825,6 +827,19 @@ class _RunState extends SequenceRunStateNotifier {
   final SequenceRunStateInfo value;
   @override
   Future<SequenceRunStateInfo?> build() async => value;
+}
+
+/// A calibration run Simple Mode started.
+class _Calibrating extends SimpleCalibrationNotifier {
+  @override
+  SimpleCalibrationRun? build() => (sequenceId: 'cal-run', total: 205);
+}
+
+/// The Guide Camera builds, as the rig's events fold them.
+class _Builds extends GuiderBuildActivityNotifier {
+  @override
+  Map<CalibrationArtifact, CalibrationBuildActivity> build() => const {};
+  void set(Map<CalibrationArtifact, CalibrationBuildActivity> v) => state = v;
 }
 
 /// The run state a test moves on.
@@ -6251,6 +6266,42 @@ void main() {
         .map((t) => t.text.toPlainText())
         .join(' ');
     expect(words, allOf(contains('Focus offsets'), contains('OIII · 4 of 7')));
+  });
+
+  testWidgets('the calibration run has a status pill with its frames (#1757)', (tester) async {
+    await _pump(tester, const Size(1024, 768),
+        runState: const SequenceRunStateInfo(sequenceId: 'cal-run', state: SequenceRunState.running, framesCaptured: 46),
+        gear: [simpleCalibrationProvider.overrideWith(_Calibrating.new)]);
+    await tester.pump();
+    final words = tester
+        .widgetList<RichText>(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText)))
+        .map((t) => t.text.toPlainText())
+        .join(' ');
+    expect(words, allOf(contains('Calibration'), contains('46 of 205')));
+  });
+
+  testWidgets('a Guide Camera build has a status pill with its frames; how it ended is a message (#1757)', (tester) async {
+    final builds = _Builds();
+    final c = await _pump(tester, const Size(1024, 768), gear: [guiderBuildActivityProvider.overrideWith(() => builds)]);
+    builds.set({
+      CalibrationArtifact.darkLibrary: const CalibrationBuildActivity(
+          phase: CalibrationBuildPhase.building, exposureIndex: 2, exposureCount: 3, frame: 1, frameCount: 5),
+    });
+    await tester.pump();
+    String words() => tester
+        .widgetList<RichText>(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText)))
+        .map((t) => t.text.toPlainText())
+        .join(' ');
+    expect(words(), allOf(contains('Dark library'), contains('Building · 6 of 15')));
+
+    builds.set({
+      CalibrationArtifact.darkLibrary: const CalibrationBuildActivity(
+          phase: CalibrationBuildPhase.failed, error: 'ZWO image acquisition failed'),
+    });
+    await tester.pump();
+    final pill = c.read(simpleMessagesProvider).firstWhere((m) => m.kind == SimpleMessageKind.error);
+    expect(pill.title, "Dark library wasn't built");
+    expect(pill.detail, 'ZWO image acquisition failed', reason: "the guider's own words name the cause");
   });
 
   test('the exposure list stays inside what the camera reports', () {

@@ -7736,6 +7736,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Put the screen or light box over the scope, then press Resume to take the flats.'**
   String get calibrationLightPrompt;
+
+  /// Calibration status pill: frames taken of planned in the calibration run
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total}'**
+  String calibrationPillProgress(int done, int total);
+
+  /// Status pill: the Guide Camera's dark library or bad-pixel map is being built, before the rig reports frames
+  ///
+  /// In en, this message translates to:
+  /// **'Building…'**
+  String get calibrationGuideBuilding;
+
+  /// Status pill: the Guide Camera's dark library or bad-pixel map build, frames taken of planned
+  ///
+  /// In en, this message translates to:
+  /// **'Building · {done} of {total}'**
+  String calibrationGuideBuildProgress(int done, int total);
+
+  /// Error pill: a Guide Camera build failed on the rig; the guider's reason follows. {what} is the Dark library or the Bad-pixel map
+  ///
+  /// In en, this message translates to:
+  /// **'{what} wasn\'t built'**
+  String calibrationGuideBuildFailed(String what);
+
+  /// Result pill: a Guide Camera build finished on the rig
+  ///
+  /// In en, this message translates to:
+  /// **'{what} built'**
+  String calibrationGuideBuilt(String what);
 }
 
 class _AppLocalizationsDelegate

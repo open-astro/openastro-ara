@@ -5892,5 +5892,39 @@
   "calibrationLightPrompt": "Put the screen or light box over the scope, then press Resume to take the flats.",
   "@calibrationLightPrompt": {
     "description": "The calibration run's first step with no flat panel: the question its pill asks before the flats"
+  },
+  "calibrationPillProgress": "{done} of {total}",
+  "@calibrationPillProgress": {
+    "description": "Calibration status pill: frames taken of planned in the calibration run",
+    "placeholders": {
+      "done": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "calibrationGuideBuilding": "Building…",
+  "@calibrationGuideBuilding": {
+    "description": "Status pill: the Guide Camera's dark library or bad-pixel map is being built, before the rig reports frames"
+  },
+  "calibrationGuideBuildProgress": "Building · {done} of {total}",
+  "@calibrationGuideBuildProgress": {
+    "description": "Status pill: the Guide Camera's dark library or bad-pixel map build, frames taken of planned",
+    "placeholders": {
+      "done": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
+  "calibrationGuideBuildFailed": "{what} wasn't built",
+  "@calibrationGuideBuildFailed": {
+    "description": "Error pill: a Guide Camera build failed on the rig; the guider's reason follows. {what} is the Dark library or the Bad-pixel map",
+    "placeholders": {
+      "what": {"type": "String", "example": "Dark library"}
+    }
+  },
+  "calibrationGuideBuilt": "{what} built",
+  "@calibrationGuideBuilt": {
+    "description": "Result pill: a Guide Camera build finished on the rig",
+    "placeholders": {
+      "what": {"type": "String", "example": "Dark library"}
+    }
   }
 }

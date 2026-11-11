@@ -21,6 +21,8 @@ import '../../state/imaging/live_view_state.dart';
 import '../../state/imaging/main_camera_state.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/simple_messages_state.dart';
+import '../../state/guider/guider_build_activity_state.dart';
+import 'simple_calibration.dart' show simpleCalibrationProgress;
 import '../../state/simple_preflight_state.dart'
     show SimpleModeScreen, SimplePreflightStep, SimplePreflightStepLabel, simplePreflightProvider, simpleShowingProvider;
 import '../../models/sequence/sequence_summary.dart';
@@ -1532,6 +1534,15 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final offsets = ref.watch(
       filterOffsetCalibrationProvider.select((o) => o.calibration),
     );
+    // #1757 — the calibration run Simple Mode started, else a Guide Camera
+    // build (its frames, once the rig reports them).
+    final calibrating = simpleCalibrationProgress(ref);
+    final builds = ref.watch(guiderBuildActivityProvider);
+    final building = [
+      for (final a in CalibrationArtifact.values)
+        if (builds[a] case final b? when b.phase == CalibrationBuildPhase.building)
+          (a, b),
+    ].firstOrNull;
     // One pill per thing happening, stacked in this order (user, 2026-11-04:
     // a frame hid the guider). Each says it once when it changes, not each
     // second of a countdown, a calibration step or an RMS update.
@@ -1818,6 +1829,34 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
       // on the left that fades, posted by the shell (user, 2026-11-04).
       // The offset calibration's autofocus runs are its own: one pill, the
       // filter and which run of how many (#1675).
+      if (calibrating != null)
+        _PillData(
+          SimpleStatusOrigin.calibration,
+          l10n.shellModeCalibration,
+          l10n.calibrationPillProgress(calibrating.done, calibrating.total),
+          AraColors.accentConnected,
+          working: true,
+          spoken: l10n.shellModeCalibration,
+          footProgress: calibrating.total > 0
+              ? (calibrating.done / calibrating.total).clamp(0.0, 1.0)
+              : null,
+        )
+      else if (building case (final artifact, final b)?)
+        _PillData(
+          SimpleStatusOrigin.calibration,
+          artifact == CalibrationArtifact.darkLibrary
+              ? l10n.calibrationGuideDarks
+              : l10n.calibrationGuideDefect,
+          switch ((b.exposureIndex, b.exposureCount, b.frame, b.frameCount)) {
+            (final ei?, final ec?, final f?, final fc?) when ec > 0 && fc > 0 =>
+              l10n.calibrationGuideBuildProgress((ei - 1) * fc + f, ec * fc),
+            _ => l10n.calibrationGuideBuilding,
+          },
+          AraColors.accentConnected,
+          working: true,
+          spoken: l10n.calibrationGuideBuilding,
+          footProgress: b.fraction,
+        ),
       if (offsets != null && offsets.isRunning)
         _PillData(
           SimpleStatusOrigin.focus,

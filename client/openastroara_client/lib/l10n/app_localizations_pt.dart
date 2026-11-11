@@ -4558,6 +4558,29 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get calibrationLightPrompt =>
       'Put the screen or light box over the scope, then press Resume to take the flats.';
+
+  @override
+  String calibrationPillProgress(int done, int total) {
+    return '$done of $total';
+  }
+
+  @override
+  String get calibrationGuideBuilding => 'Building…';
+
+  @override
+  String calibrationGuideBuildProgress(int done, int total) {
+    return 'Building · $done of $total';
+  }
+
+  @override
+  String calibrationGuideBuildFailed(String what) {
+    return '$what wasn\'t built';
+  }
+
+  @override
+  String calibrationGuideBuilt(String what) {
+    return '$what built';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -9141,4 +9164,27 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get calibrationLightPrompt =>
       'Coloque a tela ou caixa de luz sobre o telescópio e toque em Retomar para fazer os flats.';
+
+  @override
+  String calibrationPillProgress(int done, int total) {
+    return '$done de $total';
+  }
+
+  @override
+  String get calibrationGuideBuilding => 'Montando…';
+
+  @override
+  String calibrationGuideBuildProgress(int done, int total) {
+    return 'Montando · $done de $total';
+  }
+
+  @override
+  String calibrationGuideBuildFailed(String what) {
+    return '$what: falha ao montar';
+  }
+
+  @override
+  String calibrationGuideBuilt(String what) {
+    return '$what: pronto';
+  }
 }

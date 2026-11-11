@@ -4558,4 +4558,27 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get calibrationLightPrompt =>
       'Put the screen or light box over the scope, then press Resume to take the flats.';
+
+  @override
+  String calibrationPillProgress(int done, int total) {
+    return '$done of $total';
+  }
+
+  @override
+  String get calibrationGuideBuilding => 'Building…';
+
+  @override
+  String calibrationGuideBuildProgress(int done, int total) {
+    return 'Building · $done of $total';
+  }
+
+  @override
+  String calibrationGuideBuildFailed(String what) {
+    return '$what wasn\'t built';
+  }
+
+  @override
+  String calibrationGuideBuilt(String what) {
+    return '$what built';
+  }
 }
