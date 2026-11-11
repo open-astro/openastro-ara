@@ -685,12 +685,45 @@ class SimplePointingNotifier extends Notifier<SimplePointing> {
     ) {
       if (busy) moved();
     });
+    // A check or centring that ends badly with no window open to show it says
+    // so in a message pill, as any failed routine does (DESIGN.md pill rule).
+    listenSelf((prev, next) {
+      if (_windows > 0 || prev == null || !prev.working) return;
+      final l10n = _l10n;
+      final title = prev.phase == SimplePointingPhase.centring
+          ? l10n.pointingCouldntCentre
+          : l10n.pointingCouldntSolve;
+      final messages = ref.read(simpleMessagesProvider.notifier);
+      if (next.phase == SimplePointingPhase.error) {
+        messages.show(
+          SimpleMessageKind.error,
+          title,
+          detail: next.error,
+          origin: SimpleStatusOrigin.mount,
+        );
+      } else if (next.phase == SimplePointingPhase.result &&
+          next.result?.success == false) {
+        // Amber: the rig works, the frame didn't solve.
+        messages.show(
+          SimpleMessageKind.refused,
+          title,
+          detail: next.result?.note,
+          origin: SimpleStatusOrigin.mount,
+        );
+      }
+    });
     return const SimplePointing();
   }
+
+  /// Mount windows open now: with none, a failure goes to a message pill.
+  int _windows = 0;
+
+  void opened() => _windows++;
 
   /// The Mount window closed: its answer goes with it (a check or centring
   /// under way carries on, and its pill with it).
   void closed() {
+    if (_windows > 0) _windows--;
     if (ref.mounted && !state.working) state = const SimplePointing();
   }
 
@@ -997,9 +1030,10 @@ class SimpleMountPointingResult extends ConsumerWidget {
       if (p.phase == SimplePointingPhase.result && p.result != null)
         ..._answer(context, ref, l10n, p),
     ];
-    // Announced as it changes, as the pills are.
+    // Announced as it changes, as the pills are; not the progress words, which
+    // the status pill already announces.
     return Semantics(
-      liveRegion: true,
+      liveRegion: !p.working,
       container: true,
       child: Column(
         key: const Key('simple-mount-pointing'),

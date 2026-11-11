@@ -798,7 +798,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
   @override
   void initState() {
     super.initState();
-    _pointing = ref.read(simplePointingProvider.notifier);
+    _pointing = ref.read(simplePointingProvider.notifier)..opened();
   }
 
   @override

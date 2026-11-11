@@ -813,6 +813,38 @@ void main() {
       expect(find.descendant(of: pill, matching: find.textContaining('Taking a frame and solving')), findsNothing);
     });
 
+    testWidgets('a Check that fails after the window closed says so in a message pill', (tester) async {
+      final (c, _, solver, _) = await _pump(tester, _wire());
+      solver.error = const PlateSolveException('No star database is installed for ASTAP.', statusCode: 422);
+      solver.hold = Completer<void>();
+      await tester.tap(find.byKey(const Key('simple-mount-check')));
+      await tester.pump();
+      await tester.pumpWidget(UncontrolledProviderScope(container: c, child: const SizedBox()));
+      await tester.pump();
+      solver.hold!.complete();
+      await tester.pump();
+      await tester.pump();
+      final pill = c.read(simpleMessagesProvider).single;
+      expect(pill.kind, SimpleMessageKind.error);
+      expect(pill.detail, 'No star database is installed for ASTAP.');
+      await tester.pump(const Duration(seconds: 25));
+    });
+
+    testWidgets('the progress words are not a live region while the pill says them', (tester) async {
+      final (_, _, solver, _) = await _pump(tester, _wire());
+      solver.answer = const VerifyPositionResult(success: false, exposureSeconds: 2);
+      solver.hold = Completer<void>();
+      await tester.tap(find.byKey(const Key('simple-mount-check')));
+      await tester.pump();
+      final live = find.ancestor(
+        of: find.text('Taking a frame and solving…'),
+        matching: find.byWidgetPredicate((w) => w is Semantics && (w.properties.liveRegion ?? false)),
+      );
+      expect(live, findsNothing);
+      solver.hold!.complete();
+      await tester.pump();
+    });
+
     testWidgets('a failed solve says so with the note', (tester) async {
       final (_, _, solver, _) = await _pump(tester, _wire());
       solver.answer = const VerifyPositionResult(success: false, exposureSeconds: 2, note: 'Too few stars.');
