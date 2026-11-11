@@ -4508,7 +4508,7 @@ Server reads this at session start and behaves accordingly.
 
 ## 36. Sky imagery + Data Manager (WILMA)
 
-> **Historical (Aladin era), except where marked live.** The live sky atlas is the embedded **Stellarium Web Engine** (`client/openastroara_client/lib/widgets/sky_atlas/stellarium_view.dart`; `client/openastroara_client/lib/screens/tabs/planning_tab.dart`) with the catalogs bundled in `assets/stellarium` and `assets/catalogs`. Aladin Lite and the Data Manager that fed it (survey picker, 21 HiPS downloads, "no sky imagery" banner) were removed with the planetarium pivot (#611); the sections below are kept as the record of that design and must not steer new work. Still live: §36.7 Tonight's Sky (list and recentre), §36.8 universal search, §36.11 licensing. Aladin mentions inside historical sections are left as written (#1550).
+> **Historical (Aladin era), except where marked live.** The live sky atlas is the embedded **Stellarium Web Engine** (`client/openastroara_client/lib/widgets/sky_atlas/stellarium_view.dart`; `client/openastroara_client/lib/screens/tabs/planning_tab.dart`) with the catalogs bundled in `assets/stellarium` and `assets/catalogs`. Aladin Lite and the imagery side of the Data Manager (survey picker, 21 HiPS downloads, "no sky imagery" banner) were removed with the planetarium pivot (#611); the sections below are kept as the record of that design and must not steer new work. The Data Manager itself stays, in Settings > System > Sky data and the wizard, for catalog and ASTAP database packages. Still live: §36.4.5 download mechanics, §36.7 Tonight's Sky (list and recentre; its "full design" list is historical), §36.8 universal search, §36.10 and §36.12 only for the solver-database recommendation (§36.10 shipped; status in §18.I Plate solving), §36.11 licensing, §36.14 the `planning.*` search keys. Aladin mentions inside historical sections are left as written (#1550).
 
 WILMA owns the sky atlas (per §2 responsibility split). ARA ships a **slim ~50 MB installer** and uses an in-app **Data Manager** for everything else, modeled on SkySafari's catalog-download pattern. The full feature surface ships in the initial release — Tonight's Sky planetarium, all 21 surveys, full DE440 ephemerides, comet motion trails, star-catalog supplements — but as opt-in downloads rather than bundled assets. Users complete the mandatory wizard (§37) on first run; the wizard suggests downloads keyed to the user's focal length before any imaging begins. Aladin Lite is the differentiator vs NINA — by giving users the full atlas with on-demand depth, ARA delivers a sky-data experience NINA cannot match.
 
@@ -4700,7 +4700,7 @@ toggle). Tonight's Sky is the planetarium mode.
 > + comet catalogs, the time slider — remain a **deferred peak-over-night
 > refinement** (needs the §36.2.4 Full DE440 ephemeris + the overlay JS bridge).
 
-**Tonight's Sky implementation (full design, overlays deferred):**
+**Tonight's Sky implementation (historical Aladin-era design, overlays deferred; the live atlas is the Stellarium Web Engine):**
 - Aladin Lite driven by WILMA — view centered programmatically on current zenith RA/Dec, stereographic projection
 - WILMA computes (Dart, using inherited Astrometry library):
   - Current zenith RA/Dec from profile lat/long + UTC
@@ -4720,7 +4720,7 @@ toggle). Tonight's Sky is the planetarium mode.
 
 Search bar at the top of the Planning tab (Explore mode):
 
-- **Online** (WILMA has internet): query Aladin's Simbad integration. Type "wolf" → resolves to Wolf 359, Wolf-Rayet stars, candidate matches. Type "M31" / "NGC 6188" / "Andromeda Galaxy" / coordinates → resolves.
+- **Online** (WILMA has internet): the daemon resolves the name through `GET /api/v1/targets/resolve` (bundled index, then cache, then Simbad). Type "wolf" → resolves to Wolf 359, Wolf-Rayet stars, candidate matches. Type "M31" / "NGC 6188" / "Andromeda Galaxy" / coordinates → resolves.
 - **Offline**: fall back to bundled name resolver index (HYG common names + NGC/IC/M/HD/HIP/Tycho-2 designations + Bayer/Flamsteed + bundled comets). ~5-10 MB index, ~50-100k entries.
 - **Coordinate parsing**: accept RA/Dec strings in multiple formats (HH:MM:SS / decimal degrees / mixed).
 - **Comets**: searchable by designation (`C/2023 A3`) or common name (`Tsuchinshan-ATLAS`).
@@ -4788,7 +4788,7 @@ Flutter's desktop WebView story on Linux is patchy across packages (`webview_flu
 ### 36.11 Sky atlas license requirements (live)
 
 - The Stellarium Web Engine is **AGPL v3** and is bundled with the client (WASM + JS with small ARA patches, `client/openastroara_client/assets/stellarium/`); the client itself is AGPL-3.0-or-later, so the licenses are compatible. The server stays MPL 2.0.
-- AGPL §13: the complete corresponding source for the patched build is published at `open-astro/stellarium-web-engine` (tag `ara-v1`); `assets/stellarium/README.md` carries the disclosure and provenance. Keep that offer and the `NOTICE.md` credit.
+- AGPL §13: the complete corresponding source for the patched build is published at `open-astro/stellarium-web-engine` (tag `ara-v2`); `assets/stellarium/README.md` carries the disclosure and provenance. Keep that offer and the `NOTICE.md` credit.
 - Historical: the Aladin Lite v3 (GPL v3) attribution rule (logo and link bottom-right, credit in `NOTICE.md`) ended when Aladin Lite was removed; `NOTICE.md` records the removal. The optional DSS2 layer is credited in `NOTICE.md` ("Digitized Sky Survey (DSS2), STScI/AURA, via CDS hips2fits").
 
 ### 36.12 Wizard integration
@@ -4927,7 +4927,7 @@ Server enumerates Alpaca devices, groups by type. User assigns each device-type 
 - Focal length (mm) — required
 - Aperture (mm) — required
 - Focal ratio — auto-computed but editable
-- ~~Aladin survey recommendation~~ (historical: removed with the Data Manager, §36 banner; the wizard recommends no survey download)
+- ~~Aladin survey recommendation~~ (historical: removed with Aladin Lite, §36 banner; the wizard recommends no survey download)
 
 **Screen 5 — Camera**
 
@@ -10797,7 +10797,7 @@ All searchable from the §61 omnibar.
 ### 64.17 Future expansion paths
 
 - **Live stacking integration (§55 commitment)** — Live View becomes the realtime preview surface for the future live-stacking pipeline. User taps "Stack" instead of (or in addition to) Live View; same loop, but each frame is registered + integrated into a running stack; preview shows the integrated result, not the latest frame.
-- **Mobile full control** — if demand emerges, promote mobile companion from read-only to full Live View control.
+- **Mobile full control** — if demand emerges, ~~promote mobile companion from read-only to full Live View control~~ (superseded by §41 and #1772: phones run Simple Mode).
 - **Multi-frame averaging for display** — server-side running average of last N frames for noise-reduced preview (display-only, doesn't change Save Current behavior). Trades latency for visible SNR.
 - **Bahtinov mask focus indicator** — automatic detection of Bahtinov mask diffraction pattern with a numeric "focus quality" score on each live frame. Power-user feature; small audience but high value for that audience.
 
@@ -10928,7 +10928,7 @@ DELETE /api/v1/frames/{id}/preview/variants    → flush all alt-stretch variant
 
 ### 65.8 Mobile companion behavior (§41)
 
-§41 (Companion Mode) keeps the sequence editor and templates off phones; the earlier view-only cap on equipment control no longer holds, since a phone runs Simple Mode's Preflight, Autopilot and device windows. Stretching is a **viewing** capability (the underlying FITS is unchanged), so mobile gets the full stretch palette + manual sliders via the same `?stretch=` API. Mobile UX uses tap-to-cycle through the preset stretches and a bottom-sheet panel for manual sliders.
+§41 (Companion Mode) keeps the sequence editor and templates off phones; the earlier view-only cap on equipment control no longer holds, since a phone runs Simple Mode's Preflight, Autopilot and device windows. Stretching is a **viewing** capability (the underlying FITS is unchanged), so mobile gets the full stretch palette + manual sliders via the same `?stretch=` API. Mobile UX uses tap-to-cycle through the preset stretches and manual sliders that open inline in the Simple Mode panel (no popup, §41.3).
 
 ### 65.9 Frame viewer UI integration (§40.5)
 

@@ -339,12 +339,12 @@ The shell (reference: PR #1474, merged 2026-11-02) follows NINA's arrangement:
 - **Centre:** the active tab.
 - **Bottom status bar (40 px):** the connection indicator, then Emergency Stop, the backup-stream pulse, and the launchers right-anchored.
 
-Below 600 px of window width (a phone in portrait) the same shell folds:
+Below 600 px of window width (a narrowed desktop window; phones get Simple Mode, not this shell) the same shell folds:
 - the tabs move to a bottom navigation bar, under the status bar;
 - the device buttons stand in a column down the left edge;
 - the top bar shrinks to 48 px and keeps search, Night mode and the gear.
 
-Wherever the eleven named device buttons don't fit (shortest side under 600 px, an iPad in portrait, a narrowed window) they show icons only, with the name as a tooltip, so none is pushed off screen. Safe-area margins (notch, status bar, home indicator) take the Panel Grey of the bars instead of black.
+Wherever the eleven named device buttons don't fit (an iPad in portrait, a narrowed window) they show icons only, with the name as a tooltip, so none is pushed off screen. Safe-area margins (notch, status bar, home indicator) take the Panel Grey of the bars instead of black.
 
 Spacing uses one scale: 4 / 8 / 12 / 16 / 24 px.
 
