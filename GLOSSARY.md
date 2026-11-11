@@ -30,6 +30,14 @@ _Avoid_: guider camera, guiding camera
 The guiding program that reads the Guide Camera and corrects the mount: PHD2 or openastro-guider, reached through the daemon. The device chip, the status pill ("Guider · Calibrating") and the guider window name the program. Simple Mode's **Guider** mode holds its settings (exposure, gain, dither) and starts and stops it, so it carries the same name (2026-11-06).
 _Avoid_: guide (for the program), guider camera
 
+**Calibration frames**:
+The frames that are not lights: flats (an evenly lit field through each filter), darks (the shutter closed, at a light's exposure, gain and temperature) and bias (the shortest exposure). Simple Mode's **Calibration** mode shoots the ones the latest plan's lights lack; Preview's snapshots don't count as lights.
+_Avoid_: calibration (alone, for the frames: it also names the Guider's mount calibration), cal frames
+
+**Frame type**:
+What a Plan row shoots: Light or Flat. Darks and bias are never Plan rows, because they don't depend on the filter; they reach the Queue only as its one Calibration block.
+_Avoid_: image type (the FITS `IMAGETYP` keyword, which the frame type sets)
+
 **Polar Align Routine**:
 The steps that measure the polar alignment error while the person turns the mount's bolts.
 _Avoid_: Polar Align session, Polar Align run
