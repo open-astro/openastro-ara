@@ -13,14 +13,9 @@
 #endregion "copyright"
 
 using Moq;
-using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
 
