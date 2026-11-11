@@ -58,6 +58,8 @@ namespace OpenAstroAra.Test {
             public string[] Names = ["L", "R", "G", "B"];
             public Dictionary<int, Queue<int?>> Script = new();
             public int? BlockOnSlot;
+            public int? BlockChangeToSlot;
+            public readonly TaskCompletionSource ChangeBlocked = new(TaskCreationOptions.RunContinuationsAsynchronously);
             public int CurrentSlot = 3;
             public int FocuserPosition = 5000;
             public bool Manual;
@@ -94,7 +96,14 @@ namespace OpenAstroAra.Test {
                     new FilterWheelDto("fw", "Wheel", EquipmentConnectionState.Connected, new FilterWheelStateDto("idle", CurrentSlot), slots, Manual));
                 var wheelMediator = new Mock<IFilterWheelMediator>();
                 wheelMediator.Setup(w => w.ChangeFilter(It.IsAny<FilterInfo>(), It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()))
-                    .ReturnsAsync((FilterInfo f, IProgress<ApplicationStatus>? _, CancellationToken _) => { CurrentSlot = f.Position; return f; });
+                    .Returns(async (FilterInfo f, IProgress<ApplicationStatus>? _, CancellationToken ct) => {
+                        if (BlockChangeToSlot == f.Position) {
+                            ChangeBlocked.TrySetResult();
+                            await Task.Delay(Timeout.Infinite, ct);
+                        }
+                        CurrentSlot = f.Position;
+                        return f;
+                    });
                 var focuser = new Mock<IFocuserService>();
                 focuser.Setup(f => f.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(() =>
                     new FocuserDto("foc", "Focuser", EquipmentConnectionState.Connected,
@@ -412,6 +421,33 @@ namespace OpenAstroAra.Test {
 
             Assert.That(result.GetProperty("reference_position").GetInt32(), Is.EqualTo(reference));
             Assert.That(result.GetProperty("filters").EnumerateArray().Select(f => f.GetProperty("position").GetInt32()), Is.EqualTo(measured));
+        }
+
+        [Test]
+        public async Task Bahtinov_and_guide_camera_focus_are_refused_between_the_calibrations_autofocus_runs() {
+            await using var rig = new Rig { BlockChangeToSlot = 1 };
+            rig.Seed([1000, 1000], [1040]);
+            await rig.StartAsync();
+            using var started = await rig.CalibrateAsync(0, 1);
+            await rig.ChangeBlocked.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.That(rig.Tracker.IsRunning, Is.False, "in the gap: no autofocus is running");
+
+            var bahtinov = new Mock<IBahtinovFocusService>(MockBehavior.Strict);
+            var guideFocus = new Mock<IGuideFocusService>(MockBehavior.Strict);
+            var refusals = new[] {
+                await BahtinovFocusEndpoints.StartAsync(new BahtinovFocusStartRequestDto(), bahtinov.Object, rig.Service, CancellationToken.None),
+                await EquipmentEndpoints.StartGuideFocusAsync(new GuideFocusStartRequestDto(), guideFocus.Object, rig.Service, CancellationToken.None),
+            };
+
+            foreach (var refusal in refusals) {
+                var problem = refusal as ProblemHttpResult;
+                Assert.That(problem?.StatusCode, Is.EqualTo(StatusCodes.Status409Conflict));
+                Assert.That(problem!.ProblemDetails.Title, Is.EqualTo("offset_calibration_refused"));
+            }
+            bahtinov.VerifyNoOtherCalls();
+            guideFocus.VerifyNoOtherCalls();
+            Assert.That(await rig.PostAsync("cancel"), Is.EqualTo(204));
+            await rig.WaitForEndAsync();
         }
 
         [Test]

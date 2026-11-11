@@ -42,19 +42,28 @@ public static class BahtinovFocusEndpoints {
                 detail: $"The Bahtinov focus readout is running. Finish it and remove the mask before {before}.",
                 statusCode: StatusCodes.Status409Conflict)
             : null;
+    /// <summary>The body of <c>POST /bahtinov-focus/start</c>.</summary>
+    internal static async System.Threading.Tasks.Task<IResult> StartAsync(BahtinovFocusStartRequestDto request, IBahtinovFocusService svc,
+            FilterOffsetCalibrationService? offsets, CancellationToken ct) {
+        // #1675 — one focus routine at a time.
+        if (EquipmentEndpoints.OffsetCalibrationConflict(offsets, "starting the Bahtinov readout") is { } calibrating) {
+            return calibrating;
+        }
+        try {
+            await svc.StartAsync(request, ct);
+            return Results.Accepted();
+        } catch (System.ArgumentException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        } catch (System.InvalidOperationException ex) when (ex is not System.ObjectDisposedException) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
+    }
+
     public static IEndpointRouteBuilder MapBahtinovFocusEndpoints(this IEndpointRouteBuilder app) {
         var bahtinov = app.MapGroup("/api/v1/bahtinov-focus").WithTags("Bahtinov focus");
 
-        bahtinov.MapPost("/start", async ([FromBody] BahtinovFocusStartRequestDto request, IBahtinovFocusService svc, CancellationToken ct) => {
-            try {
-                await svc.StartAsync(request, ct);
-                return Results.Accepted();
-            } catch (System.ArgumentException ex) {
-                return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
-            } catch (System.InvalidOperationException ex) when (ex is not System.ObjectDisposedException) {
-                return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
-            }
-        })
+        bahtinov.MapPost("/start", ([FromBody] BahtinovFocusStartRequestDto request, IBahtinovFocusService svc, FilterOffsetCalibrationService offsets, CancellationToken ct) =>
+            StartAsync(request, svc, offsets, ct))
             .Accepts<BahtinovFocusStartRequestDto>("application/json")
             .Produces(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status400BadRequest)

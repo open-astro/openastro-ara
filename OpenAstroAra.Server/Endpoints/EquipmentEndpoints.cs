@@ -543,19 +543,8 @@ public static partial class EquipmentEndpoints {
         // Guide-camera focus loop (Setup → Smart Focus): frames borrowed through the guider, measured here.
         // start: 202; 400 bad exposure/binning; 409 not connected / guiding / polar aligning / already running.
         // stop: 204 once the in-flight frame has drained. status + the latest rendered frame (204 until one).
-        guider.MapPost("/focus/start", async ([FromBody] GuideFocusStartRequestDto request, IGuideFocusService focus, CancellationToken ct) => {
-            try {
-                await focus.StartAsync(request, ct);
-                return Results.Accepted();
-            } catch (System.ArgumentException ex) {
-                return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
-            } catch (System.InvalidOperationException ex) when (ex is not System.ObjectDisposedException) {
-                return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
-            } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
-                // The daemon refused the lease (it is guiding/calibrating, or its camera is not connected).
-                return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
-            }
-        })
+        guider.MapPost("/focus/start", ([FromBody] GuideFocusStartRequestDto request, IGuideFocusService focus, FilterOffsetCalibrationService offsets, CancellationToken ct) =>
+            StartGuideFocusAsync(request, focus, offsets, ct))
             .Produces(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status409Conflict)
@@ -825,6 +814,35 @@ public static partial class EquipmentEndpoints {
 
     internal const string OffsetCalibrationRefusedTitle = "offset_calibration_refused";
 
+    /// <summary>#1675 — the other focus routines' refusal while an offset calibration runs, including between its
+    /// autofocus runs (it moves the wheel and focuser there). Null when none runs. <paramref name="before"/>
+    /// finishes "Stop it before …".</summary>
+    internal static IResult? OffsetCalibrationConflict(FilterOffsetCalibrationService? offsets, string before) =>
+        offsets is { IsRunning: true }
+            ? Results.Problem(title: OffsetCalibrationRefusedTitle,
+                detail: $"A focus offset calibration is running. Stop it before {before}.",
+                statusCode: StatusCodes.Status409Conflict)
+            : null;
+
+    /// <summary>The body of <c>POST /equipment/guider/focus/start</c>.</summary>
+    internal static async Task<IResult> StartGuideFocusAsync(GuideFocusStartRequestDto request, IGuideFocusService focus,
+            FilterOffsetCalibrationService? offsets, CancellationToken ct) {
+        if (OffsetCalibrationConflict(offsets, "focusing the guide camera") is { } calibrating) {
+            return calibrating;
+        }
+        try {
+            await focus.StartAsync(request, ct);
+            return Results.Accepted();
+        } catch (System.ArgumentException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
+        } catch (System.InvalidOperationException ex) when (ex is not System.ObjectDisposedException) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
+            // The daemon refused the lease (it is guiding/calibrating, or its camera is not connected).
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
+    }
+
     /// <summary>#1675 — the focus offset calibration routes under <c>/equipment/filterwheel</c>.</summary>
     internal static void MapOffsetCalibration(IEndpointRouteBuilder filterwheel) {
         // 202 + the batch job; 400 for a slot the wheel does not have; 409 with the reason when a
@@ -881,11 +899,9 @@ public static partial class EquipmentEndpoints {
             AutofocusRunTracker tracker,
             IBahtinovFocusService bahtinov,
             FilterOffsetCalibrationService? offsets = null) {
-        // #1675 — one focus routine at a time: the calibration moves the wheel and focuser between its runs.
-        if (offsets is { IsRunning: true }) {
-            return Results.Problem(title: OffsetCalibrationRefusedTitle,
-                detail: "A focus offset calibration is running. Stop it before running autofocus.",
-                statusCode: StatusCodes.Status409Conflict);
+        // #1675 — one focus routine at a time.
+        if (OffsetCalibrationConflict(offsets, "running autofocus") is { } calibrating) {
+            return calibrating;
         }
         // #1299 — the Bahtinov readout has the camera, and the mask is probably still on: a sweep through
         // it would fit diffraction spikes. The user finishes (and takes the mask off) first.
