@@ -477,6 +477,75 @@ void main() {
       }
     });
   }
+
+  // #1647: Sky Map's caption takes two lines on its 60 x 56 rail button; in
+  // pt-BR neither it nor the Stats label is cut.
+  for (final scale in const [1.0, 1.3]) {
+    testWidgets(
+      'pt-BR: Mapa do céu shows in full on two lines at ${scale}x text; Números is not cut',
+      skip: !hasFonts,
+      (tester) async {
+        tester.view.physicalSize = const Size(1024, 768);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        final c = ProviderContainer(
+          overrides: [
+            simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
+            selectedTabIndexProvider.overrideWith(_StartOnLive.new),
+            discoveredServersProvider.overrideWith(
+              (ref) => const Stream<AraServer>.empty(),
+            ),
+          ],
+        );
+        addTearDown(c.dispose);
+        await c.read(simpleModeProvider.future);
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: c,
+            child: MaterialApp(
+              locale: const Locale('pt', 'BR'),
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
+              theme: ThemeData(fontFamily: 'Roboto'),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(scale)),
+                child: child!,
+              ),
+              home: const SimpleShell(planetarium: SizedBox()),
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(tester.takeException(), isNull, reason: 'no overflow');
+        for (final (key, label) in [
+          ('simple-sky', 'Mapa do céu'),
+          ('simple-stats', 'Números'),
+        ]) {
+          final text = find.descendant(
+            of: find.byKey(Key(key)),
+            matching: find.text(label),
+          );
+          expect(text, findsOneWidget);
+          final p = tester.renderObject<RenderParagraph>(text);
+          expect(p.didExceedMaxLines, isFalse, reason: '$label cut');
+        }
+        if (scale == 1.0) {
+          expect(
+            tester.getSize(
+              find
+                  .descendant(
+                    of: find.byKey(const Key('simple-sky')),
+                    matching: find.byType(SizedBox),
+                  )
+                  .first,
+            ),
+            const Size(60, 56),
+          );
+        }
+      },
+    );
+  }
 }
 
 class _SkippedRun extends SequenceRunStateNotifier {

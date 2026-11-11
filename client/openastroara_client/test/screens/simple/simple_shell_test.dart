@@ -1,4 +1,3 @@
-import 'dart:io' show File, Platform;
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
@@ -1495,60 +1494,6 @@ void main() {
         );
       },
     );
-
-    for (final scale in [1.0, 1.3]) {
-      // The test font draws square glyphs, far wider than a real face: fit is measured with the SDK's Roboto.
-      final fonts =
-          '${Platform.environment['FLUTTER_ROOT']}/bin/cache/artifacts/material_fonts';
-      testWidgets(
-        'pt-BR: Mapa do céu shows in full on two lines at ${scale}x text; Números is not cut',
-        skip: !File('$fonts/Roboto-Regular.ttf').existsSync(),
-        (tester) async {
-          final roboto = FontLoader('Roboto');
-          for (final f in ['Roboto-Regular.ttf', 'Roboto-Medium.ttf']) {
-            roboto.addFont(
-              Future.value(
-                ByteData.view(File('$fonts/$f').readAsBytesSync().buffer),
-              ),
-            );
-          }
-          await roboto.load();
-          tester.platformDispatcher.textScaleFactorTestValue = scale;
-          addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-          await _pump(
-            tester,
-            const Size(1024, 768),
-            locale: const Locale('pt', 'BR'),
-          );
-          expect(tester.takeException(), isNull, reason: 'no overflow');
-          for (final (key, label) in [
-            ('simple-sky', 'Mapa do céu'),
-            ('simple-stats', 'Números'),
-          ]) {
-            final text = find.descendant(
-              of: find.byKey(Key(key)),
-              matching: find.text(label),
-            );
-            expect(text, findsOneWidget);
-            final p = tester.renderObject<RenderParagraph>(text);
-            expect(p.didExceedMaxLines, isFalse, reason: '$label cut');
-          }
-          if (scale == 1.0) {
-            expect(
-              tester.getSize(
-                find
-                    .descendant(
-                      of: find.byKey(const Key('simple-sky')),
-                      matching: find.byType(SizedBox),
-                    )
-                    .first,
-              ),
-              const Size(60, 56),
-            );
-          }
-        },
-      );
-    }
 
     testWidgets(
       'picking M42 shows its Art and credit with Image this; a second pick swaps the Art',
