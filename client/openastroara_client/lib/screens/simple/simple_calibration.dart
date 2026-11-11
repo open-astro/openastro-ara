@@ -736,7 +736,12 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
       ),
     };
     // Picked: Plan's solid blue with white words.
-    Widget chip(Key key, String label, bool on, ValueChanged<bool> onSelected) =>
+    Widget chip(
+      Key key,
+      String label,
+      bool on,
+      ValueChanged<bool> onSelected,
+    ) =>
         FilterChip(
           key: key,
           label: Text(
@@ -830,7 +835,9 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
                   _secs(s),
                   picked.contains(s),
                   (on) => setState(
-                    () => _picked = on ? {...picked, s} : ({...picked}..remove(s)),
+                    () => _picked = on
+                        ? {...picked, s}
+                        : ({...picked}..remove(s)),
                   ),
                 ),
               // Bias is shot again on request, even with some on file.

@@ -1031,7 +1031,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       }),
     );
     final sheet = screen.overlay(screenHost);
-        final runActive =
+    final runActive =
         sheet != null &&
         ref.watch(
           sequenceRunStateProvider.select(
