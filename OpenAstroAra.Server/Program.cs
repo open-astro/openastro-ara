@@ -729,7 +729,8 @@ public partial class Program {
         // §55.1 multi-device WILMA settings sync — opaque UI-preferences blob under {profileDir}/client-settings.json.
         // profileDir-scoped, so registered here alongside the other profile-dir-backed services.
         builder.Services.AddSingleton<IClientSettingsService>(sp =>
-            new ClientSettingsService(profileDir, sp.GetRequiredService<ILogger<ClientSettingsService>>()));
+            new ClientSettingsService(profileDir, sp.GetRequiredService<ILogger<ClientSettingsService>>(),
+                sp.GetService<IWsBroadcaster>()));
 
         // §52.1 — remembers the last device connected per type, one file per profile
         // (#1710, {profileDir}/profiles/{id}.equipment.json), so EquipmentAutoConnectService can

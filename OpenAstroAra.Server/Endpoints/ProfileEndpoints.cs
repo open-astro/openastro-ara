@@ -15,10 +15,14 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using OpenAstroAra.Profile;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
+using System;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenAstroAra.Server.Endpoints;
 
@@ -35,8 +39,45 @@ namespace OpenAstroAra.Server.Endpoints;
 /// already holds the full state client-side.
 /// </summary>
 public static class ProfileEndpoints {
+    /// <summary>Runs the write, then publishes <c>profile.updated</c> with the section name (the first path segment
+    /// under <c>/api/v1/profile/</c>) when it was a 2xx write. Reads, rejected writes (4xx) and thrown errors publish
+    /// nothing. A failed publish never fails the write.</summary>
+    internal static async ValueTask<object?> PublishUpdatedAfterWrite(
+        HttpContext http, Func<ValueTask<object?>> next, IWsBroadcaster? ws) {
+        var result = await next();
+        var method = http.Request.Method;
+        if (ws is null || HttpMethods.IsGet(method) || HttpMethods.IsHead(method) || HttpMethods.IsOptions(method)) {
+            return result;
+        }
+        var status = (result as IStatusCodeHttpResult)?.StatusCode ?? StatusCodes.Status200OK;
+        if (status < 200 || status >= 300) {
+            return result;
+        }
+        const string prefix = "/api/v1/profile/";
+        var path = http.Request.Path.Value ?? string.Empty;
+        if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) {
+            return result;
+        }
+        var section = path[prefix.Length..].Split('/')[0];
+        try {
+            using var doc = System.Text.Json.JsonDocument.Parse(
+                new System.Text.Json.Nodes.JsonObject { ["section"] = section }.ToJsonString());
+            await ws.PublishAsync(Contracts.WsEvents.WsEventCatalog.ProfileUpdated, doc.RootElement.Clone(),
+                CancellationToken.None);
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            // Best-effort: the profile write already landed; a dead broadcaster must not turn it into a 500.
+        }
+        return result;
+    }
+
     public static IEndpointRouteBuilder MapProfileEndpoints(this IEndpointRouteBuilder app) {
         var profile = app.MapGroup("/api/v1/profile").WithTags("Profile");
+
+        // #1644 — every successful section write tells the other devices (profile.updated { section }).
+        profile.AddEndpointFilter(async (ctx, next) => {
+            var ws = ctx.HttpContext.RequestServices.GetService<IWsBroadcaster>();
+            return await PublishUpdatedAfterWrite(ctx.HttpContext, () => next(ctx), ws);
+        });
 
         profile.MapGet("/imaging-defaults", (IProfileStore store) =>
                 Results.Ok(store.GetImagingDefaults()))

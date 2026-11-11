@@ -263,6 +263,11 @@ public static class WsEventCatalog {
     // position in the event stream.
     public const string DiagnosticsSnapshot = "diagnostics.snapshot";
 
+    // #1644 — multi-device preference sync. profile.updated { section } after a successful profile-section
+    // write; client_settings.updated { keys, updated_utc } after a client-settings replace or merge.
+    public const string ProfileUpdated = "profile.updated";
+    public const string ClientSettingsUpdated = "client_settings.updated";
+
     // Phase 9 — server lifecycle + notifications + storage
     public const string ServerPendingRestart = "server.pending_restart";
     public const string ServerRestartImminent = "server.restart_imminent";
@@ -348,6 +353,7 @@ public static class WsEventCatalog {
 
         BackupStreamFrameAvailable, BackupStreamFrameClaimed, BackupStreamBackpressure,
 
+        ProfileUpdated, ClientSettingsUpdated,
         DiagnosticsHealthChanged, DiagnosticsIssueDetected,
         DiagnosticsAutoActionTaken, DiagnosticsAutoActionSkipped, DiagnosticsCleared,
 

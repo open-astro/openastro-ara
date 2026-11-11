@@ -1280,6 +1280,19 @@ is connected, straight from its GuideStep events):
       lower bound. A dropped measurement re-publishes the previous result, or
       { status: "idle" }. The same object is runtime.pa_residual on
       GET /equipment/guider.
+  profile.updated { section }
+      #1644 — after any successful write under /api/v1/profile/<section>
+      (a PUT, or the first-flip re-arm POST); section is the first path
+      segment ("site", "optics", "filter-wheel", "safety", ...). A rejected
+      write (4xx/5xx) publishes nothing. Another device refetches that
+      section; the one that wrote may ignore it.
+  client_settings.updated { keys, updated_utc }
+      #1644 — after a successful PUT or PATCH /api/v1/client-settings; keys
+      are the top-level keys the write carried (PATCH: the patch's keys,
+      removed ones included; PUT: the keys of the stored object) and
+      updated_utc is the new stamp, equal to the updated_utc in the write's
+      own response so the writer can tell its own event from another
+      device's. A rejected write publishes nothing.
 ```
 
 ## 2026-10-19 — polar-align `binning` 0 = auto (#1133)
@@ -1456,3 +1469,13 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Reasoning:** the Guider erases its calibration before it calibrates, so a failed run left none. An unattended plan should not end the night for that.
 
 **Spec ref:** `GuiderService.RecalibrateAndGuide`, `GuiderService.StartGuidingCalibratedTonight`, `MeridianFlipExecutor.MeridianFlip`, `FocuserService.HaltAsync`
+
+## 2026-11-11 — Preference sync through the rig: `PATCH /client-settings`, `profile.updated`, `client_settings.updated` (#1644)
+
+**Endpoint(s) or area:** `PATCH /api/v1/client-settings`; WebSocket `profile.updated`, `client_settings.updated`.
+
+**Decision:** the existing `ClientSettingsDto` resource gains a top-level-key merge on the same path, as `PATCH` with the same `{ "settings": { ... } }` body as the `PUT`. Only the given top-level keys change (the value is replaced whole, not deep-merged); a key whose value is JSON `null` is removed; every other key is left alone. It takes the same write gate as the `PUT`, applies the object-only check (400) and the 256 KiB cap (400) to the merged result, writes with the same temp-file rename, and answers 200 with the stored object and its new `updated_utc`. The `PUT` is unchanged. The two WebSocket events are documented in the WebSocket section above; neither carries the preference values, only what changed. `profile.updated` is published by an endpoint filter on the whole `/api/v1/profile` group, so a section added later is covered without extra code; daemon-internal profile writes (calibration stamps, the connect-time identity record) are not client edits and publish nothing.
+
+**Reasoning:** two devices saving different keys at the same moment must both land, which a read-modify-replace on the client cannot guarantee. The merge runs inside the daemon's write gate. The `updated_utc` in the event lets the device that wrote skip the refetch of its own save. An older daemon answers 404/405 to the `PATCH` and sends neither event; the client then keeps its preferences local.
+
+**Spec ref:** `Services/ClientSettingsService.MergeAsync`, `Endpoints/ClientSettingsEndpoints.cs`, `Endpoints/ProfileEndpoints.PublishUpdatedAfterWrite`, `Contracts/WsEvents/WsEventCatalog.cs`
