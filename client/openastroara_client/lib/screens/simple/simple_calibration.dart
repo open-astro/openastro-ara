@@ -56,7 +56,7 @@ class SimpleNightCalibration extends ConsumerWidget {
     if (session == null) return const SizedBox.shrink();
     final calibration = ref.read(simpleCalibrationProvider.notifier);
     final run = ref.watch(simpleCalibrationProvider);
-    final info = ref.watch(sequenceRunStateProvider).value;
+    final info = ref.watch(simpleCalibrationRunStateProvider).value;
     final ours = run != null && info?.sequenceId == run.sequenceId;
     final need = calibrationNeed(session);
 
@@ -168,7 +168,7 @@ CalibrationSession? simpleLatestCalibrationSession(WidgetRef ref) =>
 /// planned.
 ({int done, int total})? simpleCalibrationProgress(WidgetRef ref) {
   final run = ref.watch(simpleCalibrationProvider);
-  final info = ref.watch(sequenceRunStateProvider).value;
+  final info = ref.watch(simpleCalibrationRunStateProvider).value;
   if (run == null ||
       info?.sequenceId != run.sequenceId ||
       !(info?.state?.isActive ?? false)) {

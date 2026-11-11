@@ -145,7 +145,17 @@ class _Seq implements SequenceClient {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+/// The rig's run states: the Plan's selected sequence, and the calibration
+/// run's own poll (it is never the selected one).
 class _Run extends SequenceRunStateNotifier {
+  final calibration = _CalRun();
+  @override
+  Future<SequenceRunStateInfo?> build() async => null;
+  void set(SequenceRunStateInfo s) =>
+      s.sequenceId == 'cal-run' ? calibration.set(s) : state = AsyncData(s);
+}
+
+class _CalRun extends SimpleCalibrationRunStateNotifier {
   @override
   Future<SequenceRunStateInfo?> build() async => null;
   void set(SequenceRunStateInfo s) => state = AsyncData(s);
@@ -257,6 +267,7 @@ Future<(ProviderContainer, _Calibration, _Seq, _Run)> _pump(
     calibrationApiProvider.overrideWithValue(cal),
     sequenceApiProvider.overrideWithValue(seq),
     sequenceRunStateProvider.overrideWith(() => run),
+    simpleCalibrationRunStateProvider.overrideWith(() => run.calibration),
     flatPanelProvider.overrideWith(() => _Panel(panel, cover: cover)),
     cameraStatusProvider.overrideWith(() => _Camera(camera)),
     if (plan != null) simpleRunProvider.overrideWith(() => _Plan(plan)),
@@ -276,6 +287,7 @@ Future<(ProviderContainer, _Calibration, _Seq, _Run)> _pump(
   ));
   // Keeps the autoDispose providers the row reads alive between pumps.
   c.listen(flatPanelProvider, (_, _) {});
+  c.listen(sequenceRunStateProvider, (_, _) {});
   await tester.pumpAndSettle();
   return (c, cal, seq, run);
 }

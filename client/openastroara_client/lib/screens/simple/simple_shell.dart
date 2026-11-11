@@ -40,6 +40,7 @@ import '../../state/imaging/live_view_state.dart';
 import '../../state/night_mode_state.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../state/sequencer/sequence_list_state.dart';
+import '../../state/simple_calibration_state.dart' show simpleCalibrationRunStateProvider;
 import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/settings/cooling_fan_state.dart';
 import '../../state/settings/settings_nav.dart';
@@ -367,11 +368,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     _watchDeviceFailures();
     // #1563 — a run that isn't the Plan's (calibration frames) waiting for the
     // person; a frame late, as a pill changes a provider.
-    ref.listenManual(sequenceRunStateProvider, (_, next) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _syncAwaitingPill(next.value);
-      });
-    }, fireImmediately: true);
+    void syncAwaiting() => WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _syncAwaitingPill();
+    });
+    ref.listenManual(sequenceRunStateProvider, (_, _) => syncAwaiting(),
+        fireImmediately: true);
+    // The calibration run is never the selected sequence: its own poll.
+    ref.listenManual(simpleCalibrationRunStateProvider, (_, _) => syncAwaiting());
     // #1756 — a Guider start that failed after calibration began: the pill a quick failure shows.
     ref.listenManual(guideStartLateFailureProvider, (_, failed) {
       if (failed != null && mounted) {
@@ -387,7 +390,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// A run other than the Plan's paused for the person (put the lens cap on):
   /// its words in a pill with Resume, since the shutter resumes only the
   /// Plan's run. The pill goes when the run moves on.
-  void _syncAwaitingPill(SequenceRunStateInfo? info) {
+  void _syncAwaitingPill() {
+    bool waiting(SequenceRunStateInfo? i) =>
+        i?.state == SequenceRunState.pausedAwaitingUser &&
+        i?.sequenceId != ref.read(simpleRunProvider).sequenceId;
+    final calibration = ref.read(simpleCalibrationRunStateProvider).value;
+    final selected = ref.read(sequenceRunStateProvider).value;
+    final info = waiting(calibration) ? calibration : selected;
     final text =
         info != null &&
             info.state == SequenceRunState.pausedAwaitingUser &&

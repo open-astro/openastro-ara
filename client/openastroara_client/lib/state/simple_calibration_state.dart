@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../l10n/l10n.dart';
 import '../models/calibration/calibration_models.dart';
 import '../models/sequence/imaging_run_body.dart';
+import '../models/sequence/sequence_summary.dart';
 import '../models/sequence/nina_dom.dart' show childrenOf, withChildren;
 import '../util/friendly_error.dart';
 import 'app_locale_state.dart';
@@ -364,6 +367,40 @@ final simpleLibraryNeedProvider = Provider.autoDispose<LibraryNeed?>((ref) {
         : null,
   );
 });
+
+/// The calibration run's state, read from the rig every 2 s until it ends.
+/// The run state provider follows the Plan's selected sequence, so it never
+/// sees this run: the lens-cap pause, progress and Stop read it here
+/// (rig 2026-11-12: Build picked started runs no screen showed).
+final simpleCalibrationRunStateProvider =
+    AsyncNotifierProvider<
+      SimpleCalibrationRunStateNotifier,
+      SequenceRunStateInfo?
+    >(SimpleCalibrationRunStateNotifier.new);
+
+class SimpleCalibrationRunStateNotifier
+    extends AsyncNotifier<SequenceRunStateInfo?> {
+  Timer? _poll;
+
+  @override
+  Future<SequenceRunStateInfo?> build() async {
+    ref.onDispose(() => _poll?.cancel());
+    final run = ref.watch(simpleCalibrationProvider);
+    final api = ref.watch(sequenceApiProvider);
+    if (run == null || api == null) return null;
+    _poll = Timer.periodic(const Duration(seconds: 2), (_) async {
+      try {
+        final next = await api.getRunState(run.sequenceId);
+        if (!ref.mounted) return;
+        state = AsyncData(next);
+        if (!(next?.state?.isActive ?? false)) _poll?.cancel();
+      } catch (_) {
+        // A missed read is retried on the next tick.
+      }
+    });
+    return api.getRunState(run.sequenceId);
+  }
+}
 
 final simpleCalibrationProvider =
     NotifierProvider<SimpleCalibrationNotifier, SimpleCalibrationRun?>(

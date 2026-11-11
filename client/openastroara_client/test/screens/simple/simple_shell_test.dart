@@ -835,6 +835,20 @@ class _Calibrating extends SimpleCalibrationNotifier {
   SimpleCalibrationRun? build() => (sequenceId: 'cal-run', total: 205);
 }
 
+class _CalibrationWaiting extends SimpleCalibrationRunStateNotifier {
+  @override
+  Future<SequenceRunStateInfo?> build() async => const SequenceRunStateInfo(
+      sequenceId: 'lib-run',
+      state: SequenceRunState.pausedAwaitingUser,
+      currentInstructionDescription: 'Put the lens cap on the scope, then press Resume to take the darks.');
+}
+
+class _CalibrationRunning extends SimpleCalibrationRunStateNotifier {
+  @override
+  Future<SequenceRunStateInfo?> build() async =>
+      const SequenceRunStateInfo(sequenceId: 'cal-run', state: SequenceRunState.running, framesCaptured: 46);
+}
+
 /// The Guide Camera builds, as the rig's events fold them.
 class _Builds extends GuiderBuildActivityNotifier {
   @override
@@ -944,6 +958,23 @@ Future<bool> _tabToLabel(WidgetTester tester, String label, {int max = 60}) asyn
 }
 
 void main() {
+  testWidgets('the calibration run is never the selected sequence: its own poll brings the lens-cap pill (rig 2026-11-12)', (tester) async {
+    final seq = _ResumeSeq();
+    final c = await _pump(tester, const Size(1024, 768), plan: _queuedM31,
+        runState: const SequenceRunStateInfo(sequenceId: 'seq-1', state: SequenceRunState.completed),
+        gear: [
+          simpleCalibrationRunStateProvider.overrideWith(_CalibrationWaiting.new),
+          sequenceApiProvider.overrideWithValue(seq),
+        ]);
+    await tester.pump();
+    await tester.pump();
+    final asked = c.read(simpleMessagesProvider).firstWhere((m) => m.kind == SimpleMessageKind.question);
+    expect(asked.title, 'Put the lens cap on the scope, then press Resume to take the darks.');
+    asked.actions.single.onPressed();
+    await tester.pump();
+    expect(seq.calls, ['resume lib-run recenter=false']);
+  });
+
   testWidgets("a calibration run waiting for the lens cap asks in a pill with Resume; the Plan's own pause does not (#1563)", (tester) async {
     const lensCap = SequenceRunStateInfo(
         sequenceId: 'cal-run',
@@ -6269,9 +6300,11 @@ void main() {
   });
 
   testWidgets('the calibration run has a status pill with its frames (#1757)', (tester) async {
-    await _pump(tester, const Size(1024, 768),
-        runState: const SequenceRunStateInfo(sequenceId: 'cal-run', state: SequenceRunState.running, framesCaptured: 46),
-        gear: [simpleCalibrationProvider.overrideWith(_Calibrating.new)]);
+    await _pump(tester, const Size(1024, 768), gear: [
+      simpleCalibrationProvider.overrideWith(_Calibrating.new),
+      // The calibration run's own poll: it is never the selected sequence.
+      simpleCalibrationRunStateProvider.overrideWith(_CalibrationRunning.new),
+    ]);
     await tester.pump();
     final words = tester
         .widgetList<RichText>(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText)))
