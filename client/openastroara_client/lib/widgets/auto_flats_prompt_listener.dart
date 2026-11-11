@@ -38,8 +38,9 @@ class _AutoFlatsPromptListenerState
   @override
   Widget build(BuildContext context) {
     final simple =
-        (ref.watch(simpleModeProvider).value ?? false) &&
-        (ref.watch(simpleModeFeatureProvider).value ?? false);
+        ref.watch(companionModeProvider) ||
+        ((ref.watch(simpleModeProvider).value ?? false) &&
+            (ref.watch(simpleModeFeatureProvider).value ?? false));
     ref.listen(wsEventsProvider, (previous, next) {
       final event = next.asData?.value;
       if (event == null || event.type != 'sequence.auto_flats_prompt') return;

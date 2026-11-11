@@ -25,6 +25,7 @@ import 'panels/imaging_plate_solve_panel.dart';
 import 'panels/camera_electronics_panel.dart';
 import 'panels/filter_set_panel.dart';
 import 'panels/about_panel.dart';
+import '../../state/simple_mode_state.dart';
 import 'panels/experimental_panel.dart';
 import 'panels/optics_panel.dart';
 import 'panels/profile_active_panel.dart';
@@ -51,6 +52,9 @@ class SettingsShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final selectedId = ref.watch(selectedSettingsPanelProvider);
     final selectedInfo = findPanelInfo(selectedId);
+    // Companion Mode: the Experimental toggle is not reachable.
+    final companion = ref.watch(companionModeProvider);
+    final hidden = companion && selectedId == 'app.experimental';
 
     return Row(
       children: [
@@ -63,6 +67,7 @@ class SettingsShell extends ConsumerWidget {
             ),
             child: _SettingsTree(
               selectedId: selectedId,
+              companion: companion,
               onSelect: ref
                   .read(selectedSettingsPanelProvider.notifier)
                   .select,
@@ -72,8 +77,8 @@ class SettingsShell extends ConsumerWidget {
         Expanded(
           child: Column(
             children: [
-              _PanelHeader(info: selectedInfo),
-              Expanded(child: _PanelBody(panelId: selectedId)),
+              _PanelHeader(info: hidden ? findPanelInfo('app.changelog') : selectedInfo),
+              Expanded(child: _PanelBody(panelId: hidden ? 'app.changelog' : selectedId)),
             ],
           ),
         ),
@@ -85,8 +90,13 @@ class SettingsShell extends ConsumerWidget {
 class _SettingsTree extends StatelessWidget {
   final String selectedId;
   final ValueChanged<String> onSelect;
+  final bool companion;
 
-  const _SettingsTree({required this.selectedId, required this.onSelect});
+  const _SettingsTree({
+    required this.selectedId,
+    required this.onSelect,
+    required this.companion,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -105,6 +115,7 @@ class _SettingsTree extends StatelessWidget {
             ),
           ),
           for (final panel in group.panels)
+            if (!(companion && panel.id == 'app.experimental'))
             _PanelRow(
               panel: panel,
               selected: panel.id == selectedId,

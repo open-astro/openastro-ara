@@ -49,8 +49,9 @@ extension SimpleModeScreenLabels on SimpleModeScreen {
 /// Simple Mode is showing: the feature AND the mode, read from the two sources
 /// (a derived Provider with no reader is not recomputed).
 bool _simpleModeActive(Ref ref) =>
-    (ref.read(simpleModeFeatureProvider).value ?? false) &&
-    (ref.read(simpleModeProvider).value ?? false);
+    ref.read(companionModeProvider) ||
+    ((ref.read(simpleModeFeatureProvider).value ?? false) &&
+        (ref.read(simpleModeProvider).value ?? false));
 
 /// What Simple Mode shows. Two writers: the person's pick, and Preflight's
 /// steps. [SimpleModeScreen.preflight] is only ever picked: it starts

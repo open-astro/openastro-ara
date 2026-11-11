@@ -110,6 +110,7 @@ import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
+import 'package:openastroara/state/settings/settings_search.dart' show buildSearchIndex;
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/theme/ara_metrics.dart' show AraBlur, AraSpace;
 import 'package:openastroara/widgets/imaging/frame_viewer.dart' show FrameViewer;
@@ -143,6 +144,16 @@ class _MemPrefs extends SimpleModePrefsService {
   Future<bool> load() async => value;
   @override
   Future<void> save(bool enabled) async => value = enabled;
+}
+
+/// Both prefs off; records every save.
+class _SavingPrefs extends SimpleModePrefsService {
+  _SavingPrefs(this.saved);
+  final List<bool> saved;
+  @override
+  Future<bool> load() async => false;
+  @override
+  Future<void> save(bool enabled) async => saved.add(enabled);
 }
 
 /// Simple Mode is entered from the full UI's Live tab (the switch button
@@ -181,12 +192,12 @@ final _someSteps = [
 
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
-    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases, Locale? locale}) async {
+    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases, Locale? locale, SimpleModePrefsService? modePrefs}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final container = ProviderContainer(overrides: [
-    simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
+    simpleModePrefsProvider.overrideWithValue(modePrefs ?? _MemPrefs()),
     if (feature) simpleModeFeaturePrefsProvider.overrideWithValue(_MemPrefs()),
     if (pier) simplePermanentPierPrefsProvider.overrideWithValue(_MemPrefs()..value = false),
     if (linkUp) serverLinkUpProvider.overrideWithValue(true),
@@ -2600,6 +2611,74 @@ void main() {
     await tester.tap(button);
     await tester.pump();
     expect(c.read(simpleModeProvider).value, isFalse);
+  });
+
+  group('Companion Mode (phone): no way into the full UI', () {
+    final phone = <Override>[
+      companionPlatformProvider.overrideWithValue(TargetPlatform.iOS),
+      companionShortestSideProvider.overrideWithValue(390),
+    ];
+
+    testWidgets('390x844 with both prefs off: the Simple shell, no Full UI, no Experimental, nothing saved', (tester) async {
+      final saved = <bool>[];
+      final prefs = _SavingPrefs(saved);
+      final c = await _pump(tester, const Size(390, 844),
+          feature: true, modePrefs: prefs, gear: phone);
+      await c.read(simpleModeFeatureProvider.notifier).set(false);
+      await tester.pump();
+      expect(c.read(simpleModeProvider).value, isFalse);
+      expect(c.read(simpleModeActiveProvider), isTrue);
+      expect(find.byType(SimpleShell), findsOneWidget);
+      expect(find.byKey(const Key('simple-full-ui-button')), findsNothing);
+      expect(find.byTooltip('Full UI'), findsNothing);
+      // A jump to another full-UI tab stays here and writes nothing.
+      c.read(selectedTabIndexProvider.notifier).select(kPlanningTabIndex);
+      await tester.pump();
+      expect(find.byType(SimpleShell), findsOneWidget);
+      // Settings: the System group has no Experimental row.
+      c.read(selectedSettingsPanelProvider.notifier).select('app.experimental');
+      tester.view.physicalSize = const Size(1280, 2400);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(home: Scaffold(body: SettingsShell())),
+      ));
+      await tester.pump();
+      expect(find.text('Experimental'), findsNothing);
+      expect(find.text('About'), findsWidgets);
+      expect(
+        buildSearchIndex(companion: c.read(companionModeProvider)).any((e) => e.panelId == 'app.experimental'),
+        isFalse,
+      );
+      expect(saved, isEmpty, reason: 'the mode pref is never written');
+    });
+
+    testWidgets('a tablet-size screen (768 px) keeps today: Full UI button leaves for the full UI', (tester) async {
+      final c = await _pump(tester, const Size(1024, 768), gear: [
+        companionPlatformProvider.overrideWithValue(TargetPlatform.iOS),
+        companionShortestSideProvider.overrideWithValue(768),
+      ]);
+      expect(c.read(companionModeProvider), isFalse);
+      await tester.tap(find.byKey(const Key('simple-full-ui-button')));
+      await tester.pump();
+      expect(c.read(simpleModeProvider).value, isFalse);
+    });
+
+    testWidgets('a desktop keeps today: the Experimental row shows in Settings', (tester) async {
+      final c = await _pump(tester, const Size(1280, 800), gear: [
+        companionPlatformProvider.overrideWithValue(TargetPlatform.macOS),
+        companionShortestSideProvider.overrideWithValue(390),
+      ]);
+      expect(c.read(companionModeProvider), isFalse);
+      expect(find.byKey(const Key('simple-full-ui-button')), findsOneWidget);
+      tester.view.physicalSize = const Size(1280, 2400);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(home: Scaffold(body: SettingsShell())),
+      ));
+      await tester.pump();
+      expect(find.text('Experimental'), findsWidgets);
+      expect(buildSearchIndex().any((e) => e.panelId == 'app.experimental'), isTrue);
+    });
   });
 
   group('the OpenAstro Ara sheet: Change and licenses', () {

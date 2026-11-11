@@ -785,6 +785,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     if (!discarded && _askDiscard(() => _leaveForFullUi(discarded: true))) {
       return;
     }
+    if (ref.read(companionModeProvider)) return;
     ref.read(simpleModeProvider.notifier).set(false);
   }
 
@@ -885,6 +886,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         }
         return;
       }
+      // Companion Mode has no full UI to leave for: stay here.
+      if (ref.read(companionModeProvider)) return;
       ref.read(simpleModeProvider.notifier).set(false);
     });
     // Fetched once per rig, so the Ara sheet has its versions on its first frame.
@@ -1906,16 +1909,17 @@ class _StatusStrip extends ConsumerWidget {
                 : context.l10n.shellNightMode,
             onPressed: () => ref.read(nightModeProvider.notifier).set(!night),
           ),
-          IconButton(
-            key: const Key('simple-full-ui-button'),
-            icon: const Icon(
-              Icons.fit_screen,
-              size: 22,
-              color: AraColors.accentInfo,
+          if (!ref.watch(companionModeProvider))
+            IconButton(
+              key: const Key('simple-full-ui-button'),
+              icon: const Icon(
+                Icons.fit_screen,
+                size: 22,
+                color: AraColors.accentInfo,
+              ),
+              tooltip: context.l10n.shellFullUi,
+              onPressed: onFullUi,
             ),
-            tooltip: context.l10n.shellFullUi,
-            onPressed: onFullUi,
-          ),
           IconButton(
             icon: const Icon(Icons.settings_outlined, size: 22),
             tooltip: context.l10n.shellSettings,

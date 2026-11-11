@@ -35,6 +35,10 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Added (Companion Mode)
+
+- On a phone (iOS or Android, shortest side under 600 px) the app opens in Simple Mode whatever the saved choice, and there is no way into the full UI: no Full UI button, no Experimental toggle in Settings or search, and no jump to a full-UI tab. Tablets and desktops are unchanged (#1774).
+
 ### Added (mount by hand)
 
 - Simple Mode's Mount window has a direction pad: eight directions around a center Stop, with Slow, Medium and Fast speeds taken from the mount's own rates. Hold a direction to move and let go to stop. The arrow keys drive it, and Escape stops. The pad is off, saying why, while the mount is parked, the plan is imaging, polar alignment runs or the Guider guides (#1649).

@@ -451,6 +451,7 @@ List<SettingsSearchEntry> targetEntries(Iterable<(String id, String name, String
 List<SettingsSearchEntry> buildSearchIndex({
   Iterable<String> templateNames = const [],
   Iterable<(String id, String name, String type)> targets = const [],
+  bool companion = false,
 }) {
   final entries = <SettingsSearchEntry>[];
   // 0. §61.10 — tab navigation ("go to run", "planning", …) + actions.
@@ -463,6 +464,8 @@ List<SettingsSearchEntry> buildSearchIndex({
   // 1. Index panels.
   for (final group in settingsTree) {
     for (final panel in group.panels) {
+      // Companion Mode has no Experimental toggle to find.
+      if (companion && panel.id == 'app.experimental') continue;
       entries.add(SettingsSearchEntry(
         panelId: panel.id,
         label: panel.label,

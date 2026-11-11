@@ -1,3 +1,7 @@
+import 'dart:ui' show PlatformDispatcher;
+
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/simple_mode_prefs_service.dart';
@@ -61,12 +65,38 @@ final simpleModeFeatureProvider =
       SimpleModeFeatureController.new,
     );
 
-/// Whether the Simple Mode shell shows: the feature is on AND the client
-/// chose Simple Mode.
+/// The platform Companion Mode reads; overridden in tests.
+final companionPlatformProvider = Provider<TargetPlatform>(
+  (ref) => defaultTargetPlatform,
+);
+
+/// The view's shortest side in logical px; overridden in tests.
+// shortcut: read once at start, not reactive; a phone does not resize, and
+// the shortest side survives rotation. Make it reactive for split-screen.
+final companionShortestSideProvider = Provider<double>((ref) {
+  final view = PlatformDispatcher.instance.views.firstOrNull;
+  if (view == null) return double.infinity;
+  final logical = view.physicalSize / view.devicePixelRatio;
+  return logical.shortestSide;
+});
+
+/// Companion Mode: a phone (iOS or Android, shortest side under 600 logical
+/// px). Simple Mode is forced on and every way into the full UI is gone. It
+/// reads no preference and writes none.
+final companionModeProvider = Provider<bool>((ref) {
+  final platform = ref.watch(companionPlatformProvider);
+  final phone =
+      platform == TargetPlatform.iOS || platform == TargetPlatform.android;
+  return phone && ref.watch(companionShortestSideProvider) < 600;
+});
+
+/// Whether the Simple Mode shell shows: Companion Mode, or the feature is on
+/// AND the client chose Simple Mode.
 final simpleModeActiveProvider = Provider<bool>(
   (ref) =>
-      (ref.watch(simpleModeFeatureProvider).value ?? false) &&
-      (ref.watch(simpleModeProvider).value ?? false),
+      ref.watch(companionModeProvider) ||
+      ((ref.watch(simpleModeFeatureProvider).value ?? false) &&
+          (ref.watch(simpleModeProvider).value ?? false)),
 );
 
 /// The prefs file backing [simplePermanentPierProvider]; overridden in tests.
