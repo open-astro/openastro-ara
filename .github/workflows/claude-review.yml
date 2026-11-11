@@ -168,7 +168,7 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       - id: agent
-        uses: anthropics/claude-code-action@4845bacbb38b3c4b15d948f035349786f678e068  # v1.0.267
+        uses: anthropics/claude-code-action@61a9c274fa7110a66dfafc1bbbced03833eb25fe  # v1.0.269
         with:
           # Subscription (Pro/Max) auth. Generate locally with `claude setup-token`
           # and store as an org or repo secret named CLAUDE_CODE_OAUTH_TOKEN.
@@ -481,7 +481,7 @@ jobs:
             echo "ADR_SCOPE_EOF"
           } >> "${GITHUB_OUTPUT}"
 
-      - uses: anthropics/claude-code-action@4845bacbb38b3c4b15d948f035349786f678e068  # v1.0.267
+      - uses: anthropics/claude-code-action@61a9c274fa7110a66dfafc1bbbced03833eb25fe  # v1.0.269
         env:
           # allowed_non_write_users (below) auto-enables subprocess secret
           # scrubbing, which strips the GitHub token from the agent's
