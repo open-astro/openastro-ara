@@ -98,7 +98,7 @@ namespace OpenAstroAra.Test {
             Assert.That(caps.MoveAxisRatesDegPerSec, Is.EqualTo(RepublishedLegacyList), "the legacy list follows the re-published bands");
 
             // And the pad can now use a published rate on the secondary without a 409.
-            await svc.MoveAxisAsync(1, 0.5, CancellationToken.None);
+            await svc.MoveAxisAsync(1, 0.5, null, CancellationToken.None);
         }
     
     }

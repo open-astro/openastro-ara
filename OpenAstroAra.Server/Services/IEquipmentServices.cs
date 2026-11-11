@@ -107,8 +107,10 @@ public interface ITelescopeService {
     /// to completion regardless of <paramref name="ct"/> — a cancelled request must never leave the
     /// mount running. Implementations therefore treat the stop as unconditional (the request token
     /// is intentionally not honored); a future implementor wiring <paramref name="ct"/> into the
-    /// device call would break that safety invariant.</summary>
-    Task MoveAxisAsync(int axis, double rate, CancellationToken ct);
+    /// device call would break that safety invariant. #1649 — a non-zero rate with
+    /// <paramref name="leaseMs"/> (clamped to 250–5000) is stopped by the service itself when no
+    /// renewal arrives within the lease; null keeps the move running until a stop.</summary>
+    Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct);
     Task AbortSlewAsync(CancellationToken ct);
 
     /// <summary>#1246 — true once a refresh tick since the current connect read the runtime with

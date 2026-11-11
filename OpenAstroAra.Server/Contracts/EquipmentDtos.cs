@@ -300,8 +300,10 @@ public sealed record SlewRequestDto(
 public sealed record ParkRequestDto(string? Reason = null);
 
 // Manual axis move: Axis 0 = primary (RA/Az), 1 = secondary (Dec/Alt). Rate is deg/sec
-// (signed: positive/negative for the two directions); Rate 0 stops that axis.
-public sealed record MoveAxisRequestDto(int Axis, double Rate);
+// (signed: positive/negative for the two directions); Rate 0 stops that axis. #1649 — LeaseMs
+// (optional, clamped to 250–5000): the daemon stops the axis itself unless the move is renewed
+// within it; absent, the move runs until a stop (the Full UI pad).
+public sealed record MoveAxisRequestDto(int Axis, double Rate, int? LeaseMs = null);
 
 // Tracking control: start/stop sidereal tracking (the set-point rate is the
 // device's current TrackingRate; this only toggles Tracking on/off).

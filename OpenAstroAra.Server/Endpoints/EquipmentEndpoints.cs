@@ -1192,7 +1192,7 @@ public static partial class EquipmentEndpoints {
                 statusCode: StatusCodes.Status400BadRequest);
         }
         try {
-            await svc.MoveAxisAsync(request.Axis, request.Rate, ct).ConfigureAwait(false);
+            await svc.MoveAxisAsync(request.Axis, request.Rate, request.LeaseMs, ct).ConfigureAwait(false);
             return Results.Accepted();
         } catch (System.InvalidOperationException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);

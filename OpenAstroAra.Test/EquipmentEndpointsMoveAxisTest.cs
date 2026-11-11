@@ -42,7 +42,16 @@ namespace OpenAstroAra.Test {
             var svc = new Mock<ITelescopeService>();
             var result = await EquipmentEndpoints.MoveAxisAsync(new MoveAxisRequestDto(1, 1.5), svc.Object, CancellationToken.None);
             Assert.That(StatusOf(result), Is.EqualTo(StatusCodes.Status202Accepted));
-            svc.Verify(s => s.MoveAxisAsync(1, 1.5, It.IsAny<CancellationToken>()), Times.Once);
+            svc.Verify(s => s.MoveAxisAsync(1, 1.5, It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task A_lease_is_forwarded_and_its_absence_stays_null() {
+            var svc = new Mock<ITelescopeService>();
+            await EquipmentEndpoints.MoveAxisAsync(new MoveAxisRequestDto(0, 1.0, 1000), svc.Object, CancellationToken.None);
+            await EquipmentEndpoints.MoveAxisAsync(new MoveAxisRequestDto(0, 1.0), svc.Object, CancellationToken.None);
+            svc.Verify(s => s.MoveAxisAsync(0, 1.0, 1000, It.IsAny<CancellationToken>()), Times.Once);
+            svc.Verify(s => s.MoveAxisAsync(0, 1.0, null, It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Test]
@@ -51,13 +60,13 @@ namespace OpenAstroAra.Test {
             Assert.That(StatusOf(await EquipmentEndpoints.MoveAxisAsync(new MoveAxisRequestDto(2, 1), svc.Object, CancellationToken.None)), Is.EqualTo(StatusCodes.Status400BadRequest));
             Assert.That(StatusOf(await EquipmentEndpoints.MoveAxisAsync(new MoveAxisRequestDto(-1, 1), svc.Object, CancellationToken.None)), Is.EqualTo(StatusCodes.Status400BadRequest));
             Assert.That(StatusOf(await EquipmentEndpoints.MoveAxisAsync(new MoveAxisRequestDto(0, double.NaN), svc.Object, CancellationToken.None)), Is.EqualTo(StatusCodes.Status400BadRequest));
-            svc.Verify(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<CancellationToken>()), Times.Never);
+            svc.Verify(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Test]
         public async Task A_refused_nudge_maps_InvalidOperation_to_409() {
             var svc = new Mock<ITelescopeService>();
-            svc.Setup(s => s.MoveAxisAsync(0, 1.0, It.IsAny<CancellationToken>()))
+            svc.Setup(s => s.MoveAxisAsync(0, 1.0, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new InvalidOperationException("Mount reports no MoveAxis rate for this axis"));
             var result = await EquipmentEndpoints.MoveAxisAsync(new MoveAxisRequestDto(0, 1.0), svc.Object, CancellationToken.None);
             Assert.That(StatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
@@ -68,7 +77,7 @@ namespace OpenAstroAra.Test {
             // #1085 — the real service throw (not a stand-in), so the text the client's toast renders
             // is exactly what SnapMoveAxisRate wrote.
             var svc = new Mock<ITelescopeService>();
-            svc.Setup(s => s.MoveAxisAsync(0, 0.06, It.IsAny<CancellationToken>()))
+            svc.Setup(s => s.MoveAxisAsync(0, 0.06, It.IsAny<int?>(), It.IsAny<CancellationToken>()))
                 .Returns(() => throw Assert.Throws<InvalidOperationException>(() => TelescopeService.SnapMoveAxisRate(0.06, [(2.0, 6.0)]))!);
             var result = await EquipmentEndpoints.MoveAxisAsync(new MoveAxisRequestDto(0, 0.06), svc.Object, CancellationToken.None);
             Assert.That(StatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
