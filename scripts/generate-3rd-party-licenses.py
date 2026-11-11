@@ -207,8 +207,8 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright (c) 2022 Flutter 4 Fun",
     },
     "flutter_riverpod": {
-        # 3.4.3 verified 2026-09-19: LICENSE byte-identical to 3.4.2 (MIT, Remi Rousselet).
-        "version": "3.4.3",
+        # 3.5.0 verified 2026-11-11: LICENSE byte-identical to 3.4.3 (MIT, Remi Rousselet).
+        "version": "3.5.0",
         "license": "MIT",
         "copyright": "Copyright (c) 2020 Remi Rousselet",
     },
@@ -243,8 +243,8 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright 2013 The Flutter Authors",
     },
     "riverpod": {
-        # 3.4.3 verified 2026-09-19: LICENSE byte-identical to 3.4.2 (MIT, Remi Rousselet).
-        "version": "3.4.3",
+        # 3.5.0 verified 2026-11-11: LICENSE byte-identical to 3.4.3 (MIT, Remi Rousselet).
+        "version": "3.5.0",
         "license": "MIT",
         "copyright": "Copyright (c) 2020 Remi Rousselet",
     },
