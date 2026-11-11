@@ -335,6 +335,8 @@ public static partial class EquipmentEndpoints {
         telescope.MapPost("/tracking", async ([FromBody] TelescopeTrackingRequestDto request, ITelescopeService svc, CancellationToken ct) => {
             await svc.SetTrackingAsync(request.Enabled, ct); return Results.Accepted();
         });
+        telescope.MapPost("/trackingrate", async ([FromBody] TelescopeTrackingRateRequestDto request, ITelescopeService svc, CancellationToken ct) =>
+            await SetTrackingRateAsync(request, svc, ct));
 
         // ─── Focuser ───
         var focuser = equipment.MapGroup("/focuser");
@@ -1193,6 +1195,24 @@ public static partial class EquipmentEndpoints {
         }
         try {
             await svc.MoveAxisAsync(request.Axis, request.Rate, request.LeaseMs, ct).ConfigureAwait(false);
+            return Results.Accepted();
+        } catch (System.InvalidOperationException ex) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
+    }
+
+    // #1649 — the drive rate by its ASCOM name in any case (400 for anything else, before the driver);
+    // not connected, or a rate the mount doesn't list, is a 409 with the service's sentence.
+    public static async Task<IResult> SetTrackingRateAsync(TelescopeTrackingRateRequestDto request, ITelescopeService svc, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(svc);
+        if (!Enum.TryParse<ASCOM.Common.DeviceInterfaces.DriveRate>(request.Rate, ignoreCase: true, out var rate)
+                || !Enum.IsDefined(rate) || int.TryParse(request.Rate, out _)) {
+            return Results.Problem($"rate must be Sidereal, Lunar, Solar or King (got '{request.Rate}').",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+        try {
+            await svc.SetTrackingRateAsync(rate.ToString(), ct).ConfigureAwait(false);
             return Results.Accepted();
         } catch (System.InvalidOperationException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);

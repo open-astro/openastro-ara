@@ -286,7 +286,10 @@ public sealed record TelescopeStateDto(
     // §57.9 — the destination of the last equatorial slew/sync, read back from the mount's
     // own TargetRA/TargetDec bookkeeping (null when the mount can't report it or none set yet).
     double? TargetRightAscensionHours = null,
-    double? TargetDeclinationDegrees = null);
+    double? TargetDeclinationDegrees = null,
+    // #1649 — the mount's drive rate ("Sidereal" | "Lunar" | "Solar" | "King", ASCOM DriveRate
+    // names as in SupportedSiderealRates); null when the mount can't report it.
+    string? TrackingRate = null);
 
 /// <param name="Force">A slew while a sequence run is in progress stops guiding and pauses the run,
 /// so it is refused (409) unless the caller says it knows: the client asks, then repeats with
@@ -308,6 +311,10 @@ public sealed record MoveAxisRequestDto(int Axis, double Rate, int? LeaseMs = nu
 // Tracking control: start/stop sidereal tracking (the set-point rate is the
 // device's current TrackingRate; this only toggles Tracking on/off).
 public sealed record TelescopeTrackingRequestDto(bool Enabled);
+
+// #1649 — set the mount's drive rate, one of the capability's SupportedSiderealRates (any case).
+// Tracking on/off is unchanged.
+public sealed record TelescopeTrackingRateRequestDto(string Rate);
 
 // ─── Focuser (§10.6 row 3) ────────────────────────────────────────────────────
 

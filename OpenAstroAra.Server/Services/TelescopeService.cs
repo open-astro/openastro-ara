@@ -422,6 +422,23 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         RefreshCacheOnce();
     }
 
+    public async Task SetTrackingRateAsync(string rate, CancellationToken ct) {
+        var client = RequireConnectedClient();
+        if (!Enum.TryParse<DriveRate>(rate, ignoreCase: false, out var driveRate) || !Enum.IsDefined(driveRate)) {
+            throw new ArgumentException($"Unknown tracking rate '{rate}'.", nameof(rate));
+        }
+        IReadOnlyList<string>? offered;
+        lock (_gate) {
+            offered = _capabilities?.SupportedSiderealRates;
+        }
+        // An empty list means the mount didn't say; let the driver decide then.
+        if (offered is { Count: > 0 } && !offered.Contains(driveRate.ToString())) {
+            throw new InvalidOperationException($"This mount doesn't offer the {driveRate} tracking rate.");
+        }
+        await Task.Run(() => client.TrackingRate = driveRate, CancellationToken.None).ConfigureAwait(false);
+        RefreshCacheOnce();
+    }
+
     public async Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct) {
         // ct is intentionally NOT honored — see the ITelescopeService.MoveAxisAsync contract: a stop
         // must always run to completion even if the request token cancelled, or a dropped token could
@@ -1039,6 +1056,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         try { targetRa = c.TargetRightAscension; } catch (Exception) { targetRa = null; }
         double? targetDec;
         try { targetDec = c.TargetDeclination; } catch (Exception) { targetDec = null; }
+        // #1649 — the drive rate, best-effort like the targets (many mounts NotImplement it).
+        string? trackingRate;
+        try { trackingRate = c.TrackingRate.ToString(); } catch (Exception) { trackingRate = null; }
         var tracking = Read(() => c.Tracking, false);
         var parked = Read(() => c.AtPark, false);
         var atHome = Read(() => c.AtHome, false);
@@ -1048,7 +1068,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // the shared helper so the precedence (incl. the parked-over-slewing
         // contradiction guard) is unit-tested in one place.
         var state = ResolveRuntimeState(slewing, parked, tracking);
-        return new TelescopeStateDto(state, ra, dec, tracking, parked, atHome, targetRa, targetDec);
+        return new TelescopeStateDto(state, ra, dec, tracking, parked, atHome, targetRa, targetDec, trackingRate);
     }
 
     // #1229 — the mount's SideOfPier (ASCOM PointingState), per-field best-effort like ReadRuntime:
