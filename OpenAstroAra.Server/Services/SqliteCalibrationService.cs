@@ -174,22 +174,24 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         }
 
         // 1) Session headers from their LIGHT frames.
-        var headers = new Dictionary<string, (int Count, DateTimeOffset Start, DateTimeOffset End, string Target)>(StringComparer.Ordinal);
+        var headers = new Dictionary<string, (int Count, DateTimeOffset Start, DateTimeOffset End, string Target, bool Manual)>(StringComparer.Ordinal);
         await using (var cmd = conn.CreateCommand()) {
             cmd.CommandText = $"""
-                SELECT session_id, COUNT(*), MIN(captured_utc), MAX(captured_utc), MIN(target_name)
+                SELECT session_id, COUNT(*), MIN(captured_utc), MAX(captured_utc), MIN(target_name), {ManualCaptureColumn}
                 FROM frames
                 WHERE frame_type = 'light' AND session_id IN ({placeholders})
                 GROUP BY session_id;
                 """;
             BindIds(cmd);
+            cmd.Parameters.AddWithValue("$manual", CameraService.ManualCaptureTarget);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             while (await reader.ReadAsync(ct)) {
                 headers[reader.GetString(0)] = (
                     reader.GetInt32(1),
                     ParseUtc(reader.GetString(2)),
                     ParseUtc(reader.GetString(3)),
-                    await reader.IsDBNullAsync(4, ct) ? "(unknown)" : reader.GetString(4));
+                    await reader.IsDBNullAsync(4, ct) ? "(unknown)" : reader.GetString(4),
+                    reader.GetBoolean(5));
             }
         }
 
@@ -289,7 +291,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
                 MatchingDarksAvailable: !darksUncovered.Contains(sid),
                 ProfileId: profiles.GetValueOrDefault(sid),
                 CoolerSetpointC: setpoints.TryGetValue(sid, out var sp) ? sp : null,
-                MatchingBiasAvailable: !biasUncovered.Contains(sid)));
+                MatchingBiasAvailable: !biasUncovered.Contains(sid),
+                ManualCapture: h.Manual));
         }
         return items;
     }
@@ -522,23 +525,28 @@ public sealed class SqliteCalibrationService : ICalibrationService {
         return result;
     }
 
+    // Every light of the group is a Take One frame ($manual binds CameraService.ManualCaptureTarget).
+    private const string ManualCaptureColumn = "SUM(CASE WHEN target_name = $manual THEN 1 ELSE 0 END) = COUNT(*)";
+
     private static async Task<CalibrationSessionDto?> BuildSessionDtoAsync(SqliteConnection conn, Guid sessionId, CancellationToken ct) {
         var sid = sessionId.ToString();
 
         // Session header from its LIGHT frames. Null row (no lights) ⇒ not a calibration session.
         string targetName;
+        bool manualCapture;
         int lightCount;
         DateTimeOffset start, end;
         await using (var cmd = conn.CreateCommand()) {
             // MIN(target_name) picks the lexicographically-first target for a multi-target session (mosaic /
             // back-to-back nights). Acceptable for v0.0.1 — one representative name; a fuller multi-target
             // summary is a future refinement.
-            cmd.CommandText = """
-                SELECT COUNT(*), MIN(captured_utc), MAX(captured_utc), MIN(target_name)
+            cmd.CommandText = $"""
+                SELECT COUNT(*), MIN(captured_utc), MAX(captured_utc), MIN(target_name), {ManualCaptureColumn}
                 FROM frames
                 WHERE frame_type = 'light' AND session_id = $sid;
                 """;
             cmd.Parameters.AddWithValue("$sid", sid);
+            cmd.Parameters.AddWithValue("$manual", CameraService.ManualCaptureTarget);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             // COUNT(*) is never NULL (0 for an empty set), so the zero check is the real "no lights" guard.
             if (!await reader.ReadAsync(ct) || reader.GetInt32(0) == 0) {
@@ -548,6 +556,7 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             start = ParseUtc(reader.GetString(1));
             end = ParseUtc(reader.GetString(2));
             targetName = await reader.IsDBNullAsync(3, ct) ? "(unknown)" : reader.GetString(3);
+            manualCapture = reader.GetBoolean(4);
         }
 
         // Per-filter summary.
@@ -614,7 +623,8 @@ public sealed class SqliteCalibrationService : ICalibrationService {
             ProfileId: profileId,
             CoolerSetpointC: (await ModalCoolerSetpointsAsync(conn, "session_id = $sid",
                 cmd => cmd.Parameters.AddWithValue("$sid", sid), ct)).TryGetValue(sid, out var sp) ? sp : null,
-            MatchingBiasAvailable: biasAvailable);
+            MatchingBiasAvailable: biasAvailable,
+            ManualCapture: manualCapture);
     }
 
     // The session's (gain, offset, binning) combinations no bias frame covers yet. EXCEPT treats

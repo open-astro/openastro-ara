@@ -93,6 +93,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_session_is_marked_manual_capture_only_when_every_light_is_a_manual_capture() {
+            var run = Guid.Parse("33333333-3333-3333-3333-333333333342");
+            var mixed = Guid.Parse("33333333-3333-3333-3333-333333333343");
+            await InsertSessionAsync(run);
+            await InsertSessionAsync(mixed);
+            await InsertFrameAsync(Session, "light", "L", 5, 100, CameraService.ManualCaptureTarget);
+            await InsertFrameAsync(Session, "light", "L", 5, 100, CameraService.ManualCaptureTarget);
+            await InsertFrameAsync(run, "light", "Ha", 300, 100, "M42");
+            await InsertFrameAsync(mixed, "light", "L", 5, 100, CameraService.ManualCaptureTarget);
+            await InsertFrameAsync(mixed, "light", "Ha", 300, 100, "M42");
+
+            var listed = (await _svc.ListSessionsAsync(10, null, CancellationToken.None)).Items.ToDictionary(s => s.Id, s => s.ManualCapture);
+            Assert.That(listed[Session], Is.True, "only manual-capture lights");
+            Assert.That(listed[run], Is.False, "a run session");
+            Assert.That(listed[mixed], Is.False, "mixed");
+            Assert.That((await _svc.GetSessionAsync(Session, CancellationToken.None))!.ManualCapture, Is.True);
+            Assert.That((await _svc.GetSessionAsync(mixed, CancellationToken.None))!.ManualCapture, Is.False);
+        }
+
+        [Test]
         public async Task ListSessions_paginates_over_the_cursor() {
             var s2 = Guid.Parse("33333333-3333-3333-3333-333333333332");
             var s3 = Guid.Parse("33333333-3333-3333-3333-333333333333");

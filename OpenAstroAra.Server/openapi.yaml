@@ -8541,6 +8541,9 @@ components:
         matching_bias_available:
           type: boolean
           default: false
+        manual_capture:
+          type: boolean
+          default: false
     CalibrationStateDto:
       required:
         - dark_library

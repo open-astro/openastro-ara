@@ -38,6 +38,20 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-11 — Calibration sessions say which one holds Take One frames: `manual_capture`
+
+**Endpoint(s) or area:** `GET /api/v1/calibration/sessions` and `GET /api/v1/calibration/sessions/{id}` (`CalibrationSessionDto.manual_capture`).
+
+**Decision:** `manual_capture` is true when every light in the session has the target `Manual capture` (`CameraService.ManualCaptureTarget`), the shared session Preview's Take One files its frames into; false for a plan's session and for a session that mixes both. Nothing else changes: the session is still listed and calibrated like any other.
+
+**Reasoning:** the bucket was indistinguishable from a plan session, so a client could not label or set it apart. The flag is derived from the lights, the same rows the session header already reads, so no schema change is needed.
+
+**Spec ref:** `Services/SqliteCalibrationService.cs` (`ManualCaptureColumn`), `Services/CameraService.cs` (`ManualCaptureTarget`).
+
+**Related:** tests `SqliteCalibrationServiceTest.A_session_is_marked_manual_capture_only_when_every_light_is_a_manual_capture`.
+
+---
+
 ## 2026-11-11 — #1675 calibrate per-filter focus offsets: `/equipment/filterwheel/offsets/*`
 
 **Endpoint(s) or area:** new `POST /api/v1/equipment/filterwheel/offsets/calibrate`, `GET …/offsets/calibration`, `POST …/offsets/calibration/cancel`, `…/save`, `…/discard`; `POST /api/v1/equipment/focuser/autofocus`, `POST /api/v1/bahtinov-focus/start` and `POST /api/v1/equipment/guider/focus/start` gain a 409.

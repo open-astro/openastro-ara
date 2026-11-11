@@ -50,6 +50,9 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public sealed partial class CameraService : ICameraService, IRetainedDeviceSource, IDisposable {
 
+    /// <summary>The target a Take One (a frame outside any plan) is filed under, in the shared manual-capture session.</summary>
+    public const string ManualCaptureTarget = "Manual capture";
+
     // #1127 — the record the card names. The remembered-selection store and this can diverge
     // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
     public DiscoveredDeviceDto? RetainedDevice {
@@ -735,7 +738,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             // #1177 — the request's ImageType (validated at the entry point) picks the IMAGETYP, the
             // catalog frame type and, through the lower-cased kind, the shutter.
             var imageType = NormalizeManualImageType(request.ImageType);
-            _ = await CaptureCoreAsync(client, frameId, request, imageType, MapFrameType(imageType), "Manual capture", CancellationToken.None).ConfigureAwait(false);
+            _ = await CaptureCoreAsync(client, frameId, request, imageType, MapFrameType(imageType), ManualCaptureTarget, CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
             LogCaptureFailed(ex, frameId);
         } finally {
@@ -1554,7 +1557,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             var prefs = ReadHeaderPrefsBestEffort();
 
             fits.SetHeader("SWCREATE", FrameAlbumFields.AraSoftware, "capture software");
-            if (!string.IsNullOrWhiteSpace(targetName) && targetName != "Manual capture") {
+            if (!string.IsNullOrWhiteSpace(targetName) && targetName != ManualCaptureTarget) {
                 fits.SetHeader("OBJECT", targetName!, "target name");
             }
             // Where the mount was pointed: the solve hint (§18.I reads OBJCTRA/OBJCTDEC back), the
@@ -1857,7 +1860,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                 BinX: request.BinX,
                 BinY: request.BinY,
                 SensorTemp: sensorTemp,
-                TargetName: string.IsNullOrWhiteSpace(targetName) || targetName == "Manual capture"
+                TargetName: string.IsNullOrWhiteSpace(targetName) || targetName == ManualCaptureTarget
                     ? null : targetName,
                 FrameNumber: NextFrameNumber(rootDir),
                 Night: night));
