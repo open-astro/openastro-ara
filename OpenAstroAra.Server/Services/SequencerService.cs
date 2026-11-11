@@ -312,6 +312,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     /// text ("Guiding did not start … press Resume") otherwise stood for minutes over a run that was
     /// already calibrating (2026-10-16).</summary>
     internal const string ResumedDescription = "Resumed — trying the step again";
+    internal const string PausedDescription = "Paused";
 
     public Task<OperationAcceptedDto> ResumeAsync(Guid id, SequenceResumeRequestDto? request, string? idempotencyKey, CancellationToken ct) {
         _unattendedShutdown?.NotifyUserActivity("sequencer.resume");

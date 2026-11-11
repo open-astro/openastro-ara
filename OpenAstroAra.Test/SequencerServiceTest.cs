@@ -1564,6 +1564,29 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Entering_Paused_replaces_the_last_steps_countdown_text() {
+            // #1784 — a pause that lands right after a step (here the flip's settle countdown) must not keep that
+            // step's last text as the run's description.
+            SequencerService? holder = null;
+            var id = Guid.Empty;
+            var (svc, runId) = FlipRun(async (p, _) => {
+                p.Report(new OpenAstroAra.Core.Model.ApplicationStatus { Source = "MeridianFlip", Status = "Settling — 00:00:05" });
+                await holder!.PauseAsync(id, null, CancellationToken.None);
+                return true;
+            });
+            holder = svc;
+            id = runId;
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Paused);
+
+            var state = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(state!.CurrentInstructionDescription, Is.EqualTo(SequencerService.PausedDescription));
+
+            await svc.AbortAsync(id, null, CancellationToken.None);
+        }
+
+        [Test]
         public async Task A_refused_flip_reports_meridian_refused_with_no_seconds_left() {
             var (svc, id) = FlipRun((p, _) => {
                 p.Report(new OpenAstroAra.Core.Model.ApplicationStatus {

@@ -97,6 +97,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
     }
     // §58.8 — the first-flip proceed-on-timeout window (spec: ~60 s).
     internal TimeSpan FirstFlipConfirmWait { get; set; } = TimeSpan.FromSeconds(60);
+    internal const string FirstFlipWaitText = "Meridian flip — first flip, starting in";
     // Injectable clock for the Layer-1 altitude prediction (tests pin the instant).
     internal Func<DateTimeOffset> UtcNow { get; set; } = () => DateTimeOffset.UtcNow;
 
