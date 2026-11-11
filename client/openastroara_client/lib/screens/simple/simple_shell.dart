@@ -642,6 +642,21 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     ref.read(simpleShowingProvider.notifier).pick(m);
   }
 
+  /// Another mode picked from the grid opens with its panel, so it takes one
+  /// tap, not two (user, 2026-11-11; it only switched since 2026-11-02).
+  /// Preview keeps the frame clear and Preflight opens its own step panels.
+  void _pickFromGrid(SimpleModeScreen m) {
+    final from = ref.read(simplePreflightProvider) != null
+        ? SimpleModeScreen.preflight
+        : ref.read(simpleShowingProvider);
+    _pickMode(m);
+    if (m != from &&
+        m != SimpleModeScreen.preview &&
+        m != SimpleModeScreen.preflight) {
+      setState(() => _popover = _Popover.settings);
+    }
+  }
+
   /// The Settings sheet's section to open on (a search hit names one).
   String _menuSection = 'Rig';
 
@@ -1420,9 +1435,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                                 current: pilot != null
                                                     ? SimpleModeScreen.preflight
                                                     : shown,
-                                                // Picking a mode only switches it; the
-                                                // chip opens its panel (user, 2026-11-02).
-                                                onPicked: _pickMode,
+                                                onPicked: _pickFromGrid,
                                               )
                                             : SimpleScreen.of(shown)
                                                   .panel(screenHost),

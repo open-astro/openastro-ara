@@ -49,6 +49,7 @@ at the top. This happens in the same commit that pushes the release tag.
 - The Simple Mode left rail scrolls when large text makes its items taller than the window.
 - Pausing a plan now stops what it has in progress, such as an autofocus, a wait or centring, and runs it again on Resume. The frame being exposed and a meridian flip still finish first.
 - The Simple Mode Guider window may reach down over the guiding bar, so its options fit without scrolling.
+- In Simple Mode, picking another mode from the mode grid opens its panel, so you no longer tap the settings chip as well. Preview opens nothing, so the frame stays clear. The chip still hides and shows the panel.
 - Monitor leaves by a Back button at its top left, as the Sky Album does, instead of an ×.
 - Info leaves the Simple Mode left rail now that Monitor watches the night. The last frame's facts turn on and off from an Info row in Preview's and Focus's panels.
 

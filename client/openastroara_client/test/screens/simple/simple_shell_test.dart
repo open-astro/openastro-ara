@@ -834,6 +834,9 @@ Future<void> _openEditOfM31(WidgetTester tester) async {
   await tester.pump();
   await tester.tap(find.text('Plan').first);
   await tester.pump();
+  // Picking Plan opens its sheet, which hides the plan squares: the chip puts it away.
+  await tester.tap(find.byKey(const Key('simple-settings')));
+  await tester.pump();
   await tester.tap(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('M31')));
   await tester.pump();
   await tester.tap(find.byKey(const Key('simple-run-edit-0')));
@@ -989,11 +992,8 @@ void main() {
     await tester.pump();
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'Plan stays in Simple Mode');
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Plan')), findsOneWidget);
-    // Picking Plan opens nothing; the chip opens its sheet, which with nothing
+    // Picking Plan opens its sheet (user, 2026-11-11), which with nothing
     // picked asks for a target.
-    expect(find.text('Search, or pick in the sky.'), findsNothing);
-    await tester.tap(find.byKey(const Key('simple-settings')));
-    await tester.pump();
     expect(find.text('Search, or pick in the sky.'), findsOneWidget);
     // The chip reads the plan's total imaging time: 60 frames at the 5 s default.
     expect(find.descendant(of: find.byKey(const Key('simple-settings')), matching: find.text('5 min')), findsOneWidget);
@@ -1035,8 +1035,6 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-mode')));
       await tester.pump();
       await tester.tap(find.text('Focus'));
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('simple-settings')));
       await tester.pump();
       final scroll = find.ancestor(of: find.byType(SimpleFocusPanel), matching: find.byType(Scrollable)).first;
       expect(tester.state<ScrollableState>(scroll).position.maxScrollExtent, 0, reason: 'everything in view');
@@ -1103,8 +1101,6 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mode-plan')));
     await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-settings')));
-    await tester.pump();
     expect(find.byType(SimpleRunSheet), findsOneWidget);
     expect(find.text("Tonight's plan"), findsNothing);
   });
@@ -1118,8 +1114,6 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mode-plan')));
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
     wheel.report({'state': 'awaiting_user', 'current_slot': 1, 'pending_slot': 2}, manual: true);
     await tester.pump();
@@ -1177,8 +1171,6 @@ void main() {
         reason: 'the modes menu stays by the rail');
     await tester.tap(find.byKey(const Key('simple-mode-focus')));
     await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-settings')));
-    await tester.pump();
     expect(_panelOf(tester, find.text('Fit the mask, then Start')).top, rail.top, reason: 'Focus on its own: by the rail');
   });
 
@@ -1195,8 +1187,6 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mode-guide')));
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     final panel = tester.getRect(find.byKey(const Key('simple-guide-panel')));
@@ -1226,8 +1216,6 @@ void main() {
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mode-guide')));
     await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-settings')));
-    await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     final panel = tester.getRect(find.byKey(const Key('simple-guide-panel')));
     final row = tester.getRect(find.byKey(const Key('simple-histogram')));
@@ -1242,8 +1230,6 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mode-guide')));
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     final panel = tester.getRect(find.byKey(const Key('simple-guide-panel')));
@@ -1261,12 +1247,34 @@ void main() {
     // The mode holds the guider's settings, so it reads Guider (user, 2026-11-06).
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Guider')), findsOneWidget);
     expect(find.byType(SimpleGuideShutter), findsOneWidget);
-    await tester.tap(find.byKey(const Key('simple-settings')));
-    await tester.pump();
     expect(find.byType(SimpleGuidePanel), findsOneWidget);
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
     expect(tester.getRect(find.byKey(const Key('simple-guide-panel'))).right, rail.left - kSimpleInset,
         reason: 'left of the rail, like every mode panel');
+  });
+
+  testWidgets('picking another mode from the grid opens its panel; Preview and the mode in hand open nothing (user, 2026-11-11)',
+      (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    Future<void> pick(String mode) async {
+      await tester.tap(find.byKey(const Key('simple-mode')));
+      await tester.pump();
+      await tester.tap(find.byKey(Key('simple-mode-$mode')));
+      await tester.pump();
+    }
+
+    await pick('focus');
+    expect(find.byType(SimpleFocusPanel), findsOneWidget, reason: 'no second tap on the chip');
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
+    expect(find.byType(SimpleFocusPanel), findsNothing, reason: 'the chip still hides it');
+    await pick('focus');
+    expect(find.byType(SimpleFocusPanel), findsNothing, reason: 'the mode in hand only closes the grid');
+    await pick('polarAlign');
+    expect(find.byType(SimplePolarPanel), findsOneWidget);
+    await pick('preview');
+    expect(find.byType(SimplePolarPanel), findsNothing);
+    expect(find.text('Exposure'), findsNothing, reason: 'Preview keeps the frame clear');
   });
 
   testWidgets('Focus stays in Simple Mode: the rail reads Focus, its panel opens left of the rail; the chip is the Focus chip',
@@ -1278,10 +1286,7 @@ void main() {
     await tester.pump();
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('Focus')), findsOneWidget);
-    expect(find.text('Fit the mask, then Start'), findsNothing, reason: 'picking a mode opens nothing');
-    // Picking a mode only switches it; the chip opens its panel.
-    await tester.tap(find.byKey(const Key('simple-settings')));
-    await tester.pump();
+    // Picking another mode opens its panel (user, 2026-11-11).
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
     final panel = _panelOf(tester, find.text('Fit the mask, then Start'));
     expect(panel.right, rail.left - kSimpleInset, reason: 'left of the rail');
@@ -1318,9 +1323,7 @@ void main() {
     expect(container.read(simpleModeProvider).value, isTrue, reason: 'no jump to the full UI');
     expect(find.descendant(of: find.byKey(const Key('simple-mode')), matching: find.text('P.A.')), findsOneWidget);
     final chip = find.byKey(const Key('simple-settings'));
-    expect(find.byKey(const Key('simple-polar-exposure')), findsNothing, reason: 'picking a mode opens nothing');
-    await tester.tap(chip);
-    await tester.pump();
+    // Picking another mode opens its panel (user, 2026-11-11).
     expect(find.descendant(of: chip, matching: find.text('1 s\nLoop')), findsOneWidget);
     final rail = _panelOf(tester, find.byKey(const Key('simple-shutter')));
     final panel = _panelOf(tester, find.byKey(const Key('simple-polar-exposure')));
@@ -1609,7 +1612,7 @@ void main() {
       expect(find.text('Preflight'), findsNWidgets(2), reason: 'the modes are open, beside the rail');
       await tap(find.ancestor(of: find.text('Focus'), matching: find.byType(InkWell)).first);
       expect(find.byKey(const Key('preflight-strip')), findsNothing, reason: 'Focus picked: Preflight left');
-      expect(find.byType(SimpleFocusPanel), findsNothing, reason: 'picking a mode opens nothing');
+      expect(find.byType(SimpleFocusPanel), findsOneWidget, reason: 'picking another mode opens its panel');
     });
   }
 
@@ -1660,8 +1663,6 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-mode')));
       await tester.pump();
       await tester.tap(find.text('Plan').first);
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('simple-settings')));
       await tester.pump();
       final scroll = find.descendant(of: find.byType(SimpleRunSheet), matching: find.byType(Scrollable)).first;
       expect(tester.state<ScrollableState>(scroll).position.maxScrollExtent, 0, reason: 'everything shows');
@@ -1772,6 +1773,9 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.text('Plan').first);
+    await tester.pump();
+    // Picking Plan opens its sheet, which hides the plan squares: the chip puts it away.
+    await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
     await tester.tap(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('M31')));
     await tester.pump();
@@ -1962,6 +1966,9 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Plan').first);
     await tester.pump();
+    // Picking Plan opens its sheet, which hides the plan squares: the chip puts it away.
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
     final square = tester.getRect(find.byKey(const Key('simple-run-tracker')));
     expect(square.right, 1024 - kSimpleInset, reason: 'in the corner, from the first frame (no slide from the offer)');
     final stop = tester.getRect(find.byType(EmergencyStopButton));
@@ -1983,8 +1990,6 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-mode')));
       await tester.pump();
       await tester.tap(find.text('Plan').first);
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('simple-settings')));
       await tester.pump();
       final sheet = tester.getRect(find.byType(SimpleRunSheet));
       expect(sheet.top, greaterThanOrEqualTo(kSimpleInset * 2 + kSimpleBarHeight + kSimpleStatusHeight + 8),
@@ -2104,8 +2109,6 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mode-focus')));
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-info-on')));
     await tester.pump();
@@ -2906,6 +2909,9 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Plan').first); // the plan squares
     await tester.pump();
+    // Picking Plan opens its sheet, which hides the plan squares: the chip puts it away.
+    await tester.tap(find.byKey(const Key('simple-settings')));
+    await tester.pump();
     c.read(simpleMessagesProvider.notifier)
       ..show(SimpleMessageKind.error, "Couldn't start imaging")
       ..show(SimpleMessageKind.result, 'Frame saved');
@@ -2949,8 +2955,6 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-mode')));
     await tester.pump();
     await tester.tap(find.text('Plan').first);
-    await tester.pump();
-    await tester.tap(find.byKey(const Key('simple-settings')));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     final sheet = tester.getRect(find.byType(SimpleRunSheet));
