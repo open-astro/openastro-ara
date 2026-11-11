@@ -8573,7 +8573,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get actionApplyToFrames => 'aplicar isso aos quadros selecionados';
 
   @override
-  String get actionBuildCalibration => 'montar a calibração';
+  String get actionBuildCalibration => 'criar calibração';
 
   @override
   String get actionCancelCopy => 'cancelar a cópia';

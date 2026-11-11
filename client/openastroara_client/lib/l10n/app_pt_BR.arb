@@ -1168,7 +1168,7 @@
   "monitorLinkLostShort": "Sem contato com o setup",
   "actionAbortCapture": "abortar a captura",
   "actionApplyToFrames": "aplicar isso aos quadros selecionados",
-  "actionBuildCalibration": "montar a calibração",
+  "actionBuildCalibration": "criar calibração",
   "actionCancelCopy": "cancelar a cópia",
   "actionCheckDisk": "verificar os quadros no disco",
   "actionCleanPreviewCache": "limpar o cache de prévias",
