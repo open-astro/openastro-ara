@@ -1455,6 +1455,7 @@ class ProfileApi {
         softWarningAltitudeDeg:
             (j['soft_warning_altitude_deg'] as num?)?.toDouble() ?? 30,
         observerName: (j['observer_name'] as String?) ?? '',
+        permanentPier: (j['permanent_pier'] as bool?) ?? false,
       );
 
   static Map<String, dynamic> siteSettingsToJson(SiteSettings v) => {
@@ -1472,6 +1473,7 @@ class ProfileApi {
     'max_sequence_runtime_min': v.maxSequenceRuntimeMin,
     'soft_warning_altitude_deg': v.softWarningAltitudeDeg,
     'observer_name': v.observerName,
+    'permanent_pier': v.permanentPier,
   };
 
   static TwilightDefinition _twilightFromString(String? s) {

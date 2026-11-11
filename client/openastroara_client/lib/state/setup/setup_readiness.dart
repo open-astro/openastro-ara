@@ -5,6 +5,7 @@ import '../../models/equipment_device_status.dart';
 import '../../models/mount_status.dart';
 import '../../models/autofocus_run.dart';
 import '../../models/polar_align.dart';
+import '../../util/observing_night.dart';
 import '../equipment/camera_state.dart';
 import '../equipment/mount_state.dart';
 import '../focus/autofocus_live_state.dart';
@@ -54,8 +55,15 @@ SetupStepState connectStepState(MountStatus? mount, CameraStatus? camera) {
 /// clean Stop, so "aligned then stopped the loop" stays satisfied);
 /// problem = the routine failed; inProgress = any running stage;
 /// else pending. This is a THIS-SESSION signal by design: alignment is
-/// physical and per-setup, so a fresh app session starts unaligned.
-SetupStepState polarAlignStepState(PolarAlignLive live) {
+/// physical and per-setup, so a fresh app session starts unaligned. Simple
+/// Mode's Night Setup (#1565) passes [last] and [now] to also count the rig's
+/// last routine: done when it ended in tonight's observing night inside the
+/// green zone. The Full UI passes neither.
+SetupStepState polarAlignStepState(
+  PolarAlignLive live, {
+  PolarAlignLastResult? last,
+  DateTime? now,
+}) {
   // The rough stage's green is a first pass on the main camera, not an
   // alignment: fine and check are still ahead of it. (A new stage starts with
   // no readout — the daemon and the fold both clear it — so a later stage's
@@ -68,6 +76,12 @@ SetupStepState polarAlignStepState(PolarAlignLive live) {
   // "not aligned": the step needs work, it is not untouched.
   if (live.phase == PolarAlignStates.checked) return SetupStepState.problem;
   if (live.isActive) return SetupStepState.inProgress;
+  if (last != null &&
+      now != null &&
+      polarAlignZone(last.errorArcmin) == 'green' &&
+      isTonight(last.completedUtc, now)) {
+    return SetupStepState.done;
+  }
   return SetupStepState.pending;
 }
 
@@ -77,9 +91,14 @@ SetupStepState polarAlignStepState(PolarAlignLive live) {
 /// already in focus); inProgress = a run is underway; problem = the last run
 /// failed; else pending. A cancelled run is pending, not a problem — the user
 /// asked for it. THIS-SESSION by design, like polar alignment: focus drifts.
-SetupStepState focusStepState(AutofocusLive live) {
+/// Simple Mode's Night Setup (#1565) passes [now] to also count a completed run
+/// the rig kept from earlier in tonight's observing night; the Full UI does not.
+SetupStepState focusStepState(AutofocusLive live, {DateTime? now}) {
   if (live.run.isRunning) return SetupStepState.inProgress;
   if (live.focusedThisSession) return SetupStepState.done;
+  if (now != null && live.run.isComplete && isTonight(live.run.completedUtc, now)) {
+    return SetupStepState.done;
+  }
   if (live.run.state == AutofocusRunStates.failed) return SetupStepState.problem;
   return SetupStepState.pending;
 }

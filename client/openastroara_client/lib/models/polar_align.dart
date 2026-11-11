@@ -95,6 +95,23 @@ class PolarAlignCheckResult {
       );
 }
 
+/// The last routine to end with an error reading (`last_result` on the status):
+/// the daemon keeps it for its boot, so a relaunched client can tell whether
+/// the mount was aligned tonight.
+class PolarAlignLastResult {
+  final double errorArcmin;
+  final DateTime completedUtc;
+  const PolarAlignLastResult({required this.errorArcmin, required this.completedUtc});
+
+  static PolarAlignLastResult? tryParse(Object? json) {
+    if (json is! Map) return null;
+    final e = json['error_arcmin'];
+    final t = json['completed_utc'];
+    final at = t is String ? DateTime.tryParse(t) : null;
+    return e is num && at != null ? PolarAlignLastResult(errorArcmin: e.toDouble(), completedUtc: at) : null;
+  }
+}
+
 /// Live-adjust capture modes (`PolarAlignSettingsDto.loop_mode`).
 abstract final class PolarAlignLoopModes {
   /// Re-shoot continuously.
@@ -164,6 +181,9 @@ class PolarAlignStatus {
   final int checkSolvesDone;
   final PolarAlignCheckResult? checkResult;
 
+  /// #1565 — null from an older daemon or before any routine ended.
+  final PolarAlignLastResult? lastResult;
+
   const PolarAlignStatus({
     required this.state,
     this.currentErrorArcmin,
@@ -177,6 +197,7 @@ class PolarAlignStatus {
     this.waitingForHome = false,
     this.checkSolvesDone = 0,
     this.checkResult,
+    this.lastResult,
   });
 
   factory PolarAlignStatus.fromJson(Map<String, dynamic> json) =>
@@ -197,6 +218,7 @@ class PolarAlignStatus {
         checkResult: json['check_result'] is Map<String, dynamic>
             ? PolarAlignCheckResult.fromJson(json['check_result'] as Map<String, dynamic>)
             : null,
+        lastResult: PolarAlignLastResult.tryParse(json['last_result']),
       );
 
   /// True while the server is running any phase of the routine.

@@ -7,11 +7,12 @@ import 'simple_run_state.dart'
         simpleDarkStartProvider,
         simpleRunProvider,
         simpleScheduleAllowedProvider;
-import '../models/polar_align.dart' show PolarAlignStates;
+import '../models/polar_align.dart' show PolarAlignLastResult, PolarAlignStates;
 import '../util/friendly_error.dart';
 import 'app_locale_state.dart';
 import 'guider/guider_state.dart';
 import 'imaging/main_camera_state.dart';
+import 'focus/autofocus_live_state.dart';
 import 'polar_align/polar_align_state.dart';
 import 'setup/setup_readiness.dart';
 import 'simple_messages_state.dart';
@@ -117,6 +118,37 @@ extension SimplePreflightStepLabel on SimplePreflightStep {
   };
 }
 
+/// #1565 — the rig's last polar-align routine, read once per server so a
+/// relaunch still knows the mount was aligned tonight. Null from an older
+/// daemon, before any routine ended, or when the read fails.
+final polarAlignLastResultProvider = FutureProvider<PolarAlignLastResult?>((
+  ref,
+) async {
+  final api = ref.watch(polarAlignApiProvider);
+  if (api == null) return null;
+  try {
+    return (await api.getStatus())?.lastResult;
+  } catch (_) {
+    return null;
+  }
+});
+
+/// Night Setup's focus step: the shared readiness plus a run the rig kept from
+/// earlier tonight. (The clock is read when a dependency changes, which is
+/// often enough for a step that only flips at the 12 h line.)
+final nightFocusStateProvider = Provider<SetupStepState>(
+  (ref) => focusStepState(ref.watch(autofocusLiveProvider), now: DateTime.now()),
+);
+
+/// Night Setup's polar step: the shared readiness plus the rig's last routine.
+final nightPolarAlignStateProvider = Provider<SetupStepState>(
+  (ref) => polarAlignStepState(
+    ref.watch(polarAlignLiveProvider),
+    last: ref.watch(polarAlignLastResultProvider).value,
+    now: DateTime.now(),
+  ),
+);
+
 /// The step to start on (always the plan), or go to next from [after]: the
 /// first setup step not done tonight, polar align skipped on a permanent
 /// pier, guide skipped when already guiding or with no guider ([guided]);
@@ -153,8 +185,8 @@ SimplePreflightStep? simplePreflightNext(
   final g = ref.watch(guiderStatusProvider).value;
   return preflightNextStep(
     after: after,
-    focused: ref.watch(setupFocusStateProvider) == SetupStepState.done,
-    aligned: ref.watch(setupPolarAlignStateProvider) == SetupStepState.done,
+    focused: ref.watch(nightFocusStateProvider) == SetupStepState.done,
+    aligned: ref.watch(nightPolarAlignStateProvider) == SetupStepState.done,
     permanentPier: ref.watch(simplePermanentPierProvider).value ?? false,
     guided: g == null || !g.isConnected || g.isCorrecting,
   );
@@ -167,7 +199,7 @@ SimplePreflightStep? simplePreflightNext(
 class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
   @override
   SimplePreflightStep? build() {
-    ref.listen(setupFocusStateProvider, (prev, next) {
+    ref.listen(nightFocusStateProvider, (prev, next) {
       if (state == SimplePreflightStep.focus &&
           prev != SetupStepState.done &&
           next == SetupStepState.done) {
@@ -200,8 +232,8 @@ class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
 
   SimplePreflightStep? _next(SimplePreflightStep? after) => preflightNextStep(
     after: after,
-    focused: ref.read(setupFocusStateProvider) == SetupStepState.done,
-    aligned: ref.read(setupPolarAlignStateProvider) == SetupStepState.done,
+    focused: ref.read(nightFocusStateProvider) == SetupStepState.done,
+    aligned: ref.read(nightPolarAlignStateProvider) == SetupStepState.done,
     permanentPier: ref.read(simplePermanentPierProvider).value ?? false,
     guided: _guided(ref),
   );

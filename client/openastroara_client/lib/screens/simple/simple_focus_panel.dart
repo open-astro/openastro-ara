@@ -21,8 +21,7 @@ import '../../widgets/focus/guide_focus_card.dart'
     show GuideFocusCard, TurnAdvice, guideFocusBlocker, guideFocusHint;
 import '../../widgets/focus/v_curve_chart.dart';
 import '../../state/setup/setup_readiness.dart';
-import 'simple_preflight.dart'
-    show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
+import '../../state/simple_preflight_state.dart';
 import 'simple_preview_panel.dart'
     show SimpleInfoToggle, SimpleShutterButton, kSimpleText;
 import 'simple_device_windows.dart' show simpleCelsius;
@@ -299,7 +298,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
         ref.watch(simplePreflightProvider) == SimplePreflightStep.focus &&
             simplePreflightNext(ref, after: SimplePreflightStep.focus) == null
         ? _keepRoom(
-            visible: ref.watch(setupFocusStateProvider) == SetupStepState.done,
+            visible: ref.watch(nightFocusStateProvider) == SetupStepState.done,
             child: FilledButton(
               key: const Key('simple-focus-preflight-done'),
               style: kSimpleGoStyle,

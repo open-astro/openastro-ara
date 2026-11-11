@@ -11,6 +11,8 @@ import 'package:openastroara/models/equipment_device_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/screens/simple/simple_preflight.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
+import 'package:openastroara/state/simple_preflight_state.dart'
+    show nightFocusStateProvider, nightPolarAlignStateProvider;
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
@@ -359,8 +361,8 @@ void main() {
     _c = ProviderContainer(overrides: [
       focuserProvider.overrideWith(() => f),
       autofocusLiveProvider.overrideWith(() => _Live(AutofocusLive(run: weak))),
-      setupFocusStateProvider.overrideWithValue(SetupStepState.done),
-      setupPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
+      nightFocusStateProvider.overrideWithValue(SetupStepState.done),
+      nightPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
       simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
       simplePreflightProvider.overrideWith(() => pilot),
     ]);
@@ -381,8 +383,8 @@ void main() {
         final c = ProviderContainer(overrides: [
           focuserProvider.overrideWith(() => _Focuser(_focuser())),
           mainFocusMethodProvider.overrideWith(() => _Pick(method)),
-          setupFocusStateProvider.overrideWithValue(focus),
-          setupPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
+          nightFocusStateProvider.overrideWithValue(focus),
+          nightPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
           simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
           simplePreflightProvider.overrideWith(_Pilot.new),
         ]);
@@ -410,8 +412,8 @@ void main() {
     _c = ProviderContainer(overrides: [
       focuserProvider.overrideWith(() => _Focuser(null)),
       mainFocusMethodProvider.overrideWith(() => _Pick(MainFocusMethod.bahtinov)),
-      setupFocusStateProvider.overrideWithValue(SetupStepState.done),
-      setupPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
+      nightFocusStateProvider.overrideWithValue(SetupStepState.done),
+      nightPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
       simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
       simplePreflightProvider.overrideWith(() => pilot),
     ]);

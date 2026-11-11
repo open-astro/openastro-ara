@@ -73,8 +73,8 @@ Future<void> eventually(bool Function() ok) async {
 }
 
 /// The pending marker is written after the upload settles: poll for it.
-Future<void> pendingHas(_Device d, bool present) async {
-  for (var i = 0; i < 100 && (await d.pending.load()).contains('planning') != present; i++) {
+Future<void> pendingHas(SyncedPrefsPendingService Function() pending, bool present) async {
+  for (var i = 0; i < 100 && (await pending().load()).contains('planning') != present; i++) {
     await Future<void>.delayed(const Duration(milliseconds: 20));
   }
 }
@@ -165,7 +165,7 @@ void main() {
     rig.failWrites = true;
     a.container.read(planningPrefsProvider.notifier).setNoiseTolerancePct(4);
     await eventually(() => rig.merges == 1);
-    await pendingHas(a, true);
+    await pendingHas(() => a.pending, true);
     expect(a.planning.noiseTolerancePct, 4, reason: 'the local value stays');
     expect((await a.planningFile.load()).noiseTolerancePct, 4);
     expect(await a.pending.load(), {'planning'});
@@ -178,7 +178,7 @@ void main() {
     await again.open();
     await eventually(() => (rig.stored['planning'] as Map)['noise_tolerance_pct'] == 4);
     expect(again.planning.noiseTolerancePct, 4, reason: 'the rig value did not overwrite the offline edit');
-    await pendingHas(again, false);
+    await pendingHas(() => again.pending, false);
     expect(await again.pending.load(), isEmpty);
   });
 

@@ -66,8 +66,8 @@ class _Live extends PolarAlignLiveNotifier {
 Future<ProviderContainer> _container() async {
   final c = ProviderContainer(overrides: [
     polarAlignLiveProvider.overrideWith(_Live.new),
-    setupFocusStateProvider.overrideWith((ref) => ref.watch(_focus)),
-    setupPolarAlignStateProvider.overrideWith((ref) => ref.watch(_aligned)),
+    nightFocusStateProvider.overrideWith((ref) => ref.watch(_focus)),
+    nightPolarAlignStateProvider.overrideWith((ref) => ref.watch(_aligned)),
     polarAlignApiProvider.overrideWithValue(_PolarApi()),
     simplePermanentPierPrefsProvider.overrideWithValue(_Prefs(false)),
     simpleModePrefsProvider.overrideWithValue(_Prefs(true)),

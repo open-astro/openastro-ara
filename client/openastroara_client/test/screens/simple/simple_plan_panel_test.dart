@@ -38,6 +38,8 @@ import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
+import 'package:openastroara/state/simple_preflight_state.dart'
+    show nightPolarAlignStateProvider;
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
@@ -1240,7 +1242,7 @@ void main() {
         await _pump(tester, _Seq(),
             SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
             overrides: [
-              setupPolarAlignStateProvider.overrideWithValue(aligned),
+              nightPolarAlignStateProvider.overrideWithValue(aligned),
               simplePermanentPierPrefsProvider.overrideWithValue(_Prefs(permanent)),
             ]);
         expect(find.text('Not polar aligned tonight'), shown ? findsOneWidget : findsNothing);

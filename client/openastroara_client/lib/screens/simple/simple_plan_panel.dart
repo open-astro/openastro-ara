@@ -44,8 +44,7 @@ import '../../widgets/sequencer/target_plan_dialog.dart'
 import '../../widgets/emergency_stop_button.dart' show kEmergencyStopHold;
 import '../../widgets/sequencer/run_completion_sheet.dart'
     show runFramesPerFilter;
-import 'simple_preflight.dart'
-    show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
+import '../../state/simple_preflight_state.dart';
 import 'simple_device_windows.dart' show SimpleGainSlider;
 import 'simple_preview_panel.dart'
     show
@@ -1288,7 +1287,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
         // The full UI asks before Run; here it only warns (a permanent pier
         // or a daytime test runs fine unaligned).
         if (editing == null &&
-            ref.watch(setupPolarAlignStateProvider) != SetupStepState.done &&
+            ref.watch(nightPolarAlignStateProvider) != SetupStepState.done &&
             !(ref.watch(simplePermanentPierProvider).value ?? false))
           Text(
             context.l10n.planNotPolarAligned,

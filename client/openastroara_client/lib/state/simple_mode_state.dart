@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/simple_mode_prefs_service.dart';
+import 'profile_management_state.dart' show profileApiProvider;
+import 'settings/site_settings_state.dart';
 
 /// The prefs file backing [simpleModeProvider]; overridden in tests.
 final simpleModePrefsProvider = Provider<SimpleModePrefsService>(
@@ -75,22 +77,62 @@ final simplePermanentPierPrefsProvider = Provider<SimpleModePrefsService>(
 );
 
 /// The mount stays polar aligned (a permanent pier), so Simple Mode's
-/// Preflight skips polar alignment. Off by default.
-// shortcut: saved on this client, not in the rig's profile; move it to the
-// profile once the daemon carries the setting (it belongs to the rig).
+/// Preflight skips polar alignment. Off by default. #1565 — lives in the rig's
+/// site profile, so every device agrees. The old device-local file is carried
+/// over once: while it still says on and the profile says off, it goes to the
+/// profile and is cleared when that write lands (a failed write keeps it, and
+/// the next start retries). With no rig, the file alone decides.
 class SimplePermanentPierController extends AsyncNotifier<bool> {
-  bool? _pending;
+  bool _writing = false;
 
   @override
   Future<bool> build() async {
-    final loaded = await ref.read(simplePermanentPierPrefsProvider).load();
-    return _pending ?? loaded;
+    final files = ref.read(simplePermanentPierPrefsProvider);
+    final local = await files.load();
+    final api = ref.watch(profileApiProvider);
+    // A change another device made lands through the profile hydrate.
+    ref.listen(siteSettingsProvider.select((s) => s.permanentPier), (_, on) {
+      if (!_writing && state.hasValue) state = AsyncData(on);
+    });
+    if (api == null) return local;
+    final site = ref.read(siteSettingsProvider.notifier);
+    try {
+      await site.hydrateFromServer(api);
+    } catch (_) {
+      return local; // an unreachable rig: the file keeps the answer
+    }
+    final onRig = ref.read(siteSettingsProvider).permanentPier;
+    if (local && !onRig) {
+      try {
+        site.setPermanentPier(true);
+        await site.persistToServer(api);
+        await files.save(false);
+      } catch (_) {} // kept on the device; the next start retries
+      return true;
+    }
+    if (local) await files.save(false);
+    return onRig;
   }
 
   Future<void> set(bool on) async {
-    _pending = on;
     state = AsyncData(on);
-    await ref.read(simplePermanentPierPrefsProvider).save(on);
+    final files = ref.read(simplePermanentPierPrefsProvider);
+    final api = ref.read(profileApiProvider);
+    if (api == null) return files.save(on);
+    _writing = true;
+    try {
+      final site = ref.read(siteSettingsProvider.notifier);
+      await site.hydrateFromServer(api); // never write over a section not read
+      site.setPermanentPier(on);
+      await site.persistToServer(api);
+      await files.save(false);
+    } catch (_) {
+      await files.save(
+        on,
+      ); // the rig did not hear: keep it here, retry next start
+    } finally {
+      _writing = false;
+    }
   }
 }
 

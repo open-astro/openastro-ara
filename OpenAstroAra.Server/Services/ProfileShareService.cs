@@ -129,7 +129,7 @@ public sealed class ProfileShareService : IProfileShareService {
     ///   <item>ImagingDefaults — KEEP (exposure/gain/cooler tuning, no PII)</item>
     ///   <item>Storage — STRIP save_directory + filename_template (paths); keep format/compression/disk-thresholds</item>
     ///   <item>Notifications — STRIP pushover_token + telegram_bot_token (SECRETS); keep channel/trigger toggles</item>
-    ///   <item>Site — STRIP name/lat/long/elevation/timezone (location); keep bortle/seeing/twilight/horizon</item>
+    ///   <item>Site — STRIP name/lat/long/elevation/timezone (location); keep bortle/seeing/twilight/horizon/permanent-pier</item>
     ///   <item>Filenames — KEEP (date-separator enum + compress toggle, not a path)</item>
     ///   <item>SafetyPolicies — KEEP (tuning judgement)</item>
     ///   <item>Autofocus — KEEP (method/sweep/trigger judgement; af_filter is a harmless name)</item>
