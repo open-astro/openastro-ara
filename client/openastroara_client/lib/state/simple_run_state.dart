@@ -811,12 +811,12 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     final id = state.sequenceId;
     final api = ref.read(sequenceApiProvider);
     if (id == null || api == null) return;
-    final filters = [
+    final filters = {
       for (final t in state.targets)
         if (t.flats == SimpleTargetFlats.endOfNight)
           for (final s in t.steps)
             if (s.filterName.isNotEmpty) s.filterName,
-    ].toSet().toList();
+    }.toList();
     var targets = [...state.targets];
     if (targets.any((t) => t.calibration && t.name == kEndFlatsBlockName)) {
       await _removeBlock(api, id, kEndFlatsBlockName);

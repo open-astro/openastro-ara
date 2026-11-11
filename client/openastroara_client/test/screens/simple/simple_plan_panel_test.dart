@@ -51,9 +51,6 @@ import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/stop_mount_overlay.dart' show SlewWsEvents;
 import 'package:openastroara/models/library/live_library.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
-import 'package:openastroara/state/settings/safety_policies_state.dart';
-import 'package:openastroara/models/flat_panel_status.dart';
-import 'package:openastroara/state/equipment/flat_panel_state.dart';
 
 const _m42 = PlanetariumSelection(
     name: 'M42', kind: 'Nebula', raHours: 5.59, decDeg: -5.39, raJ2000Hours: 5.59, decJ2000Deg: -5.39, altDeg: 30, maxAltDeg: 45);
@@ -318,11 +315,6 @@ Future<ProviderContainer> _pump(WidgetTester tester, _Seq seq, Widget child,
 
 final _en = lookupAppLocalizations(const Locale('en'));
 
-class _Panel extends FlatPanelNotifier {
-  @override
-  Future<FlatPanelStatus?> build() async =>
-      FlatPanelStatus.fromJson({'device_id': 'd', 'name': 'Flip-Flat', 'state': 'connected'});
-}
 
 
 /// Tabs (at most [max] times) until keyboard focus is inside the widget keyed [k].
