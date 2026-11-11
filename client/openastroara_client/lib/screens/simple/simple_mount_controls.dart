@@ -314,6 +314,9 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
   void _stopAll() {
     _renew?.cancel();
     _renew = null;
+    // A press this ends: its key or finger may lift later and find nothing
+    // held, so the flag settles here (a later GoTo must block the pad).
+    if (_held != null) _moving.released();
     if (mounted) setState(() => _held = null);
     try {
       ref.read(mountProvider.notifier).abortSlew().catchError((Object e) {
