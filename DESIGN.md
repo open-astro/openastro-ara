@@ -339,7 +339,7 @@ The shell (reference: PR #1474, merged 2026-11-02) follows NINA's arrangement:
 - **Centre:** the active tab.
 - **Bottom status bar (40 px):** the connection indicator, then Emergency Stop, the backup-stream pulse, and the launchers right-anchored.
 
-Below 600 px of window width (a narrowed desktop window; phones get Simple Mode, not this shell) the same shell folds:
+Below 600 px of window width (a narrowed desktop window; phones get Simple Mode, not this shell, target, #1772) the same shell folds:
 - the tabs move to a bottom navigation bar, under the status bar;
 - the device buttons stand in a column down the left edge;
 - the top bar shrinks to 48 px and keeps search, Night mode and the gear.
@@ -353,7 +353,7 @@ Responsive behaviour is keyed to the window, not the device:
 - Instrument panes sit side by side (picture | readout) from 760 px of pane width, and stack below that.
 - In a short window they stay side by side down to 600 px, because stacking would scroll.
 
-Phones run Companion Mode (see PRODUCT.md): Simple Mode, never this shell. Its arrangement is "Simple Mode on a phone" under Components.
+Phones run Companion Mode (target, #1772; see PRODUCT.md): Simple Mode, never this shell. Its arrangement is "Simple Mode on a phone" under Components.
 
 ### Named Rules
 **The Two Densities Rule.** The full UI is dense: 11–15 px type and 4–8 px corners. Simple Mode is roomy and image-first: the frame fills the window, controls float on translucent overlays, every interactive target is at least 44 px tall, corners are 10 px, and body text is 14 px. Both densities share the same colours, the same named rules and the same Emergency Stop hold; both densities' Stop fills with `emergency-stop` (#D32F2F) so its label reads at 4.5:1. Phones run Companion Mode, which builds on Simple Mode, so phones always get the roomy density. Simple Mode ships on master behind an experimental toggle (Settings → System → Experimental); this is its target.

@@ -2766,7 +2766,7 @@ Contents:
 |---|---|---|
 | `catalogs/` | Bundled HYG, Tycho-2, NGC/IC, Caldwell, Sharpless, MPC comets, constellation art, nebula vectors | ~200 MB (bundled, immutable) |
 | `hips/<survey>/` | Downloaded HiPS tile sets per §36 (DSS2, Mellinger, eROSITA, etc.) | Variable — 0 GB to TB depending on what user downloads |
-| `stellarium-dss2/` | DSS2 HiPS tiles for the planetarium's optional sky-survey layer, fetched on demand through the client's loopback server (replaced `aladin-cache/`, Aladin Lite is gone) | Kept until the folder is deleted |
+| `stellarium-dss2/` | DSS2 HiPS tiles for the planetarium's optional sky-survey layer, fetched on demand through the client's loopback server (replaced `aladin-cache/`, Aladin Lite is gone) | Capped at about 512 MB: the least recently fetched tiles are evicted first (down to 90% of the cap); the index and overview images are never evicted |
 | `sequences/` | Draft + saved sequence JSON files built in WILMA | Tiny (KB per file) |
 | `profiles/` | Profile drafts (sync to Pi when connected) | Tiny |
 | `frames-downloaded/` | FITS files the user pulled from the Pi for review | Variable, user-managed |
@@ -5673,7 +5673,7 @@ Multi-select frames via Shift+Click (desktop) or long-press + tap (mobile):
 
 ## 41. Mobile companion mode (iOS / Android)
 
-**Scope status: spec, being built (#1772). Store distribution is deferred.** Side-loaded iOS and Android builds exist today. Store distribution is still deferred (see the `P1`–`P5` issue backlog per §18.G): it needs funded Apple Developer and Play Console accounts, signing and a per-platform review workflow. The server API surface (WebSocket event shapes, single-client policy semantics, mDNS discovery, GPS-push endpoint, emergency-stop authentication-free semantics) already covers this section, so no server change is needed.
+**Scope status: spec, being built (#1772). Store distribution is deferred.** iOS and Android builds can be side-loaded (no CI leg builds them). Store distribution is still deferred (see the `P1`–`P5` issue backlog per §18.G): it needs funded Apple Developer and Play Console accounts, signing and a per-platform review workflow. The server API surface (WebSocket event shapes, single-client policy semantics, mDNS discovery, GPS-push endpoint, emergency-stop authentication-free semantics) already covers this section, so no server change is needed.
 
 **Companion Mode is Simple Mode on a phone.** It is not a second app, a second shell or a reduced desktop client. On an iPhone or Android phone, Ara opens straight into Simple Mode (the Simple shell, DESIGN.md "Simple Mode: Image First"), laid out for a portrait screen. There is no toggle, and there is no way into the full UI. Everything Simple Mode does on an iPad works the same way on the phone: the same sections, the same Stop hold, the same message pills, the same night colours.
 
@@ -10790,7 +10790,7 @@ All searchable from the §61 omnibar.
 - WS `live.*` event family
 - Save Current Frame promotion path (re-routes one frame through standard capture pipeline)
 - Auto-stop on mutually-exclusive operations (sequence, AF, PA, plate-solve, Take One)
-- Mobile companion read-only view
+- ~~Mobile companion read-only view~~ (superseded by §41 and #1772)
 - §61 settings registry entries
 - Frame stat extraction reused from §51 / Hocus Focus (no new code, just calling existing analyzers)
 
