@@ -32,12 +32,19 @@ namespace OpenAstroAra.Server.Endpoints;
 /// (Ara stores no copy). Host and port are the AlpacaBridge the Connect screen found, validated like every other
 /// management call (<see cref="AlpacaManagementClient.ManagementUri"/>).</summary>
 public static partial class AlpacaBridgeSetupEndpoints {
-    /// <summary>The add route, for the stale-session guard test (the guard is middleware over every mutating /api/v1 route).</summary>
-    internal const string AddPath = "/api/v1/equipment/alpacabridge/devices";
+    /// <summary>This file's group under the equipment group (<c>/api/v1/equipment</c>).</summary>
+    private const string Group = "/alpacabridge";
+
+    /// <summary>The add route under <see cref="Group"/>.</summary>
+    private const string AddRoute = "/devices";
+
+    /// <summary>The add route's full path, for the stale-session guard test (the guard is middleware over every mutating
+    /// /api/v1 route). Built from the constants the route is mapped with, so the test checks the path the route serves.</summary>
+    internal const string AddPath = "/api/v1/equipment" + Group + AddRoute;
 
     public static void MapAlpacaBridgeSetup(this RouteGroupBuilder equipment) {
         ArgumentNullException.ThrowIfNull(equipment);
-        var bridge = equipment.MapGroup("/alpacabridge");
+        var bridge = equipment.MapGroup(Group);
         bridge.MapGet("/catalog", async (string? host, int? port, IAlpacaManagementClient alpaca, CancellationToken ct) =>
                 await GetCatalogAsync(host, port, alpaca, ct))
             .Produces<AlpacaBridgeCatalogResponseDto>(StatusCodes.Status200OK)
@@ -50,7 +57,7 @@ public static partial class AlpacaBridgeSetupEndpoints {
             .ProducesProblem(StatusCodes.Status400BadRequest)
             .WithName("GetAlpacaBridgeCameras")
             .WithSummary("The cameras plugged in for one vendor; empty for a vendor with no lister.");
-        bridge.MapPost("/devices", async (string? host, int? port, JsonElement body, IAlpacaManagementClient alpaca, CancellationToken ct) =>
+        bridge.MapPost(AddRoute, async (string? host, int? port, JsonElement body, IAlpacaManagementClient alpaca, CancellationToken ct) =>
                 await AddDeviceAsync(host, port, body, alpaca, ct))
             .Produces<AlpacaBridgeAddDeviceResponseDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
