@@ -35,6 +35,15 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Added (calibration)
+
+- **Calibration** is a seventh Simple Mode mode, between Guider and Plan (#1757). The chip says how many calibration sets the latest plan's lights lack ("5 missing", "Ready"). The shutter shoots everything missing in one run; its red square stops it. Three tabs: **Flats** (each filter's coverage, from the panel when one is connected, otherwise the twilight sky), **Darks & bias** (shoot now, or **Add to queue** as one Calibration block after the last target; with no plan lights yet, build a dark library for the exposures you pick) and **Guide Camera** (the Guider's dark library and bad-pixel map, asking you to cover the guide scope first and refused while guiding). Search finds it under "flats", "darks" and "bias".
+- **Night done** offers the calibration frames tonight's lights still lack, flats first: Take flats, Take darks or Take flats and darks, with progress and Stop (#1563). A calibration run that pauses for the lens cap asks in a pill with **Resume**.
+- Plan rows are **Light** or **Flat** when a flat panel is connected: a Flat row shoots the panel's auto-exposure flats for its filter with the lights (#1757).
+- **Focus offsets**: the daemon measures each filter's focus offset from the reference filter (two reference runs check for drift) and saves the offsets with the profile, so they survive a restart and a filter change applies them (#1675). New routes under `/equipment/filterwheel/offsets`. The Bahtinov readout and guide-camera focus are refused while it runs.
+- The daemon marks a calibration session that holds only Take One snapshots (`manual_capture`); Simple Mode leaves those out of its calibration checks.
+- New sequence item **Close Flat Panel Cover**: closes the motorised cover for unattended darks and bias, and fails when there is no cover to close.
+
 ### Added (session watch)
 
 - **Monitor** in Simple Mode: a full-screen, read-only view of the Session, opened from the left rail on windows 900 pt wide or more. One line on top says whether all is well or names the most important problem. Tiles show what the rig is doing now with a frame countdown and Up next, the Target with its altitude tonight, the next meridian flip, safety, weather, Guiding and the last frame's quality with its trend, and tonight's timeline runs beside a large Emergency Stop. Tiles appear only for gear in the rig's profile. If the link to the rig is lost, the numbers freeze and say how old they are. Tapping a tile opens the window or panel that owns it. The screen stays awake while Monitor shows, and this device's battery shows beside the clock (#1724).
