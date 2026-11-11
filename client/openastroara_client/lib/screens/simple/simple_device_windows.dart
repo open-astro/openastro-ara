@@ -67,7 +67,6 @@ import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot;
 import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment, SimpleSegments, simpleRailScale;
 import 'simple_mount_controls.dart';
-import '../../util/slew_rates.dart' show buildSlewRateOptionsFromBands;
 import '../../util/tracking_rate_words.dart';
 import '../../util/friendly_error.dart';
 
@@ -1031,9 +1030,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     final cameraOn =
         ref.watch(cameraStatusProvider).asData?.value?.isConnected ?? false;
     final speeds = (caps?.canMoveAxis ?? false)
-        ? simplePadSpeeds(
-            buildSlewRateOptionsFromBands(caps?.padRateBands ?? const []),
-          )
+        ? simplePadSpeeds(caps?.padRateBands ?? const [])
         : const <(String, double)>[];
     final pad = speeds.isEmpty
         ? SizedBox(

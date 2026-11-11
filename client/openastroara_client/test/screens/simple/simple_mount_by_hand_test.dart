@@ -47,6 +47,11 @@ class _Mount extends MountNotifier {
     return true;
   }
 
+  int refreshes = 0;
+
+  @override
+  Future<void> refresh([client]) async => refreshes++;
+
   @override
   Future<bool> abortSlew() async {
     calls.add('abort');
@@ -239,15 +244,17 @@ void main() {
 
   group('pure', () {
     test('pad speeds: Slow / Medium / Fast are 5, 25 and 100 % of the top speed', () {
-      final one = buildSlewRateOptionsFromBands(const [SlewRateBand(0.002, 4.0)]);
-      expect(simplePadSpeeds(one), [('slow', 0.2), ('medium', 1.0), ('fast', 4.0)]);
+      expect(simplePadSpeeds(const [SlewRateBand(0.002, 4.0)]), [('slow', 0.2), ('medium', 1.0), ('fast', 4.0)]);
+    });
+
+    test('pad speeds inside the bands of a mount with a gap (OmniSim: 0–6.7 and 10–20 deg/s)', () {
+      expect(simplePadSpeeds(const [SlewRateBand(0, 6.666666666666667), SlewRateBand(10, 20)]),
+          [('slow', 1.0), ('medium', 5.0), ('fast', 20.0)]);
     });
 
     test('a discrete-rate mount gets its nearest steps, fewer names when it has fewer', () {
-      final steps = buildSlewRateOptionsFromBands(const [SlewRateBand(0.5, 0.5), SlewRateBand(4.0, 4.0)]);
-      expect(simplePadSpeeds(steps), [('slow', 0.5), ('fast', 4.0)]);
-      final single = buildSlewRateOptionsFromBands(const [SlewRateBand(2.0, 2.0)]);
-      expect(simplePadSpeeds(single), [('fast', 2.0)]);
+      expect(simplePadSpeeds(const [SlewRateBand(0.5, 0.5), SlewRateBand(4.0, 4.0)]), [('slow', 0.5), ('fast', 4.0)]);
+      expect(simplePadSpeeds(const [SlewRateBand(2.0, 2.0)]), [('fast', 2.0)]);
       expect(simplePadSpeeds(const []), isEmpty);
     });
 
@@ -293,6 +300,7 @@ void main() {
         expect(mount.calls, ['move 1 $_medium lease 1000', 'move 1 $_medium lease 1000', 'move 1 $_medium lease 1000']);
       });
       expect(mount.calls.last, 'move 1 0.0');
+      expect(mount.refreshes, greaterThanOrEqualTo(4), reason: 'the position follows the move');
       mount.calls.clear();
       await tester.pump(const Duration(seconds: 1));
       expect(mount.calls, isEmpty, reason: 'no renewals after letting go');
@@ -413,20 +421,6 @@ void main() {
   });
 
   group('audit of #1785', () {
-    testWidgets('keyboard focus on the pad shows a 2 pt Info Blue ring', (tester) async {
-      await _pump(tester, _wire());
-      expect(find.byKey(const Key('simple-mount-pad-focus')), findsNothing);
-      tester.binding.focusManager.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
-      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-      await tester.pump();
-      for (var i = 0; i < 20 && find.byKey(const Key('simple-mount-pad-focus')).evaluate().isEmpty; i++) {
-        await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-        await tester.pump();
-      }
-      expect(find.byKey(const Key('simple-mount-pad-focus')), findsOneWidget);
-      tester.binding.focusManager.highlightStrategy = FocusHighlightStrategy.automatic;
-    });
-
     testWidgets('Finding home… and Taking a frame and solving… blink', (tester) async {
       final (_, _, solver, _) = await _pump(tester, _wire());
       await tester.tap(find.byKey(const Key('simple-mount-park-home')));
@@ -574,6 +568,28 @@ void main() {
       await tester.pump();
       expect(solver.checks, 2, reason: 'a finished centring checks again');
       await tester.pump(const Duration(seconds: 12)); // the Synced pill fades
+    });
+
+    testWidgets('a move after Check drops the answer, so Sync never writes an old solve', (tester) async {
+      final (_, mount, solver, _) = await _pump(tester, _wire());
+      solver.answer = solved;
+      await tester.tap(find.byKey(const Key('simple-mount-check')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('simple-mount-sync')), findsOneWidget);
+      await _hold(tester, 'n', () async {});
+      expect(find.byKey(const Key('simple-mount-sync')), findsNothing, reason: 'a pad nudge moved the mount');
+      expect(find.text('Pointing'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-mount-check')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byKey(const Key('simple-mount-sync')), findsOneWidget);
+      mount.set(_wire(runtime: 'slewing')); // a GoTo from elsewhere
+      await tester.pump();
+      mount.set(_wire());
+      await tester.pump();
+      expect(find.byKey(const Key('simple-mount-sync')), findsNothing, reason: 'a slew moved the mount');
+      expect(mount.calls.where((c) => c.startsWith('sync')), isEmpty);
     });
 
     testWidgets('no Target matched reads from the last go-to; within 1′ is On target with no Center', (tester) async {

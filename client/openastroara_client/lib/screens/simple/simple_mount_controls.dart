@@ -42,19 +42,30 @@ const Duration kSimplePadRenew = Duration(milliseconds: 300);
 /// with the text as the window does ([simpleRailScale]).
 const double kSimplePadCell = 60;
 
-/// The pad's speeds: Slow, Medium and Fast are the options nearest 5 %, 25 %
-/// and 100 % of the mount's top speed (one of the mount's own steps on a
-/// discrete-rate mount), deduped, so a mount with fewer steps gets fewer
-/// names. (id, rate) slowest first. Pure — unit-tested.
-List<(String, double)> simplePadSpeeds(List<SlewRateOption> options) {
-  if (options.isEmpty) return const [];
-  final rates = [for (final o in options) o.rateDegPerSec]..sort();
-  final top = rates.last;
-  double nearest(double want) =>
-      rates.reduce((a, b) => (a - want).abs() <= (b - want).abs() ? a : b);
+/// The pad's speeds: Slow, Medium and Fast are 5 %, 25 % and 100 % of the
+/// mount's top speed, each moved into the mount's rate bands (inside a band
+/// as is, else to the nearest band edge, so a discrete-rate mount gets its own
+/// steps), deduped, so a mount with fewer steps gets fewer names. (id, rate)
+/// slowest first. Pure — unit-tested.
+List<(String, double)> simplePadSpeeds(List<SlewRateBand> bands) {
+  final usable = [
+    for (final b in bands)
+      if (b.max > 0) b,
+  ];
+  if (usable.isEmpty) return const [];
+  final top = usable.map((b) => b.max).reduce(math.max);
+  double fit(double want) {
+    var best = 0.0, gap = double.infinity;
+    for (final b in usable) {
+      final r = want.clamp(b.min, b.max).toDouble();
+      if ((r - want).abs() < gap) (best, gap) = (r, (r - want).abs());
+    }
+    return best;
+  }
+
   final picks = <double>[];
   for (final want in [top * 0.05, top * 0.25, top]) {
-    final r = nearest(want);
+    final r = fit(want);
     if (!picks.contains(r)) picks.add(r);
   }
   final ids = switch (picks.length) {
@@ -168,9 +179,6 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
     onKeyEvent: _key,
   );
 
-  /// Keyboard focus is on the pad: a ring says the arrow keys move the mount.
-  bool _focused = false;
-
   /// Read on the first send: dispose may still need it to stop a held move,
   /// and ref is gone by then.
   late final MountNotifier _mount = ref.read(mountProvider.notifier);
@@ -219,6 +227,7 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
   void _press(String dir) {
     if (widget.blocker != null) return;
     if (_held != null) _release();
+    ref.read(simplePointingProvider.notifier).moved();
     setState(() => _held = dir);
     _refusalShown = false;
     _start();
@@ -231,6 +240,9 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
     for (final (axis, sign) in _padMoves[dir]!) {
       _send(axis, sign * _rate, lease: kSimplePadLeaseMs);
     }
+    // The position follows the move: many mounts report a hand move as
+    // tracking, not slewing, so the busy poll never starts.
+    _mount.refresh().ignore();
   }
 
   void _release() {
@@ -242,6 +254,7 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
     for (final (axis, _) in _padMoves[dir]!) {
       _send(axis, 0);
     }
+    _mount.refresh().ignore();
   }
 
   void _stopAll() {
@@ -356,23 +369,15 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
       ],
     ];
     final width = size * 3 + AraSpace.s8 * 2;
-    return FocusableActionDetector(
+    // No focus ring (user, 2026-11-11): a click focuses the pad too, and the
+    // ring read as a stray contour.
+    return Focus(
       focusNode: _focus,
-      onShowFocusHighlight: (v) => setState(() => _focused = v),
       child: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTapDown: (_) => _focus.requestFocus(),
-        child: Container(
-          key: _focused ? const Key('simple-mount-pad-focus') : null,
+        child: SizedBox(
           width: width,
-          // The rotator's and dome's dials' ring, outside the cells so
-          // nothing moves (2 pt Info Blue).
-          foregroundDecoration: _focused
-              ? BoxDecoration(
-                  border: Border.all(color: AraColors.accentInfo, width: 2),
-                  borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-                )
-              : null,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             spacing: AraSpace.s8,
@@ -537,7 +542,24 @@ class SimplePointingNotifier extends Notifier<SimplePointing> {
   @override
   SimplePointing build() {
     ref.onDispose(() => _poll?.cancel());
+    // A slew from anywhere (a GoTo, a park, a pad nudge the mount reports)
+    // makes the answer old.
+    ref.listen(mountProvider.select((s) => s.value?.isBusy ?? false), (
+      _,
+      busy,
+    ) {
+      if (busy) moved();
+    });
     return const SimplePointing();
+  }
+
+  /// The mount moved since the check: drop the answer, so Sync can never
+  /// write an old solve into the mount's model. A centring moves the mount
+  /// itself and keeps going.
+  void moved() {
+    if (!state.working && state.phase != SimplePointingPhase.idle) {
+      state = const SimplePointing();
+    }
   }
 
   AppLocalizations get _l10n => l10nFor(ref.read(appLocaleProvider));

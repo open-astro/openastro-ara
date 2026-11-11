@@ -53,6 +53,9 @@ namespace OpenAstroAra.Test {
             var svc = new Mock<ITelescopeService>();
             var result = await EquipmentEndpoints.SetTrackingRateAsync(new TelescopeTrackingRateRequestDto("ludicrous"), svc.Object, CancellationToken.None);
             Assert.That(StatusOf(result), Is.EqualTo(StatusCodes.Status400BadRequest));
+            // Enum.TryParse ORs flag-style lists ("Sidereal,Lunar" reads as Lunar); one name only.
+            var list = await EquipmentEndpoints.SetTrackingRateAsync(new TelescopeTrackingRateRequestDto("Sidereal,Lunar"), svc.Object, CancellationToken.None);
+            Assert.That(StatusOf(list), Is.EqualTo(StatusCodes.Status400BadRequest));
             svc.Verify(s => s.SetTrackingRateAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 

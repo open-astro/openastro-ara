@@ -1207,7 +1207,7 @@ public static partial class EquipmentEndpoints {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(svc);
         if (!Enum.TryParse<ASCOM.Common.DeviceInterfaces.DriveRate>(request.Rate, ignoreCase: true, out var rate)
-                || !Enum.IsDefined(rate) || int.TryParse(request.Rate, out _)) {
+                || !Enum.IsDefined(rate) || int.TryParse(request.Rate, out _) || request.Rate.Contains(',', StringComparison.Ordinal)) {
             return Results.Problem($"rate must be Sidereal, Lunar, Solar or King (got '{request.Rate}').",
                 statusCode: StatusCodes.Status400BadRequest);
         }
