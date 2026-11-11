@@ -49,6 +49,9 @@ namespace OpenAstroAra.Sequencer.Utility {
         private TaskCompletionSource? _resume;
         private PauseKind _kind = PauseKind.User;
         private CancellationTokenSource _interrupt = new();
+        // Set when a user's pause has handed _interrupt to a Cancel that runs outside the lock: a
+        // Resume in that gap must still swap it, or the token stays cancelled on an unarmed gate.
+        private bool _interruptHandedOut;
 
         /// <summary>Cancelled by a user's pause (a person, or the daemon's safety pause), and new
         /// again on Resume: the plan's work in progress stops with it (user, 2026-11-11). An
@@ -93,6 +96,7 @@ namespace OpenAstroAra.Sequencer.Utility {
                 }
                 if (kind == PauseKind.User) {
                     interrupt = _interrupt;
+                    _interruptHandedOut = true;
                 }
             }
             // Outside the lock: cancellation runs the work's callbacks inline.
@@ -106,8 +110,9 @@ namespace OpenAstroAra.Sequencer.Utility {
                 toComplete = _resume;
                 _resume = null;
                 _kind = PauseKind.User;
-                if (_interrupt.IsCancellationRequested) {
+                if (_interruptHandedOut || _interrupt.IsCancellationRequested) {
                     _interrupt = new CancellationTokenSource();
+                    _interruptHandedOut = false;
                 }
             }
             toComplete?.TrySetResult();

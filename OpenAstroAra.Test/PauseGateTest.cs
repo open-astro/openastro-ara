@@ -136,5 +136,38 @@ namespace OpenAstroAra.Test {
             gate.RequestPause(PauseKind.User);         // must NOT downgrade
             Assert.That(gate.PendingKind, Is.EqualTo(PauseKind.AwaitingUser));
         }
+
+        [Test]
+        public void A_resume_racing_a_pause_never_leaves_the_interrupt_cancelled_on_an_unarmed_gate() {
+            // RequestPause cancels outside its lock; a Resume in that gap used to keep the source, so
+            // the token stayed cancelled with no pause armed and the strategy spun on it.
+            const int rounds = 200_000;
+            var gates = new PauseGate[rounds];
+            for (var i = 0; i < rounds; i++) {
+                gates[i] = new PauseGate();
+            }
+            // Both threads meet before each gate (a spin barrier), so every round really races.
+            var arrived = new int[rounds];
+            void Race(Action<PauseGate> act) {
+                for (var i = 0; i < rounds; i++) {
+                    Interlocked.Increment(ref arrived[i]);
+                    while (Volatile.Read(ref arrived[i]) < 2) { }
+                    act(gates[i]);
+                }
+            }
+            var pauser = new Thread(() => Race(g => g.RequestPause()));
+            var resumer = new Thread(() => Race(g => g.Resume()));
+            pauser.Start();
+            resumer.Start();
+            pauser.Join();
+            resumer.Join();
+            var stuck = 0;
+            foreach (var g in gates) {
+                if (!g.IsPauseRequested && g.InterruptToken.IsCancellationRequested) {
+                    stuck++;
+                }
+            }
+            Assert.That(stuck, Is.Zero, "gates left with a cancelled interrupt and no pause armed");
+        }
     }
 }
