@@ -18,6 +18,7 @@ using OpenAstroAra.Core.Model.Equipment;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.SequenceItem.FlatDevice;
 using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Sequencer.Utility;
 using System;
@@ -211,6 +212,44 @@ namespace OpenAstroAra.Test {
             gate.Resume();
             await run.WaitAsync(Soon);
             Assert.That(slow.Starts, Is.EqualTo(1));
+        }
+
+        /// <summary>Takes its whole flat set in one call that honours its token, as the real executor does.</summary>
+        private sealed class SlowFlatExecutor : IFlatCaptureExecutor {
+            public int Calls;
+            public readonly TaskCompletionSource Started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public readonly TaskCompletionSource Release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public async Task<bool> CaptureFlatSetAsync(FlatSetRequest request, IProgress<ApplicationStatus> progress, CancellationToken token) {
+                Calls++;
+                Started.TrySetResult();
+                await Release.Task.WaitAsync(token);
+                return true;
+            }
+            public Task<bool> CaptureSkyFlatSetAsync(SkyFlatSetRequest request, IProgress<ApplicationStatus> progress, CancellationToken token) =>
+                CaptureFlatSetAsync(null!, progress, token);
+            public Task<bool> OpenCoverAsync(CancellationToken token) => Task.FromResult(true);
+        }
+
+        [Test]
+        public async Task A_pause_lets_the_flat_set_in_progress_finish() {
+            // A flat set takes its frames inside one instruction; stopping it mid-set meant Resume shot the whole set again.
+            var flats = new SlowFlatExecutor();
+            var after = new AfterItem();
+            var (block, gate, entered) = Plan(new FlatPanelFlats(flats), after);
+
+            var run = block.Execute(NoProgress, CancellationToken.None);
+            await flats.Started.Task.WaitAsync(Soon);
+            gate.RequestPause();
+            await Task.Delay(200);
+            Assert.That(entered.Task.IsCompleted, Is.False, "the flat set is still taking its frames");
+
+            flats.Release.SetResult();
+            await entered.Task.WaitAsync(Soon);
+            Assert.That((flats.Calls, after.Ran), Is.EqualTo((1, false)), "the set ran once; the pause lands after it");
+
+            gate.Resume();
+            await run.WaitAsync(Soon);
+            Assert.That((flats.Calls, after.Ran), Is.EqualTo((1, true)));
         }
     }
 }

@@ -6369,17 +6369,11 @@ abstract class AppLocalizations {
   /// **'No frames until the mount flips.'**
   String get monitorWaitingForFlipReason;
 
-  /// Monitor: the plan was paused by Ara
+  /// Monitor: the plan is paused (by the user or by Ara; the run state does not say which)
   ///
   /// In en, this message translates to:
-  /// **'Paused by Ara'**
-  String get monitorPausedByAra;
-
-  /// Monitor top line reason: paused by Ara
-  ///
-  /// In en, this message translates to:
-  /// **'It resumes on its own.'**
-  String get monitorPausedByAraReason;
+  /// **'Paused'**
+  String get monitorPaused;
 
   /// Monitor top line: the plan is paused until the user acts
   ///

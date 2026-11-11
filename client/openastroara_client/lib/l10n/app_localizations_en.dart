@@ -3772,10 +3772,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get monitorWaitingForFlipReason => 'No frames until the mount flips.';
 
   @override
-  String get monitorPausedByAra => 'Paused by Ara';
-
-  @override
-  String get monitorPausedByAraReason => 'It resumes on its own.';
+  String get monitorPaused => 'Paused';
 
   @override
   String get monitorWaitingForYou => 'Plan paused · waiting for you';

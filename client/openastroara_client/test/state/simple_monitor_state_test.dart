@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/models/guider_status.dart';
@@ -8,6 +10,7 @@ import 'package:openastroara/models/safety_monitor_status.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/weather_status.dart';
+import 'package:openastroara/screens/simple/simple_monitor_screen.dart' show monitorVerdictText;
 import 'package:openastroara/services/storage_space_api.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
@@ -339,14 +342,16 @@ void main() {
       expect(calm.read().verdict.kind, MonitorVerdictKind.linkLost, reason: 'link lost keeps its age on the top line');
     });
 
-    test('a meridian flip in progress, the wait before it, a pause by Ara and the wait for dark', () async {
+    test('a meridian flip in progress, the wait before it, a pause and the wait for dark', () async {
       final flipping = await _rig(run: _running(flip: const MeridianFlipInfo(state: 'flipping')));
       expect(flipping.read().verdict.kind, MonitorVerdictKind.flipping);
       final wait = await _rig(run: _running(reasonCode: 'meridian', waitLeft: 272));
       expect(wait.read().verdict.kind, MonitorVerdictKind.waitingForFlip);
       expect(wait.read().verdict.at, _t0.add(const Duration(seconds: 272)));
       final paused = await _rig(run: _running(state: SequenceRunState.paused));
-      expect((paused.read().verdict.kind, paused.read().verdict.status), (MonitorVerdictKind.pausedByAra, MonitorStatus.changing));
+      expect((paused.read().verdict.kind, paused.read().verdict.status), (MonitorVerdictKind.paused, MonitorStatus.changing));
+      // The run state does not say who paused it, and a person's own pause never resumes on its own.
+      expect(monitorVerdictText(lookupAppLocalizations(const Locale('en')), paused.read(), _t0), ('Paused', null));
       final dusk = await _rig(plan: SimpleRun(sequenceId: 'seq-1', started: true, targets: const [_m42], startAt: _t0.add(const Duration(hours: 1))));
       expect(dusk.read().verdict.kind, MonitorVerdictKind.waitingForDark);
       expect(dusk.read().now.countdownTo, _t0.add(const Duration(hours: 1)));

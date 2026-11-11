@@ -42,7 +42,7 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 **Endpoint(s) or area:** `POST /api/v1/sequences/{id}/pause`, and the daemon's own safety pause.
 
-**Decision:** a pause now stops what the plan has in progress, not only what comes next: an instruction (a wait, a slew, centring, cooling, an autofocus instruction) or a trigger (autofocus, dither) in progress is cancelled, the run suspends, and on Resume that instruction runs again and the triggers are asked again. A frame in progress (an exposure item) and a meridian flip still finish first. An instruction's own wait for the user (a failed settle, a prompt) does not interrupt anything. The response and the `sequence.paused` event are unchanged; `Paused` is still reported only once the run has suspended.
+**Decision:** a pause now stops what the plan has in progress, not only what comes next: an instruction (a wait, a slew, centring, cooling, an autofocus instruction) or a trigger (autofocus, dither) in progress is cancelled, the run suspends, and on Resume that instruction runs again and the triggers are asked again. A frame in progress (an exposure item), a flat set (`FlatPanelFlats`, `SkyFlats`, which take their frames inside one instruction) and a meridian flip still finish first. An instruction's own wait for the user (a failed settle, a prompt) does not interrupt anything. The response and the `sequence.paused` event are unchanged; `Paused` is still reported only once the run has suspended.
 
 **Reasoning:** with NINA's semantics (the current instruction always finishes) a paused plan kept focusing for minutes, which reads as a pause that did nothing (user, 2026-11-11). A frame keeps "Pause after this frame"; a flip is never cut short with the mount mid-move.
 

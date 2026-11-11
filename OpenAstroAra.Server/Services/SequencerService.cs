@@ -57,7 +57,7 @@ namespace OpenAstroAra.Server.Services;
 /// <see cref="OpenAstroAra.Sequencer.Utility.PauseGate"/> attached to the root
 /// container; the execution strategies await it at every instruction boundary,
 /// and a user's pause also stops the instruction or trigger in progress, which
-/// runs again from its start on Resume (a frame or container finishes first). The run
+/// runs again from its start on Resume (a frame, flat set or container finishes first). The run
 /// reports <c>Paused</c> and emits <c>sequence.paused</c> only when the engine
 /// ACTUALLY suspends (the gate's PauseEntered callback), never on the mere
 /// request; Abort/Stop win over an active pause via token cancellation.
@@ -275,7 +275,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
     public Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
         _unattendedShutdown?.NotifyUserActivity("sequencer.pause");
         // Arm the run's pause gate: the instruction or trigger in progress stops and
-        // runs again from its start on Resume (a frame or container finishes first),
+        // runs again from its start on Resume (a frame, flat set or container finishes first),
         // and the engine suspends at that boundary (SequentialStrategy). The state
         // flip to Paused + the sequence.paused event happen in OnPauseEntered when
         // the engine ACTUALLY suspends, never on the mere request. Idempotent, and

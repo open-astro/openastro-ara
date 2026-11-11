@@ -62,7 +62,7 @@ enum MonitorVerdictKind {
   cooler,
   flipping,
   waitingForFlip,
-  pausedByAra,
+  paused,
   waitingForYou,
   waitingForDark,
   noPlan,
@@ -157,7 +157,7 @@ enum MonitorNowWord {
   working,
   flipping,
   waitingForFlip,
-  pausedByAra,
+  paused,
   waitingForYou,
   waitingToStart,
   idle,
@@ -678,7 +678,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
         ? MonitorVerdict(MonitorVerdictKind.waitingForFlip, MonitorStatus.changing,
             at: now.add(Duration(seconds: waitLeft)))
         : paused
-        ? MonitorVerdict(MonitorVerdictKind.pausedByAra, MonitorStatus.changing, text: info?.reasonText)
+        ? MonitorVerdict(MonitorVerdictKind.paused, MonitorStatus.changing, text: info?.reasonText)
         : awaitingUser
         ? MonitorVerdict(MonitorVerdictKind.waitingForYou, MonitorStatus.warning, text: info?.reasonText)
         : startAt != null
@@ -700,7 +700,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
         : waitLeft != null
         ? (MonitorNowWord.waitingForFlip, MonitorStatus.changing)
         : paused
-        ? (MonitorNowWord.pausedByAra, MonitorStatus.changing)
+        ? (MonitorNowWord.paused, MonitorStatus.changing)
         : awaitingUser
         ? (MonitorNowWord.waitingForYou, MonitorStatus.warning)
         : exposing

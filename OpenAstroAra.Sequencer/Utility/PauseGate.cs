@@ -27,8 +27,8 @@ namespace OpenAstroAra.Sequencer.Utility {
     /// Semantics:
     ///  * <see cref="RequestPause"/> arms the gate. A <see cref="PauseKind.User"/>
     ///    pause also cancels <see cref="InterruptToken"/>, so the instruction or
-    ///    trigger in progress stops and runs again on Resume (a frame or container
-    ///    finishes first); the strategy then suspends at that boundary.
+    ///    trigger in progress stops and runs again on Resume (a frame, flat set or
+    ///    container finishes first); the strategy then suspends at that boundary.
     ///  * <see cref="PauseEntered"/> fires (on the engine thread) when a wait
     ///    actually blocks, so the owner can flip run state to Paused / notify only
     ///    for a suspension that really happened.

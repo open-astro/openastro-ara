@@ -4907,13 +4907,9 @@
   "@monitorWaitingForFlipReason": {
     "description": "Monitor top line reason while waiting for the meridian flip"
   },
-  "monitorPausedByAra": "Paused by Ara",
-  "@monitorPausedByAra": {
-    "description": "Monitor: the plan was paused by Ara"
-  },
-  "monitorPausedByAraReason": "It resumes on its own.",
-  "@monitorPausedByAraReason": {
-    "description": "Monitor top line reason: paused by Ara"
+  "monitorPaused": "Paused",
+  "@monitorPaused": {
+    "description": "Monitor: the plan is paused (by the user or by Ara; the run state does not say which)"
   },
   "monitorWaitingForYou": "Plan paused · waiting for you",
   "@monitorWaitingForYou": {

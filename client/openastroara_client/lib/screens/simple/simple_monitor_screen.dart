@@ -498,7 +498,7 @@ class _Tile extends StatelessWidget {
         l10n.previewWaitingForFlip(simpleCountdown(v.at!.difference(s.asOf).inSeconds)),
         l10n.monitorWaitingForFlipReason,
       ),
-    MonitorVerdictKind.pausedByAra => (l10n.monitorPausedByAra, v.text ?? l10n.monitorPausedByAraReason),
+    MonitorVerdictKind.paused => (l10n.monitorPaused, v.text),
     MonitorVerdictKind.waitingForYou => (l10n.monitorWaitingForYou, v.text),
     MonitorVerdictKind.waitingForDark => (
         l10n.monitorWaitingForDark(simpleClockTime(v.at!)),
@@ -546,7 +546,7 @@ class _NowTile extends StatelessWidget {
       MonitorNowWord.working => l10n.monitorRunning,
       MonitorNowWord.flipping => l10n.monitorFlipping,
       MonitorNowWord.waitingForFlip => l10n.planWaitingForFlip,
-      MonitorNowWord.pausedByAra => l10n.monitorPausedByAra,
+      MonitorNowWord.paused => l10n.monitorPaused,
       MonitorNowWord.waitingForYou => l10n.monitorWaitingForYouWord,
       MonitorNowWord.waitingToStart => l10n.monitorWaiting,
       MonitorNowWord.idle || MonitorNowWord.lastKnown => l10n.monitorIdle,

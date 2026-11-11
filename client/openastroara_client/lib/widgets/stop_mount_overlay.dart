@@ -404,7 +404,7 @@ class _MountStoppedDialogState extends State<_MountStoppedDialog> {
           Text('Current position: $position'),
           const SizedBox(height: 8),
           Text(
-            'Any running sequence pauses; a frame in progress finishes first. '
+            'Any running sequence pauses; a frame or flat set in progress finishes first. '
             'Cooler, guider, and other equipment are still running. Verify '
             'the mount is in a safe position before resuming.',
             style: theme.textTheme.bodySmall,

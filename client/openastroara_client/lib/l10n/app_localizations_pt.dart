@@ -3772,10 +3772,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get monitorWaitingForFlipReason => 'No frames until the mount flips.';
 
   @override
-  String get monitorPausedByAra => 'Paused by Ara';
-
-  @override
-  String get monitorPausedByAraReason => 'It resumes on its own.';
+  String get monitorPaused => 'Paused';
 
   @override
   String get monitorWaitingForYou => 'Plan paused · waiting for you';
@@ -7805,10 +7802,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Nenhum quadro até a montagem virar.';
 
   @override
-  String get monitorPausedByAra => 'Pausado pelo Ara';
-
-  @override
-  String get monitorPausedByAraReason => 'Ele retoma sozinho.';
+  String get monitorPaused => 'Pausado';
 
   @override
   String get monitorWaitingForYou => 'Plano pausado · aguardando você';
