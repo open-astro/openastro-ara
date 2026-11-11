@@ -300,6 +300,15 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
     _renew = null;
   }
 
+  /// The arrow keys or Escape were used since the last pointer down: the ring
+  /// shows, so a keyboard user sees the pad has focus (WCAG 2.4.7) and a
+  /// click never draws it (user, 2026-11-11: it read as a stray contour).
+  bool _keyRing = false;
+
+  void _showKeyRing() {
+    if (!_keyRing && mounted) setState(() => _keyRing = true);
+  }
+
   KeyEventResult _key(FocusNode _, KeyEvent e) {
     final keys = {
       LogicalKeyboardKey.arrowUp: 'n',
@@ -308,11 +317,13 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
       LogicalKeyboardKey.arrowRight: 'e',
     };
     if (e.logicalKey == LogicalKeyboardKey.escape && e is KeyDownEvent) {
+      _showKeyRing();
       _stopAll();
       return KeyEventResult.handled;
     }
     final dir = keys[e.logicalKey];
     if (dir == null) return KeyEventResult.ignored;
+    _showKeyRing();
     if (e is KeyDownEvent) {
       _press(dir);
     } else if (e is KeyUpEvent && _held == dir) {
@@ -369,15 +380,27 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
       ],
     ];
     final width = size * 3 + AraSpace.s8 * 2;
-    // No focus ring (user, 2026-11-11): a click focuses the pad too, and the
-    // ring read as a stray contour.
     return Focus(
       focusNode: _focus,
-      child: GestureDetector(
+      onFocusChange: (has) {
+        if (!has && _keyRing) setState(() => _keyRing = false);
+      },
+      child: Listener(
         behavior: HitTestBehavior.translucent,
-        onTapDown: (_) => _focus.requestFocus(),
-        child: SizedBox(
+        onPointerDown: (_) {
+          _focus.requestFocus();
+          if (_keyRing) setState(() => _keyRing = false);
+        },
+        child: Container(
+          key: _keyRing ? const Key('simple-mount-pad-focus') : null,
           width: width,
+          // The dials' ring (2 pt Info Blue), drawn over the pad so nothing moves.
+          foregroundDecoration: _keyRing
+              ? BoxDecoration(
+                  border: Border.all(color: AraColors.accentInfo, width: 2),
+                  borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+                )
+              : null,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             spacing: AraSpace.s8,

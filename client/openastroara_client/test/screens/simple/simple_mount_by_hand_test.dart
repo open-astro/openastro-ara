@@ -421,6 +421,21 @@ void main() {
   });
 
   group('audit of #1785', () {
+    testWidgets('the pad shows a focus ring after an arrow key, never after a click', (tester) async {
+      await _pump(tester, _wire());
+      await tester.tap(find.byKey(const Key('simple-mount-pad-stop')));
+      await tester.pump();
+      expect(find.byKey(const Key('simple-mount-pad-focus')), findsNothing, reason: 'a click draws no ring');
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pump();
+      expect(find.byKey(const Key('simple-mount-pad-focus')), findsOneWidget, reason: 'keyboard use shows it');
+      await tester.tap(find.byKey(const Key('simple-mount-pad-stop')));
+      await tester.pump();
+      expect(find.byKey(const Key('simple-mount-pad-focus')), findsNothing, reason: 'the next pointer hides it');
+    });
+
     testWidgets('Finding home… and Taking a frame and solving… blink', (tester) async {
       final (_, _, solver, _) = await _pump(tester, _wire());
       await tester.tap(find.byKey(const Key('simple-mount-park-home')));
