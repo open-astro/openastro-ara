@@ -7892,6 +7892,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'After target: right after its last frame, at its rotator angle. End of night: after the last target. With no panel the run asks for a screen first.'**
   String get planFlatsHint;
+
+  /// Calibration library row: a set from before the rig recorded which camera took it; it counts for any camera
+  ///
+  /// In en, this message translates to:
+  /// **'camera not recorded'**
+  String get calibrationLibraryNoCamera;
 }
 
 class _AppLocalizationsDelegate

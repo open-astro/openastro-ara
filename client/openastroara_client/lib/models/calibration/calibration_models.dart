@@ -141,6 +141,10 @@ class DarkLibraryEntry {
   final DateTime capturedUtc;
   final int fileSizeBytes;
 
+  /// The camera that took the set; null for frames from before the daemon
+  /// recorded it (they count for any camera).
+  final String? camera;
+
   const DarkLibraryEntry({
     required this.id,
     required this.exposureSeconds,
@@ -149,6 +153,7 @@ class DarkLibraryEntry {
     required this.frameCount,
     required this.capturedUtc,
     required this.fileSizeBytes,
+    this.camera,
   });
 
   factory DarkLibraryEntry.fromJson(Map<String, dynamic> json) {
@@ -161,6 +166,7 @@ class DarkLibraryEntry {
       capturedUtc: DateTime.tryParse(json['captured_utc'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       fileSizeBytes: (json['file_size_bytes'] as num?)?.toInt() ?? 0,
+      camera: json['camera'] as String?,
     );
   }
 }
@@ -176,6 +182,9 @@ class BiasLibraryEntry {
   final DateTime capturedUtc;
   final int fileSizeBytes;
 
+  /// The camera; null for frames from before the daemon recorded it.
+  final String? camera;
+
   const BiasLibraryEntry({
     required this.id,
     required this.gain,
@@ -184,6 +193,7 @@ class BiasLibraryEntry {
     required this.frameCount,
     required this.capturedUtc,
     required this.fileSizeBytes,
+    this.camera,
   });
 
   factory BiasLibraryEntry.fromJson(Map<String, dynamic> json) {
@@ -196,6 +206,7 @@ class BiasLibraryEntry {
       capturedUtc: DateTime.tryParse(json['captured_utc'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       fileSizeBytes: (json['file_size_bytes'] as num?)?.toInt() ?? 0,
+      camera: json['camera'] as String?,
     );
   }
 }
@@ -211,6 +222,9 @@ class DarkLibraryState {
   final List<DarkLibraryEntry> entries;
   final List<BiasLibraryEntry> biasEntries;
 
+  /// The camera the list is for (the connected main camera); null with none.
+  final String? camera;
+
   const DarkLibraryState({
     required this.status,
     required this.totalCombinations,
@@ -218,6 +232,7 @@ class DarkLibraryState {
     required this.generatedSequenceId,
     required this.entries,
     this.biasEntries = const [],
+    this.camera,
   });
 
   factory DarkLibraryState.fromJson(Map<String, dynamic> json) {
@@ -236,6 +251,7 @@ class DarkLibraryState {
           .whereType<Map<String, dynamic>>()
           .map(BiasLibraryEntry.fromJson)
           .toList(growable: false),
+      camera: json['camera'] as String?,
     );
   }
 }

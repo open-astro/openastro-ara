@@ -4703,6 +4703,9 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get planFlatsHint =>
       'After target: right after its last frame, at its rotator angle. End of night: after the last target. With no panel the run asks for a screen first.';
+
+  @override
+  String get calibrationLibraryNoCamera => 'camera not recorded';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -9432,4 +9435,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get planFlatsHint =>
       'Após o alvo: logo após o último quadro, no ângulo do rotador. Fim da noite: após o último alvo. Sem painel a sessão pede uma tela antes.';
+
+  @override
+  String get calibrationLibraryNoCamera => 'câmera não registrada';
 }

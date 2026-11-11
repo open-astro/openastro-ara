@@ -476,8 +476,18 @@ void main() {
       testWidgets('covers the plan: says so, lists what is on file with its age, and the shutter has nothing to do', (tester) async {
         await library(tester, [_dark(300)]);
         expect(find.text('Covers your plan'), findsOneWidget);
-        expect(find.text('3 weeks old · 30 frames'), findsWidgets);
+        expect(find.textContaining('3 weeks old · 30 frames'), findsWidgets);
         expect(find.textContaining('ASI2600MM'), findsOneWidget, reason: 'the library belongs to the camera');
+      });
+
+      testWidgets('the library is the camera the rig names, and a set from before cameras were recorded says so', (tester) async {
+        final (c, cal, _, _) = await library(tester, [_dark(300)]);
+        cal.library = DarkLibraryState(status: 'idle', totalCombinations: 0, completedCombinations: 0,
+            generatedSequenceId: null, entries: [_dark(300)], biasEntries: [_bias], camera: 'ZWO ASI533MC Pro');
+        c.invalidate(darkLibraryStatusProvider);
+        await tester.pumpAndSettle();
+        expect(find.text('ZWO ASI533MC Pro · reused for months'), findsOneWidget);
+        expect(find.textContaining('camera not recorded'), findsWidgets, reason: 'legacy sets count for any camera');
       });
 
       testWidgets('a gap: the plan\'s missing exposure is named, and the shutter builds just that at the plan\'s gain and temperature', (tester) async {

@@ -4703,4 +4703,7 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get planFlatsHint =>
       'After target: right after its last frame, at its rotator angle. End of night: after the last target. With no panel the run asks for a screen first.';
+
+  @override
+  String get calibrationLibraryNoCamera => 'camera not recorded';
 }

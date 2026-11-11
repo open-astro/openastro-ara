@@ -744,7 +744,7 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
       spacing: AraSpace.s8,
       children: [
         _section(
-          l.calibrationLibraryCamera(camera?.name ?? l.calibrationTabDarks),
+          l.calibrationLibraryCamera(lib?.camera ?? camera?.name ?? l.calibrationTabDarks),
           key: const Key('simple-calibration-library-camera'),
         ),
         Container(
@@ -779,7 +779,10 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
                 [_secs(d.exposureSeconds), settings(d.gain, d.temperatureC)]
                     .where((s) => s.isNotEmpty)
                     .join(' · '),
-                l.calibrationLibraryAge(_age(l, d.capturedUtc), d.frameCount),
+                [
+                  l.calibrationLibraryAge(_age(l, d.capturedUtc), d.frameCount),
+                  if (d.camera == null) l.calibrationLibraryNoCamera,
+                ].join(' · '),
                 covered: !old.contains(d),
                 tag: old.contains(d) ? l.calibrationOld : l.calibrationOnFileTag,
               ),
@@ -796,7 +799,10 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
                   if (b.offset != null) l.calibrationOffset(b.offset!),
                   '${b.bin}×${b.bin}',
                 ].join(' · '),
-                l.calibrationLibraryAge(_age(l, b.capturedUtc), b.frameCount),
+                [
+                  l.calibrationLibraryAge(_age(l, b.capturedUtc), b.frameCount),
+                  if (b.camera == null) l.calibrationLibraryNoCamera,
+                ].join(' · '),
                 covered: true,
                 tag: l.calibrationOnFileTag,
               ),

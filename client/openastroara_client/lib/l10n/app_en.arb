@@ -6052,5 +6052,9 @@
   "planFlatsHint": "After target: right after its last frame, at its rotator angle. End of night: after the last target. With no panel the run asks for a screen first.",
   "@planFlatsHint": {
     "description": "Plan sheet, Flats row: what the two choices do"
+  },
+  "calibrationLibraryNoCamera": "camera not recorded",
+  "@calibrationLibraryNoCamera": {
+    "description": "Calibration library row: a set from before the rig recorded which camera took it; it counts for any camera"
   }
 }
