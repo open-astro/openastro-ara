@@ -72,7 +72,9 @@
   .pad button.diag { font-size: 12px; color: var(--text2); }
   .pad button.diag, .pad button.stop { font-size: calc(var(--cell) * .21) !important; }
   .pad button.held { background: var(--sel); border-color: var(--sel); color: #fff; }
-  .pad button.stop { border-color: var(--err); color: #FF8A80; font-size: 12px; }
+  .pad button.stop, .pad button.homec { display: grid; place-items: center; }
+  .pad button.stop i { width: 20px; height: 20px; border-radius: 4px; background: var(--err); }
+  .pad button.homec { font-size: 26px !important; }
   .pad button:disabled { opacity: .35; cursor: default; }
   .pad.off button:not(.stop) { opacity: .35; cursor: default; }
   .speed button { min-width: 0 !important; padding: 8px 12px; }
@@ -150,7 +152,7 @@
     <div><h2>Speed</h2><p>Slow / Medium / Fast: the 5 %, 25 % and 100 % presets of the mount's top speed, or the nearest of its own fixed steps (fewer names when it has fewer steps). Starts on Medium; kept while the window is open only.</p></div>
     <div><h2>Unavailable</h2><p>The pad greys out with one reason under it; first match wins: parked, Plan imaging, polar alignment, guiding. During a GoTo only Stop works.</p></div>
     <div><h2>Tracking speed</h2><p>Sidereal, Lunar, Solar (King when the mount offers it), as named segments under Tracking. Only the rates the mount reports; a sidereal-only mount shows no row. Off sidereal, a caption says so. Layout A chosen 2026-11-11.</p></div>
-    <div><h2>Home</h2><p>A third segment after Parked / Unparked, only for mounts that can find home; it reads pressed while the mount is at home, and moving off home presses Unparked again. "Homing…" from the tap, "At home" when the mount says so.</p></div>
+    <div><h2>Home</h2><p>The pad's centre, a house; while the mount moves on its own it becomes the red Stop square. The Position row says At home. "Homing…" from the tap, "At home" when the mount says so.</p></div>
     <div><h2>Pointing · Check</h2><p>The mount's RA/Dec with Check beside it, no separate section. One quick frame at the Preview exposure, solved on the rig. Center shows only when more than 1′ off the Target.</p></div>
     <div><h2>Sync</h2><p>After a good Check, only while nothing runs (no plan imaging, no guiding, mount still): Sync writes the solve into the mount's model. Never automatic. A connected, still rotator is synced to the solved angle by Check itself.</p></div>
     <div><h2>Dome follows the mount</h2><p>On / Off in the Dome window, only for a dome that can turn. Using the dial, Park or Home turns following off and says so once.</p></div>
@@ -229,7 +231,7 @@ function padHtml() {
   const cell = (d, label, cls = '') => `<button class="${cls}${st.held.has(d) ? ' held' : ''}" data-d="${d}" aria-label="Move ${label}" ${off ? 'disabled' : ''}>${d.toUpperCase()}</button>`;
   return `<div class="pad${off ? ' off' : ''}" role="group" aria-label="Direction pad">
     ${cell('nw', 'north-west', 'diag')}${cell('n', 'north')}${cell('ne', 'north-east', 'diag')}
-    ${cell('w', 'west')}<button class="stop" data-stop aria-label="Stop the mount">Stop</button>${cell('e', 'east')}
+    ${cell('w', 'west')}${st.home === 'homing' ? '<button class="stop" data-stop aria-label="Stop the mount"><i></i></button>' : `<button class="homec" data-home aria-label="Home" ${st.rig === 'parked' ? 'disabled' : ''}>⌂</button>`}${cell('e', 'east')}
     ${cell('sw', 'south-west', 'diag')}${cell('s', 'south')}${cell('se', 'south-east', 'diag')}
   </div>`;
 }
@@ -250,14 +252,14 @@ function onOff(id, label, on, dis = false, onText = 'On') {
 }
 function rowsHtml() {
   const parked = st.rig === 'parked';
-  const homeLine = st.home === 'homing' ? '<span class="moving blinkt">Homing…</span>' : st.home === 'home' ? 'At home' : '';
+  const homeLine = st.home === 'homing' ? '<span class="moving blinkt">Finding home…</span>' : st.home === 'home' ? 'At home' : '';
   return `
     ${onOff('trk', 'Tracking', !parked, parked)}
     ${st.offered > 1 ? `<div class="r"><span class="l">Tracking speed</span><div class="seg speed" role="group" aria-label="Tracking speed">${TRACK.slice(0, st.offered).map(t =>
       `<button aria-pressed="${t === st.rate}" data-rate="${t}" ${parked ? 'disabled' : ''}>${t}</button>`).join('')}</div></div>` : ''}
     ${st.rate !== 'Sidereal' && st.offered > 1 ? `<span class="caption">Tracking at the ${st.rate.toLowerCase()} rate. Back to Sidereal for stars and galaxies.</span>` : ''}
     <div class="r"><span class="l">Position ${homeLine ? `<span class="caption">· ${homeLine}</span>` : ''}</span><div class="seg" role="group" aria-label="Position">
-      <button aria-pressed="${parked}">Parked</button><button aria-pressed="${!parked && st.home !== 'home'}">Unparked</button><button aria-pressed="${st.home === 'home'}" data-home ${parked || st.held.size || st.home === 'homing' ? 'disabled' : ''}>Home</button></div></div>
+      <button aria-pressed="${parked}">Parked</button><button aria-pressed="${!parked}">Unparked</button></div></div>
     ${onOff('flip', 'Meridian flip', true, false, 'Auto')}`;
 }
 function pointingHtml() {
@@ -329,10 +331,10 @@ function bind() {
     b.onpointerdown = e => { b.setPointerCapture(e.pointerId); press(d); };
     b.onpointerup = b.onpointercancel = () => release(d);
   });
-  const stop = w.querySelector('[data-stop]'); if (stop) stop.onclick = () => { stopAll(); render(); };
+  const stop = w.querySelector('[data-stop]'); if (stop) stop.onclick = () => { stopAll(); clearTimeout(st._h); st.home = 'idle'; render(); };
   w.querySelectorAll('[data-rate]').forEach(b => b.onclick = () => { st.rate = b.dataset.rate; render(); pill(`Mount · Tracking ${st.rate.toLowerCase()}`); });
   w.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => { st.speed = +b.dataset.speed; render(); });
-  const home = w.querySelector('[data-home]'); if (home) home.onclick = () => { st.home = 'homing'; render(); setTimeout(() => { st.home = 'home'; render(); }, 2500); };
+  const home = w.querySelector('[data-home]'); if (home) home.onclick = () => { st.home = 'homing'; render(); st._h = setTimeout(() => { st.home = 'home'; render(); }, 2500); };
   const sync = w.querySelector('[data-sync]'); if (sync) sync.onclick = () => { st.synced = true; render(); pill('Mount · Synced to the solved position'); };
   const check = w.querySelector('[data-check]'); if (check) check.onclick = () => { st.synced = false; st.pointing = 'solving'; render(); setTimeout(() => { st.pointing = 'done'; render(); }, 1600); };
   const centre = w.querySelector('[data-centre]'); if (centre) centre.onclick = () => { st.pointing = 'centring'; render(); st._c = setTimeout(() => { st.solve = 'on'; document.querySelectorAll('#solve button').forEach(x => x.setAttribute('aria-pressed', x.dataset.v === 'on')); st.pointing = 'done'; render(); }, 2500); };

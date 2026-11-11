@@ -27,6 +27,7 @@ import '../../util/friendly_error.dart';
 import '../../util/slew_rates.dart';
 import '../../widgets/status_indicator.dart' show StatusBlink;
 import 'simple_device_windows.dart' show SimpleWindowButton;
+import 'simple_preview_panel.dart' show SimpleStopSquare;
 import 'simple_shell.dart' show SimpleSegments, simpleRailScale;
 
 /// Simple Mode's Mount window controls for moving the mount by hand (#1649)
@@ -182,6 +183,9 @@ class SimpleMountPad extends ConsumerStatefulWidget {
     super.key,
     required this.speeds,
     required this.blocker,
+    this.moving = false,
+    this.canHome = false,
+    this.onHome,
   });
 
   /// From [simplePadSpeeds]; never empty (the window says the mount can't
@@ -190,6 +194,18 @@ class SimpleMountPad extends ConsumerStatefulWidget {
 
   /// From [simplePadBlocker]: null, or why the directions are off.
   final String? blocker;
+
+  /// The mount moves on its own (a Home, a GoTo, a park): the centre is Stop,
+  /// the red square, which aborts every move.
+  final bool moving;
+
+  /// The mount can find home: the centre is Home while it is still. Without
+  /// it the centre is always Stop.
+  final bool canHome;
+
+  /// Sends the mount home (the window asks first while a plan runs); null
+  /// while it can't (parked).
+  final VoidCallback? onHome;
 
   @override
   ConsumerState<SimpleMountPad> createState() => _SimpleMountPadState();
@@ -396,16 +412,30 @@ class _SimpleMountPadState extends ConsumerState<SimpleMountPad>
       ],
       [
         cell('w', w, l10n.padMoveWest),
-        _PadCell(
-          key: const Key('simple-mount-pad-stop'),
-          size: size,
-          label: l10n.deviceStop,
-          semantics: l10n.padStopMount,
-          stop: true,
-          small: true,
-          onDown: _stopAll,
-          onUp: () {},
-        ),
+        if (widget.canHome && !widget.moving)
+          _PadCell(
+            key: const Key('simple-mount-pad-home'),
+            size: size,
+            label: l10n.deviceHome,
+            semantics: l10n.deviceHome,
+            glyph: Icon(
+              Icons.home_rounded,
+              size: size * 0.45,
+              color: AraColors.textPrimary,
+            ),
+            onDown: widget.onHome,
+            onUp: () {},
+          )
+        else
+          _PadCell(
+            key: const Key('simple-mount-pad-stop'),
+            size: size,
+            label: l10n.deviceStop,
+            semantics: l10n.padStopMount,
+            glyph: const SimpleStopSquare(),
+            onDown: _stopAll,
+            onUp: () {},
+          ),
         cell('e', e, l10n.padMoveEast),
       ],
       [
@@ -499,17 +529,20 @@ class _PadCell extends StatelessWidget {
     required this.size,
     this.held = false,
     this.small = false,
-    this.stop = false,
+    this.glyph,
   });
 
   final double size;
   final String label;
+
+  /// Drawn instead of [label] (Home's house, Stop's red square); the label
+  /// stays for screen readers.
+  final Widget? glyph;
   final String semantics;
   final VoidCallback? onDown;
   final VoidCallback onUp;
   final bool held;
   final bool small;
-  final bool stop;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -537,24 +570,23 @@ class _PadCell extends StatelessWidget {
           decoration: BoxDecoration(
             color: held ? AraColors.selectionBg : AraColors.tileFill,
             borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-            border: stop ? Border.all(color: AraColors.accentError) : null,
           ),
-          child: Text(
-            label,
-            style: kSimpleText.copyWith(
-              fontSize: small
-                  ? AraFontSize.simpleUnit
-                  : AraFontSize.simplePadLetter,
-              fontWeight: FontWeight.w600,
-              color: stop
-                  ? AraColors.errorText
-                  : held
-                  ? AraColors.selectionFg
-                  : small
-                  ? AraColors.textSecondary
-                  : AraColors.textPrimary,
-            ),
-          ),
+          child:
+              glyph ??
+              Text(
+                label,
+                style: kSimpleText.copyWith(
+                  fontSize: small
+                      ? AraFontSize.simpleUnit
+                      : AraFontSize.simplePadLetter,
+                  fontWeight: FontWeight.w600,
+                  color: held
+                      ? AraColors.selectionFg
+                      : small
+                      ? AraColors.textSecondary
+                      : AraColors.textPrimary,
+                ),
+              ),
         ),
       ),
     ),

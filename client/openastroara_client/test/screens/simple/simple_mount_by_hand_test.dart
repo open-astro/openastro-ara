@@ -12,7 +12,7 @@ import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/verify_position_result.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart';
 import 'package:openastroara/screens/simple/simple_mount_controls.dart';
-import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegment;
+import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimpleStopSquare;
 import 'package:openastroara/services/autofocus_api.dart';
 import 'package:openastroara/services/center_api.dart';
 import 'package:openastroara/services/plate_solve_api.dart';
@@ -349,8 +349,20 @@ void main() {
       await tester.pump(const Duration(seconds: 4)); // the pad's "still moving" settle
     });
 
-    testWidgets('the centre Stop aborts every axis', (tester) async {
+    testWidgets('the centre is Home, and the red Stop square aborts every axis while the mount moves on its own',
+        (tester) async {
       final (_, mount, _, _) = await _pump(tester, _wire());
+      expect(find.byKey(const Key('simple-mount-pad-home')), findsOneWidget);
+      expect(find.byKey(const Key('simple-mount-pad-stop')), findsNothing);
+      mount.set(_wire(runtime: 'slewing')); // a GoTo from elsewhere
+      await tester.pump();
+      expect(find.byKey(const Key('simple-mount-pad-home')), findsNothing);
+      expect(
+        find.descendant(of: find.byKey(const Key('simple-mount-pad-stop')), matching: find.byType(SimpleStopSquare)),
+        findsOneWidget,
+        reason: 'the red square, not the word',
+      );
+      expect(find.descendant(of: find.byKey(const Key('simple-mount-pad-stop')), matching: find.text('Stop')), findsNothing);
       await tester.tap(find.byKey(const Key('simple-mount-pad-stop')));
       await tester.pump();
       expect(mount.calls, ['abort']);
@@ -413,7 +425,7 @@ void main() {
     });
 
     testWidgets('the arrow keys drive N/S/E/W while the pad has focus; Escape stops', (tester) async {
-      final (_, mount, _, _) = await _pump(tester, _wire());
+      final (_, mount, _, _) = await _pump(tester, _wire(home: false));
       await tester.tap(find.byKey(const Key('simple-mount-pad-stop')));
       await tester.pump();
       mount.calls.clear();
@@ -434,6 +446,8 @@ void main() {
       await _pump(tester, _wire());
       expect(find.bySemanticsLabel('Move north'), findsOneWidget);
       expect(find.bySemanticsLabel('Move south-west'), findsOneWidget);
+      expect(find.bySemanticsLabel('Home'), findsOneWidget);
+      await _pump(tester, _wire(home: false));
       expect(find.bySemanticsLabel('Stop the mount'), findsOneWidget);
       handle.dispose();
     });
@@ -453,7 +467,7 @@ void main() {
 
   group('audit of #1785', () {
     testWidgets('the pad shows a focus ring after an arrow key, never after a click', (tester) async {
-      await _pump(tester, _wire());
+      await _pump(tester, _wire(home: false));
       await tester.tap(find.byKey(const Key('simple-mount-pad-stop')));
       await tester.pump();
       expect(find.byKey(const Key('simple-mount-pad-focus')), findsNothing, reason: 'a click draws no ring');
@@ -470,7 +484,7 @@ void main() {
 
     testWidgets('Finding home… and Taking a frame and solving… blink', (tester) async {
       final (_, _, solver, _) = await _pump(tester, _wire());
-      await tester.tap(find.byKey(const Key('simple-mount-park-home')));
+      await tester.tap(find.byKey(const Key('simple-mount-pad-home')));
       await tester.pump();
       expect(find.ancestor(of: find.text('Finding home…'), matching: find.byType(StatusBlink)), findsOneWidget);
       await tester.pump(const Duration(seconds: 4));
@@ -518,10 +532,10 @@ void main() {
   });
 
   group('Position and Tracking speed', () {
-    testWidgets('Home is the third segment, for a mount that can find home; it sends the mount home', (tester) async {
+    testWidgets('Home is the pad centre, for a mount that can find home; it sends the mount home', (tester) async {
       final (c, mount, _, _) = await _pump(tester, _wire());
       expect(find.text('Position'), findsOneWidget);
-      await tester.tap(find.byKey(const Key('simple-mount-park-home')));
+      await tester.tap(find.byKey(const Key('simple-mount-pad-home')));
       await tester.pump();
       expect(mount.calls, ['home']);
       expect(find.text('Finding home…'), findsOneWidget, reason: 'from the tap');
@@ -530,13 +544,14 @@ void main() {
       mount.set(_wire(atHome: true, runtime: 'idle'));
       await tester.pump();
       expect(find.text('Finding home…'), findsNothing);
-      expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-mount-park-home'))).selected, isTrue);
+      expect(find.text('Position · At home'), findsOneWidget);
+      expect(find.byKey(const Key('simple-mount-park-home')), findsNothing, reason: 'Parked / Unparked only');
       expect(c.read(simpleMountHomeProvider), isFalse);
     });
 
     testWidgets('a Home that moves nothing clears after a few seconds', (tester) async {
       final (c, _, _, _) = await _pump(tester, _wire());
-      await tester.tap(find.byKey(const Key('simple-mount-park-home')));
+      await tester.tap(find.byKey(const Key('simple-mount-pad-home')));
       await tester.pump();
       await tester.pump(const Duration(seconds: 4));
       expect(c.read(simpleMountHomeProvider), isFalse);
@@ -544,14 +559,17 @@ void main() {
 
     testWidgets('no Home without the capability; Home takes no tap while parked', (tester) async {
       await _pump(tester, _wire(home: false));
-      expect(find.byKey(const Key('simple-mount-park-home')), findsNothing);
-      await _pump(tester, _wire(parked: true, runtime: 'parked'));
-      expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-mount-park-home'))).onTap, isNull);
+      expect(find.byKey(const Key('simple-mount-pad-home')), findsNothing);
+      expect(find.byKey(const Key('simple-mount-pad-stop')), findsOneWidget, reason: 'no Home: the centre is Stop');
+      final (_, c2, _, _) = await _pump(tester, _wire(parked: true, runtime: 'parked'));
+      await tester.tap(find.byKey(const Key('simple-mount-pad-home')));
+      await tester.pump();
+      expect(c2.calls, isEmpty, reason: 'parked: Home takes no tap');
     });
 
     testWidgets('while a plan runs, Home asks first', (tester) async {
       final (_, mount, _, _) = await _pump(tester, _wire(), imaging: true);
-      await tester.tap(find.byKey(const Key('simple-mount-park-home')));
+      await tester.tap(find.byKey(const Key('simple-mount-pad-home')));
       await tester.pump();
       expect(mount.calls, isEmpty);
       await tester.tap(find.text('Home anyway'));

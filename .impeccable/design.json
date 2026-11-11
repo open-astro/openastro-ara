@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-11T18:55:47+13:00",
+  "generatedAt": "2026-11-11T20:26:07+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -763,9 +763,9 @@
       "name": "Direction Pad (Simple Mode)",
       "kind": "custom",
       "refersTo": "simple-mount-pad",
-      "description": "The Mount window's pad: three rows of 60 pt tile cells (N, S, E, W in 18 pt 600, diagonals and the centre Stop in 13 pt; Stop outlined and lettered in Error red; W left, E right as in the full UI), Slow / Medium / Fast segments above (the reason it is off takes their place), a held cell in Selection Blue, its bottom level with the Pointing row's Check. Hold to move on a lease the rig ends itself; let go to stop (#1649).",
-      "html": "<div class=\"ds-pad\"><div class=\"ds-pad-speed\"><b>Slow</b><b class=\"on\">Medium</b><b>Fast</b></div><div class=\"ds-pad-grid\"><i class=\"s\">NW</i><i>N</i><i class=\"s\">NE</i><i>W</i><i class=\"stop\">Stop</i><i>E</i><i class=\"s\">SW</i><i>S</i><i class=\"s\">SE</i></div></div>",
-      "css": ".ds-pad{display:inline-flex;flex-direction:column;gap:8px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif} .ds-pad-speed{display:flex;background:rgba(56,56,56,.55);border-radius:8px} .ds-pad-speed b{flex:1;text-align:center;font-weight:400;font-size:15px;color:#A0A0A0;padding:12px 0;border-radius:8px} .ds-pad-speed b.on{background:#1976D2;color:#fff} .ds-pad-grid{display:grid;grid-template-columns:repeat(3,60px);gap:8px} .ds-pad-grid i{height:60px;display:grid;place-items:center;font-style:normal;font-weight:600;font-size:18px;color:#E0E0E0;background:rgba(56,56,56,.55);border-radius:10px} .ds-pad-grid i.s{font-size:13px;color:#A0A0A0} .ds-pad-grid i.stop{font-size:13px;color:#FF8A80;border:1px solid #E53935}"
+      "description": "The Mount window's pad: three rows of 60 pt tile cells growing with the text (N, S, E, W in 18 pt 600, diagonals in 13 pt; W left, E right as in the full UI), Slow / Medium / Fast segments above (the reason it is off takes their place), a held cell in Selection Blue, its bottom level with the Pointing row's Check. The centre is Home (a house glyph), the red stop square while the mount moves on its own. Hold to move on a lease the rig ends itself; let go to stop (#1649).",
+      "html": "<div class=\"ds-pad\"><div class=\"ds-pad-speed\"><b>Slow</b><b class=\"on\">Medium</b><b>Fast</b></div><div class=\"ds-pad-grid\"><i class=\"s\">NW</i><i>N</i><i class=\"s\">NE</i><i>W</i><i class=\"home\">⌂</i><i>E</i><i class=\"s\">SW</i><i>S</i><i class=\"s\">SE</i></div></div>",
+      "css": ".ds-pad{display:inline-flex;flex-direction:column;gap:8px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif} .ds-pad-speed{display:flex;background:rgba(56,56,56,.55);border-radius:8px} .ds-pad-speed b{flex:1;text-align:center;font-weight:400;font-size:15px;color:#A0A0A0;padding:12px 0;border-radius:8px} .ds-pad-speed b.on{background:#1976D2;color:#fff} .ds-pad-grid{display:grid;grid-template-columns:repeat(3,60px);gap:8px} .ds-pad-grid i{height:60px;display:grid;place-items:center;font-style:normal;font-weight:600;font-size:18px;color:#E0E0E0;background:rgba(56,56,56,.55);border-radius:10px} .ds-pad-grid i.s{font-size:13px;color:#A0A0A0} .ds-pad-grid i.home{font-size:24px}"
     },
     {
       "name": "Focus Knobs (Simple Mode)",

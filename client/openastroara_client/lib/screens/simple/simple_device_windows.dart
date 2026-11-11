@@ -879,14 +879,13 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
       }
       final homing = ref.watch(simpleMountHomeProvider);
       final canHome = caps?.canFindHome ?? false;
-      final position = m.parked
-          ? 'parked'
-          : m.atHome && canHome
-          ? 'home'
-          : 'unparked';
+      final position = m.parked ? 'parked' : 'unparked';
       children.add(
         simpleWindowRow(
-          context.l10n.deviceMountPosition,
+          // Home is the pad's centre now; the row still says where it is.
+          m.atHome && canHome && !homing
+              ? '${context.l10n.deviceMountPosition} · ${context.l10n.deviceAtHome}'
+              : context.l10n.deviceMountPosition,
           id: 'Position',
           moving || homing
               ? SizedBox(
@@ -933,15 +932,6 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                           !m.parked || (caps?.canUnpark ?? false),
                           () => _park(context, false),
                         ),
-                        if (canHome)
-                          (
-                            'home',
-                            context.l10n.deviceHome,
-                            !m.parked && !m.isBusy,
-                            () => planRunning
-                                ? setState(() => _asking = false)
-                                : _home(context),
-                          ),
                       ])
                         Flexible(
                           child: SimpleSegment(
@@ -951,13 +941,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                             shrinkToFit: true,
                             selected: position == id,
                             radius: AraRadius.container,
-                            onTap:
-                                position == id ||
-                                    !enabled ||
-                                    // Unparked from home is no move to ask for.
-                                    (id == 'unparked' && !m.parked)
-                                ? null
-                                : onTap,
+                            onTap: position == id || !enabled ? null : onTap,
                           ),
                         ),
                     ],
@@ -1044,6 +1028,17 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
           )
         : SimpleMountPad(
             speeds: speeds,
+            // The centre: Home, and Stop while the mount moves on its own
+            // (a Home, a GoTo, a park); a pad move stops on letting go.
+            moving:
+                ref.watch(simpleMountHomeProvider) ||
+                (m.isBusy && !ref.watch(simplePadMovingProvider)),
+            canHome: caps?.canFindHome ?? false,
+            onHome: m.parked || m.isBusy
+                ? null
+                : () => planRunning
+                      ? setState(() => _asking = false)
+                      : _home(context),
             blocker: simplePadBlocker(
               l10n,
               m,
