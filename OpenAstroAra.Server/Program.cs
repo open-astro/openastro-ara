@@ -1168,7 +1168,6 @@ public partial class Program {
             OpenAstroAra.Server.Services.Equipment.HeadlessFlatDeviceMediator>();
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IWeatherDataMediator,
             OpenAstroAra.Server.Services.Equipment.HeadlessWeatherDataMediator>();
-        // §38k-21 — IDomeFollower stub (non-mediator dome dependency of SynchronizeDome).
         // #1689 — the real follower (replaces the headless stub): turns the dome to keep the slit in front of the
         // mount. Hosted so its poll starts with the daemon and attaches itself to the DomeService.
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.IDomeSynchronization>(sp =>

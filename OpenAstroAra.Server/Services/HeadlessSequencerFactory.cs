@@ -321,7 +321,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 new SetSwitchValue(switchMediator),
                 // §38k-18 — dome instructions. Five depend only on IDomeMediator;
                 // Enable/DisableDomeSynchronization also take the telescope stub.
-                // (SynchronizeDome also needs IDomeFollower → deferred.)
+                // (SynchronizeDome follows below: it also needs an IDomeFollower.)
                 new OpenDomeShutter(domeMediator),
                 new CloseDomeShutter(domeMediator),
                 new ParkDome(domeMediator),
