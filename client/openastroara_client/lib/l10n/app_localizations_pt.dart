@@ -1263,7 +1263,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get shellSettings => 'Settings';
 
   @override
-  String get shellSky => 'Sky';
+  String get shellSky => 'Sky Map';
+
+  @override
+  String get shellStats => 'Stats';
 
   @override
   String get shellInfo => 'Info';
@@ -5457,7 +5460,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get shellSettings => 'Ajustes';
 
   @override
-  String get shellSky => 'Céu';
+  String get shellSky => 'Mapa do céu';
+
+  @override
+  String get shellStats => 'Números';
 
   @override
   String get shellInfo => 'Info';

@@ -93,6 +93,7 @@ import '../../widgets/imaging/guiding_strip.dart';
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../../widgets/sky_atlas/stellarium_view.dart';
 import '../library/image_library_screen.dart';
+import '../stats/stats_dashboard_screen.dart';
 import '../settings/settings_shell.dart';
 import '../shell_listeners.dart';
 import 'simple_preflight.dart';
@@ -103,6 +104,10 @@ import '../../state/settings/phd2_settings_state.dart'
     show phd2SettingsProvider;
 import 'simple_message_pills.dart';
 import '../album/sky_album_screen.dart';
+import '../../state/sky_atlas/dso_catalog_state.dart' show bundledCatalogProvider;
+import '../../state/album/album_art.dart';
+import '../../state/album/album_matching.dart' show skyPickArt;
+import '../../widgets/album/album_card.dart' show albumCardAspect;
 import 'simple_plan_panel.dart';
 import 'simple_preview_panel.dart';
 import 'simple_rig_card.dart';
@@ -1638,19 +1643,57 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
 /// The object picked in the sky, over it: its name, type and altitude, and
 /// Image this, which opens Plan's sheet with it.
-class _SkyPick extends StatelessWidget {
+class _SkyPick extends ConsumerWidget {
   const _SkyPick({required this.selection, required this.onImage});
 
   final PlanetariumSelection selection;
   final VoidCallback onImage;
 
   @override
-  Widget build(BuildContext context) => SimplePanel(
+  Widget build(BuildContext context, WidgetRef ref) {
+    // The card renders at once; the Art joins when the manifest and catalog
+    // have loaded.
+    final manifest = ref.watch(albumManifestProvider).value;
+    final catalog = ref.watch(bundledCatalogProvider).value;
+    final art = manifest == null || catalog == null
+        ? null
+        : skyPickArt(selection.designations, selection.name, catalog, manifest);
+    return _card(context, art);
+  }
+
+  Widget _card(BuildContext context, AlbumArt? art) => SimplePanel(
     padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       spacing: AraSpace.s16,
       children: [
+        if (art != null)
+          // A small portrait thumbnail at the Album's aspect, on its backdrop.
+          Semantics(
+            image: true,
+            label: selection.name,
+            child: ExcludeSemantics(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AraRadius.container),
+                child: ColoredBox(
+                  color: AraColors.albumArtBackdrop,
+                  child: SizedBox(
+                    width: 52,
+                    child: AspectRatio(
+                      aspectRatio: albumCardAspect,
+                      child: Image.asset(
+                        art.asset!,
+                        key: const Key('simple-sky-art'),
+                        fit: BoxFit.cover,
+                        cacheWidth: 104,
+                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         // Wraps in a narrow window (or a longer language) so Image this
         // keeps its place.
         Flexible(
@@ -1674,6 +1717,15 @@ class _SkyPick extends StatelessWidget {
                       : AraColors.textSecondary,
                 ),
               ),
+              if (art?.creditLine != null)
+                Text(
+                  context.l10n.albumArtCredit(art!.creditLine!),
+                  key: const Key('simple-sky-art-credit'),
+                  style: kSimpleText.copyWith(
+                    fontSize: AraFontSize.simpleCaption,
+                    color: AraColors.textSecondary,
+                  ),
+                ),
             ],
           ),
         ),
@@ -1937,9 +1989,18 @@ class _RailButton extends StatelessWidget {
     required this.onTap,
     this.selected = false,
     this.tall = false,
+    this.glyph,
+    this.twoLines = false,
   });
 
   final IconData? icon;
+
+  /// A drawn glyph in place of [icon], coloured by the same state colours.
+  final Widget Function(Color color)? glyph;
+
+  /// The caption may wrap to two lines under the icon (the Sky Map button:
+  /// pt-BR "Mapa do céu"); the others keep one line with an ellipsis.
+  final bool twoLines;
 
   /// The settings chip: tall enough for the icon over two lines (P.A.'s
   /// setup, Plan's time), in every mode so the rail never changes size.
@@ -1969,30 +2030,20 @@ class _RailButton extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (icon != null) ...[
-                Icon(
-                  icon,
-                  size: 24,
-                  color: onTap == null && !selected
-                      ? AraColors.textDisabled
-                      : selected
-                      ? AraColors.textPrimary
-                      : AraColors.textSecondary,
-                ),
-                const SizedBox(height: 2),
+              if (icon != null || glyph != null) ...[
+                if (glyph != null)
+                  glyph!(color)
+                else
+                  Icon(icon, size: 24, color: color),
+                // Two caption lines take the 2 px gap to fit the 56 px button.
+                if (!twoLines) const SizedBox(height: 2),
               ],
               Text(
                 label,
-                maxLines: icon == null || tall ? 2 : 1,
+                maxLines: icon == null && glyph == null || tall || twoLines ? 2 : 1,
                 textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
-                style: AraText.caption.copyWith(
-                  color: onTap == null && !selected
-                      ? AraColors.textDisabled
-                      : selected
-                      ? AraColors.textPrimary
-                      : AraColors.textSecondary,
-                ),
+                style: AraText.caption.copyWith(color: color),
               ),
             ],
           ),
@@ -2000,6 +2051,75 @@ class _RailButton extends StatelessWidget {
       ),
     ),
   );
+
+  Color get color => onTap == null && !selected
+      ? AraColors.textDisabled
+      : selected
+      ? AraColors.textPrimary
+      : AraColors.textSecondary;
+}
+
+/// The Sky Map icon: a folded map sheet with a four-star constellation, on
+/// Material's 24 px grid with its 2 px outlined stroke (Material has no
+/// star-chart glyph).
+class SkyChartIcon extends StatelessWidget {
+  const SkyChartIcon({super.key, required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+    size: const Size(24, 24),
+    painter: _SkyChartPainter(color),
+  );
+}
+
+class _SkyChartPainter extends CustomPainter {
+  _SkyChartPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final sheet = Path()
+      ..moveTo(3, 6.2)
+      ..lineTo(9, 4)
+      ..lineTo(15, 6.2)
+      ..lineTo(21, 4)
+      ..lineTo(21, 17.8)
+      ..lineTo(15, 20)
+      ..lineTo(9, 17.8)
+      ..lineTo(3, 20)
+      ..close();
+    canvas.drawPath(
+      sheet,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeJoin = StrokeJoin.round,
+    );
+    const stars = [Offset(6, 15), Offset(9.5, 9), Offset(13, 12.5), Offset(17.5, 8.5)];
+    canvas.drawPath(
+      Path()
+        ..moveTo(stars[0].dx, stars[0].dy)
+        ..lineTo(stars[1].dx, stars[1].dy)
+        ..lineTo(stars[2].dx, stars[2].dy)
+        ..lineTo(stars[3].dx, stars[3].dy),
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+    for (final p in stars) {
+      canvas.drawCircle(p, 1.3, Paint()..color = color);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SkyChartPainter old) => old.color != color;
 }
 
 /// How much the rails grow: none up to 1.1x text, then with the text, so
@@ -2061,7 +2181,8 @@ class _LeftRail extends StatelessWidget {
       children: [
         _RailButton(
           key: const Key('simple-sky'),
-          icon: Icons.public,
+          glyph: (c) => SkyChartIcon(color: c),
+          twoLines: true,
           label: context.l10n.shellSky,
           selected: sky,
           onTap: onSky,
@@ -2074,6 +2195,16 @@ class _LeftRail extends StatelessWidget {
           label: context.l10n.shellLibrary,
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
+          ),
+        ),
+        _RailButton(
+          key: const Key('simple-stats'),
+          icon: Icons.bar_chart_outlined,
+          label: context.l10n.shellStats,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const StatsDashboardScreen(simple: true),
+            ),
           ),
         ),
         _RailButton(

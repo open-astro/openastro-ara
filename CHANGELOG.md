@@ -35,6 +35,13 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Added (sky map and stats)
+
+- Simple Mode's Sky button is now **Sky Map** (Portuguese **Mapa do céu**, on two lines), with a drawn sky-chart icon in place of the globe (#1647).
+- The Simple Mode Sky Map is a dark star chart: crisp star points sized by brightness, constellation lines and names, the RA/Dec grid and named deep-sky markers, with no atmosphere, landscape, Milky Way, DSS2 photos or constellation art. The Full UI planetarium and its saved Display toggles are unchanged (#1647).
+- The card for an object picked on the Simple Mode Sky Map shows its Sky Album Art and credit when it is a Messier or Caldwell object, found by any of its names, offline (#1647).
+- Simple Mode has a **Stats** button beside Library and Sky Album. It opens the Stats page with Overview, Best frames, Achievements and the Calendar heatmap only; Targets, Pi performance, the troubleshooting charts and the export menu stay in the Full UI (#1646).
+
 ### Added (mount by hand)
 
 - Simple Mode's Mount window has a direction pad: eight directions around a center Stop, with Slow, Medium and Fast speeds taken from the mount's own rates. Hold a direction to move and let go to stop. The arrow keys drive it, and Escape stops. The pad is off, saying why, while the mount is parked, the plan is imaging, polar alignment runs or the Guider guides (#1649).

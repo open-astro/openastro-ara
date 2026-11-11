@@ -7,6 +7,7 @@ import 'dart:math' as math;
 import '../../models/preflight_checklist.dart';
 import '../../services/dso_catalog_service.dart';
 import '../../util/dedupe_catalog.dart';
+import 'album_art.dart';
 import 'album_frame.dart';
 
 enum AlbumBook { messier, caldwell }
@@ -36,6 +37,26 @@ bool targetNames(String target, PlanningDso o) {
   final key = _albumKey(target);
   if (key.isEmpty) return false;
   return [o.id, o.name, ...o.aliases].any((d) => _albumKey(d) == key);
+}
+
+/// The Art of the object the sky picked: the Messier or Caldwell catalog
+/// object that one of [designations] / [name] names (as [targetNames]
+/// folds), and only when its manifest row has art. Null otherwise.
+AlbumArt? skyPickArt(
+  Iterable<String> designations,
+  String name,
+  List<PlanningDso> catalog,
+  Map<String, AlbumArt> manifest,
+) {
+  // The engine prefixes common names ("NAME Orion Nebula").
+  final names = [for (final d in [...designations, name]) d.replaceFirst(RegExp(r'^NAME\s+'), '')];
+  for (final o in catalog) {
+    final num = o.messierNum != null ? 'M${o.messierNum}' : (o.caldwellNum != null ? 'C${o.caldwellNum}' : null);
+    if (num == null || !names.any((n) => targetNames(n, o))) continue;
+    final art = manifest[num];
+    return art?.asset == null ? null : art;
+  }
+  return null;
 }
 
 final RegExp _catalogWord = RegExp(r'^\s*(messier|caldwell)', caseSensitive: false);

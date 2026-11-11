@@ -22,14 +22,19 @@ import '../../l10n/l10n.dart';
 /// Quality composite, Calendar heatmap) render via fl_chart. CSV export +
 /// per-target detail drill-down remain follow-ups.
 class StatsDashboardScreen extends ConsumerWidget {
-  const StatsDashboardScreen({super.key});
+  const StatsDashboardScreen({super.key, this.simple = false});
+
+  /// Opened from Simple Mode: only Overview, Best frames, Achievements and
+  /// the Calendar heatmap; no Targets, rig diagnostics, troubleshooting
+  /// charts or export.
+  final bool simple;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Stats'),
-        actions: [
+        actions: simple ? null : [
           Builder(
             builder: (context) => PopupMenuButton<String>(
               tooltip: 'Export CSV',
@@ -68,18 +73,22 @@ class StatsDashboardScreen extends ConsumerWidget {
         children: [
           const OverviewSection(),
           const SizedBox(height: 24),
-          const TargetsSection(),
-          const SizedBox(height: 24),
+          if (!simple) ...[
+            const TargetsSection(),
+            const SizedBox(height: 24),
+          ],
           const BestFramesSection(),
           const SizedBox(height: 24),
           const AchievementsSection(),
           const SizedBox(height: 24),
-          const PiPerformanceSection(),
-          const SizedBox(height: 24),
-          _SectionTitle(title: 'Visualizations', context: context),
-          const FocusTempScatterChart(),
-          const GuidingRmsChart(),
-          const FrameQualityChart(),
+          if (!simple) ...[
+            const PiPerformanceSection(),
+            const SizedBox(height: 24),
+            _SectionTitle(title: 'Visualizations', context: context),
+            const FocusTempScatterChart(),
+            const GuidingRmsChart(),
+            const FrameQualityChart(),
+          ],
           const CalendarHeatmap(),
         ],
       ),

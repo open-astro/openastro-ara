@@ -81,12 +81,35 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
     await sleep(600);
     res.yaw1 = await page.evaluate(() => window.stel.core.observer.yaw);
   }
+  // Layer state of a freshly loaded page: the Simple Mode chart (?bare=1) and
+  // the Full UI defaults (no flag).
+  const layerState = () => page.evaluate(() => { const c = window.stel.core; return {
+    atmosphere: c.atmosphere.visible, landscape: c.landscapes.visible, milkyway: c.milkyway.visible,
+    dss: c.dss.visible, art: c.constellations.images_visible, lines: c.constellations.lines_visible,
+    grid: c.lines.equatorial.visible, dsos: c.dsos.visible, hints: c.dsos.hints_visible }; });
+  const loadLayers = async (query) => {
+    await page.goto(`http://localhost:${PORT}/index.html?${query}`, { waitUntil: 'load', timeout: 40000 });
+    for (let i = 0; i < 20; i++) {
+      if (await page.evaluate(() => !!(window.stel && window.stel.core))) break;
+      await sleep(3000);
+    }
+    return layerState();
+  };
+  if (ready) {
+    res.chart = await loadLayers('bare=1');
+    res.full = await loadLayers('lat=34.66&lon=-106.78');
+  }
   console.log('=== RESULT ===\n' + JSON.stringify(res, null, 2));
   console.log('=== PAGE LOGS (' + logs.length + ') ===\n' + logs.slice(0, 50).join('\n'));
   await browser.close(); server.close();
   // Verdict
   const ok = res.ready && res.fov1 < res.fov0 && Math.abs(res.yaw1 - res.yaw0) > 1e-6 &&
-             Math.abs(res.latRad - 34.66 * Math.PI / 180) < 1e-3;
+             Math.abs(res.latRad - 34.66 * Math.PI / 180) < 1e-3 &&
+             // Simple Mode chart: art/atmosphere/landscape/Milky Way/DSS2 off; lines, grid, DSO hints on.
+             !res.chart.atmosphere && !res.chart.landscape && !res.chart.milkyway && !res.chart.dss &&
+             !res.chart.art && res.chart.lines && res.chart.grid && res.chart.dsos && res.chart.hints &&
+             // Full UI: today's defaults (landscape and DSS2 on, atmosphere off).
+             res.full.landscape && res.full.dss && !res.full.atmosphere && res.full.lines;
   console.log('VERDICT=' + (ok ? 'PASS' : 'FAIL'));
   process.exit(ok ? 0 : 2);
 })().catch(e => { console.error('HARNESS ERROR', e); process.exit(1); });

@@ -1263,7 +1263,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellSettings => 'Settings';
 
   @override
-  String get shellSky => 'Sky';
+  String get shellSky => 'Sky Map';
+
+  @override
+  String get shellStats => 'Stats';
 
   @override
   String get shellInfo => 'Info';
