@@ -4051,4 +4051,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get calibrationActionStop => 'stop the calibration frames';
+
+  @override
+  String get planLight => 'Light';
+
+  @override
+  String get planFlat => 'Flat';
+
+  @override
+  String get planExposureAuto => 'Auto';
 }

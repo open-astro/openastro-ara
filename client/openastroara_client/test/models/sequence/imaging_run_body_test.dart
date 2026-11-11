@@ -523,6 +523,22 @@ void main() {
           rig: rig,
         );
 
+    test('#1757 a Flat row shoots the panel\'s auto-exposure flats for its filter; a Light row is unchanged', () {
+      const light = FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30);
+      final before = block(RigCapabilities.everything, plan: const [light]);
+      final mixed = block(RigCapabilities.everything,
+          plan: const [light, FilterPlanStep(filterName: 'Ha', exposureSeconds: 120, frameCount: 25, frameType: PlanFrameType.flat)]);
+
+      final kids = childrenOf(mixed);
+      final flats = kids.singleWhere((c) => c[r'$type'] == flatPanelFlatsType);
+      expect(flats['FrameCount'], 25);
+      final i = kids.indexOf(flats);
+      expect((kids[i - 1]['Filter'] as Map)['_name'], 'Ha', reason: 'the switch to its filter comes first');
+      expect(kids.where((c) => c['Name'] == 'Ha Imaging'), isEmpty, reason: 'no lights for a Flat row');
+      expect(childrenOf(before).firstWhere((c) => c['Name'] == 'L Imaging'),
+          kids.firstWhere((c) => c['Name'] == 'L Imaging'));
+    });
+
     test('#1264 the probe carries a SPEC-SHEET prior as PriorSeconds only when given (never the stored ceiling)', () {
       Map<String, dynamic> probeOf(Map<String, dynamic> b) =>
           childrenOf(b).singleWhere((c) => c[r'$type'] == trackingProbeType);

@@ -5346,5 +5346,17 @@
   "calibrationActionStop": "stop the calibration frames",
   "@calibrationActionStop": {
     "description": "Simple Mode, after Couldn't: stopping the calibration run failed"
+  },
+  "planLight": "Light",
+  "@planLight": {
+    "description": "Plan sheet: a filter row shoots lights (the night's frames of the target) (#1757)"
+  },
+  "planFlat": "Flat",
+  "@planFlat": {
+    "description": "Plan sheet: a filter row shoots flats with the panel instead of lights (#1757)"
+  },
+  "planExposureAuto": "Auto",
+  "@planExposureAuto": {
+    "description": "Plan sheet: a flat row's exposure, set by the panel's flats to the Target ADU"
   }
 }

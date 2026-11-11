@@ -6848,6 +6848,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'stop the calibration frames'**
   String get calibrationActionStop;
+
+  /// Plan sheet: a filter row shoots lights (the night's frames of the target) (#1757)
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get planLight;
+
+  /// Plan sheet: a filter row shoots flats with the panel instead of lights (#1757)
+  ///
+  /// In en, this message translates to:
+  /// **'Flat'**
+  String get planFlat;
+
+  /// Plan sheet: a flat row's exposure, set by the panel's flats to the Target ADU
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get planExposureAuto;
 }
 
 class _AppLocalizationsDelegate

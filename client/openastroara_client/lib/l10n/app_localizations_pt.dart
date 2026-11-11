@@ -4051,6 +4051,15 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get calibrationActionStop => 'stop the calibration frames';
+
+  @override
+  String get planLight => 'Light';
+
+  @override
+  String get planFlat => 'Flat';
+
+  @override
+  String get planExposureAuto => 'Auto';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -8128,4 +8137,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get calibrationActionStop => 'parar os quadros de calibração';
+
+  @override
+  String get planLight => 'Light';
+
+  @override
+  String get planFlat => 'Flat';
+
+  @override
+  String get planExposureAuto => 'Auto';
 }

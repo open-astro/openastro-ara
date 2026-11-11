@@ -192,24 +192,33 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
     if (!_loaded) state = _defaults();
   }
 
+  // A flat row keeps its count: the window sizes lights, not flats.
   FilterPlanStep _fit(FilterPlanStep s, double exposureSeconds) =>
-      FilterPlanStep(
-        filterName: s.filterName,
-        exposureSeconds: exposureSeconds,
-        frameCount: planFrameCount(
-          exposureSeconds,
-          remainingDarkHours: _darkHours,
-          filterCount: state.length,
-        ),
-      );
+      s.frameType == PlanFrameType.flat
+      ? s
+      : FilterPlanStep(
+          filterName: s.filterName,
+          exposureSeconds: exposureSeconds,
+          frameCount: planFrameCount(
+            exposureSeconds,
+            remainingDarkHours: _darkHours,
+            filterCount: state.length,
+          ),
+        );
 
-  void _set(int i, {double? exposureSeconds, int? frameCount}) => state = [
+  void _set(
+    int i, {
+    double? exposureSeconds,
+    int? frameCount,
+    PlanFrameType? frameType,
+  }) => state = [
     for (var j = 0; j < state.length; j++)
       j == i
           ? FilterPlanStep(
               filterName: state[j].filterName,
               exposureSeconds: exposureSeconds ?? state[j].exposureSeconds,
               frameCount: frameCount ?? state[j].frameCount,
+              frameType: frameType ?? state[j].frameType,
             )
           : state[j],
   ];
@@ -228,6 +237,9 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
             j == i ? _fit(state[j], seconds) : state[j],
         ];
   void setFrames(int i, int count) => _set(i, frameCount: count);
+
+  /// #1757 — row [i] shoots lights or flats; a new row starts as Light.
+  void setFrameType(int i, PlanFrameType type) => _set(i, frameType: type);
 
   // The last row stays: a run needs something to take.
   void remove(int i) {

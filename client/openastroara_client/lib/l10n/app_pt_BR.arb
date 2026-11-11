@@ -1124,5 +1124,8 @@
   "calibrationDone": "Quadros de calibração concluídos",
   "calibrationOnFile": "Flats, darks e bias já salvos",
   "calibrationActionShoot": "iniciar os quadros de calibração",
-  "calibrationActionStop": "parar os quadros de calibração"
+  "calibrationActionStop": "parar os quadros de calibração",
+  "planLight": "Light",
+  "planFlat": "Flat",
+  "planExposureAuto": "Auto"
 }

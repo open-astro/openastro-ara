@@ -183,15 +183,24 @@ Map<String, dynamic> buildImagingRunBody({
 /// One step of a filter-aware target plan: image [filterName] for
 /// [frameCount] subs of [exposureSeconds] each. Built by the Run tab's plan
 /// chooser (SHO / LRGB / single filter) from the user's planning filter set.
+/// What a plan row shoots (#1757). Darks and bias are never rows: they don't
+/// depend on the filter.
+enum PlanFrameType { light, flat }
+
 class FilterPlanStep {
   final String filterName;
   final double exposureSeconds;
   final int frameCount;
 
+  /// A flat row ignores [exposureSeconds]: the panel's flats expose to the
+  /// Target ADU on their own.
+  final PlanFrameType frameType;
+
   const FilterPlanStep({
     required this.filterName,
     required this.exposureSeconds,
     required this.frameCount,
+    this.frameType = PlanFrameType.light,
   });
 }
 
@@ -499,11 +508,19 @@ Map<String, dynamic> buildTargetBlock({
     if (plan != null)
       for (var i = 0; i < plan.length; i++) ...[
         if (i > 0) ?switchTo(plan[i].filterName),
-        imagingLoop(
-          name: '${plan[i].filterName.trim()} Imaging',
-          expSeconds: plan[i].exposureSeconds,
-          count: plan[i].frameCount,
-        ),
+        if (plan[i].frameType == PlanFrameType.flat)
+          // The matching-flats generator's own flat set: the panel exposes to
+          // the Target ADU and files FLATs.
+          _item(flatPanelFlatsType)
+            ..['FrameCount'] = plan[i].frameCount
+            ..['Gain'] = gain
+            ..['Offset'] = offset
+        else
+          imagingLoop(
+            name: '${plan[i].filterName.trim()} Imaging',
+            expSeconds: plan[i].exposureSeconds,
+            count: plan[i].frameCount,
+          ),
       ]
     else
       imagingLoop(

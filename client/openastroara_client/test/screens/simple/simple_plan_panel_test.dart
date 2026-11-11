@@ -53,6 +53,8 @@ import 'package:openastroara/models/library/live_library.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
 import 'package:openastroara/state/simple_flats_choice_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
+import 'package:openastroara/models/flat_panel_status.dart';
+import 'package:openastroara/state/equipment/flat_panel_state.dart';
 
 const _m42 = PlanetariumSelection(
     name: 'M42', kind: 'Nebula', raHours: 5.59, decDeg: -5.39, raJ2000Hours: 5.59, decJ2000Deg: -5.39, altDeg: 30, maxAltDeg: 45);
@@ -316,6 +318,12 @@ Future<ProviderContainer> _pump(WidgetTester tester, _Seq seq, Widget child,
 }
 
 final _en = lookupAppLocalizations(const Locale('en'));
+
+class _Panel extends FlatPanelNotifier {
+  @override
+  Future<FlatPanelStatus?> build() async =>
+      FlatPanelStatus.fromJson({'device_id': 'd', 'name': 'Flip-Flat', 'state': 'connected'});
+}
 
 
 /// Tabs (at most [max] times) until keyboard focus is inside the widget keyed [k].
@@ -656,6 +664,26 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-run-queue')));
     await tester.pumpAndSettle();
   }
+
+  testWidgets('#1757 with a flat panel each row is Light or Flat; new rows start Light and a Flat row queues panel flats', (tester) async {
+    final (c, seq) = await run(tester, overrides: [flatPanelProvider.overrideWith(_Panel.new)]);
+    expect(c.read(simpleRunPlanProvider).every((s) => s.frameType == PlanFrameType.light), isTrue);
+
+    await tester.tap(find.byKey(const Key('simple-run-type-0')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Flat').last);
+    await tester.pumpAndSettle();
+    expect(c.read(simpleRunPlanProvider).first.frameType, PlanFrameType.flat);
+    expect(find.descendant(of: find.byKey(const Key('simple-run-exposure-0')), matching: find.text('Auto')), findsOneWidget);
+
+    await create(tester);
+    expect(jsonEncode(seq.bodies.values.single), contains('FlatPanelFlats'));
+  });
+
+  testWidgets('#1757 without a flat panel the rows have no Light / Flat choice', (tester) async {
+    await run(tester);
+    expect(find.byKey(const Key('simple-run-type-0')), findsNothing);
+  });
 
   testWidgets('a plan on a rig with no filter wheel never stops to ask for a filter change', (tester) async {
     final (_, seq) = await run(tester);

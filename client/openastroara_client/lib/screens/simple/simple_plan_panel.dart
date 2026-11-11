@@ -14,6 +14,7 @@ import '../../state/simple_flats_choice_state.dart';
 import '../../models/sequence/imaging_run_body.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../state/equipment/camera_state.dart';
+import '../../state/equipment/flat_panel_state.dart';
 import '../../state/planning/sky_model_calibration_state.dart';
 import '../../state/sequencer/create_imaging_run.dart';
 import '../../state/sequencer/sequence_list_state.dart';
@@ -778,6 +779,11 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
 }
 
 TextStyle get _dim => kSimpleText.copyWith(color: AraColors.textSecondary);
+
+/// A panel flat's time in the sheet's estimate, its exposure solve included.
+// shortcut: one guess for every panel and filter; read the daemon's flat
+// training if the estimate is visibly off.
+const kSimpleFlatSecondsEstimate = 5.0;
 TextStyle get _head =>
     kSimpleText.copyWith(fontSize: 16, fontWeight: FontWeight.w600);
 
@@ -940,8 +946,16 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final filters = ref.watch(filterSetProvider).filters;
     final seconds = steps.fold(
       0.0,
-      (t, s) => t + s.exposureSeconds * s.frameCount,
+      (t, s) =>
+          t +
+          (s.frameType == PlanFrameType.flat
+                  ? kSimpleFlatSecondsEstimate
+                  : s.exposureSeconds) *
+              s.frameCount,
     );
+    final canFlat =
+        (ref.watch(flatPanelProvider).value?.isConnected ?? false) ||
+        steps.any((s) => s.frameType == PlanFrameType.flat);
     final k =
         ref.watch(skyModelCalibrationProvider).value?.appliedK ?? const {};
     final suggested = [
@@ -1210,14 +1224,32 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             spacing: AraSpace.s8,
             children: [
-              SizedBox(
-                width: nameWidth,
-                child: Text(
-                  steps[i].filterName.isEmpty ? '—' : steps[i].filterName,
-                  style: nameStyle,
-                  maxLines: 1,
+              // #1757 — with a flat panel a row can shoot flats instead.
+              if (canFlat)
+                Expanded(
+                  child: SimplePresetTile<PlanFrameType>(
+                    key: Key('simple-run-type-$i'),
+                    label: steps[i].filterName.isEmpty
+                        ? '—'
+                        : steps[i].filterName,
+                    value: steps[i].frameType,
+                    options: PlanFrameType.values,
+                    format: (t) => switch (t) {
+                      PlanFrameType.light => context.l10n.planLight,
+                      PlanFrameType.flat => context.l10n.planFlat,
+                    },
+                    onSelected: (t) => plan.setFrameType(i, t),
+                  ),
+                )
+              else
+                SizedBox(
+                  width: nameWidth,
+                  child: Text(
+                    steps[i].filterName.isEmpty ? '—' : steps[i].filterName,
+                    style: nameStyle,
+                    maxLines: 1,
+                  ),
                 ),
-              ),
               Expanded(
                 child: SimplePresetTile<Duration>(
                   key: Key('simple-run-exposure-$i'),
@@ -1228,11 +1260,15 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                     ...exposurePresets(minSec: 1, maxSec: 0),
                     dur(suggested[i]),
                   }.toList()..sort(),
-                  format: (d) => d == dur(suggested[i])
+                  // A flat row exposes to the Target ADU on its own.
+                  format: (d) => steps[i].frameType == PlanFrameType.flat
+                      ? context.l10n.planExposureAuto
+                      : d == dur(suggested[i])
                       ? context.l10n.planExposureSuggested(formatExposure(d))
                       : formatExposure(d),
-                  onSelected: (d) =>
-                      plan.setExposure(i, d.inMilliseconds / 1000),
+                  onSelected: steps[i].frameType == PlanFrameType.flat
+                      ? null
+                      : (d) => plan.setExposure(i, d.inMilliseconds / 1000),
                 ),
               ),
               Expanded(
