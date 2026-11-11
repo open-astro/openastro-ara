@@ -1484,8 +1484,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   left: _topLeftOverlayLeft(context),
                                   top: railTop,
                                   // Never past the bottom row: a tall window
-                                  // (a many-slot filter wheel) scrolls.
-                                  bottom: aboveRow,
+                                  // (a many-slot filter wheel) scrolls. The
+                                  // Guider window may go over the guiding bar,
+                                  // so its options fit (user, 2026-11-11).
+                                  bottom: _device == 'eq.guider'
+                                      ? kSimpleInset
+                                      : aboveRow,
                                   width:
                                       kSimpleDeviceWindowWidth *
                                       simpleRailScale(context),

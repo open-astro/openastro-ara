@@ -37,6 +37,8 @@ namespace OpenAstroAra.Sequencer.Utility {
     /// Thread-safe: request/resume race arbitrary threads; waits happen on the
     /// engine worker.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable",
+        Justification = "The interrupt source holds no timer or native handle (it is never created with a timeout), so it needs no disposal; a gate lives as long as its run and is shared by reference with containers that must not dispose it.")]
     public sealed class PauseGate {
         private readonly object _lock = new object();
         // Non-null while a pause is requested/active; completing it releases the
@@ -44,6 +46,14 @@ namespace OpenAstroAra.Sequencer.Utility {
         // never inlines engine continuations.
         private TaskCompletionSource? _resume;
         private PauseKind _kind = PauseKind.User;
+        private CancellationTokenSource _interrupt = new();
+
+        /// <summary>Cancelled by a user's pause (a person, or the daemon's safety pause), and new
+        /// again on Resume: the plan's work in progress stops with it (user, 2026-11-11). An
+        /// instruction's own wait for the user (a failed settle, a prompt) leaves it alone.</summary>
+        public CancellationToken InterruptToken {
+            get { lock (_lock) { return _interrupt.Token; } }
+        }
 
         /// <summary>
         /// Raised on the engine thread each time a strategy actually suspends at
@@ -73,12 +83,18 @@ namespace OpenAstroAra.Sequencer.Utility {
         /// <see cref="PauseKind.AwaitingUser"/> back to an ordinary pause).
         /// </summary>
         public void RequestPause(PauseKind kind = PauseKind.User) {
+            CancellationTokenSource? interrupt = null;
             lock (_lock) {
                 _resume ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 if (kind > _kind) {
                     _kind = kind;
                 }
+                if (kind == PauseKind.User) {
+                    interrupt = _interrupt;
+                }
             }
+            // Outside the lock: cancellation runs the work's callbacks inline.
+            interrupt?.Cancel();
         }
 
         /// <summary>Release all waiters and disarm. Harmless when not paused.</summary>
@@ -88,6 +104,9 @@ namespace OpenAstroAra.Sequencer.Utility {
                 toComplete = _resume;
                 _resume = null;
                 _kind = PauseKind.User;
+                if (_interrupt.IsCancellationRequested) {
+                    _interrupt = new CancellationTokenSource();
+                }
             }
             toComplete?.TrySetResult();
         }

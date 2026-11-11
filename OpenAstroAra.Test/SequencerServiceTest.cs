@@ -890,11 +890,11 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Pause_suspends_at_the_instruction_boundary_and_resume_completes() {
-            // §38 pause: the current instruction (a 2s wait) always finishes; the
-            // run then suspends BETWEEN instructions, reports Paused, and emits
-            // sequence.paused. Resume releases the gate, emits sequence.resumed,
-            // and the run completes.
+        public async Task A_pause_stops_the_wait_in_progress_and_resume_runs_it_again_then_completes() {
+            // §38 pause, since 2026-11-11: a user's pause stops the instruction in
+            // progress (a 2 s wait here; only a frame or a flip finishes first), the
+            // run suspends, reports Paused and emits sequence.paused. Resume runs the
+            // wait again, emits sequence.resumed, and the run completes.
             var id = Guid.NewGuid();
             var ws = new RecordingWsBroadcaster();
             var svc = BuildService(id, BuildBody(c => {
@@ -905,12 +905,12 @@ namespace OpenAstroAra.Test {
             await WaitForInstructionInFlightAsync(svc, id, 0); // #1244 — the 2 s wait must be running before the pause
 
             await svc.PauseAsync(id, null, CancellationToken.None);
-            // The 2s wait must finish first — Paused is reported only when the
-            // engine actually suspends at the boundary, never on the mere request.
+            // Paused is reported only when the engine actually suspends, never on
+            // the mere request.
             await WaitForStateAsync(svc, id, SequenceRunState.Paused);
             var paused = await svc.GetRunStateAsync(id, CancellationToken.None);
             Assert.That(paused!.State, Is.EqualTo(SequenceRunState.Paused));
-            Assert.That(paused.InstructionsCompleted, Is.EqualTo(1), "the in-flight wait ran to completion before the suspension");
+            Assert.That(paused.InstructionsCompleted, Is.Zero, "the pause stopped the wait; it did not run it out");
             Assert.That(ws.Events, Does.Contain("sequence.paused"));
 
             // Suspended means suspended: the run must still be Paused after a beat.
@@ -920,7 +920,7 @@ namespace OpenAstroAra.Test {
             await svc.ResumeAsync(id, null, null, CancellationToken.None);
             var state = await WaitForTerminalAsync(svc, id);
             Assert.That(state!.State, Is.EqualTo(SequenceRunState.Completed));
-            Assert.That(state.InstructionsCompleted, Is.EqualTo(2), "the post-pause instruction ran after resume");
+            Assert.That(state.InstructionsCompleted, Is.EqualTo(2), "the wait ran again, then the instruction after it");
             Assert.That(ws.Events, Does.Contain("sequence.resumed"));
         }
 

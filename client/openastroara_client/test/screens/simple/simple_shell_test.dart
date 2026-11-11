@@ -3713,6 +3713,20 @@ void main() {
     expect(find.byKey(const Key('simple-menu-nav-Switches')), findsNothing);
   });
 
+  testWidgets('the Guider window may reach down over the guiding bar, so its options fit without scrolling (user, 2026-11-11)',
+      (tester) async {
+    final c = await _pump(tester, const Size(1440, 900), linkUp: true, gear: [guiderStatusProvider.overrideWith(() => _GuiderUp())]);
+    c.read(selectedSettingsPanelProvider.notifier).select('eq.guider');
+    c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+    expect(find.byWidgetPredicate((w) => w.runtimeType.toString() == '_GuidingBar'), findsOneWidget, reason: 'guiding: the stats row shows');
+    final room = tester.widget<Positioned>(
+        find.ancestor(of: find.byKey(const Key('simple-device-guider')), matching: find.byType(Positioned)).first);
+    expect(room.bottom, kSimpleInset);
+  });
+
   testWidgets('the guider\'s dot opens the Guider window; Settings lists it under Devices', (tester) async {
     final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
       guiderStatusProvider.overrideWith(() => _GuiderUp()),

@@ -47,6 +47,8 @@ at the top. This happens in the same commit that pushes the release tag.
 - After you pause a running plan in Simple Mode, the shutter greys out and the Plan pill says "Pausing after this frame" until the frame in hand lands. Another tap says so instead of doing nothing.
 - The running-plan warning in the OpenAstro Ara sheet wraps to the sheet's width instead of widening it.
 - The Simple Mode left rail scrolls when large text makes its items taller than the window.
+- Pausing a plan now stops what it has in progress, such as an autofocus, a wait or centring, and runs it again on Resume. The frame being exposed and a meridian flip still finish first.
+- The Simple Mode Guider window may reach down over the guiding bar, so its options fit without scrolling.
 
 ### Fixed (session watch)
 

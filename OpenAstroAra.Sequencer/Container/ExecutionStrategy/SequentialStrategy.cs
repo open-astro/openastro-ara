@@ -15,6 +15,7 @@
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Sequencer.Conditions;
+using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.Trigger;
 using OpenAstroAra.Sequencer.Utility;
@@ -59,7 +60,13 @@ namespace OpenAstroAra.Sequencer.Container.ExecutionStrategy {
                         if (pauseGate != null) {
                             await pauseGate.WaitWhilePausedAsync(token);
                         }
+                        var triggersInterrupt = pauseGate?.InterruptToken ?? CancellationToken.None;
                         await RunTriggers(context, previous, next, progress, token);
+                        if (triggersInterrupt.IsCancellationRequested && !token.IsCancellationRequested) {
+                            // A pause stopped a trigger (an autofocus): suspend, then ask the
+                            // triggers again before this item.
+                            continue;
+                        }
                         if (pauseGate != null) {
                             // A trigger can arm the gate itself (§58.12: a failed
                             // meridian flip pauses the run awaiting the user). Wait
@@ -79,7 +86,25 @@ namespace OpenAstroAra.Sequencer.Container.ExecutionStrategy {
                             (next, canContinue) = GetNextItem(context, previous);
                             continue;
                         }
-                        await next.Run(progress, token);
+                        // A user's pause stops the instruction in progress, and it runs again on
+                        // Resume (user, 2026-11-11); a frame (and a container, whose frames are
+                        // its own items) still finishes first.
+                        if (pauseGate != null && next is not IExposureItem && next is not ISequenceContainer) {
+                            var interrupt = pauseGate.InterruptToken;
+                            using var interruptible = CancellationTokenSource.CreateLinkedTokenSource(token, interrupt);
+                            try {
+                                await next.Run(progress, interruptible.Token);
+                            } catch (OperationCanceledException) when (interrupt.IsCancellationRequested && !token.IsCancellationRequested) {
+                                // Stopped by the pause: back to the gate, then run again.
+                            }
+                            if (interrupt.IsCancellationRequested && !token.IsCancellationRequested &&
+                                    next.Status != SequenceEntityStatus.FINISHED) {
+                                next.ResetProgress();
+                                continue;
+                            }
+                        } else {
+                            await next.Run(progress, token);
+                        }
                         previous = next;
 
                         (next, canContinue) = GetNextItem(context, previous);
