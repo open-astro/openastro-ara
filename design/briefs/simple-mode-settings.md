@@ -25,7 +25,7 @@ Simple Mode covers the top 90 % most used features, for 90 % of the people, 90 %
 | Place | Holds | Stays in the Advanced UI |
 |---|---|---|
 | Camera | Cooler on/off, target, current temperature, gain (the profile's, what plans shoot at; user, 2026-11-03) | Warm-up (End of night), electronics |
-| Mount | Tracking (On / Off), Park now / Unpark ("Parked" when parked), meridian flip (Auto / Off, the profile's) | Flip timing, refocus after a flip, pointing readout, limits |
+| Mount | Tracking (On / Off), Tracking speed (the rates the mount offers), Position (Parked / Unparked / Home), meridian flip (Auto / Off, the profile's), a direction pad with Slow / Medium / Fast, Pointing with Check, then Center and Sync (#1649, #1650) | Flip timing, refocus after a flip, limits, GoTo by typed coordinates, setting the park position |
 | Focuser | Position, temperature, coarse and fine knobs (a click scales to the travel; #1662), Autofocus, refocus when it cools by N °C | Frame-count and filter-change triggers, backlash |
 | Filter wheel | Filter in place, tap a filter to move; a manual wheel asks for the swap and its confirmation (#1662) | Renaming filters, focus offsets, slot labels for sequences |
 | Rotator | Sky angle (and mechanical angle when it differs), a sky-angle dial in 1° clicks with Start / Stop in its middle, Sync to the dial's target (#1662) | Reverse |
