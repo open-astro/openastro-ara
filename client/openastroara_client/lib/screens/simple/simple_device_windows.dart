@@ -389,23 +389,26 @@ class _DewHeaterRowState extends ConsumerState<_DewHeaterRow> {
                 opacity: busy ? AraOpacity.locked : 1,
                 child: IgnorePointer(
                   ignoring: busy,
-                  child: Semantics(
-                    label: l10n.deviceDewHeater,
-                    child: Slider(
-                      key: const Key('simple-camera-dewheater'),
-                      min: p.min,
-                      max: p.max,
-                      divisions: usableSwitchStep(p) == null
-                          ? null
-                          : switchSliderDivisions(p),
-                      value: shown,
-                      semanticFormatterCallback: (x) =>
-                          _switchPercent(p, simpleSwitchRound(p, x)),
-                      onChanged: (x) => setState(() => _drag = x),
-                      onChangeEnd: (x) {
-                        setState(() => _drag = null);
-                        _write(p, x);
-                      },
+                  // Merged, so the adjustable node is named "Dew heater".
+                  child: MergeSemantics(
+                    child: Semantics(
+                      label: l10n.deviceDewHeater,
+                      child: Slider(
+                        key: const Key('simple-camera-dewheater'),
+                        min: p.min,
+                        max: p.max,
+                        divisions: usableSwitchStep(p) == null
+                            ? null
+                            : switchSliderDivisions(p),
+                        value: shown,
+                        semanticFormatterCallback: (x) =>
+                            _switchPercent(p, simpleSwitchRound(p, x)),
+                        onChanged: (x) => setState(() => _drag = x),
+                        onChangeEnd: (x) {
+                          setState(() => _drag = null);
+                          _write(p, x);
+                        },
+                      ),
                     ),
                   ),
                 ),
@@ -512,9 +515,7 @@ Widget simpleWindowStepper({
       onPressed: onTap,
       icon: Icon(
         icon,
-        semanticLabel: name == null
-            ? label(context.l10n)
-            : '$name, ${label(context.l10n)}',
+        semanticLabel: name == null ? label(context.l10n) : '$name, ${label(context.l10n)}',
       ),
     ),
   );
@@ -1066,15 +1067,15 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                       // Dome window's Parking… (user, 2026-11-11).
                       on: true,
                       child: Text(
-                        homing
-                            ? context.l10n.deviceFindingHome
-                            : (parking ?? !m.parked)
-                            ? context.l10n.deviceParking
-                            : context.l10n.deviceUnparking,
-                        style: kSimpleText.copyWith(
-                          color: AraColors.accentConnected,
-                        ),
+                      homing
+                          ? context.l10n.deviceFindingHome
+                          : (parking ?? !m.parked)
+                          ? context.l10n.deviceParking
+                          : context.l10n.deviceUnparking,
+                      style: kSimpleText.copyWith(
+                        color: AraColors.accentConnected,
                       ),
+                    ),
                     ),
                   ),
                 )
@@ -1231,8 +1232,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     children
       ..add(
         LayoutBuilder(
-          builder: (context, box) =>
-              box.maxWidth >= kSimpleMountWideWidth * scale
+          builder: (context, box) => box.maxWidth >= kSimpleMountWideWidth * scale
               ? Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   spacing: AraSpace.s16,
@@ -1642,7 +1642,10 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
                 spacing: 2,
                 children: [
                   Text(l10n.devicePosition, style: AraText.caption),
-                  Text(simpleSteps(pos), style: kSimpleReadingLarge),
+                  Text(
+                    simpleSteps(pos),
+                    style: kSimpleReadingLarge,
+                  ),
                   // Moving is working: blinking green (DESIGN.md status rule).
                   StatusBlink(
                     on: _target == null && s.isMoving,
@@ -2902,11 +2905,7 @@ class _SimpleRotatorWindowState extends ConsumerState<SimpleRotatorWindow> {
 /// carrying the target ("Sync to 75°"; dimmed and taking no tap with no
 /// target), the Dome's Park and Home, the Mount window's Check, Center and Sync.
 class SimpleWindowButton extends StatelessWidget {
-  const SimpleWindowButton({
-    super.key,
-    required this.label,
-    required this.onTap,
-  });
+  const SimpleWindowButton({super.key, required this.label, required this.onTap});
 
   final String label;
   final VoidCallback? onTap;
@@ -4151,7 +4150,9 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
         children.add(
           Text(
             l10n.deviceSafetyLimitsNotLoaded,
-            style: kSimpleCaption.copyWith(color: AraColors.accentWarning),
+            style: kSimpleCaption.copyWith(
+              color: AraColors.accentWarning,
+            ),
           ),
         );
       }
@@ -4499,7 +4500,10 @@ class _WeatherTile extends StatelessWidget {
                       children: [
                         TextSpan(text: value),
                         if (unitBeside && unit.isNotEmpty)
-                          TextSpan(text: ' $unit', style: kSimpleUnit),
+                          TextSpan(
+                            text: ' $unit',
+                            style: kSimpleUnit,
+                          ),
                       ],
                     ),
                     style: kSimpleReading.copyWith(
@@ -4555,18 +4559,9 @@ String simpleWeatherBreachText(
   String n(double v) =>
       v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
   return switch (b.kind) {
-    WeatherBreach.wind => l10n.deviceWindOverLimit(
-      b.value.toStringAsFixed(0),
-      b.limit.round(),
-    ),
-    WeatherBreach.humidity => l10n.deviceHumidityOverLimit(
-      b.value.toStringAsFixed(0),
-      b.limit.round(),
-    ),
-    WeatherBreach.dewMargin => l10n.deviceDewUnderMargin(
-      n(b.value),
-      n(b.limit),
-    ),
+    WeatherBreach.wind => l10n.deviceWindOverLimit(b.value.toStringAsFixed(0), b.limit.round()),
+    WeatherBreach.humidity => l10n.deviceHumidityOverLimit(b.value.toStringAsFixed(0), b.limit.round()),
+    WeatherBreach.dewMargin => l10n.deviceDewUnderMargin(n(b.value), n(b.limit)),
   };
 }
 

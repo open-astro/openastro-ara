@@ -204,8 +204,12 @@ void main() {
     await _pump(tester, _wire(), _heater(), inSettings: true);
     expect(find.text('Dew heater'), findsOneWidget);
     expect(find.bySemanticsLabel(RegExp('Dew heater')), findsOneWidget);
+    expect(tester.getSemantics(find.bySemanticsLabel('Dew heater')), isSemantics(label: 'Dew heater', value: 'Off'));
     await _pump(tester, _wire(), _heater());
     expect(find.text('Dew heater'), findsOneWidget);
+    await _pump(tester, _wire(), _heater(value: 60, max: 100));
+    expect(tester.getSemantics(find.bySemanticsLabel('Dew heater')), isSemantics(label: 'Dew heater', value: '60 %'),
+        reason: 'the level, for a heater with a range');
     handle.dispose();
   });
 }
