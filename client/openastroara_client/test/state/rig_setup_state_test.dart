@@ -1,8 +1,73 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/server.dart';
+import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/state/guider/guider_state.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/rig_setup_state.dart';
+import 'package:openastroara/state/settings/optics_settings_state.dart';
+import 'package:openastroara/state/settings/phd2_settings_state.dart';
+import 'package:openastroara/state/settings/site_settings_state.dart';
+import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart'
+    show planningSettingsBootstrapProvider;
+import 'package:openastroara/state/ws/ws_providers.dart';
 
 const _gap = RigSetupGap.site;
+
+const _setUpSite = SiteSettings(
+  latitudeDeg: -33.856784,
+  longitudeDeg: 151.215297,
+);
+const _setUpOptics = OpticsSettings(
+  focalLengthMm: 800,
+  sensorWidthPx: 6248,
+  sensorHeightPx: 4176,
+  pixelSizeUm: 3.76,
+);
+
+/// The profile reads the facts wait for, without Dio. A null value is a read
+/// that fails, as against a rig that is still booting.
+class _Profile extends ProfileApi {
+  _Profile({this.site = _setUpSite, this.optics = _setUpOptics})
+    : super(const AraServer(hostname: '192.0.2.10', port: 5555));
+  final SiteSettings? site;
+  final OpticsSettings? optics;
+  @override
+  Future<SiteSettings> getSiteSettings() async =>
+      site ?? (throw Exception('connection refused'));
+  @override
+  Future<OpticsSettings> getOptics() async =>
+      optics ?? (throw Exception('connection refused'));
+  @override
+  Future<Phd2Settings> getPhd2Settings() async => const Phd2Settings();
+}
+
+/// A profile without a Guider.
+class _NoGuider extends GuiderStatusNotifier {
+  @override
+  Future<GuiderStatus?> build() async => null;
+}
+
+/// The facts and gaps for [api], once its reads have settled.
+Future<ProviderContainer> _trust(_Profile api, {bool linkUp = true}) async {
+  final c = ProviderContainer(
+    overrides: [
+      serverLinkUpProvider.overrideWithValue(linkUp),
+      profileApiProvider.overrideWithValue(api),
+      guiderStatusProvider.overrideWith(_NoGuider.new),
+      // The planner's bootstrap has finished, but it swallows a failed read,
+      // so it left the site and optics at their defaults.
+      planningSettingsBootstrapProvider.overrideWith((ref) async {}),
+    ],
+  );
+  addTearDown(c.dispose);
+  c.listen(rigSetupGapsProvider, (_, _) {});
+  for (var i = 0; i < 5; i++) {
+    await Future<void>.delayed(Duration.zero);
+  }
+  return c;
+}
 
 /// A fully set-up rig without a Guider.
 RigSetupFacts _facts({
@@ -120,6 +185,38 @@ void main() {
         RigSetupGap.guiderCalibration,
       ]);
     });
+  });
+
+  group('rigSetupFactsProvider', () {
+    test('the site, optics and guide values come from the rig: a set-up rig lists nothing', () async {
+      final c = await _trust(_Profile());
+      final facts = c.read(rigSetupFactsProvider);
+      expect(facts, isNotNull);
+      expect(facts!.latitudeDeg, -33.856784);
+      expect(facts.opticsConfigured, isTrue);
+      expect(c.read(rigSetupGapsProvider), isEmpty);
+    });
+
+    test('a site or optics read that fails leaves the facts untrusted and lists nothing', () async {
+      for (final api in [_Profile(site: null), _Profile(optics: null)]) {
+        final c = await _trust(api);
+        expect(c.read(rigSetupFactsProvider), isNull);
+        expect(c.read(rigSetupGapsProvider), isEmpty);
+      }
+    });
+
+    test(
+      'a link that is down leaves the facts untrusted and lists nothing',
+      () async {
+        final notSetUp = _Profile(
+          site: const SiteSettings(),
+          optics: const OpticsSettings(),
+        );
+        final c = await _trust(notSetUp, linkUp: false);
+        expect(c.read(rigSetupFactsProvider), isNull);
+        expect(c.read(rigSetupGapsProvider), isEmpty);
+      },
+    );
   });
 
   group('rigSetupRigKey', () {

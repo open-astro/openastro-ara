@@ -10,8 +10,6 @@ import 'saved_server_state.dart';
 import 'settings/optics_settings_state.dart';
 import 'settings/phd2_settings_state.dart';
 import 'settings/site_settings_state.dart';
-import 'sky_atlas/tonight_sky_state.dart'
-    show planningSettingsBootstrapProvider;
 import 'ws/ws_providers.dart' show serverLinkUpProvider;
 
 /// #1562 — what Simple Mode's first-time Rig setup sheet can ask for, in the
@@ -80,9 +78,12 @@ final rigSetupHydratedProvider = FutureProvider.autoDispose<bool>((ref) async {
   final api = ref.watch(profileApiProvider);
   if (api == null) return false;
   try {
-    // Site and optics: the planner's own bootstrap (best effort, never throws).
-    await ref.watch(planningSettingsBootstrapProvider.future);
-    await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
+    // Read here, not through the planner's bootstrap: it swallows a failed read.
+    await Future.wait([
+      ref.read(siteSettingsProvider.notifier).hydrateFromServer(api),
+      ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api),
+      ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api),
+    ]);
     return true;
   } catch (_) {
     return false;

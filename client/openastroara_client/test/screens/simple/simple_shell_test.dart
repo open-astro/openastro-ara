@@ -6385,17 +6385,16 @@ void main() {
       },
     );
 
-    testWidgets(
-      'a set-up rig, or a link that is down, never shows the sheet or the row',
-      (tester) async {
-        await pumpSetup(tester, done);
-        expect(find.byKey(const Key('simple-rig-setup')), findsNothing);
-        await tester.tap(find.byTooltip('Settings'));
-        await tester.pump();
-        expect(find.byKey(const Key('simple-menu-nav-RigSetup')), findsNothing);
-        await end(tester);
-      },
-    );
+    testWidgets('a set-up rig never shows the sheet or the row', (
+      tester,
+    ) async {
+      await pumpSetup(tester, done);
+      expect(find.byKey(const Key('simple-rig-setup')), findsNothing);
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pump();
+      expect(find.byKey(const Key('simple-menu-nav-RigSetup')), findsNothing);
+      await end(tester);
+    });
 
     testWidgets('facts that are not trusted yet (null) open nothing', (
       tester,
