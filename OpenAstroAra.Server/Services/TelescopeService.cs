@@ -474,18 +474,32 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             LogMoveAxisRateSnapped(_logger, axis, rate, effective);
         }
         // #1649 — a stop or an unleased move ends any lease on this axis before the driver call; a
-        // leased move starts (or renews) its deadline only once the mount took it.
+        // leased move starts its deadline only once the mount took it. A renewal at the speed the
+        // axis already moves at only extends the lease: the driver is not asked again.
         if (effective == 0 || leaseMs is null) {
             Lease.Cancel(axis);
+        } else if (Lease.TryRenew(axis, effective, leaseMs.Value, LeaseClock.GetUtcNow())) {
+            return;
         }
         NoteMountCommand(w => w.NoteMotionCommanded());
-        await Task.Run(() => client.MoveAxis(axisEnum, effective), CancellationToken.None).ConfigureAwait(false);
+        try {
+            await Task.Run(() => client.MoveAxis(axisEnum, effective), CancellationToken.None).ConfigureAwait(false);
+        } catch (ASCOM.DriverException ex) when (IsSuperseded(ex)) {
+            // A driver that queues motion (AlpacaBridge) replaced this move with a newer one before
+            // it reached the mount: the newer command decides, so this is not a failure (rig,
+            // 2026-11-11: a short pad press read "Couldn't move the mount").
+            LogMoveAxisSuperseded(_logger, axis, effective);
+            return;
+        }
         if (effective != 0 && leaseMs is int ms) {
-            Lease.Renew(axis, ms, LeaseClock.GetUtcNow());
+            Lease.Renew(axis, effective, ms, LeaseClock.GetUtcNow());
             ArmLeaseTimer(true);
         }
         RefreshCacheOnce();
     }
+
+    internal static bool IsSuperseded(Exception ex) =>
+        ex.Message.Contains("superseded", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>#1649 — stops every leased axis whose renewals stopped (the timer's tick; internal for tests).</summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -613,6 +627,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning,
         Message = "MoveAxis rate {Requested} deg/s on axis {Axis} is outside the mount's rate bands; snapped to {Effective} deg/s.")]
     private static partial void LogMoveAxisRateSnapped(ILogger logger, int axis, double requested, double effective);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Debug,
+        Message = "MoveAxis {Rate} deg/s on axis {Axis} was superseded by a newer motion command before it reached the mount.")]
+    private static partial void LogMoveAxisSuperseded(ILogger logger, int axis, double rate);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning,
         Message = "MoveAxis lease on axis {Axis} expired with no renewal; stopped the axis (#1649).")]

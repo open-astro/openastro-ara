@@ -19,14 +19,17 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>#1649 — per-axis MoveAxis deadlines for a leased direction-pad press. The client renews
 /// while the press lasts; an axis whose deadline passes is handed back once by
-/// <see cref="TakeExpired"/> so the telescope service can stop it. Thread-safe.</summary>
+/// <see cref="TakeExpired"/> so the telescope service can stop it. A renewal at the rate the axis
+/// already moves at only extends the deadline (<see cref="TryRenew"/>): drivers that queue motion
+/// reject a MoveAxis repeated every 300 ms ("Motion superseded before dispatch", EQMOD through
+/// AlpacaBridge, 2026-11-11). Thread-safe.</summary>
 public sealed class MoveAxisLease {
 
     public const int MinMs = 250;
     public const int MaxMs = 5000;
 
     private readonly object _gate = new();
-    private readonly Dictionary<int, DateTimeOffset> _deadlines = [];
+    private readonly Dictionary<int, (DateTimeOffset Deadline, double Rate)> _deadlines = [];
 
     public static int Clamp(int leaseMs) => Math.Clamp(leaseMs, MinMs, MaxMs);
 
@@ -38,9 +41,22 @@ public sealed class MoveAxisLease {
         }
     }
 
-    public void Renew(int axis, int leaseMs, DateTimeOffset now) {
+    /// <summary>Starts or renews <paramref name="axis"/>'s deadline for a move at <paramref name="rate"/>.</summary>
+    public void Renew(int axis, double rate, int leaseMs, DateTimeOffset now) {
         lock (_gate) {
-            _deadlines[axis] = now.AddMilliseconds(Clamp(leaseMs));
+            _deadlines[axis] = (now.AddMilliseconds(Clamp(leaseMs)), rate);
+        }
+    }
+
+    /// <summary>True, with the deadline extended, when <paramref name="axis"/> holds a live lease at
+    /// <paramref name="rate"/>: the mount already moves so, and the driver need not be asked again.</summary>
+    public bool TryRenew(int axis, double rate, int leaseMs, DateTimeOffset now) {
+        lock (_gate) {
+            if (!_deadlines.TryGetValue(axis, out var held) || held.Rate != rate || held.Deadline <= now) {
+                return false;
+            }
+            _deadlines[axis] = (now.AddMilliseconds(Clamp(leaseMs)), rate);
+            return true;
         }
     }
 
@@ -60,8 +76,8 @@ public sealed class MoveAxisLease {
     public IReadOnlyList<int> TakeExpired(DateTimeOffset now) {
         lock (_gate) {
             var expired = new List<int>();
-            foreach (var (axis, deadline) in _deadlines) {
-                if (deadline <= now) {
+            foreach (var (axis, held) in _deadlines) {
+                if (held.Deadline <= now) {
                     expired.Add(axis);
                 }
             }

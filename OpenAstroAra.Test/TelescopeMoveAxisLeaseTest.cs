@@ -44,7 +44,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public void An_unrenewed_axis_expires_after_its_lease_and_only_once() {
             var lease = new MoveAxisLease();
-            lease.Renew(1, 1000, T0);
+            lease.Renew(1, 1.0, 1000, T0);
             Assert.That(lease.TakeExpired(T0.AddMilliseconds(999)), Is.Empty);
             Assert.That(lease.TakeExpired(T0.AddMilliseconds(1000)), Is.EqualTo(Secondary));
             Assert.That(lease.TakeExpired(T0.AddSeconds(5)), Is.Empty, "an expired axis is stopped once");
@@ -54,22 +54,33 @@ namespace OpenAstroAra.Test {
         [Test]
         public void Renewals_keep_an_axis_moving() {
             var lease = new MoveAxisLease();
-            lease.Renew(0, 1000, T0);
-            lease.Renew(0, 1000, T0.AddMilliseconds(300));
-            lease.Renew(0, 1000, T0.AddMilliseconds(600));
+            lease.Renew(0, 1.0, 1000, T0);
+            lease.Renew(0, 1.0, 1000, T0.AddMilliseconds(300));
+            lease.Renew(0, 1.0, 1000, T0.AddMilliseconds(600));
             Assert.That(lease.TakeExpired(T0.AddMilliseconds(1500)), Is.Empty);
             Assert.That(lease.TakeExpired(T0.AddMilliseconds(1600)), Is.EqualTo(Primary));
         }
 
         [Test]
+        public void Only_a_live_lease_at_the_same_rate_is_a_renewal() {
+            var lease = new MoveAxisLease();
+            Assert.That(lease.TryRenew(0, 1.0, 1000, T0), Is.False, "nothing to renew yet");
+            lease.Renew(0, 1.0, 1000, T0);
+            Assert.That(lease.TryRenew(0, 1.0, 1000, T0.AddMilliseconds(500)), Is.True);
+            Assert.That(lease.TryRenew(0, 2.0, 1000, T0.AddMilliseconds(600)), Is.False, "another speed");
+            Assert.That(lease.TryRenew(1, 1.0, 1000, T0.AddMilliseconds(600)), Is.False, "another axis");
+            Assert.That(lease.TryRenew(0, 1.0, 1000, T0.AddMilliseconds(1600)), Is.False, "the lease ran out");
+        }
+
+        [Test]
         public void Each_axis_has_its_own_deadline_and_cancel_clears_it() {
             var lease = new MoveAxisLease();
-            lease.Renew(0, 1000, T0);
-            lease.Renew(1, 1000, T0);
+            lease.Renew(0, 1.0, 1000, T0);
+            lease.Renew(1, 1.0, 1000, T0);
             lease.Cancel(1);
             Assert.That(lease.TakeExpired(T0.AddSeconds(2)), Is.EqualTo(Primary));
-            lease.Renew(0, 1000, T0);
-            lease.Renew(1, 1000, T0);
+            lease.Renew(0, 1.0, 1000, T0);
+            lease.Renew(1, 1.0, 1000, T0);
             lease.CancelAll();
             Assert.That(lease.TakeExpired(T0.AddSeconds(2)), Is.Empty);
         }
@@ -101,8 +112,9 @@ namespace OpenAstroAra.Test {
             : path.EndsWith("/declination", StringComparison.Ordinal) ? "45.0"
             : null;
 
-        private static async Task<(ScriptedAlpacaDevice Box, TelescopeService Svc, ManualClock Clock)> ArmedAsync() {
-            var box = ScriptedAlpacaDevice.Start(Mount());
+        private static async Task<(ScriptedAlpacaDevice Box, TelescopeService Svc, ManualClock Clock)> ArmedAsync(
+                Func<string, string?>? putResponder = null) {
+            var box = ScriptedAlpacaDevice.Start(Mount(), putResponder);
             box.RespondWithQuery((path, _) => path.EndsWith("/axisrates", StringComparison.Ordinal)
                 ? "[{\"Minimum\":0.002,\"Maximum\":4.0}]" : null);
             var clock = new ManualClock();
@@ -139,6 +151,47 @@ namespace OpenAstroAra.Test {
             clock.Now = clock.Now.AddMilliseconds(2);
             svc.CheckLeases();
             Assert.That(MoveAxisPuts(box).Count(b => IsStop(b, 1)), Is.EqualTo(1), "the daemon stops the axis itself");
+        }
+
+        [Test]
+        public async Task A_renewal_at_the_same_rate_only_extends_the_lease_and_never_reaches_the_driver() {
+            // On the rig (EQMOD through AlpacaBridge, 2026-11-11) a MoveAxis repeated every 300 ms
+            // came back "Motion superseded before dispatch" (500): the pad stopped after a second.
+            var (box, svc, clock) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+
+            await svc.MoveAxisAsync(0, 1.0, 1000, CancellationToken.None);
+            clock.Now = clock.Now.AddMilliseconds(300);
+            await svc.MoveAxisAsync(0, 1.0, 1000, CancellationToken.None);
+            clock.Now = clock.Now.AddMilliseconds(300);
+            await svc.MoveAxisAsync(0, 1.0, 1000, CancellationToken.None);
+            Assert.That(MoveAxisPuts(box), Has.Length.EqualTo(1), "one move reaches the driver; renewals stay in the daemon");
+
+            clock.Now = clock.Now.AddMilliseconds(900);
+            svc.CheckLeases();
+            Assert.That(MoveAxisPuts(box).Count(b => IsStop(b, 0)), Is.Zero, "the last renewal extended the lease");
+
+            await svc.MoveAxisAsync(0, 2.0, 1000, CancellationToken.None);
+            Assert.That(MoveAxisPuts(box), Has.Length.EqualTo(2), "a new speed is a new move");
+        }
+
+        [Test]
+        public async Task A_move_the_driver_superseded_with_a_newer_one_is_not_a_failure() {
+            // AlpacaBridge queues motion: a press let go at once has its start replaced by the stop
+            // before it reaches the mount, and answers the start with this DriverException (rig,
+            // 2026-11-11: every short press showed "Couldn't move the mount").
+            var superseded = 1;
+            var (box, svc, _) = await ArmedAsync(path => path.EndsWith("/moveaxis", StringComparison.Ordinal)
+                && Interlocked.Exchange(ref superseded, 0) == 1
+                ? ScriptedAlpacaDevice.Error("Motion superseded before dispatch") : null);
+            await using var _ = box;
+            using var __ = svc;
+
+            await Assert.DoesNotThrowAsync(() => svc.MoveAxisAsync(0, 1.0, 1000, CancellationToken.None));
+            Assert.That(svc.Lease.Any, Is.False, "the newer command decides; no lease for the replaced start");
+            await svc.MoveAxisAsync(0, 1.0, 1000, CancellationToken.None);
+            Assert.That(MoveAxisPuts(box), Has.Length.EqualTo(2), "the next press still reaches the driver");
         }
 
         [Test]
