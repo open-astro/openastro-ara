@@ -309,15 +309,13 @@ void main() {
     });
 
     test('the RCW Book has a Card for every catalogue row, each with a position (#1629)', () {
-      final claimed = bookCatalog(bundle, AlbumBook.rcw);
-      expect({for (final d in claimed) rcwNumOf(d)}, rcwNumbers);
-      expect(claimed.length, 181);
-      expect([for (final d in claimed) if (d.raDeg == 0 && d.decDeg == 0) d.id], isEmpty);
-      // The Messier objects in the catalogue (M8, M16, M17, M20) and the Caldwell
-      // one (C 100) stay in their own Books.
       final book = bookObjects(bundle, AlbumBook.rcw);
-      expect(book.length, 174);
-      expect([for (final d in book) if (d.messierNum != null || d.caldwellNum != null) d.id], isEmpty);
+      expect({for (final d in book) rcwNumOf(d)}, rcwNumbers);
+      expect(book.length, 181);
+      expect([for (final d in book) if (d.raDeg == 0 && d.decDeg == 0) d.id], isEmpty);
+      // The Messier and Caldwell objects in the catalogue are RCW Cards too.
+      expect({for (final d in book) if (d.messierNum != null) 'M ${d.messierNum}' else if (d.caldwellNum != null) 'C ${d.caldwellNum}'},
+          {'M 8', 'M 16', 'M 17', 'M 20', 'C 69', 'C 92', 'C 100'});
       expect(bookObjects(bundle, AlbumBook.messier).length, 110);
       expect(bookObjects(bundle, AlbumBook.caldwell).length, 109);
     });

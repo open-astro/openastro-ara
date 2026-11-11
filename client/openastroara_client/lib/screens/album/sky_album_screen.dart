@@ -111,14 +111,16 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
         if (_catalogs.isEmpty || _catalogs.contains(b)) b,
     ];
     final views = {for (final b in AlbumBook.values) b: ref.watch(albumBookProvider(b)).value};
-    // Before a Book is matched its cards still show, all grey.
+    // Before a Book is matched its cards still show, all grey. An object in two Books
+    // shows once, as its first Book's Card.
     final bookOf = <String, AlbumBook>{};
     final bookSize = <AlbumBook, int>{};
     final objects = <PlanningDso>[];
     for (final b in books) {
       final list = views[b]?.objects ?? bookObjects(catalog, b);
-      bookSize[b] = bookCatalog(catalog, b).length;
+      bookSize[b] = list.length;
       for (final d in list) {
+        if (bookOf.containsKey(d.id)) continue;
         bookOf[d.id] = b;
         objects.add(d);
       }
@@ -139,7 +141,12 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
         number: n,
         bookSize: bookSize[book]!,
         stats: stats[d.id],
-        art: manifest[albumArtId(label)],
+        // Its own Book's Art, else the picture another Book has of the same object.
+        art: [book, ...AlbumBook.values]
+            .where((b) => bookNumberOf(d, b) != null)
+            .map((b) => manifest[albumArtId(bookLabel(d, b))])
+            .nonNulls
+            .firstOrNull,
       );
     }
 

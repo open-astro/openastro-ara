@@ -224,12 +224,11 @@ void main() {
       expect(rcw.map((d) => bookNumberOf(d, AlbumBook.rcw)), [5, 8, 53]);
     });
 
-    test('an object with a Caldwell number and an RCW designation is in the Caldwell Book only (#1629)', () {
+    test('an object in two Books is a Card in each, so the RCW count is the true count (#1629)', () {
       final catalog = [_dso('NGC3114', c: 90, aliases: ['RCW 40']), _dso('RCW 41'), _dso('NGC1976', m: 42, aliases: ['RCW 9'])];
+      expect(bookObjects(catalog, AlbumBook.messier).map((d) => d.id), ['NGC1976']);
       expect(bookObjects(catalog, AlbumBook.caldwell).map((d) => d.id), ['NGC3114']);
-      expect(bookObjects(catalog, AlbumBook.rcw).map((d) => d.id), ['RCW 41']);
-      // The Book's real size is what a Card's back counts, however many Cards an earlier Book took.
-      expect(bookCatalog(catalog, AlbumBook.rcw).length, 3);
+      expect(bookObjects(catalog, AlbumBook.rcw).map((d) => d.id), ['NGC1976', 'NGC3114', 'RCW 41']);
     });
 
     test('a frame saved as Gum 15 or by NGC number fills the RCW Card (#1629)', () {

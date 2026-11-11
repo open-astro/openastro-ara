@@ -32,9 +32,9 @@ import 'package:openastroara/widgets/album/album_card.dart';
 /// neither shell, the card front on Art or the Placeholder, the baseball-card
 /// back.
 
-PlanningDso _dso(String id, String name, {int? m, int? c, double ra = 10}) =>
+PlanningDso _dso(String id, String name, {int? m, int? c, double ra = 10, List<String> aliases = const []}) =>
     PlanningDso(id: id, name: name, type: 'G', magnitude: 5, raDeg: ra, decDeg: 20, messierNum: m, caldwellNum: c,
-        aliases: [if (m != null) 'M $m', if (c != null) 'C $c']);
+        aliases: [if (m != null) 'M $m', if (c != null) 'C $c', ...aliases]);
 
 final _m1 = _dso('NGC1952', 'Crab Nebula', m: 1, ra: 83.6);
 final _m31 = _dso('NGC0224', 'Andromeda Galaxy', m: 31, ra: 10.68);
@@ -63,6 +63,7 @@ Future<ProviderContainer> _pump(
   List<TonightSkyObject>? tonightRows,
   bool bookPending = false,
   Map<String, AlbumArt> manifest = const {},
+  List<PlanningDso>? catalog,
   Size size = const Size(1200, 1600),
   double textScale = 1,
   double bottomInset = 0,
@@ -84,7 +85,7 @@ Future<ProviderContainer> _pump(
       albumCollectionStoreProvider.overrideWithValue(
           _MemStore()..held = AlbumCollection(frames: {if (seen) for (final f in frames) f.frameId: f})),
       albumManifestProvider.overrideWith((ref) async => manifest),
-      bundledCatalogProvider.overrideWith((ref) async => [_m42, _c14, _m31, _m1]),
+      bundledCatalogProvider.overrideWith((ref) async => catalog ?? [_m42, _c14, _m31, _m1]),
       albumFetcherProvider.overrideWithValue(fetcher ??
           (baseUrl, {since}) async => AlbumFramesPage(totalLights: frames.length, frames: frames)),
       tonightSkyProvider.overrideWith((ref) async => tonightRows ?? [for (final d in tonight) _tonight(d)]),
@@ -340,6 +341,33 @@ void main() {
     await _pump(tester, frames: _m31Frames);
     expect(find.byType(FilterChip), findsNWidgets(3));
     expect(find.text('RCW · 0'), findsOneWidget);
+  });
+
+  testWidgets('an object in two Books counts in both chips and shows once, as its first Book\'s Card (#1629)',
+      (tester) async {
+    final m8 = _dso('NGC6523', 'Lagoon Nebula', m: 8, aliases: ['RCW 146']);
+    final m8Frames = [
+      AlbumFrame(frameId: 'l', targetName: 'M 8', exposureSeconds: 600, capturedUtc: DateTime(2026, 3, 2, 22).toUtc()),
+    ];
+    const art = AlbumArt(asset: 'assets/album/art/m008.webp', credit: 'ESO', licence: 'CC BY 4.0');
+    await _pump(tester, frames: m8Frames, catalog: [m8, _m42], tonight: [m8, _m42], manifest: const {'M8': art});
+    Finder inGrid(String t) => find.descendant(of: find.byType(SliverGrid), matching: find.text(t));
+    expect(find.text('Messier · 1'), findsOneWidget);
+    expect(find.text('RCW · 1'), findsOneWidget);
+    expect(inGrid('Lagoon Nebula'), findsOneWidget, reason: 'every catalog shown: no duplicate Card');
+    expect(inGrid('M 8'), findsOneWidget);
+    expect(find.text('1 / 2 collected'), findsOneWidget);
+
+    await tester.tap(find.text('RCW · 1'));
+    await tester.pumpAndSettle();
+    expect(inGrid('RCW 146'), findsOneWidget);
+    expect(find.text('1 / 1 collected'), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.ancestor(of: inGrid('RCW 146'), matching: find.byType(AlbumCardFront)),
+            matching: find.byKey(const Key('album-art'))),
+        findsOneWidget,
+        reason: 'the RCW Card carries the Messier Art');
   });
 
   testWidgets('with no catalog selected every catalog shows, Messier first', (tester) async {
