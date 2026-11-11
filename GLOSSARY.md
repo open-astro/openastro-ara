@@ -31,12 +31,12 @@ The guiding program that reads the Guide Camera and corrects the mount: PHD2 or 
 _Avoid_: guide (for the program), guider camera
 
 **Calibration frames**:
-The frames that are not lights: flats (an evenly lit field through each filter), darks (the shutter closed, at a light's exposure, gain and temperature) and bias (the shortest exposure). Simple Mode's **Calibration** mode shoots the ones the latest plan's lights lack; Preview's snapshots don't count as lights.
+The frames that are not lights: flats (an evenly lit field through each filter), darks (the shutter closed, at a light's exposure, gain and temperature) and bias (the shortest exposure). Flats belong to the night (filters, rotator angle, dust); darks and bias belong to the camera and last months, kept as its **library**. Preview's snapshots don't count as lights.
 _Avoid_: calibration (alone, for the frames: it also names the Guider's mount calibration), cal frames
 
-**Frame type**:
-What a Plan row shoots: Light or Flat. Darks and bias are never Plan rows, because they don't depend on the filter; they reach the Queue only as its one Calibration block.
-_Avoid_: image type (the FITS `IMAGETYP` keyword, which the frame type sets)
+**Dark library**:
+One camera's darks and bias, kept on the rig and reused for months: darks by exposure, gain and temperature, bias by gain, offset and binning. Simple Mode's Calibration › Darks & bias shows it and whether it covers the queued plan.
+_Avoid_: tonight's darks (they are the camera's, not the night's)
 
 **Polar Align Routine**:
 The steps that measure the polar alignment error while the person turns the mount's bolts.
