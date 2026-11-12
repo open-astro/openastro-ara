@@ -52,6 +52,8 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
     // Sum of the backlash steps added so far (absolute focusers): hardware position = reported position + this.
     private int _backlashOffset;
     private bool _compensating;
+    // Odd while a compensated Move call is in flight: only a read that starts and commits on one even value may clear the flag.
+    private int _moveSequence;
 
     public FocuserService(ILogger<FocuserService>? logger = null, EquipmentEventPublisher? events = null,
             IEquipmentFaultSink? faults = null, IProfileStore? profiles = null) {
@@ -172,8 +174,10 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
     // The runtime read the lifecycle runs each tick; capabilities are read here too until they are known.
     private DeviceRead ReadRuntime(IFocuserDevice client) {
         FocuserCapabilitiesDto? knownCaps;
+        int sequence;
         lock (_gate) {
             knownCaps = _capabilities;
+            sequence = _moveSequence;
         }
         var runtime = ReadRuntime(client, out var readError);
         var caps = knownCaps is null ? ReadCapabilities(client) : null;
@@ -181,8 +185,8 @@ public sealed partial class FocuserService : IFocuserService, IRetainedDeviceSou
         // drivers answer with a plain error instead): only an absolute focuser's Position is essential.
         var essential = (knownCaps?.AbsoluteFocuser ?? true) ? readError : null;
         return new DeviceRead(essential, CommitLocked: () => {
-            if (runtime.State != "moving") {
-                _compensating = false; // the compensated move has settled
+            if (runtime.State != "moving" && sequence == _moveSequence && sequence % 2 == 0) {
+                _compensating = false; // the compensated move has settled (this read started after its dispatch)
             }
             _runtime = FocuserBacklash.Report(runtime with { Position = runtime.Position - _backlashOffset }, _compensating);
             if (caps is not null) {

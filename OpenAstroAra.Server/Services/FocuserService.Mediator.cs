@@ -121,6 +121,7 @@ public sealed partial class FocuserService : IFocuserMediator {
         if (move.Extra != 0) {
             lock (_gate) {
                 _compensating = true;
+                _moveSequence++;
                 _runtime = FocuserBacklash.Report(_runtime, true);
             }
         }
@@ -130,12 +131,16 @@ public sealed partial class FocuserService : IFocuserMediator {
             if (move.Extra != 0) {
                 lock (_gate) {
                     _compensating = false;
+                    _moveSequence++;
                 }
             }
             throw;
         }
         // Move returns once the move is dispatched, so the flag stays up; RefreshCacheOnce drops it when IsMoving reads false.
         lock (_gate) {
+            if (move.Extra != 0) {
+                _moveSequence++; // dispatched: a read that starts from here on sees the move
+            }
             if (absolute) {
                 _backlashOffset = move.Offset;
             }
