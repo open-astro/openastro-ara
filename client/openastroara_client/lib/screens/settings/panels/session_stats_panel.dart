@@ -78,7 +78,7 @@ class _SessionStatsPanelState extends ConsumerState<SessionStatsPanel> {
             : friendlyError(
                 context.l10n,
                 e,
-                action: 'rebuild the stats catalog',
+                action: context.l10n.actionRebuildStats,
               ),
       );
     } finally {

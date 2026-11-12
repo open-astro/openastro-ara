@@ -23,7 +23,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
-/// §14e — fifth real Alpaca-backed device service. Replaces <c>PlaceholderRotatorService</c>:
+/// §14e — fifth real Alpaca-backed device service:
 /// connects to a discovered Alpaca Rotator, serves its live runtime (state + mechanical/sky angle)
 /// over the §6 REST surface, and rotates it via <see cref="MoveAsync"/> (a §60.5 202-Accepted
 /// background operation). Its lifecycle (generation supersede, §32.4 background-refresh cache,

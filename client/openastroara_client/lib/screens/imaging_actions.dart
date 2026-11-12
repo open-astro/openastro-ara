@@ -95,7 +95,7 @@ Future<void> takeOne(BuildContext context, WidgetRef ref) async {
     frameId = await CameraExposureApi(server).takeOne(params);
   } catch (e) {
     progress.fail(
-      friendlyError(l10n, e, action: 'take that exposure'),
+      friendlyError(l10n, e, action: l10n.actionTakeExposure),
       generation: generation,
     );
     return;
@@ -135,7 +135,7 @@ Future<void> takeOne(BuildContext context, WidgetRef ref) async {
     }
   } catch (e) {
     progress.fail(
-      friendlyError(l10n, e, action: 'confirm the frame arrived'),
+      friendlyError(l10n, e, action: l10n.actionConfirmFrame),
       generation: generation,
     );
     return;
@@ -187,7 +187,7 @@ Future<void> cancelCapture(BuildContext context, WidgetRef ref) async {
     // while the abort was in flight) — nothing to warn about.
     if (!context.mounted) return;
     notify(
-      friendlyError(context.l10n, e, action: 'abort the capture'),
+      friendlyError(context.l10n, e, action: context.l10n.actionAbortCapture),
       error: true,
     );
   }
