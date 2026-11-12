@@ -35,6 +35,10 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Changed (CI)
+
+- Pull request CI finishes sooner. A new push cancels the run it replaces. The client tests run on Linux in three shards; the macOS and Windows test legs run in the merge queue and on `master`, not on a pull request. The Unicode scan and the workflow audit run inside the Sanity job. The server job keeps the ASTAP solver binary between runs.
+
 ### Added (calibration)
 
 - **Calibration** is a seventh Simple Mode mode, between Guider and Plan (#1757). Flats belong to the night; darks and bias belong to the camera for months. Three tabs, and the shutter and chip follow the tab:

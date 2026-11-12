@@ -155,7 +155,7 @@ GITHUB_RULES = {
     ".github/dependabot.yml": NONE,
     ".github/FUNDING.yml": NONE,
     ".github/pull_request_template.md": NONE,
-    # Run by the (ungated) Unicode scan job only.
+    # Run by the Unicode scan step of the (ungated) Sanity job only.
     ".github/scripts/check-unicode.py": NONE,
 }
 

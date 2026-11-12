@@ -261,9 +261,9 @@ The bot is the second pair of eyes, not the test suite. For **every** Defect, in
    - **Settings / help registries**: `node scripts/check-settings-registry.mjs` and
      `node scripts/check-help-registry.mjs` (add `--staged` pre-commit). CI runs these as
      `Settings + Help registry gate`.
-   - **Any branch, always cheap**: `python3 .github/scripts/check-unicode.py` (the `Unicode scan`
-     job) and `python3 -m unittest discover -s scripts/tests -v` (runs inside `Sanity`).
-   - **Workflows**: `zizmor --offline .github/workflows/` (the `zizmor (workflow audit)` job).
+   - **Any branch, always cheap**: `python3 .github/scripts/check-unicode.py` (the Unicode scan
+     step of `Sanity`) and `python3 -m unittest discover -s scripts/tests -v` (runs inside `Sanity`).
+   - **Workflows**: `zizmor --offline .github/workflows/` (the workflow audit step of `Sanity`).
    - **Docs-only branches** still run Sanity + Unicode scan + the Python tooling tests; everything
      else is skipped by the `changes` path gate (#1020). Run those three and push.
 6. **One commit per Defect, one push per round** (this `⚠️ Issues found` path only). Commits stay
