@@ -1521,7 +1521,7 @@ void main() {
     const m31 = PlanningDso(
         id: 'NGC0224', name: 'Andromeda Galaxy', type: 'G', magnitude: 3.4, raDeg: 10.68, decDeg: 41.27,
         messierNum: 31, aliases: ['M 31']);
-    tester.widget<SkyAlbumScreen>(find.byType(SkyAlbumScreen)).onImageTarget(m31);
+    tester.widget<SkyAlbumScreen>(find.byType(SkyAlbumScreen)).onImageTarget(m31, 'M 31');
     await tester.pumpAndSettle();
 
     expect(find.byType(SkyAlbumScreen), findsNothing, reason: 'the album hands over and closes');
@@ -1530,6 +1530,7 @@ void main() {
     final sel = container.read(planetariumSelectionProvider)!;
     expect(sel.name, 'Andromeda Galaxy');
     expect(sel.decJ2000Deg, 41.27);
+    expect(find.text('M 31 (Andromeda Galaxy)'), findsOneWidget, reason: "the plan names the card's label, not NGC 224");
     expect(container.read(simpleRunProvider).targets, isEmpty, reason: 'nothing queued');
   });
 
@@ -2496,6 +2497,8 @@ void main() {
     await tester.pump();
     expect(c.read(planetariumSearchProvider), 'M 31');
     expect(c.read(planetariumSelectionProvider), isNotNull, reason: "the hit is Plan's target at once");
+    expect(c.read(planetariumSelectionProvider)!.designations.first, 'M 31',
+        reason: "the row's designation leads, so Plan's header names it as the row did");
     expect(find.byKey(const Key('simple-planetarium')), findsOneWidget, reason: 'the sky, pointed at it');
   });
 

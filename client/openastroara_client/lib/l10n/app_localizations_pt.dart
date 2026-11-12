@@ -2815,6 +2815,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get albumBookCaldwell => 'Caldwell';
 
   @override
+  String get albumBookRcw => 'RCW';
+
+  @override
   String get dsoTypeGalaxy => 'Galaxy';
 
   @override
@@ -7734,6 +7737,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get albumBookCaldwell => 'Caldwell';
+
+  @override
+  String get albumBookRcw => 'RCW';
 
   @override
   String get dsoTypeGalaxy => 'Galáxia';

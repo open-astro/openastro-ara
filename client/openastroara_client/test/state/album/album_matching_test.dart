@@ -210,6 +210,45 @@ void main() {
       expect(bookObjects(catalog, AlbumBook.messier).map((d) => d.id), ['z', 'x']);
       expect(bookObjects(catalog, AlbumBook.caldwell).map((d) => d.id), ['y']);
     });
+
+    test('the RCW Book holds only RCW-prefixed objects, in catalog-number order, labelled RCW n (#1629)', () {
+      final catalog = [
+        _dso('NGC3372', aliases: ['RCW 53', 'Gum 33']),
+        _dso('RCW 8'),
+        _dso('Sh2-1'),
+        _dso('NGC2359', aliases: ['RCW 5', 'RCW 9']),
+      ];
+      final rcw = bookObjects(catalog, AlbumBook.rcw);
+      expect(rcw.map((d) => d.id), ['NGC2359', 'RCW 8', 'NGC3372']);
+      expect(rcw.map((d) => bookLabel(d, AlbumBook.rcw)), ['RCW 5', 'RCW 8', 'RCW 53']);
+      expect(rcw.map((d) => bookNumberOf(d, AlbumBook.rcw)), [5, 8, 53]);
+    });
+
+    test("a row's RCW number is worked out once, not again on every build of the Album (#1629)", () {
+      // Rows never change, so the scan runs once per row; an alias added afterwards (only a
+      // test can) is not seen.
+      final aliases = ['Gum 22'];
+      final row = _dso('RCW 38', aliases: aliases);
+      expect(rcwNumOf(row), 38);
+      aliases.add('RCW 1');
+      expect(rcwNumOf(row), 38);
+    });
+
+    test('an object in two Books is a Card in each, so the RCW count is the true count (#1629)', () {
+      final catalog = [_dso('NGC3114', c: 90, aliases: ['RCW 40']), _dso('RCW 41'), _dso('NGC1976', m: 42, aliases: ['RCW 9'])];
+      expect(bookObjects(catalog, AlbumBook.messier).map((d) => d.id), ['NGC1976']);
+      expect(bookObjects(catalog, AlbumBook.caldwell).map((d) => d.id), ['NGC3114']);
+      expect(bookObjects(catalog, AlbumBook.rcw).map((d) => d.id), ['NGC1976', 'NGC3114', 'RCW 41']);
+    });
+
+    test('a frame saved as Gum 15 or by NGC number fills the RCW Card (#1629)', () {
+      final rcw15 = _dso('RCW 15', aliases: ['Gum 15', 'NGC 2736']);
+      for (final name in ['Gum 15', 'Gum15', 'gum 015', 'NGC 2736', 'RCW 15']) {
+        final stats = aggregateBook([_frame('a', ra: null, target: name)], [rcw15]);
+        expect(stats.keys, ['RCW 15'], reason: name);
+      }
+      expect(aggregateBook([_frame('a', ra: null, target: 'Gum 16')], [rcw15]), isEmpty);
+    });
   });
 
   test('AlbumFrame parses the snake_case wire row', () {

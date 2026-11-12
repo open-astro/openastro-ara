@@ -28,6 +28,7 @@ import '../../state/settings/equipment_connection_state.dart'
     show EquipmentDeviceType;
 import '../../widgets/equipment/alpaca_chooser_dialog.dart';
 import '../../services/equipment_driver_api.dart';
+import '../../services/dso_catalog_service.dart' show suggestionDesignation;
 import '../../state/app_shell_state.dart';
 import '../../state/launch_gate_state.dart';
 import '../../state/profile_management_state.dart';
@@ -752,7 +753,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         setState(() => _sky = true);
         ref
             .read(planetariumSelectionProvider.notifier)
-            .set(simplePickDso(ref, suggestion.dso));
+            .set(
+              simplePickDso(
+                ref,
+                suggestion.dso,
+                designation: suggestionDesignation(suggestion),
+              ),
+            );
         ref.read(planetariumSearchProvider.notifier).search(suggestion.label);
       case SimpleSettingHit(section: 'Guide'):
         _pickMode(SimpleModeScreen.guide);
@@ -772,15 +779,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   }
 
   /// The Sky Album; a card's action closes it and opens Plan's sheet with
-  /// the card's object picked, as Image this does from the sky. Nothing is
-  /// queued.
+  /// the card's object picked, as Image this does from the sky, named by the
+  /// card's label. Nothing is queued.
   void _openAlbum() => unawaited(
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (albumContext) => SkyAlbumScreen(
-          onImageTarget: (d) {
+          onImageTarget: (d, label) {
             // Read while the album still watches the ranker (it auto-disposes).
-            final sel = simplePickDso(ref, d);
+            final sel = simplePickDso(ref, d, designation: label);
             Navigator.of(albumContext).pop();
             ref.read(planetariumSelectionProvider.notifier).set(sel);
             _imagePick();

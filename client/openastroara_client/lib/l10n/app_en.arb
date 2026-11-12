@@ -3774,6 +3774,10 @@
   "@albumBookCaldwell": {
     "description": "Sky Album: Book switch segment for the Caldwell catalog"
   },
+  "albumBookRcw": "RCW",
+  "@albumBookRcw": {
+    "description": "Sky Album: Book switch segment for the RCW catalog of southern emission nebulae (Rodgers, Campbell and Whiteoak); the abbreviation is the name in every language"
+  },
   "dsoTypeGalaxy": "Galaxy",
   "@dsoTypeGalaxy": {
     "description": "Deep-sky object type on a Sky Album card back's bio line"
