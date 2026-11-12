@@ -4,6 +4,7 @@ import 'simple_monitor_screen.dart';
 import 'simple_queue_screen.dart' show simpleQueueSheetProvider;
 import 'simple_screen.dart';
 import 'simple_search.dart';
+import 'simple_rig_setup_sheet.dart';
 import 'simple_focus_panel.dart' show simpleOpenFocusOffsets;
 
 import 'package:flutter/cupertino.dart';
@@ -50,6 +51,7 @@ import '../../state/simple_mode_state.dart';
 import '../../state/simple_monitor_state.dart';
 import '../../util/app_licenses.dart';
 import '../../state/simple_preflight_state.dart';
+import '../../state/rig_setup_state.dart';
 export '../../state/simple_preflight_state.dart' show SimpleModeScreen, SimpleModeScreenLabels;
 
 import 'dart:ui' show ImageFilter;
@@ -742,6 +744,19 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   void _openMenu({String section = 'Rig'}) {
     _menuSection = section;
     _toggle(_Popover.menu);
+  }
+
+  /// #1562 — the rigs the Rig setup sheet already opened for, in this shell mount.
+  final _rigSetupOpened = <String>{};
+
+  /// #1562 — Settings at the Rig page, from the Rig setup sheet: opens it and
+  /// never closes one that is already up.
+  void _showRigPage() {
+    if (_popover == _Popover.menu) {
+      setState(() => _menuSection = 'Rig');
+    } else {
+      _openMenu();
+    }
   }
 
   /// A search hit, opened where it lives in Simple Mode.
@@ -1457,6 +1472,21 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               ),
+                              // #1562 — the first-time Rig setup sheet, where Plan's
+                              // sheet sits: each window and popover after it here
+                              // draws over it, and it stays up under Settings so
+                              // its ticks follow the edits.
+                              Positioned(
+                                left: kSimpleInset,
+                                right: kSimpleInset * 2 + railWidth,
+                                top: popoverTop,
+                                bottom: betweenBottom,
+                                child: SimpleRigSetupHost(
+                                  autoOpened: _rigSetupOpened,
+                                  onOpenRig: _showRigPage,
+                                  onOpenGuider: () => _openFromPill(SimpleStatusOrigin.guide),
+                                ),
+                              ),
                               // Plan's sheet and Night done: beside the rail;
                               // while imaging, its panel sits there like any
                               // mode's.
@@ -1673,6 +1703,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                         )),
                                         section: _menuSection,
                                         revealStorage: _revealStoragePending,
+                                        onRigSetup: () => setState(() {
+                                          _popover = _Popover.none;
+                                          ref.read(rigSetupSheetProvider.notifier).set(true);
+                                        }),
                                         onClose: () => setState(
                                           () => _popover = _Popover.none,
                                         ),
@@ -2802,11 +2836,15 @@ class _SettingsSheet extends ConsumerStatefulWidget {
     this.section = 'Rig',
     required this.onClose,
     this.revealStorage = false,
+    this.onRigSetup,
   });
 
   /// The section it opens on.
   final String section;
   final VoidCallback onClose;
+
+  /// #1562 — the Rig setup row: closes Settings and shows the Rig setup sheet.
+  final VoidCallback? onRigSetup;
 
   /// Rig opens scrolled to its Storage block (Plan's Open Storage).
   final bool revealStorage;
@@ -2828,6 +2866,9 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
     // Only a device appearing or going rebuilds this, not each 1 s reading.
     // The id picks the section (and a search hit names it); the label shows.
     final sections = <(String, String, Widget Function(Color), bool)>[
+      // #1562 — while the rig still lacks a fact the first night needs.
+      if (widget.onRigSetup != null && ref.watch(rigSetupGapsProvider).isNotEmpty)
+        ('RigSetup', l10n.rigSetupTitle, (c) => glyph(Icons.checklist, c), false),
       ('Rig', l10n.shellSectionRig, (c) => glyph(Icons.memory, c), false),
       (
         'Devices',
@@ -2936,7 +2977,9 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                       child: InkWell(
                         key: Key('simple-menu-nav-$name'),
                         borderRadius: BorderRadius.circular(AraRadius.container),
-                        onTap: () => setState(() => _section = name),
+                        onTap: () => name == 'RigSetup'
+                            ? widget.onRigSetup?.call()
+                            : setState(() => _section = name),
                         child: Semantics(
                           selected: _section == name,
                           label: narrow ? title : null,
