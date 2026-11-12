@@ -289,7 +289,7 @@ void main() {
   });
 
   // Falsified by: simple_preflight_state.dart polarAlignLastResultProvider, drop the polarAlignLiveProvider watch.
-  test('a polar routine that ends reads the rig\'s result again', () async {
+  test('a polar routine that ends reads the last result again', () async {
     final api = _StatusApi()
       ..last = PolarAlignLastResult(
         errorArcmin: 4,
