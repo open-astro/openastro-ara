@@ -231,6 +231,12 @@ abstract class AppLocalizations {
   /// **'Couldn\'t save the target'**
   String get deviceCouldntSaveTarget;
 
+  /// Camera window: the row that switches the camera's own anti-dew heater; also the name in its error pill and for a screen reader
+  ///
+  /// In en, this message translates to:
+  /// **'Dew heater'**
+  String get deviceDewHeater;
+
   /// Error message when the camera refused a cooler change
   ///
   /// In en, this message translates to:
@@ -416,12 +422,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Slot {position}'**
   String deviceSlot(int position);
-
-  /// Filter wheel window, Filter row: the filter in place and its slot number, as the full UI shows it
-  ///
-  /// In en, this message translates to:
-  /// **'{filter} (slot {position})'**
-  String deviceFilterInSlot(String filter, int position);
 
   /// Filter wheel window: a filter's segment, its slot number then its name (e.g. 1 · Ha)
   ///

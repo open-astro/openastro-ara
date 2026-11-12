@@ -1529,6 +1529,20 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 ---
 
+## 2026-11-11 — The camera status names its own dew heater: `dew_heater` (#1663)
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/camera` gains `dew_heater` (`CameraDto`, new `DewHeaterDto`).
+
+**Decision:** `dew_heater` is `{device_id, port_id}` (the heater switch's Alpaca UniqueId and the port's id) or null. It is additive: a client that does not know it ignores it, and a body without it reads as null. The daemon fills it while the main camera is connected and a connected switch carries the same serial after `_SN_` in its UniqueId and a port named `DewHeater` (`ZWO_SN_x` with `ZWO_DEW_SN_x`, the ToupTek family's `TOUPTEK_THERMALSW_SN_x`, `PLAYERONE_SW_SN_x`). A missing serial on either side, no such port, a switch that is not connected, or a failed switch-list read gives null; the status itself never fails for it. Only the main camera is paired, never the guide camera, and never by name or order. The level, range and write permission stay on the switch list, and a write goes through `POST /equipment/switch/{id}/value`; the camera adds no write path.
+
+**Reasoning:** the heater is a separate Switch device and nothing said which camera it belongs to. Pairing by serial does not depend on the order devices were found in.
+
+**Spec ref:** `Services/DewHeaterPairing.cs`, `Endpoints/EquipmentEndpoints.cs` (`GetCameraWithHeaterAsync`), `OpenAstroAra.Test/DewHeaterPairingTest.cs`
+
+**Related:** #1651, #1065
+
+---
+
 ## 2026-11-11 — Adding devices to a fresh AlpacaBridge: `GET /equipment/alpacabridge/catalog`, `GET …/cameras`, `POST …/devices` (#1580)
 
 **Endpoint(s) or area:** new `GET /api/v1/equipment/alpacabridge/catalog?host=&port=`, `GET /api/v1/equipment/alpacabridge/cameras?host=&port=&vendor=`, `POST /api/v1/equipment/alpacabridge/devices?host=&port=`. The paths follow `guider/alpacadevicenames`: the AlpacaBridge the Connect screen found is `host` and `port` in the query, validated like every management call (non-empty host, a valid host name or IP, port 1..65535; else 400).

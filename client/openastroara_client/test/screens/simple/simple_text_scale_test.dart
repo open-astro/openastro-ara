@@ -33,15 +33,16 @@ import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
+import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/models/library/live_library.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimpleStatusPill;
-import 'package:openastroara/state/equipment/focuser_state.dart';
-import 'package:openastroara/models/filter_offset_calibration.dart';
-import 'package:openastroara/models/filter_wheel_status.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
+import 'package:openastroara/state/equipment/focuser_state.dart';
+import 'package:openastroara/widgets/simple/filter_wheel.dart' show SimpleFilterWheel;
+import 'package:openastroara/models/filter_offset_calibration.dart';
 import 'package:openastroara/state/focus/filter_offset_calibration_state.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
 import 'package:openastroara/widgets/inline_choices.dart';
@@ -84,6 +85,23 @@ class _Camera extends CameraStatusNotifier {
         'state': 'connected',
         'capabilities': {'has_cooler': true, 'can_set_temperature': true},
         'runtime': {'ccd_temperature': -9.8, 'cooler_power_pct': 34, 'cooler_on': true, 'cooler_setpoint_c': -10},
+      });
+}
+
+/// A connected filter wheel with [slots] slots (the window draws 5 as the
+/// compact wheel and 12 as the large one), the names running from "L" to a
+/// name too long for its cell.
+class _Wheel extends FilterWheelNotifier {
+  _Wheel(this.slots);
+  final int slots;
+  @override
+  Future<FilterWheelStatus?> build() async => FilterWheelStatus.fromJson({
+        'device_id': 'w', 'name': 'EFW', 'state': 'connected',
+        'slots': [
+          for (var i = 0; i < slots; i++)
+            {'position': i, 'name': const ['L', 'R', 'G', 'B', 'Ha', 'OIII', 'SII', 'Dual-band', 'UV/IR cut', 'Dark', '', 'Hydrogen-alpha 3 nm'][i % 12]},
+        ],
+        'runtime': {'state': 'idle', 'current_slot': 4},
       });
 }
 
@@ -163,7 +181,7 @@ void main() {
   final lang = locale.toLanguageTag();
   final l = lookupAppLocalizations(locale);
   for (final (scale, size) in cases) {
-    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Settings Focuser', 'Search', 'Wheels lat', 'Wheels lng', 'Wheels aperture', 'Wheels focal', 'Settings Guider', 'Guiding', 'Focus Auto', 'Focus Manual', 'Focus Guide', 'Focus Offsets', 'Focus Offsets results', 'Polar adjusting', 'Guide', 'Preflight', 'Calibration flats', 'Calibration darks', 'Calibration guide']) {
+    for (final open in ['Preview settings', 'Plan', 'Stop armed', 'Modes', 'Settings', 'Rig', 'Camera', 'Filter wheel 5', 'Filter wheel 12', 'Settings Focuser', 'Search', 'Wheels lat', 'Wheels lng', 'Wheels aperture', 'Wheels focal', 'Settings Guider', 'Guiding', 'Focus Auto', 'Focus Manual', 'Focus Guide', 'Focus Offsets', 'Focus Offsets results', 'Polar adjusting', 'Guide', 'Preflight', 'Calibration flats', 'Calibration darks', 'Calibration guide']) {
       testWidgets('$lang text ${scale}x at ${size.width.toInt()}x${size.height.toInt()}, $open: nothing overflows',
           skip: !hasFonts, (tester) async {
         tester.view.physicalSize = size;
@@ -177,6 +195,7 @@ void main() {
           // Plan with real content: Tonight's best (one picked) and a queue.
           if (open == 'Camera') cameraStatusProvider.overrideWith(_Camera.new),
           if (open == 'Settings Focuser') focuserProvider.overrideWith(_Focuser.new),
+          if (open.startsWith('Filter wheel')) filterWheelProvider.overrideWith(() => _Wheel(int.parse(open.split(' ').last))),
           if (open == 'Search') liveLibrarySessionsProvider.overrideWith(_Sessions.new),
           if (open == 'Settings Guider' || open == 'Guiding' || open == 'Focus Guide' || open == 'Guide' ||
               open == 'Calibration guide')
@@ -185,7 +204,7 @@ void main() {
           if (open == 'Calibration guide') guiderCalibrationProvider.overrideWith(_GuideBuilt.new),
           if (open.startsWith('Focus')) focuserProvider.overrideWith(_Focuser.new),
           // #1675: the Offsets picker over a seven-filter wheel, and its results table.
-          if (open.startsWith('Focus Offsets')) filterWheelProvider.overrideWith(_Wheel.new),
+          if (open.startsWith('Focus Offsets')) filterWheelProvider.overrideWith(_OffsetsWheel.new),
           if (open == 'Focus Offsets results') filterOffsetCalibrationProvider.overrideWith(_OffsetResults.new),
           if (open == 'Polar adjusting') polarAlignLiveProvider.overrideWith(_Adjusting.new),
           if (open == 'Plan') ...[
@@ -260,6 +279,25 @@ void main() {
           c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
           await tester.pump();
           expect(find.byKey(const Key('simple-device-camera')), findsOneWidget);
+        } else if (open.startsWith('Filter wheel')) {
+          // The wheel window: the reading and the wheel inside it, every
+          // label whole, the cells at least a 44 pt target.
+          c.read(selectedSettingsPanelProvider.notifier).select('eq.filterwheel');
+          c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+          await tester.pump();
+          await tester.pump();
+          final window = find.byKey(const Key('simple-device-filterwheel'));
+          expect(window, findsOneWidget);
+          final wheel = find.byType(SimpleFilterWheel);
+          expect(wheel, findsOneWidget);
+          final n = int.parse(open.split(' ').last);
+          for (var p = 0; p < n; p++) {
+            final cell = tester.getSize(find.byKey(Key('simple-filterwheel-slot-$p')));
+            expect(cell.shortestSide, greaterThanOrEqualTo(44), reason: 'slot $p');
+          }
+          for (final p in tester.renderObjectList<RenderParagraph>(find.descendant(of: window, matching: find.byType(RichText)))) {
+            expect(p.didExceedMaxLines, isFalse, reason: '"${p.text.toPlainText()}" is cut off');
+          }
         } else if (open == 'Settings Focuser') {
           // Its page in Settings: the coarse and fine knobs.
           await tester.tap(find.byTooltip(l.shellSettings));
@@ -664,7 +702,7 @@ class _SkippedRun extends SequenceRunStateNotifier {
 }
 
 /// A seven-filter wheel, for the Offsets picker (#1675).
-class _Wheel extends FilterWheelNotifier {
+class _OffsetsWheel extends FilterWheelNotifier {
   @override
   Future<FilterWheelStatus?> build() async => FilterWheelStatus.fromJson({
         'device_id': 'w', 'name': 'ZWO EFW 7', 'state': 'connected',

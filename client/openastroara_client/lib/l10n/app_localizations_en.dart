@@ -88,6 +88,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceCouldntSaveTarget => 'Couldn\'t save the target';
 
   @override
+  String get deviceDewHeater => 'Dew heater';
+
+  @override
   String get deviceCouldntChangeCooler => 'Couldn\'t change the cooler';
 
   @override
@@ -183,11 +186,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String deviceSlot(int position) {
     return 'Slot $position';
-  }
-
-  @override
-  String deviceFilterInSlot(String filter, int position) {
-    return '$filter (slot $position)';
   }
 
   @override

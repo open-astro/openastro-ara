@@ -88,6 +88,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get deviceCouldntSaveTarget => 'Couldn\'t save the target';
 
   @override
+  String get deviceDewHeater => 'Dew heater';
+
+  @override
   String get deviceCouldntChangeCooler => 'Couldn\'t change the cooler';
 
   @override
@@ -183,11 +186,6 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String deviceSlot(int position) {
     return 'Slot $position';
-  }
-
-  @override
-  String deviceFilterInSlot(String filter, int position) {
-    return '$filter (slot $position)';
   }
 
   @override
@@ -5122,6 +5120,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get deviceCouldntSaveTarget => 'Não foi possível salvar o alvo';
 
   @override
+  String get deviceDewHeater => 'Aquecedor anti-orvalho';
+
+  @override
   String get deviceCouldntChangeCooler =>
       'Não foi possível alterar a refrigeração';
 
@@ -5219,11 +5220,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String deviceSlot(int position) {
     return 'Posição $position';
-  }
-
-  @override
-  String deviceFilterInSlot(String filter, int position) {
-    return '$filter (posição $position)';
   }
 
   @override
