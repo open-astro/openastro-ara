@@ -248,7 +248,7 @@ void main() {
     expect(find.textContaining('Framing for a'), findsNothing);
     container.read(planningPrefsProvider.notifier).setMosaicTiles(2, 3);
     await tester.pump();
-    expect(find.text('Framing for a 2x3 mosaic'), findsOneWidget);
+    expect(find.text('Framing for a 2×3 mosaic'), findsOneWidget);
     container.read(planningPrefsProvider.notifier).setMosaicTiles(1, 1);
     await tester.pump();
     expect(find.textContaining('Framing for a'), findsNothing);
@@ -277,7 +277,7 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.text('Enquadramento para um mosaico 2x3'), findsOneWidget);
+    expect(find.text('Enquadramento para um mosaico 2×3'), findsOneWidget);
   });
   testWidgets('the add action creates a full imaging run named after the object',
       (tester) async {

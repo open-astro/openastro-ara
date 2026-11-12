@@ -5038,7 +5038,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String imagingMosaicHelp(int min, int max) {
-    return 'Ranks Tonight\'s Sky framing for a mosaic of this many tiles ($min–$max each way). 1 × 1 is a single frame.';
+    return 'Ranks Tonight\'s Sky framing for a mosaic of this many tiles ($min–$max each way). 1×1 is a single frame.';
   }
 
   @override
@@ -5049,7 +5049,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String tonightSkyMosaicFraming(int across, int down) {
-    return 'Framing for a ${across}x$down mosaic';
+    return 'Framing for a $across×$down mosaic';
   }
 
   @override
@@ -10185,7 +10185,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String imagingMosaicHelp(int min, int max) {
-    return 'Classifica o enquadramento do Céu desta noite para um mosaico com esta quantidade de painéis ($min–$max em cada direção). 1 × 1 é um único quadro.';
+    return 'Classifica o enquadramento do Céu desta noite para um mosaico com esta quantidade de painéis ($min–$max em cada direção). 1×1 é um único quadro.';
   }
 
   @override
@@ -10198,7 +10198,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String tonightSkyMosaicFraming(int across, int down) {
-    return 'Enquadramento para um mosaico ${across}x$down';
+    return 'Enquadramento para um mosaico $across×$down';
   }
 
   @override

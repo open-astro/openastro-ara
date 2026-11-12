@@ -6444,7 +6444,7 @@
   "@calibrationStartQueueNow": {
     "description": "Question pill action: start the queue (targets first, then the calibration frames)"
   },
-  "imagingMosaicHelp": "Ranks Tonight's Sky framing for a mosaic of this many tiles ({min}–{max} each way). 1 × 1 is a single frame.",
+  "imagingMosaicHelp": "Ranks Tonight's Sky framing for a mosaic of this many tiles ({min}–{max} each way). 1×1 is a single frame.",
   "@imagingMosaicHelp": {
     "description": "Settings, Imaging defaults: caption above the two Tonight's Sky mosaic size rows; min and max are the allowed tiles per side",
     "placeholders": {
@@ -6464,9 +6464,9 @@
   "@imagingMosaicTilesDown": {
     "description": "Settings, Imaging defaults: row label, how many mosaic tiles tall Tonight's Sky ranks the framing for"
   },
-  "tonightSkyMosaicFraming": "Framing for a {across}x{down} mosaic",
+  "tonightSkyMosaicFraming": "Framing for a {across}×{down} mosaic",
   "@tonightSkyMosaicFraming": {
-    "description": "Tonight's Sky panel: line under the header when the ranking assumes a mosaic, e.g. Framing for a 2x3 mosaic",
+    "description": "Tonight's Sky panel: line under the header when the ranking assumes a mosaic, e.g. Framing for a 2×3 mosaic",
     "placeholders": {
       "across": {
         "type": "int"
