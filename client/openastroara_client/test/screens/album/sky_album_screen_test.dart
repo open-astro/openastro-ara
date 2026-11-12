@@ -214,6 +214,18 @@ void main() {
     expect(tester.getSize(find.byKey(const Key('album-art-credit'))).height, greaterThanOrEqualTo(44));
   });
 
+  testWidgets('pulling the collection down runs the same fetch the open runs', (tester) async {
+    var fetches = 0;
+    await _pump(tester, frames: _m31Frames, fetcher: (baseUrl, {since}) async {
+      fetches++;
+      return const AlbumFramesPage(totalLights: 0, frames: []);
+    });
+    expect(fetches, 1, reason: 'the open');
+    await tester.fling(find.byType(CustomScrollView).first, const Offset(0, 400), 1000);
+    await tester.pumpAndSettle();
+    expect(fetches, 2);
+  });
+
   testWidgets('the Art credit is announced as a link', (tester) async {
     final handle = tester.ensureSemantics();
     await _pump(tester, frames: _m31Frames, manifest: const {

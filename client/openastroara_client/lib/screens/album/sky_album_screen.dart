@@ -19,6 +19,7 @@ import '../../state/sky_atlas/tonight_sky_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
+import '../../widgets/adaptive_refresh.dart';
 import '../../widgets/album/album_card.dart';
 
 /// The shelf shows at most this many missing cards.
@@ -255,7 +256,8 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
           ],
         ),
       ),
-      body: CustomScrollView(
+      body: AdaptiveRefresh(
+        onRefresh: _refresh,
         slivers: [
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
