@@ -132,6 +132,8 @@ SCRIPT_RULES = {
     "scripts/check-settings-registry.mjs": NONE,
     "scripts/check-help-registry.mjs": NONE,
     "scripts/fit-star-count-model.py": NONE,
+    # Run by merge-queue.yml on a merge group only.
+    "scripts/merge-gate.sh": NONE,
 }
 
 # .github/ is mixed the same way. An explicit list, not a suffix rule: a
@@ -155,8 +157,6 @@ GITHUB_RULES = {
     ".github/pull_request_template.md": NONE,
     # Run by the (ungated) Unicode scan job only.
     ".github/scripts/check-unicode.py": NONE,
-    # Run by merge-queue.yml on a merge group only.
-    ".github/scripts/merge-gate.sh": NONE,
 }
 
 

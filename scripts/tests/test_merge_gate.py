@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The merge gate (.github/scripts/merge-gate.sh) against a fake gh.
+"""The merge gate (scripts/merge-gate.sh) against a fake gh.
 
 Run from the repo root:
 
@@ -22,7 +22,7 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-GATE = REPO_ROOT / ".github" / "scripts" / "merge-gate.sh"
+GATE = REPO_ROOT / "scripts" / "merge-gate.sh"
 REF = "refs/heads/gh-readonly-queue/master/pr-7-0123abcd"
 SHA = "a" * 40
 REVIEW_START = "2026-11-12T10:00:00Z"
