@@ -49,6 +49,7 @@ public static class ProfileStoreSnapshot {
         GuiderAdvanced: s.GetGuiderAdvancedSettings(),
         FilterWheelPolicy: s.GetFilterWheelPolicy(),
         CoolingFan: s.GetCoolingFan(),
+        FilterFocusOffsets: s.GetFilterFocusOffsets(),
         TrackingCalibration: s.GetTrackingCalibration(),
         SkyModelCalibration: s.GetSkyModelCalibration(),
         EquipmentIdentity: s.GetEquipmentIdentity(),
@@ -106,5 +107,7 @@ public static class ProfileStoreSnapshot {
         s.PutFilterWheelPolicy(snap.FilterWheelPolicy ?? FilterWheelPolicyDto.Default);
         // #1700 — selecting a profile with no designation must not inherit the previous rig's fan.
         s.PutCoolingFan(snap.CoolingFan ?? CoolingFanDto.None);
+        // #1675 — offsets belong to one rig's filters: a profile with none saved must not inherit them.
+        s.PutFilterFocusOffsets(snap.FilterFocusOffsets ?? FilterFocusOffsetsDto.Empty);
     }
 }

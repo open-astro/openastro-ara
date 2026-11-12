@@ -4,6 +4,7 @@ import 'simple_monitor_screen.dart';
 import 'simple_queue_screen.dart' show simpleQueueSheetProvider;
 import 'simple_screen.dart';
 import 'simple_search.dart';
+import 'simple_focus_panel.dart' show simpleOpenFocusOffsets;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -37,7 +38,9 @@ import '../../state/imaging/last_frame_state.dart';
 import '../../state/imaging/live_view_frame_state.dart';
 import '../../state/imaging/live_view_state.dart';
 import '../../state/night_mode_state.dart';
+import '../../models/sequence/sequence_summary.dart';
 import '../../state/sequencer/sequence_list_state.dart';
+import '../../state/simple_calibration_state.dart' show simpleCalibrationRunStateProvider;
 import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/settings/cooling_fan_state.dart';
 import '../../state/settings/settings_nav.dart';
@@ -369,12 +372,77 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       }
     }, fireImmediately: true);
     _watchDeviceFailures();
+    // #1563 — a run that isn't the Plan's (calibration frames) waiting for the
+    // person; a frame late, as a pill changes a provider.
+    void syncAwaiting() => WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _syncAwaitingPill();
+    });
+    ref.listenManual(sequenceRunStateProvider, (_, _) => syncAwaiting(),
+        fireImmediately: true);
+    // The calibration run is never the selected sequence: its own poll.
+    ref.listenManual(simpleCalibrationRunStateProvider, (_, _) => syncAwaiting());
     // #1756 — a Guider start that failed after calibration began: the pill a quick failure shows.
     ref.listenManual(guideStartLateFailureProvider, (_, failed) {
       if (failed != null && mounted) {
         _messages.show(SimpleMessageKind.error, friendlyError(context.l10n, failed), origin: SimpleStatusOrigin.guide);
       }
     });
+  }
+
+  /// #1563 — the question pill of a run that isn't the Plan's, and its words.
+  int? _awaitingPill;
+  String? _awaitingText;
+
+  /// A calibration run paused for the person (put the lens cap on): its words
+  /// in a pill with Resume and no recentre. The pill goes when the run moves
+  /// on.
+  void _syncAwaitingPill() {
+    // A run other than the Plan's, or the Plan's own on a calibration block
+    // (the lens cap, a screen): the shutter there is calibration's, not
+    // the Plan's.
+    bool calibrationNow(SequenceRunStateInfo i) {
+      final run = ref.read(simpleRunProvider);
+      if (i.sequenceId != run.sequenceId) return true;
+      final t = run.targets;
+      return t.isNotEmpty && t[simpleCurrentTarget(t, i.framesCaptured)].calibration;
+    }
+
+    bool waiting(SequenceRunStateInfo? i) =>
+        i?.state == SequenceRunState.pausedAwaitingUser && calibrationNow(i!);
+    final calibration = ref.read(simpleCalibrationRunStateProvider).value;
+    final selected = ref.read(sequenceRunStateProvider).value;
+    final info = waiting(calibration)
+        ? calibration
+        : waiting(selected)
+        ? selected
+        : null;
+    final text = info == null
+        ? null
+        : info.reasonText ?? info.currentInstructionDescription ?? '';
+    if (text == _awaitingText) return;
+    if (_awaitingPill case final id?) _messages.dismiss(id);
+    _awaitingPill = null;
+    _awaitingText = text;
+    if (text == null) return;
+    final l10n = context.l10n;
+    final id = info!.sequenceId;
+    _awaitingPill = _messages.show(
+      SimpleMessageKind.question,
+      text,
+      actions: [
+        SimpleMessageAction(l10n.planResume, () async {
+          try {
+            await ref.read(sequenceApiProvider)?.resume(id, recenter: false);
+          } catch (e) {
+            if (!mounted) return;
+            _messages.show(
+              SimpleMessageKind.error,
+              friendlyError(context.l10n, e, action: context.l10n.planActionResume),
+            );
+          }
+        }),
+      ],
+    );
   }
 
   /// #1559 — on a narrow window, the rig card opened from its bar.
@@ -696,7 +764,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         _pickMode(SimpleModeScreen.guide);
       case SimpleSettingHit(:final section):
         _openMenu(section: section);
-      case SimpleModeHit(:final mode):
+      case SimpleModeHit(:final mode, :final focusOffsets):
+        if (focusOffsets) simpleOpenFocusOffsets(ref);
         _pickMode(mode);
       case SimpleImageHit(:final target):
         ref.read(libraryFilterProvider.notifier).setQuery(target);

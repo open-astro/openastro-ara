@@ -90,7 +90,11 @@ public sealed record FrameDto(
     double? RaDeg = null,
     double? DecDeg = null,
     double? PixelScaleArcsec = null,
-    bool? CapturedByAra = null);
+    bool? CapturedByAra = null,
+    // #1757 — the main camera that took the frame: its name (the FITS INSTRUME value) and the driver's
+    // unique id. Null for a frame catalogued before the columns, or a foreign frame the scan found.
+    string? CameraName = null,
+    string? CameraId = null);
 
 /// <summary>List item used by /api/v1/frames (paginated). Excludes the heavy quality breakdown.</summary>
 public sealed record FrameListItemDto(

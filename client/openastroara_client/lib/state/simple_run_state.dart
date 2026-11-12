@@ -8,6 +8,7 @@ import '../models/sequence/sequence_summary.dart';
 import '../services/sequence_api.dart' show SequenceClient;
 import 'equipment/filter_wheel_state.dart';
 import 'sequencer/create_imaging_run.dart';
+import 'sequencer/rig_capabilities_state.dart';
 import 'sequencer/sequence_list_state.dart';
 import 'settings/filter_set_state.dart';
 import 'simple_messages_state.dart';
@@ -272,6 +273,23 @@ final simpleRunGainProvider = NotifierProvider<SimpleRunGainNotifier, int?>(
   SimpleRunGainNotifier.new,
 );
 
+/// When a target's flats are shot (#1757, round 2): not at all, right after
+/// its last frame (at its rotator angle), or with the queue's end-of-night
+/// flats.
+enum SimpleTargetFlats { none, afterTarget, endOfNight }
+
+/// The Plan sheet's Flats choice for the target it queues.
+final simpleRunFlatsProvider =
+    NotifierProvider<SimpleRunFlatsNotifier, SimpleTargetFlats>(
+      SimpleRunFlatsNotifier.new,
+    );
+
+class SimpleRunFlatsNotifier extends Notifier<SimpleTargetFlats> {
+  @override
+  SimpleTargetFlats build() => SimpleTargetFlats.none;
+  void set(SimpleTargetFlats v) => state = v;
+}
+
 /// One target in Simple Mode's queue: its name, the plan square's tag, its
 /// rows (to split the progress per filter), its position (to queue it again)
 /// and, queued below the horizon, when it rises.
@@ -284,9 +302,19 @@ class SimpleTarget {
     this.decDeg = 0,
     this.rise,
     this.gain,
+    this.calibration = false,
+    this.flats = SimpleTargetFlats.none,
   });
 
   final String name;
+
+  /// When this target's flats are shot (#1757).
+  final SimpleTargetFlats flats;
+
+  /// #1757 — one of the Queue's blocks after the targets (ADR 0010 rule 4):
+  /// the end-of-night flats ([kEndFlatsBlockName]) or the Calibration block
+  /// (darks and bias). No sky, no edit; they stay last, flats first.
+  final bool calibration;
 
   /// The plan's own gain (seeded from the camera's when the sheet opened);
   /// null: the profile's default. Fixed once queued: changing the camera's
@@ -296,6 +324,12 @@ class SimpleTarget {
   /// The catalog tag for the plan square (null: its name).
   final String? tag;
   final List<FilterPlanStep> steps;
+
+  /// The frames its After target flats add to the session's count: one set
+  /// per filter row, as the block shoots them.
+  int get flatFrames => flats == SimpleTargetFlats.afterTarget
+      ? steps.where((s) => s.filterName.isNotEmpty).length * kSimpleFlatFrames
+      : 0;
 
   /// J2000.
   final double raDeg;
@@ -317,25 +351,30 @@ class SimpleTarget {
 // run tree if that matters.
 List<List<int>> simpleTargetProgress(List<SimpleTarget> targets, int captured) {
   var left = captured;
-  return [
-    for (final t in targets)
-      [
-        for (final s in t.steps)
-          () {
-            final done = math.min(left, s.frameCount);
-            left -= done;
-            return done;
-          }(),
-      ],
-  ];
+  final out = <List<int>>[];
+  for (final t in targets) {
+    final rows = <int>[];
+    for (final s in t.steps) {
+      final done = math.min(left, s.frameCount);
+      left -= done;
+      rows.add(done);
+    }
+    // The daemon counts every frame of the session: the target's own After
+    // target flats come off the count before the next target's lights.
+    left -= math.min(left, t.flatFrames);
+    out.add(rows);
+  }
+  return out;
 }
 
-/// The target the run is on: the first not yet full, else the last. Pure —
-/// unit-tested.
+/// The target the run is on: the first not yet full (its flats included),
+/// else the last. Pure — unit-tested.
 int simpleCurrentTarget(List<SimpleTarget> targets, int captured) {
-  final done = simpleTargetProgress(targets, captured);
+  var left = captured;
   for (var i = 0; i < targets.length; i++) {
-    if (simplePlanTotal(targets[i].steps) > done[i].fold(0, (a, b) => a + b)) return i;
+    final total = simplePlanTotal(targets[i].steps) + targets[i].flatFrames;
+    if (left < total) return i;
+    left -= total;
   }
   return math.max(0, targets.length - 1);
 }
@@ -459,6 +498,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     final sel = ref.read(planetariumSelectionProvider);
     final steps = ref.read(simpleRunPlanProvider);
     final gain = ref.read(simpleRunGainProvider);
+    final flats = ref.read(simpleRunFlatsProvider);
     if (sel == null || state.busy) return false;
     // One block per name (the rig finds a target's block by it): a queued
     // target isn't added again; Start now moves it to the front instead.
@@ -508,6 +548,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         recalibrateGuider: true,
         parkAtEnd: true,
         pauseForFilterSwap: false,
+        flatsAfterTarget: flats == SimpleTargetFlats.afterTarget,
       );
       if (r == null || r.draft) {
         _fail(l10nFor(ref.read(appLocaleProvider)).planRigUnreachable);
@@ -535,6 +576,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         decDeg: sel.decJ2000Deg,
         rise: sel.belowHorizon ? sel.rise : null,
         gain: gain,
+        flats: flats,
       );
       if (queue == null) {
         state = SimpleRun(
@@ -548,12 +590,21 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
           targets: [target, ...state.targets],
           busy: false,
         );
+      } else if (state.targets.indexWhere((t) => t.calibration)
+          case final trailing when trailing >= 0) {
+        // The blocks after the targets stay after the last target.
+        await _moveBefore(queue, target.name, state.targets[trailing].name);
+        state = state.copyWith(
+          targets: [...state.targets]..insert(trailing, target),
+          busy: false,
+        );
       } else {
         state = state.copyWith(
           targets: [...state.targets, target],
           busy: false,
         );
       }
+      if (flats == SimpleTargetFlats.endOfNight) await _syncEndFlats();
       return true;
     } catch (e) {
       _fail(_why(e, (l) => l.planActionCreate));
@@ -616,6 +667,8 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         gain: gain,
         stopAtDawn: state.dawnStop,
         recalibrateGuider: true,
+        // parkAtEnd only shapes a new queue root; an append (this) never uses it.
+        flatsAfterTarget: t.flats == SimpleTargetFlats.afterTarget,
       );
       if (r == null || r.draft || r.sequenceId != id) {
         throw StateError("the rig didn't take the edited plan");
@@ -629,11 +682,14 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         decDeg: t.decDeg,
         rise: t.rise,
         gain: gain,
+        flats: t.flats,
       );
       state = state.copyWith(
         targets: [...state.targets]..[i] = edited,
         busy: false,
       );
+      // Its filters may have changed: the end-of-night flats follow them.
+      if (t.flats == SimpleTargetFlats.endOfNight) await _syncEndFlats();
       return true;
     } catch (e) {
       _fail(
@@ -735,6 +791,10 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         to >= n) {
       return false;
     }
+    // The blocks after the targets stay there: nothing moves among them.
+    if (state.targets[from].calibration || state.targets[to].calibration) {
+      return false;
+    }
     final wanted = [...state.targets];
     wanted.insert(to, wanted.removeAt(from));
     state = state.copyWith(busy: true);
@@ -759,6 +819,161 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     }
   }
 
+  /// #1757 — the queue's end-of-night flats follow its targets set to End
+  /// of night: one block, before the Calibration block, for the filters they
+  /// use; none when no target wants them. Rebuilt whole (out, then in), live
+  /// while it runs.
+  Future<void> _syncEndFlats() async {
+    final id = state.sequenceId;
+    final api = ref.read(sequenceApiProvider);
+    if (id == null || api == null) return;
+    final filters = {
+      for (final t in state.targets)
+        if (t.flats == SimpleTargetFlats.endOfNight)
+          for (final s in t.steps)
+            if (s.filterName.isNotEmpty) s.filterName,
+    }.toList();
+    var targets = [...state.targets];
+    if (targets.any((t) => t.calibration && t.name == kEndFlatsBlockName)) {
+      await _removeBlock(api, id, kEndFlatsBlockName);
+      targets.removeWhere((t) => t.calibration && t.name == kEndFlatsBlockName);
+    }
+    if (filters.isNotEmpty) {
+      final rig = await readRigCapabilities(ref.container);
+      final block = endFlatsBlock(filters, rig);
+      final body = (await api.getSequenceDetail(id)).body;
+      if (ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false) {
+        await api.addRunItem(
+          id,
+          parentPath: const [],
+          index: liveAppendIndex(body),
+          item: block,
+        );
+      } else {
+        await api.updateSequence(id, body: appendTargetToRunBody(body, block));
+      }
+      final at = targets.indexWhere((t) => t.calibration);
+      if (at >= 0) await _moveBefore(id, kEndFlatsBlockName, targets[at].name);
+      targets.insert(
+        at >= 0 ? at : targets.length,
+        SimpleTarget(
+          name: kEndFlatsBlockName,
+          calibration: true,
+          steps: [
+            for (final f in filters)
+              FilterPlanStep(
+                filterName: f,
+                exposureSeconds: 1,
+                frameCount: kSimpleFlatFrames,
+              ),
+          ],
+        ),
+      );
+    }
+    state = state.copyWith(targets: targets);
+  }
+
+  /// #1757 — runs a calibration [block] through the queue, so it has a plan
+  /// square like everything that takes a while (user, 2026-11-12). With no
+  /// queue, or a finished one, it is a queue of its own and starts. Queued
+  /// targets not started yet go first: it joins them and asks whether to
+  /// start. A queue imaging takes it after its targets. Returns the sequence
+  /// it runs in when it started a queue of its own, else null.
+  Future<String?> runCalibration(Map<String, dynamic> block) async {
+    final api = ref.read(sequenceApiProvider);
+    if (api == null || state.busy) return null;
+    final phase = simpleRunPhase(state, ref.read(sequenceRunStateProvider).value);
+    if (state.sequenceId == null || phase == SimpleRunPhase.done) {
+      state = const SimpleRun().copyWith(busy: true);
+      try {
+        final id = await api.create(
+          kCalibrationBlockName,
+          calibrationQueueBody(block),
+        );
+        ref.read(selectedSequenceIdProvider.notifier).select(id);
+        final time = calibrationBlockTime(block);
+        state = SimpleRun(
+          sequenceId: id,
+          targets: [_calibrationTarget(time)],
+        );
+        return await start() ? id : null;
+      } catch (e) {
+        _fail(_why(e, (l) => l.calibrationActionShoot), undo: const SimpleRun());
+        return null;
+      }
+    }
+    if (!await addCalibration(block)) return null;
+    if (phase == SimpleRunPhase.ready) {
+      final l = l10nFor(ref.read(appLocaleProvider));
+      ref
+          .read(simpleMessagesProvider.notifier)
+          .show(
+            SimpleMessageKind.question,
+            l.calibrationStartQueue,
+            origin: SimpleStatusOrigin.plan,
+            actions: [
+              SimpleMessageAction(l.calibrationNotNow, () {}),
+              SimpleMessageAction(l.calibrationStartQueueNow, () => startQueue()),
+            ],
+          );
+    }
+    return null;
+  }
+
+  SimpleTarget _calibrationTarget(({int frames, double seconds}) time) =>
+      SimpleTarget(
+        name: kCalibrationBlockName,
+        calibration: true,
+        steps: [
+          FilterPlanStep(
+            filterName: '',
+            exposureSeconds: time.frames == 0
+                ? 1
+                : math.max(0.001, time.seconds / time.frames),
+            frameCount: math.max(1, time.frames),
+          ),
+        ],
+      );
+
+  /// #1757 — puts the Calibration [block] after the queue's targets: live
+  /// while it runs. The queue holds one; a second is refused with the reason.
+  /// True once on the rig.
+  Future<bool> addCalibration(Map<String, dynamic> block) async {
+    final api = ref.read(sequenceApiProvider);
+    final id = state.sequenceId;
+    final l = l10nFor(ref.read(appLocaleProvider));
+    if (api == null || id == null || state.busy) {
+      _fail(l.calibrationNoQueue);
+      return false;
+    }
+    if (state.targets.any((t) => t.name == kCalibrationBlockName)) {
+      _fail(l.calibrationAlreadyQueued);
+      return false;
+    }
+    state = state.copyWith(busy: true);
+    try {
+      final body = (await api.getSequenceDetail(id)).body;
+      if (ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false) {
+        await api.addRunItem(
+          id,
+          parentPath: const [],
+          index: liveAppendIndex(body),
+          item: block,
+        );
+      } else {
+        await api.updateSequence(id, body: appendTargetToRunBody(body, block));
+      }
+      state = state.copyWith(
+        targets: [...state.targets, _calibrationTarget(calibrationBlockTime(block))],
+        busy: false,
+      );
+      return true;
+    } catch (e) {
+      _fail(_why(e, (l) => l.calibrationActionQueue));
+      return false;
+    }
+  }
+
   /// Remove target [i] from the queue (one not started yet): live from a
   /// running sequence, else from the stored body.
   Future<void> remove(int i) async {
@@ -768,13 +983,14 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     final name = state.targets[i].name;
     try {
       await _removeBlock(api, id, name);
-      final left = [...state.targets]..removeAt(i);
-      if (left.isEmpty && !state.started) {
+      final gone = state.targets[i];
+      state = state.copyWith(targets: [...state.targets]..removeAt(i));
+      // The last End of night target takes the Flats block with it.
+      if (gone.flats == SimpleTargetFlats.endOfNight) await _syncEndFlats();
+      if (state.targets.isEmpty && !state.started) {
         // Nothing left to run: the empty sequence goes too.
         await api.deleteSequence(id);
         state = const SimpleRun();
-      } else {
-        state = state.copyWith(targets: left);
       }
     } catch (e) {
       _fail(_why(e, (l) => l.planActionRemove));
