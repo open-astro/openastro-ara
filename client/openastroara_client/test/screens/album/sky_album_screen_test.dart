@@ -214,6 +214,41 @@ void main() {
     expect(tester.getSize(find.byKey(const Key('album-art-credit'))).height, greaterThanOrEqualTo(44));
   });
 
+  testWidgets('the Art credit is announced as a link', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, frames: _m31Frames, manifest: const {
+      'M31': AlbumArt(asset: 'assets/album/art/m031.webp', credit: 'ESO', licence: 'CC BY 2.0'),
+    });
+    await tester.tap(find.text('Andromeda Galaxy'));
+    await tester.pumpAndSettle();
+    expect(
+        tester.getSemantics(find.byKey(const Key('album-art-credit'))),
+        matchesSemantics(
+            isLink: true, isFocusable: true, hasTapAction: true, hasFocusAction: true,
+            label: 'Art (cropped): ESO · CC BY 2.0'));
+    handle.dispose();
+  });
+
+  for (final (name, launcher) in [
+    ('refuses', () => _FakeUrlLauncher(result: false)),
+    ('throws', () => _FakeUrlLauncher(throws: true)),
+  ]) {
+    testWidgets('a licence link the browser $name says so', (tester) async {
+      final original = UrlLauncherPlatform.instance;
+      addTearDown(() => UrlLauncherPlatform.instance = original);
+      UrlLauncherPlatform.instance = launcher();
+      await _pump(tester, frames: _m31Frames, manifest: const {
+        'M31': AlbumArt(asset: 'assets/album/art/m031.webp', credit: 'ESO', licence: 'CC BY 2.0'),
+      });
+      await tester.tap(find.text('Andromeda Galaxy'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('album-art-credit')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text("Couldn't open the licence page"), findsOneWidget);
+    });
+  }
+
   testWidgets('a card front: the Placeholder without Art, dimmed Art while missing, colour when collected',
       (tester) async {
     const art = AlbumArt(asset: 'assets/album/art/test.webp', credit: 'ESO', licence: 'CC BY 4.0');
@@ -737,11 +772,15 @@ void main() {
 }
 
 class _FakeUrlLauncher extends Fake with MockPlatformInterfaceMixin implements UrlLauncherPlatform {
+  _FakeUrlLauncher({this.result = true, this.throws = false});
+  final bool result;
+  final bool throws;
   String? launched;
 
   @override
   Future<bool> launchUrl(String url, LaunchOptions options) async {
     launched = url;
-    return true;
+    if (throws) throw Exception('no browser');
+    return result;
   }
 }

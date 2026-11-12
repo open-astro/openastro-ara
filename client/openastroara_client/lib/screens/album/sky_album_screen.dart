@@ -195,7 +195,7 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
     List<Widget> shelfRow(Key key, String title, List<PlanningDso> cards, Widget Function(PlanningDso) build) => [
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-            sliver: SliverToBoxAdapter(child: Text(title, style: Theme.of(context).textTheme.titleSmall)),
+            sliver: SliverToBoxAdapter(child: Text(title, style: kSimpleText.copyWith(fontWeight: FontWeight.w600))),
           ),
           SliverToBoxAdapter(
             child: SizedBox(
@@ -289,7 +289,7 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
                       // 40 px by default; one density step up draws it at 44.
                       visualDensity: VisualDensity(vertical: 1),
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 14)),
+                      textStyle: WidgetStatePropertyAll(kSimpleText),
                     ),
                     onSelectionChanged: (s) => setState(() => _filter = s.single),
                   );
@@ -331,7 +331,7 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
                     ),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      child: Text(error, style: const TextStyle(color: AraColors.errorText)),
+                      child: Text(error, style: kSimpleText.copyWith(color: AraColors.errorText)),
                     ),
                   ),
                 ),
@@ -349,7 +349,7 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
                 child: Text(
                   l.albumEmpty,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: AraColors.textSecondary),
+                  style: kSimpleText.copyWith(color: AraColors.textSecondary),
                 ),
               ),
             ),

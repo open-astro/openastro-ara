@@ -3949,6 +3949,10 @@
       }
     }
   },
+  "albumArtCreditOpenFailed": "Couldn't open the licence page",
+  "@albumArtCreditOpenFailed": {
+    "description": "Sky Album card back: snackbar when the Art credit's licence link cannot be opened in a browser"
+  },
   "shellAlbum": "Sky Album",
   "@shellAlbum": {
     "description": "Simple Mode left rail: opens the Sky Album"

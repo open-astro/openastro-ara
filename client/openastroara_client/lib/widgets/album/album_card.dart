@@ -237,6 +237,14 @@ class AlbumCardFront extends StatelessWidget {
 /// The card back, a baseball-card back: name banner in the Tier colour, bio
 /// line, the latest Nights and a totals row, the "Did you know?" line, the one
 /// action and the Art credit.
+/// Opens the licence deed; a browser that cannot be reached (false or thrown) says so.
+Future<void> _openLicence(BuildContext context, String url) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final failed = context.l10n.albumArtCreditOpenFailed;
+  final opened = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication).catchError((_) => false);
+  if (!opened) messenger?.showSnackBar(SnackBar(content: Text(failed)));
+}
+
 class AlbumCardBack extends StatelessWidget {
   const AlbumCardBack(this.card, {super.key, required this.onAction});
   final AlbumCardData card;
@@ -361,12 +369,13 @@ class AlbumCardBack extends StatelessWidget {
         ),
         if (art != null && art.creditLine != null) ...[
           // The licence name links its deed, as CC BY asks; the whole 44 px row is the tap target.
-          InkWell(
+          Semantics(
+            link: art.licenceUrl != null,
+            child: InkWell(
             key: const Key('album-art-credit'),
             onTap: switch (art.licenceUrl) {
               null => null,
-              final url => () => unawaited(launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)
-                  .catchError((_) => false)),
+              final url => () => unawaited(_openLicence(context, url)),
             },
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 44),
@@ -387,6 +396,7 @@ class AlbumCardBack extends StatelessWidget {
                   style: _backText,
                 ),
               ),
+            ),
             ),
           ),
         ],

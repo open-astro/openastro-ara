@@ -165,7 +165,7 @@ class AlbumBookView {
 final albumBookProvider = FutureProvider.family<AlbumBookView, AlbumBook>((ref, book) async {
   final objects = bookObjects(await ref.watch(bundledCatalogProvider.future), book);
   final collection = await ref.watch(albumFramesProvider.future);
-  // The site's longitude dates the Nights; no site (offline, none set) falls back to the device.
-  final site = await ref.watch(siteLocationProvider.future).then<SiteLocation?>((s) => s, onError: (_) => null);
+  // The site's longitude dates the Nights; until it is read, or with no site, the device's clock does.
+  final site = ref.watch(siteLocationProvider).value;
   return AlbumBookView(objects: objects, stats: aggregateBook(collection.frames.values, objects, siteLongitudeDeg: site?.longitudeDeg));
 });
