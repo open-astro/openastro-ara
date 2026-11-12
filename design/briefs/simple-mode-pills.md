@@ -21,7 +21,7 @@ Shaped 2026-11-02 (`/impeccable shape`). Paperclip: ALP-4825 (part of ALP-4810).
 Decided on the mock (2026-11-02, option A, one line): the corners are re-dealt.
 
 - Message pills stack in the **top-left** corner, under the strip and under the Preflight strip or offer when one shows.
-- The camera status pill moves to the **top-right** corner; the two share the row (status at most 300 px or half the row, messages the rest up to 420 px), so neither is ever under the other.
+- The status lines (what the rig is doing) share the messages' card (#1782, supersedes the top-right status pill): one frosted card in the top-left corner, the status lines first in their stack order, then the messages newest first, each entry behind a hairline. The card is as wide as its widest line up to 420 px, 420 px while a question holds actions, the whole row on a phone. "+N more" folds messages only. Nothing is drawn while there is no line and no message.
 - The plan squares move to the **bottom-right**, above the bottom row.
 - Newest on top; as many as fit above the left rail (two on a landscape iPad), the rest fold into "+N more", at the end of the newest pill when there is no room below.
 - In the immersive view errors and questions stay; results fade as usual.

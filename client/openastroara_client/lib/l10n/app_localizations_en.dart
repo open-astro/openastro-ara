@@ -34,17 +34,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String statusMoreSemantics(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count more statuses',
-      one: '1 more status',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get pillsDismiss => 'Dismiss';
 
   @override
@@ -3949,6 +3938,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pointingOpenCamera => 'Camera settings';
+
+  @override
+  String get pointingCameraBusy =>
+      'The camera is taking another frame. Check again once it finishes.';
 
   @override
   String get devicePlanRunningHomeAnyway =>

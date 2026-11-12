@@ -108,7 +108,8 @@ import 'simple_rig_storage.dart';
 import '../../state/focus/guide_focus_state.dart' show guideFocusProvider;
 import '../../state/settings/phd2_settings_state.dart'
     show phd2SettingsProvider;
-import 'simple_message_pills.dart';
+import 'simple_message_pills.dart' show kSimpleMessageHeight;
+import 'simple_status_card.dart';
 import '../album/sky_album_screen.dart';
 import '../../state/sky_atlas/dso_catalog_state.dart'
     show bundledCatalogProvider;
@@ -137,11 +138,8 @@ const double kSimpleDeviceWindowWidth = 360;
 const double kSimpleMountWindowWidth = 640;
 const double kSimpleWidestPopover = 316;
 
-/// The status pill's widest (top-left under the strip); Info starts right of
-/// it.
-const double kSimpleStatusMaxWidth = 300;
-
-/// The message pills' widest (they share the top row with the status pill).
+/// The status card's widest, and the message pills' (a page pushed over the
+/// shell, the safety alarm).
 const double kSimpleMessagesMaxWidth = 420;
 
 /// The Connect to your rig card's narrowest between the rails: its width in a
@@ -235,8 +233,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   double _statusHeight = 0;
   double _messagesHeight = 0;
   final _messagesKey = GlobalKey();
-  double _statusStackHeight = 0;
-  final _statusKey = GlobalKey();
   final _leftRailKey = GlobalKey();
   final _rightRailKey = GlobalKey();
   final _simplePreflightRowKey = GlobalKey();
@@ -246,15 +242,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final right = _rightRailKey.currentContext?.size?.height;
     final row = _simplePreflightRowKey.currentContext?.size?.height;
     final messages = _messagesKey.currentContext?.size?.height ?? 0;
-    final status = _statusKey.currentContext?.size?.height ?? 0;
     if (!mounted) return;
     if ((rail != null && rail != _leftRailHeight) ||
         (right != null && right != _rightRailHeight) ||
         (row != null && row != _simplePreflightRowHeight) ||
-        messages != _messagesHeight ||
-        status != _statusStackHeight) {
+        messages != _messagesHeight) {
       setState(() {
-        _statusStackHeight = status;
         _leftRailHeight = rail ?? _leftRailHeight;
         _rightRailHeight = right ?? _rightRailHeight;
         _simplePreflightRowHeight = row ?? _simplePreflightRowHeight;
@@ -1097,26 +1090,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // Preflight's step strip, under the status strip; its offer sits at the
     // bottom (user, 2026-11-03).
     final simplePreflightRow = pilot != null;
-    // Messages share the top row with the status pill, which keeps at most
-    // half of it; they start under the Preflight strip when it shows. On a
-    // window too narrow to share (a phone) they take the whole row, under a
-    // room kept for the status pill, so neither moves when the other comes.
-    final sharedWidth =
-        width -
-        kSimpleInset * 3 -
-        math.min(kSimpleStatusMaxWidth, (width - kSimpleInset * 3) / 2);
-    final stacked = sharedWidth < 200;
-    final messagesWidth = math.min(
-      kSimpleMessagesMaxWidth,
-      stacked ? width - kSimpleInset * 2 : sharedWidth,
-    );
-    final statusRow = stacked
-        ? math.max(kSimpleStatusHeight, _statusStackHeight) + AraSpace.s8
-        : 0.0;
+    // The status card (the status lines, then the messages) sits top left,
+    // starting under the Preflight strip when it shows. On a window narrower
+    // than its widest plus the insets (a phone) it takes the whole row.
+    final narrow = width < kSimpleMessagesMaxWidth + kSimpleInset * 2;
+    final messagesWidth = width - kSimpleInset * 2;
     final messagesTop = simplePreflightRow
-        ? railTop +
-              math.max(statusRow, _simplePreflightRowHeight + AraSpace.s12)
-        : railTop + statusRow;
+        ? railTop + _simplePreflightRowHeight + AraSpace.s12
+        : railTop;
     _measure();
     final height =
         MediaQuery.sizeOf(context).height -
@@ -1130,15 +1111,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final messagesRoom = panels
         ? leftRailTop - messagesTop - kSimpleInset
         : double.infinity;
-    // Pills too tall for the room above the left rail move beside it, when
-    // that leaves them a readable width; otherwise they paint over it. On a
-    // phone they would run under the right rail beside the left one, so they
-    // paint over the left rail and stop short of the right one.
+    // A card too tall for the room above the left rail moves beside it, when
+    // the room between the rails leaves it a readable width; otherwise it
+    // paints over the left rail. Either way it stops short of the right rail.
     final railShift = railWidth + kSimpleInset;
+    final besideRoom = messagesWidth - railShift * 2;
     final pillsBesideRail =
-        !stacked &&
-        _messagesHeight > messagesRoom &&
-        messagesWidth - railShift >= 240;
+        !narrow && _messagesHeight > messagesRoom && besideRoom >= 240;
     final pillsOverRail =
         panels &&
         _messagesHeight > messagesRoom &&
@@ -1210,7 +1189,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       child: SimpleRigBar(focusNode: _rigBarConnect, onOpen: () => setState(() => _rigCardOpen = true)),
     );
     final pillsLeft = kSimpleInset + (pillsBesideRail ? railShift : 0);
-    final pillsTop = panels ? messagesTop : kSimpleInset + statusRow;
+    final pillsTop = panels ? messagesTop : kSimpleInset;
     // At the pills' own place: the slot they move into animates from here.
     final emptyPillSlot = AnimatedPositioned(
       duration: Duration.zero,
@@ -1221,8 +1200,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final messagePills = AnimatedPositioned(
       left: pillsLeft,
       top: pillsTop,
-      width:
-          messagesWidth - (pillsBesideRail || pillsOverRail ? railShift : 0),
+      // As wide as its widest line (up to 420 px) off a phone; on one, the row.
+      width: narrow
+          ? messagesWidth - (pillsOverRail ? railShift : 0)
+          : null,
       duration: motion,
       curve: Curves.easeOut,
       child: NotificationListener<SizeChangedLayoutNotification>(
@@ -1233,6 +1214,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         // Large text can outgrow the screen: above Stop the pills scroll.
         child: ConstrainedBox(
           constraints: BoxConstraints(
+            maxWidth: pillsBesideRail
+                ? besideRoom
+                : messagesWidth - (pillsOverRail ? railShift : 0),
             maxHeight: math.max(
               kSimpleMessageHeight,
               height - pillsTop - aboveStop,
@@ -1240,9 +1224,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
           ),
           child: SingleChildScrollView(
             child: SizeChangedLayoutNotifier(
-              child: SimpleMessagePills(
+              child: SimpleStatusCard(
                 key: _messagesKey,
                 onOpen: _openFromPill,
+                onFirstHeight: _setStatusHeight,
                 maxHeight: messagesRoom,
               ),
             ),
@@ -1366,33 +1351,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                         // Preflight strip when it shows), down to the left rail;
                         // they stay in the immersive view.
                         pillsOverRail ? emptyPillSlot : messagePills,
-                        // The camera's status, top-right under the strip (messages
-                        // have the top-left), at most half the row; it stays in
-                        // the immersive view and moves up into the corner.
-                        AnimatedPositioned(
-                          right: kSimpleInset,
-                          top: panels ? railTop : kSimpleInset,
-                          duration: motion,
-                          curve: Curves.easeOut,
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              maxWidth: (width - kSimpleInset * 3) / 2,
-                            ),
-                            child: NotificationListener<SizeChangedLayoutNotification>(
-                              onNotification: (_) {
-                                _measure();
-                                return true;
-                              },
-                              child: SizeChangedLayoutNotifier(
-                                child: SimpleStatusPill(
-                                  key: _statusKey,
-                                  onFirstHeight: _setStatusHeight,
-                                  onOpen: _openFromPill,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
                         _Fade(
                           visible: panels,
                           child: Stack(
@@ -2932,6 +2890,11 @@ ThemeData simpleTheme(ThemeData base) {
   return base.copyWith(
     // Desktop defaults to compact density, which takes buttons under 44 px.
     visualDensity: VisualDensity.standard,
+    // A chip is 38 px on desktop, ink included (#1791): pad it to 44 here
+    // rather than padding every Material control's tap target.
+    chipTheme: base.chipTheme.copyWith(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
+    ),
     filledButtonTheme: FilledButtonThemeData(
       style: buttons.merge(base.filledButtonTheme.style),
     ),

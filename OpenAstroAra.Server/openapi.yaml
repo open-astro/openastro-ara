@@ -3572,6 +3572,7 @@ paths:
       tags:
         - PlateSolve
       summary: '§57.4 Verify-Position: a quick snapshot plate-solved and compared with the mount''s reported and intended positions.'
+      description: '409 problem details carry a stable `reason`: `no-camera` (nothing connected to look with), `camera-busy` (another exposure holds the camera; check again once it has read out) or `gate-stuck` (the in-flight gate leaked; a daemon restart clears it).'
       operationId: VerifyMountPosition
       requestBody:
         content:

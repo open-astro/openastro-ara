@@ -31,15 +31,6 @@
       }
     }
   },
-  "statusMoreSemantics": "{count, plural, =1{1 more status} other{{count} more statuses}}",
-  "@statusMoreSemantics": {
-    "description": "Simple Mode status pills: screen reader label for the +N fold past three pills; a tap opens the first one folded",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "pillsDismiss": "Dismiss",
   "@pillsDismiss": {
     "description": "Simple Mode message pills: tooltip of the close button on an error message"
@@ -5015,6 +5006,8 @@
   "@pointingOpenOptics": {"description": "Mount window button after an optics error"},
   "pointingOpenCamera": "Camera settings",
   "@pointingOpenCamera": {"description": "Mount window button when no camera can take the frame"},
+  "pointingCameraBusy": "The camera is taking another frame. Check again once it finishes.",
+  "@pointingCameraBusy": {"description": "Mount window Check failure: the main camera is busy with an exposure; no settings fix it, so no button"},
   "devicePlanRunningHomeAnyway": "A plan is running. Send the mount home anyway?",
   "@devicePlanRunningHomeAnyway": {"description": "Mount window: asked when Home is tapped while a plan runs"},
   "deviceHomeAnyway": "Home anyway",

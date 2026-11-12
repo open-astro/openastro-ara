@@ -11,17 +11,28 @@ import '../../theme/ara_metrics.dart';
 import '../../util/reduce_motion.dart';
 import 'simple_preview_panel.dart' show SimpleTapTarget, kSimpleText;
 import 'simple_shell.dart' show kSimpleInset, simpleFrost;
+import 'simple_status_card.dart' show SimpleCardHairline, NoIntrinsicWidth;
 
 /// A pill's height when its words take one line (two lines grow it).
 const double kSimpleMessageHeight = 48;
 
-/// The message pills in the top-left corner (ALP-4825): newest on top, as
-/// many as fit [maxHeight] (above the left rail), the rest folded into one
-/// "+N more" pill that shows them all.
+/// The messages, newest on top, as many as fit [maxHeight] (above the left
+/// rail), the rest folded into one "+N more" entry that shows them all. In
+/// the status card ([inCard]) they are entries under the status lines, each
+/// behind a hairline; otherwise (a page pushed over the shell, the safety
+/// alarm) they are free-standing pills (ALP-4825).
 class SimpleMessagePills extends ConsumerStatefulWidget {
-  const SimpleMessagePills({super.key, required this.maxHeight, this.onOpen});
+  const SimpleMessagePills({
+    super.key,
+    required this.maxHeight,
+    this.onOpen,
+    this.inCard = false,
+  });
 
   final double maxHeight;
+
+  /// Drawn as entries of the status card, which owns the frost and border.
+  final bool inCard;
 
   /// Opens what a message came from, on a tap (user, 2026-11-04).
   final ValueChanged<SimpleStatusOrigin>? onOpen;
@@ -86,14 +97,19 @@ class _SimpleMessagePillsState extends ConsumerState<SimpleMessagePills> {
     final inline = folded && widget.maxHeight < step + 44;
     final more = messages.length - fit;
     void toggle() => setState(() => _all = !_all);
+    final inCard = widget.inCard;
     return Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: AraSpace.s8,
+      crossAxisAlignment: inCard
+          ? CrossAxisAlignment.stretch
+          : CrossAxisAlignment.start,
+      spacing: inCard ? 0 : AraSpace.s8,
       children: [
-        for (final m in shown)
+        for (final (i, m) in shown.indexed) ...[
+          if (inCard && i > 0) const SimpleCardHairline(),
           _Pill(
             key: ValueKey(m.id),
+            inCard: inCard,
             message: m,
             more: inline && m == shown.first ? more : null,
             onMore: toggle,
@@ -101,14 +117,19 @@ class _SimpleMessagePillsState extends ConsumerState<SimpleMessagePills> {
                 ? null
                 : () => widget.onOpen!(m.origin!),
           ),
-        if ((folded && !inline) || (_all && messages.length > fit))
+        ],
+        if ((folded && !inline) || (_all && messages.length > fit)) ...[
+          if (inCard) const SimpleCardHairline(),
           Semantics(
             button: true,
-            child: simpleFrost(
+            child: _framed(
+              inCard,
               Material(
-              color: AraColors.overlayScrim,
+              color: inCard ? Colors.transparent : AraColors.overlayScrim,
               shape: RoundedRectangleBorder(
-                side: const BorderSide(color: AraColors.border),
+                side: inCard
+                    ? BorderSide.none
+                    : const BorderSide(color: AraColors.border),
                 borderRadius: BorderRadius.circular(AraRadius.simplePanel),
               ),
               child: InkWell(
@@ -130,10 +151,15 @@ class _SimpleMessagePillsState extends ConsumerState<SimpleMessagePills> {
             ),
             ),
           ),
+        ],
       ],
     );
   }
 }
+
+/// Free-standing pills carry their own frost; in the card it is the card's.
+Widget _framed(bool inCard, Widget child) =>
+    inCard ? child : simpleFrost(child);
 
 class _Pill extends ConsumerWidget {
   const _Pill({
@@ -142,9 +168,13 @@ class _Pill extends ConsumerWidget {
     this.more,
     required this.onMore,
     this.onOpen,
+    this.inCard = false,
   });
 
   final SimpleMessage message;
+
+  /// An entry of the status card: no frost, border or outline of its own.
+  final bool inCard;
 
   /// Opens what it came from.
   final VoidCallback? onOpen;
@@ -202,16 +232,19 @@ class _Pill extends ConsumerWidget {
       onTap: onOpen,
       child: SimpleTapTarget(
         onTap: onOpen,
-        child: simpleFrost(
+        child: _framed(
+        inCard,
         Container(
         key: Key('simple-message-${m.id}'),
         constraints: const BoxConstraints(minHeight: kSimpleMessageHeight),
         padding: const EdgeInsets.only(left: 14, right: 4),
-        decoration: BoxDecoration(
-          color: AraColors.overlayScrim,
-          borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-          border: Border.all(color: outline ?? AraColors.border),
-        ),
+        decoration: inCard
+            ? null
+            : BoxDecoration(
+                color: AraColors.overlayScrim,
+                borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+                border: Border.all(color: outline ?? AraColors.border),
+              ),
         child: Stack(
           children: [
             Row(
@@ -260,9 +293,13 @@ class _Pill extends ConsumerWidget {
                       if (question && actionBelow)
                         Padding(
                           padding: const EdgeInsets.only(right: 10, bottom: 10),
-                          child: _QuestionAnswers(
-                            labels: [for (final a in m.actions) a.label],
-                            onAnswer: (i) => _answer(notifier, i),
+                          // Measures its own width (LayoutBuilder): the card is
+                          // the full 420 px while a question holds actions.
+                          child: NoIntrinsicWidth(
+                            child: _QuestionAnswers(
+                              labels: [for (final a in m.actions) a.label],
+                              onAnswer: (i) => _answer(notifier, i),
+                            ),
                           ),
                         )
                       else if (actionBelow)
