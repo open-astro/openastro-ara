@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Add your devices (AlpacaBridge first-time setup, #1580)</title>
+<style>
+  /* Mock for the board's review before any Flutter code (#1580). Single dark look on purpose: DESIGN.md tokens
+     (lib/theme/ara_colors.dart), as the other design/preview mocks. Nothing here is wired to a rig: the catalog
+     below is a sample shaped like AlpacaBridge's devicecatalog, the host is a made-up 192.0.2.10. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --panel: #262626; --input: #333; --hair: #404040; --text: #E0E0E0; --text2: #A0A0A0; --dis: #6E6E6E;
+    --ok: #4CAF50; --info: #42A5F5; --link: #64B5F6; --sel: #1976D2; --fill: #1565C0; --warn: #FFB300;
+    --tile: rgba(56,56,56,.55); --errt: #FF8A80; --scrim: rgba(26,26,26,.9);
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys); margin: 0;
+         padding: 28px max(16px, env(safe-area-inset-right, 0px)) 64px max(16px, env(safe-area-inset-left, 0px)); }
+  .page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 80ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; }
+  .lbl { color: var(--text2); font-size: 13px; margin-right: 8px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--hair); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 10px 14px; font: 13px var(--sys); cursor: pointer; min-height: 44px; }
+  .seg button + button { border-left: 1px solid var(--hair); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+  .decide { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .decide div { background: var(--bg); border: 1px solid #2a2a2a; border-radius: 10px; padding: 12px 14px; min-width: 0; }
+  .decide b { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .decide span { color: var(--text2); font-size: 13px; }
+
+  /* The two looks. .full: the wizard's Screen 2 on a desktop window. .simple: Simple Mode's Settings > Devices sheet. */
+  .frame { border: 1px solid #333; border-radius: 14px; overflow: hidden; min-height: 560px; display: flex; flex-direction: column; background: #07080c; }
+  .frame .bar { padding: 10px 16px; border-bottom: 1px solid #2a2a2a; color: var(--text2); font-size: 12px; display: flex; gap: 12px; }
+  .frame .body { padding: 20px; display: flex; justify-content: center; align-items: flex-start; flex: 1; }
+  .card { width: min(560px, 100%); display: flex; flex-direction: column; gap: 14px; padding: 20px; }
+  .full .card { background: var(--panel); border: 1px solid var(--hair); border-radius: 8px; }
+  .simple .card { background: var(--scrim); border-radius: 10px; box-shadow: inset 0 0 0 1px var(--hair); font-size: 15px; }
+  .card h2 { margin: 0; font-size: 20px; font-weight: 600; }
+  .card .sub { margin: -6px 0 0; color: var(--text2); font-size: 13px; }
+  .steps { display: flex; gap: 6px; flex-wrap: wrap; color: var(--dis); font-size: 12px; }
+  .steps b { color: var(--text); font-weight: 600; }
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .row { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 8px 6px 14px; background: var(--tile); border-radius: 10px; border: 0; color: var(--text); text-align: left; font: inherit; cursor: pointer; width: 100%; }
+  .row:hover { background: rgba(70,70,70,.6); }
+  .row .who { flex: 1; min-width: 0; }
+  .row .who b { display: block; font-weight: 500; }
+  .row .who span { display: block; color: var(--text2); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .row .chev { color: var(--text2); padding-right: 6px; }
+  .row[aria-disabled="true"] { opacity: .5; cursor: default; }
+  .btn { min-height: 44px; padding: 0 18px; border-radius: 8px; border: 0; font: 600 14px var(--sys); cursor: pointer; white-space: nowrap; }
+  .simple .btn { min-height: 48px; }
+  .btn.fill { background: var(--fill); color: #fff; }
+  .btn.out { background: transparent; color: #fff; box-shadow: inset 0 0 0 1px var(--hair); }
+  .btn.text { background: transparent; color: var(--link); padding: 0 10px; }
+  .btn[disabled] { opacity: .45; cursor: default; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  .summary { display: flex; flex-direction: column; gap: 10px; padding: 14px; background: var(--tile); border-radius: 10px; }
+  .summary p { margin: 0; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--ok); margin-right: 8px; }
+  .pill { padding: 10px 14px; border-radius: 10px; font-size: 13px; }
+  .pill.ok { box-shadow: inset 0 0 0 1px var(--ok); }
+  .pill.warn { box-shadow: inset 0 0 0 1px var(--warn); }
+  .pill.err { box-shadow: inset 0 0 0 1px #E53935; color: var(--errt); }
+  /* The generated form. */
+  .form { display: flex; flex-direction: column; gap: 14px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 13px; color: var(--text); }
+  .field label .req { color: var(--warn); margin-left: 4px; }
+  .field input, .field select { background: var(--input); color: var(--text); border: 1px solid var(--hair); border-radius: 6px; min-height: 44px; padding: 0 12px; font: 14px var(--sys); width: 100%; }
+  .simple .field input, .simple .field select { min-height: 48px; }
+  .field .help { color: var(--text2); font-size: 12px; }
+  .field .err { color: var(--errt); font-size: 12px; }
+  .field.check { flex-direction: row; align-items: center; gap: 12px; min-height: 44px; }
+  .field.check input { width: 22px; min-height: 22px; }
+  fieldset { border: 1px solid var(--hair); border-radius: 8px; padding: 10px 12px 12px; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+  legend { color: var(--text2); font-size: 12px; padding: 0 6px; }
+  .rec { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; align-items: end; padding: 8px; background: var(--tile); border-radius: 8px; }
+  .legend { color: var(--text2); font-size: 12px; max-width: 80ch; }
+  .legend code { color: var(--text); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Add your devices: AlpacaBridge first-time setup (#1580)</h1>
+  <p class="note">A fresh rig has an AlpacaBridge with no devices. This mock shows the whole flow in the wizard's Connect screen (Full UI) and in Simple Mode's Settings &rsaquo; Devices. Pick the mode and the step. The form is generated from the catalog sample at the bottom of this file, the way the client would build it from AlpacaBridge's <code>devicecatalog</code>. Nothing here talks to a rig.</p>
+
+  <div class="controls">
+    <div><span class="lbl">Look</span><span class="seg" id="look"></span></div>
+    <div><span class="lbl">Step</span><span class="seg" id="step"></span></div>
+    <div><span class="lbl">Driver</span><span class="seg" id="drv"></span></div>
+    <div><span class="lbl">Answer</span><span class="seg" id="ans"></span></div>
+  </div>
+
+  <div class="frame" id="frame"><div class="bar" id="bar"></div><div class="body"><div class="card" id="card"></div></div></div>
+
+  <div class="decide">
+    <div><b>Offered only when the catalog reads</b><span>The action shows only when <code>GET /equipment/alpacabridge/catalog</code> returns drivers. A server that is not AlpacaBridge, or one too old for the catalog, gets today's message and no button (reachability stays the only gate, &sect;68.1).</span></div>
+    <div><b>Which field the attached camera fills</b><span><code>serialNumber</code> and <code>cameraName</code>. They are what AlpacaBridge's own web picker saves, so the entry binds by serial and survives a renumber. <code>cameraIndex</code> and <code>cameraId</code> (roles EnumerationIndex and DeviceId) stay behind "Enter the index by hand".</span></div>
+    <div><b>Same flow, two looks</b><span>One shared flow. Simple Mode keeps its own look (frosted sheet, 48 pt targets, no link to the Full UI). It is the empty state of Settings &rsaquo; Devices, reached from "No devices connected".</span></div>
+  </div>
+  <p class="legend">Form rules shown: defaults filled in, required fields marked and checked before Add, number range enforced, enum as a choice list, <code>appliesWhen</code> shows or hides a field, nested <code>fields</code> as a group, <code>secret</code> obscured, an unknown field type falls back to a text field. Switch Driver to see each.</p>
+</div>
+
+<script>
+/* Sample shaped like AlpacaBridge's devicecatalog (key, type, default, required, secret, role, range, enum, appliesWhen, fields).
+   Types AlpacaBridge sends: bool, int, double, string, stringList, recordList. "futuretype" is invented to show the fallback. */
+const CATALOG = [
+  { vendor: 'zwo', deviceType: 'camera', displayName: 'ZWO ASI camera', vendorLabel: 'ZWO', available: true, fields: [
+    { key: 'cameraIndex', type: 'int', default: -1, required: false, secret: false, role: 'EnumerationIndex' },
+    { key: 'cameraId', type: 'int', default: -1, required: false, secret: false, role: 'DeviceId' },
+    { key: 'serialNumber', type: 'string', default: '', required: false, secret: false, role: 'Plain' },
+    { key: 'cameraName', type: 'string', default: '', required: false, secret: false, role: 'Plain' },
+    { key: 'usbBandwidth', type: 'int', default: 40, required: false, secret: false, role: 'Plain', range: { min: 0, max: 100 } } ] },
+  { vendor: 'zwo', deviceType: 'switch', displayName: 'ZWO ASIAIR power ports', vendorLabel: 'ZWO', available: true, fields: [
+    { key: 'switchType', type: 'string', default: 'dewheater', required: true, secret: false, role: 'Discriminator', enum: ['dewheater', 'asiair', 'asiair-plus-picm4'] },
+    { key: 'gpioChip', type: 'string', default: '/dev/gpiochip0', required: true, secret: false, role: 'PortPath', appliesWhen: { key: 'switchType', value: 'asiair' } },
+    { key: 'pwmFrequencyHz', type: 'int', default: 1000, required: false, secret: false, role: 'Plain', range: { min: 1, max: 20000 } },
+    { key: 'ports', type: 'recordList', required: false, secret: false, role: 'Plain', appliesWhen: { key: 'switchType', value: 'asiair' }, fields: [
+      { key: 'name', type: 'string', default: '', required: false, secret: false, role: 'Plain' },
+      { key: 'gpio', type: 'int', default: 0, required: true, secret: false, role: 'Plain', range: { min: 0, max: 40 } },
+      { key: 'pwm', type: 'bool', default: false, required: false, secret: false, role: 'Plain' } ] } ] },
+  { vendor: 'onstep', deviceType: 'telescope', displayName: 'OnStep mount', vendorLabel: 'OnStep', available: true, fields: [
+    { key: 'connectionType', type: 'string', default: 'serial', required: true, secret: false, role: 'Discriminator', enum: ['serial', 'network'] },
+    { key: 'portPath', type: 'string', default: '/dev/ttyUSB0', required: true, secret: false, role: 'PortPath', appliesWhen: { key: 'connectionType', value: 'serial' } },
+    { key: 'host', type: 'string', default: '', required: true, secret: false, role: 'Host', appliesWhen: { key: 'connectionType', value: 'network' } },
+    { key: 'password', type: 'string', default: '', required: false, secret: true, role: 'Secret', appliesWhen: { key: 'connectionType', value: 'network' } },
+    { key: 'siteLatitude', type: 'double', default: 0, required: false, secret: false, role: 'Plain', range: { min: -90, max: 90 } },
+    { key: 'meshAlignment', type: 'futuretype', default: 'off', required: false, secret: false, role: 'Plain' } ] },
+  { vendor: 'qhy', deviceType: 'camera', displayName: 'QHY camera', vendorLabel: 'QHY', available: false, fields: [] },
+];
+const TYPES = ['camera', 'telescope', 'focuser', 'filterwheel', 'rotator', 'switch'];
+const TYPE_LABEL = { camera: 'Camera', telescope: 'Mount', focuser: 'Focuser', filterwheel: 'Filter wheel', rotator: 'Rotator', switch: 'Switch / power box' };
+const ATTACHED = [ { index: 0, name: 'ZWO ASI294MC Pro', serial: '0A1B2C3D4E5F6A7B' }, { index: 1, name: 'ZWO ASI120MM Mini', serial: '1B2C3D4E5F6A7B8C' } ];
+
+const state = { look: 'full', step: 'connect', drv: 'zwo-camera', ans: 'added', picked: null, values: {}, hand: false };
+const STEPS = [['connect', '1 Connect'], ['type', '2 Type'], ['driver', '3 Driver'], ['camera', '4 Camera'], ['form', '5 Form'], ['done', '6 Added']];
+const DRIVERS = [['zwo-camera', 'ZWO camera'], ['zwo-switch', 'ZWO switch (nested, appliesWhen)'], ['onstep-telescope', 'OnStep (secret, enum, unknown type)']];
+const ANSWERS = [['added', 'Added'], ['warning', 'Added with warning'], ['refused', 'Refused'], ['silent', 'No answer']];
+
+// A link can open a state: #look=simple&step=form&drv=onstep-telescope&ans=refused
+for (const [k, v] of new URLSearchParams(location.hash.slice(1))) if (k in state) state[k] = v;
+
+function seg(id, items, key, onpick) {
+  const el = document.getElementById(id); el.textContent = '';
+  for (const [v, label] of items) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.setAttribute('aria-pressed', String(state[key] === v));
+    b.onclick = () => { state[key] = v; if (onpick) onpick(); render(); }; el.append(b);
+  }
+}
+const h = (tag, props = {}, ...kids) => { const e = document.createElement(tag); Object.assign(e, props); for (const k of kids) e.append(k); return e; };
+const current = () => CATALOG.find(d => `${d.vendor}-${d.deviceType}` === state.drv);
+
+function fieldVisible(f, fields) {
+  if (!f.appliesWhen) return true;
+  const gate = fields.find(x => x.key === f.appliesWhen.key);
+  return String(state.values[gate.key]) === String(f.appliesWhen.value);
+}
+function resetValues(d) { state.values = {}; for (const f of d.fields) if (f.type !== 'recordList') state.values[f.key] = f.default ?? ''; state.picked = null; state.hand = false; }
+let lastDriver = null;
+
+function control(f, scope, values) {
+  const id = `f-${scope}-${f.key}`; const wrap = h('div', { className: 'field' + (f.type === 'bool' ? ' check' : '') });
+  const label = h('label', { htmlFor: id, textContent: f.key }); if (f.required) label.append(h('span', { className: 'req', textContent: 'required' }));
+  let input;
+  if (f.enum) { input = h('select', { id }); for (const v of f.enum) input.append(h('option', { value: v, textContent: v })); input.value = values[f.key]; }
+  else if (f.type === 'bool') { input = h('input', { id, type: 'checkbox', checked: !!values[f.key] }); }
+  else if (f.type === 'int' || f.type === 'double') { input = h('input', { id, type: 'number', value: values[f.key], inputMode: 'decimal' }); if (f.range) { input.min = f.range.min; input.max = f.range.max; } input.step = f.type === 'int' ? 1 : 'any'; }
+  else { input = h('input', { id, type: f.secret ? 'password' : 'text', value: values[f.key] ?? '', autocomplete: f.secret ? 'new-password' : 'off' }); }
+  input.oninput = input.onchange = () => { values[f.key] = f.type === 'bool' ? input.checked : input.value; if (f.enum) render(true); else validate(); };
+  if (f.type === 'bool') wrap.append(input, label); else wrap.append(label, input);
+  if (f.range) wrap.append(h('span', { className: 'help', textContent: `${f.range.min} to ${f.range.max}` }));
+  if (f.secret) wrap.append(h('span', { className: 'help', textContent: 'Hidden as you type. Never written to a log.' }));
+  if (!['bool', 'int', 'double', 'string', 'stringList', 'recordList'].includes(f.type)) wrap.append(h('span', { className: 'help', textContent: `A field type this Ara does not know ("${f.type}"): shown as plain text.` }));
+  wrap.append(h('span', { className: 'err', id: `${id}-err` })); return wrap;
+}
+function validate() {
+  const d = current(); let ok = true;
+  for (const f of d.fields) {
+    if (f.type === 'recordList' || !fieldVisible(f, d.fields)) continue;
+    const el = document.getElementById(`f-top-${f.key}`); const err = document.getElementById(`f-top-${f.key}-err`); if (!el || !err) continue;
+    const v = state.values[f.key]; let msg = '';
+    if (f.required && String(v ?? '').trim() === '') msg = 'Required.';
+    else if (f.range && v !== '' && (Number(v) < f.range.min || Number(v) > f.range.max)) msg = `Between ${f.range.min} and ${f.range.max}.`;
+    err.textContent = msg; if (msg) ok = false;
+  }
+  const add = document.getElementById('add'); if (add) add.disabled = !ok;
+}
+function record(f, i) {
+  const g = h('div', { className: 'rec' }); const vals = state.values[`${f.key}#${i}`] ??= Object.fromEntries(f.fields.map(x => [x.key, x.default]));
+  for (const sub of f.fields) g.append(control(sub, `${f.key}${i}`, vals)); return g;
+}
+
+function render(keep) {
+  seg('look', [['full', 'Full UI (wizard Screen 2)'], ['simple', 'Simple Mode (Settings > Devices)']], 'look');
+  seg('step', STEPS, 'step');
+  seg('drv', DRIVERS, 'drv', () => { if (state.step === 'connect' || state.step === 'type') state.step = 'form'; });
+  seg('ans', ANSWERS, 'ans');
+  const d = current(); if (lastDriver !== state.drv) { resetValues(d); lastDriver = state.drv; }
+  document.getElementById('frame').className = `frame ${state.look}`;
+  document.getElementById('bar').textContent = state.look === 'full' ? 'OpenAstro Ara setup  /  2 Connect to AlpacaBridge' : 'Simple Mode  /  Settings  /  Devices';
+  const card = document.getElementById('card'); card.textContent = '';
+  const add = (...n) => card.append(...n);
+  const crumbs = h('div', { className: 'steps' }); STEPS.slice(1).forEach(([k, l], i) => crumbs.append(...(i ? [h('span', { textContent: '›' })] : []), h(k === state.step ? 'b' : 'span', { textContent: l })));
+  if (state.step === 'connect') {
+    add(h('h2', { textContent: state.look === 'full' ? 'Connect to AlpacaBridge' : 'Devices' }));
+    add(h('div', { className: 'summary' }, h('p', {}, h('span', { className: 'dot' }), 'AlpacaBridge found at 192.0.2.10:6800. No devices yet.'),
+      h('p', { className: 'sub', textContent: 'AlpacaBridge does not add plugged-in gear on its own. Add each device here, or press Retry detection if you added some another way.' })));
+    add(h('div', { className: 'actions' }, h('button', { className: 'btn out', textContent: 'Retry detection' }), h('button', { className: 'btn fill', textContent: 'Add your devices', onclick: () => { state.step = 'type'; render(); } }),
+      state.look === 'full' ? h('button', { className: 'btn text', textContent: 'Next (add later)' }) : ''));
+  } else if (state.step === 'type') {
+    add(crumbs, h('h2', { textContent: 'What kind of device?' }), h('p', { className: 'sub', textContent: 'Only kinds your AlpacaBridge build has a driver for.' }));
+    const l = h('div', { className: 'list' }); for (const t of TYPES) { const n = CATALOG.filter(x => x.deviceType === t && x.available).length;
+      const r = h('button', { className: 'row', type: 'button', onclick: () => { state.step = 'driver'; render(); } }, h('span', { className: 'who' }, h('b', { textContent: TYPE_LABEL[t] }), h('span', { textContent: n ? `${n} driver${n > 1 ? 's' : ''}` : 'no driver in this build' })), h('span', { className: 'chev', textContent: '›' }));
+      if (!n) { r.setAttribute('aria-disabled', 'true'); r.onclick = null; } l.append(r); } add(l);
+  } else if (state.step === 'driver') {
+    add(crumbs, h('h2', { textContent: 'Which maker?' }), h('p', { className: 'sub', textContent: 'Drivers in this AlpacaBridge. One left out of the build (QHY) is not listed.' }));
+    const l = h('div', { className: 'list' }); for (const x of CATALOG.filter(x => x.available)) l.append(h('button', { className: 'row', type: 'button', onclick: () => { state.drv = `${x.vendor}-${x.deviceType}`; state.step = x.vendor === 'zwo' && x.deviceType === 'camera' ? 'camera' : 'form'; render(); } },
+      h('span', { className: 'who' }, h('b', { textContent: x.displayName }), h('span', { textContent: `${x.vendorLabel} · ${TYPE_LABEL[x.deviceType]}` })), h('span', { className: 'chev', textContent: '›' }))); add(l);
+  } else if (state.step === 'camera') {
+    add(crumbs, h('h2', { textContent: 'Which camera?' }), h('p', { className: 'sub', textContent: 'The ZWO cameras plugged in, with their serial numbers so a main and a guide camera can be told apart.' }));
+    const l = h('div', { className: 'list' }); for (const c of ATTACHED) l.append(h('button', { className: 'row', type: 'button', onclick: () => { state.picked = c; state.values.serialNumber = c.serial; state.values.cameraName = c.name; state.step = 'form'; render(); } },
+      h('span', { className: 'who' }, h('b', { textContent: c.name }), h('span', { textContent: `Serial ${c.serial}` })), h('span', { className: 'chev', textContent: '›' }))); add(l);
+    add(h('div', { className: 'actions' }, h('button', { className: 'btn text', textContent: 'Enter the index by hand', onclick: () => { state.hand = true; state.step = 'form'; render(); } })));
+  } else if (state.step === 'form') {
+    add(crumbs, h('h2', { textContent: d.displayName }));
+    if (state.picked) add(h('p', { className: 'sub', textContent: `${state.picked.name}, serial ${state.picked.serial}. Saved as serialNumber and cameraName; the camera binds by serial.` }));
+    const form = h('div', { className: 'form' });
+    for (const f of d.fields) {
+      if (!fieldVisible(f, d.fields)) continue;
+      if (state.picked && ['serialNumber', 'cameraName'].includes(f.key)) continue;              // filled by the pick
+      if (d.vendor === 'zwo' && d.deviceType === 'camera' && !state.hand && ['EnumerationIndex', 'DeviceId'].includes(f.role)) continue; // behind "by hand"
+      if (f.type === 'recordList') { const g = h('fieldset', {}, h('legend', { textContent: `${f.key} (a group of rows)` })); g.append(record(f, 0), record(f, 1)); form.append(g); continue; }
+      form.append(control(f, 'top', state.values));
+    }
+    add(form, h('div', { className: 'actions' }, h('button', { className: 'btn out', textContent: 'Back', onclick: () => { state.step = 'driver'; render(); } }),
+      h('button', { className: 'btn fill', id: 'add', textContent: 'Add', onclick: () => { state.step = 'done'; render(); } })));
+    validate();
+  } else {
+    add(h('h2', { textContent: state.ans === 'refused' ? 'AlpacaBridge refused the device' : state.ans === 'silent' ? 'No answer from AlpacaBridge' : 'Device added' }));
+    const msg = { added: ['ok', 'Device registered successfully. It is in the list below.'],
+      warning: ['warn', 'Device registered successfully. Warning: no camera matched index 3. The device is in the list; check it before imaging.'],
+      refused: ['err', "gpioChip '/dev/gpiochip9' is not in the board allowlist"],
+      silent: ['warn', 'AlpacaBridge did not answer in time. The device may or may not have been added: check the list before trying again.'] }[state.ans];
+    add(h('div', { className: 'pill ' + msg[0], textContent: msg[1] }));
+    if (state.ans === 'added' || state.ans === 'warning') add(h('div', { className: 'list' }, h('div', { className: 'row' }, h('span', { className: 'who' }, h('b', { textContent: current().displayName }), h('span', { textContent: 'on 192.0.2.10:6800 · just added' })))));
+    add(h('div', { className: 'actions' }, h('button', { className: 'btn out', textContent: state.ans === 'added' || state.ans === 'warning' ? 'Add another' : 'Back to the form', onclick: () => { state.step = state.ans === 'added' || state.ans === 'warning' ? 'type' : 'form'; render(); } }),
+      state.look === 'full' ? h('button', { className: 'btn fill', textContent: 'Next' }) : h('button', { className: 'btn fill', textContent: 'Done' })));
+  }
+}
+render();
+</script>
+</body>
+</html>

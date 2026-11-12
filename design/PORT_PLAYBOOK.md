@@ -14,7 +14,7 @@ The product model is ASIAir-like: server runs the night, client is for planning 
 
 | WILMA owns ("plan + view") | ARA Core owns ("hardware orchestration") |
 |---|---|
-| Sky atlas (Aladin Lite + bundled catalogs) | Equipment control (Alpaca devices) |
+| Sky atlas (embedded Stellarium Web Engine + bundled catalogs) | Equipment control (Alpaca devices) |
 | Sequence editor (build offline, push when ready) | Sequence execution (receives + runs) |
 | Framing assistant (FOV overlay, client compute) | Plate solving (during the actual session) |
 | Profile editor (drafts local, sync to Pi) | Guiding (PHD2) |
@@ -283,8 +283,8 @@ Phase 11  — Flutter client scaffold + first-run + server connect + handshake +
             §12, §30, §53 (a11y from the start; StatusIndicator widget)
 Phase 12  — Flutter views: app shell + all main tabs (Imaging, Planning, Sequencer, Image Library, Stats, Settings)
             — Planning = merged Sky Atlas + Framing (PORT_DECISIONS §36/§25.5, 2026-06-15)
-            §25, §36 (Planning: Sky Atlas/Aladin + Framing + Data Manager), §37 (wizard), §40 (image library UI), §50 (Stats dashboard UI),
-            §51 (Health Indicator + Diagnostic Panel UI), §41 (mobile companion shell selection),
+            §25, §36 (Planning: Sky Atlas on the embedded Stellarium Web Engine + Framing; its Data Manager design is historical), §37 (wizard), §40 (image library UI), §50 (Stats dashboard UI),
+            §51 (Health Indicator + Diagnostic Panel UI), §41 (Companion Mode: Simple Mode on phones),
             §32 (disconnect modal), §35 (safety UI), §54 (bug report flow), §61 (smart settings search),
             §63 (PHD2 settings), §64 (Live View UI), §65 (stretch picker + manual sliders)
             **Split into 8 sub-PRs (12a–12h) per `design/COMMIT-PR-RULES.md` — see that doc for the full mapping table.**
@@ -660,7 +660,7 @@ NINA's `CompositionRoot.cs` is deeply WPF-entangled (UI VMs, dispatcher-affinity
 | NINA registration | ARA fate | ARA lifetime | Notes |
 |---|---|---|---|
 | `IImagingMediator` | → `ICaptureOrchestratorService` | Singleton | UI-coupling stripped; channel-based progress events |
-| `IPlanetariumMediator` | → `IPlanetariumService` | Singleton | Tonight's Sky + Aladin integration per §36 |
+| `IPlanetariumMediator` | → `IPlanetariumService` | Singleton | Tonight's Sky + planetarium integration per §36 |
 | `IDeepSkyObjectSearchSyncBehavior` | Drop | — | WPF binding mechanism; replaced by API endpoint |
 | `ITwoPointPolarAlignmentVM` | Drop | — | TPPA removed per §45 (replaced with iPolar-style continuous loop) |
 
@@ -955,7 +955,7 @@ The client UX deliberately mirrors NINA so existing users feel at home. **See §
 - **Left panel** (collapsible) — profile selector + active equipment chooser dropdowns + manual control widgets per connected device.
 - **Center workspace** — tabbed:
   - **Imaging** — main image viewer, live preview, exposure controls, histogram overlay, plate-solve overlay
-  - **Planning** — one Aladin Lite surface: find a target (browse / search / Tonight's Sky) + frame it for capture (profile-derived FOV + rotation + mosaic) → Build Sequence. Merges the old Framing Assistant + Sky Atlas (PORT_DECISIONS §36/§25.5)
+  - **Planning** — one Stellarium Web Engine surface: find a target (browse / search / Tonight's Sky) + frame it for capture (profile-derived FOV + rotation + mosaic) → Build Sequence. Merges the old Framing Assistant + Sky Atlas (PORT_DECISIONS §36/§25.5)
   - **Sequencer** — tree-based instruction editor (Areas → Targets → Instructions)
   - **Options** — settings tree (Equipment, Imaging, Plate Solving, Astrometry, etc.)
 - **Right panel** (collapsible) — histogram + image statistics, plate solve results, log tail.
@@ -1195,7 +1195,7 @@ In `client/openastroara_client/`:
 
 ### 14.3 CI matrix (`.github/workflows/ci.yml`)
 
-As it is on `master` (reconciled 2026-09-19, #1026 — this table describes the live workflow, not the original plan). Job ids are `ci.yml`'s; the **Context** column is the literal check name the `master protection` ruleset matches (COMMIT-PR-RULES.md item 2). Path gating comes from the `changes` job (#1020/#1021): `docs_only` skips every build/test job; the finer `dotnet` / `client` outputs skip only jobs that are **not** required contexts. Six jobs (`alpaca-sim-smoke`, `alpaca-sim-integration`, `analyzer-gate`, `bench-arm64`, `server-build`, `registry-gate` — not `client-test`, which needs only `changes`) also carry `needs.sanity.result == 'success'`, so a failed `Sanity (design docs)` skips them too — when attributing a skip under §19.1, check `sanity` first, then the `changes` outputs.
+As it is on `master` (reconciled 2026-09-19, #1026 — this table describes the live workflow, not the original plan). Job ids are `ci.yml`'s; the **Context** column is the literal check name the `master protection` ruleset matches (COMMIT-PR-RULES.md item 2). Path gating comes from the `changes` job (#1020/#1021): `docs_only` skips every build/test job; the finer `dotnet` / `client` outputs skip only jobs that are **not** required contexts. Six jobs (`alpaca-sim-smoke`, `alpaca-sim-integration`, `analyzer-gate`, `bench-arm64`, `server-build`, `registry-gate` — not the `client-test*` jobs, which never need `sanity`) also carry `needs.sanity.result == 'success'`, so a failed `Sanity (design docs)` skips them too — when attributing a skip under §19.1, check `sanity` first, then the `changes` outputs.
 
 | Job id | Context | Runner | Steps | Gated by |
 |---|---|---|---|---|
@@ -1209,8 +1209,9 @@ As it is on `master` (reconciled 2026-09-19, #1026 — this table describes the 
 | `registry-gate` | `Settings + Help registry gate` ✅ required | `ubuntu-latest` | `node scripts/check-settings-registry.mjs`; `node scripts/check-help-registry.mjs` | `docs_only` only |
 | `client-test-shard` | `Client (analyze + test) — ubuntu-latest, shard <n>/3` | `ubuntu-latest` (shard matrix 1-3) | `flutter pub get`; `flutter test` on every third test file; shard 1 also runs `flutter analyze`, the l10n freshness check and the page-logic tests | `docs_only` |
 | `client-test-linux` | `Client (analyze + test) — ubuntu-latest` ✅ required | `ubuntu-latest` | passes only when every shard passed (or the shards skipped a docs-only change) | never skipped |
-| `client-test` | `Client (analyze + test) — <os>` ✅ required ×2 | `macos-latest`, `windows-latest` (os matrix); `ubuntu-latest` when the leg has no work | `flutter pub get`, `flutter analyze`, `flutter test` — in the merge queue, on `master` and on a manual run only; on a pull request the legs report green with no work | `docs_only` and the event at **step** level — the job always expands so its two required contexts report (#1025) |
-| `client-build` | `Client (native build) — <target>` | `macos-latest` / `ubuntu-latest` / `windows-latest` (target matrix `macos` / `linux` / `windows`) | `flutter build <target> --release` | `docs_only`, `client` |
+| `client-test-desktop-shard` | `Client (analyze + test) — <os>, shard <n>/3` | `macos-latest`, `windows-latest` (os matrix × shard matrix 1-3) | `flutter pub get`; `flutter test` on every third test file; shard 1 also runs `flutter analyze` and the page-logic tests — in the merge queue, on `master` and on a manual run only | `docs_only` and the event (skipped on a pull request) |
+| `client-test` | `Client (analyze + test) — <os>` ✅ required ×2 | `ubuntu-latest` (os matrix `macos-latest`, `windows-latest`) | passes only when every desktop shard passed (or the shards skipped a pull request or a docs-only change) | never skipped — the job always expands so its two required contexts report (#1025) |
+| `client-build` | `Client (native build) — <target>` | `macos-latest` / `ubuntu-latest` / `windows-latest` (target matrix `macos` / `linux` / `windows`) | `flutter build <target> --release` | `docs_only`, `client`, and skipped on `merge_group` (the merge gate checks it on the PR head) |
 
 A new push to a branch cancels the run it replaces (`concurrency`, 2026-11-12); a merge group's run is never cancelled.
 
@@ -1670,7 +1671,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
   - **Narrow field / tiny galaxies** (under 0.5°: long focal length, small sensor, few bright stars in frame) → `D80` (8000 stars/deg²) — enough faint Gaia stars to get a match where shallow catalogs fail. `H17` / `H18` are the legacy deep databases ASTAP has retired: still accepted when installed, never recommended. Under 0.15° nothing solves (the wizard says so).
   - **Selection:** the server picks the appropriate installed database from the active rig's computed FOV / pixel scale (focal length + sensor + binning) and names it to ASTAP per-solve with `-D <abbrev>` alongside `-d <database_dir>` (only when more than one is installed; see Status). A lone database is used for every solve; a warning when the FOV falls outside its useful range is not built yet. Exact database names/magnitude limits track astap.nl and may evolve — config stores paths, not hard-coded catalog identifiers.
   - **Status (2026-09-22, #1094):** `ASTAPSolver` now passes `-d <database_dir>` from the profile's plate-solve index path (`ASTAPDatabaseLocation`, bridged from `PlateSolveSettingsDto.IndexDownloadPath`, default `/var/lib/astap`); a configured directory that is missing or empty logs one warning per daemon run and falls back to ASTAP's own lookup. Since #1121, when more than one database sits in that directory the daemon names one with `-D <abbrev>` (`AstapStarDatabase.Select`, five bands: under 0.5° D80 first, 0.5–1° D50 first, 1–6° D05 first, above 6° G05 first and above 20° W08 first — the 6° and 20° cut-offs are ASTAP's own auto-selection thresholds, the 0.5° and 1° ones are this project's ladder — each falling back down the installed list), a stock solver path (`/usr/bin/astap`, `/usr/bin/astap_cli`, `/opt/astap/astap_cli`) migrates to the bundled `/opt/openastroara/astap_cli` once that binary is on disk (#1136), and Settings → Plate solving shows the directory's status (`GET /api/v1/platesolve/database`). The server-side download flow shipped in #1136 (PR #1417): D80/D50/D05/G05/W08 are Data Manager packages (D05/D50 since #1423) (release assets on open-astro/sky-data), installed under the index path one subdirectory each, with the Recommended flag from the profile's field of view; docs/DEPLOY.md step 3 points at Settings → Sky data. A blank index path means the default directory on every side (`SolverPathMigration.EffectiveIndexPath`). §36.10's rig-specific recommendation shipped with the setup wizard's reducer field and database section: `AstapStarDatabase.RecommendedFor` is the ladder (W08 > 20°, G05 > 6°, D05 ≥ 1°, D50 ≥ 0.5°, D80 below, nothing under the 0.15° floor), `POST /data-manager/solver-recommendation` answers per camera (imaging + guide, OAG through the main optics), and the fifth screen downloads the picks after Save. Still open: the "Solve a test image" setup step.
-- **Where ASTAP + databases live** (decided in ADR 0007): a **server-managed, Pi-side asset** — the same storage domain as FITS frames / profiles / calibration (§29, on the **mandatory USB drive**), and explicitly *not* the WILMA/client-side sky-data domain (§36 Aladin HiPS surveys / DE440, which download to the client). Consequences:
+- **Where ASTAP + databases live** (decided in ADR 0007): a **server-managed, Pi-side asset** — the same storage domain as FITS frames / profiles / calibration (§29, on the **mandatory USB drive**), and explicitly *not* the WILMA/client-side sky-data domain (§36's historical Data Manager design for HiPS surveys / DE440, which downloaded to the client). Consequences:
   - **Downloads execute server-side.** The wizard (running in WILMA) does not fetch databases to the client and copy them over — it calls a **server endpoint** that downloads the selected database(s) from astap.nl directly onto the Pi's USB storage, where ASTAP reads them. Client only triggers and shows progress (mirrors the §36.2 background-download UX, but the bytes land on the Pi).
   - **"Browse" = the Pi's filesystem.** Any path picker for binary/database location browses the **server's** filesystem via the server API, not WILMA's local disk.
   - **Default install location** is under the server's USB data root (per §29), e.g. `<usb-root>/astap/databases/`, so databases survive on the same drive policy as the rest of the Pi-side data and don't consume the SD card.
@@ -1691,7 +1692,7 @@ Placeholders during port. Every icon/splash/logo reference carries `TODO(brandin
 
 - **Branch allowlist:** AI may push per-PR feature branches matching `phase/<N>[-<letter>]-<short-name>` (slash namespace + hyphenated words, e.g., `phase/0.5a-plugin-strip`, `phase/12h-settings`, `phase/38k-13-focuser-mediator`) plus a small set of named prep branches (e.g., `prep-ci`), `rules-*` for rules/playbook upkeep branches (the namespace §22.2 has always listed as driver-created), and `chore/<short-name>` for maintenance work that is not a port phase (skill and doc upkeep, CI cleanups). Each branches from `master` and merges back to `master` via PR. AI never commits directly to `master` — it lands only via merged PRs. All other branches are off-limits without explicit user instruction. **Naming note:** the slash namespace is now valid because there is no longer a branch literally named `phase` or `port/ara` to collide with it (the old flat-name workaround was forced only while `port/ara` existed as a branch — retired 2026-06-02). See `design/COMMIT-PR-RULES.md` per-phase rhythm section for the branch diagram.
 - **AI merges PRs under a strict merge-gate** (policy revised 2026-05-23 from "AI never merges" after the user granted full merge authority in PR #2; tightened later same day after user direction "wait for rabbit … we need checks and balances" in PR #9 thread). The AI merges a PR when **all** of the following hold:
-  - All required CI checks are `pass` — or `skipping` **because CI's documented path gate skipped them** (`.github/workflows/ci.yml`'s `changes` job, #1020: a docs-only PR skips six jobs — six check contexts, of which two are required: `server-build` and `registry-gate`. The other four — both Alpaca jobs, `analyzer-gate`, and `client-build`, which appears once under its literal uninterpolated name `Client (native build) — ${{ matrix.target }}` because a matrix skipped at job level never expands — are not required contexts but will also read `skipping`. The three required `client-test` legs are gated at step level and report `pass`, not `skipping`, because a matrix job skipped at job level never expands and its required contexts are never reported at all — see #1025). No `pending`, no `failure`. A `skipping` that is *not* attributable to that gate — a job skipped because one of its `needs:` failed, or by an `if:` the merging agent cannot account for — is **ambiguous, not clearance**: post `Held for human review` and stop. The distinction matters because GitHub counts a skipped required context as satisfied, so "skipped" alone cannot be trusted to mean "did not need to run"; the reason has to be checked. (Amended 2026-09-19 in PR #1021, which introduced the path gate, at the user's direction after the AI flagged that editing this gate autonomously was not its call.) **Second amendment, 2026-09-19, again at the user's direction** ("I want to make sure we are thinking thoughtful with CI so we are not running things when we do not need to"): the `changes` job now also emits `dotnet` and `client`, so the four NON-REQUIRED contexts above — both Alpaca jobs, `analyzer-gate`, and `client-build` — can read `skipping` on a PR that is **not** docs-only. A client-only PR skips the three `dotnet` jobs; a PR touching neither the .NET graph nor `client/` skips all four. That is attributable and therefore clearance. The two REQUIRED contexts (`server-build`, `registry-gate`) and the three step-gated `client-test` legs are deliberately left on `docs_only` alone, because a skipped required context is counted by GitHub as satisfied and a classifier bug there would merge a broken PR with nothing red. Classification is `scripts/classify-changed-paths.py`, unit-tested in `scripts/tests/` (which the Sanity job runs), including a differential against the shell it replaced; read that script to attribute a skip, and treat a skip it does not explain as ambiguous.
+  - All required CI checks are `pass` — or `skipping` **because CI's documented path gate skipped them** (`.github/workflows/ci.yml`'s `changes` job, #1020: a docs-only PR skips six jobs — six check contexts, of which two are required: `server-build` and `registry-gate`. The other four — both Alpaca jobs, `analyzer-gate`, and `client-build`, which appears once under its literal uninterpolated name `Client (native build) — ${{ matrix.target }}` because a matrix skipped at job level never expands — are not required contexts but will also read `skipping`. The three required `Client (analyze + test) — <os>` contexts come from the always-running reporting jobs `client-test-linux` and `client-test` and report `pass`, not `skipping`, because a matrix job skipped at job level never expands and its required contexts are never reported at all — see #1025. Their shard jobs read `skipping`; the desktop shards appear once under the literal name `Client (analyze + test) — ${{ matrix.os }}, shard ${{ matrix.shard }}/3`). No `pending`, no `failure`. A `skipping` that is *not* attributable to that gate — a job skipped because one of its `needs:` failed, or by an `if:` the merging agent cannot account for — is **ambiguous, not clearance**: post `Held for human review` and stop. The distinction matters because GitHub counts a skipped required context as satisfied, so "skipped" alone cannot be trusted to mean "did not need to run"; the reason has to be checked. (Amended 2026-09-19 in PR #1021, which introduced the path gate, at the user's direction after the AI flagged that editing this gate autonomously was not its call.) **Second amendment, 2026-09-19, again at the user's direction** ("I want to make sure we are thinking thoughtful with CI so we are not running things when we do not need to"): the `changes` job now also emits `dotnet` and `client`, so the four NON-REQUIRED contexts above — both Alpaca jobs, `analyzer-gate`, and `client-build` — can read `skipping` on a PR that is **not** docs-only. A client-only PR skips the three `dotnet` jobs; a PR touching neither the .NET graph nor `client/` skips all four. That is attributable and therefore clearance. The two REQUIRED contexts (`server-build`, `registry-gate`) and the three reporting `client-test` contexts are deliberately left on `docs_only` alone, because a skipped required context is counted by GitHub as satisfied and a classifier bug there would merge a broken PR with nothing red. Classification is `scripts/classify-changed-paths.py`, unit-tested in `scripts/tests/` (which the Sanity job runs), including a differential against the shell it replaced; read that script to attribute a skip, and treat a skip it does not explain as ambiguous.
   - **The reviewer has actually reviewed the current head** — a `claude[bot]` comment (or `github-actions[bot]` on the fork path) whose `updated_at` is at or after the last push, carrying a sign-off marker (`Approved` / `Issues found`). A green `review` status check **does not satisfy** this gate on its own: that check only asserts a comment was posted, never that it was clean, and a comment older than the last push is the previous round's verdict on code that has since changed. The PR must also be quiescent (no new comments, no new commits) for ≥3 minutes after the review lands.
   - All **Defects** in that review have been addressed via additional commits on the same sub-branch (per the review poll-and-fix loop in COMMIT-PR-RULES.md). **Notes never block a merge.** Disagreements have reasoned replies; out-of-scope items are tracked in the `P1`–`P5` issue backlog
   - AI self-review against the playbook scope is clean (no out-of-scope changes, no unexplained deletions, no half-finished states per §0.3)
@@ -2031,12 +2032,12 @@ Five tabs along the top of the center area:
    - Overlay (toggle-able): plate-solve results (RA/Dec, rotation, pixel scale)
    - Right-side controls: exposure/gain/offset, "Take One" button, "Live View" toggle, sequence shortcut to start
    - Bottom: thumbnail strip of recent frames in the current session
-2. **Planning** — **one embedded Aladin Lite (CDS) surface that merges target-finding (old Sky Atlas) + framing (old Framing Assistant)**. See §36 for full spec; PORT_DECISIONS §36/§25.5 for the merge rationale. Find a target, then frame it for capture, without leaving the tab.
-   - **Explore** (default) — Aladin Lite equatorial mode, free pan/zoom, full HiPS survey browsing (21 surveys, see §36), universal search (Simbad online + bundled name index offline)
-   - **Tonight's Sky** — same Aladin instance, location-aware "best objects tonight" from the profile's site lat/long + date (ranked by altitude/visibility), zenith-centered, horizon-aware, time-controlled, Sun/Moon/planets + comets overlaid, planetarium-style. Replaces NINA's external-planetarium integration (Cartes du Ciel, Stellarium) — ARA is the planetarium.
+2. **Planning** — **one embedded Stellarium Web Engine surface that merges target-finding (old Sky Atlas) + framing (old Framing Assistant)**. See §36 for full spec; PORT_DECISIONS §36/§25.5 for the merge rationale. Find a target, then frame it for capture, without leaving the tab.
+   - **Explore** (default) — Stellarium equatorial mode, free pan/zoom over the bundled catalogs (`assets/stellarium`, `assets/catalogs`), universal search; an optional DSS2 sky-survey layer fetches HiPS tiles on demand (the 21-survey Data Manager of §36 is historical)
+   - **Tonight's Sky** — same Stellarium instance, location-aware "best objects tonight" from the profile's site lat/long + date (ranked by altitude/visibility), zenith-centered, horizon-aware, time-controlled, Sun/Moon/planets + comets overlaid, planetarium-style. Replaces NINA's external-planetarium integration (Cartes du Ciel, Stellarium) — ARA is the planetarium.
    - **Frame (toggle)** — overlays the **profile-derived FOV** (camera sensor + pixel size + telescope effective focal length → the exact field rectangle this rig captures), plus rotation + mosaic panel grid (§47). Output: **"Add to Sequence" / "Build Mosaic Sequence."** Sensor geometry is cached in the profile on first camera connect, so framing works without the camera connected / offline (see Camera/Telescope settings + PORT_DECISIONS §36/§25.5).
    - Tap an object → details panel + Frame / Add-to-Sequence actions (no cross-tab "Set as Target" handoff — it's all here)
-   - Aladin logo + CDS attribution preserved at bottom-right per Aladin's GPLv3 license terms (see §17 + §36)
+   - Stellarium Web Engine attribution and AGPL source offer kept per `NOTICE.md` and `assets/stellarium/README.md` (see §17 + §36.11)
 3. **Sequence** (was Sequencer / Run)
    - Tree view of: Areas → Targets → Instructions (NINA's hierarchy)
    - Drag-and-drop reordering within a level
@@ -2767,7 +2768,7 @@ Contents:
 |---|---|---|
 | `catalogs/` | Bundled HYG, Tycho-2, NGC/IC, Caldwell, Sharpless, MPC comets, constellation art, nebula vectors | ~200 MB (bundled, immutable) |
 | `hips/<survey>/` | Downloaded HiPS tile sets per §36 (DSS2, Mellinger, eROSITA, etc.) | Variable — 0 GB to TB depending on what user downloads |
-| `aladin-cache/` | Live-fetched HiPS tiles from CDS (auto-managed by Aladin Lite) | LRU-capped at user-configurable size (default 2 GB) |
+| `stellarium-dss2/` | DSS2 HiPS tiles for the planetarium's optional sky-survey layer, fetched on demand through the client's loopback server (replaced `aladin-cache/`, Aladin Lite is gone) | Capped at about 512 MB: the least recently fetched tiles are evicted first (down to 90% of the cap); the index and overview images are never evicted |
 | `sequences/` | Draft + saved sequence JSON files built in WILMA | Tiny (KB per file) |
 | `profiles/` | Profile drafts (sync to Pi when connected) | Tiny |
 | `frames-downloaded/` | FITS files the user pulled from the Pi for review | Variable, user-managed |
@@ -4512,6 +4513,8 @@ Server reads this at session start and behaves accordingly.
 
 ## 36. Sky imagery + Data Manager (WILMA)
 
+> **Historical (Aladin era), except where marked live.** The live sky atlas is the embedded **Stellarium Web Engine** (`client/openastroara_client/lib/widgets/sky_atlas/stellarium_view.dart`; `client/openastroara_client/lib/screens/tabs/planning_tab.dart`) with the catalogs bundled in `assets/stellarium` and `assets/catalogs`. Aladin Lite and the imagery side of the Data Manager (survey picker, 21 HiPS downloads, "no sky imagery" banner) were removed with the planetarium pivot (#611); the sections below are kept as the record of that design and must not steer new work. The Data Manager itself stays, in Settings > System > Sky data and the wizard, for catalog and ASTAP database packages. Still live: §36.4.5 download mechanics, §36.7 Tonight's Sky (list and recentre; its "full design" list is historical), §36.8 universal search, §36.10 and §36.12 only for the solver-database recommendation (§36.10 shipped; status in §18.I Plate solving), §36.11 licensing, §36.14 the `planning.*` search keys. Aladin mentions inside historical sections are left as written (#1550).
+
 WILMA owns the sky atlas (per §2 responsibility split). ARA ships a **slim ~50 MB installer** and uses an in-app **Data Manager** for everything else, modeled on SkySafari's catalog-download pattern. The full feature surface ships in the initial release — Tonight's Sky planetarium, all 21 surveys, full DE440 ephemerides, comet motion trails, star-catalog supplements — but as opt-in downloads rather than bundled assets. Users complete the mandatory wizard (§37) on first run; the wizard suggests downloads keyed to the user's focal length before any imaging begins. Aladin Lite is the differentiator vs NINA — by giving users the full atlas with on-demand depth, ARA delivers a sky-data experience NINA cannot match.
 
 ### 36.1 Installer base + Data Manager pattern
@@ -4674,7 +4677,7 @@ deliberately not implemented until a package size makes it worth a staged temp f
 - Implement HTTP `If-Modified-Since` so updates only fetch changed tiles
 - Star catalogs, thumbnails, and DE440 are served from ARA's own release-asset hosting (GitHub Releases or similar today; a CDN is a future option). Same politeness — parallel cap + `If-Modified-Since` — applies. These are static per-release assets, not live CDS pulls.
 
-### 36.6 Local asset serving to Aladin Lite
+### 36.6 Local asset serving to Aladin Lite (historical)
 
 Once an asset is downloaded:
 - HiPS tiles stored at `<wilma data>/hips/<survey-id>/Norder<n>/Dir<m>/Npix<k>.jpg` (standard HiPS layout)
@@ -4696,13 +4699,13 @@ toggle). Tonight's Sky is the planetarium mode.
 > /api/v1/planning/tonight`) ranks a curated catalog by current altitude above the
 > profile's site horizon (self-contained Meeus GMST→LST→hour-angle→altitude, no
 > ephemeris dependency — AOT-clean), and the client `TonightSkyPanel` lists them
-> with current/transit altitude; tapping one recentres the Aladin atlas. This
+> with current/transit altitude; tapping one recentres the Stellarium atlas. This
 > realizes the "best transit tonight" sort (last bullet below). The full
 > planetarium overlays — horizon polyline, below-horizon shading, Sun/Moon/planet
 > + comet catalogs, the time slider — remain a **deferred peak-over-night
 > refinement** (needs the §36.2.4 Full DE440 ephemeris + the overlay JS bridge).
 
-**Tonight's Sky implementation (full design, overlays deferred):**
+**Tonight's Sky implementation (historical Aladin-era design, overlays deferred; the live atlas is the Stellarium Web Engine):**
 - Aladin Lite driven by WILMA — view centered programmatically on current zenith RA/Dec, stereographic projection
 - WILMA computes (Dart, using inherited Astrometry library):
   - Current zenith RA/Dec from profile lat/long + UTC
@@ -4722,7 +4725,7 @@ toggle). Tonight's Sky is the planetarium mode.
 
 Search bar at the top of the Planning tab (Explore mode):
 
-- **Online** (WILMA has internet): query Aladin's Simbad integration. Type "wolf" → resolves to Wolf 359, Wolf-Rayet stars, candidate matches. Type "M31" / "NGC 6188" / "Andromeda Galaxy" / coordinates → resolves.
+- **Online** (WILMA has internet): the daemon resolves the name through `GET /api/v1/targets/resolve` (bundled index, then cache, then Simbad). Type "wolf" → resolves to Wolf 359, Wolf-Rayet stars, candidate matches. Type "M31" / "NGC 6188" / "Andromeda Galaxy" / coordinates → resolves.
 - **Offline**: fall back to bundled name resolver index (HYG common names + NGC/IC/M/HD/HIP/Tycho-2 designations + Bayer/Flamsteed + bundled comets). ~5-10 MB index, ~50-100k entries.
 - **Coordinate parsing**: accept RA/Dec strings in multiple formats (HH:MM:SS / decimal degrees / mixed).
 - **Comets**: searchable by designation (`C/2023 A3`) or common name (`Tsuchinshan-ATLAS`).
@@ -4750,7 +4753,7 @@ In the wizard's Telescope screen (Screen 4 per §37.3), after the user enters fo
 
 Recommendations are *suggestions*, not enforced. User can accept, customize, or skip entirely. All downloads are opt-in; ARA initiates nothing without user [OK]. The Data Manager (§36.2) is always reachable from Settings for adjustments later.
 
-### 36.10.5 Linux desktop WebView fallback (Aladin)
+### 36.10.5 Linux desktop WebView fallback (Aladin, historical)
 
 Flutter's desktop WebView story on Linux is patchy across packages (`webview_flutter`, `flutter_inappwebview`, `desktop_webview_window`). ARA uses `webview_flutter` (Google-official, best long-term support) for the embedded Sky Atlas WebView, but a fallback path exists for Linux desktops where the WebView fails to initialize.
 
@@ -4787,12 +4790,11 @@ Flutter's desktop WebView story on Linux is patchy across packages (`webview_flu
 
 **Future path:** a pure-Flutter Skia sky-renderer (the `P1`–`P5` issue backlog entry now largely superseded by the #611 native Stellarium atlas) eliminates this Linux-only issue entirely — but that's a substantial design pass.
 
-### 36.11 Aladin Lite license requirements
+### 36.11 Sky atlas license requirements (live)
 
-- Aladin Lite v3 is **GPL v3**; ARA is MPL 2.0
-- These mix because the WebView is a separate process boundary — Aladin JS and Dart code communicate via `postMessage`, not statically linked. GPL FAQ explicitly permits this pattern.
-- **Required by Aladin license**: keep Aladin logo + link visible bottom-right of the view. Don't strip the attribution.
-- Credit in NOTICE.md: "Sky Atlas rendering powered by [Aladin Lite](https://aladin.cds.unistra.fr/) (CDS, Strasbourg) under GPL v3."
+- The Stellarium Web Engine is **AGPL v3** and is bundled with the client (WASM + JS with small ARA patches, `client/openastroara_client/assets/stellarium/`); the client itself is AGPL-3.0-or-later, so the licenses are compatible. The server stays MPL 2.0.
+- AGPL §13: the complete corresponding source for the patched build is published at `open-astro/stellarium-web-engine` (tag `ara-v2`); `assets/stellarium/README.md` carries the disclosure and provenance. Keep that offer and the `NOTICE.md` credit.
+- Historical: the Aladin Lite v3 (GPL v3) attribution rule (logo and link bottom-right, credit in `NOTICE.md`) ended when Aladin Lite was removed; `NOTICE.md` records the removal. The optional DSS2 layer is credited in `NOTICE.md` ("Digitized Sky Survey (DSS2), STScI/AURA, via CDS hips2fits").
 
 ### 36.12 Wizard integration
 
@@ -4867,7 +4869,7 @@ Same pattern as §30.7.3's equipment-change banner. Non-blocking. Dismissible. R
 and "Sky Atlas" names still resolve as search aliases so a NINA user's vocabulary
 lands on the right surface:
 
-- `planning.open` — keywords: `planning, sky atlas, framing assistant, find a target, atlas, planetarium, aladin`
+- `planning.open` — keywords: `planning, sky atlas, framing assistant, find a target, atlas, planetarium, stellarium`
 - `planning.explore` — keywords: `explore, browse sky, hips surveys, search target, sesame, simbad`
 - `planning.tonights_sky` — keywords: `tonight's sky, tonight, best objects, what's up, well placed, altitude, transit`
 - `planning.frame` — keywords: `frame, framing, fov, field of view, sensor field, rotation, mosaic, panel grid, build mosaic`
@@ -4930,7 +4932,7 @@ Server enumerates Alpaca devices, groups by type. User assigns each device-type 
 - Focal length (mm) — required
 - Aperture (mm) — required
 - Focal ratio — auto-computed but editable
-- **Aladin survey recommendation** appears here based on focal length (per §36.10) — user can [Download recommended] or [Skip — configure in Sky Imagery later]
+- ~~Aladin survey recommendation~~ (historical: removed with Aladin Lite, §36 banner; the wizard recommends no survey download)
 
 **Screen 5 — Camera**
 
@@ -5676,86 +5678,59 @@ Multi-select frames via Shift+Click (desktop) or long-press + tap (mobile):
 
 ## 41. Mobile companion mode (iOS / Android)
 
-**Scope status: SPEC ONLY — no mobile builds ship yet.** Mobile distribution is deferred — see the `P1`–`P5` issue backlog per §18.G (requires funded Apple Developer + Play Console accounts + per-platform review workflow + ongoing signing maintenance). The §41 spec stays in the playbook because it informs today's API decisions (WebSocket event shapes, single-client policy semantics, mDNS discovery, GPS-push endpoint, emergency-stop authentication-free semantics) — so the server-side API surface is correct when mobile builds turn on. Flutter codebase already supports iOS/Android targets; what's missing is the distribution + signing + review pipeline, not the code.
+**Scope status: spec, being built (#1772). Store distribution is deferred.** iOS and Android builds can be side-loaded from a local build (CI compiles both, unsigned, but publishes no installable build). Store distribution is still deferred (see the `P1`–`P5` issue backlog per §18.G): it needs funded Apple Developer and Play Console accounts, signing and a per-platform review workflow. The server API surface (WebSocket event shapes, single-client policy semantics, mDNS discovery, GPS-push endpoint, emergency-stop authentication-free semantics) already covers this section, so no server change is needed.
 
-When mobile builds are enabled, no server changes are needed — the same WILMA codebase compiles for iOS/Android with platform-detection-driven shell selection per §41.4. The spec below describes the *intended* mobile UX; treat as future design with current API forward-compatibility.
+**Companion Mode is Simple Mode on a phone.** It is not a second app, a second shell or a reduced desktop client. On an iPhone or Android phone, Ara opens straight into Simple Mode (the Simple shell, DESIGN.md "Simple Mode: Image First"), laid out for a portrait screen. There is no toggle, and there is no way into the full UI. Everything Simple Mode does on an iPad works the same way on the phone: the same sections, the same Stop hold, the same message pills, the same night colours.
 
-WILMA on iOS/Android runs in **Companion Mode** — same Flutter codebase as the desktop client, but the UI is tailored for phone/tablet form factors and sequence-building workflows are intentionally absent for now (replaced by a "Open ARA on your desktop to do this" prompt). The phone covers setup, sky browsing, monitoring, viewing, and emergencies; building sequences stays on the desktop.
-
-### 41.1 Mobile companion — what it CAN do
+### 41.1 What the phone does
 
 | Capability | Notes |
 |---|---|
-| Connect to Pi (mDNS discovery, no auth per §67) | Same flow as desktop (§30) |
-| **GPS + time push to Pi** | Primary value-add when user has no USB GPS dongle on their laptop (§31) |
-| **Dashboard** | Current sequence, target, last frame thumbnail, time-to-next-frame, equipment connection state, sky safety status |
-| **Image library browsing** | Same data as desktop (§40), responsive layout — grouped by session, scrollable thumbnail strips |
-| **Frame viewer with pinch-to-zoom** | Full-resolution JPEG preview, native gestures, HFR + star count + temp displayed |
-| **Live preview during active session** | Subscribes to WebSocket `frame.complete` events, latest frame appears automatically |
-| **Emergency stop button** | Always visible in the persistent bottom bar; same flow as desktop (§35.3) |
-| **Safety alarm response** | Receives `safety.unsafe` WebSocket events; full-screen alarm modal with audio + vibration (§35.5); [Emergency Abort] / [Override] |
-| **Push notifications** | Sequence complete, safety alerts, HFR drift detection, recovery events |
-| **Log tail** | Read-only live log stream |
-| **Rate + tag frames** | Touch-friendly star rating + tag chips |
-| **Download FITS for off-device processing** | Save to platform Files / Photos / share sheet |
-| **Server connection management** | Same Settings → Server panel as desktop (§30.6); no token UX per §67 |
-| **Profile setup wizard** | Same wizard as desktop (§37), laid out for phone screens |
-| **Sky Atlas + Tonight's Sky** | Same as desktop (§36) — the embedded Stellarium Web Engine planetarium |
-| **Plate-solve + autofocus configuration** | Same settings as desktop, including the ASTAP path |
+| Connect to the rig (mDNS discovery, no auth per §67) | Same first-run flow as desktop (§30), laid out for the phone |
+| **Setup wizard** | Same wizard as desktop (§37), laid out for phone screens, so a new rig can be set up from the phone alone |
+| **Location and time push** | When the rig reports no recent time sync, a question pill (Not now, Send) offers the phone's location and time (§31, §41.5). Not now holds until the next session |
+| **Sky Atlas + Tonight's Sky + Simple search** | The embedded Stellarium Web Engine planetarium (§36); Simple search finds sky objects, Simple Settings, modes and imaged targets |
+| **Every Simple Mode section** | Preview, Focus, Guide, Polar and Plan, and the device windows, reachable on the phone |
+| **Preflight and Autopilot** | Preflight runs step by step; Autopilot (Image this) starts the night from the phone |
+| **Checking a running night** | The plan square, the latest frame, the pills and pause/stop on one portrait screen; Monitor (#1724) as the read-only view |
+| **Frame viewing** | Pinch to zoom the latest frame; HFR, star count and temperature as Simple Mode shows them |
+| **Emergency Stop** | Visible and holdable (2 s) from every section and over every open panel; same flow as desktop (§35.3) |
+| **Safety alarm** | Simple Mode's alarm (`safety.unsafe`, §35.5) with sound and vibration on a phone; Emergency Abort or Override |
+| **Ara sheet and Simple Settings** | Change rig and profile, versions; Storage and Logs & bug report under Settings › Rig |
+| **Plate-solve and autofocus** | No settings of their own on the phone (decided 2026-11-11, #1779 closed as not planned). The phone uses the profile's plate-solve and autofocus settings and the Focuser window's Autofocus controls |
 
-### 41.2 Mobile companion — what it explicitly does NOT do (for now)
+### 41.2 What the phone does not do
 
-| Capability | Why excluded | What user sees |
-|---|---|---|
-| Sequence editor | Drag-drop instruction tree is bad UX on a 6-inch screen | "Sequence editing requires the ARA desktop app — open WILMA on your Mac, PC, or Linux machine to edit sequences." Quick-share link button to open desktop on the same Wi-Fi. |
-| Sequence templates / instantiation | Editor-adjacent | Same redirect |
+The sequence editor and sequence templates are absent, not blocked: Simple Mode never reaches them, so no phone surface mentions them and nothing redirects to the desktop. There is no full-UI button, no Experimental toggle, no "polite modal", no clipboard link to the desktop and no tab bar. Image library and FITS download go no further than Simple Mode already shows.
 
-When a mobile user taps something disallowed, they get a polite modal with a "Copy link to send to your desktop" option that puts an ARA-protocol URL on the clipboard (e.g., `araapp://session/123/edit`) that the desktop app can pick up.
+### 41.3 Mobile-specific behaviour
 
-### 41.3 Mobile-specific UX considerations
+- **One switch.** `companionModeProvider` is true when the platform is iOS or Android and the view's shortest side is under 600 logical px. The shortest side is used so rotation never flips it. When it is true, "Simple Mode is showing" is true whatever the experimental toggle or the saved mode preference says, and neither is written. Tests override the provider.
+- **Tablets are unchanged.** An iPad or Android tablet (shortest side 600 px or more) keeps Simple Mode with the full UI behind it. There is no tablet Companion Mode.
+- **Portrait arrangement** (DESIGN.md "Simple Mode on a phone"): the frame fills the screen and Stop stays in reach. Landscape uses the narrow layout Simple Mode has today, and the phone stays in Companion Mode.
+- **No popups.** Simple Mode's no-popups rule applies unchanged: questions and results are message pills, confirmations sit inline in the block that owns them, combo boxes open in place. This replaces full-screen modals.
+- **Targets** are at least 44 px tall; text follows the user's size from 1x to 2x with nothing cut short, in English and Brazilian Portuguese.
+- **Background caveat.** iOS suspends backgrounded apps harder than Android. On return to the foreground the app refreshes the rig state from the REST snapshot before showing live values, so nothing stale is shown.
+- **Deferred:** push notifications (Firebase Cloud Messaging on Android, APNs on iOS, only between the app and the rig, no third-party telemetry path; the first mobile release uses in-app pills only), wake-from-notification to a frame, the Apple Watch and Wear OS app, and store distribution.
 
-- **Always-on bottom bar**: [Dashboard] [Library] [Logs] [Emergency Stop] — emergency button is permanently visible regardless of which tab is active
-- **Push notifications**: Firebase Cloud Messaging on Android, APNs on iOS, **but only between WILMA and the Pi** — no third-party telemetry path; Pi sends webhook to client's notification endpoint. (the first mobile release may defer push and rely on in-app foreground notifications only — depends on Apple/Google account setup effort)
-- **Background mode caveat**: iOS aggressively suspends backgrounded apps; Android less so. App in background may miss WebSocket events; user opens app → fresh state pulled via REST snapshot. Push notifications wake the user for critical events even if app is suspended.
-- **Tablet (iPad / Android tablet)**: companion mode renders with more density (split view: dashboard + library side-by-side); pinch-to-zoom on frames goes huge; otherwise same scope as phone. iPad Pro users get a perfectly usable casual-monitor experience.
-- **Apple Watch / Wear OS**: out of scope for the initial release. Could be a future "notifications only" companion app.
-
-### 41.4 Shared Flutter codebase, conditional shell
+### 41.4 Shared Flutter codebase, one switch
 
 ```dart
 // pseudocode
-final isCompanionMode = (Platform.isIOS || Platform.isAndroid);
-
-Widget appShell() => isCompanionMode
-    ? CompanionShell(routes: companionRoutes)
-    : DesktopShell(routes: desktopRoutes);
+final companion = (Platform.isIOS || Platform.isAndroid) && view.shortestSide < 600;
+final simpleShowing = companion || simpleModePreference; // companion forces Simple Mode
 ```
 
-Shared:
-- API client (auto-generated from OpenAPI)
-- State management (Riverpod providers)
-- WebSocket connection + event handlers
-- Saved-server state (no auth tokens in the initial release per §67; storage layer is reserved for future remote-access tokens)
-- Common widgets (frame viewer, dashboard tiles, status indicators)
+There is no `CompanionShell`: the phone layout is Simple Mode's code with one switch, so a fix to Simple Mode reaches phones. Shared with the desktop client: the API client (generated from OpenAPI), Riverpod providers, the WebSocket connection and event handlers, saved-server state (no auth tokens per §67; the storage layer is reserved for future remote-access tokens) and the common widgets.
 
-Different:
-- Top-level navigation (tabs vs nav rail)
-- Some screens entirely (sequence editor and templates absent on mobile)
-- Modal sizing (full-screen on mobile, dialog on desktop)
-- Gesture handling (touch-first on mobile, mouse-first on desktop)
+### 41.5 Phone-only entry point
 
-### 41.5 Mobile-only entry points
-
-Two flows that exist ONLY on mobile:
-
-- **First-launch GPS push** — if user opens mobile app and the Pi reports no recent time-sync, mobile companion auto-prompts to push device GPS+time without requiring profile-screen entry. Matches the "I just want to give the Pi a clock and go" use case.
-- **Wake-from-notification → live frame view** — push notification "Frame 47 captured" → tap → opens directly to that frame in the viewer.
+- **First-launch location and time.** If the rig reports no recent time sync and the client is in Companion Mode, a question pill offers to send the phone's location and time, with the lookup and push Simple Mode's site fill from this device's GPS uses. It matches the "give the rig a clock and go" use case. It is a pill, never a modal.
+- **Deferred:** wake-from-notification to the live frame view ("Frame 47 captured" opens that frame), with push notifications (§41.3).
 
 ### 41.6 Versioning + acronym
 
-WILMA (Windows / iOS / Linux / Mac / Android) acronym is preserved. Mobile platforms (iOS, Android) explicitly run in Companion Mode by default. Desktop platforms (Windows, macOS, Linux) run the full client.
-
-In practice this means a single `flutter build` per platform, with platform-detection-driven shell selection at runtime.
+WILMA (Windows / iOS / Linux / Mac / Android) is preserved. iOS and Android phones run Companion Mode, which is Simple Mode (§41.3). Windows, macOS, Linux and tablets run the client with the full UI behind Simple Mode.
 
 ---
 
@@ -6835,7 +6810,7 @@ The user said it best: "user may not have internet." In-app-only means:
 
 ## 47. Mosaic imaging (multi-panel)
 
-Astrophotographers shoot multi-panel mosaics when a target is too large for one frame at their focal length — Andromeda at 2000mm, the Veil Nebula, Heart-and-Soul region, etc. NINA's Framing Assistant supports this; ARA preserves and modernizes the workflow in the **Planning tab's Frame mode** (the merged Sky Atlas + Framing surface, §25.5) with Aladin Lite integration + mosaic-aware tracking.
+Astrophotographers shoot multi-panel mosaics when a target is too large for one frame at their focal length — Andromeda at 2000mm, the Veil Nebula, Heart-and-Soul region, etc. NINA's Framing Assistant supports this; ARA preserves and modernizes the workflow in the **Planning tab's Frame mode** (the merged Sky Atlas + Framing surface, §25.5) with Stellarium Web Engine integration + mosaic-aware tracking.
 
 ### 47.1 What mosaic mode does
 
@@ -6845,11 +6820,11 @@ User defines an N×M grid of overlapping panels centered on a target. Each panel
 
 UI flow:
 
-1. User searches for / picks a target in the Planning tab (Aladin Lite — §25.5)
+1. User searches for / picks a target in the Planning tab (Stellarium Web Engine — §25.5)
 2. Enables **Frame** and sets **Mosaic**: defines grid cols × rows (e.g., 3 × 2)
 3. Sets overlap percentage (default **10%**; configurable 5-25%)
 4. Optionally sets rotation angle (defaults to 0 if no rotator; else profile default)
-5. Aladin Lite overlay renders the panel grid as colored rectangles on the sky map — user sees exactly which areas each panel covers, can drag the whole mosaic to recenter, can rotate
+5. The Stellarium framing overlay renders the panel grid as colored rectangles on the sky map — user sees exactly which areas each panel covers, can drag the whole mosaic to recenter, can rotate
 6. User confirms → mosaic saved as a single logical entity with N×M panels
 
 > **Implementation status (2026-10-12, #1146).** The Frame-mode FOV overlay and
@@ -8223,7 +8198,7 @@ For existing NINA users coming to ARA, here's what's different and how to bring 
 | What | How |
 |---|---|
 | Your sequence `.json` files | Import via WILMA → Sequencer → "Import from NINA" (§38.4). Server remaps equipment IDs to your current Alpaca devices; flags any unsupported instruction types for review. |
-| Your imaging targets | Re-add manually in WILMA's Planning tab (Aladin Lite — the merged Sky Atlas + Framing surface); search by name or coords; save as a target template. Existing FITS files keep their RA/Dec metadata, so old captures still align via §40.6 Resume Target. |
+| Your imaging targets | Re-add manually in WILMA's Planning tab (Stellarium Web Engine — the merged Sky Atlas + Framing surface); search by name or coords; save as a target template. Existing FITS files keep their RA/Dec metadata, so old captures still align via §40.6 Resume Target. |
 | Your imaging style (filters, exposures, gain/offset) | Configured fresh in the §37 wizard. Takes ~10 minutes for a standard rig. |
 | Your existing FITS files | Drop them on the Pi's USB drive under any session folder; ARA's library scanner picks them up. Or process them externally in PixInsight/Siril unchanged. |
 | Your bias/dark/flat libraries | Manually copy to `/media/openastroara/calibration/` matching the layout from §39.9. Or just re-capture fresh — for many users this is easier than migrating. |
@@ -8288,7 +8263,7 @@ The reasons to migrate, honestly:
 | **Session-matching flats (replay equipment state)** | No | Yes — §39.5 |
 | **Multi-year target alignment via Resume Target** | Manual | Automated — server replays plate-solve + rotator angle (§40.6) |
 | **Real-time backup stream to desktop** | No | Yes — §44 |
-| **Multi-wavelength sky atlas (21 surveys, X-ray to far-IR)** | External tool needed | Native via Aladin Lite (§36) |
+| **Sky atlas and Tonight's Sky planetarium** | External tool needed | Native, embedded Stellarium Web Engine with bundled catalogs (§36) |
 | **First-launch wizard guides full setup** | Sprawling settings tree | 18-screen guided wizard (§37) |
 | **WILMA-pushed updates from app to Pi** | N/A | Yes — no internet on Pi needed (§33) |
 
@@ -9876,7 +9851,7 @@ Addresses NINA's single biggest UX weakness: settings are scattered across a dee
 | **WILMA top bar** (right side, magnifying-glass icon) | Click icon, or keyboard shortcut `⌘K` (macOS) / `Ctrl+K` (Win/Linux) | Always one keystroke away from any screen |
 | **Top of the Settings/Options tab** (default focus when entering Settings) | Auto-focused on tab open | Lives within Settings only |
 
-Both surface the same search behavior. Mobile companion (§41) shows only the top-bar location (Settings tab on mobile is read-mostly; full editing is desktop-class).
+Both surface the same search behavior. Companion Mode (§41, Simple Mode on a phone) has no top-bar location; the phone uses Simple Mode's own search and Simple Settings.
 
 ### 61.2 Results dropdown
 
@@ -10012,15 +9987,7 @@ This keeps the feature lightweight and means the search works even when the serv
 
 ### 61.9 Mobile companion behavior
 
-On phone/tablet companion mode (§41), the search bar exists but inline-edit is restricted to settings that make sense on mobile (notifications, alarm sound, theme, server connection). For anything else — sequence settings, equipment config, calibration — the result row shows:
-
-```
-Dither pixels
-Sequence → Guider settings — desktop only
-[Open on desktop]
-```
-
-Tapping [Open on desktop] copies an `araapp://settings/guider/dither_pixels` deep-link to clipboard (per §41.2 desktop-redirect pattern), which the desktop WILMA picks up.
+On a phone (§41, Companion Mode), the search is Simple Mode's own: sky objects, Simple Settings rows, the modes and imaged targets (PRODUCT.md, Simple Mode). It lists no settings that live only in the full UI, and never redirects to the desktop or links to the full UI. The earlier "[Open on desktop]" row and its `araapp://` deep link (the §41.2 desktop-redirect pattern) are dropped.
 
 ### 61.10 Future expansion — general command palette
 
@@ -10726,7 +10693,9 @@ Server-side: in-memory `LiveViewService` is a singleton with a single state mach
 
 ### 64.11 Mobile companion behavior (§41)
 
-Phones / tablets are **monitor-only** during Live View, consistent with §41's mobile companion mode philosophy. Specifically:
+> **Superseded in part (#1773).** §41 now makes the phone Simple Mode, where Preview runs Loop and Single as on the iPad. The monitor-only rules below are the pre-Simple-Mode design and are kept as history; the new phone Live View rules are decided with the Companion wave (#1772).
+
+Phones / tablets were **monitor-only** during Live View, under §41's earlier mobile companion philosophy. Specifically:
 
 - ✅ Subscribe to `live.frame` events and display the preview JPEG with pinch-to-zoom
 - ✅ Display frame stats overlay (HFR, star count, mean ADU)
@@ -10826,14 +10795,14 @@ All searchable from the §61 omnibar.
 - WS `live.*` event family
 - Save Current Frame promotion path (re-routes one frame through standard capture pipeline)
 - Auto-stop on mutually-exclusive operations (sequence, AF, PA, plate-solve, Take One)
-- Mobile companion read-only view
+- ~~Mobile companion read-only view~~ (superseded by §41 and #1772)
 - §61 settings registry entries
 - Frame stat extraction reused from §51 / Hocus Focus (no new code, just calling existing analyzers)
 
 ### 64.17 Future expansion paths
 
 - **Live stacking integration (§55 commitment)** — Live View becomes the realtime preview surface for the future live-stacking pipeline. User taps "Stack" instead of (or in addition to) Live View; same loop, but each frame is registered + integrated into a running stack; preview shows the integrated result, not the latest frame.
-- **Mobile full control** — if demand emerges, promote mobile companion from read-only to full Live View control.
+- **Mobile full control** — if demand emerges, ~~promote mobile companion from read-only to full Live View control~~ (superseded by §41 and #1772: phones run Simple Mode).
 - **Multi-frame averaging for display** — server-side running average of last N frames for noise-reduced preview (display-only, doesn't change Save Current behavior). Trades latency for visible SNR.
 - **Bahtinov mask focus indicator** — automatic detection of Bahtinov mask diffraction pattern with a numeric "focus quality" score on each live frame. Power-user feature; small audience but high value for that audience.
 
@@ -10964,7 +10933,7 @@ DELETE /api/v1/frames/{id}/preview/variants    → flush all alt-stretch variant
 
 ### 65.8 Mobile companion behavior (§41)
 
-§41 caps mobile to view-only / monitoring — no sequence editing, no equipment control. Stretching is a **viewing** capability (the underlying FITS is unchanged), so mobile gets the full stretch palette + manual sliders via the same `?stretch=` API. Mobile UX uses tap-to-cycle through the preset stretches and a bottom-sheet panel for manual sliders.
+§41 (Companion Mode) keeps the sequence editor and templates off phones; the earlier view-only cap on equipment control no longer holds, since a phone runs Simple Mode's Preflight, Autopilot and device windows. Stretching is a **viewing** capability (the underlying FITS is unchanged), so mobile gets the full stretch palette + manual sliders via the same `?stretch=` API. Mobile UX uses tap-to-cycle through the preset stretches and manual sliders that open inline in the Simple Mode panel (no popup, §41.3).
 
 ### 65.9 Frame viewer UI integration (§40.5)
 
@@ -11365,6 +11334,8 @@ If AlpacaBridge isn't reachable at all (no discovery response, no devices discov
   ```
 - Wizard cannot advance past Screen 2 without a successful handshake. User can [Skip to manual entry] only if they need to point to a non-standard AlpacaBridge install (different host, custom port).
 - After first-run setup, if AlpacaBridge goes missing (uninstalled, service stopped), WILMA's Equipment screen shows a critical notification with the same install command + `systemctl status alpaca-bridge` diagnostic snippet.
+
+**Zero devices (#1580).** An AlpacaBridge that answers but has no devices yet is a fresh install: it does not add plugged-in gear on its own, so Retry detection alone cannot help. When the daemon can read the bridge's device catalog (`GET /equipment/alpacabridge/catalog`, API_CONTRACT 2026-11-11), the "found, no devices yet" summary on Screen 2 gains an **Add your devices** action beside Retry detection and Next. The action is offered only when that read succeeds, so reachability stays the only gate (§68.1): a non-AlpacaBridge server, or an AlpacaBridge too old to have the catalog, gets today's message with no button. The missing-bridge panel above is unchanged. *(Client flow: pending the board's review of `design/preview/alpacabridge-add-devices-mock.html`; the daemon routes ship first.)*
 
 ### 68.3 Upgrade path
 
@@ -12842,12 +12813,14 @@ users reach everything through disclosures, not extra steps.
   camera. Autofocus, imaging defaults, safety thresholds, and site
   preferences take thoughtful defaults and live in Options — the wizard never mentions them.
 
+**Adding a device writes through to AlpacaBridge (#1580).** On a fresh rig the wizard can create a device on the bridge (Screen 2, Add your devices): Ara sends the form the bridge's own catalog described and the bridge registers and stores the device. Ara keeps no copy of the device or of what each driver needs, so "device facts live in Alpaca" still holds: AlpacaBridge stores the device, Ara only sends the form. The attached camera a user picks fills the catalog's `serialNumber` and `cameraName` fields (the entry then binds by serial), never `cameraIndex`. *(Client parts pending the board's mock review.)*
+
 ### 76.2 The five screens
 
 | # | Screen | User does |
 |---|--------|-----------|
 | 1 | Welcome | Profile name; one-tap location (GPS, or mount site lat/long once connected) |
-| 2 | Connect | Tap the UDP-discovered AlpacaBridge ("Found rc91 · 9 devices"); manual host is the fallback path (§68.2 missing-bridge UX unchanged) |
+| 2 | Connect | Tap the UDP-discovered AlpacaBridge ("Found rc91 · 9 devices"); manual host is the fallback path (§68.2 missing-bridge UX unchanged). An AlpacaBridge with no devices yet offers **Add your devices** beside Retry detection (§68.2 zero-devices case): device type, then driver, then (ZWO cameras) the attached camera, then a form built from the bridge's catalog; Add creates the device on the bridge and the list refreshes. *(Client: pending the mock review.)* |
 | 3 | Your equipment | Confirm auto-assigned device cards (real names via `/management/v1/configureddevices`); fix gaps in AlpacaBridge via deep link + Recheck; per-card Details disclosure for Ara-only tunables |
 | 4 | Guiding | Guide scope (enter FL) vs OAG (inherits main FL); guide exposure min/max range (drives BOTH dark-library coverage and guider exposure bounds — one choice, two consumers, cannot disagree); "Build dark library now" toggle (default on, "cover the guide scope" prompt); Advanced disclosure: dither, settle, calibration cadence |
 | 5 | Save + Done | Save location (sensible default); Finish saves the profile, provisions the guider twin profile named after the wizard profile, pushes guider config, kicks off the darks build (§63.6) over the chosen range with live progress streamed via §63.8 ("Building dark library… 12/40 — you're all set, this finishes in the background") |

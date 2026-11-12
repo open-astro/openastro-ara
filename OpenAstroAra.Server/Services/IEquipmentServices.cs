@@ -323,7 +323,7 @@ public interface IGuiderService {
     Task<GuiderAlpacaDiscoveryDto> DiscoverAlpacaServersAsync(DiscoverAlpacaServersRequestDto request, CancellationToken ct);
 
     /// <summary>§63.17 — request a systemd restart of the guider unit (fire-and-forget 202; §63.3 recovery
-    /// reports the outcome over guider.state). Never requires a connected guider — a manual restart is most
+    /// reports the outcome through the guider connection status). Never requires a connected guider — a manual restart is most
     /// useful when the daemon is hung.</summary>
     Task<OperationAcceptedDto> RestartGuiderAsync(string? idempotencyKey, CancellationToken ct);
 

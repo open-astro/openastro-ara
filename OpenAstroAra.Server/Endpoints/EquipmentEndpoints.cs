@@ -208,6 +208,9 @@ public static partial class EquipmentEndpoints {
             .WithName("GetDeviceDriver")
             .WithSummary("The selected device's driver, SDK and firmware versions.");
 
+        // #1580 — first-time setup of a fresh AlpacaBridge: catalog, attached cameras, add device.
+        equipment.MapAlpacaBridgeSetup();
+
         // ─── Camera ───
         var camera = equipment.MapGroup("/camera");
         camera.MapGet("", async (ICameraService svc, CancellationToken ct) => {
@@ -720,7 +723,7 @@ public static partial class EquipmentEndpoints {
             .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status409Conflict).ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("ApplyGuiderMultiStar").WithSummary("Apply the profile's multi-star setting to the connected guider; refused while guiding.");
         // §63.17 manual restart — fire-and-forget systemctl restart of the guider unit (202 immediately;
-        // §63.3 recovery + guider.state WS events report the outcome). Deliberately not gated on a
+        // §63.3 recovery + the guider connection status report the outcome). Deliberately not gated on a
         // connected guider: it's most useful when the daemon is hung.
         guider.MapPost("/restart", async ([FromHeader(Name = "Idempotency-Key")] string? key, IGuiderService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.RestartGuiderAsync(key, ct)));

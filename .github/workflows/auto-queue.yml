@@ -1,0 +1,38 @@
+name: Auto-queue
+
+# After each review run, scripts/auto-queue.sh hands the PR whose head is the
+# run's commit to the merge queue when the bot's latest verdict there is
+# "✅ Approved" (it enables auto-merge), and takes it out of the queue when the
+# verdict is "⚠️ Issues found". Nobody enables auto-merge by hand, so a PR no
+# longer reaches the queue before its review and fails the merge gate there.
+#
+# workflow_run runs master's copy of this file with a write token, also for a
+# fork PR. It never checks out or runs PR code: the script reads the PR through
+# the API only, and the run's values reach it through env, not expressions.
+
+on:
+  workflow_run:  # zizmor: ignore[dangerous-triggers] -- runs master's code only; no PR code is checked out or run
+    workflows: ["Claude Code Review"]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  queue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # Enabling auto-merge is a write on the repository contents, not only on the PR.
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Queue an approved PR, dequeue one with issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_START: ${{ github.event.workflow_run.run_started_at }}
+        run: scripts/auto-queue.sh "$REPO" "$HEAD_SHA" "$RUN_START"
