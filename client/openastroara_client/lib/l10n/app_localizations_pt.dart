@@ -4177,63 +4177,180 @@ class AppLocalizationsPt extends AppLocalizations {
   String get monitorLinkLostShort => 'Lost contact with the rig';
 
   @override
-  String get rigSetupTitle => 'Rig setup';
+  String get actionAbortCapture => 'abort the capture';
 
   @override
-  String get rigSetupIntro =>
-      'Before a first night, Ara needs a few facts about this rig.';
+  String get actionApplyToFrames => 'apply that to the selected frames';
 
   @override
-  String get rigSetupSite => 'Site';
+  String get actionBuildCalibration => 'build the calibration';
 
   @override
-  String get rigSetupSiteMissing => 'Latitude and longitude are not set.';
+  String get actionCancelCopy => 'cancel the copy';
 
   @override
-  String get rigSetupSiteAction => 'Set site';
+  String get actionCheckDisk => 'check the disk for frames';
 
   @override
-  String get rigSetupOptics => 'Main camera and telescope';
+  String get actionCleanPreviewCache => 'clean the preview cache';
 
   @override
-  String get rigSetupOpticsMissing =>
-      'The sensor or the focal length is not set.';
+  String get actionCleanSkyPhotoCache => 'clean the sky photo cache';
 
   @override
-  String get rigSetupOpticsAction => 'Set up optics';
+  String get actionClearCeiling => 'clear the ceiling';
 
   @override
-  String get rigSetupGuideScope => 'Guide scope';
+  String get actionConfirmFrame => 'confirm the frame arrived';
 
   @override
-  String get rigSetupGuideScopeMissing =>
-      'The guide focal length or the Guide Camera\'s pixel size is not set.';
+  String get actionConnect => 'connect';
 
   @override
-  String get rigSetupGuideScopeAction => 'Set guide scope';
+  String get actionDownload => 'download that';
 
   @override
-  String get rigSetupCalibration => 'Guider calibration';
+  String get actionExportFrames => 'export those frames';
 
   @override
-  String get rigSetupCalibrationMissing =>
-      'Not calibrated yet, or Ara says to calibrate again.';
+  String get actionExportStats => 'export the stats';
 
   @override
-  String get rigSetupCalibrationConnect =>
-      'Connect the Guider to check its calibration.';
+  String get actionGenerateCalibration => 'generate the calibration';
 
   @override
-  String get rigSetupCalibrationAction => 'Open Guider mode';
+  String get actionListFolders => 'list the folders';
 
   @override
-  String get rigSetupItemDone => 'Done';
+  String get actionLoadDarkLibrary => 'load the dark library';
 
   @override
-  String get rigSetupNotNow => 'Not now';
+  String get actionLoadFaults => 'load the fault history';
 
   @override
-  String get rigSetupDonePill => 'Rig set up';
+  String get actionLoadFrames => 'load the frames';
+
+  @override
+  String get actionLoadLibrary => 'load your library';
+
+  @override
+  String get actionLoadLogs => 'load the logs';
+
+  @override
+  String get actionLoadNotifications => 'load your notifications';
+
+  @override
+  String get actionLoadOlderLogs => 'load older logs';
+
+  @override
+  String get actionLoadPreview => 'load the preview';
+
+  @override
+  String get actionLoadSessions => 'load the sessions';
+
+  @override
+  String get actionLoadSettings => 'load your saved settings';
+
+  @override
+  String get actionLookForEquipment => 'look for equipment';
+
+  @override
+  String get actionPushGuiderProfile => 'push the guider profile';
+
+  @override
+  String get actionPushTime => 'push the time';
+
+  @override
+  String get actionRateFrame => 'rate the frame';
+
+  @override
+  String get actionReadCamera => 'read the camera';
+
+  @override
+  String get actionReadClock => 'read the server clock state';
+
+  @override
+  String get actionReadServerDisks => 'read the server\'s disks';
+
+  @override
+  String get actionRearmSafety => 're-arm safety';
+
+  @override
+  String get actionRefitSkyModel => 'refit the sky model';
+
+  @override
+  String get actionRestartRig => 'restart your rig';
+
+  @override
+  String get actionResumeSequence => 'resume the sequence';
+
+  @override
+  String get actionSave => 'save that';
+
+  @override
+  String get actionSaveHorizon => 'save the horizon skyline';
+
+  @override
+  String get actionSaveSlotLabels => 'save the slot labels';
+
+  @override
+  String get actionSendCalibrationChoice => 'send the calibration choice';
+
+  @override
+  String get actionSequenceAction => 'do that sequence action';
+
+  @override
+  String get actionSolveFrame => 'solve the frame';
+
+  @override
+  String get actionStarDatabase =>
+      'work out which star database this rig needs';
+
+  @override
+  String get actionStartCopy => 'start the copy';
+
+  @override
+  String get actionTakeExposure => 'take that exposure';
+
+  @override
+  String get actionTakeVerification => 'take the verification image';
+
+  @override
+  String get actionUpdateTag => 'update the tag';
+
+  @override
+  String get actionBackUpEntry => 'back up that entry';
+
+  @override
+  String get actionKeepBackupGoing => 'keep the backup stream going';
+
+  @override
+  String get actionPushGpsFix => 'push the GPS fix';
+
+  @override
+  String get actionRebuildStats => 'rebuild the stats catalog';
+
+  @override
+  String get actionStartCopyingFrames => 'start copying frames';
+
+  @override
+  String backupStreamHiccup(String reason) {
+    return 'Backup stream hiccup: $reason';
+  }
+
+  @override
+  String backupEntryFailing(String id, String reason) {
+    return 'Backup of $id failing: $reason';
+  }
+
+  @override
+  String gpsFixRefused(String reason) {
+    return 'Fix read, but the rig refused it: $reason';
+  }
+
+  @override
+  String get gpsDaemonTooOld =>
+      ' — update Ara Server on the rig; this version predates GPS on this computer.';
 
   @override
   String get calibrationDarks => 'Darks';
@@ -4782,6 +4899,65 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get calibrationStartQueueNow => 'Start queue';
+
+  @override
+  String get rigSetupTitle => 'Rig setup';
+
+  @override
+  String get rigSetupIntro =>
+      'Before a first night, Ara needs a few facts about this rig.';
+
+  @override
+  String get rigSetupSite => 'Site';
+
+  @override
+  String get rigSetupSiteMissing => 'Latitude and longitude are not set.';
+
+  @override
+  String get rigSetupSiteAction => 'Set site';
+
+  @override
+  String get rigSetupOptics => 'Main camera and telescope';
+
+  @override
+  String get rigSetupOpticsMissing =>
+      'The sensor or the focal length is not set.';
+
+  @override
+  String get rigSetupOpticsAction => 'Set up optics';
+
+  @override
+  String get rigSetupGuideScope => 'Guide scope';
+
+  @override
+  String get rigSetupGuideScopeMissing =>
+      'The guide focal length or the Guide Camera\'s pixel size is not set.';
+
+  @override
+  String get rigSetupGuideScopeAction => 'Set guide scope';
+
+  @override
+  String get rigSetupCalibration => 'Guider calibration';
+
+  @override
+  String get rigSetupCalibrationMissing =>
+      'Not calibrated yet, or Ara says to calibrate again.';
+
+  @override
+  String get rigSetupCalibrationConnect =>
+      'Connect the Guider to check its calibration.';
+
+  @override
+  String get rigSetupCalibrationAction => 'Open Guider mode';
+
+  @override
+  String get rigSetupItemDone => 'Done';
+
+  @override
+  String get rigSetupNotNow => 'Not now';
+
+  @override
+  String get rigSetupDonePill => 'Rig set up';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -8986,63 +9162,180 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get monitorLinkLostShort => 'Sem contato com o setup';
 
   @override
-  String get rigSetupTitle => 'Configuração do setup';
+  String get actionAbortCapture => 'abortar a captura';
 
   @override
-  String get rigSetupIntro =>
-      'Antes da primeira noite, o Ara precisa de alguns dados deste setup.';
+  String get actionApplyToFrames => 'aplicar isso aos quadros selecionados';
 
   @override
-  String get rigSetupSite => 'Local';
+  String get actionBuildCalibration => 'criar calibração';
 
   @override
-  String get rigSetupSiteMissing => 'Latitude e longitude não definidas.';
+  String get actionCancelCopy => 'cancelar a cópia';
 
   @override
-  String get rigSetupSiteAction => 'Definir local';
+  String get actionCheckDisk => 'verificar os quadros no disco';
 
   @override
-  String get rigSetupOptics => 'Câmera principal e telescópio';
+  String get actionCleanPreviewCache => 'limpar o cache de prévias';
 
   @override
-  String get rigSetupOpticsMissing =>
-      'O sensor ou a distância focal não está definido.';
+  String get actionCleanSkyPhotoCache => 'limpar o cache de fotos do céu';
 
   @override
-  String get rigSetupOpticsAction => 'Configurar ótica';
+  String get actionClearCeiling => 'limpar o teto';
 
   @override
-  String get rigSetupGuideScope => 'Luneta de guiagem';
+  String get actionConfirmFrame => 'confirmar que o quadro chegou';
 
   @override
-  String get rigSetupGuideScopeMissing =>
-      'A distância focal da guiagem ou o tamanho do pixel da câmera de guiagem não está definido.';
+  String get actionConnect => 'conectar';
 
   @override
-  String get rigSetupGuideScopeAction => 'Definir luneta de guiagem';
+  String get actionDownload => 'baixar isso';
 
   @override
-  String get rigSetupCalibration => 'Calibração do guiador';
+  String get actionExportFrames => 'exportar esses quadros';
 
   @override
-  String get rigSetupCalibrationMissing =>
-      'Ainda não calibrado, ou o Ara pede para calibrar de novo.';
+  String get actionExportStats => 'exportar as estatísticas';
 
   @override
-  String get rigSetupCalibrationConnect =>
-      'Conecte o guiador para verificar a calibração.';
+  String get actionGenerateCalibration => 'gerar a calibração';
 
   @override
-  String get rigSetupCalibrationAction => 'Abrir modo Guiagem';
+  String get actionListFolders => 'listar as pastas';
 
   @override
-  String get rigSetupItemDone => 'Pronto';
+  String get actionLoadDarkLibrary => 'carregar a biblioteca de darks';
 
   @override
-  String get rigSetupNotNow => 'Agora não';
+  String get actionLoadFaults => 'carregar o histórico de falhas';
 
   @override
-  String get rigSetupDonePill => 'Setup configurado';
+  String get actionLoadFrames => 'carregar os quadros';
+
+  @override
+  String get actionLoadLibrary => 'carregar sua biblioteca';
+
+  @override
+  String get actionLoadLogs => 'carregar os logs';
+
+  @override
+  String get actionLoadNotifications => 'carregar suas notificações';
+
+  @override
+  String get actionLoadOlderLogs => 'carregar logs mais antigos';
+
+  @override
+  String get actionLoadPreview => 'carregar a prévia';
+
+  @override
+  String get actionLoadSessions => 'carregar as sessões';
+
+  @override
+  String get actionLoadSettings => 'carregar suas configurações salvas';
+
+  @override
+  String get actionLookForEquipment => 'procurar equipamentos';
+
+  @override
+  String get actionPushGuiderProfile => 'enviar o perfil do guia';
+
+  @override
+  String get actionPushTime => 'enviar a hora';
+
+  @override
+  String get actionRateFrame => 'avaliar o quadro';
+
+  @override
+  String get actionReadCamera => 'ler a câmera';
+
+  @override
+  String get actionReadClock => 'ler o estado do relógio do servidor';
+
+  @override
+  String get actionReadServerDisks => 'ler os discos do servidor';
+
+  @override
+  String get actionRearmSafety => 'rearmar a segurança';
+
+  @override
+  String get actionRefitSkyModel => 'reajustar o modelo do céu';
+
+  @override
+  String get actionRestartRig => 'reiniciar seu setup';
+
+  @override
+  String get actionResumeSequence => 'retomar a sequência';
+
+  @override
+  String get actionSave => 'salvar isso';
+
+  @override
+  String get actionSaveHorizon => 'salvar o horizonte';
+
+  @override
+  String get actionSaveSlotLabels => 'salvar os nomes das posições';
+
+  @override
+  String get actionSendCalibrationChoice => 'enviar a escolha de calibração';
+
+  @override
+  String get actionSequenceAction => 'fazer essa ação da sequência';
+
+  @override
+  String get actionSolveFrame => 'resolver o quadro';
+
+  @override
+  String get actionStarDatabase =>
+      'descobrir qual banco de dados de estrelas este setup precisa';
+
+  @override
+  String get actionStartCopy => 'iniciar a cópia';
+
+  @override
+  String get actionTakeExposure => 'fazer essa exposição';
+
+  @override
+  String get actionTakeVerification => 'tirar a imagem de verificação';
+
+  @override
+  String get actionUpdateTag => 'atualizar a etiqueta';
+
+  @override
+  String get actionBackUpEntry => 'fazer backup dessa entrada';
+
+  @override
+  String get actionKeepBackupGoing => 'manter o backup em andamento';
+
+  @override
+  String get actionPushGpsFix => 'enviar a posição do GPS';
+
+  @override
+  String get actionRebuildStats => 'refazer o catálogo de estatísticas';
+
+  @override
+  String get actionStartCopyingFrames => 'começar a copiar os quadros';
+
+  @override
+  String backupStreamHiccup(String reason) {
+    return 'Falha momentânea no backup: $reason';
+  }
+
+  @override
+  String backupEntryFailing(String id, String reason) {
+    return 'Backup de $id falhando: $reason';
+  }
+
+  @override
+  String gpsFixRefused(String reason) {
+    return 'A posição foi lida, mas o setup a recusou: $reason';
+  }
+
+  @override
+  String get gpsDaemonTooOld =>
+      ' — atualize o Ara Server no setup; esta versão é anterior ao GPS deste computador.';
 
   @override
   String get calibrationDarks => 'Darks';
@@ -9592,4 +9885,63 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get calibrationStartQueueNow => 'Iniciar fila';
+
+  @override
+  String get rigSetupTitle => 'Configuração do setup';
+
+  @override
+  String get rigSetupIntro =>
+      'Antes da primeira noite, o Ara precisa de alguns dados deste setup.';
+
+  @override
+  String get rigSetupSite => 'Local';
+
+  @override
+  String get rigSetupSiteMissing => 'Latitude e longitude não definidas.';
+
+  @override
+  String get rigSetupSiteAction => 'Definir local';
+
+  @override
+  String get rigSetupOptics => 'Câmera principal e telescópio';
+
+  @override
+  String get rigSetupOpticsMissing =>
+      'O sensor ou a distância focal não está definido.';
+
+  @override
+  String get rigSetupOpticsAction => 'Configurar ótica';
+
+  @override
+  String get rigSetupGuideScope => 'Luneta de guiagem';
+
+  @override
+  String get rigSetupGuideScopeMissing =>
+      'A distância focal da guiagem ou o tamanho do pixel da câmera de guiagem não está definido.';
+
+  @override
+  String get rigSetupGuideScopeAction => 'Definir luneta de guiagem';
+
+  @override
+  String get rigSetupCalibration => 'Calibração do guiador';
+
+  @override
+  String get rigSetupCalibrationMissing =>
+      'Ainda não calibrado, ou o Ara pede para calibrar de novo.';
+
+  @override
+  String get rigSetupCalibrationConnect =>
+      'Conecte o guiador para verificar a calibração.';
+
+  @override
+  String get rigSetupCalibrationAction => 'Abrir modo Guiagem';
+
+  @override
+  String get rigSetupItemDone => 'Pronto';
+
+  @override
+  String get rigSetupNotNow => 'Agora não';
+
+  @override
+  String get rigSetupDonePill => 'Setup configurado';
 }

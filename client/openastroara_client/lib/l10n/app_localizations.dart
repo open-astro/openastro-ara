@@ -7083,113 +7083,341 @@ abstract class AppLocalizations {
   /// **'Lost contact with the rig'**
   String get monitorLinkLostShort;
 
-  /// Simple Mode: title of the first-time Rig setup sheet and of its Settings menu row
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
-  /// **'Rig setup'**
-  String get rigSetupTitle;
+  /// **'abort the capture'**
+  String get actionAbortCapture;
 
-  /// Simple Mode: one line under the Rig setup title
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
-  /// **'Before a first night, Ara needs a few facts about this rig.'**
-  String get rigSetupIntro;
+  /// **'apply that to the selected frames'**
+  String get actionApplyToFrames;
 
-  /// Rig setup line: where the rig stands
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
-  /// **'Site'**
-  String get rigSetupSite;
+  /// **'build the calibration'**
+  String get actionBuildCalibration;
 
-  /// Rig setup line: what is missing for the site
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
-  /// **'Latitude and longitude are not set.'**
-  String get rigSetupSiteMissing;
+  /// **'cancel the copy'**
+  String get actionCancelCopy;
 
-  /// Rig setup: button that opens the place where latitude and longitude are set
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
-  /// **'Set site'**
-  String get rigSetupSiteAction;
+  /// **'check the disk for frames'**
+  String get actionCheckDisk;
 
-  /// Rig setup line: the sensor and the focal length
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
-  /// **'Main camera and telescope'**
-  String get rigSetupOptics;
+  /// **'clean the preview cache'**
+  String get actionCleanPreviewCache;
 
-  /// Rig setup line: what is missing for the main camera and telescope
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
-  /// **'The sensor or the focal length is not set.'**
-  String get rigSetupOpticsMissing;
+  /// **'clean the sky photo cache'**
+  String get actionCleanSkyPhotoCache;
 
-  /// Rig setup: button that opens the optics panel
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
-  /// **'Set up optics'**
-  String get rigSetupOpticsAction;
+  /// **'clear the ceiling'**
+  String get actionClearCeiling;
 
-  /// Rig setup line: the guide focal length and the Guide Camera's pixel size
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
-  /// **'Guide scope'**
-  String get rigSetupGuideScope;
+  /// **'confirm the frame arrived'**
+  String get actionConfirmFrame;
 
-  /// Rig setup line: what is missing for the guide scope
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
-  /// **'The guide focal length or the Guide Camera\'s pixel size is not set.'**
-  String get rigSetupGuideScopeMissing;
+  /// **'connect'**
+  String get actionConnect;
 
-  /// Rig setup: button that opens the guide focal length and pixel size
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
-  /// **'Set guide scope'**
-  String get rigSetupGuideScopeAction;
+  /// **'download that'**
+  String get actionDownload;
 
-  /// Rig setup line: the Guider's calibration
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
-  /// **'Guider calibration'**
-  String get rigSetupCalibration;
+  /// **'export those frames'**
+  String get actionExportFrames;
 
-  /// Rig setup line: what is missing for the Guider calibration
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
-  /// **'Not calibrated yet, or Ara says to calibrate again.'**
-  String get rigSetupCalibrationMissing;
+  /// **'export the stats'**
+  String get actionExportStats;
 
-  /// Rig setup line: the Guider is not connected, so its calibration cannot be checked
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
-  /// **'Connect the Guider to check its calibration.'**
-  String get rigSetupCalibrationConnect;
+  /// **'generate the calibration'**
+  String get actionGenerateCalibration;
 
-  /// Rig setup: button that closes the sheet and shows Guider mode
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
-  /// **'Open Guider mode'**
-  String get rigSetupCalibrationAction;
+  /// **'list the folders'**
+  String get actionListFolders;
 
-  /// Rig setup: what a screen reader says for a line with a tick
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
-  /// **'Done'**
-  String get rigSetupItemDone;
+  /// **'load the dark library'**
+  String get actionLoadDarkLibrary;
 
-  /// Rig setup: closes the sheet and keeps it closed for this rig on this device
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
-  /// **'Not now'**
-  String get rigSetupNotNow;
+  /// **'load the fault history'**
+  String get actionLoadFaults;
 
-  /// Simple Mode result pill when the last Rig setup item is done
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
-  /// **'Rig set up'**
-  String get rigSetupDonePill;
+  /// **'load the frames'**
+  String get actionLoadFrames;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load your library'**
+  String get actionLoadLibrary;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load the logs'**
+  String get actionLoadLogs;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load your notifications'**
+  String get actionLoadNotifications;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load older logs'**
+  String get actionLoadOlderLogs;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load the preview'**
+  String get actionLoadPreview;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load the sessions'**
+  String get actionLoadSessions;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load your saved settings'**
+  String get actionLoadSettings;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'look for equipment'**
+  String get actionLookForEquipment;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'push the guider profile'**
+  String get actionPushGuiderProfile;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'push the time'**
+  String get actionPushTime;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'rate the frame'**
+  String get actionRateFrame;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'read the camera'**
+  String get actionReadCamera;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'read the server clock state'**
+  String get actionReadClock;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'read the server\'s disks'**
+  String get actionReadServerDisks;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'re-arm safety'**
+  String get actionRearmSafety;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'refit the sky model'**
+  String get actionRefitSkyModel;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'restart your rig'**
+  String get actionRestartRig;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'resume the sequence'**
+  String get actionResumeSequence;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'save that'**
+  String get actionSave;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'save the horizon skyline'**
+  String get actionSaveHorizon;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'save the slot labels'**
+  String get actionSaveSlotLabels;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'send the calibration choice'**
+  String get actionSendCalibrationChoice;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'do that sequence action'**
+  String get actionSequenceAction;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'solve the frame'**
+  String get actionSolveFrame;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'work out which star database this rig needs'**
+  String get actionStarDatabase;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'start the copy'**
+  String get actionStartCopy;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'take that exposure'**
+  String get actionTakeExposure;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'take the verification image'**
+  String get actionTakeVerification;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'update the tag'**
+  String get actionUpdateTag;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'back up that entry'**
+  String get actionBackUpEntry;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'keep the backup stream going'**
+  String get actionKeepBackupGoing;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'push the GPS fix'**
+  String get actionPushGpsFix;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'rebuild the stats catalog'**
+  String get actionRebuildStats;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'start copying frames'**
+  String get actionStartCopyingFrames;
+
+  /// Backup stream panel: transient transport trouble; reason is the already-readable error sentence
+  ///
+  /// In en, this message translates to:
+  /// **'Backup stream hiccup: {reason}'**
+  String backupStreamHiccup(String reason);
+
+  /// Backup stream panel: one frame keeps failing; id is the frame id, reason the readable cause
+  ///
+  /// In en, this message translates to:
+  /// **'Backup of {id} failing: {reason}'**
+  String backupEntryFailing(String id, String reason);
+
+  /// GPS on this computer: the receiver gave a fix but the rig rejected the push; reason is the readable error sentence
+  ///
+  /// In en, this message translates to:
+  /// **'Fix read, but the rig refused it: {reason}'**
+  String gpsFixRefused(String reason);
+
+  /// GPS on this computer: appended to the refused-push message when the rig answers 422 (daemon too old); starts with a dash and a space
+  ///
+  /// In en, this message translates to:
+  /// **' — update Ara Server on the rig; this version predates GPS on this computer.'**
+  String get gpsDaemonTooOld;
 
   /// Night done / Calibration: dark frames are missing
   ///
@@ -8036,6 +8264,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Start queue'**
   String get calibrationStartQueueNow;
+
+  /// Simple Mode: title of the first-time Rig setup sheet and of its Settings menu row
+  ///
+  /// In en, this message translates to:
+  /// **'Rig setup'**
+  String get rigSetupTitle;
+
+  /// Simple Mode: one line under the Rig setup title
+  ///
+  /// In en, this message translates to:
+  /// **'Before a first night, Ara needs a few facts about this rig.'**
+  String get rigSetupIntro;
+
+  /// Rig setup line: where the rig stands
+  ///
+  /// In en, this message translates to:
+  /// **'Site'**
+  String get rigSetupSite;
+
+  /// Rig setup line: what is missing for the site
+  ///
+  /// In en, this message translates to:
+  /// **'Latitude and longitude are not set.'**
+  String get rigSetupSiteMissing;
+
+  /// Rig setup: button that opens the place where latitude and longitude are set
+  ///
+  /// In en, this message translates to:
+  /// **'Set site'**
+  String get rigSetupSiteAction;
+
+  /// Rig setup line: the sensor and the focal length
+  ///
+  /// In en, this message translates to:
+  /// **'Main camera and telescope'**
+  String get rigSetupOptics;
+
+  /// Rig setup line: what is missing for the main camera and telescope
+  ///
+  /// In en, this message translates to:
+  /// **'The sensor or the focal length is not set.'**
+  String get rigSetupOpticsMissing;
+
+  /// Rig setup: button that opens the optics panel
+  ///
+  /// In en, this message translates to:
+  /// **'Set up optics'**
+  String get rigSetupOpticsAction;
+
+  /// Rig setup line: the guide focal length and the Guide Camera's pixel size
+  ///
+  /// In en, this message translates to:
+  /// **'Guide scope'**
+  String get rigSetupGuideScope;
+
+  /// Rig setup line: what is missing for the guide scope
+  ///
+  /// In en, this message translates to:
+  /// **'The guide focal length or the Guide Camera\'s pixel size is not set.'**
+  String get rigSetupGuideScopeMissing;
+
+  /// Rig setup: button that opens the guide focal length and pixel size
+  ///
+  /// In en, this message translates to:
+  /// **'Set guide scope'**
+  String get rigSetupGuideScopeAction;
+
+  /// Rig setup line: the Guider's calibration
+  ///
+  /// In en, this message translates to:
+  /// **'Guider calibration'**
+  String get rigSetupCalibration;
+
+  /// Rig setup line: what is missing for the Guider calibration
+  ///
+  /// In en, this message translates to:
+  /// **'Not calibrated yet, or Ara says to calibrate again.'**
+  String get rigSetupCalibrationMissing;
+
+  /// Rig setup line: the Guider is not connected, so its calibration cannot be checked
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the Guider to check its calibration.'**
+  String get rigSetupCalibrationConnect;
+
+  /// Rig setup: button that closes the sheet and shows Guider mode
+  ///
+  /// In en, this message translates to:
+  /// **'Open Guider mode'**
+  String get rigSetupCalibrationAction;
+
+  /// Rig setup: what a screen reader says for a line with a tick
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get rigSetupItemDone;
+
+  /// Rig setup: closes the sheet and keeps it closed for this rig on this device
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get rigSetupNotNow;
+
+  /// Simple Mode result pill when the last Rig setup item is done
+  ///
+  /// In en, this message translates to:
+  /// **'Rig set up'**
+  String get rigSetupDonePill;
 }
 
 class _AppLocalizationsDelegate

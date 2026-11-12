@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui' show Locale;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -11,6 +10,7 @@ import '../util/friendly_error.dart';
 import '../l10n/l10n.dart';
 import '../util/nmea_parser.dart';
 import 'time_sync_state.dart';
+import 'app_locale_state.dart';
 
 /// Injection seams (tests override with a canned source / temp-dir prefs).
 final serialGpsSourceProvider = Provider<SerialGpsSource>((_) => const OsSerialGpsSource());
@@ -254,6 +254,7 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
         }
       }
     } catch (e) {
+      final l = l10nFor(ref.read(appLocaleProvider));
       // Only when the saved port is gone; a listed port that failed (busy) is not misplaced.
       final others = savedGone ? ports.where((p) => p != port && looksLikeGpsPort(p)).toList() : const <String>[];
       error = fix == null
@@ -261,8 +262,8 @@ class ClientGpsNotifier extends AsyncNotifier<ClientGpsStatus> {
               '${others.isEmpty ? '' : ' — the GPS may be on ${others.join(' or ')}; choose it in GPS on this computer.'}'
           // The read worked; the daemon refused the push. A 422 here is a rig running a
           // daemon that predates client-side GPS (it does not know source gps-client).
-          : 'Fix read, but the rig refused it: ${friendlyError(lookupAppLocalizations(const Locale('en')), e, action: 'push the GPS fix')}'
-              '${e is DioException && e.response?.statusCode == 422 ? ' — update Ara Server on the rig; this daemon predates GPS on this computer.' : ''}';
+          : l.gpsFixRefused(friendlyError(l, e, action: l.actionPushGpsFix)) +
+              (e is DioException && e.response?.statusCode == 422 ? l.gpsDaemonTooOld : '');
       debugPrint('[client-gps] $error');
     }
     if (!ref.mounted) return fix; // the container went away mid-read (tests, hot restart)
