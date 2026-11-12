@@ -8,6 +8,7 @@ import '../../../state/stats/calendar_state.dart';
 import '../../../theme/ara_colors.dart';
 import 'chart_card.dart';
 import 'chart_stale_chip.dart';
+import '../../adaptive_controls.dart';
 
 /// §50.6 GitHub-style calendar heatmap — one cell per day in a rolling
 /// [_daysShown]-day window, shaded by that night's integration minutes, from
@@ -101,7 +102,7 @@ class _CalendarHeatmapState extends ConsumerState<CalendarHeatmap> {
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2))
+                      child: AdaptiveProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.refresh),
             ),
           ),

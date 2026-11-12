@@ -8517,6 +8517,12 @@ abstract class AppLocalizations {
   /// **'Start queue'**
   String get calibrationStartQueueNow;
 
+  /// Image library, Tag selected frames dialog: helper text under the Add tags and Remove tags fields (type several tags separated by commas)
+  ///
+  /// In en, this message translates to:
+  /// **'Comma-separated'**
+  String get libraryTagsCommaSeparated;
+
   /// Simple Mode: title of the first-time Rig setup sheet and of its Settings menu row
   ///
   /// In en, this message translates to:

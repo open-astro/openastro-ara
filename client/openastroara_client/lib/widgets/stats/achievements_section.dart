@@ -8,6 +8,7 @@ import '../../state/stats/achievements_state.dart';
 import '../../theme/ara_colors.dart';
 import 'responsive_tile_grid.dart';
 import 'stat_tile.dart';
+import '../adaptive_controls.dart';
 
 /// §50.19 Achievements section on the Stats dashboard. Unlike the demo-data
 /// Overview/Targets sections, this is wired to the live daemon
@@ -78,7 +79,7 @@ class _AchievementsSectionState extends ConsumerState<AchievementsSection> {
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2))
+                      child: AdaptiveProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.refresh),
             ),
           ],

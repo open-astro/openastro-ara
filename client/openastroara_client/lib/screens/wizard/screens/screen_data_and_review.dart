@@ -9,6 +9,7 @@ import '../../../models/solver_recommendation.dart';
 import '../../../state/wizard_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../wizard_form_kit.dart';
+import '../../../widgets/adaptive_controls.dart';
 
 /// Human-readable size for a package (`1.2 GB`, `340.0 MB`, `1.5 KB`). One
 /// decimal place for every scaled unit (KB/MB/GB) so sizes round consistently —
@@ -456,7 +457,7 @@ class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> 
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Row(children: [
-                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
                 SizedBox(width: 8),
                 Text('Working out the field of view…'),
               ]),

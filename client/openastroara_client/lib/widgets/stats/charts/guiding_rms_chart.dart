@@ -9,6 +9,7 @@ import '../../../state/stats/guiding_rms_state.dart';
 import '../../../theme/ara_colors.dart';
 import 'chart_card.dart';
 import 'chart_stale_chip.dart';
+import '../../adaptive_controls.dart';
 
 /// §50.7 guiding RMS trend — per-frame total guiding RMS (arcsec) over time
 /// from the live daemon (`GET /api/v1/stats/guiding`), with mean + p95 summary
@@ -107,7 +108,7 @@ class _GuidingRmsChartState extends ConsumerState<GuidingRmsChart> {
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2))
+                      child: AdaptiveProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.refresh),
             ),
           ),

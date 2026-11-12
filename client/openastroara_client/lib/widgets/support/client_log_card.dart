@@ -7,6 +7,7 @@ import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
 import '../../util/stream_save_location.dart';
 import 'support_card_row.dart';
+import '../adaptive_controls.dart';
 
 /// §54 "Save client log" — exports this app's own error log (#1111). Sits
 /// above the Support tab's connect gate on purpose: a client-side crash is
@@ -66,7 +67,7 @@ class _ClientLogCardState extends ConsumerState<ClientLogCard> {
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: AdaptiveProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.save_alt, size: 18),
               label: const Text('Save client log'),

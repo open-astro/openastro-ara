@@ -5037,6 +5037,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get calibrationStartQueueNow => 'Start queue';
 
   @override
+  String get libraryTagsCommaSeparated => 'Comma-separated';
+
+  @override
   String get rigSetupTitle => 'Rig setup';
 
   @override
@@ -10163,6 +10166,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get calibrationStartQueueNow => 'Iniciar fila';
+
+  @override
+  String get libraryTagsCommaSeparated => 'Separadas por vírgula';
 
   @override
   String get rigSetupTitle => 'Configuração do setup';

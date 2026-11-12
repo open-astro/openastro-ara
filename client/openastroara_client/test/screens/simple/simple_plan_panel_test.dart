@@ -2322,5 +2322,23 @@ void main() {
       await tester.pumpAndSettle();
       expect(seq.calls.sublist(before), ['stop seq-1']);
     });
+
+    testWidgets('on iPhone and iPad the hold-to-stop ring stays the 60 px Material sweep, not a spoke wheel',
+        (tester) async {
+      final (c, seq) = await run(tester);
+      await create(tester);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      await imaging(tester, c, seq, _imaging(23));
+      final g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(CupertinoActivityIndicator), findsNothing);
+      final ring = find.byWidgetPredicate((w) => w is CircularProgressIndicator && w.value != null);
+      expect(ring, findsOneWidget);
+      expect(tester.getSize(ring), const Size(60, 60));
+      await g.up();
+      await tester.pumpAndSettle();
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
   });
 }

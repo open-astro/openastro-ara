@@ -5037,6 +5037,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get calibrationStartQueueNow => 'Start queue';
 
   @override
+  String get libraryTagsCommaSeparated => 'Comma-separated';
+
+  @override
   String get rigSetupTitle => 'Rig setup';
 
   @override

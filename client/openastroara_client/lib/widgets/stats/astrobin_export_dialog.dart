@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/stats/stats_target.dart';
 import '../../state/stats/stats_targets_state.dart';
 import '../../theme/ara_colors.dart';
+import '../adaptive_controls.dart';
 
 /// §50.19 AstroBin acquisition export: pick a target, then open its AstroBin
 /// acquisition CSV (`GET /api/v1/stats/export/astrobin?target=…`) in the browser
@@ -78,7 +79,7 @@ class _AstrobinExportDialogState extends ConsumerState<AstrobinExportDialog> {
   ) {
     if (async.isLoading && targets == null) {
       return const SizedBox(
-          height: 120, child: Center(child: CircularProgressIndicator()));
+          height: 120, child: Center(child: AdaptiveProgressIndicator()));
     }
     if (async.hasError && targets == null) {
       return _hintWithRetry('Could not load targets.');
@@ -123,7 +124,7 @@ class _AstrobinExportDialogState extends ConsumerState<AstrobinExportDialog> {
       ),
       trailing: busy
           ? const SizedBox(
-              width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2))
           : const Icon(Icons.file_download, size: 18),
       enabled: _launching == null,
       onTap: () => unawaited(_export(t.targetName)),

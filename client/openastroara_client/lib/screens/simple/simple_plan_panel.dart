@@ -72,6 +72,7 @@ import 'simple_shell.dart'
         kSimpleInset,
         kSimpleRailWidth,
         simpleRailScale;
+import '../../widgets/adaptive_controls.dart';
 
 /// The plan's one-line hint: the suggested sub length of every row that
 /// differs from it, rows sharing a length together ("L 120 s · GB 180 s",
@@ -768,12 +769,14 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
                     duration: _hold.value > 0
                         ? Duration.zero
                         : const Duration(milliseconds: 900),
-                    builder: (_, v, _) => CircularProgressIndicator(
+                    builder: (_, v, _) => AdaptiveProgressIndicator(
                       value: v,
                       strokeWidth: 3,
-                      color: _hold.value > 0
-                          ? AraColors.accentError
-                          : AraColors.selectionBg,
+                      valueColor: AlwaysStoppedAnimation(
+                        _hold.value > 0
+                            ? AraColors.accentError
+                            : AraColors.selectionBg,
+                      ),
                     ),
                   ),
                 ),

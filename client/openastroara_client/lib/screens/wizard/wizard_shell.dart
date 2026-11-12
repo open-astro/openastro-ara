@@ -20,6 +20,7 @@ import '../../util/friendly_error.dart';
 import 'wizard_equipment_apply.dart';
 import 'wizard_save.dart';
 import 'wizard_screens.dart';
+import '../../widgets/adaptive_controls.dart';
 
 /// §37 wizard host. Renders progress bar + current screen + nav bar.
 /// Launched from "Add a Profile" / "Run Wizard Again" or first-run when no
@@ -174,7 +175,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
       // route under it) instead of the spinner.
       builder: (_) => const PopScope(
         canPop: false,
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: AdaptiveProgressIndicator()),
       ),
     );
 

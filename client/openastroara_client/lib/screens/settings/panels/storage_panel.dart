@@ -23,6 +23,7 @@ import '../../../services/storage_browse_api.dart';
 import '../../../widgets/storage/sky_photo_cache_row.dart';
 import '../../../widgets/help_icon.dart';
 import '../../../widgets/settings/settings_row.dart';
+import '../../../widgets/adaptive_controls.dart';
 
 /// Storage panel per §29 — save directory + format + compression + filename
 /// template. Phase 12h.6c added the daemon round-trip — values hydrate from
@@ -541,7 +542,7 @@ class _CopyRow extends ConsumerWidget {
           const SizedBox(
             width: 14,
             height: 14,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: AdaptiveProgressIndicator(strokeWidth: 2),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -648,7 +649,7 @@ class _EjectButtonState extends ConsumerState<StorageEjectButton> {
           ? const SizedBox(
               width: 14,
               height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: AdaptiveProgressIndicator(strokeWidth: 2),
             )
           : const Icon(Icons.eject, size: 16),
       label: Text(widget.label),
@@ -762,7 +763,7 @@ class _CheckDiskButtonState extends ConsumerState<StorageCheckDiskButton> {
           ? const SizedBox(
               width: 14,
               height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: AdaptiveProgressIndicator(strokeWidth: 2),
             )
           : Text(widget.label),
     );
@@ -812,7 +813,7 @@ class _RescanButtonState extends ConsumerState<_RescanButton> {
           ? const SizedBox(
               width: 14,
               height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: AdaptiveProgressIndicator(strokeWidth: 2),
             )
           : const Text('Find frames on disk'),
     );
@@ -924,7 +925,7 @@ class _PreviewCacheRowState extends ConsumerState<_PreviewCacheRow> {
                 ? const SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: AdaptiveProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.cleaning_services_outlined, size: 16),
             label: Text(_cleaning ? 'Cleaning…' : 'Clean cache'),

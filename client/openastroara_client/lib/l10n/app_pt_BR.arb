@@ -1403,6 +1403,7 @@
   "calibrationLibraryNoCamera": "câmera não registrada",
   "calibrationStartQueue": "Os quadros de calibração estão na fila após os seus alvos. Iniciar a fila agora?",
   "calibrationStartQueueNow": "Iniciar fila",
+  "libraryTagsCommaSeparated": "Separadas por vírgula",
   "rigSetupTitle": "Configuração do setup",
   "rigSetupIntro": "Antes da primeira noite, o Ara precisa de alguns dados deste setup.",
   "rigSetupSite": "Local",
