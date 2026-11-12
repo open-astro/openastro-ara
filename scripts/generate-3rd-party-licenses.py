@@ -194,15 +194,15 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright (c) 2018 Wen Du; Copyright (c) 2022 The CFUG Team",
     },
     "file_picker": {
-        # 13.3.2 verified 2026-11-06: LICENSE byte-identical to 13.1.0
-        # (MIT, Miguel Ruivo).
-        "version": "13.3.2",
+        # 13.3.3 verified 2026-11-12: LICENSE byte-identical to 13.3.2
+        # and 13.1.0 (MIT, Miguel Ruivo).
+        "version": "13.3.3",
         "license": "MIT",
         "copyright": "Copyright (c) 2018 Miguel Ruivo",
     },
     "fl_chart": {
-        # 1.3.0 verified 2026-10-28: LICENSE byte-identical to 1.2.0 (MIT, Flutter 4 Fun).
-        "version": "1.3.0",
+        # 1.3.1 verified 2026-11-12: LICENSE byte-identical to 1.3.0 and 1.2.0 (MIT, Flutter 4 Fun).
+        "version": "1.3.1",
         "license": "MIT",
         "copyright": "Copyright (c) 2022 Flutter 4 Fun",
     },
@@ -261,8 +261,8 @@ PUB_LICENSES: dict[str, dict[str, str]] = {
         "copyright": "Copyright 2016, the Dart project authors",
     },
     "webview_all": {
-        # 1.4.7 verified 2026-10-28: LICENSE byte-identical to 1.4.4 (MIT, Abandoft).
-        "version": "1.4.7",
+        # 1.5.0 verified 2026-11-12: LICENSE byte-identical to 1.4.7 and 1.4.4 (MIT, Abandoft).
+        "version": "1.5.0",
         "license": "MIT",
         "copyright": "Copyright 2021-2026 Abandoft",
     },

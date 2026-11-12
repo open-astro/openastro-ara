@@ -12,8 +12,6 @@
 
 #endregion "copyright"
 
-using ASCOM.Alpaca.Clients;
-using ASCOM.Common.Alpaca;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
@@ -24,6 +22,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using DesiredState = OpenAstroAra.Server.Services.DesiredConnection;
 
 namespace OpenAstroAra.Server.Services;
 
@@ -38,18 +37,18 @@ namespace OpenAstroAra.Server.Services;
 /// separate Alpaca servers, BOTH device number 0). The previous device-number keying made those
 /// collide: the second connect evicted the first and its toggles vanished from the client.</para>
 ///
-/// Follows the SafetyMonitor/ObservingConditions template: §60.5 202-Accepted connect lifecycle;
-/// per-connection generation-based supersede; §32.4 background-refresh cache (a single timer reads
-/// every port of every connected device every <see cref="RefreshInterval"/>) so the GET surface serves
-/// the cached port list synchronously. A write refreshes the cache so the new value is reflected promptly.
+/// Each connection holds one <see cref="DeviceLifecycle{TDevice}"/> (ADR 0011): the §60.5 202-Accepted
+/// connect lifecycle, generation-based supersede, the §32.4 background-refresh cache (each connection's
+/// refresh reads every port of its device) so the GET surface serves the cached port list synchronously,
+/// the §42.3 probe, read health and the #1539 desired connection state. The ports-unreadable detector, the
+/// §42.4 read-back and the fan catch-up stay here, on top of the module. A write refreshes the cache so
+/// the new value is reflected promptly.
 ///
 /// The Sequencer's <c>ISwitchMediator</c> (one singleton per §8.1) targets the lowest-numbered connected
 /// switch as its "primary" — see <c>SwitchService.Mediator.cs</c>. Per-device sequencer targeting is a
 /// follow-up.
 /// </summary>
-public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator, IDisposable {
-
-    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
+public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator, IRecoverableDevice, IDisposable {
 
     /// <summary>Unreadable-ports observations a switch gets for free, once per connection,
     /// before they start counting against it (§42.3). Covers USB re-enumeration and drivers
@@ -72,40 +71,47 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
     private readonly IEquipmentFaultSink? _faults;
     private readonly IProfileStore? _profileStore;
     private readonly IWsBroadcaster? _ws;
+    // Guards the connection map and _disposed only. Each connection's session state (ports, read-back
+    // watch, ports-unreadable streak) is guarded by its lifecycle's gate. Order: this gate, then a lifecycle's.
     private readonly object _gate = new();
-    private readonly Timer _refreshTimer;
     // #1265 — bench-test knob: the §42.4 read-back settle window every new connection's watch is
     // built with (null = SwitchReadbackWatch.DefaultSettleWindow), shrunk alongside RefreshPeriod.
     internal TimeSpan? ReadbackSettleWindow { get; set; }
-    // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence so a fixture that
-    // needs "several ticks" waits milliseconds, not multiples of the 2 s production interval.
-    // Init-only (object initializer), so it can never re-arm a disposed timer; never used by the daemon.
-    internal TimeSpan RefreshPeriod { init => _refreshTimer.Change(value, value); }
-    // Connected (and recently-disconnected) switches keyed by the device's Alpaca UniqueId (globally
-    // unique — the AlpacaDeviceNumber is only unique per host). Mutated only under _gate. A single
-    // shared refresh timer reads every entry's ports — keep the one-lock discipline of the original
-    // single-instance service, just one record per device.
+    // #1265 — bench-test knob: the refresh cadence every connection's lifecycle is armed with, so a fixture
+    // that needs "several ticks" waits milliseconds, not multiples of the 2 s production interval.
+    // Init-only (object initializer), never used by the daemon.
+    private TimeSpan _refreshPeriod = DeviceLifecycle<ISwitchDevice>.DefaultRefreshInterval;
+    internal TimeSpan RefreshPeriod { init => _refreshPeriod = value; }
+    // Test seam (ADR 0011 rule 4): the adapter the lifecycles build for a selected device.
+    private Func<DiscoveredDeviceDto, ISwitchDevice> _createDevice = AlpacaSwitchDevice.Create;
+    internal Func<DiscoveredDeviceDto, ISwitchDevice> DeviceFactory { init => _createDevice = value; }
+    // Known switches keyed by the device's Alpaca UniqueId (globally unique — the AlpacaDeviceNumber is only
+    // unique per host). A connection (and its lifecycle) is kept across reconnects of the same device so the
+    // user's disconnect is remembered; dropped on Remove, an id rename or Dispose. Mutated only under _gate.
     private readonly Dictionary<string, SwitchConnection> _connections = new(StringComparer.Ordinal);
-    private int _refreshing;
     private bool _disposed;
 
-    /// <summary>Per-device mutable connection state. All fields are read/written under the service
-    /// <see cref="_gate"/> (no inner lock), so the generation-supersede + adopt guards of the original
-    /// single-instance service carry over unchanged — one record per connected switch.</summary>
+    /// <summary>Per-device state around one <see cref="DeviceLifecycle{TDevice}"/>. Everything but the
+    /// lifecycle is guarded by <c>Lifecycle.Gate</c>.</summary>
     private sealed class SwitchConnection {
-        public required DiscoveredDeviceDto Device { get; init; }
-        public AlpacaSwitch? Client { get; set; }
-        public EquipmentConnectionState State { get; set; } = EquipmentConnectionState.Disconnected;
-        public DateTimeOffset LastTransition { get; set; } = DateTimeOffset.UtcNow;
+        private readonly DiscoveredDeviceDto _initial;
+        private volatile IReadOnlyList<SwitchPortSnapshot> _cachedSnapshots = Array.Empty<SwitchPortSnapshot>();
+
+        public SwitchConnection(DiscoveredDeviceDto initial, TimeSpan? readbackSettleWindow) {
+            _initial = initial;
+            Readback = new SwitchReadbackWatch(readbackSettleWindow);
+        }
+
+        public DeviceLifecycle<ISwitchDevice> Lifecycle { get; set; } = null!;
+        // The selected record (the lifecycle's, which a reconnect may replace); the connect's until then.
+        public DiscoveredDeviceDto Device => Lifecycle.Device ?? _initial;
+        public ISwitchDevice? Client => Lifecycle.Live;
+        public EquipmentConnectionState State => Lifecycle.State;
         // Full per-port snapshot (superset of SwitchPortDto: + Description, for the ISwitchMediator
         // surface). ProjectPorts projects the DTO view.
-        public IReadOnlyList<SwitchPortSnapshot> CachedSnapshots { get; set; } = Array.Empty<SwitchPortSnapshot>();
-        public long Generation { get; set; }
+        public IReadOnlyList<SwitchPortSnapshot> CachedSnapshots { get => _cachedSnapshots; set => _cachedSnapshots = value; }
         public int DeviceNumber => Device.AlpacaDeviceNumber;
-        public string Key => Device.UniqueId;
-        // §42.3 — per-connection disconnect-detection streak (multi-instance: each connected switch
-        // is probed independently). Only touched from the single-flighted refresh path.
-        public DeviceConnectionProbe Probe { get; } = new();
+        public string Key => _initial.UniqueId;
         // §42.3 — the weaker "advertises ports, delivers none" signal, on its own longer
         // streak so a transient read burst can't tear down a switch whose Connected is
         // still answering. Cleared whenever a pass reads ports successfully.
@@ -116,7 +122,15 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         // fall. Reset with the probe.
         public int UnreadableTicksSinceConnect { get; set; }
         // §42.4 — per-connection commanded-value read-back watch (only ports the daemon wrote).
-        public SwitchReadbackWatch Readback { get; init; } = new();
+        public SwitchReadbackWatch Readback { get; }
+
+        // Caller holds Lifecycle.Gate: a fresh, ended or tripped session starts clean.
+        public void ResetSessionLocked() {
+            CachedSnapshots = Array.Empty<SwitchPortSnapshot>(); // don't serve a prior device's ports
+            PortsProbe.Reset();
+            UnreadableTicksSinceConnect = 0; // and a fresh ports-unreadable grace window
+            Readback.Reset();                // §42.4 — commanded values don't survive a session
+        }
     }
 
     public SwitchService(ILogger<SwitchService>? logger = null, EquipmentEventPublisher? events = null,
@@ -132,7 +146,6 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         if (_profileStore is not null) {
             _profileStore.Changed += OnProfileChanged;
         }
-        _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
     }
 
     // ct unused by design: ports are served from the §32.4 cache, so there is no per-call HTTP read to
@@ -157,37 +170,31 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         }
     }
 
-    public Task<bool> RemoveAsync(string deviceId, CancellationToken ct) {
+    public async Task<bool> RemoveAsync(string deviceId, CancellationToken ct) {
         ArgumentException.ThrowIfNullOrEmpty(deviceId);
-        AlpacaSwitch? client;
         SwitchConnection conn;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
             if (!_connections.TryGetValue(deviceId, out var found)) {
-                return Task.FromResult(false);
+                return false;
             }
             conn = found;
-            // #1127 — live means Connecting too: a mid-connect removal would let the adopt path
-            // land a client into an entry nobody tracks any more. Same gate as the card's.
-            if (conn.State is EquipmentConnectionState.Connected or EquipmentConnectionState.Connecting) {
-                throw new InvalidOperationException(
-                    "the switch is connected — disconnect it before removing it");
+        }
+        // #1127 — a live switch (Connecting too: a mid-connect removal would let the adopt path land a
+        // client into an entry nobody tracks any more) throws "disconnect it before removing it". An Error
+        // reached from Connected (§42.3 trip) still holds the adopted client; the lifecycle releases it with
+        // the same teardown a disconnect uses. §60.9 — it publishes Removed so a second open client drops the
+        // card on this instead of waiting for its next poll.
+        if (!await conn.Lifecycle.ForgetAsync().ConfigureAwait(false)) {
+            return false;
+        }
+        lock (_gate) {
+            if (_connections.TryGetValue(deviceId, out var current) && ReferenceEquals(current, conn)) {
+                _connections.Remove(deviceId);
             }
-            // An Error reached from Connected (§42.3 trip) still holds the adopted client; dropping
-            // the entry without releasing it leaked the driver connection (#1127). Supersede any
-            // late adopt and hand the client to the same off-lock teardown DisconnectAsync uses.
-            conn.Generation++;
-            client = conn.Client;
-            conn.Client = null;
-            _connections.Remove(deviceId);
         }
-        if (client is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(client), CancellationToken.None);
-        }
-        // §60.9 — the device left the known list: a second open client drops its card on this
-        // instead of waiting for its next poll (#1127).
-        _events?.Removed(DeviceType.Switch, conn.Device.UniqueId, conn.Device.Name);
-        return Task.FromResult(true);
+        conn.Lifecycle.Dispose();
+        return true;
     }
 
     public Task<SwitchDto?> GetAsync(string deviceId, CancellationToken ct) {
@@ -220,60 +227,108 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.Device);
         var device = request.Device;
-        long generation;
-        SwitchConnection conn;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            // Same PHYSICAL device = same Alpaca endpoint (host:port + device number), not same
-            // UniqueId: bridges have been observed changing a device's UniqueId across versions
-            // (ZWO dew heater: "ZWO_DEW_1" → "ZWO_DEW_SN_..."), and a remembered old-id entry plus
-            // a fresh discovery would otherwise open TWO live connections to one device.
-            SwitchConnection? existing = _connections.TryGetValue(device.UniqueId, out var byId)
-                ? byId
-                : _connections.Values.FirstOrDefault(c => EndpointKey(c.Device) == EndpointKey(device));
-            if (existing is not null) {
-                if ((existing.State == EquipmentConnectionState.Connecting || existing.State == EquipmentConnectionState.Connected)
-                    && existing.Device.UniqueId == device.UniqueId) {
-                    // Already connecting/connected to this exact device — idempotent, no teardown.
-                    return Task.FromResult(Accepted("switch.connect", idempotencyKey));
-                }
-                // Reconnecting a known-but-down device, or the same endpoint under a renamed
-                // UniqueId: tear down the stale entry first. §60.9 — surface the teardown before
-                // the replacement's Connecting, so a WS subscriber sees a clean transition.
-                SetState(existing, EquipmentConnectionState.Disconnected);
-                DisposeClientLocked(existing);
-                _connections.Remove(existing.Key); // may differ from device.UniqueId on an id rename
-            }
-            conn = new SwitchConnection { Device = device, Readback = new SwitchReadbackWatch(ReadbackSettleWindow) };
-            _connections[device.UniqueId] = conn;
-            generation = ++conn.Generation;
-            SetState(conn, EquipmentConnectionState.Connecting);
+            // Connecting to the device already connecting/connected is a no-op accept (the lifecycle's rule).
+            return EnsureConnectionLocked(device).Lifecycle.ConnectAsync(device, idempotencyKey);
         }
-        _ = Task.Run(() => ConnectInBackground(conn, device, generation), CancellationToken.None);
-        return Task.FromResult(Accepted("switch.connect", idempotencyKey));
+    }
+
+    /// <summary>#1539 — the ladder's connect: refuses (false) when the user disconnected this switch, and
+    /// dispatches like <see cref="ConnectAsync"/> otherwise. A switch the service does not know yet is a
+    /// first connect.</summary>
+    public bool TryRecover(DiscoveredDeviceDto device) {
+        ArgumentNullException.ThrowIfNull(device);
+        lock (_gate) {
+            if (_disposed) {
+                return false;
+            }
+            var existing = FindConnectionLocked(device);
+            // The endpoint under a renamed id: the old entry's wish still holds for the replacement.
+            if (existing is not null && existing.Key != device.UniqueId
+                && existing.Lifecycle.Desired == DesiredState.DisconnectedByUser) {
+                return false;
+            }
+            return EnsureConnectionLocked(device).Lifecycle.TryRecover(device);
+        }
+    }
+
+    /// <summary>#1539 — across the known switches: <see cref="DesiredConnection.DisconnectedByUser"/> only
+    /// when every one of them was disconnected by the user (the reaction to one switch's fault must not
+    /// stop for another's disconnect); otherwise the first wanted-connected state; null with none known.</summary>
+    public DesiredConnection? DesiredConnection {
+        get {
+            lock (_gate) {
+                DesiredState? result = null;
+                foreach (var conn in _connections.Values) {
+                    var desired = conn.Lifecycle.Desired;
+                    if (desired is null) {
+                        continue;
+                    }
+                    if (desired != DesiredState.DisconnectedByUser) {
+                        return desired;
+                    }
+                    result = desired;
+                }
+                return result;
+            }
+        }
+    }
+
+    // #1246 — true once a refresh tick since the switch's current connect read its ports cleanly.
+    internal bool HasCleanReadSinceConnect(string deviceId) {
+        lock (_gate) {
+            return _connections.TryGetValue(deviceId, out var conn) && conn.Lifecycle.HasCleanReadSinceConnect;
+        }
+    }
+
+    // Same PHYSICAL device = same Alpaca endpoint (host:port + device number), not same
+    // UniqueId: bridges have been observed changing a device's UniqueId across versions
+    // (ZWO dew heater: "ZWO_DEW_1" → "ZWO_DEW_SN_..."), and a remembered old-id entry plus
+    // a fresh discovery would otherwise open TWO live connections to one device. Caller holds _gate.
+    private SwitchConnection? FindConnectionLocked(DiscoveredDeviceDto device) =>
+        _connections.TryGetValue(device.UniqueId, out var byId)
+            ? byId
+            : _connections.Values.FirstOrDefault(c => EndpointKey(c.Device) == EndpointKey(device));
+
+    // The connection that serves `device`: the known one, or a new one. The same endpoint under a renamed
+    // UniqueId replaces the stale entry: §60.9 — its teardown is published before the replacement's
+    // Connecting, so a WS subscriber sees a clean transition. Caller holds _gate.
+    private SwitchConnection EnsureConnectionLocked(DiscoveredDeviceDto device) {
+        var existing = FindConnectionLocked(device);
+        if (existing is not null && existing.Key == device.UniqueId) {
+            return existing;
+        }
+        if (existing is not null) {
+            _ = existing.Lifecycle.DisconnectAsync(null);
+            _connections.Remove(existing.Key);
+            existing.Lifecycle.Dispose();
+        }
+        var conn = new SwitchConnection(device, ReadbackSettleWindow);
+        var key = device.UniqueId;
+        conn.Lifecycle = new DeviceLifecycle<ISwitchDevice>(this, DeviceType.Switch, "switch",
+            d => _createDevice(d), client => ReadPortsRuntime(conn, client), conn.ResetSessionLocked,
+            DeviceHealthTracker.DefaultThreshold, _logger, _events, _faults,
+            // #1076 — the fan's switch connecting AFTER the cooler was turned on: the fan sync only fires on a
+            // cooler write, so catch up from the camera's current state (best-effort; a failure is a logged
+            // fault like any fan-sync failure).
+            onConnected: () => _ = Task.Run(() => SyncFanToCoolingCameraAsync(key), CancellationToken.None));
+        conn.Lifecycle.RefreshPeriod = _refreshPeriod;
+        _connections[key] = conn;
+        return conn;
     }
 
     public Task<OperationAcceptedDto> DisconnectAsync(string deviceId, string? idempotencyKey, CancellationToken ct) {
         ArgumentException.ThrowIfNullOrEmpty(deviceId);
-        AlpacaSwitch? client = null;
+        SwitchConnection? conn;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_connections.TryGetValue(deviceId, out var conn)) {
-                // Supersede any in-flight connect for this slot, drop the client, and keep the entry as
-                // Disconnected (so GET still reports the known device's state, mirroring the single-instance
-                // service) until it is reconnected or the daemon restarts.
-                conn.Generation++;
-                client = conn.Client;
-                conn.Client = null;
-                conn.CachedSnapshots = Array.Empty<SwitchPortSnapshot>();
-                conn.Readback.Reset(); // §42.4 — commanded values don't survive a disconnect
-                SetState(conn, EquipmentConnectionState.Disconnected);
-            }
+            _connections.TryGetValue(deviceId, out conn);
         }
-        if (client is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(client), CancellationToken.None);
-        }
-        return Task.FromResult(Accepted("switch.disconnect", idempotencyKey));
+        // Supersedes any in-flight connect for this slot, drops the client, and keeps the entry as Disconnected
+        // (so GET still reports the known device's state) until it is reconnected, removed or the daemon restarts.
+        return conn is not null ? conn.Lifecycle.DisconnectAsync(idempotencyKey)
+            : Task.FromResult(Accepted("switch.disconnect", idempotencyKey));
     }
 
     public async Task<OperationAcceptedDto?> ReconnectAsync(string deviceId, string? idempotencyKey, CancellationToken ct) {
@@ -469,7 +524,7 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
 
     private async Task SetValueCoreAsync(string deviceId, SwitchValueRequestDto request, CancellationToken ct) {
         ThrowIfPortIdOutOfRange(request);
-        AlpacaSwitch? client;
+        ISwitchDevice? client;
         lock (_gate) {
             ObjectDisposedException.ThrowIf(_disposed, this);
             client = _connections.TryGetValue(deviceId, out var conn)
@@ -488,142 +543,111 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         RefreshCacheOnce();
     }
 
-    private void RefreshTick(object? state) => RefreshCacheOnce();
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Timer-callback boundary: an unhandled exception in a System.Threading.Timer callback crashes the process. The per-port reads already absorb device failures; this catch-all is a hard backstop so a refresh tick can never fault the daemon. CA1031's log-and-recover boundary applies.")]
+    // Refreshes every connected switch once (a write, or the mediator's Poll, wants the new value promptly;
+    // each lifecycle's own timer keeps the cache fresh otherwise). Single-flighted per connection.
     private void RefreshCacheOnce() {
-        if (Interlocked.CompareExchange(ref _refreshing, 1, 0) != 0) {
-            return;
-        }
-        try {
-            // Snapshot the connected (connection, client) pairs under the gate, then read each device's
-            // ports off-lock. One pass refreshes every connected switch SEQUENTIALLY under the single
-            // _refreshing guard, so the effective per-device refresh rate degrades with device count (a
-            // slow ASCOM read on switch A delays switch B's). Fine for the handful-of-switches case this
-            // targets; if large switch farms ever appear, parallelize the reads or guard per-connection.
-            List<(SwitchConnection Conn, AlpacaSwitch Client)>? targets = null;
-            lock (_gate) {
-                if (_disposed) {
-                    return;
-                }
-                foreach (var conn in _connections.Values) {
-                    if (conn.State == EquipmentConnectionState.Connected && conn.Client is not null) {
-                        (targets ??= new List<(SwitchConnection, AlpacaSwitch)>()).Add((conn, conn.Client));
-                    }
-                }
-            }
-            if (targets is null) {
+        List<DeviceLifecycle<ISwitchDevice>>? lifecycles = null;
+        lock (_gate) {
+            if (_disposed) {
                 return;
             }
-            // §42.4 — one best-effort policy read per pass (profile IO stays off the gate).
-            var tolerancePct = ReadTolerancePct();
-            foreach (var (conn, client) in targets) {
-                // §42.3 — the ONE deliberate connection probe per device per tick. The per-port reads
-                // below deliberately swallow failures (an unsupported port must stay benign), so
-                // this probe is the only disconnect-detection source: Connected throws on transport
-                // death and reads false on a driver-side disconnect; a consecutive-failure streak
-                // (not one blip) trips the device to Error + publishes the §42.2 fault.
-                if (!ProbeConnected(client)) {
-                    if (ObserveProbeIfLive(conn, client, probeSucceeded: false) == ProbeVerdict.Lost) {
-                        TripConnectionLost(conn,
-                            $"stopped answering {DeviceConnectionProbe.DefaultLostThreshold} consecutive connection probes");
-                    }
-                    continue; // this device didn't answer — skip its reads, not the whole tick
-                }
-                // Isolate each device: a read failure (ASCOM timeout / network hiccup) on one switch
-                // must not drop the rest of this tick's devices from the refresh.
-                try {
-                    var (advertised, ports) = ReadPorts(client);
-                    // §42.3 — `Connected` alone is not proof of life. A bridge may implement it as
-                    // PER-CLIENT session state (our session stays "connected" no matter what the
-                    // hardware is doing), and a driver may keep serving static metadata — MaxSwitch,
-                    // GetSwitchName — from a table while the link to the device is dead. Observed on
-                    // a Gemini PDH ADV3 after a USB replug: Connected true, MaxSwitch 24, and every
-                    // GetSwitchValue throwing "communications compromised". The device advertised 24
-                    // ports and delivered none, yet stayed Connected forever with an empty card.
-                    // So: advertising ports but reading none counts as a failed probe, and the same
-                    // consecutive-failure streak declares it lost.
-                    // A device is failing this probe when it won't say how many
-                    // ports it has, or claims some and delivers none.
-                    var unreadable = PortsUnreadable(advertised, ports.Count);
-                    // This signal is WEAKER than the `Connected` probe and gets its
-                    // own, longer streak: `Connected` is often served from the
-                    // bridge's session state and keeps succeeding through a stall,
-                    // so a transient burst of failing value reads (a bridge under
-                    // load, a brief network stall, a driver reload) must not tear a
-                    // working switch down to Error and demand a manual Reconnect.
-                    // The tick counter and the streak are both mutated under _gate
-                    // with the live-connection guard, so a concurrent reconnect's
-                    // reset can't be clobbered by an in-flight slow read.
-                    if (unreadable) {
-                        var verdict = ObservePortsProbeIfLive(conn, client);
-                        if (verdict == ProbeVerdict.Lost) {
-                            LogPortsUnreadable(conn.Device.Name, advertised ?? -1);
-                            TripConnectionLost(conn,
-                                $"answered as connected but delivered no readable ports on {PortsLostThreshold} consecutive reads");
-                        }
-                        continue; // no ports to cache either way
-                    }
-                    ObserveProbeIfLive(conn, client, probeSucceeded: true);
-                    List<(SwitchPortSnapshot Port, double Commanded)>? mismatched = null;
-                    List<(short PortId, double Commanded)>? recommand = null;
-                    lock (_gate) {
-                        // Write back only if this exact connection + client is still the live one (a
-                        // concurrent disconnect/replace supersedes the read we just did).
-                        if (!_disposed
-                            && _connections.TryGetValue(conn.Key, out var current)
-                            && ReferenceEquals(current, conn)
-                            && conn.State == EquipmentConnectionState.Connected
-                            && ReferenceEquals(conn.Client, client)) {
-                            conn.CachedSnapshots = ports;
-                            // §42.4 — read-back check for ports the daemon wrote, under the same
-                            // commit lock as the liveness check (the #789 one-critical-section
-                            // lesson). Verdicts are collected here, acted on off-lock below.
-                            foreach (var port in ports) {
-                                var verdict = conn.Readback.Observe(port.Id, port.Value, port.Min, port.Max,
-                                    tolerancePct, DateTimeOffset.UtcNow);
-                                if (verdict == ReadbackVerdict.Mismatch) {
-                                    (mismatched ??= []).Add((port, conn.Readback.CommandedFor(port.Id) ?? double.NaN));
-                                } else if (verdict == ReadbackVerdict.Recommand) {
-                                    (recommand ??= []).Add((port.Id, conn.Readback.CommandedFor(port.Id) ?? double.NaN));
-                                }
-                            }
-                        }
-                    }
-                    if (recommand is not null) {
-                        // §42.2 rows 15/16 — one best-effort re-issue of the same value before the
-                        // fault fires. Deliberately a raw device write (not RunSwitchWriteAsync,
-                        // whose Command() recording would restart the episode and erase the
-                        // one-recommand budget); the watch already re-armed its settle window.
-                        foreach (var (portId, commanded) in recommand) {
-                            if (!double.IsNaN(commanded)) {
-                                RecommandQuietly(conn, client, portId, commanded);
-                            }
-                        }
-                    }
-                    if (mismatched is not null) {
-                        foreach (var (port, commanded) in mismatched) {
-                            PublishValueMismatch(conn, port, commanded, tolerancePct);
-                        }
-                    }
-                } catch (Exception ex) {
-                    LogPortReadFailed(ex);
-                }
+            foreach (var conn in _connections.Values) {
+                (lifecycles ??= new()).Add(conn.Lifecycle);
             }
-        } catch (Exception ex) {
-            // Backstop for anything outside the per-device loop (the timer callback must never fault).
-            LogPortReadFailed(ex);
-        } finally {
-            Interlocked.Exchange(ref _refreshing, 0);
         }
+        if (lifecycles is null) {
+            return;
+        }
+        foreach (var lifecycle in lifecycles) {
+            lifecycle.Refresh();
+        }
+    }
+
+    // The ports read the lifecycle runs each tick, after its §42.3 connection probe answered. `Connected`
+    // alone is not proof of life. A bridge may implement it as PER-CLIENT session state (our session stays
+    // "connected" no matter what the hardware is doing), and a driver may keep serving static metadata —
+    // MaxSwitch, GetSwitchName — from a table while the link to the device is dead. Observed on a Gemini PDH
+    // ADV3 after a USB replug: Connected true, MaxSwitch 24, and every GetSwitchValue throwing
+    // "communications compromised". The device advertised 24 ports and delivered none, yet stayed Connected
+    // forever with an empty card. So: advertising ports but reading none is the essential read failing, and
+    // a longer streak of it (below) declares the device lost.
+    private DeviceRead ReadPortsRuntime(SwitchConnection conn, ISwitchDevice client) {
+        // §42.4 — one best-effort policy read per pass (profile IO stays off the gate).
+        var tolerancePct = ReadTolerancePct();
+        var (advertised, ports) = ReadPorts(client);
+        // A device is failing when it won't say how many ports it has, or claims some and delivers none.
+        var unreadable = PortsUnreadable(advertised, ports.Count);
+        var lost = false;
+        List<(SwitchPortSnapshot Port, double Commanded)>? mismatched = null;
+        List<(short PortId, double Commanded)>? recommand = null;
+        var readError = unreadable
+            ? advertised is null ? "the device would not report how many ports it has"
+                : $"the device advertises {advertised} ports but none could be read"
+            : null;
+        return new DeviceRead(readError,
+            CommitLocked: () => {
+                // This signal is WEAKER than the `Connected` probe and gets its own, longer streak:
+                // `Connected` is often served from the bridge's session state and keeps succeeding through a
+                // stall, so a transient burst of failing value reads (a bridge under load, a brief network
+                // stall, a driver reload) must not tear a working switch down to Error and demand a manual
+                // Reconnect. The tick counter and the streak are both mutated under the gate with the
+                // live-connection guard, so a concurrent reconnect's reset can't be clobbered by an
+                // in-flight slow read.
+                if (unreadable) {
+                    conn.UnreadableTicksSinceConnect++;
+                    // Give a freshly-connected device a few ticks before counting these against it: a USB
+                    // re-enumeration or a driver that answers Connected before its first status frame would
+                    // otherwise be torn down while it is still coming up.
+                    lost = conn.UnreadableTicksSinceConnect > PortReadGraceTicks
+                        && conn.PortsProbe.Observe(probeSucceeded: false) == ProbeVerdict.Lost;
+                    return; // no ports to cache either way
+                }
+                conn.PortsProbe.Reset();
+                conn.CachedSnapshots = ports;
+                // §42.4 — read-back check for ports the daemon wrote, under the same commit lock as the
+                // liveness check (the #789 one-critical-section lesson). Verdicts are collected here, acted
+                // on off-lock in AfterCommit.
+                foreach (var port in ports) {
+                    var verdict = conn.Readback.Observe(port.Id, port.Value, port.Min, port.Max,
+                        tolerancePct, DateTimeOffset.UtcNow);
+                    if (verdict == ReadbackVerdict.Mismatch) {
+                        (mismatched ??= []).Add((port, conn.Readback.CommandedFor(port.Id) ?? double.NaN));
+                    } else if (verdict == ReadbackVerdict.Recommand) {
+                        (recommand ??= []).Add((port.Id, conn.Readback.CommandedFor(port.Id) ?? double.NaN));
+                    }
+                }
+            },
+            AfterCommit: () => {
+                if (lost) {
+                    LogPortsUnreadable(conn.Device.Name, advertised ?? -1);
+                    conn.Lifecycle.TripConnectionLost(client,
+                        $"answered as connected but delivered no readable ports on {PortsLostThreshold} consecutive reads");
+                    return;
+                }
+                if (recommand is not null) {
+                    // §42.2 rows 15/16 — one best-effort re-issue of the same value before the fault fires.
+                    // Deliberately a raw device write (not RunSwitchWriteAsync, whose Command() recording
+                    // would restart the episode and erase the one-recommand budget); the watch already
+                    // re-armed its settle window.
+                    foreach (var (portId, commanded) in recommand) {
+                        if (!double.IsNaN(commanded)) {
+                            RecommandQuietly(conn, client, portId, commanded);
+                        }
+                    }
+                }
+                if (mismatched is not null) {
+                    foreach (var (port, commanded) in mismatched) {
+                        PublishValueMismatch(conn, port, commanded, tolerancePct);
+                    }
+                }
+            });
     }
 
     // Reads MaxSwitch then each port independently: a port that fails to read is skipped rather
     // than failing the whole snapshot.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-port read boundary: a switch port read can throw driver/HTTP exceptions; that port is skipped, never propagated. CA1031's log-and-recover boundary applies.")]
-    private (short? Advertised, IReadOnlyList<SwitchPortSnapshot> Ports) ReadPorts(AlpacaSwitch c) {
+    private (short? Advertised, IReadOnlyList<SwitchPortSnapshot> Ports) ReadPorts(ISwitchDevice c) {
         short max;
         try {
             max = c.MaxSwitch;
@@ -657,7 +681,7 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: the description is cosmetic — a driver that throws from GetSwitchDescription must not knock the whole port out of the snapshot the way a failed value/range read does. CA1031's log-and-recover boundary applies.")]
-    private static string ReadDescription(AlpacaSwitch c, short id) {
+    private static string ReadDescription(ISwitchDevice c, short id) {
         try {
             return c.GetSwitchDescription(id) ?? string.Empty;
         } catch (Exception) {
@@ -673,134 +697,17 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
         return ports;
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Background connect boundary: constructing the Alpaca client and setting Connected can throw arbitrary driver/HTTP/socket exceptions; any escape must surface as the Error state and be contained, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
-        Justification = "Ownership of the AlpacaSwitch is managed explicitly: on every non-adopt path SafeDisconnectDispose disposes it; on the adopt path it is stored in the connection (local set to null) and disposed later by DisconnectAsync/Dispose. CA2000 cannot follow the transfer through the lock + helper.")]
-    private void ConnectInBackground(SwitchConnection conn, DiscoveredDeviceDto device, long generation) {
-        AlpacaSwitch? client = null;
-        var adopted = false;
-        try {
-            var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
-            if (string.IsNullOrWhiteSpace(host)) {
-                throw new InvalidOperationException(
-                    $"discovered device '{device.Name}' carries neither an IP address nor a host name");
-            }
-            client = new AlpacaSwitch(
-                device.UseHttps ? ServiceType.Https : ServiceType.Http,
-                host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
-            AlpacaConnect.Connect(client);
-            lock (_gate) {
-                if (!_disposed
-                    && _connections.TryGetValue(conn.Key, out var current)
-                    && ReferenceEquals(current, conn)
-                    && conn.Generation == generation) {
-                    conn.Client = client;
-                    conn.CachedSnapshots = Array.Empty<SwitchPortSnapshot>(); // don't serve a prior device's ports
-                    conn.Probe.Reset();    // §42.3 — a fresh session starts a fresh streak
-                    conn.PortsProbe.Reset();
-                    conn.UnreadableTicksSinceConnect = 0;  // and a fresh ports-unreadable grace window
-                    conn.Readback.Reset(); // §42.4 — a fresh session has no commanded values
-                    SetState(conn, EquipmentConnectionState.Connected);
-                    adopted = true;
-                }
-            }
-            if (!adopted) {
-                SafeDisconnectDispose(client);
-                return;
-            }
-            client = null; // ownership transferred to the connection
-            RefreshCacheOnce(); // seed the port cache through the guarded path
-            bool stillConnected;
-            lock (_gate) {
-                stillConnected = conn.State == EquipmentConnectionState.Connected
-                    && _connections.TryGetValue(conn.Key, out var current)
-                    && ReferenceEquals(current, conn);
-                if (stillConnected) {
-                    // The Connected push went out before this seed read; tell clients the
-                    // details are cached so they re-read now.
-                    _events?.DetailsReady(DeviceType.Switch, conn.Device.UniqueId, conn.Device.Name);
-                }
-            }
-            if (stillConnected) {
-                LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
-                // #1076 — the fan's switch connecting AFTER the cooler was turned on: the fan
-                // sync only fires on a cooler write, so catch up here from the camera's current
-                // state (best-effort; a failure is a logged fault like any fan-sync failure).
-                _ = Task.Run(() => SyncFanToCoolingCameraAsync(conn.Key), CancellationToken.None);
-            }
-        } catch (Exception ex) {
-            if (!adopted) {
-                if (client is not null) {
-                    SafeDisconnectDispose(client);
-                }
-                lock (_gate) {
-                    if (!_disposed
-                        && _connections.TryGetValue(conn.Key, out var current)
-                        && ReferenceEquals(current, conn)
-                        && conn.Generation == generation) {
-                        SetState(conn, EquipmentConnectionState.Error);
-                    }
-                }
-                LogConnectFailed(ex, device.Name);
-            }
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort teardown: Connected = false can throw driver/HTTP exceptions, which must be swallowed so Dispose always runs and cleanup completes. CA1031's log-and-recover boundary applies.")]
-    private void SafeDisconnectDispose(AlpacaSwitch client) {
-        try {
-            client.Connected = false;
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
-        }
-        DisposeQuietly(client);
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort teardown: ASCOM/COM-backed clients have been known to throw from Dispose(); the throw must be swallowed (and logged) rather than escape into a fire-and-forget Task.Run as an unobserved exception. CA1031's log-and-recover boundary applies.")]
-    private void DisposeQuietly(AlpacaSwitch client) {
-        try {
-            client.Dispose();
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
-        }
-    }
-
-    // Caller holds _gate. Drops the connection's client off-thread (blocking teardown must not run
-    // under the lock).
-    private void DisposeClientLocked(SwitchConnection conn) {
-        var c = conn.Client;
-        conn.Client = null;
-        if (c is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "The probe's whole job is turning any transport/driver exception into a failed-probe observation. CA1031's log-and-recover boundary applies.")]
-    private static bool ProbeConnected(AlpacaSwitch c) {
-        try { return c.Connected; } catch (Exception) { return false; }
-    }
-
-    // §42.3 — declare the device lost: Connected → Error (keeps the connection entry remembered so
-    // a reconnect can find it; the state publisher already maps Error to
-    // equipment.connection_failed for WILMA's chips) + publish the §42.2 fault event.
-    // Only a probe of the LIVE connection + client may feed its streak: the blocking probe runs
-    // outside _gate, so a concurrent disconnect/replace can have superseded the entry while the
-    // stale probe was still in flight. The liveness check and the Observe are ONE operation under
-    // _gate — a separate check-then-observe leaves a gap for ConnectInBackground's Reset to land
-    // between them (review finding; the connect path's fresh-SwitchConnection-per-reconnect
-    // invariant makes that benign today, but the probe path now defends it itself). Returns null
-    // when the probed pair is stale (the observation is discarded).
     // §42.4 — remember a successful write's commanded value against the still-live connection
     // + client (a concurrent disconnect/replace supersedes the write — same staleness rule as
     // the snapshot commit); shared by the REST SetValueAsync and the mediator write path.
-    private void RecordCommandedValue(AlpacaSwitch client, short portId, double value) {
+    private void RecordCommandedValue(ISwitchDevice client, short portId, double value) {
+        List<SwitchConnection> live;
         lock (_gate) {
-            foreach (var conn in _connections.Values) {
-                if (conn.State == EquipmentConnectionState.Connected && ReferenceEquals(conn.Client, client)) {
+            live = _connections.Values.ToList();
+        }
+        foreach (var conn in live) {
+            lock (conn.Lifecycle.Gate) {
+                if (conn.Lifecycle.IsLive(client)) {
                     conn.Readback.Command(portId, value, DateTimeOffset.UtcNow);
                     return;
                 }
@@ -855,7 +762,7 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
     // tick: the outcome is judged by the watch's next read-backs, not by this call.
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort recovery write: a failed re-command simply leaves the port mismatched and the watch fires the fault after the re-armed window; the failure is logged, never propagated into the refresh tick or left as an unobserved task exception. CA1031's log-and-recover boundary applies.")]
-    private void RecommandQuietly(SwitchConnection conn, AlpacaSwitch client, short portId, double commanded) {
+    private void RecommandQuietly(SwitchConnection conn, ISwitchDevice client, short portId, double commanded) {
         LogRecommand(conn.Device.Name, portId, commanded);
         _ = Task.Run(() => {
             try {
@@ -887,92 +794,6 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
     internal static bool PortsUnreadable(short? advertised, int portsRead) =>
         advertised is null || (advertised > 0 && portsRead == 0);
 
-    /// <summary>§42.3 — observe the weaker ports-unreadable signal against the live connection.
-    /// Advances the post-connect grace counter and the dedicated streak in ONE critical section
-    /// under <c>_gate</c>, with the same live-connection guard the other refresh-path mutations
-    /// use: the reads happen off-lock and can take seconds, so an unguarded read-modify-write
-    /// here could wipe a concurrent reconnect's reset and rob a re-enumerating device of its
-    /// grace window. Returns null while still inside the grace window or when the probed pair
-    /// is stale (the observation is discarded).</summary>
-    private ProbeVerdict? ObservePortsProbeIfLive(SwitchConnection conn, AlpacaSwitch client) {
-        lock (_gate) {
-            if (_disposed
-                || conn.State != EquipmentConnectionState.Connected
-                || !_connections.TryGetValue(conn.Key, out var current)
-                || !ReferenceEquals(current, conn)
-                || !ReferenceEquals(conn.Client, client)) {
-                return null;
-            }
-            conn.UnreadableTicksSinceConnect++;
-            // Give a freshly-connected device a few ticks before counting these
-            // against it: a USB re-enumeration or a driver that answers Connected
-            // before its first status frame would otherwise be torn down while it
-            // is still coming up.
-            if (conn.UnreadableTicksSinceConnect <= PortReadGraceTicks) {
-                return null;
-            }
-            return conn.PortsProbe.Observe(probeSucceeded: false);
-        }
-    }
-
-    private ProbeVerdict? ObserveProbeIfLive(SwitchConnection conn, AlpacaSwitch client, bool probeSucceeded) {
-        lock (_gate) {
-            if (_disposed
-                || conn.State != EquipmentConnectionState.Connected
-                || !_connections.TryGetValue(conn.Key, out var current)
-                || !ReferenceEquals(current, conn)
-                || !ReferenceEquals(conn.Client, client)) {
-                return null;
-            }
-            if (probeSucceeded) {
-                conn.PortsProbe.Reset();
-            }
-            return conn.Probe.Observe(probeSucceeded);
-        }
-    }
-
-    /// <param name="reason">What actually stopped answering, in the user-facing §42.2 fault.
-    /// Two detectors call this and they have different thresholds, so a single hardcoded
-    /// message would tell the user "3 consecutive connection probes" for a trip that in fact
-    /// took ten unreadable reads.</param>
-    private void TripConnectionLost(SwitchConnection conn, string reason) {
-        lock (_gate) {
-            // Only trip the connection we probed if it is still the live entry for its device
-            // number and still Connected (a concurrent disconnect/replace supersedes the probe).
-            if (conn.State != EquipmentConnectionState.Connected
-                || !_connections.TryGetValue(conn.Key, out var current)
-                || !ReferenceEquals(current, conn)) {
-                return;
-            }
-            SetState(conn, EquipmentConnectionState.Error);
-            conn.Probe.Reset();
-            conn.PortsProbe.Reset();
-            conn.UnreadableTicksSinceConnect = 0;
-            conn.Readback.Reset();
-        }
-        LogConnectionLost(conn.Device.Name);
-        _faults?.Publish(new EquipmentFaultEvent(DeviceType.Switch, conn.Device.UniqueId, conn.Device.Name,
-            EquipmentFaultKind.Disconnected,
-            reason,
-            DateTimeOffset.UtcNow));
-    }
-
-    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Switch '{Device}' stopped answering — marked Error (§42.3)")]
-    private partial void LogConnectionLost(string device);
-
-    // Caller must hold _gate (every call site already does), so no inner lock here.
-    // Instance (not static) since §60.9: transitions publish equipment.* events.
-    private void SetState(SwitchConnection conn, EquipmentConnectionState state) {
-        if (conn.State == state) {
-            return;
-        }
-        conn.State = state;
-        conn.LastTransition = DateTimeOffset.UtcNow;
-        // Callers hold the service lock; the publisher's synchronous part only
-        // serializes a small payload and hands off (see EquipmentEventPublisher).
-        _events?.StateChanged(DeviceType.Switch, conn.Device.UniqueId, conn.Device.Name, state);
-    }
-
     private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>
         new(OperationId: Guid.NewGuid(),
             OperationType: operationType,
@@ -980,7 +801,7 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
             IdempotencyKey: idempotencyKey);
 
     public void Dispose() {
-        var clients = new List<AlpacaSwitch>();
+        List<SwitchConnection> connections;
         lock (_gate) {
             if (_disposed) {
                 return;
@@ -989,20 +810,13 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
             if (_profileStore is not null) {
                 _profileStore.Changed -= OnProfileChanged;
             }
-            foreach (var conn in _connections.Values) {
-                if (conn.Client is not null) {
-                    clients.Add(conn.Client);
-                    conn.Client = null;
-                }
-            }
+            connections = _connections.Values.ToList();
             _connections.Clear();
         }
-        _refreshTimer.Dispose();
-        // Dispose each client directly (guarded), not via SafeDisconnectDispose: the courtesy
-        // "Connected = false" is a blocking HTTP call (up to ~3s ASCOM timeout) that would hang
-        // container shutdown if the device is unreachable. DisposeQuietly releases resources only.
-        foreach (var client in clients) {
-            DisposeQuietly(client);
+        // Each lifecycle stops its timer and releases its client without the courtesy disconnect (a blocking
+        // HTTP call that would hang container shutdown if the device is unreachable).
+        foreach (var conn in connections) {
+            conn.Lifecycle.Dispose();
         }
         GC.SuppressFinalize(this);
     }
@@ -1015,13 +829,4 @@ public sealed partial class SwitchService : ISwitchService, ICoolingFanActuator,
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Switch port {Port} unavailable (skipped)")]
     private partial void LogPortUnavailable(int port, Exception ex);
-
-    [LoggerMessage(Level = LogLevel.Information, Message = "Switch connected: {Name} at {Host}:{Port}/{Device}")]
-    private partial void LogConnected(string name, string host, int port, int device);
-
-    [LoggerMessage(Level = LogLevel.Error, Message = "Switch connect failed for {Name}")]
-    private partial void LogConnectFailed(Exception ex, string name);
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "ignored error while disconnecting Switch during teardown")]
-    private partial void LogTeardownIgnored(Exception ex);
 }

@@ -139,6 +139,8 @@ SCRIPT_RULES = {
     "scripts/changelog-fragments.py": NONE,
     # Run by merge-queue.yml on a merge group only.
     "scripts/merge-gate.sh": NONE,
+    # Run by auto-queue.yml after a review run only.
+    "scripts/auto-queue.sh": NONE,
 }
 
 # .github/ is mixed the same way. An explicit list, not a suffix rule: a
@@ -157,6 +159,7 @@ GITHUB_RULES = {
     ".github/workflows/pr-body.yml": NONE,
     ".github/workflows/label-trusted-authors.yml": NONE,
     ".github/workflows/merge-queue.yml": NONE,
+    ".github/workflows/auto-queue.yml": NONE,
     ".github/dependabot.yml": NONE,
     ".github/FUNDING.yml": NONE,
     ".github/pull_request_template.md": NONE,

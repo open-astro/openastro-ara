@@ -435,8 +435,9 @@ Then:
   Merging it untagged silently skips §19.1's phase-boundary gate item. If a `phase/*` or `prep-*` PR cannot be
   placed in the plan, that is ambiguous: **Hard stop** with `Held for human review`.
 
-  Then hand it to the merge queue and wait for it to land. Run this with `run_in_background`, as
-  part of the same chain: the wait can last 90 minutes.
+  Then wait for it to land. The `Auto-queue` workflow already enabled auto-merge when the bot
+  approved the head, so the PR is normally in the queue by now; `gh pr merge <N>` below covers a PR
+  it skipped. Run this with `run_in_background`, as part of the same chain: the wait can last 90 minutes.
   ```bash
   gh pr merge <N> && {
   sleep 15   # the entry takes a moment to show up

@@ -2,12 +2,15 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/backup_stream.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/backup_stream_api.dart';
 import 'package:openastroara/services/backup_stream_prefs_service.dart';
+import 'package:openastroara/state/app_locale_state.dart';
 import 'package:openastroara/state/backup/backup_stream_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
@@ -228,6 +231,50 @@ void main() {
     final state = container.read(backupStreamProvider);
     expect(fake.acked, isEmpty);
     expect(state.problem, isNotNull, reason: 'disk trouble must reach the panel');
+  });
+
+  test('a claim that fails reads wholly in the picked language, action included (#1751)', () async {
+    container.read(appLocaleProvider.notifier).set(const Locale('pt', 'BR'));
+    fake.onClaim = () async => throw DioException(
+          requestOptions: RequestOptions(path: '/api/v1/backup-stream/claim'),
+          type: DioExceptionType.connectionTimeout,
+        );
+    final c = controller();
+
+    await c.setEnabled(true);
+    await settle();
+
+    final problem = container.read(backupStreamProvider).problem;
+    expect(problem, startsWith('Não foi possível começar a copiar os quadros'));
+    expect(problem, isNot(contains('start copying')));
+  });
+
+  test('a frame that keeps failing reads wholly in the picked language (#1751)', () async {
+    container.read(appLocaleProvider.notifier).set(const Locale('pt', 'BR'));
+    final c = controller();
+    fake.corruptor = (_) => Uint8List.fromList('TAMPERED'.codeUnits);
+    fake.addFrame('frame-bad', 'FITS-DATA-1');
+
+    await c.setEnabled(true);
+    await settle();
+
+    final problem = container.read(backupStreamProvider).problem;
+    expect(problem, startsWith('Backup de frame-bad falhando: '));
+    expect(problem, isNot(contains('failing')));
+  });
+
+  test('transport trouble mid-pass reads wholly in the picked language (#1751)', () async {
+    container.read(appLocaleProvider.notifier).set(const Locale('pt', 'BR'));
+    final c = controller();
+    fake.addFrame('frame-1', 'FITS-DATA-1');
+    fake.ackFailBudget = 1;
+
+    await c.setEnabled(true);
+    await settle();
+
+    final problem = container.read(backupStreamProvider).problem;
+    expect(problem, startsWith('Falha momentânea no backup: '));
+    expect(problem, isNot(contains('hiccup')));
   });
 
   test('a claim denied at enable time retries on the next tick without a manual off/on', () async {

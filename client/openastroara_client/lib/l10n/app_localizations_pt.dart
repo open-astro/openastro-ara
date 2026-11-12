@@ -4180,6 +4180,182 @@ class AppLocalizationsPt extends AppLocalizations {
   String get monitorLinkLostShort => 'Lost contact with the rig';
 
   @override
+  String get actionAbortCapture => 'abort the capture';
+
+  @override
+  String get actionApplyToFrames => 'apply that to the selected frames';
+
+  @override
+  String get actionBuildCalibration => 'build the calibration';
+
+  @override
+  String get actionCancelCopy => 'cancel the copy';
+
+  @override
+  String get actionCheckDisk => 'check the disk for frames';
+
+  @override
+  String get actionCleanPreviewCache => 'clean the preview cache';
+
+  @override
+  String get actionCleanSkyPhotoCache => 'clean the sky photo cache';
+
+  @override
+  String get actionClearCeiling => 'clear the ceiling';
+
+  @override
+  String get actionConfirmFrame => 'confirm the frame arrived';
+
+  @override
+  String get actionConnect => 'connect';
+
+  @override
+  String get actionDownload => 'download that';
+
+  @override
+  String get actionExportFrames => 'export those frames';
+
+  @override
+  String get actionExportStats => 'export the stats';
+
+  @override
+  String get actionGenerateCalibration => 'generate the calibration';
+
+  @override
+  String get actionListFolders => 'list the folders';
+
+  @override
+  String get actionLoadDarkLibrary => 'load the dark library';
+
+  @override
+  String get actionLoadFaults => 'load the fault history';
+
+  @override
+  String get actionLoadFrames => 'load the frames';
+
+  @override
+  String get actionLoadLibrary => 'load your library';
+
+  @override
+  String get actionLoadLogs => 'load the logs';
+
+  @override
+  String get actionLoadNotifications => 'load your notifications';
+
+  @override
+  String get actionLoadOlderLogs => 'load older logs';
+
+  @override
+  String get actionLoadPreview => 'load the preview';
+
+  @override
+  String get actionLoadSessions => 'load the sessions';
+
+  @override
+  String get actionLoadSettings => 'load your saved settings';
+
+  @override
+  String get actionLookForEquipment => 'look for equipment';
+
+  @override
+  String get actionPushGuiderProfile => 'push the guider profile';
+
+  @override
+  String get actionPushTime => 'push the time';
+
+  @override
+  String get actionRateFrame => 'rate the frame';
+
+  @override
+  String get actionReadCamera => 'read the camera';
+
+  @override
+  String get actionReadClock => 'read the server clock state';
+
+  @override
+  String get actionReadServerDisks => 'read the server\'s disks';
+
+  @override
+  String get actionRearmSafety => 're-arm safety';
+
+  @override
+  String get actionRefitSkyModel => 'refit the sky model';
+
+  @override
+  String get actionRestartRig => 'restart your rig';
+
+  @override
+  String get actionResumeSequence => 'resume the sequence';
+
+  @override
+  String get actionSave => 'save that';
+
+  @override
+  String get actionSaveHorizon => 'save the horizon skyline';
+
+  @override
+  String get actionSaveSlotLabels => 'save the slot labels';
+
+  @override
+  String get actionSendCalibrationChoice => 'send the calibration choice';
+
+  @override
+  String get actionSequenceAction => 'do that sequence action';
+
+  @override
+  String get actionSolveFrame => 'solve the frame';
+
+  @override
+  String get actionStarDatabase =>
+      'work out which star database this rig needs';
+
+  @override
+  String get actionStartCopy => 'start the copy';
+
+  @override
+  String get actionTakeExposure => 'take that exposure';
+
+  @override
+  String get actionTakeVerification => 'take the verification image';
+
+  @override
+  String get actionUpdateTag => 'update the tag';
+
+  @override
+  String get actionBackUpEntry => 'back up that entry';
+
+  @override
+  String get actionKeepBackupGoing => 'keep the backup stream going';
+
+  @override
+  String get actionPushGpsFix => 'push the GPS fix';
+
+  @override
+  String get actionRebuildStats => 'rebuild the stats catalog';
+
+  @override
+  String get actionStartCopyingFrames => 'start copying frames';
+
+  @override
+  String backupStreamHiccup(String reason) {
+    return 'Backup stream hiccup: $reason';
+  }
+
+  @override
+  String backupEntryFailing(String id, String reason) {
+    return 'Backup of $id failing: $reason';
+  }
+
+  @override
+  String gpsFixRefused(String reason) {
+    return 'Fix read, but the rig refused it: $reason';
+  }
+
+  @override
+  String get gpsDaemonTooOld =>
+      ' — update Ara Server on the rig; this version predates GPS on this computer.';
+
+  @override
   String get calibrationDarks => 'Darks';
 
   @override
@@ -8932,6 +9108,182 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get monitorLinkLostShort => 'Sem contato com o setup';
+
+  @override
+  String get actionAbortCapture => 'abortar a captura';
+
+  @override
+  String get actionApplyToFrames => 'aplicar isso aos quadros selecionados';
+
+  @override
+  String get actionBuildCalibration => 'criar calibração';
+
+  @override
+  String get actionCancelCopy => 'cancelar a cópia';
+
+  @override
+  String get actionCheckDisk => 'verificar os quadros no disco';
+
+  @override
+  String get actionCleanPreviewCache => 'limpar o cache de prévias';
+
+  @override
+  String get actionCleanSkyPhotoCache => 'limpar o cache de fotos do céu';
+
+  @override
+  String get actionClearCeiling => 'limpar o teto';
+
+  @override
+  String get actionConfirmFrame => 'confirmar que o quadro chegou';
+
+  @override
+  String get actionConnect => 'conectar';
+
+  @override
+  String get actionDownload => 'baixar isso';
+
+  @override
+  String get actionExportFrames => 'exportar esses quadros';
+
+  @override
+  String get actionExportStats => 'exportar as estatísticas';
+
+  @override
+  String get actionGenerateCalibration => 'gerar a calibração';
+
+  @override
+  String get actionListFolders => 'listar as pastas';
+
+  @override
+  String get actionLoadDarkLibrary => 'carregar a biblioteca de darks';
+
+  @override
+  String get actionLoadFaults => 'carregar o histórico de falhas';
+
+  @override
+  String get actionLoadFrames => 'carregar os quadros';
+
+  @override
+  String get actionLoadLibrary => 'carregar sua biblioteca';
+
+  @override
+  String get actionLoadLogs => 'carregar os logs';
+
+  @override
+  String get actionLoadNotifications => 'carregar suas notificações';
+
+  @override
+  String get actionLoadOlderLogs => 'carregar logs mais antigos';
+
+  @override
+  String get actionLoadPreview => 'carregar a prévia';
+
+  @override
+  String get actionLoadSessions => 'carregar as sessões';
+
+  @override
+  String get actionLoadSettings => 'carregar suas configurações salvas';
+
+  @override
+  String get actionLookForEquipment => 'procurar equipamentos';
+
+  @override
+  String get actionPushGuiderProfile => 'enviar o perfil do guia';
+
+  @override
+  String get actionPushTime => 'enviar a hora';
+
+  @override
+  String get actionRateFrame => 'avaliar o quadro';
+
+  @override
+  String get actionReadCamera => 'ler a câmera';
+
+  @override
+  String get actionReadClock => 'ler o estado do relógio do servidor';
+
+  @override
+  String get actionReadServerDisks => 'ler os discos do servidor';
+
+  @override
+  String get actionRearmSafety => 'rearmar a segurança';
+
+  @override
+  String get actionRefitSkyModel => 'reajustar o modelo do céu';
+
+  @override
+  String get actionRestartRig => 'reiniciar seu setup';
+
+  @override
+  String get actionResumeSequence => 'retomar a sequência';
+
+  @override
+  String get actionSave => 'salvar isso';
+
+  @override
+  String get actionSaveHorizon => 'salvar o horizonte';
+
+  @override
+  String get actionSaveSlotLabels => 'salvar os nomes das posições';
+
+  @override
+  String get actionSendCalibrationChoice => 'enviar a escolha de calibração';
+
+  @override
+  String get actionSequenceAction => 'fazer essa ação da sequência';
+
+  @override
+  String get actionSolveFrame => 'resolver o quadro';
+
+  @override
+  String get actionStarDatabase =>
+      'descobrir qual banco de dados de estrelas este setup precisa';
+
+  @override
+  String get actionStartCopy => 'iniciar a cópia';
+
+  @override
+  String get actionTakeExposure => 'fazer essa exposição';
+
+  @override
+  String get actionTakeVerification => 'tirar a imagem de verificação';
+
+  @override
+  String get actionUpdateTag => 'atualizar a etiqueta';
+
+  @override
+  String get actionBackUpEntry => 'fazer backup dessa entrada';
+
+  @override
+  String get actionKeepBackupGoing => 'manter o backup em andamento';
+
+  @override
+  String get actionPushGpsFix => 'enviar a posição do GPS';
+
+  @override
+  String get actionRebuildStats => 'refazer o catálogo de estatísticas';
+
+  @override
+  String get actionStartCopyingFrames => 'começar a copiar os quadros';
+
+  @override
+  String backupStreamHiccup(String reason) {
+    return 'Falha momentânea no backup: $reason';
+  }
+
+  @override
+  String backupEntryFailing(String id, String reason) {
+    return 'Backup de $id falhando: $reason';
+  }
+
+  @override
+  String gpsFixRefused(String reason) {
+    return 'A posição foi lida, mas o setup a recusou: $reason';
+  }
+
+  @override
+  String get gpsDaemonTooOld =>
+      ' — atualize o Ara Server no setup; esta versão é anterior ao GPS deste computador.';
 
   @override
   String get calibrationDarks => 'Darks';

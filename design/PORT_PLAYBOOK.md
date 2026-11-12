@@ -1210,7 +1210,7 @@ As it is on `master` (reconciled 2026-09-19, #1026 — this table describes the 
 | `client-test-shard` | `Client (analyze + test) — ubuntu-latest, shard <n>/3` | `ubuntu-latest` (shard matrix 1-3) | `flutter pub get`; `flutter test` on every third test file; shard 1 also runs `flutter analyze`, the l10n freshness check and the page-logic tests | `docs_only` |
 | `client-test-linux` | `Client (analyze + test) — ubuntu-latest` ✅ required | `ubuntu-latest` | passes only when every shard passed (or the shards skipped a docs-only change) | never skipped |
 | `client-test` | `Client (analyze + test) — <os>` ✅ required ×2 | `macos-latest`, `windows-latest` (os matrix); `ubuntu-latest` when the leg has no work | `flutter pub get`, `flutter analyze`, `flutter test` — in the merge queue, on `master` and on a manual run only; on a pull request the legs report green with no work | `docs_only` and the event at **step** level — the job always expands so its two required contexts report (#1025) |
-| `client-build` | `Client (native build) — <target>` | `macos-latest` / `ubuntu-latest` / `windows-latest` (target matrix `macos` / `linux` / `windows`) | `flutter build <target> --release` | `docs_only`, `client` |
+| `client-build` | `Client (native build) — <target>` | `macos-latest` / `ubuntu-latest` / `windows-latest` (target matrix `macos` / `linux` / `windows`) | `flutter build <target> --release` | `docs_only`, `client`, and skipped on `merge_group` (the merge gate checks it on the PR head) |
 
 A new push to a branch cancels the run it replaces (`concurrency`, 2026-11-12); a merge group's run is never cancelled.
 

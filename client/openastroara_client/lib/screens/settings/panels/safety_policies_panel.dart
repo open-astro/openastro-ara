@@ -40,7 +40,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
       if (mounted) {
         setState(
           () =>
-              _lastError = friendlyError(context.l10n, e, action: 'load your saved settings'),
+              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
         );
       }
     }
@@ -66,7 +66,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: 'save that'));
+      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -95,7 +95,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
       );
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: 're-arm safety'))));
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionRearmSafety))));
     }
   }
 
