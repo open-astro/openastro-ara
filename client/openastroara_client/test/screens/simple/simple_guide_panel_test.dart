@@ -469,10 +469,12 @@ void main() {
 
     testWidgets('while the Assistant measures: Stop, a blinking green line, and Recalibrate off', (tester) async {
       final a = _Assistant(_assistant('measuring'));
-      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      // A real run reports the guider runtime as `assistant`, which counts as busy.
+      await _pump(tester, _wire(runtime: 'assistant'), rig: rig(_GuiderEquipment(), assistant: a));
       await _tab(tester, 'tools');
       expect(find.text('Stop'), findsOneWidget);
       expect(find.text('Measuring drift…'), findsOneWidget);
+      expect(find.text('Stop the guide loop to recalibrate.'), findsNothing, reason: 'stopping it would end the run');
       expect(dot(tester, gaStatus).color, AraColors.accentConnected);
       expect(
           tester.widget<StatusBlink>(find.descendant(of: find.byKey(const Key(gaStatus)), matching: find.byType(StatusBlink))).on,

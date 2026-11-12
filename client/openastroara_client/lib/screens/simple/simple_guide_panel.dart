@@ -623,8 +623,10 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
         : guiding
         ? l10n.guideStopGuidingFirst
         : null;
+    final measuring = status.isRunning;
     // A loop stops Recalibrate only: the Assistant needs one, so it goes on that row.
-    final loop = shared == null && active ? l10n.guideStopLoopFirst : null;
+    // While the Assistant measures the runtime is busy too, but stopping it would end the run.
+    final loop = shared == null && active && !measuring ? l10n.guideStopLoopFirst : null;
     final canRun = connected && shared == null && pending == null;
     final dec = calibration?.declinationDeg;
     final calibrationLine = !calibrated
@@ -634,7 +636,6 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
         : l10n.guideToolCalibratedAt(
             '${dec < 0 ? '-' : '+'}${dec.abs().round()}°',
           );
-    final measuring = status.isRunning;
     final waiting = suggestions.length;
     final failed = status.isFailed;
     final String assistantLine = measuring
@@ -873,17 +874,14 @@ class _ToolStatusState extends State<_ToolStatus> {
       ],
     );
     if (!widget.expandable) return line;
-    return Semantics(
-      button: true,
-      expanded: _whole,
-      child: InkWell(
-        key: const Key('simple-guider-assistant-failed'),
-        borderRadius: BorderRadius.circular(AraRadius.container),
-        onTap: () => setState(() => _whole = !_whole),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 44),
-          child: line,
-        ),
+    // Sighted tap only: the row's one semantics label already reads the whole reason.
+    return InkWell(
+      key: const Key('simple-guider-assistant-failed'),
+      borderRadius: BorderRadius.circular(AraRadius.container),
+      onTap: () => setState(() => _whole = !_whole),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 44),
+        child: line,
       ),
     );
   }

@@ -762,7 +762,7 @@
   "guideTabsGroup": "Página do Guia",
   "guideMinimumMoveName": "Movimento mínimo",
   "guideStopLoopFirst": "Pare o loop de guiagem para recalibrar.",
-  "guideAssistantCalibrateFirst": "Calibre primeiro: toque em Recalibrar agora e depois execute o Assistente de Guiagem.",
+  "guideAssistantCalibrateFirst": "Calibre primeiro: toque em Recalibrar e depois execute o Assistente de Guiagem.",
   "guideAssistantNoStar": "O Guia não encontrou estrela para medir. Verifique a câmera de guiagem e tente de novo.",
   "focusNudgePlanRunning": "Pare o plano para mover o focalizador.",
   "focusNudgeAutofocusRunning": "O autofoco está usando o focalizador. Espere terminar ou cancele.",

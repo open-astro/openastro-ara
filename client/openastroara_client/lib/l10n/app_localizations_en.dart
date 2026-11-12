@@ -2706,7 +2706,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get guideAssistantCalibrateFirst =>
-      'Calibrate first: press Recalibrate now, then run the Guiding Assistant.';
+      'Calibrate first: press Recalibrate, then run the Guiding Assistant.';
 
   @override
   String get guideAssistantNoStar =>

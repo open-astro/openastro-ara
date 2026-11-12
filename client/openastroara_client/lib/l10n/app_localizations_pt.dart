@@ -2706,7 +2706,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get guideAssistantCalibrateFirst =>
-      'Calibrate first: press Recalibrate now, then run the Guiding Assistant.';
+      'Calibrate first: press Recalibrate, then run the Guiding Assistant.';
 
   @override
   String get guideAssistantNoStar =>
@@ -7507,7 +7507,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get guideAssistantCalibrateFirst =>
-      'Calibre primeiro: toque em Recalibrar agora e depois execute o Assistente de Guiagem.';
+      'Calibre primeiro: toque em Recalibrar e depois execute o Assistente de Guiagem.';
 
   @override
   String get guideAssistantNoStar =>

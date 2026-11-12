@@ -4674,7 +4674,7 @@ abstract class AppLocalizations {
   /// No description provided for @guideAssistantCalibrateFirst.
   ///
   /// In en, this message translates to:
-  /// **'Calibrate first: press Recalibrate now, then run the Guiding Assistant.'**
+  /// **'Calibrate first: press Recalibrate, then run the Guiding Assistant.'**
   String get guideAssistantCalibrateFirst;
 
   /// No description provided for @guideAssistantNoStar.
