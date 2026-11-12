@@ -843,11 +843,22 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Progress_frames_carry_the_flip_and_stop_after_frame() {
             var ws = new RecordingWsBroadcaster();
-            var (svc, id, _, frame) = ExposingRun(ws, exposureSeconds: 3600, flipTelescope: TelescopeWithFlipIn(2));
+            var (svc, id, imaging, frame) = ExposingRun(ws, exposureSeconds: 3600, flipTelescope: TelescopeWithFlipIn(2));
             await svc.StartAsync(id, StartReq, null, CancellationToken.None);
             await WaitForInstructionInFlightAsync(svc, id, 0);
 
             await svc.StopAfterFrameAsync(id, null, CancellationToken.None);
+            // A camera reports while it exposes, and that report carries the armed stop. Land the frame only once
+            // its progress frame is out: a report posted after the frame can reach the pool after the run seals its
+            // progress (#648) and is dropped, and then no frame carries the flag.
+            for (var i = 0; i < 500 && !imaging.Invocations.Any(v => v.Method.Name == "CaptureImage"); i++) {
+                await Task.Delay(10);
+            }
+            var camera = (IProgress<ApplicationStatus>)imaging.Invocations.Last(v => v.Method.Name == "CaptureImage").Arguments[2]!;
+            camera.Report(new ApplicationStatus { Status = "Exposing" });
+            for (var i = 0; i < 500 && !ws.Records.Any(e => e.Type == "sequence.progress" && e.Payload.GetProperty("stop_after_frame").GetBoolean()); i++) {
+                await Task.Delay(10);
+            }
             frame.SetResult(new Mock<OpenAstroAra.Image.Interfaces.IExposureData>().Object);
             await WaitForTerminalAsync(svc, id);
 
