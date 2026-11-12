@@ -63,7 +63,7 @@ class _SessionsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final sessions = ref.watch(calibrationSessionsProvider);
     return sessions.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: CircularProgressIndicator.adaptive()),
       error: (e, _) => _ErrorRetry(
         message: friendlyError(context.l10n, e, action: 'load the sessions'),
         onRetry: () => ref.read(calibrationSessionsProvider.notifier).refresh(),
@@ -684,7 +684,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator.adaptive(strokeWidth: 2),
                 )
               : const Text('Generate & open'),
         ),
@@ -702,7 +702,7 @@ class _DarkLibraryTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(darkLibraryStatusProvider);
     return status.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: CircularProgressIndicator.adaptive()),
       error: (e, _) => _ErrorRetry(
         message: friendlyError(context.l10n, e, action: 'load the dark library'),
         onRetry: () => ref.read(darkLibraryStatusProvider.notifier).refresh(),
@@ -1035,7 +1035,7 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator.adaptive(strokeWidth: 2),
                 )
               : const Icon(Icons.build_outlined, size: 16),
           label: const Text('Generate build sequence'),

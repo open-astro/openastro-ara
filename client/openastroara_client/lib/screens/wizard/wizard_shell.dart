@@ -174,7 +174,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
       // route under it) instead of the spinner.
       builder: (_) => const PopScope(
         canPop: false,
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: CircularProgressIndicator.adaptive()),
       ),
     );
 

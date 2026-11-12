@@ -212,7 +212,7 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
     final devices = ref.watch(storageDevicesProvider);
     return devices.when(
       loading: () => const SizedBox(
-          height: 140, child: Center(child: CircularProgressIndicator())),
+          height: 140, child: Center(child: CircularProgressIndicator.adaptive())),
       error: (e, _) => SizedBox(
         height: 140,
         child: Center(
@@ -477,7 +477,7 @@ class _FolderChecklistState extends ConsumerState<_FolderChecklist> {
           else if (level == null)
             const Padding(
               padding: EdgeInsets.all(12),
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              child: Center(child: CircularProgressIndicator.adaptive(strokeWidth: 2)),
             )
           else if (level.dirs.isEmpty)
             Padding(

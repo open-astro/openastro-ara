@@ -66,7 +66,7 @@ class _ClientLogCardState extends ConsumerState<ClientLogCard> {
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator.adaptive(strokeWidth: 2),
                     )
                   : const Icon(Icons.save_alt, size: 18),
               label: const Text('Save client log'),

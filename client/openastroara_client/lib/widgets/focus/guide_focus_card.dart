@@ -94,7 +94,7 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
         ? FilledButton.tonalIcon(
             onPressed: live.busy ? null : () => ref.read(guideFocusProvider.notifier).stop(),
             icon: live.busy
-                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator.adaptive(strokeWidth: 2))
                 : const Icon(Icons.stop_rounded, size: 18),
             label: const Text('Stop'),
           )
@@ -103,7 +103,7 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
                 ? null
                 : () => ref.read(guideFocusProvider.notifier).start(exposureSec: _exposureSec),
             icon: live.busy
-                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator.adaptive(strokeWidth: 2))
                 : const Icon(Icons.play_arrow_rounded, size: 18),
             label: Text(hasData ? 'Start again' : 'Start live focus'),
           );

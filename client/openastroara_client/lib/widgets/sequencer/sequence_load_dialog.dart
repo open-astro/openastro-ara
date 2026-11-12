@@ -62,7 +62,7 @@ class SequenceLoadDialog extends ConsumerWidget {
     return async.when(
           loading: () => const SizedBox(
             height: 120,
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(child: CircularProgressIndicator.adaptive()),
           ),
           error: (e, st) {
             // Keep the raw error in the logs (diagnosable in dev); show the user
@@ -288,7 +288,7 @@ class _ImportNinaButtonState extends ConsumerState<_ImportNinaButton> {
           ? const SizedBox(
               width: 18,
               height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: CircularProgressIndicator.adaptive(strokeWidth: 2),
             )
           : const Icon(Icons.upload_file, size: 18),
       label: const Text('Import NINA…'),
@@ -359,7 +359,7 @@ class _ExportSequenceButtonState extends ConsumerState<_ExportSequenceButton> {
     return IconButton(
       icon: _busy
           ? const SizedBox(
-              width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              width: 18, height: 18, child: CircularProgressIndicator.adaptive(strokeWidth: 2))
           : const Icon(Icons.save_alt, size: 18),
       tooltip: 'Export…',
       onPressed: _busy ? null : _run,

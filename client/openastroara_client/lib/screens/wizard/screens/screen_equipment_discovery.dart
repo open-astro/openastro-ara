@@ -246,7 +246,7 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
                 ? const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator.adaptive(strokeWidth: 2),
                   )
                 : const Icon(Icons.wifi_tethering, size: 18),
             label: Text(_testing ? 'Detecting…' : 'Retry detection'),
@@ -472,7 +472,7 @@ class _DiscoverySheetState extends State<DiscoverySheet> {
                 future: _future,
                 builder: (context, snap) {
                   if (snap.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const Center(child: CircularProgressIndicator.adaptive());
                   }
                   if (snap.hasError) {
                     return _SheetMessage(

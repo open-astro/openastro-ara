@@ -166,7 +166,7 @@ class _NotificationCenter extends ConsumerWidget {
                                   child: SizedBox(
                                       width: 22,
                                       height: 22,
-                                      child: CircularProgressIndicator(
+                                      child: CircularProgressIndicator.adaptive(
                                           strokeWidth: 2)))),
                           error: (e, _) => _Empty(
                             icon: Icons.cloud_off,

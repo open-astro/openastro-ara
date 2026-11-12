@@ -541,7 +541,7 @@ class _CopyRow extends ConsumerWidget {
           const SizedBox(
             width: 14,
             height: 14,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: CircularProgressIndicator.adaptive(strokeWidth: 2),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -648,7 +648,7 @@ class _EjectButtonState extends ConsumerState<StorageEjectButton> {
           ? const SizedBox(
               width: 14,
               height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: CircularProgressIndicator.adaptive(strokeWidth: 2),
             )
           : const Icon(Icons.eject, size: 16),
       label: Text(widget.label),
@@ -762,7 +762,7 @@ class _CheckDiskButtonState extends ConsumerState<StorageCheckDiskButton> {
           ? const SizedBox(
               width: 14,
               height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: CircularProgressIndicator.adaptive(strokeWidth: 2),
             )
           : Text(widget.label),
     );
@@ -812,7 +812,7 @@ class _RescanButtonState extends ConsumerState<_RescanButton> {
           ? const SizedBox(
               width: 14,
               height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: CircularProgressIndicator.adaptive(strokeWidth: 2),
             )
           : const Text('Find frames on disk'),
     );
@@ -924,7 +924,7 @@ class _PreviewCacheRowState extends ConsumerState<_PreviewCacheRow> {
                 ? const SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator.adaptive(strokeWidth: 2),
                   )
                 : const Icon(Icons.cleaning_services_outlined, size: 16),
             label: Text(_cleaning ? 'Cleaning…' : 'Clean cache'),

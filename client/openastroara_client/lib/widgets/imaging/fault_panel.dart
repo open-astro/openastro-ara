@@ -96,7 +96,7 @@ class _FaultHistoryList extends ConsumerWidget {
               child: SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2)))),
+                  child: CircularProgressIndicator.adaptive(strokeWidth: 2)))),
       error: (e, _) => Padding(
         padding: const EdgeInsets.all(12),
         child: Text(friendlyError(context.l10n, e, action: 'load the fault history'),

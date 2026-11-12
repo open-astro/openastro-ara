@@ -71,7 +71,7 @@ class _ExposureTimerBannerState extends ConsumerState<ExposureTimerBanner> {
                 const SizedBox(
                   width: 14,
                   height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator.adaptive(strokeWidth: 2),
                 )
               else
                 const StatusBlink(

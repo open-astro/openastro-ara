@@ -387,7 +387,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
                       ? Text(_error!,
                           style:
                               const TextStyle(color: AraColors.accentError))
-                      : const Center(child: CircularProgressIndicator()),
+                      : const Center(child: CircularProgressIndicator.adaptive()),
                 )
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -446,7 +446,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
                     ? const SizedBox(
                         width: 14,
                         height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2))
+                        child: CircularProgressIndicator.adaptive(strokeWidth: 2))
                     : const Icon(Icons.link, size: 16),
                 label: const Text('Connect'),
               ),
@@ -761,7 +761,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
                   ? const SizedBox(
                       width: 14,
                       height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2))
+                      child: CircularProgressIndicator.adaptive(strokeWidth: 2))
                   : const Icon(Icons.send, size: 16),
               label: const Text('Apply to guider'),
             ),
@@ -804,7 +804,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
                   ? const SizedBox(
                       width: 14,
                       height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2))
+                      child: CircularProgressIndicator.adaptive(strokeWidth: 2))
                   : const Icon(Icons.dark_mode_outlined, size: 16),
               label: const Text('Build dark library'),
             ),

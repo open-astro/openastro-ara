@@ -426,7 +426,7 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
               ? const SizedBox(
                   width: 14,
                   height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator.adaptive(strokeWidth: 2),
                 )
               : const Icon(Icons.playlist_add, size: 16),
           label: const Text('Add to plan'),

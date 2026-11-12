@@ -39,7 +39,7 @@ class SolvePanel extends ConsumerWidget {
                 ? const SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator.adaptive(strokeWidth: 2),
                   )
                 : const Icon(Icons.my_location, size: 16),
             label: Text(solving ? 'Solving…' : 'Solve frame'),

@@ -385,7 +385,7 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
                 icon: _testing
                     ? const SizedBox(
                         width: 16, height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2))
+                        child: CircularProgressIndicator.adaptive(strokeWidth: 2))
                     : const Icon(Icons.network_check, size: 18),
                 label: const Text('Test connection'),
               ),
@@ -483,7 +483,7 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
                     icon: _sweeping
                         ? const SizedBox(
                             width: 16, height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2))
+                            child: CircularProgressIndicator.adaptive(strokeWidth: 2))
                         : const Icon(Icons.refresh, size: 18),
                     label: const Text('Refresh choices'),
                   ),

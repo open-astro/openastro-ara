@@ -225,7 +225,7 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
     final async = ref.watch(storageDevicesProvider);
     final body = async.when(
           loading: () => const SizedBox(
-              height: 140, child: Center(child: CircularProgressIndicator())),
+              height: 140, child: Center(child: CircularProgressIndicator.adaptive())),
           error: (e, _) => SizedBox(
             height: 140,
             child: Center(
@@ -398,7 +398,7 @@ class _StorageDriveChooserState extends ConsumerState<StorageDriveChooser> {
                     const SizedBox(
                         width: 14,
                         height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2)),
+                        child: CircularProgressIndicator.adaptive(strokeWidth: 2)),
                     const SizedBox(width: 10),
                     Text(
                         _needsErase

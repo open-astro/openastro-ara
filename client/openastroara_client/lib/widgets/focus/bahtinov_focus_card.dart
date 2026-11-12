@@ -101,7 +101,7 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
     ].join(' · ');
 
     final busySpinner = const SizedBox(
-        width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2));
+        width: 14, height: 14, child: CircularProgressIndicator.adaptive(strokeWidth: 2));
     final startStop = active
         ? FilledButton.tonalIcon(
             onPressed: live.busy ? null : () => ref.read(bahtinovFocusProvider.notifier).stop(),

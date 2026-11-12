@@ -273,7 +273,7 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
           const SizedBox(
             width: 12,
             height: 12,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: CircularProgressIndicator.adaptive(strokeWidth: 2),
           ),
           const SizedBox(width: 8),
           Text('Computing optimal sub…', style: dim),

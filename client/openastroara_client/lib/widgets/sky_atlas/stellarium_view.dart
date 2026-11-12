@@ -841,7 +841,7 @@ class _Loading extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const ColoredBox(
     color: AraColors.bgPrimary,
-    child: Center(child: CircularProgressIndicator()),
+    child: Center(child: CircularProgressIndicator.adaptive()),
   );
 }
 

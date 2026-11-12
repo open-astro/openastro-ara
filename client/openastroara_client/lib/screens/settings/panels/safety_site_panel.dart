@@ -210,7 +210,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
                     ? const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator.adaptive(strokeWidth: 2),
                       )
                     : const Icon(Icons.gps_fixed, size: 18),
                 label: const Text('Fill from GPS'),

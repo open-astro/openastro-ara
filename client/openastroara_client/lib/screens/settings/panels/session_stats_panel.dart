@@ -124,7 +124,7 @@ class _SessionStatsPanelState extends ConsumerState<SessionStatsPanel> {
                 ? const SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator.adaptive(strokeWidth: 2),
                   )
                 : const Icon(Icons.restart_alt, size: 16),
             label: const Text('Clear & rebuild stats…'),

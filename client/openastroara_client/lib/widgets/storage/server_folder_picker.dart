@@ -166,7 +166,7 @@ class _ServerFolderPickerDialogState extends State<_ServerFolderPickerDialog> {
         width: 440,
         height: 360,
         child: _loading
-            ? const Center(child: CircularProgressIndicator())
+            ? const Center(child: CircularProgressIndicator.adaptive())
             : _error != null
                 ? Center(
                     child: Text(_error!,

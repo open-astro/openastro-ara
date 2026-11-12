@@ -50,7 +50,7 @@ class _OfflineLaunchScreenState extends ConsumerState<OfflineLaunchScreen> {
                   const SizedBox(height: 24),
                   ...async.when(
                     loading: () => const [
-                      Center(child: CircularProgressIndicator()),
+                      Center(child: CircularProgressIndicator.adaptive()),
                     ],
                     // A cache read never throws (the service degrades to
                     // empty), but the branch is required — treat it as empty.
@@ -130,7 +130,7 @@ class _OfflineLaunchScreenState extends ConsumerState<OfflineLaunchScreen> {
             ? const SizedBox(
                 width: 18,
                 height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2))
+                child: CircularProgressIndicator.adaptive(strokeWidth: 2))
             : const Text('Plan'),
       ),
     ];

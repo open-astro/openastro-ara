@@ -87,7 +87,7 @@ class _SequenceNewDialogState extends ConsumerState<SequenceNewDialog> {
         child: async.when(
           loading: () => const SizedBox(
             height: 120,
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(child: CircularProgressIndicator.adaptive()),
           ),
           error: (e, st) {
             debugPrint('[sequencer] template list load failed: $e\n$st');
@@ -168,7 +168,7 @@ class _SequenceNewDialogState extends ConsumerState<SequenceNewDialog> {
               ? const SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2))
+                  child: CircularProgressIndicator.adaptive(strokeWidth: 2))
               : const Text('Create'),
         ),
       ],

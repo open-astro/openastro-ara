@@ -67,7 +67,7 @@ class _GuiderConnectionSectionState extends ConsumerState<GuiderConnectionSectio
         child: busy && status == null
             ? const Padding(
                 padding: EdgeInsets.all(12),
-                child: Center(child: CircularProgressIndicator()),
+                child: Center(child: CircularProgressIndicator.adaptive()),
               )
             : async.hasError
                 ? Row(
@@ -135,7 +135,7 @@ class _BusySpinner extends StatelessWidget {
   const _BusySpinner();
   @override
   Widget build(BuildContext context) =>
-      const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2));
+      const SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive(strokeWidth: 2));
 }
 
 class _StatusBody extends StatelessWidget {

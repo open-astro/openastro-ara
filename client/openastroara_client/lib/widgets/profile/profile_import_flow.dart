@@ -191,7 +191,7 @@ Future<T> runWithBlockingSpinner<T>(
     barrierDismissible: false,
     builder: (_) => const PopScope(
       canPop: false,
-      child: Center(child: CircularProgressIndicator()),
+      child: Center(child: CircularProgressIndicator.adaptive()),
     ),
   );
   unawaited(navigator.push(spinner));

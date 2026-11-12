@@ -221,7 +221,7 @@ class _Row extends StatelessWidget {
           const SizedBox(
             width: 16,
             height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: CircularProgressIndicator.adaptive(strokeWidth: 2),
           )
         else
           // The exposing row (no colour of its own) is working: blinking green.

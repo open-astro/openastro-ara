@@ -33,7 +33,7 @@ class FrameViewer extends ConsumerWidget {
       color: AraColors.bgPanelAlt,
       child: preview.when(
         data: (bytes) => _ZoomableFrame(bytes: bytes),
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: CircularProgressIndicator.adaptive()),
         error: (e, _) => Center(
           child: Text(
             friendlyError(context.l10n, e, action: 'load the preview'),
@@ -184,7 +184,7 @@ class _LiveView extends StatelessWidget {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const CircularProgressIndicator(),
+                        const CircularProgressIndicator.adaptive(),
                         const SizedBox(height: 12),
                         Text('Starting Live View…',
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(

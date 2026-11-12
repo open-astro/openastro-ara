@@ -99,7 +99,7 @@ class _DataManagerViewState extends ConsumerState<DataManagerView> {
     List<DataPackage>? packages,
   ) {
     if (async.isLoading && packages == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator.adaptive());
     }
     if (async.hasError) {
       return _Centered(

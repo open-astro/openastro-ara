@@ -102,7 +102,7 @@ class _AlpacaDeviceChooserState extends ConsumerState<AlpacaDeviceChooser> {
     future: _future,
     builder: (context, snap) {
       if (snap.connectionState == ConnectionState.waiting) {
-        return const Center(heightFactor: 2, child: CircularProgressIndicator());
+        return const Center(heightFactor: 2, child: CircularProgressIndicator.adaptive());
       }
       if (snap.hasError) {
         return _ErrorState(error: snap.error, onRetry: _refresh);

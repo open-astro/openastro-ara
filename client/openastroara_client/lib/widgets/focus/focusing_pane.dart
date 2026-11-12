@@ -139,7 +139,7 @@ class _StepTab extends StatelessWidget {
             const SizedBox(
               width: 14,
               height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: CircularProgressIndicator.adaptive(strokeWidth: 2),
             )
           else
             Icon(
@@ -304,7 +304,7 @@ class MainFocusCard extends ConsumerWidget {
             icon: live.busy
                 ? const SizedBox(
                     width: 14, height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2))
+                    child: CircularProgressIndicator.adaptive(strokeWidth: 2))
                 : const Icon(Icons.center_focus_strong, size: 18),
             label: Text(run.isComplete ? 'Run again' : 'Run autofocus'),
           );

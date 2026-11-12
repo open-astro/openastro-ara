@@ -279,7 +279,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
         ? SizedBox(
             width: simple ? 18 : 14,
             height: simple ? 18 : 14,
-            child: const CircularProgressIndicator(strokeWidth: 2),
+            child: const CircularProgressIndicator.adaptive(strokeWidth: 2),
           )
         : Icon(Icons.report, size: large ? 32 : (simple ? 20 : 16));
     final label = Text(

@@ -78,7 +78,7 @@ class _AstrobinExportDialogState extends ConsumerState<AstrobinExportDialog> {
   ) {
     if (async.isLoading && targets == null) {
       return const SizedBox(
-          height: 120, child: Center(child: CircularProgressIndicator()));
+          height: 120, child: Center(child: CircularProgressIndicator.adaptive()));
     }
     if (async.hasError && targets == null) {
       return _hintWithRetry('Could not load targets.');
@@ -123,7 +123,7 @@ class _AstrobinExportDialogState extends ConsumerState<AstrobinExportDialog> {
       ),
       trailing: busy
           ? const SizedBox(
-              width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              width: 16, height: 16, child: CircularProgressIndicator.adaptive(strokeWidth: 2))
           : const Icon(Icons.file_download, size: 18),
       enabled: _launching == null,
       onTap: () => unawaited(_export(t.targetName)),

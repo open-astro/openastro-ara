@@ -456,7 +456,7 @@ class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> 
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Row(children: [
-                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive(strokeWidth: 2)),
                 SizedBox(width: 8),
                 Text('Working out the field of view…'),
               ]),

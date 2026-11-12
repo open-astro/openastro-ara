@@ -353,7 +353,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                             width: 14,
                             height: 14,
                             child:
-                                CircularProgressIndicator(strokeWidth: 2))
+                                CircularProgressIndicator.adaptive(strokeWidth: 2))
                         : const Icon(Icons.auto_awesome, size: 16),
                     label: Text(_planning
                         ? 'Planning…'
@@ -414,7 +414,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                               ? const SizedBox(
                                   width: 14,
                                   height: 14,
-                                  child: CircularProgressIndicator(
+                                  child: CircularProgressIndicator.adaptive(
                                       strokeWidth: 2))
                               : const Icon(Icons.playlist_add, size: 16),
                           label: Text(_adding

@@ -311,7 +311,7 @@ class _HandshakePanel extends StatelessWidget {
               const SizedBox(
                 width: 24,
                 height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator.adaptive(strokeWidth: 2),
               ),
               const SizedBox(width: 12),
               Text('Connecting to ${server.baseUrl}…'),

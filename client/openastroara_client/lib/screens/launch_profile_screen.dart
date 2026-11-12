@@ -87,7 +87,7 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
                   const SizedBox(height: 24),
                   ...async.when(
                     loading: () => const [
-                      Center(child: CircularProgressIndicator()),
+                      Center(child: CircularProgressIndicator.adaptive()),
                     ],
                     error: (e, _) => [
                       Text(
@@ -215,7 +215,7 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
         child: _entering
             ? const SizedBox(
                 width: 18, height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2))
+                child: CircularProgressIndicator.adaptive(strokeWidth: 2))
             : const Text('Image'),
       ),
     ];

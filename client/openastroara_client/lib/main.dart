@@ -186,7 +186,7 @@ class _RootRouter extends ConsumerWidget {
           ? shell
           : const LaunchProfileScreen(),
       loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
+          const Scaffold(body: Center(child: CircularProgressIndicator.adaptive())),
       error: (e, st) {
         // Log internal details for debug; UI shows a generic message so
         // exception text can't leak into the user-facing surface.

@@ -65,7 +65,7 @@ class ImageLibraryScreen extends ConsumerWidget {
         ),
       ),
       body: sessions.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: CircularProgressIndicator.adaptive()),
         error: (e, _) => _CenteredNotice(
           message: friendlyError(context.l10n, e, action: 'load your library'),
           action: OutlinedButton(
@@ -753,7 +753,7 @@ class _SessionFramesGrid extends ConsumerWidget {
             child: SizedBox(
               width: 16,
               height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: CircularProgressIndicator.adaptive(strokeWidth: 2),
             ),
           ),
         ),

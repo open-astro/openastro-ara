@@ -61,7 +61,7 @@ class _PiPerformanceSectionState extends ConsumerState<PiPerformanceSection> {
               visualDensity: VisualDensity.compact,
               onPressed: spinning ? null : () => unawaited(_refresh()),
               icon: spinning
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive(strokeWidth: 2))
                   : const Icon(Icons.refresh),
             ),
           ],

@@ -94,7 +94,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
             ),
           _ => const Padding(
               padding: EdgeInsets.all(12),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: CircularProgressIndicator.adaptive()),
             ),
         },
       ),

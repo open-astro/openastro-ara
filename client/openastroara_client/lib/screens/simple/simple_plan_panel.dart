@@ -743,12 +743,14 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
                     duration: _hold.value > 0
                         ? Duration.zero
                         : const Duration(milliseconds: 900),
-                    builder: (_, v, _) => CircularProgressIndicator(
+                    builder: (_, v, _) => CircularProgressIndicator.adaptive(
                       value: v,
                       strokeWidth: 3,
-                      color: _hold.value > 0
-                          ? AraColors.accentError
-                          : AraColors.selectionBg,
+                      valueColor: AlwaysStoppedAnimation(
+                        _hold.value > 0
+                            ? AraColors.accentError
+                            : AraColors.selectionBg,
+                      ),
                     ),
                   ),
                 ),

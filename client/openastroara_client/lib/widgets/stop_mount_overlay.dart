@@ -414,7 +414,7 @@ class _MountStoppedDialogState extends State<_MountStoppedDialog> {
             key: const ValueKey('stop_modal_verify'),
             onPressed: _verifying ? null : _verify,
             icon: _verifying
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator.adaptive(strokeWidth: 2))
                 : const Icon(Icons.camera_alt_outlined, size: 18),
             label: Text(_verifying ? 'Taking a 2 s image and solving…' : 'Verify Position — show me an image'),
           ),

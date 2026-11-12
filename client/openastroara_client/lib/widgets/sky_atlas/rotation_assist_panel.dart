@@ -159,7 +159,7 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
                                 icon: const SizedBox(
                                   width: 16,
                                   height: 16,
-                                  child: CircularProgressIndicator(
+                                  child: CircularProgressIndicator.adaptive(
                                     strokeWidth: 2,
                                   ),
                                 ),
@@ -176,7 +176,7 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
                                     ? const SizedBox(
                                         width: 16,
                                         height: 16,
-                                        child: CircularProgressIndicator(
+                                        child: CircularProgressIndicator.adaptive(
                                           strokeWidth: 2,
                                         ),
                                       )

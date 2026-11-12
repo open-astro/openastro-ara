@@ -384,7 +384,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           if (waiting)
             const Icon(Icons.home_outlined, size: 32, color: AraColors.accentBusy)
           else
-            const SizedBox.square(dimension: 28, child: CircularProgressIndicator(strokeWidth: 2.5)),
+            const SizedBox.square(dimension: 28, child: CircularProgressIndicator.adaptive(strokeWidth: 2.5)),
           const SizedBox(height: 20),
           Text(
             waiting ? 'Put the mount in its home position' : 'Sending the mount Home',
@@ -436,7 +436,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         children: [
           Align(alignment: Alignment.centerLeft, child: _sectionLabel('Three-point check')),
           const SizedBox(height: 28),
-          const SizedBox.square(dimension: 28, child: CircularProgressIndicator(strokeWidth: 2.5)),
+          const SizedBox.square(dimension: 28, child: CircularProgressIndicator.adaptive(strokeWidth: 2.5)),
           const SizedBox(height: 20),
           Text(
             'Check solve ${live.checkSolvesDone} of ${live.checkSolvesTotal}',
@@ -708,7 +708,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         children: [
           Align(alignment: Alignment.centerLeft, child: _sectionLabel('RA axis')),
           const SizedBox(height: 28),
-          const SizedBox.square(dimension: 28, child: CircularProgressIndicator(strokeWidth: 2.5)),
+          const SizedBox.square(dimension: 28, child: CircularProgressIndicator.adaptive(strokeWidth: 2.5)),
           const SizedBox(height: 20),
           const Text(
             'Measuring the RA axis',

@@ -239,7 +239,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
                 ? const SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator.adaptive(strokeWidth: 2),
                   )
                 : const Icon(Icons.camera_alt_outlined, size: 16),
             label: Text(

@@ -28,7 +28,7 @@ class _LoadMoreButtonState extends State<LoadMoreButton> {
       onPressed: _busy ? null : _tap,
       icon: _busy
           ? const SizedBox(
-              width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+              width: 14, height: 14, child: CircularProgressIndicator.adaptive(strokeWidth: 2))
           : const Icon(Icons.expand_more, size: 16),
       label: const Text('Load more sessions'),
     );
