@@ -35,6 +35,10 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Changed (decision records)
+
+- Three more proposed decision records in `docs/adr/`: 0014 says a WebSocket event is declared once (#1805), 0015 says a client profile section is loaded from the rig before it can be saved (#1807), and 0016 says one daemon module decides who holds the Guide Camera (#1809). Record 0011 gains the device command module (#1808). `GLOSSARY.md` gains Event Declaration, Profile Section, Device Command and Guide Camera Custody. No code changes yet.
+
 ### Added (calibration)
 
 - **Calibration** is a seventh Simple Mode mode, between Guider and Plan (#1757). Flats belong to the night; darks and bias belong to the camera for months. Three tabs, and the shutter and chip follow the tab:
