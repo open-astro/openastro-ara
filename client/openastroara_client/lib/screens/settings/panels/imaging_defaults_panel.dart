@@ -266,6 +266,16 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
           ),
         ),
         // #1622 — mosaic size the Tonight's Sky framing rank assumes.
+        Padding(
+          padding: const EdgeInsets.only(top: 12, left: 4, bottom: 4),
+          child: Text(
+            'Ranks Tonight\'s Sky framing for a mosaic of this many tiles '
+            '(${PlanningPrefs.minMosaicTiles}–${PlanningPrefs.maxMosaicTiles} each way). '
+            '1 × 1 is a single frame.',
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(color: AraColors.textSecondary),
+          ),
+        ),
         for (final across in [true, false])
           EditableNumberRow(
             label: across
@@ -287,16 +297,6 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
                   );
             },
           ),
-        Padding(
-          padding: const EdgeInsets.only(top: 4, left: 4),
-          child: Text(
-            'Ranks Tonight\'s Sky framing for a mosaic of this many tiles '
-            '(${PlanningPrefs.minMosaicTiles}–${PlanningPrefs.maxMosaicTiles} each way). '
-            '1 × 1 is a single frame.',
-            style: Theme.of(context).textTheme.labelSmall
-                ?.copyWith(color: AraColors.textDisabled),
-          ),
-        ),
         // #1140 P2 — the sky-model calibration store: k per filter kind, fitted
         // by the daemon from the library's frame backgrounds.
         const SizedBox(height: 16),
