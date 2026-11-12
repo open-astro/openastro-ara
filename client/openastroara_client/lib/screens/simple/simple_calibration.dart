@@ -196,6 +196,14 @@ typedef SimpleCalibrationJob = ({
   VoidCallback? queue,
 });
 
+/// The darks the shutter shoots for a library [cover]: the missing ones, else
+/// the old ones again ([refresh]); none when the library covers the plan.
+({List<double> exposures, bool refresh}) _darksToShoot(
+  ({List<double> missing, List<double> old, bool biasMissing}) cover,
+) => cover.missing.isNotEmpty
+    ? (exposures: cover.missing, refresh: false)
+    : (exposures: cover.old, refresh: cover.old.isNotEmpty);
+
 /// The current tab's job, the same one the shutter and the tab's main button
 /// do (round 2 mock, approved 2026-11-12).
 SimpleCalibrationJob simpleCalibrationJob(BuildContext context, WidgetRef ref) {
@@ -245,8 +253,7 @@ SimpleCalibrationJob simpleCalibrationJob(BuildContext context, WidgetRef ref) {
       }
       if (lib == null) return idle('…', l.calibrationLibraryNoPlan);
       final cover = libraryCover(lib, need, DateTime.now().toUtc());
-      final refresh = cover.missing.isEmpty && cover.old.isNotEmpty;
-      final exposures = cover.missing.isNotEmpty ? cover.missing : cover.old;
+      final (:exposures, :refresh) = _darksToShoot(cover);
       if (exposures.isEmpty && !cover.biasMissing) {
         return idle(l.calibrationChipReady, l.calibrationNothingMissing);
       }
@@ -697,6 +704,11 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
     // Nothing picked by hand: the shutter's own job.
     final byHand = _picked != null || _biasPicked != null;
     final canBuild = picked.isNotEmpty || biasOn;
+    // Exposures untouched: the shutter's darks, not every chip shown picked;
+    // those picked by hand are shot again.
+    final work = _picked != null || cover == null
+        ? (exposures: picked.toList()..sort(), refresh: _picked != null)
+        : _darksToShoot(cover);
     final temp = need?.temperatureC;
     String settings(int? gain, double? t) => [
       if (gain != null) l.calibrationGain(gain),
@@ -867,11 +879,9 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
                             .read(simpleCalibrationProvider.notifier)
                             .buildLibrary(
                               need,
-                              picked.toList()..sort(),
+                              work.exposures,
                               bias: biasOn,
-                              // As Add to queue: only exposures picked by
-                              // hand are shot again.
-                              refresh: _picked != null,
+                              refresh: work.refresh,
                               lensCapPrompt: l.calibrationLensCapPrompt,
                             ),
                 ),
@@ -887,9 +897,9 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
                             .read(simpleCalibrationProvider.notifier)
                             .queueLibrary(
                               need,
-                              picked.toList()..sort(),
+                              work.exposures,
                               bias: biasOn,
-                              refresh: _picked != null,
+                              refresh: work.refresh,
                               lensCapPrompt: l.calibrationLensCapPrompt,
                             ),
                 ),

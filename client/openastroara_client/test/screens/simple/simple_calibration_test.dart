@@ -600,21 +600,34 @@ void main() {
       Future<(ProviderContainer, _Calibration, _Seq, _Run)> library(
         WidgetTester tester, {
         List<BiasLibraryEntry>? bias,
+        List<DarkLibraryEntry>? darks,
+        bool queued = true,
       }) async {
         final r = await _pump(
           tester,
           [_session()],
           panel: true,
-          plan: _queued(const []),
+          plan: queued ? _queued(const []) : null,
           child: panelView(),
           overrides: [simpleCalibrationTabProvider.overrideWith(_DarksTab.new)],
         );
+        // Not queued: the plan in Plan's sheet, so a build starts its own run.
+        if (!queued) {
+          r.$1.read(simpleRunPlanProvider.notifier).load(const [
+            FilterPlanStep(
+              filterName: 'L',
+              exposureSeconds: 300,
+              frameCount: 40,
+            ),
+          ]);
+          r.$1.read(simpleRunGainProvider.notifier).set(100);
+        }
         r.$2.library = DarkLibraryState(
           status: 'idle',
           totalCombinations: 0,
           completedCombinations: 0,
           generatedSequenceId: null,
-          entries: [_dark(300)],
+          entries: darks ?? [_dark(300)],
           biasEntries: bias ?? [_bias],
         );
         r.$1.invalidate(darkLibraryStatusProvider);
@@ -649,38 +662,56 @@ void main() {
         expect(selected(tester, 'simple-calibration-bias'), isTrue);
       });
 
+      bool queuedBias(_Seq seq) =>
+          childrenOf(childrenOf(seq.bodies['queue-1']!).last)
+              .any((k) => (k['Name'] as String?)?.startsWith('Bias') ?? false);
+
+      // Exposures untouched: the shutter's own darks, not the chips shown picked.
       testWidgets(
-        'Bias with an exposure and bias on file: the dark run plus the bias set',
+        'only Bias touched, every dark on file: Add to queue queues the bias set and asks the rig for no darks',
         (tester) async {
           final (_, cal, seq, _) = await library(tester);
           await tapKey(tester, 'simple-calibration-bias');
           await tapKey(tester, 'simple-calibration-queue-library');
-          expect(cal.builds.single.exposureSecondsList, [300.0]);
-          final kids = childrenOf(childrenOf(seq.bodies['queue-1']!).last);
-          expect(
-            kids.any(
-              (k) => (k['Name'] as String?)?.startsWith('Bias') ?? false,
-            ),
-            isTrue,
-            reason: 'the bias set is shot again',
-          );
+          expect(cal.builds, isEmpty, reason: 'the 300 s darks are on file');
+          expect(queuedBias(seq), isTrue, reason: 'the bias set is shot again');
         },
       );
 
       testWidgets(
-        'only Bias touched: Build reuses the darks on file, as Add to queue does',
+        'only Bias touched, every dark on file: Build asks the rig for no darks and counts the bias frames only',
         (tester) async {
-          final (_, cal, _, _) = await library(tester);
+          final (c, cal, _, _) = await library(tester, queued: false);
           await tapKey(tester, 'simple-calibration-bias');
           await tapKey(tester, 'simple-calibration-build-library');
-          expect(cal.builds.single.exposureSecondsList, [300.0]);
-          expect(
-            cal.builds.single.reuseExistingFrames,
-            isTrue,
-            reason: 'the exposures were not picked by hand',
-          );
+          expect(cal.builds, isEmpty, reason: 'the 300 s darks are on file');
+          expect(c.read(simpleCalibrationProvider)?.total, kSimpleBiasFrames);
         },
       );
+
+      for (final (key, name) in const [
+        ('simple-calibration-build-library', 'Build'),
+        ('simple-calibration-queue-library', 'Add to queue'),
+      ]) {
+        testWidgets(
+          'only Bias touched, old darks: $name refreshes them along with the bias set',
+          (tester) async {
+            final (_, cal, seq, _) = await library(
+              tester,
+              darks: [_dark(300, ageDays: 220)],
+            );
+            await tapKey(tester, 'simple-calibration-bias');
+            await tapKey(tester, key);
+            expect(cal.builds.single.exposureSecondsList, [300.0]);
+            expect(
+              cal.builds.single.reuseExistingFrames,
+              isFalse,
+              reason: 'the shutter refreshes old darks',
+            );
+            expect(queuedBias(seq), isTrue);
+          },
+        );
+      }
 
       testWidgets(
         'Bias alone: a bias-only run through the queue, no dark library build asked of the rig',
