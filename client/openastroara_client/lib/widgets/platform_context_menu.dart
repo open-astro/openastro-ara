@@ -1,5 +1,6 @@
 /// A long-press menu in iOS's form (DESIGN.md, Platform gestures): on iOS and iPadOS a
-/// [CupertinoContextMenu] that lifts [child] as its own preview; elsewhere [child] as it is.
+/// [CupertinoContextMenu] that lifts [child] as its own preview, which takes no touches; elsewhere
+/// [child] as it is.
 library;
 
 import 'package:flutter/cupertino.dart';
@@ -51,7 +52,8 @@ class PlatformContextMenu extends StatelessWidget {
                   isDestructiveAction: i.destructive,
                   onPressed: () {
                     Navigator.of(sheet).pop();
-                    i.onPressed();
+                    // The item may have gone while the sheet was up.
+                    if (context.mounted) i.onPressed();
                   },
                   child: Text(i.label),
                 ),
@@ -68,30 +70,42 @@ class PlatformContextMenu extends StatelessWidget {
     // The preview is laid out loose in the overlay: give it the size it has in the page, or a
     // child that fills its slot (a Card) has no height to fill.
     return LayoutBuilder(
-      builder: (context, box) => CupertinoContextMenu.builder(
-        actions: [
-          for (final i in items)
-            CupertinoContextMenuAction(
-              isDestructiveAction: i.destructive,
-              trailingIcon: i.icon,
-              onPressed: () {
-                Navigator.of(context, rootNavigator: true).pop();
-                i.onPressed();
-              },
-              child: Text(i.label),
+      builder: (context, box) {
+        // Read now: the item may be gone (removed elsewhere) by the time an action is tapped.
+        final menu = Navigator.of(context, rootNavigator: true);
+        final page = ModalRoute.of(context);
+        return CupertinoContextMenu.builder(
+          actions: [
+            for (final i in items)
+              CupertinoContextMenuAction(
+                isDestructiveAction: i.destructive,
+                trailingIcon: i.icon,
+                onPressed: () {
+                  menu.pop();
+                  if (context.mounted) i.onPressed();
+                },
+                child: Text(i.label),
+              ),
+          ],
+          builder: (lifted, animation) => SizedBox(
+            width: box.hasTightWidth ? box.maxWidth : null,
+            height: box.hasTightHeight ? box.maxHeight : null,
+            // The overlay is outside any Scaffold: ink needs its own Material.
+            child: Material(
+              type: MaterialType.transparency,
+              // Only the item in the page takes touches. The lifted copy is a preview, not a
+              // second control: a swipe or a button on it would act under the open menu.
+              child: AbsorbPointer(
+                absorbing: ModalRoute.of(lifted) != page,
+                // A row in a list has no tight height; the preview shrinks to its content.
+                child: box.hasTightHeight
+                    ? child
+                    : IntrinsicHeight(child: child),
+              ),
             ),
-        ],
-        builder: (context, animation) => SizedBox(
-          width: box.hasTightWidth ? box.maxWidth : null,
-          height: box.hasTightHeight ? box.maxHeight : null,
-          // The overlay is outside any Scaffold: ink needs its own Material.
-          child: Material(
-            type: MaterialType.transparency,
-            // A row in a list has no tight height; the preview shrinks to its content.
-            child: box.hasTightHeight ? child : IntrinsicHeight(child: child),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

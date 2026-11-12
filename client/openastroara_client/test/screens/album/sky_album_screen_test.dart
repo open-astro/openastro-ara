@@ -265,7 +265,8 @@ void main() {
     testWidgets('under Reduce Motion the actions come as a sheet, with no zoom', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
       tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(reduceMotion: true);
       addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
-      await _pump(tester, frames: _m31Frames);
+      final picked = <String>[];
+      await _pump(tester, frames: _m31Frames, onImageTarget: (d) => picked.add(d.id));
       await hold(tester, find.text('Andromeda Galaxy'));
       expect(find.byType(CupertinoActionSheet), findsOneWidget);
       expect(find.text('Add more time'), findsOneWidget);
@@ -274,6 +275,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(CupertinoActionSheet), findsNothing);
       expect(find.byType(AlbumCardBack), findsNothing);
+      expect(picked, isEmpty);
     });
 
     testWidgets('other platforms get no menu', variant: TargetPlatformVariant.only(TargetPlatform.android), (tester) async {

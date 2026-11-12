@@ -1773,6 +1773,49 @@ void main() {
       expect(widths, [inPage, inPage]);
     });
 
+    testWidgets('on iOS the lifted queue row is only a preview: a tap on its × or a swipe removes nothing',
+        variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      final c = await iosQueue(tester);
+      final row = find.byKey(const Key('simple-run-edit-1'));
+      await longPress(tester, row);
+      await tester.tap(find.byKey(const Key('simple-run-remove-1')).last, warnIfMissed: false);
+      await tester.pumpAndSettle();
+      await tester.drag(row.last, const Offset(-400, 0), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42']);
+      expect(c.read(simpleMessagesProvider), isEmpty);
+    });
+
+    testWidgets('on iOS a menu left open on a row that is gone does nothing', variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+        (tester) async {
+      final (c, seq) = await queueOfThree(tester);
+      await longPress(tester, find.byKey(const Key('simple-run-edit-1')));
+      // M42 goes another way (the × on another screen) while its menu is up.
+      await c.read(simpleRunProvider.notifier).remove(1);
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M31', 'M45']);
+      await tester.tap(find.text('Remove M42 from the queue'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(CupertinoContextMenuAction), findsNothing, reason: 'the menu closes');
+      expect(seq.targets('seq-1'), ['M31', 'M45'], reason: 'not the row that took its place');
+    });
+
+    testWidgets('on iOS under Reduce Motion a sheet left open on a row that is gone does nothing',
+        variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(reduceMotion: true);
+      addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+      final (c, seq) = await queueOfThree(tester);
+      await longPress(tester, find.byKey(const Key('simple-run-edit-1')));
+      expect(find.byType(CupertinoActionSheet), findsOneWidget);
+      await c.read(simpleRunProvider.notifier).remove(1);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove M42 from the queue'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoActionSheet), findsNothing);
+      expect(seq.targets('seq-1'), ['M31', 'M45'], reason: 'not the row that took its place');
+    });
+
     testWidgets('a swipe left removes a queued target; Undo puts it back where it was', (tester) async {
       final (c, seq) = await queueOfThree(tester);
       await tester.drag(find.byKey(const Key('simple-run-edit-0')), const Offset(-400, 0));
