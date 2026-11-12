@@ -1318,7 +1318,7 @@ void main() {
     // draws the panel shorter than the iPad's, so 1.3x text stands in for it.
     tester.platformDispatcher.textScaleFactorTestValue = 1.3;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-    
+
     final c = await _pump(tester, const Size(1024, 768), histogram: _histogram,
         gear: [guiderStatusProvider.overrideWith(_GuiderUp.new), guidingAssistantProvider.overrideWith(_AssistantFailed.new)]);
     await _frame(tester, c);

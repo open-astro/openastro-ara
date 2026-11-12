@@ -268,6 +268,17 @@ void main() {
       semantics.dispose();
     });
 
+    testWidgets('each row is read once: its name, what it does and where it stands', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), live: _calibratedAt(12)));
+      await _tab(tester, 'tools');
+      expect(find.bySemanticsLabel(RegExp(r'^Calibration\. Measures again .* Calibrated at Dec \+12°$')), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp(r'^Guiding Assistant\. .* Not run yet$')), findsOneWidget);
+      // the drawn words are not a second reading of the same row
+      expect(find.bySemanticsLabel('Not run yet'), findsNothing);
+      semantics.dispose();
+    });
+
     testWidgets('a minimum move goes to the Guider live', (tester) async {
       final e = _GuiderEquipment();
       final c = await _pump(tester, _wire(), rig: rig(e));

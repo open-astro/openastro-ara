@@ -3698,7 +3698,6 @@
   "guideRecalibrateNow": "Recalibrate now",
   "guideRunAssistant": "Run Guiding Assistant",
   "guideStopAssistant": "Stop Guiding Assistant",
-  "guideAssistantMeasuring": "Measuring. Guide corrections are off for now.",
   "guideAssistantApply": "{count, plural, =1{Apply 1 suggestion} other{Apply {count} suggestions}}",
   "@guideAssistantApply": {
     "placeholders": {
@@ -3716,14 +3715,6 @@
   "guideAssistantNoStar": "The guider found no star to measure. Check the guide camera, then try again.",
   "focusNudgePlanRunning": "Stop the plan to move the focuser.",
   "focusNudgeAutofocusRunning": "Autofocus has the focuser. Wait for it to finish, or cancel it.",
-  "guideAssistantFailed": "The Guiding Assistant stopped: {reason}",
-  "@guideAssistantFailed": {
-    "placeholders": {
-      "reason": {
-        "type": "String"
-      }
-    }
-  },
   "guideAssistantFailedNoReason": "the guider gave no reason",
   "guideToolRecalibrate": "Recalibrate",
   "guideToolCalibration": "Calibration",

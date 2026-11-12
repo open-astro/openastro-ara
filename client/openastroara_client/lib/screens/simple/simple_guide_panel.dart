@@ -665,6 +665,7 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
         _ToolRow(
           title: l10n.guideToolCalibration,
           what: l10n.guideToolCalibrationWhat,
+          statusText: calibrationLine,
           button: _toolButton(
             key: const Key('simple-guider-recalibrate'),
             label: l10n.guideToolRecalibrate,
@@ -693,6 +694,7 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
         _ToolRow(
           title: l10n.guideToolAssistant,
           what: l10n.guideToolAssistantWhat,
+          statusText: assistantLine,
           button: _toolButton(
             key: const Key('simple-guider-assistant'),
             label: measuring
@@ -748,11 +750,13 @@ class _ToolRow extends StatelessWidget {
     required this.what,
     required this.button,
     required this.status,
+    required this.statusText,
     this.extra,
   });
 
   final String title;
   final String what;
+  final String statusText;
   final Widget button;
   final Widget status;
   final Widget? extra;
@@ -764,12 +768,17 @@ class _ToolRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s4,
       children: [
+        // One spoken node per row (name, what it does, where it stands) on the
+        // title; the lines below are drawn but left out of the tree.
         Row(
           spacing: AraSpace.s12,
           children: [
             Expanded(
               child: Semantics(
+                container: true,
                 header: true,
+                label: '$title. $what $statusText',
+                excludeSemantics: true,
                 child: Text(
                   title,
                   style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
@@ -779,8 +788,8 @@ class _ToolRow extends StatelessWidget {
             button,
           ],
         ),
-        Text(what, style: AraText.caption),
-        status,
+        ExcludeSemantics(child: Text(what, style: AraText.caption)),
+        ExcludeSemantics(child: status),
         if (extra != null)
           Padding(
             padding: const EdgeInsets.only(top: AraSpace.s4),

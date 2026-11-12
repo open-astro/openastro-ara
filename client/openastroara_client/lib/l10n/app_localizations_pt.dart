@@ -2679,10 +2679,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get guideStopAssistant => 'Stop Guiding Assistant';
 
   @override
-  String get guideAssistantMeasuring =>
-      'Measuring. Guide corrections are off for now.';
-
-  @override
   String guideAssistantApply(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -2722,11 +2718,6 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get focusNudgeAutofocusRunning =>
       'Autofocus has the focuser. Wait for it to finish, or cancel it.';
-
-  @override
-  String guideAssistantFailed(String reason) {
-    return 'The Guiding Assistant stopped: $reason';
-  }
 
   @override
   String get guideAssistantFailedNoReason => 'the guider gave no reason';
@@ -7489,10 +7480,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get guideStopAssistant => 'Parar o Assistente de Guiagem';
 
   @override
-  String get guideAssistantMeasuring =>
-      'Medindo. As correções de guiagem estão desligadas por enquanto.';
-
-  @override
   String guideAssistantApply(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -7532,11 +7519,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get focusNudgeAutofocusRunning =>
       'O autofoco está usando o focalizador. Espere terminar ou cancele.';
-
-  @override
-  String guideAssistantFailed(String reason) {
-    return 'O Assistente de Guiagem parou: $reason';
-  }
 
   @override
   String get guideAssistantFailedNoReason => 'o Guia não informou o motivo';

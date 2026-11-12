@@ -4635,12 +4635,6 @@ abstract class AppLocalizations {
   /// **'Stop Guiding Assistant'**
   String get guideStopAssistant;
 
-  /// No description provided for @guideAssistantMeasuring.
-  ///
-  /// In en, this message translates to:
-  /// **'Measuring. Guide corrections are off for now.'**
-  String get guideAssistantMeasuring;
-
   /// No description provided for @guideAssistantApply.
   ///
   /// In en, this message translates to:
@@ -4700,12 +4694,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Autofocus has the focuser. Wait for it to finish, or cancel it.'**
   String get focusNudgeAutofocusRunning;
-
-  /// No description provided for @guideAssistantFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'The Guiding Assistant stopped: {reason}'**
-  String guideAssistantFailed(String reason);
 
   /// No description provided for @guideAssistantFailedNoReason.
   ///

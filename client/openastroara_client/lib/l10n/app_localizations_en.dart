@@ -2679,10 +2679,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get guideStopAssistant => 'Stop Guiding Assistant';
 
   @override
-  String get guideAssistantMeasuring =>
-      'Measuring. Guide corrections are off for now.';
-
-  @override
   String guideAssistantApply(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -2722,11 +2718,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get focusNudgeAutofocusRunning =>
       'Autofocus has the focuser. Wait for it to finish, or cancel it.';
-
-  @override
-  String guideAssistantFailed(String reason) {
-    return 'The Guiding Assistant stopped: $reason';
-  }
 
   @override
   String get guideAssistantFailedNoReason => 'the guider gave no reason';
