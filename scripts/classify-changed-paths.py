@@ -60,8 +60,9 @@ NONE: frozenset = frozenset()
 # tests pin the recipes), which run on every PR regardless of this list;
 # `claude-review.yml` runs unconditionally, and §19.1's gate on a rulebook
 # change is the review, not the build matrix. Skipping the two job-gated
-# required contexts (server-build, registry-gate) and the three client-test
-# legs' steps on a SKILL.md-only PR loses nothing that CI ever checked.
+# required contexts (server-build, registry-gate), the Linux client test
+# shards and the steps of the macOS and Windows client-test legs on a
+# SKILL.md-only PR loses nothing that CI ever checked.
 #
 # codeql.yml's `paths-ignore:` mirrors this tuple; the same test pins it.
 INERT_DIRS = (
@@ -159,7 +160,7 @@ GITHUB_RULES = {
     ".github/dependabot.yml": NONE,
     ".github/FUNDING.yml": NONE,
     ".github/pull_request_template.md": NONE,
-    # Run by the (ungated) Unicode scan job only.
+    # Run by the Unicode scan step of the (ungated) Sanity job only.
     ".github/scripts/check-unicode.py": NONE,
 }
 
