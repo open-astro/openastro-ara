@@ -69,6 +69,8 @@ INERT_DIRS = (
     "docs/",
     ".claude/",
     ".github/ISSUE_TEMPLATE/",
+    # #1812: changelog fragments, read only by scripts/changelog-fragments.py in the Sanity job.
+    "changelog.d/",
 )
 
 # Root-level files that are prose and nothing else. Deliberately short:
@@ -127,6 +129,8 @@ SCRIPT_RULES = {
     "scripts/check-adr-authorization.py": NONE,
     "scripts/check-adr-scope.py": NONE,
     "scripts/check-adr-shape.py": NONE,
+    # Changelog fragment check (#1812): run by the Sanity job, read by no .NET or client job.
+    "scripts/changelog-fragments.py": NONE,
     "scripts/check-falsified-by.py": NONE,
     "scripts/check-pr-template.py": NONE,
     "scripts/check-settings-registry.mjs": NONE,
