@@ -1835,9 +1835,13 @@
   "@shellSettings": {
     "description": "Simple Mode top bar: Settings button tooltip; title of the Settings page"
   },
-  "shellSky": "Sky",
+  "shellSky": "Sky Map",
   "@shellSky": {
     "description": "Simple Mode left rail button: show the sky (planetarium)"
+  },
+  "shellStats": "Stats",
+  "@shellStats": {
+    "description": "Simple Mode left rail button: open the Stats page"
   },
   "shellInfo": "Info",
   "@shellInfo": {

@@ -2394,8 +2394,14 @@ abstract class AppLocalizations {
   /// Simple Mode left rail button: show the sky (planetarium)
   ///
   /// In en, this message translates to:
-  /// **'Sky'**
+  /// **'Sky Map'**
   String get shellSky;
+
+  /// Simple Mode left rail button: open the Stats page
+  ///
+  /// In en, this message translates to:
+  /// **'Stats'**
+  String get shellStats;
 
   /// Simple Mode left rail button: show the info strips
   ///

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
+import 'package:openastroara/state/album/album_art.dart';
 import 'package:openastroara/state/album/album_frame.dart';
 import 'package:openastroara/state/album/album_matching.dart';
 
@@ -269,4 +270,21 @@ void main() {
             f.filterName, f.targetName, f.updatedUtc),
         reason: 'the cache file round-trips the row');
   });
+
+  test(
+    'skyPickArt finds the Art by the engine\'s NAME-prefixed common name alone',
+    () {
+      final catalog = [_dso('NGC1976', name: 'Orion Nebula', m: 42)];
+      const art = AlbumArt(asset: 'assets/album/m42.webp');
+      expect(
+        skyPickArt(
+          ['NAME Orion Nebula'],
+          'Selected object',
+          catalog,
+          {'M42': art},
+        ),
+        same(art),
+      );
+    },
+  );
 }
