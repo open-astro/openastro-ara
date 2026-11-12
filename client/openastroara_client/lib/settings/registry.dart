@@ -2229,7 +2229,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.dome.radius_mm',
     label: 'Dome radius',
-    description: 'The radius of the dome in millimetres, from its centre to the wall. The scope must sit inside it.',
+    description: 'The radius of the dome in millimeters, from its center to the wall. The scope must sit inside it.',
     keywords: ['dome', 'radius', 'geometry', 'follow'],
     path: ['Settings', 'Equipment', 'Dome'],
     type: SettingType.doubleRange(min: 0, max: 100000, step: 10),
@@ -2239,7 +2239,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.dome.scope_position',
     label: 'Scope position in the dome',
-    description: 'Where the telescope sits relative to the dome centre, in millimetres: north, east and up. Three fields in the Geometry section of the Dome panel.',
+    description: 'Where the telescope sits relative to the dome center, in millimeters: north, east and up. Three fields in the Geometry section of the Dome panel.',
     keywords: ['dome', 'scope', 'position', 'offset', 'geometry', 'pier'],
     path: ['Settings', 'Equipment', 'Dome'],
     type: SettingType.complex(),
@@ -2249,7 +2249,7 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'eq.dome.axis_offsets',
     label: 'Mount axis offsets',
-    description: 'The axis length, lateral offset and Dec axis horizontal offset of a German equatorial mount in millimetres, so the slit follows the side of the pier.',
+    description: 'The axis length, lateral offset and Dec axis horizontal offset of a German equatorial mount in millimeters, so the slit follows the side of the pier.',
     keywords: ['dome', 'gem', 'axis', 'offset', 'lateral', 'geometry'],
     path: ['Settings', 'Equipment', 'Dome'],
     type: SettingType.complex(),

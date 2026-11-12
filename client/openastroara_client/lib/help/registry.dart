@@ -2182,7 +2182,7 @@ const Map<String, Help> helpRegistry = {
     body:
         'Where the slit has to be depends on the radius of the dome, where the telescope sits inside it, and (on a '
         'German equatorial mount) the mount axis offsets, because the telescope swings to a different spot on each '
-        'side of the pier. Measure from the centre of the dome: north, east and up are positive. A telescope placed '
+        'side of the pier. Measure from the center of the dome: north, east and up are positive. A telescope placed '
         'outside the radius of the dome is refused.',
   ),
   'eq.dome.tolerance': Help(

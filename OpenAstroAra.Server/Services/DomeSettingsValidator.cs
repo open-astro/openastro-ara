@@ -53,7 +53,7 @@ internal static class DomeSettingsValidator {
         var offset = Math.Sqrt(Math.Pow(d.ScopePositionNorthSouthMm, 2) + Math.Pow(d.ScopePositionEastWestMm, 2) + Math.Pow(d.ScopePositionUpDownMm, 2));
         if (offset > d.DomeRadiusMm) {
             return string.Create(CultureInfo.InvariantCulture,
-                $"The scope sits outside the dome: its offset from the dome centre is {offset:0} mm, more than the dome radius of {d.DomeRadiusMm:0} mm.");
+                $"The scope sits outside the dome: its offset from the dome center is {offset:0} mm, more than the dome radius of {d.DomeRadiusMm:0} mm.");
         }
         if (d.FollowMount && d.DomeRadiusMm <= 0) {
             return "Set the dome radius before the dome follows the mount.";
