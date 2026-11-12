@@ -9,8 +9,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../state/settings/safety_policies_state.dart';
-import '../../state/simple_flats_choice_state.dart';
 import '../../models/sequence/imaging_run_body.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../state/equipment/camera_state.dart';
@@ -52,6 +50,7 @@ import '../../widgets/sequencer/run_completion_sheet.dart'
     show runFramesPerFilter;
 import 'simple_preflight.dart'
     show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
+import 'simple_calibration.dart' show SimpleNightCalibration;
 import 'simple_device_windows.dart' show SimpleGainSlider;
 import 'simple_preview_panel.dart'
     show
@@ -783,6 +782,8 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter>
 }
 
 TextStyle get _dim => kSimpleText.copyWith(color: AraColors.textSecondary);
+
+
 TextStyle get _head =>
     kSimpleText.copyWith(fontSize: 16, fontWeight: FontWeight.w600);
 
@@ -1315,7 +1316,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             style: kSimpleText.copyWith(color: AraColors.accentConnected),
           ),
         if (run.error != null || run.noStorage) _RunError(run),
-        if (editing == null && !imaging) const _FlatsChoice(),
+        if (editing == null) const _TargetFlats(),
         if (inPreflight && editing == null)
           Text(context.l10n.preflightImagingStartsAfter, style: _dim)
         else if (editing == null && !imaging) ...[
@@ -1533,6 +1534,8 @@ class _QueueList extends ConsumerWidget {
     final notifier = ref.read(simpleRunProvider.notifier);
     // A target that hasn't started can be edited, removed and moved.
     bool open(int i) => !run.started || i > cur;
+    // The Calibration block has no rows to edit and stays last.
+    bool editable(int i) => open(i) && !run.targets[i].calibration;
 
     Future<void> remove(int i) async {
       final t = run.targets[i];
@@ -1566,7 +1569,7 @@ class _QueueList extends ConsumerWidget {
           SizedBox(
             width: 28,
             height: 44,
-            child: open(i)
+            child: editable(i)
                 ? ReorderableDragStartListener(
                     index: i,
                     child: Semantics(
@@ -1587,7 +1590,7 @@ class _QueueList extends ConsumerWidget {
             child: InkWell(
               key: Key('simple-run-edit-$i'),
               borderRadius: BorderRadius.circular(AraRadius.container),
-              onTap: open(i) ? () => onEdit(i) : null,
+              onTap: editable(i) ? () => onEdit(i) : null,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1831,6 +1834,9 @@ class _NightDone extends ConsumerWidget {
               ],
             ),
         ],
+        if (info.startedUtc case final from?)
+          if (info.completedUtc case final to?)
+            SimpleNightCalibration(startUtc: from, endUtc: to),
         SizedBox(
           width: double.infinity,
           child: FilledButton(
@@ -1844,37 +1850,51 @@ class _NightDone extends ConsumerWidget {
   }
 }
 
-/// A profile set to ask about flats answers here, before the run starts: Simple
-/// Mode has no popups. A profile with its own setting needs no answer.
-class _FlatsChoice extends ConsumerWidget {
-  const _FlatsChoice();
+/// The target's flats (#1757, round 2): none, right after its last frame (at
+/// its rotator angle), or with the queue's end-of-night flats. Shot from a
+/// panel, or a screen the run asks for first.
+class _TargetFlats extends ConsumerWidget {
+  const _TargetFlats();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final ask = ref.watch(
-      safetyPoliciesProvider.select(
-        (s) => s.calibrationCaptureDefault == CalibrationCaptureDefault.ask,
-      ),
-    );
-    if (!ask) return const SizedBox.shrink();
     final l10n = context.l10n;
-    return Row(
-      spacing: AraSpace.s12,
+    final filters = [
+      for (final s in ref.watch(simpleRunPlanProvider))
+        if (s.filterName.isNotEmpty) s.filterName,
+    ];
+    if (filters.isEmpty) return const SizedBox.shrink();
+    return Column(
+      key: const Key('simple-run-flats'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
       children: [
-        Text(l10n.planFlats, style: _dim),
-        Expanded(
-          child: SimpleSegments<String>(
-            keyPrefix: 'simple-run-flats',
-            group: l10n.planFlats,
-            options: [
-              ('later', l10n.planFlatsNone, 'none'),
-              ('sky_at_twilight', l10n.planFlatsSky, 'sky'),
-              ('panel_at_end', l10n.planFlatsPanel, 'panel'),
-            ],
-            selected: ref.watch(simpleFlatsChoiceProvider),
-            onPick: ref.read(simpleFlatsChoiceProvider.notifier).set,
-          ),
+        Row(
+          children: [
+            Text(l10n.planFlats, style: kSimpleText),
+            const SizedBox(width: AraSpace.s8),
+            Expanded(
+              child: Text(
+                l10n.planFlatsFor(filters.join(', ')),
+                style: _dim,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
+        SimpleSegments<SimpleTargetFlats>(
+          keyPrefix: 'simple-run-flats',
+          group: l10n.planFlats,
+          options: [
+            (SimpleTargetFlats.none, l10n.planFlatsNone, 'none'),
+            (SimpleTargetFlats.afterTarget, l10n.planFlatsAfterTarget, 'after'),
+            (SimpleTargetFlats.endOfNight, l10n.planFlatsEndOfNight, 'end'),
+          ],
+          selected: ref.watch(simpleRunFlatsProvider),
+          onPick: ref.read(simpleRunFlatsProvider.notifier).set,
+        ),
+        if (ref.watch(simpleRunFlatsProvider) != SimpleTargetFlats.none)
+          Text(l10n.planFlatsHint, style: _dim),
       ],
     );
   }

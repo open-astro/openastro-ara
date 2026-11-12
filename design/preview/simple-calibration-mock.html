@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simple Calibration Mode</title>
+<style>
+  /* Single dark look on purpose: DESIGN.md tokens from lib/theme/ara_colors.dart. Layout: the iPad scene, a mode panel left of the right rail. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+    --ok: #4CAF50; --busy: #FFB300; --info: #42A5F5; --sel: #1976D2; --tile: #383838;
+    --link: #64B5F6; --err: #FF8A80; --stop: #D32F2F; --tint: rgba(66,165,245,.18);
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys); padding-block: 32px 64px;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .page { max-width: 1024px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 76ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+  .lbl { color: var(--text2); font-size: 13px; margin-right: 6px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; vertical-align: middle; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 12px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+  .ipad { height: 820px; max-width: 100%; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 35% 45%, #2a2f3a 0, #101217 55%, #07080b 100%); }
+  .p { position: absolute; background: rgba(14,14,14,.9); border-radius: 10px; box-shadow: inset 0 0 0 1px var(--border); }
+  .rail { right: 16px; top: 180px; width: 72px; padding: 8px 6px; display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .chip { width: 60px; min-height: 52px; border-radius: 8px; background: var(--tile); display: grid; place-items: center; text-align: center; font-size: 12px; line-height: 1.2; padding: 4px 2px; overflow: hidden; }
+  .chip.small { font-size: 10.5px; letter-spacing: -.2px; }
+  .chip small { display: block; color: var(--text2); font-size: 11px; }
+  .shutter { width: 60px; height: 60px; border-radius: 50%; border: 3px solid #fff; display: grid; place-items: center; }
+  .shutter b { width: 0; height: 0; border-left: 20px solid #fff; border-top: 13px solid transparent; border-bottom: 13px solid transparent; margin-left: 6px; }
+  .shutter.run b { width: 24px; height: 24px; border: 0; border-radius: 4px; background: var(--stop); margin: 0; }
+  .shutter-cap { font-size: 11px; color: var(--text2); text-align: center; max-width: 64px; }
+  .panel { right: 104px; top: 16px; width: min(380px, calc(100% - 120px)); max-height: calc(100% - 32px); overflow: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .head { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 16px; min-height: 32px; }
+  .sect { color: var(--text2); font-size: 12px; margin-top: 8px; }
+  .rows { display: flex; flex-direction: column; }
+  .r { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 0; border-top: 1px solid #2a2a2a; }
+  .rows .r:first-child { border-top: 0; }
+  .r .l { flex: 1; min-width: 0; }
+  .r .l small { display: block; color: var(--text2); font-size: 12px; }
+  .st { font-size: 12px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .st.miss { color: var(--busy); box-shadow: inset 0 0 0 1px var(--busy); }
+  .st.ok { color: var(--ok); box-shadow: inset 0 0 0 1px var(--ok); }
+  .st.old { color: var(--busy); box-shadow: inset 0 0 0 1px var(--busy); }
+  .tabs { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin: 4px 0 2px; flex: none; }
+  .tabs button { flex: 1; background: transparent; color: var(--text); border: 0; min-height: 40px; font: 13px var(--sys); cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--sel); color: #fff; }
+  .segrow { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .segrow span { flex: 1; text-align: center; padding: 8px 4px; font-size: 13px; }
+  .segrow span.on { background: var(--tint); color: var(--link); }
+  .act { min-height: 44px; flex: 1; border: 0; border-radius: 10px; background: var(--tile); color: var(--text); font: 600 14px var(--sys); cursor: pointer; padding: 8px 12px; }
+  .act.out { background: transparent; box-shadow: inset 0 0 0 1px var(--border); }
+  .act.go { background: #1565C0; color: #fff; }
+  .acts { display: flex; gap: 8px; margin-top: 6px; }
+  .hint { color: var(--text2); font-size: 12px; margin: 2px 0 0; }
+  .warn { color: var(--busy); font-size: 13px; margin: 2px 0 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips span { padding: 6px 10px; border-radius: 8px; background: var(--tile); font-size: 13px; }
+  .chips span.on { background: var(--sel); color: #fff; }
+  .cover { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .cover b { font-weight: 600; }
+  .new { outline: 1.5px dashed var(--busy); outline-offset: 2px; border-radius: 8px; }
+
+  .pills { position: absolute; left: 16px; top: 16px; display: flex; flex-direction: column; gap: 8px; max-width: 420px; }
+  .pill { padding: 10px 14px; border-radius: 10px; background: rgba(14,14,14,.9); box-shadow: inset 0 0 0 1px var(--border); display: flex; gap: 10px; align-items: center; }
+  .pill i { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .pill.q { background: rgba(255,179,0,.16); box-shadow: inset 0 0 0 1px var(--busy); }
+  .pill .grow { flex: 1; min-width: 0; }
+  .sheet { left: 50%; top: 50%; transform: translate(-50%,-50%); width: min(440px, calc(100% - 140px)); padding: 18px 20px; }
+  .big { font-size: 30px; font-weight: 300; font-variant-numeric: tabular-nums; }
+  .tile { flex: 1; min-height: 44px; border-radius: 10px; background: var(--tile); padding: 4px 10px; display: flex; flex-direction: column; justify-content: center; font-size: 13px; }
+  .tile small { color: var(--text2); font-size: 11px; }
+  .decide { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; color: var(--text2); font-size: 13px; }
+  .decide b { color: var(--text); font-weight: 600; }
+  .decide ul { margin: 6px 0 0; padding-left: 18px; }
+  @media (max-width: 720px) { .pills { display: none; } .ipad { height: 900px; } }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <h1>Calibration, round 2: flats per night, darks and bias per camera</h1>
+  <p class="note">Second round for #1757 / #1563 after the first rig review (2026-11-11). Flats belong to the night (filters, rotator angle, dust). Darks and bias belong to the camera and last months, so Darks &amp; bias becomes the camera's library, not tonight's checklist. Dashed amber marks what changed from round 1. Values are examples.</p>
+
+  <div class="controls">
+    <span><span class="lbl">Scene</span><span class="seg" id="scene">
+      <button aria-pressed="true" data-v="flats">Flats</button><button data-v="lib">Darks &amp; bias</button><button data-v="guide">Guide Camera</button><button data-v="plan">Plan sheet</button><button data-v="done">Night done</button>
+    </span></span>
+  </div>
+  <div class="controls" id="ctl-lib" hidden>
+    <span><span class="lbl">Library</span><span class="seg" id="lstate">
+      <button aria-pressed="true" data-v="covers">Covers the plan</button><button data-v="gap">Gap for the plan</button><button data-v="old">Getting old</button><button data-v="empty">Empty</button><button data-v="build">Building</button>
+    </span></span>
+  </div>
+  <div class="controls" id="ctl-done" hidden>
+    <span><span class="lbl">Library</span><span class="seg" id="dstate">
+      <button aria-pressed="true" data-v="libok">Has tonight's darks</button><button data-v="libgap">Lacks tonight's darks</button>
+    </span></span>
+  </div>
+
+  <div class="ipad" id="ipad" role="img" aria-label="iPad scene"></div>
+  <div class="decide" id="decide"></div>
+</div>
+
+<script>
+const S = { scene: 'flats', lstate: 'covers', dstate: 'libok' };
+document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  seg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  S[seg.id] = b.dataset.v; render();
+}));
+
+const rail = (chipTop, chipSub, cap, running) => `
+  <div class="p rail">
+    <div class="chip small">Calibration</div>
+    <div class="chip">${chipTop}<small>${chipSub}</small></div>
+    <div class="shutter ${running ? 'run' : ''}"><b></b></div>
+    <div class="shutter-cap new">${cap}</div>
+  </div>`;
+const tabs = sel => `<div class="tabs">${[['flats','Flats'],['lib','Darks & bias'],['guide','Guide Camera']].map(([v,n]) => `<button aria-selected="${sel===v}">${n}</button>`).join('')}</div>`;
+const tag = (cls, t) => `<span class="st ${cls}">${t}</span>`;
+
+function flats() {
+  const rows = [['L','Flats from 9 Nov · 0° rotator','ok','Covered'],['R','9 Nov flats at 90°, tonight at 0°','miss','Missing'],['G','','miss','Missing'],['B','Flats from 9 Nov · 0° rotator','ok','Covered'],['Ha','','miss','Missing']];
+  return `${rail('Flats','3 missing','Shoot flats')}
+  <div class="p panel"><div class="head">Calibration</div>${tabs('flats')}
+    <div class="sect">Tonight's filters · NGC 7000</div>
+    <div class="rows">${rows.map(([f,w,c,t]) => `<div class="r"><div class="l">${f}${w ? `<small>${w}</small>` : ''}</div>${tag(c,t)}</div>`).join('')}</div>
+    <div class="sect">Light</div>
+    <div class="segrow"><span class="on">Panel or screen</span><span>Twilight sky</span></div>
+    <p class="hint">No flat panel connected: the run asks you to put a screen or light box over the scope first.</p>
+    <div class="acts"><button class="act go">Shoot 3 missing flats</button></div>
+    <p class="hint new">Reshoot all keeps what you have and shoots every filter again.</p>
+  </div>`;
+}
+
+function lib() {
+  const st = S.lstate;
+  const darks = st === 'empty' ? [] : [
+    ['300 s · gain 100 · −10 °C', st==='old' ? '7 months old · 30 frames' : '3 weeks old · 30 frames', st==='old' ? 'old' : 'ok', st==='old' ? 'Old' : 'On file'],
+    ['180 s · gain 100 · −10 °C', '3 weeks old · 30 frames', 'ok', 'On file'],
+    ['60 s · gain 100 · −10 °C', '2 months old · 30 frames', 'ok', 'On file'],
+  ];
+  const bias = st === 'empty' ? [] : [['gain 100 · offset 50 · 1×1', '3 weeks old · 50 frames', 'ok', 'On file']];
+  const coverLine = {
+    covers: `<b style="color:var(--ok)">Covers your plan</b><span class="hint" style="margin:0">L R G B 300 s and Ha 180 s at gain 100, −10 °C</span>`,
+    gap: `<b style="color:var(--busy)">Your plan needs 120 s · gain 100 · −10 °C</b><span class="hint" style="margin:0">Ha in the queue is 120 s; the library has 60, 180 and 300 s.</span>`,
+    old: `<b style="color:var(--busy)">Covers your plan, but the 300 s darks are 7 months old</b><span class="hint" style="margin:0">Darks drift as a sensor ages. Refresh them when you can.</span>`,
+    empty: `<b style="color:var(--busy)">No darks or bias for this camera yet</b><span class="hint" style="margin:0">Build them once on a cloudy night; they last months.</span>`,
+    build: `<b>Building · 120 s darks · 12 of 30</b><span class="hint" style="margin:0">Then bias, 50 frames.</span>`,
+  }[st];
+  const chipSub = { covers: 'Ready', gap: '1 missing', old: '1 old', empty: 'Empty', build: '12 / 80' }[st];
+  const cap = { covers: 'Nothing to build', gap: 'Build 120 s', old: 'Refresh 300 s', empty: 'Build for plan', build: 'Stop' }[st];
+  return `${rail('Library', chipSub, cap, st==='build')}
+  <div class="p panel"><div class="head">Calibration</div>${tabs('lib')}
+    <div class="sect new">ZWO ASI533MC Pro · reused for months</div>
+    <div class="cover new">${coverLine}</div>
+    <div class="sect">Darks</div>
+    <div class="rows">${darks.length ? darks.map(([a,w,c,t]) => `<div class="r"><div class="l">${a}<small>${w}</small></div>${tag(c,t)}</div>`).join('') : '<p class="hint">None yet.</p>'}</div>
+    <div class="sect">Bias</div>
+    <div class="rows">${bias.length ? bias.map(([a,w,c,t]) => `<div class="r"><div class="l">${a}<small>${w}</small></div>${tag(c,t)}</div>`).join('') : '<p class="hint">None yet.</p>'}</div>
+    <div class="sect new">Build or refresh</div>
+    <div class="chips new"><span>30 s</span><span class="on">60 s</span><span class="on">120 s</span><span class="on">180 s</span><span class="on">300 s</span><span>600 s</span></div>
+    <p class="hint">Gain 100 · offset 50 · −10 °C, from the plan. Bias at the same gain and offset. The run asks for the lens cap first.</p>
+    <div class="acts"><button class="act ${st==='covers'?'':'go'}">${st==='gap'?'Build 120 s darks':st==='old'?'Refresh 300 s darks':st==='empty'?'Build for my plan':'Build picked'}</button><button class="act out">Add to queue</button></div>
+  </div>`;
+}
+
+function guide() {
+  return `${rail('Guide','Ready','Nothing to build')}
+  <div class="p panel"><div class="head">Calibration</div>${tabs('guide')}
+    <div class="sect">Dark library</div>
+    <div class="rows"><div class="r"><div class="l">Covers 1 · 2 · 3 s<small>Built 8 Nov · −5 °C · gain 60</small></div>${tag('ok','On file')}</div>
+      <div class="r"><div class="l">Use while guiding</div><div class="segrow" style="width:140px"><span class="on">On</span><span>Off</span></div></div></div>
+    <div class="acts"><button class="act">Rebuild</button><button class="act out">Delete</button></div>
+    <div class="sect">Bad-pixel map</div>
+    <div class="rows"><div class="r"><div class="l">Built<small>3856 hot pixels</small></div>${tag('ok','On file')}</div>
+      <div class="r"><div class="l">Use while guiding</div><div class="segrow" style="width:140px"><span class="on">On</span><span>Off</span></div></div></div>
+    <div class="acts new"><button class="act">Rebuild</button><button class="act out">Delete</button></div>
+    <p class="hint">Building asks you to cover the guide scope first.</p>
+  </div>`;
+}
+
+function plan() {
+  return `<div class="p rail"><div class="chip">Plan</div><div class="chip">Plan<small>6 h 10</small></div><div class="shutter"><b></b></div></div>
+  <div class="p panel"><div class="head">Edit NGC 7000</div>
+    <div class="sect">Filters</div>
+    <div class="rows">${[['L','300 s','× 40'],['R','300 s','× 30'],['G','300 s','× 30'],['Ha','300 s','× 20']].map(([f,e,n]) => `<div class="r"><div class="l" style="flex:0 0 40px">${f}</div><div class="tile"><small>Exposure</small>${e}</div><div class="tile"><small>Frames</small>${n}</div></div>`).join('')}</div>
+    <div class="r new" style="border-top:1px solid #2a2a2a"><div class="l">Flats<small>For L, R, G and Ha · panel or screen</small></div></div>
+    <div class="segrow new"><span>None</span><span class="on">After target</span><span>End of night</span></div>
+    <p class="hint new">After target: flats for this target's filters right after its last frame, at its rotator angle. End of night: after the last target. With no panel the run asks for the screen first.</p>
+  </div>`;
+}
+
+function done() {
+  const gap = S.dstate === 'libgap';
+  return `<div class="pills"><div class="pill q"><span class="grow">Put the screen or light box over the scope, then press Resume to take the flats.</span><button class="act" style="flex:none;min-height:36px">Resume</button></div></div>
+  <div class="p rail"><div class="chip">Plan</div><div class="chip">Plan<small>Done</small></div><div class="shutter"><b></b></div></div>
+  <div class="p sheet"><div class="head">Night done</div>
+    <div class="hint">21:14 – 04:52 · 7 h 38 min · stopped at dawn</div>
+    <div class="big" style="margin-top:8px">186 <span style="font-size:14px;color:var(--text2)">frames</span></div>
+    <div class="rows"><div class="r"><div class="l">NGC 7000</div><span class="hint">L 60 · R 40 · G 40 · Ha 46</span></div>
+      <div class="r new"><div class="l">Flats missing<small>R, G, Ha</small></div><button class="act" style="flex:none">Take flats</button></div>
+      ${gap ? `<div class="r new"><div class="l">Darks missing from the library<small>Ha 120 s · gain 100 · −10 °C, new tonight</small></div><button class="act out" style="flex:none">Take darks</button></div>` : ''}
+    </div>
+    <div class="acts"><button class="act">New plan</button></div>
+  </div>`;
+}
+
+const notes = {
+  flats: '<b>Flats</b> stay per night: tonight\'s filters, why each one is covered or missing, the light, and one button that shoots what is missing. <b>Proposal:</b> the shutter does the tab\'s main action, and its caption says what (here, Shoot flats).',
+  lib: '<b>Darks &amp; bias</b> is the camera\'s library: what is on file, how old, and whether it covers the queued plan. Build picks exposures as chips, prefilled with what the plan needs. <b>Open question for the daemon:</b> the library does not record which camera took a dark today, so "per camera" means per profile until the daemon keys it by camera. <b>Proposal:</b> a dark set older than 6 months reads Old (amber).',
+  guide: '<b>Guide Camera</b> as the build you reviewed, plus the bad-pixel map\'s count, and the bad-pixel map now gets Rebuild and Delete like the dark library (the guider\'s delete route takes either file). Its shutter builds whatever is missing (asking for the guide scope cover first).',
+  plan: '<b>Plan sheet:</b> rows are lights only again (per-row Light / Flat goes). Each target gets a Flats row: None, After target, or End of night (the old profile-driven None / Sky / Panel row folds into this). Your choice 2026-11-11: a Flats row per target.',
+  done: '<b>Night done</b> offers flats every night. It offers darks only when tonight\'s lights have no matching library darks (a new exposure, gain or temperature). Your choice 2026-11-11.',
+};
+
+function render() {
+  document.getElementById('ctl-lib').hidden = S.scene !== 'lib';
+  document.getElementById('ctl-done').hidden = S.scene !== 'done';
+  document.getElementById('ipad').innerHTML = { flats, lib, guide, plan, done }[S.scene]();
+  document.getElementById('decide').innerHTML = notes[S.scene];
+}
+render();
+</script>
+
+</body>
+</html>
