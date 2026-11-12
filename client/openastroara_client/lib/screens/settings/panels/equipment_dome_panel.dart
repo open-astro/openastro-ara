@@ -53,7 +53,7 @@ class EquipmentDomePanel extends ConsumerWidget {
           onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.dome, v),
           hint: 'Off by default — dome connect actuates shutter',
         ),
-        const SettingsSectionHeader('Following the mount'),
+        SettingsSectionHeader(context.l10n.domePanelFollowingHeader),
         const _DomeFollowSection(),
       ],
     );
@@ -69,8 +69,9 @@ class _DomeFollowSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
     final settings = ref.watch(domeSettingsProvider).value;
-    if (settings == null) return const Text('Reading…');
+    if (settings == null) return Text(l10n.domePanelReadingSettings);
     final dome = ref.watch(domeProvider).value;
     final canTurn = dome?.capabilities?.canSetAzimuth ?? false;
     // The dome status, not the saved settings: parking, a turn of the dial or
@@ -79,13 +80,14 @@ class _DomeFollowSection extends ConsumerWidget {
 
     Future<void> save(DomeSettings next) async {
       final messenger = ScaffoldMessenger.of(context);
-      final l10n = context.l10n;
       try {
         await ref.read(domeSettingsProvider.notifier).save(next);
       } catch (e) {
         messenger.showSnackBar(
           SnackBar(
-            content: Text("Couldn't save the dome: ${failureReason(l10n, e)}"),
+            content: Text(
+              '${l10n.domePanelCouldntSave}: ${failureReason(l10n, e)}',
+            ),
             backgroundColor: AraColors.accentError,
           ),
         );
@@ -94,14 +96,13 @@ class _DomeFollowSection extends ConsumerWidget {
 
     Future<void> follow(bool on) async {
       final messenger = ScaffoldMessenger.of(context);
-      final l10n = context.l10n;
       try {
         await ref.read(domeProvider.notifier).followMount(on);
       } catch (e) {
         messenger.showSnackBar(
           SnackBar(
             content: Text(
-              "Couldn't change following: ${failureReason(l10n, e)}",
+              '${l10n.deviceCouldntFollowMount}: ${failureReason(l10n, e)}',
             ),
             backgroundColor: AraColors.accentError,
           ),
@@ -131,35 +132,26 @@ class _DomeFollowSection extends ConsumerWidget {
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Text(
-            'With this on, Ara turns the dome so its slit stays in front of '
-            'the telescope: after a mount slew, after a meridian flip, and '
-            'while tracking whenever the slit falls behind by more than the '
-            'tolerance. Turning the dome by hand, parking it, sending it '
-            'home, stopping it or disconnecting it turns this off, and so do '
-            'an emergency stop, an unsafe-weather reaction and a geometry '
-            'that puts the telescope outside the dome. The dome must be able '
-            'to turn to an azimuth.',
+            l10n.domePanelFollowNote,
             style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: AraColors.textSecondary),
           ),
         ),
         SettingsSwitchRow(
-          label: 'Follow the mount',
+          label: l10n.domePanelFollowMount,
           helpKey: 'eq.dome.follow',
           value: following,
           onChanged: canTurn || following ? follow : (_) {},
-          hint: canTurn || following
-              ? null
-              : 'Connect a dome that can turn to an azimuth first',
+          hint: canTurn || following ? null : l10n.domePanelFollowNeedsAzimuth,
         ),
-        const SettingsSectionHeader('Geometry'),
+        SettingsSectionHeader(l10n.domePanelGeometryHeader),
         SettingsDropdownRow<String>(
-          label: 'Mount type',
+          label: l10n.domePanelMountType,
           helpKey: 'eq.dome.geometry',
           value: settings.mountType,
-          items: const {
-            'equatorial': 'German equatorial',
-            'fork_on_wedge': 'Fork or alt-az (on a wedge)',
+          items: {
+            'equatorial': l10n.domePanelMountGermanEquatorial,
+            'fork_on_wedge': l10n.domePanelMountForkOnWedge,
           },
           onChanged: (v) {
             if (v != null && v != settings.mountType) {
@@ -168,56 +160,56 @@ class _DomeFollowSection extends ConsumerWidget {
           },
         ),
         number(
-          'Dome radius (mm)',
+          l10n.domePanelDomeRadius,
           settings.domeRadiusMm,
           (v) => settings.copyWith(domeRadiusMm: v),
           helpKey: 'eq.dome.geometry',
         ),
         number(
-          'Scope north of dome centre (mm)',
+          l10n.domePanelScopeNorth,
           settings.scopePositionNorthSouthMm,
           (v) => settings.copyWith(scopePositionNorthSouthMm: v),
         ),
         number(
-          'Scope east of dome centre (mm)',
+          l10n.domePanelScopeEast,
           settings.scopePositionEastWestMm,
           (v) => settings.copyWith(scopePositionEastWestMm: v),
         ),
         number(
-          'Scope above dome centre (mm)',
+          l10n.domePanelScopeAbove,
           settings.scopePositionUpDownMm,
           (v) => settings.copyWith(scopePositionUpDownMm: v),
         ),
         if (settings.isEquatorial) ...[
           number(
-            'Mount axis length (mm)',
+            l10n.domePanelMountAxisLength,
             settings.gemAxisMm,
             (v) => settings.copyWith(gemAxisMm: v),
           ),
           number(
-            'Mount lateral offset (mm)',
+            l10n.domePanelMountLateralOffset,
             settings.lateralAxisMm,
             (v) => settings.copyWith(lateralAxisMm: v),
           ),
           number(
-            'Dec axis horizontal offset (mm)',
+            l10n.domePanelDecAxisOffset,
             settings.decOffsetHorizontalMm,
             (v) => settings.copyWith(decOffsetHorizontalMm: v),
           ),
         ],
         number(
-          'Azimuth tolerance (°)',
+          l10n.domePanelAzimuthTolerance,
           settings.azimuthToleranceDegrees,
           (v) => settings.copyWith(azimuthToleranceDegrees: v),
           helpKey: 'eq.dome.tolerance',
         ),
         SettingsSwitchRow(
-          label: 'Turn during mount slews',
+          label: l10n.domePanelTurnDuringSlews,
           helpKey: 'eq.dome.tolerance',
           value: settings.synchronizeDuringMountSlew,
           onChanged: (v) =>
               save(settings.copyWith(synchronizeDuringMountSlew: v)),
-          hint: 'Off: the dome turns when the mount has finished slewing',
+          hint: l10n.domePanelTurnDuringSlewsHint,
         ),
       ],
     );
@@ -281,7 +273,9 @@ class _DomeBodyState extends ConsumerState<_DomeBody> {
               on: s.runtimeState == 'slewing',
               child: Text(
                 s.runtimeState == 'slewing'
-                    ? (s.following ? 'Following the mount…' : 'Slewing…')
+                    ? (s.following
+                          ? context.l10n.deviceFollowingMount
+                          : context.l10n.domePanelSlewing)
                     : 'Shutter moving…',
                 style: TextStyle(
                   color: s.runtimeState == 'slewing'

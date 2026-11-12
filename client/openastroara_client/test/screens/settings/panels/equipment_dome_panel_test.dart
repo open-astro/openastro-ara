@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/dome_settings.dart';
@@ -113,6 +114,7 @@ Future<_FakeDomeApi> _pump(
   WidgetTester tester,
   DomeStatus? status, {
   _FakeProfileApi? profile,
+  Locale? locale,
 }) async {
   // A working device's status blinks (DESIGN.md status rule) and never settles: Reduce Motion holds it.
   tester.platformDispatcher.accessibilityFeaturesTestValue =
@@ -130,7 +132,12 @@ Future<_FakeDomeApi> _pump(
         domeApiFactoryProvider.overrideWithValue((_) => api),
         if (profile != null) profileApiProvider.overrideWithValue(profile),
       ],
-      child: const MaterialApp(home: Scaffold(body: EquipmentDomePanel())),
+      child: MaterialApp(
+        locale: locale,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const Scaffold(body: EquipmentDomePanel()),
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -249,7 +256,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(profile.puts.single.domeRadiusMm, 1000);
 
-    final north = _field('Scope north of dome centre (mm)');
+    final north = _field('Scope north of dome center (mm)');
     await tester.scrollUntilVisible(
       north,
       200,
@@ -288,6 +295,26 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Mount axis length (mm)'), findsOneWidget);
+  });
+
+  testWidgets('the follow section and its geometry read in pt-BR', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _status(runtimeState: 'slewing', following: true),
+      profile: _FakeProfileApi(const DomeSettings()),
+      locale: const Locale('pt', 'BR'),
+    );
+    expect(find.text('Seguindo a montagem'), findsOneWidget);
+    expect(find.text('Seguindo a montagem…'), findsOneWidget);
+    expect(find.text('Seguir a montagem'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Raio da cúpula (mm)'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Geometria'), findsOneWidget);
   });
 
   testWidgets('no device connected shows the empty state + Connect…', (

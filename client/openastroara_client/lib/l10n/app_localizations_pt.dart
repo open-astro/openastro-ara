@@ -353,6 +353,72 @@ class AppLocalizationsPt extends AppLocalizations {
       'Couldn\'t change whether the dome follows the mount';
 
   @override
+  String get domePanelFollowingHeader => 'Following the mount';
+
+  @override
+  String get domePanelReadingSettings => 'Reading…';
+
+  @override
+  String get domePanelCouldntSave => 'Couldn\'t save the dome';
+
+  @override
+  String get domePanelFollowNote =>
+      'With this on, Ara turns the dome so its slit stays in front of the telescope: after a mount slew, after a meridian flip, and while tracking whenever the slit falls behind by more than the tolerance. Turning the dome by hand, parking it, sending it home, stopping it or disconnecting it turns this off, and so do an emergency stop, an unsafe-weather reaction and a geometry that puts the telescope outside the dome. The dome must be able to turn to an azimuth.';
+
+  @override
+  String get domePanelFollowMount => 'Follow the mount';
+
+  @override
+  String get domePanelFollowNeedsAzimuth =>
+      'Connect a dome that can turn to an azimuth first';
+
+  @override
+  String get domePanelGeometryHeader => 'Geometry';
+
+  @override
+  String get domePanelMountType => 'Mount type';
+
+  @override
+  String get domePanelMountGermanEquatorial => 'German equatorial';
+
+  @override
+  String get domePanelMountForkOnWedge => 'Fork or alt-az (on a wedge)';
+
+  @override
+  String get domePanelDomeRadius => 'Dome radius (mm)';
+
+  @override
+  String get domePanelScopeNorth => 'Scope north of dome center (mm)';
+
+  @override
+  String get domePanelScopeEast => 'Scope east of dome center (mm)';
+
+  @override
+  String get domePanelScopeAbove => 'Scope above dome center (mm)';
+
+  @override
+  String get domePanelMountAxisLength => 'Mount axis length (mm)';
+
+  @override
+  String get domePanelMountLateralOffset => 'Mount lateral offset (mm)';
+
+  @override
+  String get domePanelDecAxisOffset => 'Dec axis horizontal offset (mm)';
+
+  @override
+  String get domePanelAzimuthTolerance => 'Azimuth tolerance (°)';
+
+  @override
+  String get domePanelTurnDuringSlews => 'Turn during mount slews';
+
+  @override
+  String get domePanelTurnDuringSlewsHint =>
+      'Off: the dome turns when the mount has finished slewing';
+
+  @override
+  String get domePanelSlewing => 'Slewing…';
+
+  @override
   String get deviceDomeReadFailed => 'Dome read failed — check the device.';
 
   @override
@@ -5264,6 +5330,78 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get deviceCouldntFollowMount =>
       'Não foi possível alterar se a cúpula segue a montagem';
+
+  @override
+  String get domePanelFollowingHeader => 'Seguindo a montagem';
+
+  @override
+  String get domePanelReadingSettings => 'Lendo…';
+
+  @override
+  String get domePanelCouldntSave =>
+      'Não foi possível salvar os ajustes da cúpula';
+
+  @override
+  String get domePanelFollowNote =>
+      'Com isto ligado, o Ara gira a cúpula para manter a janela na frente do telescópio: depois de um movimento da montagem, depois de uma virada de meridiano e, durante o rastreamento, sempre que a janela ficar para trás mais do que a tolerância. Girar a cúpula manualmente, estacioná-la, mandá-la para o Início, pará-la ou desconectá-la desliga isto, assim como uma parada de emergência, uma reação a clima inseguro e uma geometria que coloque o telescópio fora da cúpula. A cúpula precisa conseguir girar até um azimute.';
+
+  @override
+  String get domePanelFollowMount => 'Seguir a montagem';
+
+  @override
+  String get domePanelFollowNeedsAzimuth =>
+      'Conecte primeiro uma cúpula que consiga girar até um azimute';
+
+  @override
+  String get domePanelGeometryHeader => 'Geometria';
+
+  @override
+  String get domePanelMountType => 'Tipo de montagem';
+
+  @override
+  String get domePanelMountGermanEquatorial => 'Equatorial alemã';
+
+  @override
+  String get domePanelMountForkOnWedge => 'Garfo ou alt-az (numa cunha)';
+
+  @override
+  String get domePanelDomeRadius => 'Raio da cúpula (mm)';
+
+  @override
+  String get domePanelScopeNorth =>
+      'Telescópio ao norte do centro da cúpula (mm)';
+
+  @override
+  String get domePanelScopeEast =>
+      'Telescópio a leste do centro da cúpula (mm)';
+
+  @override
+  String get domePanelScopeAbove => 'Telescópio acima do centro da cúpula (mm)';
+
+  @override
+  String get domePanelMountAxisLength => 'Comprimento do eixo da montagem (mm)';
+
+  @override
+  String get domePanelMountLateralOffset =>
+      'Deslocamento lateral da montagem (mm)';
+
+  @override
+  String get domePanelDecAxisOffset =>
+      'Deslocamento horizontal do eixo de declinação (mm)';
+
+  @override
+  String get domePanelAzimuthTolerance => 'Tolerância de azimute (°)';
+
+  @override
+  String get domePanelTurnDuringSlews =>
+      'Girar durante os movimentos da montagem';
+
+  @override
+  String get domePanelTurnDuringSlewsHint =>
+      'Desligado: a cúpula gira quando a montagem termina de se mover';
+
+  @override
+  String get domePanelSlewing => 'Girando…';
 
   @override
   String get deviceDomeReadFailed =>

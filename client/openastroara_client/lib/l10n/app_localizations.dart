@@ -681,6 +681,132 @@ abstract class AppLocalizations {
   /// **'Couldn\'t change whether the dome follows the mount'**
   String get deviceCouldntFollowMount;
 
+  /// Full UI Dome panel: the section header above the Follow the mount switch and its note
+  ///
+  /// In en, this message translates to:
+  /// **'Following the mount'**
+  String get domePanelFollowingHeader;
+
+  /// Full UI Dome panel: shown while the dome settings load
+  ///
+  /// In en, this message translates to:
+  /// **'Reading…'**
+  String get domePanelReadingSettings;
+
+  /// Full UI Dome panel: error lead when the daemon refused a geometry change (the reason follows after a colon)
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save the dome'**
+  String get domePanelCouldntSave;
+
+  /// Full UI Dome panel: the note under Following the mount; names what turns the dome and what turns following off
+  ///
+  /// In en, this message translates to:
+  /// **'With this on, Ara turns the dome so its slit stays in front of the telescope: after a mount slew, after a meridian flip, and while tracking whenever the slit falls behind by more than the tolerance. Turning the dome by hand, parking it, sending it home, stopping it or disconnecting it turns this off, and so do an emergency stop, an unsafe-weather reaction and a geometry that puts the telescope outside the dome. The dome must be able to turn to an azimuth.'**
+  String get domePanelFollowNote;
+
+  /// Full UI Dome panel: the switch that makes the dome keep its slit in front of the telescope
+  ///
+  /// In en, this message translates to:
+  /// **'Follow the mount'**
+  String get domePanelFollowMount;
+
+  /// Full UI Dome panel: hint under Follow the mount when the connected dome cannot turn to an azimuth
+  ///
+  /// In en, this message translates to:
+  /// **'Connect a dome that can turn to an azimuth first'**
+  String get domePanelFollowNeedsAzimuth;
+
+  /// Full UI Dome panel: the section header above the dome and mount measurements
+  ///
+  /// In en, this message translates to:
+  /// **'Geometry'**
+  String get domePanelGeometryHeader;
+
+  /// Full UI Dome panel: the mount type picker in the dome geometry
+  ///
+  /// In en, this message translates to:
+  /// **'Mount type'**
+  String get domePanelMountType;
+
+  /// Full UI Dome panel: mount type choice; a German equatorial mount adds its axis offsets to the slit math
+  ///
+  /// In en, this message translates to:
+  /// **'German equatorial'**
+  String get domePanelMountGermanEquatorial;
+
+  /// Full UI Dome panel: mount type choice for a fork or alt-az mount on an equatorial wedge
+  ///
+  /// In en, this message translates to:
+  /// **'Fork or alt-az (on a wedge)'**
+  String get domePanelMountForkOnWedge;
+
+  /// Full UI Dome panel: dome geometry field, in millimeters
+  ///
+  /// In en, this message translates to:
+  /// **'Dome radius (mm)'**
+  String get domePanelDomeRadius;
+
+  /// Full UI Dome panel: dome geometry field, in millimeters; negative is south
+  ///
+  /// In en, this message translates to:
+  /// **'Scope north of dome center (mm)'**
+  String get domePanelScopeNorth;
+
+  /// Full UI Dome panel: dome geometry field, in millimeters; negative is west
+  ///
+  /// In en, this message translates to:
+  /// **'Scope east of dome center (mm)'**
+  String get domePanelScopeEast;
+
+  /// Full UI Dome panel: dome geometry field, in millimeters; negative is below
+  ///
+  /// In en, this message translates to:
+  /// **'Scope above dome center (mm)'**
+  String get domePanelScopeAbove;
+
+  /// Full UI Dome panel: German equatorial mount geometry field, in millimeters
+  ///
+  /// In en, this message translates to:
+  /// **'Mount axis length (mm)'**
+  String get domePanelMountAxisLength;
+
+  /// Full UI Dome panel: German equatorial mount geometry field, in millimeters
+  ///
+  /// In en, this message translates to:
+  /// **'Mount lateral offset (mm)'**
+  String get domePanelMountLateralOffset;
+
+  /// Full UI Dome panel: German equatorial mount geometry field, in millimeters
+  ///
+  /// In en, this message translates to:
+  /// **'Dec axis horizontal offset (mm)'**
+  String get domePanelDecAxisOffset;
+
+  /// Full UI Dome panel: how far the slit may fall behind before the dome turns again, in degrees
+  ///
+  /// In en, this message translates to:
+  /// **'Azimuth tolerance (°)'**
+  String get domePanelAzimuthTolerance;
+
+  /// Full UI Dome panel: switch; the dome starts turning while the mount is still slewing
+  ///
+  /// In en, this message translates to:
+  /// **'Turn during mount slews'**
+  String get domePanelTurnDuringSlews;
+
+  /// Full UI Dome panel: hint under Turn during mount slews
+  ///
+  /// In en, this message translates to:
+  /// **'Off: the dome turns when the mount has finished slewing'**
+  String get domePanelTurnDuringSlewsHint;
+
+  /// Full UI Dome panel: the moving line while the dome turns on its own (not following the mount)
+  ///
+  /// In en, this message translates to:
+  /// **'Slewing…'**
+  String get domePanelSlewing;
+
   /// Dome window: the daemon couldn't read the dome
   ///
   /// In en, this message translates to:
