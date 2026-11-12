@@ -2290,8 +2290,11 @@ void main() {
   testWidgets(
     'Preflight\'s step panel hides the plan squares and the chip brings them back',
     (tester) async {
-      await _pump(tester, const Size(1024, 768), plan: squaresRun);
+      final c = await _pump(tester, const Size(1024, 768), plan: squaresRun);
       await _startPreflight(tester);
+      // To Focus: the plan step's panel is Plan's sheet, which hides them too.
+      c.read(simplePreflightProvider.notifier).next();
+      await tester.pump();
       final panelUp = find
           .byKey(const Key('simple-run-tracker'))
           .evaluate()
