@@ -17,7 +17,6 @@
 
 #endregion "copyright"
 
-using ASCOM.Alpaca.Clients;
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MySwitch;
@@ -165,7 +164,7 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
     /// device degrades to the same logged no-op as not-connected — never a fallback to a different
     /// device.</summary>
     public async Task SetSwitchValue(int alpacaDeviceNumber, short switchIndex, double value, IProgress<ApplicationStatus> progress, CancellationToken ct) {
-        AlpacaSwitch? client;
+        ISwitchDevice? client;
         short portId;
         string deviceId;
         lock (_gate) {
@@ -217,7 +216,7 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Sequencer switch-write boundary: the blocking ASCOM SetSwitchValue can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-write; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP-timeout OCE) is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]
-    private async Task RunSwitchWriteAsync(AlpacaSwitch client, short portId, double value, CancellationToken ct) {
+    private async Task RunSwitchWriteAsync(ISwitchDevice client, short portId, double value, CancellationToken ct) {
         try {
             // Race the blocking ASCOM call against both the sequencer token and a wall-clock bound so
             // a hung HTTP call can't pin the sequence thread. The abandoned write is observed.
@@ -260,14 +259,14 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
     // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
     // so no live match means no publish. Publish runs off-lock (EquipmentFaultHub.Publish is
     // non-blocking and never throws into the caller).
-    private void PublishOpFault(AlpacaSwitch client, EquipmentFaultKind kind, string details) {
+    private void PublishOpFault(ISwitchDevice client, EquipmentFaultKind kind, string details) {
         if (_faults is null) {
             return;
         }
         DiscoveredDeviceDto? device = null;
         lock (_gate) {
             foreach (var conn in _connections.Values) {
-                if (ReferenceEquals(conn.Client, client) && conn.State == EquipmentConnectionState.Connected) {
+                if (conn.Lifecycle.IsLive(client)) {
                     device = conn.Device;
                     break;
                 }
@@ -318,7 +317,7 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
     // SetSwitchValue.Execute goes through the mediator method — but the wrapper contract must work).
     // Targets the primary switch (the one its wrapper came from).
     internal void WriteSwitchValueBestEffort(short portId, double value) {
-        AlpacaSwitch? client;
+        ISwitchDevice? client;
         lock (_gate) {
             client = (_disposed ? null : PrimaryConnectionLocked())?.Client;
         }

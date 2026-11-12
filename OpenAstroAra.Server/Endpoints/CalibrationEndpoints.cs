@@ -89,9 +89,10 @@ public static class CalibrationEndpoints {
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .WithName("BuildDarkLibrary");
 
+        // #1757 — one camera's library (its groups plus the legacy, camera-less ones); no `camera` = the connected main camera.
         calibration.MapGet("/dark-library/status",
-                async (IDarkLibraryService svc, CancellationToken ct) =>
-                    Results.Ok(await svc.GetStatusAsync(ct)))
+                async ([FromQuery] string? camera, IDarkLibraryService svc, CancellationToken ct) =>
+                    Results.Ok(await svc.GetStatusAsync(camera, ct)))
             .Produces<DarkLibraryStateDto>(StatusCodes.Status200OK)
             .WithName("GetDarkLibraryStatus");
 

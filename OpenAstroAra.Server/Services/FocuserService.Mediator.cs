@@ -72,13 +72,13 @@ public sealed partial class FocuserService : IFocuserMediator {
     /// </summary>
     public FocuserInfo GetInfo() {
         lock (_gate) {
-            var connected = !_disposed && _state == EquipmentConnectionState.Connected && _client is not null;
+            var connected = _lifecycle.Live is not null;
             var caps = _capabilities;
             var runtime = _runtime;
             return new FocuserInfo {
                 Connected = connected,
-                Name = _device?.Name ?? string.Empty,
-                DeviceId = _device?.UniqueId ?? string.Empty,
+                Name = _lifecycle.Device?.Name ?? string.Empty,
+                DeviceId = _lifecycle.Device?.UniqueId ?? string.Empty,
                 Position = connected ? runtime.Position ?? 0 : 0,
                 Temperature = connected && runtime.Temperature is double t ? t : double.NaN,
                 IsMoving = connected && runtime.State is "moving" or "backlash_compensating",
@@ -104,7 +104,7 @@ public sealed partial class FocuserService : IFocuserMediator {
     // backlash to the same move (no return leg). The extra steps accumulate in _backlashOffset, so the hardware
     // sits at logical + offset and every reported position subtracts it. Blocking (runs on the pool); the sweep
     // suppresses compensation.
-    private void MoveCompensated(AlpacaFocuser client, int target) {
+    private void MoveCompensated(IFocuserDevice client, int target) {
         int lastDirection, offset;
         FocuserCapabilitiesDto? caps;
         lock (_gate) {
@@ -171,9 +171,9 @@ public sealed partial class FocuserService : IFocuserMediator {
     // a relative move is only meaningful against the focuser's true current position). Falls back to
     // the cache when disconnected / the read fails.
     private int CurrentPosition() {
-        AlpacaFocuser? client;
+        IFocuserDevice? client;
         lock (_gate) {
-            client = _state == EquipmentConnectionState.Connected ? _client : null;
+            client = _lifecycle.Live;
         }
         var live = client is not null ? Logical(ReadPosition(client)) : null;
         if (live is int p) {
@@ -185,20 +185,20 @@ public sealed partial class FocuserService : IFocuserMediator {
     }
 
     public void ToggleTempComp(bool tempComp) {
-        AlpacaFocuser? client;
+        IFocuserDevice? client;
         lock (_gate) {
-            client = _state == EquipmentConnectionState.Connected ? _client : null;
+            client = _lifecycle.Live;
         }
         if (client is null) {
             return; // not connected: no-op (the REST/sequencer caller has already validated)
         }
         TrySetTempComp(client, tempComp);
-        RefreshCacheOnce();
+        _lifecycle.Refresh();
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort property write: setting TempComp can throw on a focuser without temp-comp support; the failure is logged and ignored rather than faulting the sequence. CA1031's log-and-recover boundary applies.")]
-    private void TrySetTempComp(AlpacaFocuser client, bool tempComp) {
+    private void TrySetTempComp(IFocuserDevice client, bool tempComp) {
         try {
             client.TempComp = tempComp;
         } catch (Exception ex) {
@@ -209,12 +209,12 @@ public sealed partial class FocuserService : IFocuserMediator {
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Sequencer move boundary: the blocking ASCOM Move can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-move; cancellation is rethrown (the sequence is aborting), and any other escape is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]
     private async Task<int> MoveFocuserBlockingAsync(int target, CancellationToken ct) {
-        AlpacaFocuser? client;
+        IFocuserDevice? client;
         lock (_gate) {
-            if (_disposed) {
+            if (_lifecycle.IsDisposed) {
                 return 0;
             }
-            client = _state == EquipmentConnectionState.Connected ? _client : null;
+            client = _lifecycle.Live;
         }
         if (client is null) {
             // Not connected: the instruction's Validate has already blocked this; defensively report
@@ -270,7 +270,7 @@ public sealed partial class FocuserService : IFocuserMediator {
             PublishOpFault(client, EquipmentFaultKind.OpError, $"focuser Move to {target} failed: {ex.Message}");
             throw new SequenceEntityFailedException($"focuser Move to {target} failed: {ex.Message}", ex);
         }
-        RefreshCacheOnce();
+        _lifecycle.Refresh();
         // Prefer a direct device read for the returned position so a single-flight RefreshCacheOnce
         // that no-op'd against a concurrent timer tick can't make us report a stale cache value
         // instead of where the focuser actually settled. If both the live read and the cache are
@@ -291,7 +291,7 @@ public sealed partial class FocuserService : IFocuserMediator {
     // dropped/was superseded mid-wait (position unknown; the instruction must fail even though the
     // §42.3 disconnect episode owns the fault/reaction — the publish gate suppresses a spurious
     // stall event for that case, aligning with the mount/dome/filter settle loops).
-    private async Task<bool> WaitForMoveCompleteAsync(AlpacaFocuser client, CancellationToken ct) {
+    private async Task<bool> WaitForMoveCompleteAsync(IFocuserDevice client, CancellationToken ct) {
         var unknownStreak = 0;
         for (var i = 0; i < MoveSettleMaxPolls; i++) {
             await Task.Delay(MoveSettlePollInterval, ct).ConfigureAwait(false);
@@ -299,14 +299,13 @@ public sealed partial class FocuserService : IFocuserMediator {
             // must NOT be mistaken for "settled" the way a swallowed IsMoving read would be.
             bool stillOurClient;
             lock (_gate) {
-                stillOurClient = !_disposed && _state == EquipmentConnectionState.Connected
-                    && ReferenceEquals(_client, client);
+                stillOurClient = _lifecycle.IsLive(client);
             }
             if (!stillOurClient) {
                 return false;
             }
             var moving = ReadIsMoving(client);
-            RefreshCacheOnce();
+            _lifecycle.Refresh();
             if (moving == false) {
                 return true; // confirmed settled
             }
@@ -333,16 +332,16 @@ public sealed partial class FocuserService : IFocuserMediator {
     // only be blamed on the LIVE client — an op whose client was superseded or disposed by a user
     // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
     // so the liveness check and the device snapshot share one critical section.
-    private void PublishOpFault(AlpacaFocuser client, EquipmentFaultKind kind, string details) {
+    private void PublishOpFault(IFocuserDevice client, EquipmentFaultKind kind, string details) {
         if (_faults is null) {
             return;
         }
         DiscoveredDeviceDto? device;
         lock (_gate) {
-            if (!ReferenceEquals(_client, client)) {
+            if (!_lifecycle.IsCurrent(client)) {
                 return;
             }
-            device = _device;
+            device = _lifecycle.Device;
         }
         _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.Focuser, device?.UniqueId, device?.Name,
             kind, details, DateTimeOffset.UtcNow));
@@ -350,7 +349,7 @@ public sealed partial class FocuserService : IFocuserMediator {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: a transient/unsupported IsMoving read throws; report null ('unknown') so the settle-wait keeps polling rather than concluding 'settled', while a genuine disconnect is caught by the connection check in the loop. CA1031's log-and-recover boundary applies.")]
-    private static bool? ReadIsMoving(AlpacaFocuser client) {
+    private static bool? ReadIsMoving(IFocuserDevice client) {
         try {
             return client.IsMoving;
         } catch (Exception) {
@@ -360,7 +359,7 @@ public sealed partial class FocuserService : IFocuserMediator {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: a transient/unsupported Position read throws; report null so the caller falls back to the cached position rather than faulting. CA1031's log-and-recover boundary applies.")]
-    private static int? ReadPosition(AlpacaFocuser client) {
+    private static int? ReadPosition(IFocuserDevice client) {
         try {
             return client.Position;
         } catch (Exception) {

@@ -1199,18 +1199,20 @@ As it is on `master` (reconciled 2026-09-19, #1026 — this table describes the 
 
 | Job id | Context | Runner | Steps | Gated by |
 |---|---|---|---|---|
-| `sanity` | `Sanity (design docs)` ✅ required | `ubuntu-latest` | verify the required design docs exist; install gojq (the engine behind `gh --jq`, #1173) so the Flutter-bump selector cross-check runs on it; Python tooling tests (`scripts/tests/`); DUT1 table freshness; lint `DESIGN.md` with `@google/design.md` (fails on errors or any contrast-ratio finding, #1600) | never skipped |
+| `sanity` | `Sanity (design docs)` ✅ required | `ubuntu-latest` | verify the required design docs exist; install gojq (the engine behind `gh --jq`, #1173) so the Flutter-bump selector cross-check runs on it; Python tooling tests (`scripts/tests/`); DUT1 table freshness; lint `DESIGN.md` with `@google/design.md` (fails on errors or any contrast-ratio finding, #1600); Trojan-Source / invisible-Unicode scan; zizmor static audit of `.github/workflows/` (both were jobs of their own until 2026-11-12) | never skipped |
 | `changes` | `Changed paths` | `ubuntu-latest` | classify the PR diff into `docs_only` / `dotnet` / `client` outputs (fails open: an error runs everything, and both steps are `continue-on-error` so a checkout flake or a wedged clone leaves the job green with an annotation; only the outer 5-minute job timeout can still report failure — #1024; job-level `continue-on-error` was measured on #1043 to still publish a red check) | never skipped |
 | `alpaca-sim-smoke` | `Alpaca simulator harness (smoke)` | `ubuntu-latest` | download + verify the pinned Alpaca simulators; smoke-test the Alpaca API | `docs_only`, `dotnet` |
 | `alpaca-sim-integration` | `Alpaca discovery integration test` | `ubuntu-latest` | simulators + `dotnet test` of the discovery integration test | `docs_only`, `dotnet` |
 | `analyzer-gate` | `Analyzer gate (full solution, warnings = errors)` | `ubuntu-latest` | `dotnet build OpenAstroAra.sln -c Release` with warnings as errors; astrometry natives; `dotnet test` (non-Integration) | `docs_only`, `dotnet` |
 | `bench-arm64` | `Bench (linux-arm64, native)` | `ubuntu-24.04-arm` | build the test project; `dotnet test --filter TestCategory=bench` natively on arm64 Linux (the §42.2 virtual-observatory bench on the Pi's platform, #1173; `bench/run.sh` is the same lane under QEMU from a Mac) | `docs_only`, `dotnet` |
-| `server-build` | `Server (build + cross-publish + Docker)` ✅ required | `ubuntu-latest` | third-party licenses freshness gate; build Server + Fits; test Fits + Stretch; runtime smoke (`/healthz`); `dotnet publish linux-arm64`; QEMU arm64 Docker image + health probe; build + upload the arm64 `.deb` | `docs_only` only |
+| `server-build` | `Server (build + cross-publish + Docker)` ✅ required | `ubuntu-latest` | third-party licenses freshness gate; build Server + Fits; test Fits + Stretch; runtime smoke (`/healthz`); `dotnet publish linux-arm64`; QEMU arm64 Docker image + health probe; build + upload the arm64 `.deb`. The qemu build of `astap_cli` is cached on the submodule commit and `scripts/build-astap-cli.sh` | `docs_only` only |
 | `registry-gate` | `Settings + Help registry gate` ✅ required | `ubuntu-latest` | `node scripts/check-settings-registry.mjs`; `node scripts/check-help-registry.mjs` | `docs_only` only |
-| `client-test` | `Client (analyze + test) — <os>` ✅ required ×3 | `ubuntu-latest`, `macos-latest`, `windows-latest` (os matrix) | `flutter pub get`, `flutter analyze`, `flutter test` | `docs_only` at **step** level — the job always expands so its three required contexts report (#1025) |
+| `client-test-shard` | `Client (analyze + test) — ubuntu-latest, shard <n>/3` | `ubuntu-latest` (shard matrix 1-3) | `flutter pub get`; `flutter test` on every third test file; shard 1 also runs `flutter analyze`, the l10n freshness check and the page-logic tests | `docs_only` |
+| `client-test-linux` | `Client (analyze + test) — ubuntu-latest` ✅ required | `ubuntu-latest` | passes only when every shard passed (or the shards skipped a docs-only change) | never skipped |
+| `client-test` | `Client (analyze + test) — <os>` ✅ required ×2 | `macos-latest`, `windows-latest` (os matrix); `ubuntu-latest` when the leg has no work | `flutter pub get`, `flutter analyze`, `flutter test` — in the merge queue, on `master` and on a manual run only; on a pull request the legs report green with no work | `docs_only` and the event at **step** level — the job always expands so its two required contexts report (#1025) |
 | `client-build` | `Client (native build) — <target>` | `macos-latest` / `ubuntu-latest` / `windows-latest` (target matrix `macos` / `linux` / `windows`) | `flutter build <target> --release` | `docs_only`, `client` |
-| `unicode` | `Unicode scan` | `ubuntu-latest` | Trojan-Source / invisible-Unicode scan | never skipped |
-| `zizmor` | `zizmor (workflow audit)` | `ubuntu-latest` | static audit of `.github/workflows/` | never skipped |
+
+A new push to a branch cancels the run it replaces (`concurrency`, 2026-11-12); a merge group's run is never cancelled.
 
 Not in `ci.yml`: the `claude[bot]` review (`claude-review.yml`, `review` / `review-fork` contexts — a merge-gate item under §19.1, not a required context), CodeQL (`codeql.yml`, C# — skips prose-only PRs via a workflow-level `paths-ignore`, safe there because it is not a required context, #1022), the weekly Flutter-version check (`check-flutter.yml`), and trusted-author labelling. There is **no release job yet**: nothing runs on a `v0.0.1-ara.*` tag; that remains Phase 14/15 work.
 
@@ -1798,7 +1800,7 @@ AUTHORS=$(gh pr list --state all --limit 100 --head "chore/<name>" --json author
    - Run a 2-target sequence with simulator camera + simulator mount; openastro-phd2 connects and dithers.
    - Disconnect the client mid-sequence; wait 5 minutes; reconnect; verify session continued and frames were captured.
    - Open every section of the app. Note regressions.
-4. Update `CHANGELOG.md` (per §33.7) — rename `## [Unreleased]` → `## [0.0.1-ara.1] — <date>` with sections:
+4. Update `CHANGELOG.md` (per §33.7) — run `python3 scripts/changelog-fragments.py --release 0.0.1-ara.1 --date <date>`, which writes `## [0.0.1-ara.1] - <date>` from the `changelog.d/` fragments and deletes them (#1812); add a fragment first with sections:
    - Headless server + cross-platform desktop client architecture
    - Alpaca-only equipment (per §52, §68)
    - Plugin support deferred — see the `P1`–`P5` issue backlog
@@ -1806,9 +1808,8 @@ AUTHORS=$(gh pr list --state all --limit 100 --head "chore/<name>" --json author
    - Behavioral parity goals vs. upstream NINA where applicable
    - Lineage attribution
    - Known issues, install instructions
-   - Create fresh `## [Unreleased]` placeholder for the next release's work
 5. Bump `CommonAssemblyInfo.cs` to `0.0.1.0`; informational `0.0.1-ara.1`. Bump `pubspec.yaml` to `0.0.1+1`.
-6. **Final release PR.** Phase work has already been landing on `master` continuously (§22.0); this last PR carries the Phase 15 tail-end work (TODO sweep, version bumps, CHANGELOG entry, smoke-test fixes). Branch `phase/15-release` → `master`. Title: `port(release): phase-15-complete — v0.0.1-ara.1`. Body: the release notes cut from `CHANGELOG.md` `[Unreleased]` (#1119). The §19.1 merge-gate applies; merge commit (not squash) to preserve history.
+6. **Final release PR.** Phase work has already been landing on `master` continuously (§22.0); this last PR carries the Phase 15 tail-end work (TODO sweep, version bumps, CHANGELOG entry, smoke-test fixes). Branch `phase/15-release` → `master`. Title: `port(release): phase-15-complete — v0.0.1-ara.1`. Body: the release notes from `scripts/changelog-fragments.py --preview` (#1119). The §19.1 merge-gate applies; merge commit (not squash) to preserve history.
 
 ---
 
@@ -4010,9 +4011,7 @@ Example structure:
 ```markdown
 # Changelog
 
-## [Unreleased]
-
-## [0.0.1-ara.6] — 2026-06-01
+## [0.0.1-ara.6] - 2026-06-01
 
 ### Added
 - Smart Focus collimation detection (§59.4)
@@ -4025,14 +4024,19 @@ Example structure:
 ### Security
 - Bug-report bundles now strip §70 share-sensitive fields (§54.3)
 
-## [0.0.1-ara.5] — 2026-05-25
+<details>
+<summary><strong>[0.0.1-ara.5] - 2026-05-25</strong></summary>
 
 ### Added
 - Initial release of OpenAstroAra
+
+</details>
 ...
 ```
 
-Entry-writing discipline: every PR that ships a user-visible change adds a `### <Type>` line under `## [Unreleased]`. The release tag-cut process (Phase 15 + future releases) renames `## [Unreleased]` → `## [<version>] — <date>` and creates a fresh `## [Unreleased]` placeholder.
+Only the newest release is expanded; `--release` folds each older one into a `<details>` block, so the release-notes parser reads both forms.
+
+Entry-writing discipline: every PR that ships a user-visible change adds a `changelog.d/<branch-slug>.md` fragment with `### <Type>` subsections (`changelog.d/README.md`, #1812). The release tag-cut process (Phase 15 + future releases) runs `scripts/changelog-fragments.py --release <version> --date <date>`, which writes `## [<version>] - <date>` from the fragments and deletes them.
 
 **Server-side endpoint** (already declared in §34.7):
 
@@ -4143,9 +4147,9 @@ WILMA's Help menu adds "Release notes" → opens the side panel with the full ch
 
 **Release process integration:**
 
-- The Phase 15 PR (final port → master) adds the initial CHANGELOG.md with `## [0.0.1-ara.1] — <date>` entry
-- COMMIT-PR-RULES.md's per-phase PR rhythm (future bake) adds "update CHANGELOG.md [Unreleased] section" to the pre-PR gate (§14.4) for any PR with user-visible changes — same enforcement style as the settings-registry gate
-- Release tags (manual, user-driven): rename `[Unreleased]` → `[<version>] — <date>`, create fresh `[Unreleased]`, push tag, GitHub Actions builds the .deb with the updated CHANGELOG.md
+- The Phase 15 PR (final port → master) adds the `## [0.0.1-ara.1] - <date>` section to CHANGELOG.md with `--release`
+- Any PR with user-visible changes adds a `changelog.d/` fragment; the Sanity job's `scripts/changelog-fragments.py --check` validates every fragment (#1812)
+- Release tags (manual, user-driven): `scripts/changelog-fragments.py --release <version> --date <date>`, push tag, GitHub Actions builds the .deb with the updated CHANGELOG.md
 - Cross-ref with COMMIT-PR-RULES "Things still to decide" — release cadence post-release entry (future-scope section) inherits the changelog discipline
 
 **Cross-references:**

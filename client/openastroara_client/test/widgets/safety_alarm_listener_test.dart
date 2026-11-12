@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/state/alarm/safety_alarm_state.dart';
 import 'package:openastroara/widgets/safety_alarm_listener.dart';
 
@@ -53,6 +54,39 @@ void main() {
     expect(find.text('SAFETY ALERT'), findsNothing);
     expect(find.text('UNDERLYING SCREEN'), findsOneWidget,
         reason: 'a double pop would take the screen under the modal with it');
+  });
+
+  testWidgets('the alarm dialog speaks Brazilian Portuguese when that is the language (#1751)',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      safetyAlarmProvider.overrideWith(_ManualAlarm.new),
+    ]);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          locale: Locale('pt', 'BR'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: SafetyAlarmListener(child: Text('UNDERLYING SCREEN')),
+          ),
+        ),
+      ),
+    );
+
+    // No reason from the rig: the dialog states the default itself.
+    (container.read(safetyAlarmProvider.notifier) as _ManualAlarm)
+        .startPending('');
+    await tester.pumpAndSettle();
+
+    expect(find.text('ALERTA DE SEGURANÇA'), findsOneWidget);
+    expect(find.text('Condições INSEGURAS.'), findsOneWidget);
+    expect(find.text('Silenciar alarme'), findsOneWidget);
+    expect(find.text('SAFETY ALERT'), findsNothing);
+    expect(find.text('Silence alarm'), findsNothing);
   });
 
   testWidgets('safety.safe clearing the state also drops the modal',

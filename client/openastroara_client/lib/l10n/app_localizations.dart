@@ -5283,18 +5283,6 @@ abstract class AppLocalizations {
   /// **'None'**
   String get planFlatsNone;
 
-  /// Plan sheet flats choice
-  ///
-  /// In en, this message translates to:
-  /// **'Sky'**
-  String get planFlatsSky;
-
-  /// Plan sheet flats choice
-  ///
-  /// In en, this message translates to:
-  /// **'Panel'**
-  String get planFlatsPanel;
-
   /// Simple Mode Storage block: heading while the first read is out
   ///
   /// In en, this message translates to:
@@ -7094,6 +7082,1188 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Lost contact with the rig'**
   String get monitorLinkLostShort;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'abort the capture'**
+  String get actionAbortCapture;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'apply that to the selected frames'**
+  String get actionApplyToFrames;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'build the calibration'**
+  String get actionBuildCalibration;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'cancel the copy'**
+  String get actionCancelCopy;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'check the disk for frames'**
+  String get actionCheckDisk;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'clean the preview cache'**
+  String get actionCleanPreviewCache;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'clean the sky photo cache'**
+  String get actionCleanSkyPhotoCache;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'clear the ceiling'**
+  String get actionClearCeiling;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'confirm the frame arrived'**
+  String get actionConfirmFrame;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'connect'**
+  String get actionConnect;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'download that'**
+  String get actionDownload;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'export those frames'**
+  String get actionExportFrames;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'export the stats'**
+  String get actionExportStats;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'generate the calibration'**
+  String get actionGenerateCalibration;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'list the folders'**
+  String get actionListFolders;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load the dark library'**
+  String get actionLoadDarkLibrary;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load the fault history'**
+  String get actionLoadFaults;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load the frames'**
+  String get actionLoadFrames;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load your library'**
+  String get actionLoadLibrary;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load the logs'**
+  String get actionLoadLogs;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load your notifications'**
+  String get actionLoadNotifications;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load older logs'**
+  String get actionLoadOlderLogs;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load the preview'**
+  String get actionLoadPreview;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load the sessions'**
+  String get actionLoadSessions;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'load your saved settings'**
+  String get actionLoadSettings;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'look for equipment'**
+  String get actionLookForEquipment;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'push the guider profile'**
+  String get actionPushGuiderProfile;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'push the time'**
+  String get actionPushTime;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'rate the frame'**
+  String get actionRateFrame;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'read the camera'**
+  String get actionReadCamera;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'read the server clock state'**
+  String get actionReadClock;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'read the server\'s disks'**
+  String get actionReadServerDisks;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'re-arm safety'**
+  String get actionRearmSafety;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'refit the sky model'**
+  String get actionRefitSkyModel;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'restart your rig'**
+  String get actionRestartRig;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'resume the sequence'**
+  String get actionResumeSequence;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'save that'**
+  String get actionSave;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'save the horizon skyline'**
+  String get actionSaveHorizon;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'save the slot labels'**
+  String get actionSaveSlotLabels;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'send the calibration choice'**
+  String get actionSendCalibrationChoice;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'do that sequence action'**
+  String get actionSequenceAction;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'solve the frame'**
+  String get actionSolveFrame;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'work out which star database this rig needs'**
+  String get actionStarDatabase;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'start the copy'**
+  String get actionStartCopy;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'take that exposure'**
+  String get actionTakeExposure;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'take the verification image'**
+  String get actionTakeVerification;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'update the tag'**
+  String get actionUpdateTag;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'back up that entry'**
+  String get actionBackUpEntry;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'keep the backup stream going'**
+  String get actionKeepBackupGoing;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'push the GPS fix'**
+  String get actionPushGpsFix;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'rebuild the stats catalog'**
+  String get actionRebuildStats;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'start copying frames'**
+  String get actionStartCopyingFrames;
+
+  /// Backup stream panel: transient transport trouble; reason is the already-readable error sentence
+  ///
+  /// In en, this message translates to:
+  /// **'Backup stream hiccup: {reason}'**
+  String backupStreamHiccup(String reason);
+
+  /// Backup stream panel: one frame keeps failing; id is the frame id, reason the readable cause
+  ///
+  /// In en, this message translates to:
+  /// **'Backup of {id} failing: {reason}'**
+  String backupEntryFailing(String id, String reason);
+
+  /// GPS on this computer: the receiver gave a fix but the rig rejected the push; reason is the readable error sentence
+  ///
+  /// In en, this message translates to:
+  /// **'Fix read, but the rig refused it: {reason}'**
+  String gpsFixRefused(String reason);
+
+  /// GPS on this computer: appended to the refused-push message when the rig answers 422 (daemon too old); starts with a dash and a space
+  ///
+  /// In en, this message translates to:
+  /// **' — update Ara Server on the rig; this version predates GPS on this computer.'**
+  String get gpsDaemonTooOld;
+
+  /// Night done / Calibration: dark frames are missing
+  ///
+  /// In en, this message translates to:
+  /// **'Darks'**
+  String get calibrationDarks;
+
+  /// Night done / Calibration: bias frames are missing
+  ///
+  /// In en, this message translates to:
+  /// **'Bias'**
+  String get calibrationBias;
+
+  /// Night done button: shoot the missing flats
+  ///
+  /// In en, this message translates to:
+  /// **'Take flats'**
+  String get calibrationTakeFlats;
+
+  /// Night done button: shoot the missing darks and bias (asks for the lens cap first)
+  ///
+  /// In en, this message translates to:
+  /// **'Take darks'**
+  String get calibrationTakeDarks;
+
+  /// Night done: the calibration run in progress, frames taken of planned
+  ///
+  /// In en, this message translates to:
+  /// **'Calibration frames · {done} of {total}'**
+  String calibrationTaking(int done, int total);
+
+  /// Night done: the calibration run was stopped part-way, frames taken of planned
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped · {done} of {total}'**
+  String calibrationStopped(int done, int total);
+
+  /// Night done: the calibration run finished
+  ///
+  /// In en, this message translates to:
+  /// **'Calibration frames done'**
+  String get calibrationDone;
+
+  /// Simple Mode, after Couldn't: generating or starting the calibration run failed
+  ///
+  /// In en, this message translates to:
+  /// **'start the calibration frames'**
+  String get calibrationActionShoot;
+
+  /// Simple Mode, after Couldn't: stopping the calibration run failed
+  ///
+  /// In en, this message translates to:
+  /// **'stop the calibration frames'**
+  String get calibrationActionStop;
+
+  /// Calibration mode (#1757): flats, darks and bias for the main camera and the Guide Camera's dark library; the mode grid's tile and the rail's name
+  ///
+  /// In en, this message translates to:
+  /// **'Calibration'**
+  String get shellModeCalibration;
+
+  /// Calibration panel: the screen reader's name for the row of tabs
+  ///
+  /// In en, this message translates to:
+  /// **'Calibration tabs'**
+  String get calibrationTabsGroup;
+
+  /// Calibration panel tab: flats per filter
+  ///
+  /// In en, this message translates to:
+  /// **'Flats'**
+  String get calibrationTabFlats;
+
+  /// Calibration panel tab: darks and bias (no filters)
+  ///
+  /// In en, this message translates to:
+  /// **'Darks & bias'**
+  String get calibrationTabDarks;
+
+  /// Calibration panel tab: the Guider's dark library and bad-pixel map
+  ///
+  /// In en, this message translates to:
+  /// **'Guide Camera'**
+  String get calibrationTabGuide;
+
+  /// Calibration settings chip: how many calibration sets the latest plan's lights lack
+  ///
+  /// In en, this message translates to:
+  /// **'{count} missing'**
+  String calibrationChipMissing(int count);
+
+  /// Calibration settings chip: the latest plan's lights have every calibration set
+  ///
+  /// In en, this message translates to:
+  /// **'Ready'**
+  String get calibrationChipReady;
+
+  /// Calibration settings chip: no plan has taken lights yet
+  ///
+  /// In en, this message translates to:
+  /// **'No lights'**
+  String get calibrationChipNoLights;
+
+  /// Calibration panel: no plan has taken lights, so there is nothing to match; Darks & bias builds a dark library instead
+  ///
+  /// In en, this message translates to:
+  /// **'No plan lights yet. Build a dark library to reuse for weeks.'**
+  String get calibrationNoLightsYet;
+
+  /// Calibration panel: this set has matching calibration frames
+  ///
+  /// In en, this message translates to:
+  /// **'Covered'**
+  String get calibrationCovered;
+
+  /// Calibration panel: this set has no matching calibration frames
+  ///
+  /// In en, this message translates to:
+  /// **'Missing'**
+  String get calibrationMissing;
+
+  /// Calibration panel, Flats: when the flats that count for this filter were shot
+  ///
+  /// In en, this message translates to:
+  /// **'Flats from {date}'**
+  String calibrationFlatsFrom(String date);
+
+  /// Calibration: put the darks and bias in the Queue as one Calibration block after the last target
+  ///
+  /// In en, this message translates to:
+  /// **'Add to queue'**
+  String get calibrationAddToQueue;
+
+  /// The dark library run's first step: the question its pill asks
+  ///
+  /// In en, this message translates to:
+  /// **'Put the lens cap on the scope, then press Resume to take the darks.'**
+  String get calibrationLensCapPrompt;
+
+  /// Calibration: shooting asked while the Plan's run is going; the rig runs one at a time
+  ///
+  /// In en, this message translates to:
+  /// **'A plan is running. Calibration would have to wait for it: add the darks and bias to the queue instead?'**
+  String get calibrationPlanRunning;
+
+  /// Calibration panel: shown while the Plan's run is going
+  ///
+  /// In en, this message translates to:
+  /// **'A plan is running: calibration frames go in the queue.'**
+  String get calibrationPlanRunningNote;
+
+  /// Calibration question pill: leave it
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get calibrationNotNow;
+
+  /// Calibration shutter: why it is off with no main camera
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the camera first.'**
+  String get calibrationConnectCamera;
+
+  /// Calibration shutter's spoken label while its run goes
+  ///
+  /// In en, this message translates to:
+  /// **'Stop calibration'**
+  String get calibrationShutterStop;
+
+  /// Calibration shutter: why it is off when every set is covered
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing missing.'**
+  String get calibrationNothingMissing;
+
+  /// Calibration panel, Guide Camera: the Guider isn't connected
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the Guider to build its dark library and bad-pixel map.'**
+  String get calibrationGuideNoGuider;
+
+  /// Calibration panel, Guide Camera: the Guider's dark library
+  ///
+  /// In en, this message translates to:
+  /// **'Dark library'**
+  String get calibrationGuideDarks;
+
+  /// Calibration panel, Guide Camera: the guide exposures the loaded dark library covers
+  ///
+  /// In en, this message translates to:
+  /// **'Covers {min} to {max}'**
+  String calibrationGuideCovers(String min, String max);
+
+  /// Calibration panel, Guide Camera: no dark library or bad-pixel map yet
+  ///
+  /// In en, this message translates to:
+  /// **'Not built'**
+  String get calibrationGuideNotBuilt;
+
+  /// Calibration panel, Guide Camera: the Guider subtracts the darks / skips the bad pixels
+  ///
+  /// In en, this message translates to:
+  /// **'Use while guiding'**
+  String get calibrationGuideUse;
+
+  /// Calibration panel, Guide Camera: build it again (after a gain or temperature change)
+  ///
+  /// In en, this message translates to:
+  /// **'Rebuild'**
+  String get calibrationGuideRebuild;
+
+  /// Calibration panel, Guide Camera: delete the dark library
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get calibrationGuideDelete;
+
+  /// Calibration, Guide Camera: the inline question before Delete removes the guider's dark library
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the dark library?'**
+  String get calibrationGuideDeleteDarksTitle;
+
+  /// Calibration, Guide Camera: the inline question before Delete removes the guider's bad-pixel map
+  ///
+  /// In en, this message translates to:
+  /// **'Delete the bad-pixel map?'**
+  String get calibrationGuideDeleteDefectsTitle;
+
+  /// Calibration, Guide Camera: why Delete asks first
+  ///
+  /// In en, this message translates to:
+  /// **'Building it again takes several minutes of frames with the guide scope covered.'**
+  String get calibrationGuideDeleteBody;
+
+  /// Calibration panel, Guide Camera: the Guider's defect map, so hot pixels aren't picked as guide stars
+  ///
+  /// In en, this message translates to:
+  /// **'Bad-pixel map'**
+  String get calibrationGuideDefect;
+
+  /// Calibration, Guide Camera: the question before a build (the frames must be dark)
+  ///
+  /// In en, this message translates to:
+  /// **'Cover the guide scope, then build.'**
+  String get calibrationGuideCover;
+
+  /// Calibration, Guide Camera question: the guide scope is covered; build
+  ///
+  /// In en, this message translates to:
+  /// **'Covered, build'**
+  String get calibrationGuideCovered;
+
+  /// Calibration panel, Guide Camera: builds are refused while guiding
+  ///
+  /// In en, this message translates to:
+  /// **'Stop guiding to build: a plan would lose its guide star.'**
+  String get calibrationGuideStopFirst;
+
+  /// Calibration, Add to queue with no queue
+  ///
+  /// In en, this message translates to:
+  /// **'Queue a target first: the darks and bias run after it.'**
+  String get calibrationNoQueue;
+
+  /// Calibration, Add to queue: the queue holds one Calibration block
+  ///
+  /// In en, this message translates to:
+  /// **'The queue already has its calibration frames.'**
+  String get calibrationAlreadyQueued;
+
+  /// Simple Mode, after Couldn't: queuing the Calibration block failed
+  ///
+  /// In en, this message translates to:
+  /// **'add the calibration frames to the queue'**
+  String get calibrationActionQueue;
+
+  /// Simple Mode, after Couldn't: building the dark library failed
+  ///
+  /// In en, this message translates to:
+  /// **'build the dark library'**
+  String get calibrationActionBuildLibrary;
+
+  /// Simple Mode, after Couldn't: a Guide Camera tab action failed
+  ///
+  /// In en, this message translates to:
+  /// **'change the guide camera\'s calibration'**
+  String get calibrationActionGuide;
+
+  /// Simple Mode search: words (never shown) that find the Calibration mode; space-separated, lower case
+  ///
+  /// In en, this message translates to:
+  /// **'flats darks bias calibration frames dark library'**
+  String get searchCalibrationWords;
+
+  /// Simple Focus panel: the third routine beside Auto and Manual, which measures each filter's focus offset (keep it short, it shares a row)
+  ///
+  /// In en, this message translates to:
+  /// **'Offsets'**
+  String get focusOffsets;
+
+  /// Simple Mode: the offset calibration routine's name, on its status pill and its search result
+  ///
+  /// In en, this message translates to:
+  /// **'Focus offsets'**
+  String get focusOffsetsTitle;
+
+  /// Simple Mode status pill, Focus offsets: the filter being measured and which autofocus run of how many (e.g. OIII · 4 of 7)
+  ///
+  /// In en, this message translates to:
+  /// **'{filter} · {index} of {count}'**
+  String focusOffsetsProgress(String filter, int index, int count);
+
+  /// Simple Focus panel, Offsets: what the routine does, before it starts
+  ///
+  /// In en, this message translates to:
+  /// **'Point at a star field, pick the filters, then Start. Each filter is focused once, the reference before and after.'**
+  String get focusOffsetsIntro;
+
+  /// Simple Focus panel, Offsets: which filter the offsets are measured from, before the run
+  ///
+  /// In en, this message translates to:
+  /// **'Offsets are measured from {filter}, the reference.'**
+  String focusOffsetsReference(String filter);
+
+  /// Simple Focus panel, Offsets filter picker: the reference filter's chip, always measured
+  ///
+  /// In en, this message translates to:
+  /// **'{filter} · reference'**
+  String focusOffsetsReferenceChip(String filter);
+
+  /// Simple Focus panel, Offsets: the filter picker's caption
+  ///
+  /// In en, this message translates to:
+  /// **'Filters to measure'**
+  String get focusOffsetsPicker;
+
+  /// Simple Mode shutter in Focus, Offsets: starts the calibration (screen-reader label)
+  ///
+  /// In en, this message translates to:
+  /// **'Calibrate focus offsets'**
+  String get focusOffsetsStart;
+
+  /// Simple Mode shutter in Focus, Offsets while it runs: the red square stops it (screen-reader label)
+  ///
+  /// In en, this message translates to:
+  /// **'Stop calibrating focus offsets'**
+  String get focusOffsetsCancel;
+
+  /// Simple Focus panel, Offsets: the run's headline while it measures a filter
+  ///
+  /// In en, this message translates to:
+  /// **'Measuring {filter} · {index} of {count}'**
+  String focusOffsetsMeasuring(String filter, int index, int count);
+
+  /// Simple Focus panel, Offsets: the headline before the first measurement starts
+  ///
+  /// In en, this message translates to:
+  /// **'Starting…'**
+  String get focusOffsetsStarting;
+
+  /// Simple Focus panel, Offsets: why it can't start while a plan runs
+  ///
+  /// In en, this message translates to:
+  /// **'Wait for the plan to finish: calibrating changes filters and focus.'**
+  String get focusOffsetsPlanRunning;
+
+  /// Simple Focus panel, Offsets: why it can't start while autofocus, the Bahtinov readout or guide-camera focus runs
+  ///
+  /// In en, this message translates to:
+  /// **'Wait for the other focus routine to finish.'**
+  String get focusOffsetsFocusBusy;
+
+  /// Simple Focus panel, Offsets: why it can't start, no camera connected
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the camera to calibrate focus offsets.'**
+  String get focusOffsetsNeedsCamera;
+
+  /// Simple Focus panel, Offsets: why it can't start, no focuser connected
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the focuser to calibrate focus offsets.'**
+  String get focusOffsetsNeedsFocuser;
+
+  /// Simple Focus panel, Offsets: why it can't start, no filter wheel connected
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the filter wheel to calibrate focus offsets.'**
+  String get focusOffsetsNeedsWheel;
+
+  /// Simple Focus panel, Offsets: why it can't start with the manual filter wheel
+  ///
+  /// In en, this message translates to:
+  /// **'Calibrating needs a motorised filter wheel: a manual one can\'t change filters by itself.'**
+  String get focusOffsetsNeedsMotorisedWheel;
+
+  /// Simple Focus panel, Offsets: why it can't start with a relative focuser
+  ///
+  /// In en, this message translates to:
+  /// **'Calibrating needs an absolute focuser: a relative one has no positions to compare.'**
+  String get focusOffsetsNeedsAbsoluteFocuser;
+
+  /// Simple Focus panel, Offsets: why it can't start with only the reference picked
+  ///
+  /// In en, this message translates to:
+  /// **'Pick at least one filter besides the reference.'**
+  String get focusOffsetsPickOne;
+
+  /// Simple Focus panel, Offsets: the finished run's headline
+  ///
+  /// In en, this message translates to:
+  /// **'Offsets measured'**
+  String get focusOffsetsResults;
+
+  /// Simple Focus panel, Offsets: the headline after the run was stopped
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped. Your saved offsets are unchanged.'**
+  String get focusOffsetsStopped;
+
+  /// Simple Focus panel, Offsets: the headline after the run failed (the reason follows)
+  ///
+  /// In en, this message translates to:
+  /// **'The calibration failed. Your saved offsets are unchanged.'**
+  String get focusOffsetsFailed;
+
+  /// Simple Focus panel, Offsets results table: the filter column
+  ///
+  /// In en, this message translates to:
+  /// **'Filter'**
+  String get focusOffsetsColFilter;
+
+  /// Simple Focus panel, Offsets results table: the offset column, in focuser steps
+  ///
+  /// In en, this message translates to:
+  /// **'Offset'**
+  String get focusOffsetsColOffset;
+
+  /// Simple Focus panel, Offsets results table: the offset saved before this run
+  ///
+  /// In en, this message translates to:
+  /// **'Before'**
+  String get focusOffsetsColPrevious;
+
+  /// Simple Focus panel, Offsets results table: a filter whose autofocus failed (the reason follows)
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get focusOffsetsRowFailed;
+
+  /// Simple Focus panel, Offsets results table: a filter the run ended before
+  ///
+  /// In en, this message translates to:
+  /// **'Not measured'**
+  String get focusOffsetsRowSkipped;
+
+  /// Simple Focus panel, Offsets results table: a filter not reached yet
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting'**
+  String get focusOffsetsRowPending;
+
+  /// Simple Focus panel, Offsets results table: a filter whose fit was weak, in the full UI's weak-fit words
+  ///
+  /// In en, this message translates to:
+  /// **'Weak curve fit (R² {r2}): run again if the sky has settled.'**
+  String focusOffsetsWeakFit(String r2);
+
+  /// Simple Focus panel, Offsets results: the drift warning
+  ///
+  /// In en, this message translates to:
+  /// **'The reference moved {steps} steps between its two runs, more than its critical focus zone ({cfz} steps). Run it again for steadier numbers.'**
+  String focusOffsetsDrift(int steps, int cfz);
+
+  /// Simple Focus panel, Offsets results: the reference's second run failed, so drift was not checked
+  ///
+  /// In en, this message translates to:
+  /// **'Drift not checked: the reference\'s second run didn\'t measure.'**
+  String get focusOffsetsDriftNotChecked;
+
+  /// Simple Focus panel, Offsets results: keeps the measured offsets
+  ///
+  /// In en, this message translates to:
+  /// **'Save offsets'**
+  String get focusOffsetsSave;
+
+  /// Simple Focus panel, Offsets results: throws the results away, the saved offsets stay
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get focusOffsetsDiscard;
+
+  /// Simple Focus panel, Offsets: the hint after Save
+  ///
+  /// In en, this message translates to:
+  /// **'Offsets saved. Autofocus after a filter change can now be turned off.'**
+  String get focusOffsetsSaved;
+
+  /// Simple Filter wheel window: the filter in place's saved focus offset, signed (e.g. Offset +42 steps)
+  ///
+  /// In en, this message translates to:
+  /// **'Offset {offset} steps'**
+  String deviceFocusOffset(String offset);
+
+  /// Simple Mode search: words (never shown) that find the Focus offsets routine; space-separated, lower case
+  ///
+  /// In en, this message translates to:
+  /// **'focus offsets filter offsets calibrate'**
+  String get searchFocusOffsetsWords;
+
+  /// Calibration panel, Flats: where the flats' light comes from (screen reader name of the two segments)
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get calibrationLightGroup;
+
+  /// Calibration panel, Flats: an even light in front of the scope: a flat panel, a tablet screen or a light box
+  ///
+  /// In en, this message translates to:
+  /// **'Panel or screen'**
+  String get calibrationLightFront;
+
+  /// Calibration panel, Flats: the flats wait for twilight and use the sky
+  ///
+  /// In en, this message translates to:
+  /// **'Twilight sky'**
+  String get calibrationLightSky;
+
+  /// Calibration panel, Flats: a flat panel is connected, so the run turns it on
+  ///
+  /// In en, this message translates to:
+  /// **'The flat panel lights itself.'**
+  String get calibrationLightPanelNote;
+
+  /// Calibration panel, Flats: no panel device, so a hand-held light (a tablet, a light box) is asked for before the flats
+  ///
+  /// In en, this message translates to:
+  /// **'No flat panel connected: the run asks you to put a screen or light box over the scope first.'**
+  String get calibrationLightScreenNote;
+
+  /// Calibration panel, Flats: twilight sky flats
+  ///
+  /// In en, this message translates to:
+  /// **'The flats wait for twilight and use the sky.'**
+  String get calibrationLightSkyNote;
+
+  /// The calibration run's first step with no flat panel: the question its pill asks before the flats
+  ///
+  /// In en, this message translates to:
+  /// **'Put the screen or light box over the scope, then press Resume to take the flats.'**
+  String get calibrationLightPrompt;
+
+  /// Calibration status pill: frames taken of planned in the calibration run
+  ///
+  /// In en, this message translates to:
+  /// **'{done} of {total}'**
+  String calibrationPillProgress(int done, int total);
+
+  /// Status pill: the Guide Camera's dark library or bad-pixel map is being built, before the rig reports frames
+  ///
+  /// In en, this message translates to:
+  /// **'Building…'**
+  String get calibrationGuideBuilding;
+
+  /// Status pill: the Guide Camera's dark library or bad-pixel map build, frames taken of planned
+  ///
+  /// In en, this message translates to:
+  /// **'Building · {done} of {total}'**
+  String calibrationGuideBuildProgress(int done, int total);
+
+  /// Error pill: a Guide Camera build failed on the rig; the guider's reason follows. {what} is the Dark library or the Bad-pixel map
+  ///
+  /// In en, this message translates to:
+  /// **'{what} wasn\'t built'**
+  String calibrationGuideBuildFailed(String what);
+
+  /// Result pill: a Guide Camera build finished on the rig
+  ///
+  /// In en, this message translates to:
+  /// **'{what} built'**
+  String calibrationGuideBuilt(String what);
+
+  /// Calibration panel, Flats: the section heading over the filter rows, naming the latest plan's target
+  ///
+  /// In en, this message translates to:
+  /// **'Tonight\'s filters · {target}'**
+  String calibrationFlatsForSession(String target);
+
+  /// Calibration panel, Guide Camera: the outlined pill of a dark library or bad-pixel map that exists
+  ///
+  /// In en, this message translates to:
+  /// **'On file'**
+  String get calibrationOnFileTag;
+
+  /// Calibration panel, Guide Camera: build the Guider's dark library
+  ///
+  /// In en, this message translates to:
+  /// **'Build dark library'**
+  String get calibrationGuideBuildDarks;
+
+  /// Calibration panel, Guide Camera: build the Guider's bad-pixel map
+  ///
+  /// In en, this message translates to:
+  /// **'Build bad-pixel map'**
+  String get calibrationGuideBuildDefects;
+
+  /// Calibration panel, Guide Camera: the line under the build buttons
+  ///
+  /// In en, this message translates to:
+  /// **'Building asks you to cover the guide scope first.'**
+  String get calibrationGuideCoverNote;
+
+  /// Calibration panel, Guide Camera: the dark library or bad-pixel map exists (its row, beside the On file pill)
+  ///
+  /// In en, this message translates to:
+  /// **'Built'**
+  String get calibrationGuideReady;
+
+  /// Night done: tonight's lights lack flats; the filters follow under it
+  ///
+  /// In en, this message translates to:
+  /// **'Flats missing'**
+  String get calibrationFlatsMissing;
+
+  /// Night done: every filter of tonight's lights has flats
+  ///
+  /// In en, this message translates to:
+  /// **'Flats on file'**
+  String get calibrationFlatsOnFile;
+
+  /// Night done: the camera's library has no darks (or bias) matching tonight's lights, e.g. a new exposure, gain or temperature
+  ///
+  /// In en, this message translates to:
+  /// **'Darks missing from the library'**
+  String get calibrationDarksMissingFromLibrary;
+
+  /// Calibration chip on Darks & bias: no plan rows to say which darks are needed
+  ///
+  /// In en, this message translates to:
+  /// **'No plan'**
+  String get calibrationChipNoPlan;
+
+  /// Calibration chip on Darks & bias: dark sets the plan needs that are older than six months
+  ///
+  /// In en, this message translates to:
+  /// **'{count} old'**
+  String calibrationChipOld(int count);
+
+  /// Calibration chip on Guide Camera: the Guider isn't connected
+  ///
+  /// In en, this message translates to:
+  /// **'No guider'**
+  String get calibrationChipNoGuider;
+
+  /// Calibration shutter caption on Flats: what the shutter does
+  ///
+  /// In en, this message translates to:
+  /// **'Shoot flats'**
+  String get calibrationCapShootFlats;
+
+  /// Calibration shutter caption and button on Darks & bias: builds the darks (by exposure) and/or bias the plan needs
+  ///
+  /// In en, this message translates to:
+  /// **'Build {what}'**
+  String calibrationCapBuild(String what);
+
+  /// Calibration shutter caption and button on Darks & bias: shoots old dark sets again
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh {what}'**
+  String calibrationCapRefresh(String what);
+
+  /// Calibration panel, Darks & bias: no plan rows, so coverage can't be judged
+  ///
+  /// In en, this message translates to:
+  /// **'Queue a target to see which darks its plan needs.'**
+  String get calibrationLibraryNoPlan;
+
+  /// Calibration panel, Flats: shoot the filters that have no flats
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Shoot 1 missing flat set} other{Shoot {count} missing flat sets}}'**
+  String calibrationShootMissingFlats(int count);
+
+  /// Calibration panel, Flats: every filter is covered; shoot all of them again
+  ///
+  /// In en, this message translates to:
+  /// **'Reshoot all'**
+  String get calibrationReshootAll;
+
+  /// Calibration panel, Flats: the line under Reshoot all
+  ///
+  /// In en, this message translates to:
+  /// **'Reshoot all keeps what you have and shoots every filter again.'**
+  String get calibrationReshootAllNote;
+
+  /// Calibration library: how old a set is, in days (followed by 'old')
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{today} =1{1 day} other{{count} days}}'**
+  String calibrationAgeDays(int count);
+
+  /// Calibration library: how old a set is, in weeks
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 week} other{{count} weeks}}'**
+  String calibrationAgeWeeks(int count);
+
+  /// Calibration library: how old a set is, in months
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 month} other{{count} months}}'**
+  String calibrationAgeMonths(int count);
+
+  /// Calibration library: a set's camera gain
+  ///
+  /// In en, this message translates to:
+  /// **'gain {gain}'**
+  String calibrationGain(int gain);
+
+  /// Calibration library: a bias set's camera offset
+  ///
+  /// In en, this message translates to:
+  /// **'offset {offset}'**
+  String calibrationOffset(int offset);
+
+  /// Calibration panel, Darks & bias: the heading naming the camera the library belongs to
+  ///
+  /// In en, this message translates to:
+  /// **'{camera} · reused for months'**
+  String calibrationLibraryCamera(String camera);
+
+  /// Calibration panel, Darks & bias: the library has darks and bias for every exposure the queued plan uses
+  ///
+  /// In en, this message translates to:
+  /// **'Covers your plan'**
+  String get calibrationLibraryCovers;
+
+  /// Calibration panel, Darks & bias: the darks (by exposure) and/or bias the library lacks for the queued plan
+  ///
+  /// In en, this message translates to:
+  /// **'Your plan needs {what}'**
+  String calibrationLibraryNeeds(String what);
+
+  /// Calibration panel, Darks & bias: the plan is covered by dark sets older than six months
+  ///
+  /// In en, this message translates to:
+  /// **'Covers your plan, but the {what} darks are old'**
+  String calibrationLibraryOld(String what);
+
+  /// Calibration panel, Darks & bias: under the old-darks line
+  ///
+  /// In en, this message translates to:
+  /// **'Darks drift as a sensor ages. Refresh them when you can.'**
+  String get calibrationLibraryOldNote;
+
+  /// Calibration panel, Darks & bias: the camera's library is empty
+  ///
+  /// In en, this message translates to:
+  /// **'No darks or bias for this camera yet'**
+  String get calibrationLibraryEmpty;
+
+  /// Calibration panel, Darks & bias: under the empty-library line
+  ///
+  /// In en, this message translates to:
+  /// **'Build them once on a cloudy night; they last months.'**
+  String get calibrationLibraryEmptyNote;
+
+  /// Calibration panel, Darks & bias: no darks (or no bias) in the library
+  ///
+  /// In en, this message translates to:
+  /// **'None yet.'**
+  String get calibrationLibraryNone;
+
+  /// Calibration library row: how old the set is and how many frames it holds
+  ///
+  /// In en, this message translates to:
+  /// **'{age} old · {frames} frames'**
+  String calibrationLibraryAge(String age, int frames);
+
+  /// Calibration library: the outlined pill of a dark set older than six months
+  ///
+  /// In en, this message translates to:
+  /// **'Old'**
+  String get calibrationOld;
+
+  /// Calibration panel, Darks & bias: the heading over the exposure chips
+  ///
+  /// In en, this message translates to:
+  /// **'Build or refresh'**
+  String get calibrationLibraryBuildSection;
+
+  /// Calibration panel, Darks & bias: the settings the library build uses
+  ///
+  /// In en, this message translates to:
+  /// **'At {settings}, from the plan. Bias at the same gain. The run asks for the lens cap first.'**
+  String calibrationLibraryNote(String settings);
+
+  /// Calibration panel, Darks & bias: build darks for the exposures picked by hand
+  ///
+  /// In en, this message translates to:
+  /// **'Build picked'**
+  String get calibrationBuildPicked;
+
+  /// Plan sheet, Flats row: the target's filters the flats are for
+  ///
+  /// In en, this message translates to:
+  /// **'For {filters}'**
+  String planFlatsFor(String filters);
+
+  /// Plan sheet, Flats row: flats for this target's filters right after its last frame (#1757)
+  ///
+  /// In en, this message translates to:
+  /// **'After target'**
+  String get planFlatsAfterTarget;
+
+  /// Plan sheet, Flats row: flats for this target's filters after the queue's last target (#1757)
+  ///
+  /// In en, this message translates to:
+  /// **'End of night'**
+  String get planFlatsEndOfNight;
+
+  /// Plan sheet, Flats row: what the two choices do
+  ///
+  /// In en, this message translates to:
+  /// **'After target: right after its last frame, at its rotator angle. End of night: after the last target. With no panel the run asks for a screen first.'**
+  String get planFlatsHint;
+
+  /// Calibration library row: a set from before the rig recorded which camera took it; it counts for any camera
+  ///
+  /// In en, this message translates to:
+  /// **'camera not recorded'**
+  String get calibrationLibraryNoCamera;
+
+  /// Question pill: calibration was added to a queue whose targets haven't started
+  ///
+  /// In en, this message translates to:
+  /// **'The calibration frames are in the queue after your targets. Start the queue now?'**
+  String get calibrationStartQueue;
+
+  /// Question pill action: start the queue (targets first, then the calibration frames)
+  ///
+  /// In en, this message translates to:
+  /// **'Start queue'**
+  String get calibrationStartQueueNow;
 }
 
 class _AppLocalizationsDelegate

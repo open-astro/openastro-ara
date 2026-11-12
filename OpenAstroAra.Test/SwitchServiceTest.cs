@@ -80,7 +80,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task ConnectAsync_to_an_unreachable_device_ends_in_Error() {
-            using var svc = new SwitchService();
+            using var svc = new SwitchService { DeviceFactory = _ => throw new InvalidOperationException("connection refused") };
 
             await svc.ConnectAsync(new ConnectRequestDto(Dead("unit-test-uid", 0)), null, CancellationToken.None);
 
@@ -93,7 +93,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task ConnectAsync_keeps_multiple_switches_addressed_by_unique_id() {
-            using var svc = new SwitchService();
+            using var svc = new SwitchService { DeviceFactory = _ => throw new InvalidOperationException("connection refused") };
             // Two distinct switches (device numbers 0 and 1) — the multi-switch rig. The second connect
             // must NOT evict the first (the single-instance bug this service fixes).
             await svc.ConnectAsync(new ConnectRequestDto(Dead("uid-0", 0)), null, CancellationToken.None);
@@ -121,7 +121,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task ConnectAsync_same_device_number_on_two_hosts_keeps_both() {
-            using var svc = new SwitchService();
+            using var svc = new SwitchService { DeviceFactory = _ => throw new InvalidOperationException("connection refused") };
             // The common two-host rig: a power box and a relay board on separate Alpaca servers are
             // BOTH device number 0. UniqueId addressing must keep both — the old device-number keying
             // made the second connect evict the first (the toggles-vanish bug).
@@ -138,7 +138,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task ConnectAsync_same_endpoint_with_a_renamed_unique_id_replaces_not_duplicates() {
-            using var svc = new SwitchService();
+            using var svc = new SwitchService { DeviceFactory = _ => throw new InvalidOperationException("connection refused") };
             // A bridge that renamed the device's UniqueId across versions (ZWO_DEW_1 →
             // ZWO_DEW_SN_...): the endpoint (host:port + number) is the same physical device, so
             // the fresh connect must supersede the stale entry, not open a second connection.
@@ -166,7 +166,7 @@ namespace OpenAstroAra.Test {
                     }
                     return Task.CompletedTask;
                 });
-            using var svc = new SwitchService(events: new EquipmentEventPublisher(broadcaster.Object));
+            using var svc = new SwitchService(events: new EquipmentEventPublisher(broadcaster.Object)) { DeviceFactory = _ => throw new InvalidOperationException("connection refused") };
 
             await svc.ConnectAsync(new ConnectRequestDto(Dead("uid-A", 0)), null, CancellationToken.None);
             await PollUntilNotConnectingAsync(svc, "uid-A"); // unreachable → Error
@@ -191,7 +191,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task DisconnectAsync_after_a_failed_connect_returns_to_Disconnected() {
-            using var svc = new SwitchService();
+            using var svc = new SwitchService { DeviceFactory = _ => throw new InvalidOperationException("connection refused") };
             await svc.ConnectAsync(new ConnectRequestDto(Dead("uid", 0)), null, CancellationToken.None);
             await PollUntilNotConnectingAsync(svc, "uid");
 
@@ -208,7 +208,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task ReconnectAsync_after_a_disconnect_redispatches_the_known_device() {
-            using var svc = new SwitchService();
+            using var svc = new SwitchService { DeviceFactory = _ => throw new InvalidOperationException("connection refused") };
             await svc.ConnectAsync(new ConnectRequestDto(Dead("uid", 0)), null, CancellationToken.None);
             await PollUntilNotConnectingAsync(svc, "uid");
             await svc.DisconnectAsync("uid", null, CancellationToken.None);
@@ -277,12 +277,13 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task RemoveAsync_refuses_a_connecting_switch_and_an_unknown_id_is_false() {
-            using var svc = new SwitchService();
+            // The device's connect is held, so the entry stays in flight long enough to observe Connecting.
+            using var hold = new ManualResetEventSlim(false);
+            using var svc = new SwitchService { DeviceFactory = _ => { hold.Wait(TimeSpan.FromSeconds(10)); throw new InvalidOperationException("connection refused"); } };
             Assert.That(await svc.RemoveAsync("never-seen", CancellationToken.None), Is.False);
-            // A black-hole address keeps the connect in flight long enough to observe Connecting.
             await svc.ConnectAsync(new ConnectRequestDto(Dead("uid-slow", 0, host: "10.255.255.1")), null, CancellationToken.None);
             var dto = await svc.GetAsync("uid-slow", CancellationToken.None);
-            Assume.That(dto?.State, Is.EqualTo(EquipmentConnectionState.Connecting), "the connect must still be in flight for this probe");
+            Assert.That(dto?.State, Is.EqualTo(EquipmentConnectionState.Connecting), "the connect must still be in flight for this probe");
             await Assert.ThatAsync(() => svc.RemoveAsync("uid-slow", CancellationToken.None), Throws.TypeOf<InvalidOperationException>(),
                 "a mid-connect removal would let the adopt land in an untracked entry");
             Assert.That(await svc.GetAsync("uid-slow", CancellationToken.None), Is.Not.Null, "refused means kept");
@@ -291,42 +292,38 @@ namespace OpenAstroAra.Test {
         [Test]
         [Category("bench")] // loopback-only, runs in the default job too
         public async Task RemoveAsync_releases_the_client_of_a_switch_that_tripped_to_Error() {
-            // Connect to a scripted switch, then have it answer Connected=false until the §42.3
-            // streak trips the entry to Error — the entry still holds the adopted client. Remove
-            // must release it: the teardown's Connected=false PUT reaching the device is the proof
-            // (before #1127 the entry was dropped and the client leaked, no PUT ever arrived).
-            var connected = "true";
-            await using var box = ScriptedAlpacaDevice.Start(path =>
-                path.EndsWith("/connected", StringComparison.Ordinal) ? Volatile.Read(ref connected)
-                : path.EndsWith("/maxswitch", StringComparison.Ordinal) ? "0"
-                : null);
+            // Connect to a fake switch, then have it stop answering until the §42.3 streak trips the
+            // entry to Error — the entry still holds the adopted device. Remove must release it: the
+            // teardown's Disconnect reaching the device is the proof (before #1127 the entry was
+            // dropped and the client leaked, no disconnect ever arrived).
             var ws = new Mock<IWsBroadcaster>();
             var events = new List<(string Type, JsonElement Payload)>();
             ws.Setup(w => w.PublishAsync(It.IsAny<string>(), It.IsAny<JsonElement>(), It.IsAny<CancellationToken>()))
                 .Callback<string, JsonElement, CancellationToken>((t, p, _) => { lock (events) { events.Add((t, p.Clone())); } })
                 .Returns(Task.CompletedTask);
-            using var svc = new SwitchService(events: new EquipmentEventPublisher(ws.Object));
+            using var fake = new FakeSwitchDevice(); // the service disposes it too; a second Dispose is harmless
+            using var svc = new SwitchService(events: new EquipmentEventPublisher(ws.Object)) {
+                RefreshPeriod = TimeSpan.FromMilliseconds(20),
+                DeviceFactory = _ => fake,
+            };
             var device = new DiscoveredDeviceDto(
                 UniqueId: "switch-under-test", Name: "Bench Power Box", Type: DeviceType.Switch,
-                HostName: box.BaseUri.Host, IpAddress: box.BaseUri.Host, IpPort: box.BaseUri.Port,
+                HostName: "127.0.0.1", IpAddress: "127.0.0.1", IpPort: 11111,
                 AlpacaDeviceNumber: 0, UseHttps: false);
             await svc.ConnectAsync(new ConnectRequestDto(device), null, CancellationToken.None);
             await WaitForStateAsync(svc, "switch-under-test", EquipmentConnectionState.Connected, TimeSpan.FromSeconds(15));
 
-            Volatile.Write(ref connected, "false");
+            fake.Answers = false;
             await WaitForStateAsync(svc, "switch-under-test", EquipmentConnectionState.Error, TimeSpan.FromSeconds(30));
-            // The connect itself PUT Connected=True; the release is the LATER Connected=False.
-            static bool IsDisconnectPut((string Path, string Body) p) =>
-                p.Path.EndsWith("/connected", StringComparison.Ordinal) && p.Body.Contains("False", StringComparison.OrdinalIgnoreCase);
-            Assume.That(box.Puts.Any(IsDisconnectPut), Is.False, "nothing has released the client yet");
+            Assume.That(fake.Disconnects, Is.Zero, "nothing has released the device yet");
 
             Assert.That(await svc.RemoveAsync("switch-under-test", CancellationToken.None), Is.True);
             Assert.That(await svc.GetAsync("switch-under-test", CancellationToken.None), Is.Null, "gone from the known list");
             var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
-            while (DateTime.UtcNow < deadline && !box.Puts.Any(IsDisconnectPut)) {
-                await Task.Delay(100);
+            while (DateTime.UtcNow < deadline && fake.Disconnects == 0) {
+                await Task.Delay(20);
             }
-            Assert.That(box.Puts.Any(IsDisconnectPut), Is.True, "the Error entry's client was never released (no Connected=False reached the device)");
+            Assert.That(fake.Disconnects, Is.EqualTo(1), "the Error entry's device was never released (no Disconnect reached it)");
 
             // §60.9 — the removal is pushed, so a second open client drops the card now rather
             // than on its next poll: exactly one state_changed flagged removed, for THIS switch.

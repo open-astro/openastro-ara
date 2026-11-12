@@ -171,7 +171,7 @@ class _NotificationCenter extends ConsumerWidget {
                           error: (e, _) => _Empty(
                             icon: Icons.cloud_off,
                             title:
-                                friendlyError(context.l10n, e, action: 'load your notifications'),
+                                friendlyError(context.l10n, e, action: context.l10n.actionLoadNotifications),
                           ),
                           data: (items) => _Body(items: items),
                         ),

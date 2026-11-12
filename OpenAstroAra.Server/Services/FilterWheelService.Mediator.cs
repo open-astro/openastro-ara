@@ -75,13 +75,13 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     public FilterWheelInfo GetInfo() {
         var profileSnapshot = SnapshotProfileFilters();
         lock (_gate) {
-            var connected = !_disposed && _state == EquipmentConnectionState.Connected && _client is not null;
+            var connected = _lifecycle.Live is not null;
             var runtime = _runtime;
             var slots = _slots;
             var info = new FilterWheelInfo {
                 Connected = connected,
-                Name = _device?.Name ?? string.Empty,
-                DeviceId = _device?.UniqueId ?? string.Empty,
+                Name = _lifecycle.Device?.Name ?? string.Empty,
+                DeviceId = _lifecycle.Device?.UniqueId ?? string.Empty,
                 IsMoving = connected && runtime.State == "moving",
             };
             if (connected && runtime.CurrentSlot is int position) {
@@ -106,10 +106,10 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     /// </summary>
     public async Task<FilterInfo> ChangeFilter(FilterInfo inputFilter, IProgress<ApplicationStatus>? progress = null, CancellationToken token = default) {
         ArgumentNullException.ThrowIfNull(inputFilter);
-        AlpacaFilterWheel? client;
+        IFilterWheelDevice? client;
         IReadOnlyList<FilterSlotDto>? slots;
         lock (_gate) {
-            client = !_disposed && _state == EquipmentConnectionState.Connected ? _client : null;
+            client = _lifecycle.Live;
             slots = _slots;
             _focusBaseline ??= _runtime.CurrentSlot;
         }
@@ -175,12 +175,12 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     // #1265 — instance knob (6 s in production): bench fixtures shrink it with the refresh cadence.
     internal TimeSpan SlotsWaitBudget { get; set; } = TimeSpan.FromSeconds(6);
 
-    private async Task<IReadOnlyList<FilterSlotDto>?> WaitForSlotsAsync(AlpacaFilterWheel client, CancellationToken ct) {
+    private async Task<IReadOnlyList<FilterSlotDto>?> WaitForSlotsAsync(IFilterWheelDevice client, CancellationToken ct) {
         var deadline = DateTimeOffset.UtcNow + SlotsWaitBudget;
         while (DateTimeOffset.UtcNow < deadline) {
             IReadOnlyList<FilterSlotDto>? slots;
             lock (_gate) {
-                if (_disposed || _state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, client)) {
+                if (!_lifecycle.IsLive(client)) {
                     return null;
                 }
                 slots = _slots;
@@ -194,7 +194,7 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
             // Same liveness guard as inside the loop: a different wheel adopted in the final
             // 200 ms must not have its slot list validated against and then written to the
             // captured (now disposed) client.
-            return !_disposed && _state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client) ? _slots : null;
+            return _lifecycle.IsLive(client) ? _slots : null;
         }
     }
 
@@ -210,7 +210,7 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Sequencer filter-change boundary: the blocking ASCOM Position write can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-change; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP-timeout OCE) is logged, published as a §42.4 fault, and reported as an unconfirmed change — which ChangeFilter converts into a SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify boundary applies.")]
-    private async Task<bool> RunFilterChangeAsync(AlpacaFilterWheel client, short target, CancellationToken ct) {
+    private async Task<bool> RunFilterChangeAsync(IFilterWheelDevice client, short target, CancellationToken ct) {
         try {
             // Race the blocking ASCOM write against both the sequencer token and a wall-clock bound
             // so a hung HTTP call can't pin the sequence thread. The abandoned write is observed.
@@ -247,14 +247,13 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     // WITHOUT a second Position read per tick (one network call per poll). Delay-before-check gives
     // the driver one poll interval to leave the old position before the first read. False on
     // timeout / a dropped-or-superseded connection.
-    private async Task<bool> WaitForPositionAsync(AlpacaFilterWheel client, short target, CancellationToken ct) {
+    private async Task<bool> WaitForPositionAsync(IFilterWheelDevice client, short target, CancellationToken ct) {
         var loggedReadFailure = false;
         for (var i = 0; i < FilterChangeSettleMaxPolls; i++) {
             await Task.Delay(FilterChangePollInterval, ct).ConfigureAwait(false);
             bool stillOurClient;
             lock (_gate) {
-                stillOurClient = !_disposed && _state == EquipmentConnectionState.Connected
-                    && ReferenceEquals(_client, client);
+                stillOurClient = _lifecycle.IsLive(client);
             }
             if (!stillOurClient) {
                 return false; // disconnected / superseded — the change can't be confirmed
@@ -268,7 +267,7 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
                 continue; // failed read: keep the prior cached runtime, poll again
             }
             lock (_gate) {
-                if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
+                if (_lifecycle.IsLive(client)) {
                     _runtime = position < 0
                         ? new FilterWheelStateDto("moving", null)
                         : new FilterWheelStateDto("idle", position);
@@ -291,16 +290,16 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
     // only be blamed on the LIVE client — an op whose client was superseded or disposed by a user
     // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
     // so the liveness check and the device snapshot share one critical section.
-    private void PublishOpFault(AlpacaFilterWheel client, EquipmentFaultKind kind, string details) {
+    private void PublishOpFault(IFilterWheelDevice client, EquipmentFaultKind kind, string details) {
         if (_faults is null) {
             return;
         }
         DiscoveredDeviceDto? device;
         lock (_gate) {
-            if (!ReferenceEquals(_client, client)) {
+            if (!_lifecycle.IsCurrent(client)) {
                 return;
             }
-            device = _device;
+            device = _lifecycle.Device;
         }
         _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.FilterWheel, device?.UniqueId, device?.Name,
             kind, details, DateTimeOffset.UtcNow));
@@ -308,7 +307,7 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-poll read boundary: a transient Position read throws; report null ('unknown') so the wait keeps polling (and logs once) rather than faulting. CA1031's log-and-recover boundary applies.")]
-    private static short? ReadPositionSafe(AlpacaFilterWheel client) {
+    private static short? ReadPositionSafe(IFilterWheelDevice client) {
         try {
             return client.Position;
         } catch (Exception) {
@@ -356,6 +355,12 @@ public sealed partial class FilterWheelService : IFilterWheelMediator {
                 return; // REST-only construction (unit tests): no profile to import into
             }
             SyncProfileFilters(filters, slots);
+            // #1675 — a saved offset also wins over an entry this daemon run imported earlier (another profile's).
+            foreach (var saved in _profileStore?.GetFilterFocusOffsets()?.Offsets ?? []) {
+                if (filters.FirstOrDefault(f => f.Position == saved.Position) is { } filter) {
+                    filter.FocusOffset = saved.Offset;
+                }
+            }
         }
         LogProfileFiltersImported(slots.Count);
     }

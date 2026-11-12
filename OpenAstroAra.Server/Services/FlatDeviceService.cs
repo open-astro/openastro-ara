@@ -12,8 +12,7 @@
 
 #endregion "copyright"
 
-using ASCOM.Alpaca.Clients;
-using ASCOM.Common.Alpaca;
+
 using ASCOM.Common.DeviceInterfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -26,152 +25,94 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
-/// §14e — seventh real Alpaca-backed device service. Replaces <c>PlaceholderFlatDeviceService</c>:
-/// connects to a discovered Alpaca CoverCalibrator (NINA's "flat device"), serves its live runtime
-/// (cover/light state + brightness, §32.4-cached) over the §6 REST surface, and drives the cover +
-/// calibrator light via <see cref="ApplyFlatPanelAsync"/> (a §60.5 202-Accepted background op).
-/// Mirrors the established control-device template. REST-only — the mediator unification is a
-/// follow-up.
+/// §14e — seventh real Alpaca-backed device service: connects to a discovered Alpaca CoverCalibrator
+/// (NINA's "flat device"), serves its live runtime (cover/light state + brightness, §32.4-cached) over
+/// the §6 REST surface, and drives the cover + calibrator light via <see cref="ApplyFlatPanelAsync"/> (a
+/// §60.5 202-Accepted background op). Its lifecycle (generation supersede, §32.4 background-refresh cache,
+/// the §42.3 probe and read health) is the shared <see cref="DeviceLifecycle{TDevice}"/> (ADR 0011).
+/// REST-only — the mediator unification is a follow-up.
 /// </summary>
-public sealed partial class FlatDeviceService : IFlatDeviceService, IRetainedDeviceSource, IDisposable {
+public sealed partial class FlatDeviceService : IFlatDeviceService, IRetainedDeviceSource, IRecoverableDevice, IDisposable {
 
-    // #1127 — the record the card names. The remembered-selection store and this can diverge
-    // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
-    public DiscoveredDeviceDto? RetainedDevice {
-        get {
-            lock (_gate) {
-                return _disposed ? null : _device;
-            }
-        }
-    }
-
-
-    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
-    private static readonly TimeSpan SettlePollInterval = TimeSpan.FromMilliseconds(200);
     // ~40s of cover travel at SettlePollInterval — real motorised covers take 10-30s end to end.
     internal const int MaxSettlePolls = 200;
+    private static readonly TimeSpan SettlePollInterval = TimeSpan.FromMilliseconds(200);
     private static readonly FlatDeviceStateDto IdleRuntime = new("cover_closed", CoverOpen: false, LightOn: false, Brightness: 0);
 
     private readonly ILogger<FlatDeviceService> _logger;
-    private readonly EquipmentEventPublisher? _events;
-    private readonly IEquipmentFaultSink? _faults;
-    private readonly DeviceConnectionProbe _probe = new();
-    private readonly object _gate = new();
-    private readonly Timer _refreshTimer;
-    // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence so a fixture that
-    // needs "several ticks" waits milliseconds, not multiples of the 2 s production interval.
-    // Init-only (object initializer), so it can never re-arm a disposed timer; never used by the daemon.
-    internal TimeSpan RefreshPeriod { init => _refreshTimer.Change(value, value); }
-    private AlpacaCoverCalibrator? _client;
-    private DiscoveredDeviceDto? _device;
-    private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
+    // ADR 0011 — connect, disconnect, forget, refresh, probe, read health and the desired state.
+    private readonly DeviceLifecycle<IFlatDeviceDevice> _lifecycle;
+    private Func<DiscoveredDeviceDto, IFlatDeviceDevice> _createDevice = AlpacaFlatDevice.Create;
+    // Guarded by the lifecycle's gate, like the connection state.
     private int? _maxBrightness; // read once on connect (for brightness validation)
     private FlatDeviceStateDto _runtime = IdleRuntime;
-    private int _refreshing;
-    private long _connectGeneration;
-    private bool _disposed;
 
     public FlatDeviceService(ILogger<FlatDeviceService>? logger = null, EquipmentEventPublisher? events = null,
             IEquipmentFaultSink? faults = null) {
         _logger = logger ?? NullLogger<FlatDeviceService>.Instance;
-        _events = events;
-        _faults = faults;
-        _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
+        _lifecycle = new DeviceLifecycle<IFlatDeviceDevice>(this, DeviceType.FlatDevice, "flat device",
+            d => _createDevice(d), ReadRuntime, ResetSessionLocked,
+            DeviceHealthTracker.DefaultThreshold, _logger, events, faults);
     }
+
+    private object _gate => _lifecycle.Gate;
+
+    // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence. Init-only, never used by the daemon.
+    internal TimeSpan RefreshPeriod { init => _lifecycle.RefreshPeriod = value; }
+
+    // Test seam (ADR 0011 rule 4): the adapter the lifecycle builds for a selected device.
+    internal Func<DiscoveredDeviceDto, IFlatDeviceDevice> DeviceFactory { init => _createDevice = value; }
+
+    // #1127 — the record the card names. The remembered-selection store and this can diverge
+    // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
+    public DiscoveredDeviceDto? RetainedDevice => _lifecycle.RetainedDevice;
+
+    public DesiredConnection? DesiredConnection => _lifecycle.Desired;
+
+    // #1246 — true once a refresh tick since the current connect read the essential read cleanly.
+    internal bool HasCleanReadSinceConnect => _lifecycle.HasCleanReadSinceConnect;
+
+    public bool TryRecover(DiscoveredDeviceDto device) => _lifecycle.TryRecover(device);
 
     public Task<FlatDeviceDto?> GetAsync(CancellationToken ct) {
         lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
+            ObjectDisposedException.ThrowIf(_lifecycle.IsDisposed, this);
             // null ONLY when no device has ever been selected (-> 404); a retained device after
             // disconnect returns Disconnected + idle runtime, consistent across the device services.
-            if (_device is null) {
+            var device = _lifecycle.Device;
+            if (device is null) {
                 return Task.FromResult<FlatDeviceDto?>(null);
             }
-            var runtime = _state == EquipmentConnectionState.Connected ? _runtime : IdleRuntime;
-            return Task.FromResult<FlatDeviceDto?>(new FlatDeviceDto(_device.UniqueId, _device.Name, _state, runtime));
+            var state = _lifecycle.State;
+            var runtime = state == EquipmentConnectionState.Connected ? _runtime : IdleRuntime;
+            return Task.FromResult<FlatDeviceDto?>(new FlatDeviceDto(device.UniqueId, device.Name, state, runtime));
         }
     }
 
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.Device);
-        var device = request.Device;
-        long generation;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if ((_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected)
-                && _device?.UniqueId == device.UniqueId) {
-                return Task.FromResult(Accepted("flat-device.connect", idempotencyKey));
-            }
-            DisposeClientLocked();
-            _device = device;
-            generation = ++_connectGeneration;
-            SetState(EquipmentConnectionState.Connecting);
-        }
-        _ = Task.Run(() => ConnectInBackground(device, generation), CancellationToken.None);
-        return Task.FromResult(Accepted("flat-device.connect", idempotencyKey));
+        return _lifecycle.ConnectAsync(request.Device, idempotencyKey);
     }
 
-    public async Task<bool> ForgetAsync(CancellationToken ct) {
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_device is null) {
-                return false;
-            }
-            if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
-                throw new InvalidOperationException("the flat device is connected — disconnect it before removing it");
-            }
-        }
-        // The SAME teardown as a disconnect — bump the connect generation, drop the client and hand
-        // it to SafeDisconnectDispose off-lock, publish Disconnected (the §60.9 transition while the
-        // device is still known to subscribers). An Error reached from Connected (§42.3 trip, a
-        // throwing property read) still holds a live, adopted client, and the card offers no
-        // Disconnect there any more — so Remove must release the driver itself (#1108 review).
-        await DisconnectAsync(null, ct).ConfigureAwait(false);
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_device is null) {
-                return false;
-            }
-            // A connect that raced in between the two locks is live again — refuse, don't drop.
-            if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
-                throw new InvalidOperationException("the flat device is connected — disconnect it before removing it");
-            }
-            var removed = _device;
-            _device = null;
-            // §60.9 — a second open client drops its card on this instead of waiting for its
-            // next poll (#1127); the lock-held publish is the same hand-off SetState makes.
-            _events?.Removed(DeviceType.FlatDevice, removed.UniqueId, removed.Name);
-            return true;
-        }
-    }
+    public Task<bool> ForgetAsync(CancellationToken ct) => _lifecycle.ForgetAsync();
 
-    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) {
-        AlpacaCoverCalibrator? client;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            _connectGeneration++;
-            client = _client;
-            _client = null;
-            _maxBrightness = null;
-            if (_device is not null) {
-                SetState(EquipmentConnectionState.Disconnected);
-            }
-        }
-        if (client is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(client), CancellationToken.None);
-        }
-        return Task.FromResult(Accepted("flat-device.disconnect", idempotencyKey));
+    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) =>
+        _lifecycle.DisconnectAsync(idempotencyKey);
+
+    // Caller holds the gate: a fresh, ended or tripped session forgets the last one's reads.
+    private void ResetSessionLocked() {
+        _maxBrightness = null;  // re-read for the new device
+        _runtime = IdleRuntime; // don't serve a prior device's runtime
     }
 
     public Task<OperationAcceptedDto> ApplyFlatPanelAsync(FlatPanelRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
         // Dispose -> range -> connected ordering, aligned with the other device services.
-        AlpacaCoverCalibrator? client;
+        IFlatDeviceDevice? client;
         int? maxBrightness;
         lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            client = _state == EquipmentConnectionState.Connected ? _client : null;
+            client = _lifecycle.ConnectedDevice();
             maxBrightness = _maxBrightness;
         }
         if (request.Brightness is int b && IsBrightnessOutOfRange(maxBrightness, b)) {
@@ -187,7 +128,7 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IRetainedDev
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background apply boundary: the blocking ASCOM OpenCover/CloseCover/CalibratorOn/Off can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-apply; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    private void ApplyInBackground(AlpacaCoverCalibrator client, FlatPanelRequestDto req, int? maxBrightness) {
+    private void ApplyInBackground(IFlatDeviceDevice client, FlatPanelRequestDto req, int? maxBrightness) {
         try {
             var changingLight = NeedsCoverSettle(req);
             if (req.OpenCover is bool open) {
@@ -235,69 +176,44 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IRetainedDev
                     client.CalibratorOff();
                 }
             }
-            RefreshCacheOnce();
+            _lifecycle.Refresh();
         } catch (Exception ex) {
             LogApplyFailed(ex);
         }
     }
 
-    private void RefreshTick(object? state) => RefreshCacheOnce();
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Timer-callback boundary: an unhandled exception in a System.Threading.Timer callback crashes the process. The per-field reads already absorb device failures; this catch-all is a hard backstop so a refresh tick can never fault the daemon. CA1031's log-and-recover boundary applies.")]
-    private void RefreshCacheOnce() {
-        if (Interlocked.CompareExchange(ref _refreshing, 1, 0) != 0) {
-            return;
+    // The runtime read the lifecycle runs each tick. Cover and calibrator state are per-field tolerant (an
+    // unsupported property must stay benign), so the essential read is CoverState: a device that answers
+    // Connected while its cover state keeps throwing is degraded (§42.3 second channel). A driver without
+    // a cover or a calibrator says NotImplemented, which is not a fault.
+    private DeviceRead ReadRuntime(IFlatDeviceDevice client) {
+        int? cachedMax;
+        lock (_gate) {
+            cachedMax = _maxBrightness;
         }
-        try {
-            AlpacaCoverCalibrator? client;
-            int? cachedMax;
-            bool needMax;
-            lock (_gate) {
-                if (_disposed || _state != EquipmentConnectionState.Connected) {
-                    return;
-                }
-                client = _client;
-                cachedMax = _maxBrightness;
-                needMax = cachedMax is null;
+        int? max = cachedMax ?? ReadMaxBrightness(client);
+        var runtime = ReadRuntime(client, max, out var readError);
+        return new DeviceRead(readError, CommitLocked: () => {
+            _runtime = runtime;
+            if (max is int m) {
+                _maxBrightness = m;
             }
-            if (client is null) {
-                return;
-            }
-            // §42.3 — the ONE deliberate connection probe per tick. The per-field runtime reads
-            // below deliberately swallow failures (an unsupported property must stay benign), so
-            // this probe is the only disconnect-detection source: Connected throws on transport
-            // death and reads false on a driver-side disconnect; a consecutive-failure streak
-            // (not one blip) trips the device to Error + publishes the §42.2 fault.
-            if (!ProbeConnected(client)) {
-                if (ObserveProbeIfLive(client, probeSucceeded: false) == ProbeVerdict.Lost) {
-                    TripConnectionLost(client);
-                }
-                return; // the device didn't answer — skip this tick's reads
-            }
-            ObserveProbeIfLive(client, probeSucceeded: true);
-            int? max = needMax ? ReadMaxBrightness(client) : cachedMax;
-            var runtime = ReadRuntime(client, max);
-            lock (_gate) {
-                if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
-                    _runtime = runtime;
-                    if (max is int m) {
-                        _maxBrightness = m;
-                    }
-                }
-            }
-        } catch (Exception ex) {
-            LogRuntimeReadFailed(ex);
-        } finally {
-            Interlocked.Exchange(ref _refreshing, 0);
-        }
+        });
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported cover/calibrator property throws; that field falls back to a default rather than failing the whole runtime read. CA1031's log-and-recover boundary applies.")]
-    private static FlatDeviceStateDto ReadRuntime(AlpacaCoverCalibrator c, int? maxBrightness) {
+    private static FlatDeviceStateDto ReadRuntime(IFlatDeviceDevice c, int? maxBrightness, out string? readError) {
         CoverStatus cover;
-        try { cover = c.CoverState; } catch (Exception) { cover = CoverStatus.Unknown; }
+        readError = null;
+        try {
+            cover = c.CoverState;
+        } catch (ASCOM.NotImplementedException) {
+            cover = CoverStatus.Unknown; // not a fault: the driver has no cover state
+        } catch (Exception ex) {
+            cover = CoverStatus.Unknown;
+            readError = ex.Message;
+        }
         CalibratorStatus cal;
         try { cal = c.CalibratorState; } catch (Exception) { cal = CalibratorStatus.Unknown; }
         int brightness;
@@ -338,7 +254,7 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IRetainedDev
     // expired mid-travel and the light op then failed with "already in progress"). Runs on the
     // fire-and-forget apply thread; a CoverState read that throws propagates to
     // ApplyInBackground's catch.
-    private static bool WaitForCoverSettle(AlpacaCoverCalibrator c) =>
+    private static bool WaitForCoverSettle(IFlatDeviceDevice c) =>
         WaitForCoverSettle(() => c.CoverState, () => Thread.Sleep(SettlePollInterval), MaxSettlePolls);
 
     /// <summary>
@@ -370,7 +286,7 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IRetainedDev
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Capability read boundary: a device without a calibrator throws for MaxBrightness; return null so we don't cache a bogus 0 max (the next tick retries). CA1031's log-and-recover boundary applies.")]
-    private static int? ReadMaxBrightness(AlpacaCoverCalibrator c) {
+    private static int? ReadMaxBrightness(IFlatDeviceDevice c) {
         try {
             return c.MaxBrightness;
         } catch (Exception) {
@@ -378,148 +294,10 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IRetainedDev
         }
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Background connect boundary: constructing the Alpaca client and setting Connected can throw arbitrary driver/HTTP/socket exceptions; any escape must surface as the Error state and be contained, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
-        Justification = "Ownership of the AlpacaCoverCalibrator is managed explicitly: on every non-adopt path SafeDisconnectDispose disposes it; on the adopt path it is stored in _client (local set to null) and disposed later by DisconnectAsync/Dispose. CA2000 cannot follow the transfer through the lock + helper.")]
-    private void ConnectInBackground(DiscoveredDeviceDto device, long generation) {
-        AlpacaCoverCalibrator? client = null;
-        var adopted = false;
-        try {
-            var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
-            if (string.IsNullOrWhiteSpace(host)) {
-                throw new InvalidOperationException(
-                    $"discovered device '{device.Name}' carries neither an IP address nor a host name");
-            }
-            client = new AlpacaCoverCalibrator(
-                device.UseHttps ? ServiceType.Https : ServiceType.Http,
-                host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
-            AlpacaConnect.Connect(client);
-            lock (_gate) {
-                if (!_disposed && _connectGeneration == generation) {
-                    _client = client;
-                    _maxBrightness = null;  // re-read for the new device
-                    _runtime = IdleRuntime; // don't serve a prior device's runtime
-                    _probe.Reset();         // §42.3 — a fresh session starts a fresh streak
-                    SetState(EquipmentConnectionState.Connected);
-                    adopted = true;
-                }
-            }
-            if (!adopted) {
-                SafeDisconnectDispose(client);
-                return;
-            }
-            client = null; // ownership transferred to _client
-            RefreshCacheOnce(); // seed runtime + max brightness through the guarded path
-            bool stillConnected;
-            lock (_gate) {
-                stillConnected = _state == EquipmentConnectionState.Connected;
-                if (stillConnected) {
-                    // The Connected push went out before this seed read; tell clients the
-                    // details are cached so they re-read now.
-                    _events?.DetailsReady(DeviceType.FlatDevice, _device?.UniqueId, _device?.Name);
-                }
-            }
-            if (stillConnected) {
-                LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
-            }
-        } catch (Exception ex) {
-            if (!adopted) {
-                if (client is not null) {
-                    SafeDisconnectDispose(client);
-                }
-                lock (_gate) {
-                    if (!_disposed && _connectGeneration == generation) {
-                        SetState(EquipmentConnectionState.Error);
-                    }
-                }
-                LogConnectFailed(ex, device.Name);
-            }
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort teardown: Connected = false can throw driver/HTTP exceptions, which must be swallowed so Dispose always runs and cleanup completes. CA1031's log-and-recover boundary applies.")]
-    private void SafeDisconnectDispose(AlpacaCoverCalibrator client) {
-        try {
-            client.Connected = false;
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
-        }
-        DisposeQuietly(client);
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort teardown: ASCOM/COM-backed clients have been known to throw from Dispose(); the throw must be swallowed (and logged) rather than escape into a fire-and-forget Task.Run as an unobserved exception. CA1031's log-and-recover boundary applies.")]
-    private void DisposeQuietly(AlpacaCoverCalibrator client) {
-        try {
-            client.Dispose();
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
-        }
-    }
-
-    private void DisposeClientLocked() {
-        var c = _client;
-        _client = null;
-        if (c is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "The probe's whole job is turning any transport/driver exception into a failed-probe observation. CA1031's log-and-recover boundary applies.")]
-    private static bool ProbeConnected(AlpacaCoverCalibrator c) {
-        try { return c.Connected; } catch (Exception) { return false; }
-    }
-
-    // Only a probe of the LIVE client may feed the streak: the blocking probe runs outside
-    // _gate, so a concurrent reconnect can have swapped the client (and reset the probe)
-    // while a stale probe of the dead session was still in flight. The liveness check and
-    // the Observe are ONE operation under _gate — a separate check-then-observe leaves a
-    // gap for ConnectInBackground's Reset to land between them (review finding). Returns
-    // null when the probed client is stale (the observation is discarded).
-    private ProbeVerdict? ObserveProbeIfLive(AlpacaCoverCalibrator client, bool probeSucceeded) {
-        lock (_gate) {
-            return ReferenceEquals(_client, client) ? _probe.Observe(probeSucceeded) : null;
-        }
-    }
-
-    // §42.3 — declare the device lost: Connected → Error (keeps _device remembered so a
-    // reconnect can find it; the state publisher already maps Error to
-    // equipment.connection_failed for WILMA's chips) + publish the §42.2 fault event.
-    // Re-checks the probed client's identity under the gate: a reconnect between the probe
-    // and this trip must never flip the NEW, healthy session to Error (review finding).
-    private void TripConnectionLost(AlpacaCoverCalibrator probed) {
-        DiscoveredDeviceDto? device;
-        lock (_gate) {
-            if (_state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, probed)) {
-                return;
-            }
-            device = _device;
-            SetState(EquipmentConnectionState.Error);
-            _probe.Reset();
-        }
-        LogConnectionLost(device?.Name ?? "?");
-        _faults?.Publish(new EquipmentFaultEvent(DeviceType.FlatDevice, device?.UniqueId, device?.Name,
-            EquipmentFaultKind.Disconnected,
-            $"stopped answering {DeviceConnectionProbe.DefaultLostThreshold} consecutive connection probes",
-            DateTimeOffset.UtcNow));
-    }
-
-    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "FlatDevice '{Device}' stopped answering — marked Error (§42.3)")]
-    private partial void LogConnectionLost(string device);
-
-    // Caller must hold _gate (every call site already does), so no inner lock here.
-    private void SetState(EquipmentConnectionState state) {
-        if (_state == state) {
-            return;
-        }
-        _state = state;
-        // Callers hold the service lock; the publisher's synchronous part only
-        // serializes a small payload and hands off (see EquipmentEventPublisher).
-        _events?.StateChanged(DeviceType.FlatDevice, _device?.UniqueId, _device?.Name, state);
-    }
+    // Extracted (internal) for direct unit testing. Out of range only when a real max is known
+    // (> 0); otherwise the device validates the bound.
+    internal static bool IsBrightnessOutOfRange(int? maxBrightness, int brightness) =>
+        brightness < 0 || (maxBrightness is int max && max > 0 && brightness > max);
 
     private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>
         new(OperationId: Guid.NewGuid(),
@@ -527,33 +305,10 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IRetainedDev
             AcceptedUtc: DateTimeOffset.UtcNow,
             IdempotencyKey: idempotencyKey);
 
-    // Extracted (internal) for direct unit testing. Out of range only when a real max is known
-    // (> 0); otherwise the device validates the bound.
-    internal static bool IsBrightnessOutOfRange(int? maxBrightness, int brightness) =>
-        brightness < 0 || (maxBrightness is int max && max > 0 && brightness > max);
-
     public void Dispose() {
-        AlpacaCoverCalibrator? client;
-        lock (_gate) {
-            if (_disposed) {
-                return;
-            }
-            _disposed = true;
-            client = _client;
-            _client = null;
-        }
-        _refreshTimer.Dispose();
-        // Dispose the client directly (guarded), not via SafeDisconnectDispose: the courtesy
-        // Connected=false is a blocking HTTP call (up to ~3s ASCOM timeout) that would hang
-        // container shutdown if the device is unreachable. DisposeQuietly releases resources only.
-        if (client is not null) {
-            DisposeQuietly(client);
-        }
+        _lifecycle.Dispose();
         GC.SuppressFinalize(this);
     }
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "FlatDevice runtime read failed")]
-    private partial void LogRuntimeReadFailed(Exception ex);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "FlatDevice apply (cover/light) failed")]
     private partial void LogApplyFailed(Exception ex);
@@ -565,13 +320,4 @@ public sealed partial class FlatDeviceService : IFlatDeviceService, IRetainedDev
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "FlatDevice cover never settled within the wait budget — applying the light change anyway")]
     private partial void LogCoverNeverSettled();
-
-    [LoggerMessage(Level = LogLevel.Information, Message = "FlatDevice connected: {Name} at {Host}:{Port}/{Device}")]
-    private partial void LogConnected(string name, string host, int port, int device);
-
-    [LoggerMessage(Level = LogLevel.Error, Message = "FlatDevice connect failed for {Name}")]
-    private partial void LogConnectFailed(Exception ex, string name);
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "ignored error while disconnecting FlatDevice during teardown")]
-    private partial void LogTeardownIgnored(Exception ex);
 }

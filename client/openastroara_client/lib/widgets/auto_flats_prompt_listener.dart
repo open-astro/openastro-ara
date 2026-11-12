@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../state/sequencer/sequence_list_state.dart';
-import '../state/simple_flats_choice_state.dart';
 import '../state/simple_messages_state.dart';
 import '../state/simple_mode_state.dart';
 import '../state/ws/ws_providers.dart';
@@ -61,14 +60,16 @@ class _AutoFlatsPromptListenerState
     try {
       await api.decideAutoFlats(
         sequenceId,
-        choice: ref.read(simpleFlatsChoiceProvider),
+        // Simple Mode's flats are per target, in the queue itself (#1757):
+        // the rig's own end-of-run flats would shoot them twice.
+        choice: 'later',
         remember: false,
       );
     } catch (e) {
       if (!mounted) return;
       ref.read(simpleMessagesProvider.notifier).show(
         SimpleMessageKind.error,
-        friendlyError(context.l10n, e, action: 'send the calibration choice'),
+        friendlyError(context.l10n, e, action: context.l10n.actionSendCalibrationChoice),
       );
     }
   }
@@ -99,7 +100,7 @@ class _AutoFlatsPromptListenerState
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                   content:
-                      Text(friendlyError(context.l10n, e, action: 'send the calibration choice'))));
+                      Text(friendlyError(context.l10n, e, action: context.l10n.actionSendCalibrationChoice))));
             }
           },
         ),

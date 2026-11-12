@@ -357,6 +357,8 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 new SkyFlats(flatCaptureExecutor),
                 // Opens the panel's cover before a lens-cap pause (bias/darks after the flats).
                 new OpenFlatPanelCover(flatCaptureExecutor),
+                // #1757 — closes the cover for unattended bias/darks; fails (never skips) without a motorised cover.
+                new CloseFlatPanelCover(flatCaptureExecutor),
                 // §38k-22 — Connect dir. All take the full 11 device mediators;
                 // Connect*/SwitchProfile also take IProfileService (profile-first),
                 // Disconnect* do not (camera-first). The Disconnect* classes were
