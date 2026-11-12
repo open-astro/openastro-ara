@@ -96,6 +96,33 @@ void main() {
       );
     });
 
+    test('polar: a routine stopped outside the green wins over an older green result, one with no reading does not', () {
+      expect(
+        polarAlignStepState(
+          const PolarAlignLive(
+            phase: PolarAlignStates.stopped,
+            stage: PolarAlignStages.fine,
+            totalErrorArcmin: 18,
+            zone: 'yellow',
+          ),
+          last: last(4, tonight),
+          now: now,
+        ),
+        SetupStepState.pending,
+      );
+      expect(
+        polarAlignStepState(
+          const PolarAlignLive(
+            phase: PolarAlignStates.stopped,
+            stage: PolarAlignStages.fine,
+          ),
+          last: last(4, tonight),
+          now: now,
+        ),
+        SetupStepState.done,
+      );
+    });
+
     test('the status carries last_result; an older daemon has none', () {
       final s = PolarAlignStatus.fromJson({
         'state': 'idle',

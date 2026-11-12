@@ -131,12 +131,14 @@ extension SimplePreflightStepLabel on SimplePreflightStep {
 }
 
 /// #1565 — the rig's last polar-align routine, read once per server so a
-/// relaunch still knows the mount was aligned tonight. Null from an older
+/// relaunch still knows the mount was aligned tonight, and again each time a
+/// routine starts or ends, so a newer routine replaces it. Null from an older
 /// daemon, before any routine ended, or when the read fails.
 final polarAlignLastResultProvider = FutureProvider<PolarAlignLastResult?>((
   ref,
 ) async {
   final api = ref.watch(polarAlignApiProvider);
+  ref.watch(polarAlignLiveProvider.select((l) => l.isActive));
   if (api == null) return null;
   try {
     return (await api.getStatus())?.lastResult;
