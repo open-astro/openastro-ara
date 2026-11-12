@@ -1768,6 +1768,27 @@ void main() {
         expect(find.byKey(const Key('simple-stats')), findsOneWidget);
       },
     );
+
+    // Falsified by: stats_dashboard_screen.dart title back to const Text('Stats').
+    testWidgets('Stats page title: the rail button\'s localized name in Simple Mode, Stats in the Full UI',
+        (tester) async {
+      await _pump(tester, const Size(1024, 768), locale: const Locale('pt', 'BR'));
+      await tester.tap(find.byKey(const Key('simple-stats')));
+      await tester.pumpAndSettle();
+      expect(find.descendant(of: find.byType(AppBar), matching: find.text('Números')), findsOneWidget);
+
+      await tester.pumpWidget(const ProviderScope(
+        child: MaterialApp(
+          locale: Locale('pt', 'BR'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: StatsDashboardScreen(),
+        ),
+      ));
+      await tester.pump();
+      expect(find.descendant(of: find.byType(AppBar), matching: find.text('Stats')), findsOneWidget);
+      expect(find.text('Números'), findsNothing);
+    });
   });
 
   testWidgets('Sky Album on the left rail; a card\'s action closes it on Plan\'s sheet with the card picked',
