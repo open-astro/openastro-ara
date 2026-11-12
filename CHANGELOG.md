@@ -35,10 +35,6 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
-### Added (dome follows the mount)
-
-- The dome follows the mount (#1689). With **Follows the mount** on, Ara turns the dome to keep its slit in front of the scope after a mount slew, after a meridian flip, and while tracking whenever the slit falls behind by more than the tolerance; exposures and the sequencer's Synchronize dome wait for the dome to arrive. Turn it on in Simple Mode's Dome window (it shows "Following the mount…" while it turns) or in the full UI's Dome panel, which also takes the dome geometry (radius, scope position, mount axis offsets, tolerance); a scope outside the dome is refused with a reason. Turning the dome by hand, parking it, sending it home, stopping it, disconnecting it, an unsafe-weather reaction, an emergency stop, or a geometry that puts the scope outside the dome turns following off. With following off, the dome still turns once to the scope after a meridian flip and after each centering re-slew, once the dome radius is set. The setting is per profile and kept across restarts. New `POST /equipment/dome/follow`, `GET/PUT /profile/dome` and `runtime.following` on the dome status.
-
 ### Added (calibration)
 
 - **Calibration** is a seventh Simple Mode mode, between Guider and Plan (#1757). Flats belong to the night; darks and bias belong to the camera for months. Three tabs, and the shutter and chip follow the tab:
@@ -56,6 +52,10 @@ at the top. This happens in the same commit that pushes the release tag.
 ### Fixed (calibration)
 
 - An edited sequence body (a daemon-generated run with a step added) no longer fails to load on the rig: a new collection wrapper writes `$type` before `$values`, as Json.NET needs.
+
+### Added (dome follows the mount)
+
+- The dome follows the mount (#1689). With **Follows the mount** on, Ara turns the dome to keep its slit in front of the scope after a mount slew, after a meridian flip, and while tracking whenever the slit falls behind by more than the tolerance; exposures and the sequencer's Synchronize dome wait for the dome to arrive. Turn it on in Simple Mode's Dome window (it shows "Following the mount…" while it turns) or in the full UI's Dome panel, which also takes the dome geometry (radius, scope position, mount axis offsets, tolerance); a scope outside the dome is refused with a reason. Turning the dome by hand, parking it, sending it home, stopping it, disconnecting it, an unsafe-weather reaction, an emergency stop, or a geometry that puts the scope outside the dome turns following off. With following off, the dome still turns once to the scope after a meridian flip and after each centering re-slew, once the dome radius is set. The setting is per profile and kept across restarts. New `POST /equipment/dome/follow`, `GET/PUT /profile/dome` and `runtime.following` on the dome status.
 
 ### Added (mount by hand)
 
