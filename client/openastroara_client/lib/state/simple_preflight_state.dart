@@ -57,11 +57,12 @@ extension SimpleModeScreenLabels on SimpleModeScreen {
   };
 }
 
-/// Simple Mode is showing: the feature AND the mode, read from the two sources
-/// (a derived Provider with no reader is not recomputed).
+/// Simple Mode is showing: Companion Mode, or the feature AND the mode, read
+/// from the sources (a derived Provider with no reader is not recomputed).
 bool _simpleModeActive(Ref ref) =>
-    (ref.read(simpleModeFeatureProvider).value ?? false) &&
-    (ref.read(simpleModeProvider).value ?? false);
+    ref.read(companionModeProvider) ||
+    ((ref.read(simpleModeFeatureProvider).value ?? false) &&
+        (ref.read(simpleModeProvider).value ?? false));
 
 /// What Simple Mode shows. Two writers: the person's pick, and Preflight's
 /// steps. [SimpleModeScreen.preflight] is only ever picked: it starts
@@ -71,9 +72,9 @@ class SimpleShowingNotifier extends Notifier<SimpleModeScreen> {
   SimpleModeScreen build() {
     // Simple Mode opens on Preview, as when the shell held what shows; the
     // pick also ends a Preflight left running (its strip was hidden before).
-    // The shell mounts on the feature AND the mode (simpleModeActiveProvider),
-    // so both toggles count; the two sources are listened to, as a derived
-    // Provider with no reader is not recomputed.
+    // The shell mounts on Companion Mode, or the feature AND the mode
+    // (simpleModeActiveProvider), so all three count; each source is listened
+    // to, as a derived Provider with no reader is not recomputed.
     var was = _simpleModeActive(ref);
     void opened(Object? prev, Object? next) {
       final now = _simpleModeActive(ref);
@@ -83,6 +84,7 @@ class SimpleShowingNotifier extends Notifier<SimpleModeScreen> {
 
     ref.listen(simpleModeProvider, opened);
     ref.listen(simpleModeFeatureProvider, opened);
+    ref.listen(companionModeProvider, opened);
     return SimpleModeScreen.preview;
   }
 
@@ -238,6 +240,7 @@ class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
 
     ref.listen(simpleModeProvider, closed);
     ref.listen(simpleModeFeatureProvider, closed);
+    ref.listen(companionModeProvider, closed);
     return null;
   }
 

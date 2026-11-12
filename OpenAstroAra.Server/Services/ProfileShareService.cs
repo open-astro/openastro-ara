@@ -143,6 +143,7 @@ public sealed class ProfileShareService : IProfileShareService {
     ///   <item>FilterSet — STRIP all (donor's physical filters; recipient declares their own)</item>
     ///   <item>Unguided — KEEP (guard thresholds and probe ladder: tuning judgement, no PII)</item>
     ///   <item>GuiderAdvanced — KEEP (guider tuning like aggressiveness: star detection, algorithms, limits; no path, network or identity)</item>
+    ///   <item>Dome — STRIP all (the donor's dome geometry and follow flag describe the donor's observatory)</item>
     ///   <item>CoolingFan — STRIP (a UniqueId names the donor's own switch; the recipient designates theirs)</item>
     ///   <item>FilterFocusOffsets — STRIP all (measured on the donor's filters and focuser)</item>
     /// </list>
@@ -216,6 +217,8 @@ public sealed class ProfileShareService : IProfileShareService {
         CoolingFan = null,
         // Strip the #1675 focus offsets — measured on the donor's filters and focuser.
         FilterFocusOffsets = FilterFocusOffsetsDto.Empty,
+        // Strip the #1689 dome block — the geometry measures the donor's dome; the recipient measures theirs.
+        Dome = null,
     };
 
     private static ProfileShareRigDescriptionDto BuildRigDescription(ProfileSnapshotDto s) =>
@@ -268,6 +271,7 @@ public sealed class ProfileShareService : IProfileShareService {
         "Sky-model calibration — fitted to the donor's optics, camera and sky",
         "Guider calibration state (dark library / defect map stamps) — rebuild on your rig",
         "Cooling fan — choose your own in the camera settings",
+        "Dome geometry and Follow the mount — set your own in the Dome settings",
     };
 
     // Returns Task.FromException (never throws synchronously) so every exit — including

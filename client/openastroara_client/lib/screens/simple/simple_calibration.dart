@@ -196,6 +196,14 @@ typedef SimpleCalibrationJob = ({
   VoidCallback? queue,
 });
 
+/// The darks the shutter shoots for a library [cover]: the missing ones, else
+/// the old ones again ([refresh]); none when the library covers the plan.
+({List<double> exposures, bool refresh}) _darksToShoot(
+  ({List<double> missing, List<double> old, bool biasMissing}) cover,
+) => cover.missing.isNotEmpty
+    ? (exposures: cover.missing, refresh: false)
+    : (exposures: cover.old, refresh: cover.old.isNotEmpty);
+
 /// The current tab's job, the same one the shutter and the tab's main button
 /// do (round 2 mock, approved 2026-11-12).
 SimpleCalibrationJob simpleCalibrationJob(BuildContext context, WidgetRef ref) {
@@ -245,8 +253,7 @@ SimpleCalibrationJob simpleCalibrationJob(BuildContext context, WidgetRef ref) {
       }
       if (lib == null) return idle('…', l.calibrationLibraryNoPlan);
       final cover = libraryCover(lib, need, DateTime.now().toUtc());
-      final refresh = cover.missing.isEmpty && cover.old.isNotEmpty;
-      final exposures = cover.missing.isNotEmpty ? cover.missing : cover.old;
+      final (:exposures, :refresh) = _darksToShoot(cover);
       if (exposures.isEmpty && !cover.biasMissing) {
         return idle(l.calibrationChipReady, l.calibrationNothingMissing);
       }
@@ -659,6 +666,9 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
   /// The exposures picked by hand; null: what the plan needs.
   Set<double>? _picked;
 
+  /// Bias picked by hand; null: on when the library lacks it (#1790).
+  bool? _biasPicked;
+
   String _age(AppLocalizations l, DateTime at) {
     final d = DateTime.now().toUtc().difference(at);
     return d.inDays < 14
@@ -690,6 +700,15 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
           if (cover != null && cover.missing.isEmpty && cover.old.isEmpty)
             ...planExposures,
         };
+    final biasOn = _biasPicked ?? cover?.biasMissing ?? true;
+    // Nothing picked by hand: the shutter's own job.
+    final byHand = _picked != null || _biasPicked != null;
+    final canBuild = picked.isNotEmpty || biasOn;
+    // Exposures untouched: the shutter's darks, not every chip shown picked;
+    // those picked by hand are shot again.
+    final work = _picked != null || cover == null
+        ? (exposures: picked.toList()..sort(), refresh: _picked != null)
+        : _darksToShoot(cover);
     final temp = need?.temperatureC;
     String settings(int? gain, double? t) => [
       if (gain != null) l.calibrationGain(gain),
@@ -728,6 +747,25 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
         true,
       ),
     };
+    // Picked: Plan's solid blue with white words.
+    Widget chip(
+      Key key,
+      String label,
+      bool on,
+      ValueChanged<bool> onSelected,
+    ) => FilterChip(
+      key: key,
+      label: Text(
+        label,
+        style: kSimpleText.copyWith(
+          color: on ? AraColors.selectionFg : AraColors.textPrimary,
+        ),
+      ),
+      selected: on,
+      showCheckmark: false,
+      selectedColor: AraColors.selectionBg,
+      onSelected: onSelected,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
@@ -803,26 +841,23 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
             runSpacing: AraSpace.s8,
             children: [
               for (final s in {..._choices, ...planExposures}.toList()..sort())
-                FilterChip(
-                  key: Key('simple-calibration-exposure-${s.round()}'),
-                  // Picked: Plan's solid blue with white words.
-                  label: Text(
-                    _secs(s),
-                    style: kSimpleText.copyWith(
-                      color: picked.contains(s)
-                          ? AraColors.selectionFg
-                          : AraColors.textPrimary,
-                    ),
-                  ),
-                  selected: picked.contains(s),
-                  showCheckmark: false,
-                  selectedColor: AraColors.selectionBg,
-                  onSelected: (on) => setState(
+                chip(
+                  Key('simple-calibration-exposure-${s.round()}'),
+                  _secs(s),
+                  picked.contains(s),
+                  (on) => setState(
                     () => _picked = on
                         ? {...picked, s}
                         : ({...picked}..remove(s)),
                   ),
                 ),
+              // Bias is shot again on request, even with some on file.
+              chip(
+                const Key('simple-calibration-bias'),
+                l.calibrationBias,
+                biasOn,
+                (on) => setState(() => _biasPicked = on),
+              ),
             ],
           ),
           Text(
@@ -835,20 +870,18 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
               Expanded(
                 child: SimpleWindowButton(
                   key: const Key('simple-calibration-build-library'),
-                  label: _picked == null
-                      ? job.caption
-                      : l.calibrationBuildPicked,
-                  onTap: !_canShoot(ref) || picked.isEmpty
+                  label: !byHand ? job.caption : l.calibrationBuildPicked,
+                  onTap: !_canShoot(ref) || !canBuild
                       ? null
-                      : _picked == null
+                      : !byHand
                       ? (job.run == null ? null : () => _runJob(context, ref, job))
                       : () => ref
                             .read(simpleCalibrationProvider.notifier)
                             .buildLibrary(
                               need,
-                              picked.toList()..sort(),
-                              bias: cover?.biasMissing ?? true,
-                              refresh: true,
+                              work.exposures,
+                              bias: biasOn,
+                              refresh: work.refresh,
                               lensCapPrompt: l.calibrationLensCapPrompt,
                             ),
                 ),
@@ -858,15 +891,15 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
                   key: const Key('simple-calibration-queue-library'),
                   outlined: true,
                   label: l.calibrationAddToQueue,
-                  onTap: picked.isEmpty
+                  onTap: !canBuild
                       ? null
                       : () => ref
                             .read(simpleCalibrationProvider.notifier)
                             .queueLibrary(
                               need,
-                              picked.toList()..sort(),
-                              bias: cover?.biasMissing ?? true,
-                              refresh: _picked != null,
+                              work.exposures,
+                              bias: biasOn,
+                              refresh: work.refresh,
                               lensCapPrompt: l.calibrationLensCapPrompt,
                             ),
                 ),

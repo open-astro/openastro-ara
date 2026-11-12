@@ -293,6 +293,24 @@ var D2R = Math.PI / 180.0;
 function mjdFromUnixMs(ms) { return ms / 86400000.0 + 40587.0; }
 function qp(name, dflt) { var v = new URLSearchParams(location.search).get(name); return v === null ? dflt : v; }
 if (qp('bare', '0') === '1') document.documentElement.classList.add('bare');
+// Simple Mode draws a dark star chart (applyChartPreset) and never writes the
+// Full UI's saved layer toggles back (postDisplayPrefs, the dss goto flag).
+var CHART = document.documentElement.classList.contains('bare');
+
+// The Simple Mode chart: layers only, on the engine's default black sky.
+function applyChartPreset(core) {
+  core.atmosphere.visible = false;
+  core.landscapes.visible = false;
+  core.milkyway.visible = false;
+  core.dss.visible = false;
+  core.constellations.images_visible = false;
+  core.constellations.lines_visible = true;
+  core.constellations.labels_visible = true;
+  core.lines.equatorial.visible = true;
+  core.lines.azimuthal.visible = false;
+  core.dsos.visible = true;
+  core.dsos.hints_visible = true;
+}
 
 // Config from the URL (the Flutter app injects these when it loads the page).
 var LAT = parseFloat(qp('lat', '0'));
@@ -654,7 +672,8 @@ function updateStarScale() {
   // NB: the fov attribute lives on core — a bare `stel.fov` is undefined, which
   // silently turned this whole function into NaN math (and garbage attr writes).
   var fovDeg = stel.core.fov / D2R;
-  var t = Math.max(0, Math.min(1, (fovDeg - 4) / (15 - 4))); // 0 ≤4° … 1 ≥15°
+  // The chart holds the crisp-point end (0) at every field of view.
+  var t = CHART ? 0 : Math.max(0, Math.min(1, (fovDeg - 4) / (15 - 4))); // 0 ≤4° … 1 ≥15°
   // core.fov can read NaN for the first frames after load; setting a NaN scale
   // reaches the engine as JSON null, which its float parser can't take (debug
   // builds assert in args_vget; release builds store an undefined value).
@@ -1779,7 +1798,7 @@ function pollCmd() {
         // `dss: true` (the session planner's "Show on the planetarium") turns
         // the DSS2 photo layer on so the user sees the real field; the
         // Display panel dot + stored prefs follow, same as a manual toggle.
-        if (c.dss && !dispState('dss')) { setLayer('dss', true); renderDisplayPanel(); postDisplayPrefs(); }
+        if (c.dss && !CHART && !dispState('dss')) { setLayer('dss', true); renderDisplayPanel(); postDisplayPrefs(); }
         // `rot` (degrees) presets the framing dial — the session planner's
         // per-slot rotation lands on the box so the user sees the layout
         // they dialled, and Create Run here carries the same angle.
@@ -2091,6 +2110,7 @@ StelWebEngine({
     // failed boot-time fetch reverts the toggle honestly and the merge-save keeps
     // the stored key for the next launch).
     try { applyDisplayPrefs(JSON.parse(qp('prefs', '{}')), true); } catch (e) {}
+    if (CHART) applyChartPreset(core);   // over the saved toggles
     s.zoomTo(90 * D2R, 0);
 
     // Self-init the observer from the URL params, then start the clock + controls.

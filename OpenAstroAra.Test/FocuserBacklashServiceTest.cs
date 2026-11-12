@@ -140,6 +140,53 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        /// <summary>An in-process focuser whose next <c>IsMoving</c> read can be held: it takes its answer, signals
+        /// <see cref="HeldRead"/> and returns only once <see cref="Release"/> is set, so a refresh tick stays in flight.</summary>
+        private sealed class HoldableFocuser : FakeDeviceAdapter, IFocuserDevice {
+            private int _position = 1000;
+            private volatile bool _moving;
+            private int _isMovingReads;
+            public TaskCompletionSource? HeldRead;
+            public readonly ManualResetEventSlim Release = new(false);
+            public readonly ConcurrentQueue<int> Moves = new();
+            // When set, a move leaves the focuser moving until a test clears Moving.
+            public volatile bool MoveLeavesMoving;
+            // When set, Move signals MoveEntered and waits for it before the move lands: the dispatch stays in flight.
+            public ManualResetEventSlim? MoveGate;
+            public readonly TaskCompletionSource MoveEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public int IsMovingReads => Volatile.Read(ref _isMovingReads);
+            public bool Moving { set => _moving = value; }
+            public bool IsMoving {
+                get {
+                    Interlocked.Increment(ref _isMovingReads);
+                    var moving = _moving;
+                    if (Interlocked.Exchange(ref HeldRead, null) is { } held) {
+                        held.SetResult();
+                        Release.Wait(TimeSpan.FromSeconds(10));
+                    }
+                    return moving;
+                }
+            }
+            public int Position => Volatile.Read(ref _position);
+            public double Temperature => 10;
+            public bool TempComp { get; set; }
+            public int MaxStep => 50_000;
+            public double StepSize => 1;
+            public bool TempCompAvailable => false;
+            public bool Absolute => true;
+            public void Move(int position) {
+                if (MoveGate is { } gate) {
+                    MoveEntered.TrySetResult();
+                    gate.Wait(TimeSpan.FromSeconds(10));
+                }
+                Volatile.Write(ref _position, position);
+                _moving = MoveLeavesMoving;
+                Moves.Enqueue(position);
+            }
+            public void Halt() => _moving = false;
+        }
+
         private static InMemoryProfileStore Store(int backlashIn, int backlashOut) {
             var store = new InMemoryProfileStore();
             store.PutAutofocusSettings(new AutofocusSettingsDto("hfr_v_curve", 4, 100, 2, 1, "L", false, 1.0, 10, 0, false, true, StepSizeAuto: false,
@@ -220,6 +267,89 @@ namespace OpenAstroAra.Test {
             // A plain move (no reversal) is just "moving".
             await svc.MoveAsync(new FocuserMoveRequestDto(800), idempotencyKey: null, CancellationToken.None);
             Assert.That((await PollAsync(svc, d => d.Runtime.State != "idle"))?.Runtime.State, Is.EqualTo("moving"));
+        }
+
+        private static async Task<FocuserService> ConnectHoldableAsync(HoldableFocuser focuser, CancellationToken ct) {
+            var svc = new FocuserService(profiles: Store(backlashIn: 30, backlashOut: 40)) { RefreshPeriod = Tick, DeviceFactory = _ => focuser };
+            var device = new DiscoveredDeviceDto("focuser-under-test", "Bench Focuser", DeviceType.Focuser, "127.0.0.1", "127.0.0.1", 1, 0, false);
+            await svc.ConnectAsync(new ConnectRequestDto(device), idempotencyKey: null, ct);
+            Assert.That((await PollAsync(svc, d => d.Capabilities is not null))?.Capabilities, Is.Not.Null, "connected with capabilities");
+            await svc.MoveFocuser(1200, ct); // an out move: the next in move is a reversal
+            return svc;
+        }
+
+        [TestCase(false, TestName = "A_refresh_read_taken_before_the_dispatch_and_committed_after_it_does_not_clear_backlash_compensating")]
+        [TestCase(true, TestName = "A_refresh_read_taken_before_the_dispatch_and_committed_during_the_move_call_does_not_clear_backlash_compensating")]
+        [CancelAfter(30_000)]
+        public async Task A_refresh_read_taken_before_the_dispatch_does_not_clear_backlash_compensating(bool commitDuringMoveCall, CancellationToken ct) {
+            using var focuser = new HoldableFocuser();
+            using var svc = await ConnectHoldableAsync(focuser, ct);
+            using var moveGate = new ManualResetEventSlim(false);
+            focuser.MoveGate = commitDuringMoveCall ? moveGate : null;
+
+            // Hold a refresh tick mid-read: it has already read IsMoving false (the focuser is idle).
+            var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            focuser.HeldRead = held;
+            await held.Task.WaitAsync(ct);
+            // The compensated in move raises the flag while that read is in flight; its Move call lands or stalls.
+            focuser.MoveLeavesMoving = true;
+            await svc.MoveAsync(new FocuserMoveRequestDto(1000), idempotencyKey: null, ct);
+            if (commitDuringMoveCall) {
+                await focuser.MoveEntered.Task.WaitAsync(ct);
+            } else {
+                while (focuser.Moves.Count < 2) {
+                    await Task.Delay(10, ct);
+                }
+            }
+            var readsAtRelease = focuser.IsMovingReads;
+            focuser.Release.Set();
+            // Ticks never overlap: a second read after the release means the held tick has committed and a fresh one ran.
+            while (focuser.IsMovingReads < readsAtRelease + 2) {
+                await Task.Delay(10, ct);
+            }
+
+            Assert.That((await svc.GetAsync(ct))!.Runtime.State, Is.EqualTo("backlash_compensating"),
+                "a read taken before the dispatch must not end the compensated move");
+            moveGate.Set();
+            while (focuser.Moves.Count < 2) {
+                await Task.Delay(10, ct);
+            }
+            focuser.Moving = false;
+            Assert.That((await PollAsync(svc, d => d.Runtime.State == "idle"))?.Runtime.State, Is.EqualTo("idle"),
+                "cleared once a read after the dispatch sees the focuser stopped");
+        }
+
+        [Test]
+        [CancelAfter(30_000)]
+        public async Task A_refresh_read_taken_while_the_move_call_is_in_flight_does_not_clear_backlash_compensating(CancellationToken ct) {
+            using var focuser = new HoldableFocuser();
+            using var svc = await ConnectHoldableAsync(focuser, ct);
+
+            // The compensated in move raises the flag, then its Move call stalls before the focuser starts.
+            using var moveGate = new ManualResetEventSlim(false);
+            focuser.MoveGate = moveGate;
+            await svc.MoveAsync(new FocuserMoveRequestDto(1000), idempotencyKey: null, ct);
+            await focuser.MoveEntered.Task.WaitAsync(ct);
+            // A refresh tick reads IsMoving false inside that window and commits before Move returns.
+            var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            focuser.HeldRead = held;
+            await held.Task.WaitAsync(ct);
+            var readsAtRelease = focuser.IsMovingReads;
+            focuser.Release.Set();
+            while (focuser.IsMovingReads < readsAtRelease + 2) {
+                await Task.Delay(10, ct);
+            }
+
+            Assert.That((await svc.GetAsync(ct))!.Runtime.State, Is.EqualTo("backlash_compensating"),
+                "a read taken before Move returned must not end the compensated move");
+            focuser.MoveLeavesMoving = true;
+            moveGate.Set();
+            while (focuser.Moves.Count < 2) {
+                await Task.Delay(10, ct);
+            }
+            focuser.Moving = false;
+            Assert.That((await PollAsync(svc, d => d.Runtime.State == "idle"))?.Runtime.State, Is.EqualTo("idle"),
+                "cleared once a read after the dispatch sees the focuser stopped");
         }
 
         [Test]

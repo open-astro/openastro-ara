@@ -22,64 +22,75 @@ import '../../l10n/l10n.dart';
 /// Quality composite, Calendar heatmap) render via fl_chart. CSV export +
 /// per-target detail drill-down remain follow-ups.
 class StatsDashboardScreen extends ConsumerWidget {
-  const StatsDashboardScreen({super.key});
+  const StatsDashboardScreen({super.key, this.simple = false});
+
+  /// Opened from Simple Mode: only Overview, Best frames, Achievements and
+  /// the Calendar heatmap; no Targets, rig diagnostics, troubleshooting
+  /// charts or export.
+  final bool simple;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Stats'),
-        actions: [
-          Builder(
-            builder: (context) => PopupMenuButton<String>(
-              tooltip: 'Export CSV',
-              onSelected: (key) => _exportCsv(context, ref, key),
-              itemBuilder: (_) => const [
-                PopupMenuItem(
-                  value: 'sessions',
-                  child: Text('Sessions summary'),
+        // Simple Mode shows the rail button's own (localized) name.
+        title: Text(simple ? context.l10n.shellStats : 'Stats'),
+        actions: simple
+            ? null
+            : [
+                Builder(
+                  builder: (context) => PopupMenuButton<String>(
+                    tooltip: 'Export CSV',
+                    onSelected: (key) => _exportCsv(context, ref, key),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'sessions',
+                        child: Text('Sessions summary'),
+                      ),
+                      PopupMenuItem(
+                        value: 'frames',
+                        child: Text('Per-frame details'),
+                      ),
+                      PopupMenuItem(
+                        value: 'astrobin',
+                        child: Text('AstroBin (per target)…'),
+                      ),
+                    ],
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.file_download, size: 16),
+                          SizedBox(width: 6),
+                          Text('Export CSV'),
+                          SizedBox(width: 4),
+                          Icon(Icons.arrow_drop_down, size: 16),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-                PopupMenuItem(
-                  value: 'frames',
-                  child: Text('Per-frame details'),
-                ),
-                PopupMenuItem(
-                  value: 'astrobin',
-                  child: Text('AstroBin (per target)…'),
-                ),
+                const SizedBox(width: 8),
               ],
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Row(children: [
-                  Icon(Icons.file_download, size: 16),
-                  SizedBox(width: 6),
-                  Text('Export CSV'),
-                  SizedBox(width: 4),
-                  Icon(Icons.arrow_drop_down, size: 16),
-                ]),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           const OverviewSection(),
           const SizedBox(height: 24),
-          const TargetsSection(),
-          const SizedBox(height: 24),
+          if (!simple) ...[const TargetsSection(), const SizedBox(height: 24)],
           const BestFramesSection(),
           const SizedBox(height: 24),
           const AchievementsSection(),
           const SizedBox(height: 24),
-          const PiPerformanceSection(),
-          const SizedBox(height: 24),
-          _SectionTitle(title: 'Visualizations', context: context),
-          const FocusTempScatterChart(),
-          const GuidingRmsChart(),
-          const FrameQualityChart(),
+          if (!simple) ...[
+            const PiPerformanceSection(),
+            const SizedBox(height: 24),
+            _SectionTitle(title: 'Visualizations', context: context),
+            const FocusTempScatterChart(),
+            const GuidingRmsChart(),
+            const FrameQualityChart(),
+          ],
           const CalendarHeatmap(),
         ],
       ),
@@ -105,7 +116,8 @@ class StatsDashboardScreen extends ConsumerWidget {
     final api = ref.read(statsExportApiProvider);
     if (api == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Connect to a server to export.')));
+        const SnackBar(content: Text('Connect to a server to export.')),
+      );
       return;
     }
     final String csv;
@@ -113,9 +125,17 @@ class StatsDashboardScreen extends ConsumerWidget {
       csv = await api.fetchCsv(key);
     } on Exception catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(
-              content: Text(friendlyError(context.l10n, e, action: context.l10n.actionExportStats))));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            friendlyError(
+              context.l10n,
+              e,
+              action: context.l10n.actionExportStats,
+            ),
+          ),
+        ),
+      );
       return;
     }
     if (!context.mounted) return;
@@ -135,8 +155,7 @@ class StatsDashboardScreen extends ConsumerWidget {
       return;
     }
     if (!context.mounted) return;
-    final label =
-        key == 'sessions' ? 'Sessions summary' : 'Per-frame details';
+    final label = key == 'sessions' ? 'Sessions summary' : 'Per-frame details';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -161,4 +180,3 @@ class _SectionTitle extends StatelessWidget {
     );
   }
 }
-

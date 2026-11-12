@@ -6,7 +6,7 @@ import 'package:openastroara/state/imaging/exposure_state.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/rendering.dart' show RenderParagraph;
+import 'package:flutter/rendering.dart' show RenderBox, RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
@@ -609,6 +609,11 @@ void main() {
     expect(unlisted.decJ2000Deg, 41.27);
     expect(unlisted.maxAltDeg, closeTo(90 - (41.27 + 33.856784), 1e-9));
     expect(unlisted.designations, ['NGC0224', 'M 31']);
+    // Picked as "M 31" (a search row or a Card): that designation leads, once, so the header names it.
+    expect(simpleSelectionOfDso(m31, const [], latitudeDeg: -33.856784, designation: 'M 31').designations,
+        ['M 31', 'NGC0224']);
+    expect(simpleSelectionOfDso(m31, ranked, latitudeDeg: -33.856784, designation: 'M 31').designations, ['M 31'],
+        reason: "the ranker row's M31 is the same designation");
     final southern = PlanningDso(
         id: 'NGC5128', name: 'Centaurus A', type: 'G', magnitude: 6.8, raDeg: 201.37, decDeg: -47.48);
     expect(simpleSelectionOfDso(southern, const [], latitudeDeg: 51.477833).neverRises, isTrue);
@@ -1021,6 +1026,112 @@ void main() {
       expect(c.read(planetariumSearchProvider), isNull, reason: 'nothing to look up');
       expect(showSky, 0, reason: 'the Plan sheet stays up');
       expect(find.byKey(const Key('simple-run-suggestion-0')), findsNothing, reason: 'the list closes on a pick');
+    });
+
+    testWidgets('the Skull Nebula shows as "NGC 246 (Skull Nebula)" in the suggestion row and the plan header', (tester) async {
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          overrides: [
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(id: 'NGC0246', name: 'Skull Nebula', type: 'PN', magnitude: 8, raDeg: 11.76, decDeg: -11.87, aliases: ['C 056']),
+                ]),
+          ]);
+      await tester.enterText(find.byKey(const Key('simple-run-search')), 'skull');
+      await tester.pump();
+      await tester.pump();
+      expect(find.descendant(of: find.byKey(const Key('simple-run-suggestion-0')), matching: find.text('NGC 246 (Skull Nebula)')),
+          findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-run-suggestion-0')));
+      await tester.pump();
+      expect(find.text('NGC 246 (Skull Nebula)'), findsOneWidget, reason: 'the plan header, the list is closed');
+    });
+
+    testWidgets('the plan header keeps the designation the row was picked by: "M 31", not the row id NGC 224',
+        (tester) async {
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          overrides: [
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(id: 'NGC0224', name: 'Andromeda Galaxy', type: 'G', magnitude: 3.4, raDeg: 10.7, decDeg: 41.3, aliases: ['M 31']),
+                  PlanningDso(id: 'NGC6334', name: "Cat's Paw Nebula", type: 'HII', magnitude: null, raDeg: 260.1, decDeg: -35.8, aliases: ['RCW 127']),
+                ]),
+          ]);
+      for (final (query, title) in [('M 31', 'M 31 (Andromeda Galaxy)'), ('RCW 127', "RCW 127 (Cat's Paw Nebula)")]) {
+        await tester.enterText(find.byKey(const Key('simple-run-search')), query);
+        await tester.pump();
+        await tester.pump();
+        expect(find.descendant(of: find.byKey(const Key('simple-run-suggestion-0')), matching: find.text(title)), findsOneWidget);
+        await tester.tap(find.byKey(const Key('simple-run-suggestion-0')));
+        await tester.pump();
+        expect(find.text(title), findsOneWidget, reason: 'the plan header reads as the row did');
+      }
+    });
+
+    testWidgets('an Abell planetary heads the plan as "Abell 21 (Medusa Nebula)", not by its short alias A 21',
+        (tester) async {
+      const medusa = PlanningDso(
+          id: 'Abell 21', name: 'Medusa Nebula', type: 'PN', magnitude: null, raDeg: 112.26, decDeg: 13.24,
+          aliases: ['PN G205.1+14.2', 'A 21', 'PK 205+14 1', 'Sh 2-274']);
+      await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: simpleSelectionOfDso(medusa, const [], latitudeDeg: 51.477833));
+      expect(find.text('Abell 21 (Medusa Nebula)'), findsOneWidget);
+    });
+
+    testWidgets('a nickname that matched stays in the row: "NGC 598 (Triangulum Pinwheel)"', (tester) async {
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          overrides: [
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(
+                      id: 'NGC0598', name: 'Triangulum Galaxy', type: 'G', magnitude: 5.7, raDeg: 23.46, decDeg: 30.66,
+                      aliases: ['M 33', 'Triangulum Pinwheel']),
+                ]),
+          ]);
+      await tester.enterText(find.byKey(const Key('simple-run-search')), 'triangulum pinwheel');
+      await tester.pump();
+      await tester.pump();
+      expect(
+          find.descendant(
+              of: find.byKey(const Key('simple-run-suggestion-0')), matching: find.text('NGC 598 (Triangulum Pinwheel)')),
+          findsOneWidget,
+          reason: 'what matched, so the row says why it is listed');
+    });
+
+    testWidgets('at twice the text size a search row and the plan header show their whole designation (name)',
+        (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          overrides: [
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(
+                      id: 'NGC0598', name: 'Triangulum Galaxy', type: 'G', magnitude: 5.7, raDeg: 23.46, decDeg: 30.66,
+                      aliases: ['M 33', 'Triangulum Pinwheel']),
+                ]),
+          ]);
+      void whole(String text) =>
+          expect(tester.renderObject<RenderParagraph>(find.text(text)).didExceedMaxLines, isFalse, reason: '"$text" is cut off');
+      await tester.enterText(find.byKey(const Key('simple-run-search')), 'triangulum pinwheel');
+      await tester.pump();
+      await tester.pump();
+      whole('NGC 598 (Triangulum Pinwheel)');
+      whole('mag 5.7');
+      await tester.tap(find.byKey(const Key('simple-run-suggestion-0')));
+      await tester.pump();
+      whole('NGC 598 (Triangulum Galaxy)');
     });
 
     testWidgets('Add to queue creates the run without starting it and keeps the sheet up for the next pick; again it appends',
@@ -1680,6 +1791,143 @@ void main() {
       expect(seq.targets('seq-1'), ['M31', 'M42', 'M45']);
       return (c, seq);
     }
+
+    testWidgets('on iOS a long press on a queued target lists Edit and Remove, and Remove removes it',
+        variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      // The queue's own narrow column, as the shell draws it.
+      final seq = _Seq();
+      final c = await _pump(
+          tester,
+          seq,
+          Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 360,
+              child: SingleChildScrollView(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+                  SimpleRunPanel(onAdd: () {}, onEdit: (_) {}),
+                ]),
+              ),
+            ),
+          ));
+      await create(tester);
+      await pick(tester, c, _m42);
+      await create(tester);
+      await pick(tester, c, _m45);
+      await create(tester);
+      final g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-run-edit-1'))));
+      for (var i = 0; i < 60; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await g.up();
+      await tester.pumpAndSettle();
+      expect(find.text('Edit M42'), findsOneWidget);
+      await tester.tap(find.text('Remove M42 from the queue'));
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M31', 'M45']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M45']);
+      await tester.pump(kSimpleResultLife + const Duration(seconds: 1)); // the Undo pill fades
+    });
+
+    // The queue's own narrow column on iOS, with M31, M42 and (when asked) the end-of-night Calibration block.
+    Future<ProviderContainer> iosQueue(WidgetTester tester, {bool endFlats = false}) async {
+      final c = await _pump(
+          tester,
+          _Seq(),
+          Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 360,
+              child: SingleChildScrollView(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+                  SimpleRunPanel(onAdd: () {}, onEdit: (_) {}),
+                ]),
+              ),
+            ),
+          ));
+      await create(tester);
+      await pick(tester, c, _m42);
+      if (endFlats) c.read(simpleRunFlatsProvider.notifier).set(SimpleTargetFlats.endOfNight);
+      await create(tester);
+      return c;
+    }
+
+    Future<void> longPress(WidgetTester tester, Finder row) async {
+      final g = await tester.startGesture(tester.getCenter(row));
+      for (var i = 0; i < 60; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await g.up();
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('on iOS a long press on the Calibration block lists Remove and no Edit',
+        variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      final c = await iosQueue(tester, endFlats: true);
+      expect(c.read(simpleRunProvider).targets.last.name, kEndFlatsBlockName);
+      await tester.ensureVisible(find.byKey(const Key('simple-run-edit-2')));
+      await tester.pumpAndSettle();
+      await longPress(tester, find.byKey(const Key('simple-run-edit-2')));
+      expect(find.byType(CupertinoContextMenuAction), findsOneWidget);
+      expect(find.textContaining('Remove'), findsOneWidget);
+      expect(find.textContaining('Edit'), findsNothing);
+    });
+
+    testWidgets('on iOS the lifted queue row is as wide as the row in its 360 px column',
+        variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      await iosQueue(tester);
+      final row = find.byKey(const Key('simple-run-edit-1'));
+      final inPage = tester.getSize(row).width;
+      await longPress(tester, row);
+      final widths = [for (final e in row.evaluate()) (e.renderObject! as RenderBox).size.width];
+      expect(widths.length, 2, reason: 'the row in the page and its lifted preview');
+      expect(widths, [inPage, inPage]);
+    });
+
+    testWidgets('on iOS the lifted queue row is only a preview: a tap on its × or a swipe removes nothing',
+        variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      final c = await iosQueue(tester);
+      final row = find.byKey(const Key('simple-run-edit-1'));
+      await longPress(tester, row);
+      await tester.tap(find.byKey(const Key('simple-run-remove-1')).last, warnIfMissed: false);
+      await tester.pumpAndSettle();
+      await tester.drag(row.last, const Offset(-400, 0), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M42']);
+      expect(c.read(simpleMessagesProvider), isEmpty);
+    });
+
+    testWidgets('on iOS a menu left open on a row that is gone does nothing', variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+        (tester) async {
+      final (c, seq) = await queueOfThree(tester);
+      await longPress(tester, find.byKey(const Key('simple-run-edit-1')));
+      // M42 goes another way (the × on another screen) while its menu is up.
+      await c.read(simpleRunProvider.notifier).remove(1);
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M31', 'M45']);
+      await tester.tap(find.text('Remove M42 from the queue'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.byType(CupertinoContextMenuAction), findsNothing, reason: 'the menu closes');
+      expect(seq.targets('seq-1'), ['M31', 'M45'], reason: 'not the row that took its place');
+    });
+
+    testWidgets('on iOS under Reduce Motion a sheet left open on a row that is gone does nothing',
+        variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(reduceMotion: true);
+      addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+      final (c, seq) = await queueOfThree(tester);
+      await longPress(tester, find.byKey(const Key('simple-run-edit-1')));
+      expect(find.byType(CupertinoActionSheet), findsOneWidget);
+      await c.read(simpleRunProvider.notifier).remove(1);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove M42 from the queue'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoActionSheet), findsNothing);
+      expect(seq.targets('seq-1'), ['M31', 'M45'], reason: 'not the row that took its place');
+    });
 
     testWidgets('a swipe left removes a queued target; Undo puts it back where it was', (tester) async {
       final (c, seq) = await queueOfThree(tester);

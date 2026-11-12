@@ -562,14 +562,22 @@ void main() {
       expect(tester.takeException(), isNull, reason: 'Stop fits its cell at 2x');
     });
 
-    testWidgets('a 409 offers the camera settings whatever its words', (tester) async {
-      final (_, _, solver, _) = await _pump(tester, _wire());
-      solver.error = const PlateSolveException('Busy right now.', statusCode: 409);
-      await tester.tap(find.byKey(const Key('simple-mount-check')));
-      await tester.pump();
-      await tester.pump();
-      expect(find.text('Camera settings'), findsOneWidget);
-    });
+    for (final (reason, words, button, shown) in const [
+      ('no-camera', 'No camera connected', true, 'No camera connected'),
+      ('camera-busy', 'The camera is busy with an exposure — try Verify Position again once it has read out.', false, 'The camera is taking another frame. Check again once it finishes.'),
+      ('gate-stuck', "The camera's in-flight gate is stuck — check the daemon log; a restart clears it.", false, "The camera's in-flight gate is stuck — check the daemon log; a restart clears it."),
+    ]) {
+      testWidgets('a 409 for $reason ${button ? 'offers' : 'does not offer'} the camera settings', (tester) async {
+        final (_, _, solver, _) = await _pump(tester, _wire());
+        solver.error = PlateSolveException(words, statusCode: 409, reason: reason);
+        await tester.tap(find.byKey(const Key('simple-mount-check')));
+        await tester.pump();
+        await tester.pump();
+        expect(find.text(shown), findsOneWidget);
+        expect(find.text('Camera settings'), button ? findsOneWidget : findsNothing);
+        expect(find.textContaining('Verify Position'), findsNothing, reason: 'Check is called Check here');
+      });
+    }
   });
 
   group('Position and Tracking speed', () {

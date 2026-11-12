@@ -4,6 +4,7 @@ import 'simple_monitor_screen.dart';
 import 'simple_queue_screen.dart' show simpleQueueSheetProvider;
 import 'simple_screen.dart';
 import 'simple_search.dart';
+import 'simple_rig_setup_sheet.dart';
 import 'simple_focus_panel.dart' show simpleOpenFocusOffsets;
 
 import 'package:flutter/cupertino.dart';
@@ -28,6 +29,7 @@ import '../../state/settings/equipment_connection_state.dart'
     show EquipmentDeviceType;
 import '../../widgets/equipment/alpaca_chooser_dialog.dart';
 import '../../services/equipment_driver_api.dart';
+import '../../services/dso_catalog_service.dart' show suggestionDesignation;
 import '../../state/app_shell_state.dart';
 import '../../state/launch_gate_state.dart';
 import '../../state/profile_management_state.dart';
@@ -49,6 +51,7 @@ import '../../state/simple_mode_state.dart';
 import '../../state/simple_monitor_state.dart';
 import '../../util/app_licenses.dart';
 import '../../state/simple_preflight_state.dart';
+import '../../state/rig_setup_state.dart';
 export '../../state/simple_preflight_state.dart' show SimpleModeScreen, SimpleModeScreenLabels;
 
 import 'dart:ui' show ImageFilter;
@@ -97,6 +100,7 @@ import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../../widgets/sky_atlas/stellarium_view.dart';
 import '../library/image_library_screen.dart';
 import '../settings/settings_shell.dart';
+import '../stats/stats_dashboard_screen.dart';
 import '../shell_listeners.dart';
 import 'simple_preflight.dart';
 import 'simple_device_windows.dart';
@@ -104,8 +108,14 @@ import 'simple_rig_storage.dart';
 import '../../state/focus/guide_focus_state.dart' show guideFocusProvider;
 import '../../state/settings/phd2_settings_state.dart'
     show phd2SettingsProvider;
-import 'simple_message_pills.dart';
+import 'simple_message_pills.dart' show kSimpleMessageHeight;
+import 'simple_status_card.dart';
 import '../album/sky_album_screen.dart';
+import '../../state/sky_atlas/dso_catalog_state.dart'
+    show bundledCatalogProvider;
+import '../../state/album/album_art.dart';
+import '../../state/album/album_matching.dart' show skyPickArt;
+import '../../widgets/album/album_card.dart' show albumCardAspect;
 import 'simple_plan_panel.dart';
 import 'simple_preview_panel.dart';
 import 'simple_rig_card.dart';
@@ -128,11 +138,8 @@ const double kSimpleDeviceWindowWidth = 360;
 const double kSimpleMountWindowWidth = 640;
 const double kSimpleWidestPopover = 316;
 
-/// The status pill's widest (top-left under the strip); Info starts right of
-/// it.
-const double kSimpleStatusMaxWidth = 300;
-
-/// The message pills' widest (they share the top row with the status pill).
+/// The status card's widest, and the message pills' (a page pushed over the
+/// shell, the safety alarm).
 const double kSimpleMessagesMaxWidth = 420;
 
 /// The Connect to your rig card's narrowest between the rails: its width in a
@@ -226,8 +233,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   double _statusHeight = 0;
   double _messagesHeight = 0;
   final _messagesKey = GlobalKey();
-  double _statusStackHeight = 0;
-  final _statusKey = GlobalKey();
   final _leftRailKey = GlobalKey();
   final _rightRailKey = GlobalKey();
   final _simplePreflightRowKey = GlobalKey();
@@ -237,15 +242,12 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final right = _rightRailKey.currentContext?.size?.height;
     final row = _simplePreflightRowKey.currentContext?.size?.height;
     final messages = _messagesKey.currentContext?.size?.height ?? 0;
-    final status = _statusKey.currentContext?.size?.height ?? 0;
     if (!mounted) return;
     if ((rail != null && rail != _leftRailHeight) ||
         (right != null && right != _rightRailHeight) ||
         (row != null && row != _simplePreflightRowHeight) ||
-        messages != _messagesHeight ||
-        status != _statusStackHeight) {
+        messages != _messagesHeight) {
       setState(() {
-        _statusStackHeight = status;
         _leftRailHeight = rail ?? _leftRailHeight;
         _rightRailHeight = right ?? _rightRailHeight;
         _simplePreflightRowHeight = row ?? _simplePreflightRowHeight;
@@ -743,6 +745,19 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     _toggle(_Popover.menu);
   }
 
+  /// #1562 — the rigs the Rig setup sheet already opened for, in this shell mount.
+  final _rigSetupOpened = <String>{};
+
+  /// #1562 — Settings at the Rig page, from the Rig setup sheet: opens it and
+  /// never closes one that is already up.
+  void _showRigPage() {
+    if (_popover == _Popover.menu) {
+      setState(() => _menuSection = 'Rig');
+    } else {
+      _openMenu();
+    }
+  }
+
   /// A search hit, opened where it lives in Simple Mode.
   void _openHit(SimpleSearchHit hit) {
     setState(() => _popover = _Popover.none);
@@ -752,7 +767,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         setState(() => _sky = true);
         ref
             .read(planetariumSelectionProvider.notifier)
-            .set(simplePickDso(ref, suggestion.dso));
+            .set(
+              simplePickDso(
+                ref,
+                suggestion.dso,
+                designation: suggestionDesignation(suggestion),
+              ),
+            );
         ref.read(planetariumSearchProvider.notifier).search(suggestion.label);
       case SimpleSettingHit(section: 'Guide'):
         _pickMode(SimpleModeScreen.guide);
@@ -772,15 +793,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   }
 
   /// The Sky Album; a card's action closes it and opens Plan's sheet with
-  /// the card's object picked, as Image this does from the sky. Nothing is
-  /// queued.
+  /// the card's object picked, as Image this does from the sky, named by the
+  /// card's label. Nothing is queued.
   void _openAlbum() => unawaited(
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (albumContext) => SkyAlbumScreen(
-          onImageTarget: (d) {
+          onImageTarget: (d, label) {
             // Read while the album still watches the ranker (it auto-disposes).
-            final sel = simplePickDso(ref, d);
+            final sel = simplePickDso(ref, d, designation: label);
             Navigator.of(albumContext).pop();
             ref.read(planetariumSelectionProvider.notifier).set(sel);
             _imagePick();
@@ -854,6 +875,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     if (!discarded && _askDiscard(() => _leaveForFullUi(discarded: true))) {
       return;
     }
+    // #1774: the Full UI button is hidden in Companion Mode; this guard keeps
+    // any later caller from writing the pref there.
+    if (ref.read(companionModeProvider)) return;
     ref.read(simpleModeProvider.notifier).set(false);
   }
 
@@ -954,6 +978,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         }
         return;
       }
+      // Companion Mode has no full UI to leave for: stay here.
+      if (ref.read(companionModeProvider)) return;
       ref.read(simpleModeProvider.notifier).set(false);
     });
     // Fetched once per rig, so the Ara sheet has its versions on its first frame.
@@ -1029,10 +1055,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         _popover = _Popover.none;
         _closeSheet();
       }),
-      onTrackerTap: () => _toggle(_Popover.queue),
     );
     final sheet = screen.overlay(screenHost);
-    final tracker = screen.tracker(screenHost);
     final runActive =
         sheet != null &&
         ref.watch(
@@ -1064,26 +1088,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // Preflight's step strip, under the status strip; its offer sits at the
     // bottom (user, 2026-11-03).
     final simplePreflightRow = pilot != null;
-    // Messages share the top row with the status pill, which keeps at most
-    // half of it; they start under the Preflight strip when it shows. On a
-    // window too narrow to share (a phone) they take the whole row, under a
-    // room kept for the status pill, so neither moves when the other comes.
-    final sharedWidth =
-        width -
-        kSimpleInset * 3 -
-        math.min(kSimpleStatusMaxWidth, (width - kSimpleInset * 3) / 2);
-    final stacked = sharedWidth < 200;
-    final messagesWidth = math.min(
-      kSimpleMessagesMaxWidth,
-      stacked ? width - kSimpleInset * 2 : sharedWidth,
-    );
-    final statusRow = stacked
-        ? math.max(kSimpleStatusHeight, _statusStackHeight) + AraSpace.s8
-        : 0.0;
+    // The status card (the status lines, then the messages) sits top left,
+    // starting under the Preflight strip when it shows. On a window narrower
+    // than its widest plus the insets (a phone) it takes the whole row.
+    final narrow = width < kSimpleMessagesMaxWidth + kSimpleInset * 2;
+    final messagesWidth = width - kSimpleInset * 2;
     final messagesTop = simplePreflightRow
-        ? railTop +
-              math.max(statusRow, _simplePreflightRowHeight + AraSpace.s12)
-        : railTop + statusRow;
+        ? railTop + _simplePreflightRowHeight + AraSpace.s12
+        : railTop;
     _measure();
     final height =
         MediaQuery.sizeOf(context).height -
@@ -1097,15 +1109,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final messagesRoom = panels
         ? leftRailTop - messagesTop - kSimpleInset
         : double.infinity;
-    // Pills too tall for the room above the left rail move beside it, when
-    // that leaves them a readable width; otherwise they paint over it. On a
-    // phone they would run under the right rail beside the left one, so they
-    // paint over the left rail and stop short of the right one.
+    // A card too tall for the room above the left rail moves beside it, when
+    // the room between the rails leaves it a readable width; otherwise it
+    // paints over the left rail. Either way it stops short of the right rail.
     final railShift = railWidth + kSimpleInset;
+    final besideRoom = messagesWidth - railShift * 2;
     final pillsBesideRail =
-        !stacked &&
-        _messagesHeight > messagesRoom &&
-        messagesWidth - railShift >= 240;
+        !narrow && _messagesHeight > messagesRoom && besideRoom >= 240;
     final pillsOverRail =
         panels &&
         _messagesHeight > messagesRoom &&
@@ -1135,6 +1145,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
               kSimplePlanSquareHeight * simpleRailScale(context) +
               kSimpleInset
         : kSimpleInset;
+    // Large text or a short window: the right rail reaches down into the
+    // plan squares' corner, so they sit beside it, never over its chip.
+    final squaresBesideRail =
+        rightRailTop + _rightRailHeight + AraSpace.s8 >
+        height - aboveStop - kSimplePlanSquareHeight * simpleRailScale(context);
+    // Beside it they still hold one square (a rail wide): a phone at 2x text.
+    final squaresLeft = squaresBesideRail
+        ? math.min(width / 2, width - kSimpleInset * 2 - railWidth * 2)
+        : width / 2;
     final queuePanel = SimpleScreen.of(SimpleModeScreen.plan).panel(screenHost);
     final runSheet =
         sheet != null &&
@@ -1177,7 +1196,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       child: SimpleRigBar(focusNode: _rigBarConnect, onOpen: () => setState(() => _rigCardOpen = true)),
     );
     final pillsLeft = kSimpleInset + (pillsBesideRail ? railShift : 0);
-    final pillsTop = panels ? messagesTop : kSimpleInset + statusRow;
+    final pillsTop = panels ? messagesTop : kSimpleInset;
     // At the pills' own place: the slot they move into animates from here.
     final emptyPillSlot = AnimatedPositioned(
       duration: Duration.zero,
@@ -1188,8 +1207,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final messagePills = AnimatedPositioned(
       left: pillsLeft,
       top: pillsTop,
-      width:
-          messagesWidth - (pillsBesideRail || pillsOverRail ? railShift : 0),
+      // As wide as its widest line (up to 420 px) off a phone; on one, the row.
+      width: narrow
+          ? messagesWidth - (pillsOverRail ? railShift : 0)
+          : null,
       duration: motion,
       curve: Curves.easeOut,
       child: NotificationListener<SizeChangedLayoutNotification>(
@@ -1200,6 +1221,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         // Large text can outgrow the screen: above Stop the pills scroll.
         child: ConstrainedBox(
           constraints: BoxConstraints(
+            maxWidth: pillsBesideRail
+                ? besideRoom
+                : messagesWidth - (pillsOverRail ? railShift : 0),
             maxHeight: math.max(
               kSimpleMessageHeight,
               height - pillsTop - aboveStop,
@@ -1207,9 +1231,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
           ),
           child: SingleChildScrollView(
             child: SizeChangedLayoutNotifier(
-              child: SimpleMessagePills(
+              child: SimpleStatusCard(
                 key: _messagesKey,
                 onOpen: _openFromPill,
+                onFirstHeight: _setStatusHeight,
                 maxHeight: messagesRoom,
               ),
             ),
@@ -1333,33 +1358,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                         // Preflight strip when it shows), down to the left rail;
                         // they stay in the immersive view.
                         pillsOverRail ? emptyPillSlot : messagePills,
-                        // The camera's status, top-right under the strip (messages
-                        // have the top-left), at most half the row; it stays in
-                        // the immersive view and moves up into the corner.
-                        AnimatedPositioned(
-                          right: kSimpleInset,
-                          top: panels ? railTop : kSimpleInset,
-                          duration: motion,
-                          curve: Curves.easeOut,
-                          child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              maxWidth: (width - kSimpleInset * 3) / 2,
-                            ),
-                            child: NotificationListener<SizeChangedLayoutNotification>(
-                              onNotification: (_) {
-                                _measure();
-                                return true;
-                              },
-                              child: SizeChangedLayoutNotifier(
-                                child: SimpleStatusPill(
-                                  key: _statusKey,
-                                  onFirstHeight: _setStatusHeight,
-                                  onOpen: _openFromPill,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
                         _Fade(
                           visible: panels,
                           child: Stack(
@@ -1450,6 +1448,21 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               ),
+                              // #1562 — the first-time Rig setup sheet, where Plan's
+                              // sheet sits: each window and popover after it here
+                              // draws over it, and it stays up under Settings so
+                              // its ticks follow the edits.
+                              Positioned(
+                                left: kSimpleInset,
+                                right: kSimpleInset * 2 + railWidth,
+                                top: popoverTop,
+                                bottom: betweenBottom,
+                                child: SimpleRigSetupHost(
+                                  autoOpened: _rigSetupOpened,
+                                  onOpenRig: _showRigPage,
+                                  onOpenGuider: () => _openFromPill(SimpleStatusOrigin.guide),
+                                ),
+                              ),
                               // Plan's sheet and Night done: beside the rail;
                               // while imaging, its panel sits there like any
                               // mode's.
@@ -1530,26 +1543,38 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 ),
                               // The plan squares hug the bottom-right corner, just
                               // above the bottom row, growing left over the right
-                              // half (the Info tiles have the left).
-                              if (tracker != null && !runSheet)
+                              // half (the Info tiles have the left); beside the
+                              // rail when it reaches down that far, one square wide
+                              // at least. Not before the rail is measured, so they
+                              // never slide there.
+                              if (!runSheet &&
+                                  !preflightPanel &&
+                                  _rightRailHeight > 0)
                                 AnimatedPositioned(
                                   key: const ValueKey('plan-squares'),
-                                  left: width / 2,
-                                  right: kSimpleInset,
+                                  left: squaresLeft,
+                                  right: squaresBesideRail
+                                      ? kSimpleInset * 2 + railWidth
+                                      : kSimpleInset,
                                   bottom: aboveStop,
                                   duration: motion,
                                   curve: Curves.easeOut,
                                   child: Align(
                                     alignment: Alignment.bottomRight,
-                                    child: tracker,
+                                    child: SimpleRunTracker(
+                                      onTap: () => _toggle(_Popover.queue),
+                                    ),
                                   ),
                                 ),
-                              // The sky's pick, offered to Plan.
+                              // The sky's pick, offered to Plan; above the plan
+                              // squares while they show.
                               if (_sky && sel != null && !runSheet)
                                 Positioned(
                                   left: 0,
                                   right: 0,
-                                  bottom: kSimpleInset * 2 + 40,
+                                  bottom: planSquares && !preflightPanel
+                                      ? popoverBottom
+                                      : kSimpleInset * 2 + 40,
                                   child: Center(
                                     child: _SkyPick(
                                       selection: sel,
@@ -1666,6 +1691,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                         )),
                                         section: _menuSection,
                                         revealStorage: _revealStoragePending,
+                                        onRigSetup: () => setState(() {
+                                          _popover = _Popover.none;
+                                          ref.read(rigSetupSheetProvider.notifier).set(true);
+                                        }),
                                         onClose: () => setState(
                                           () => _popover = _Popover.none,
                                         ),
@@ -1705,21 +1734,59 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   }
 }
 
-/// The object picked in the sky, over it: its name, type and altitude, and
-/// Image this, which opens Plan's sheet with it.
-class _SkyPick extends StatelessWidget {
+/// The object picked in the sky, over it: its Album Art and credit if any,
+/// name, type and altitude, and Image this, which opens Plan's sheet with it.
+class _SkyPick extends ConsumerWidget {
   const _SkyPick({required this.selection, required this.onImage});
 
   final PlanetariumSelection selection;
   final VoidCallback onImage;
 
   @override
-  Widget build(BuildContext context) => SimplePanel(
+  Widget build(BuildContext context, WidgetRef ref) {
+    // The card renders at once; the Art joins when the manifest and catalog
+    // have loaded.
+    final manifest = ref.watch(albumManifestProvider).value;
+    final catalog = ref.watch(bundledCatalogProvider).value;
+    final art = manifest == null || catalog == null
+        ? null
+        : skyPickArt(selection.designations, selection.name, catalog, manifest);
+    return _card(context, art);
+  }
+
+  Widget _card(BuildContext context, AlbumArt? art) => SimplePanel(
     padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       spacing: AraSpace.s16,
       children: [
+        if (art != null)
+          // A small portrait thumbnail at the Album's aspect, on its backdrop.
+          Semantics(
+            image: true,
+            label: selection.name,
+            child: ExcludeSemantics(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AraRadius.container),
+                child: ColoredBox(
+                  color: AraColors.albumArtBackdrop,
+                  child: SizedBox(
+                    width: 52,
+                    child: AspectRatio(
+                      aspectRatio: albumCardAspect,
+                      child: Image.asset(
+                        art.asset!,
+                        key: const Key('simple-sky-art'),
+                        fit: BoxFit.cover,
+                        cacheWidth: 156, // 3x of 52 px (iPad)
+                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         // Wraps in a narrow window (or a longer language) so Image this
         // keeps its place.
         Flexible(
@@ -1743,6 +1810,15 @@ class _SkyPick extends StatelessWidget {
                       : AraColors.textSecondary,
                 ),
               ),
+              if (art?.creditLine != null)
+                Text(
+                  context.l10n.albumArtCredit(art!.creditLine!),
+                  key: const Key('simple-sky-art-credit'),
+                  style: kSimpleText.copyWith(
+                    fontSize: AraFontSize.simpleCaption,
+                    color: AraColors.textSecondary,
+                  ),
+                ),
             ],
           ),
         ),
@@ -1975,16 +2051,17 @@ class _StatusStrip extends ConsumerWidget {
                 : context.l10n.shellNightMode,
             onPressed: () => ref.read(nightModeProvider.notifier).set(!night),
           ),
-          IconButton(
-            key: const Key('simple-full-ui-button'),
-            icon: const Icon(
-              Icons.fit_screen,
-              size: 22,
-              color: AraColors.accentInfo,
+          if (!ref.watch(companionModeProvider))
+            IconButton(
+              key: const Key('simple-full-ui-button'),
+              icon: const Icon(
+                Icons.fit_screen,
+                size: 22,
+                color: AraColors.accentInfo,
+              ),
+              tooltip: context.l10n.shellFullUi,
+              onPressed: onFullUi,
             ),
-            tooltip: context.l10n.shellFullUi,
-            onPressed: onFullUi,
-          ),
           IconButton(
             icon: const Icon(Icons.settings_outlined, size: 22),
             tooltip: context.l10n.shellSettings,
@@ -2006,9 +2083,18 @@ class _RailButton extends StatelessWidget {
     required this.onTap,
     this.selected = false,
     this.tall = false,
+    this.glyph,
+    this.twoLines = false,
   });
 
   final IconData? icon;
+
+  /// A drawn glyph in place of [icon], coloured by the same state colours.
+  final Widget Function(Color color)? glyph;
+
+  /// The caption may wrap to two lines under the icon (the Sky Map button:
+  /// pt-BR "Mapa do céu"); the others keep one line with an ellipsis.
+  final bool twoLines;
 
   /// The settings chip: tall enough for the icon over two lines (P.A.'s
   /// setup, Plan's time), in every mode so the rail never changes size.
@@ -2038,30 +2124,22 @@ class _RailButton extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (icon != null) ...[
-                Icon(
-                  icon,
-                  size: 24,
-                  color: onTap == null && !selected
-                      ? AraColors.textDisabled
-                      : selected
-                      ? AraColors.textPrimary
-                      : AraColors.textSecondary,
-                ),
-                const SizedBox(height: 2),
+              if (icon != null || glyph != null) ...[
+                if (glyph != null)
+                  glyph!(color)
+                else
+                  Icon(icon, size: 24, color: color),
+                // Two caption lines take the 2 px gap to fit the 56 px button.
+                if (!twoLines) const SizedBox(height: 2),
               ],
               Text(
                 label,
-                maxLines: icon == null || tall ? 2 : 1,
+                maxLines: (icon == null && glyph == null) || tall || twoLines
+                    ? 2
+                    : 1,
                 textAlign: TextAlign.center,
                 overflow: TextOverflow.ellipsis,
-                style: AraText.caption.copyWith(
-                  color: onTap == null && !selected
-                      ? AraColors.textDisabled
-                      : selected
-                      ? AraColors.textPrimary
-                      : AraColors.textSecondary,
-                ),
+                style: AraText.caption.copyWith(color: color),
               ),
             ],
           ),
@@ -2069,6 +2147,78 @@ class _RailButton extends StatelessWidget {
       ),
     ),
   );
+
+  Color get color => onTap == null && !selected
+      ? AraColors.textDisabled
+      : selected
+      ? AraColors.textPrimary
+      : AraColors.textSecondary;
+}
+
+/// The Sky Map icon: a folded map sheet with a four-star constellation, on
+/// Material's 24 px grid with its 2 px outlined stroke (Material has no
+/// star-chart glyph).
+class SkyChartIcon extends StatelessWidget {
+  const SkyChartIcon({super.key, required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) =>
+      CustomPaint(size: const Size(24, 24), painter: _SkyChartPainter(color));
+}
+
+class _SkyChartPainter extends CustomPainter {
+  _SkyChartPainter(this.color);
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final sheet = Path()
+      ..moveTo(3, 6.2)
+      ..lineTo(9, 4)
+      ..lineTo(15, 6.2)
+      ..lineTo(21, 4)
+      ..lineTo(21, 17.8)
+      ..lineTo(15, 20)
+      ..lineTo(9, 17.8)
+      ..lineTo(3, 20)
+      ..close();
+    canvas.drawPath(
+      sheet,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeJoin = StrokeJoin.round,
+    );
+    const stars = [
+      Offset(6, 15),
+      Offset(9.5, 9),
+      Offset(13, 12.5),
+      Offset(17.5, 8.5),
+    ];
+    canvas.drawPath(
+      Path()
+        ..moveTo(stars[0].dx, stars[0].dy)
+        ..lineTo(stars[1].dx, stars[1].dy)
+        ..lineTo(stars[2].dx, stars[2].dy)
+        ..lineTo(stars[3].dx, stars[3].dy),
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+    for (final p in stars) {
+      canvas.drawCircle(p, 1.3, Paint()..color = color);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SkyChartPainter old) => old.color != color;
 }
 
 /// How much the rails grow: none up to 1.1x text, then with the text, so
@@ -2130,7 +2280,8 @@ class _LeftRail extends StatelessWidget {
       children: [
         _RailButton(
           key: const Key('simple-sky'),
-          icon: Icons.public,
+          glyph: (c) => SkyChartIcon(color: c),
+          twoLines: true,
           label: context.l10n.shellSky,
           selected: sky,
           onTap: onSky,
@@ -2143,6 +2294,16 @@ class _LeftRail extends StatelessWidget {
           label: context.l10n.shellLibrary,
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
+          ),
+        ),
+        _RailButton(
+          key: const Key('simple-stats'),
+          icon: Icons.bar_chart_outlined,
+          label: context.l10n.shellStats,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const StatsDashboardScreen(simple: true),
+            ),
           ),
         ),
         _RailButton(
@@ -2748,6 +2909,11 @@ ThemeData simpleTheme(ThemeData base) {
   return base.copyWith(
     // Desktop defaults to compact density, which takes buttons under 44 px.
     visualDensity: VisualDensity.standard,
+    // A chip is 38 px on desktop, ink included (#1791): pad it to 44 here
+    // rather than padding every Material control's tap target.
+    chipTheme: base.chipTheme.copyWith(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
+    ),
     filledButtonTheme: FilledButtonThemeData(
       style: buttons.merge(base.filledButtonTheme.style),
     ),
@@ -2795,11 +2961,15 @@ class _SettingsSheet extends ConsumerStatefulWidget {
     this.section = 'Rig',
     required this.onClose,
     this.revealStorage = false,
+    this.onRigSetup,
   });
 
   /// The section it opens on.
   final String section;
   final VoidCallback onClose;
+
+  /// #1562 — the Rig setup row: closes Settings and shows the Rig setup sheet.
+  final VoidCallback? onRigSetup;
 
   /// Rig opens scrolled to its Storage block (Plan's Open Storage).
   final bool revealStorage;
@@ -2821,6 +2991,9 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
     // Only a device appearing or going rebuilds this, not each 1 s reading.
     // The id picks the section (and a search hit names it); the label shows.
     final sections = <(String, String, Widget Function(Color), bool)>[
+      // #1562 — while the rig still lacks a fact the first night needs.
+      if (widget.onRigSetup != null && ref.watch(rigSetupGapsProvider).isNotEmpty)
+        ('RigSetup', l10n.rigSetupTitle, (c) => glyph(Icons.checklist, c), false),
       ('Rig', l10n.shellSectionRig, (c) => glyph(Icons.memory, c), false),
       (
         'Devices',
@@ -2929,7 +3102,9 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                       child: InkWell(
                         key: Key('simple-menu-nav-$name'),
                         borderRadius: BorderRadius.circular(AraRadius.container),
-                        onTap: () => setState(() => _section = name),
+                        onTap: () => name == 'RigSetup'
+                            ? widget.onRigSetup?.call()
+                            : setState(() => _section = name),
                         child: Semantics(
                           selected: _section == name,
                           label: narrow ? title : null,

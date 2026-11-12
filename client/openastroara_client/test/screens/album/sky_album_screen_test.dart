@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
+import 'package:flutter/cupertino.dart' show CupertinoActionSheet, CupertinoContextMenu;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -32,9 +33,9 @@ import 'package:openastroara/widgets/album/album_card.dart';
 /// neither shell, the card front on Art or the Placeholder, the baseball-card
 /// back.
 
-PlanningDso _dso(String id, String name, {int? m, int? c, double ra = 10}) =>
+PlanningDso _dso(String id, String name, {int? m, int? c, double ra = 10, List<String> aliases = const []}) =>
     PlanningDso(id: id, name: name, type: 'G', magnitude: 5, raDeg: ra, decDeg: 20, messierNum: m, caldwellNum: c,
-        aliases: [if (m != null) 'M $m', if (c != null) 'C $c']);
+        aliases: [if (m != null) 'M $m', if (c != null) 'C $c', ...aliases]);
 
 final _m1 = _dso('NGC1952', 'Crab Nebula', m: 1, ra: 83.6);
 final _m31 = _dso('NGC0224', 'Andromeda Galaxy', m: 31, ra: 10.68);
@@ -58,11 +59,12 @@ Future<ProviderContainer> _pump(
   WidgetTester tester, {
   required List<AlbumFrame> frames,
   List<PlanningDso> tonight = const [],
-  void Function(PlanningDso)? onImageTarget,
+  void Function(PlanningDso, String)? onImageTarget,
   AlbumFetcher? fetcher,
   List<TonightSkyObject>? tonightRows,
   bool bookPending = false,
   Map<String, AlbumArt> manifest = const {},
+  List<PlanningDso>? catalog,
   Size size = const Size(1200, 1600),
   double textScale = 1,
   double bottomInset = 0,
@@ -84,7 +86,7 @@ Future<ProviderContainer> _pump(
       albumCollectionStoreProvider.overrideWithValue(
           _MemStore()..held = AlbumCollection(frames: {if (seen) for (final f in frames) f.frameId: f})),
       albumManifestProvider.overrideWith((ref) async => manifest),
-      bundledCatalogProvider.overrideWith((ref) async => [_m42, _c14, _m31, _m1]),
+      bundledCatalogProvider.overrideWith((ref) async => catalog ?? [_m42, _c14, _m31, _m1]),
       albumFetcherProvider.overrideWithValue(fetcher ??
           (baseUrl, {since}) async => AlbumFramesPage(totalLights: frames.length, frames: frames)),
       tonightSkyProvider.overrideWith((ref) async => tonightRows ?? [for (final d in tonight) _tonight(d)]),
@@ -97,11 +99,11 @@ Future<ProviderContainer> _pump(
   return container;
 }
 
-Widget _app(void Function(PlanningDso)? onImageTarget, {bool open = true, Locale? locale}) => MaterialApp(
+Widget _app(void Function(PlanningDso, String)? onImageTarget, {bool open = true, Locale? locale}) => MaterialApp(
       locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      home: open ? SkyAlbumScreen(onImageTarget: onImageTarget ?? (_) {}) : const SizedBox(),
+      home: open ? SkyAlbumScreen(onImageTarget: onImageTarget ?? (_, _) {}) : const SizedBox(),
     );
 
 Finder _onShelf(String text) =>
@@ -142,7 +144,8 @@ void main() {
 
   testWidgets('a missing card\'s action calls back with that object', (tester) async {
     PlanningDso? picked;
-    await _pump(tester, frames: _m31Frames, onImageTarget: (d) => picked = d);
+    String? label;
+    await _pump(tester, frames: _m31Frames, onImageTarget: (d, l) => (picked, label) = (d, l));
 
     await tester.tap(find.text('Crab Nebula'));
     await tester.pumpAndSettle();
@@ -150,12 +153,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(picked, same(_m1));
+    expect(label, 'M 1', reason: "the card's label, so the plan names it the same");
     expect(find.text('Image this target'), findsNothing, reason: 'the card flips back and the album hands over');
   });
 
   testWidgets('a collected card shows its Nights and totals and offers more time', (tester) async {
     PlanningDso? picked;
-    await _pump(tester, frames: _m31Frames, onImageTarget: (d) => picked = d);
+    await _pump(tester, frames: _m31Frames, onImageTarget: (d, _) => picked = d);
 
     expect(find.text('1 / 4 collected'), findsOneWidget);
     await tester.tap(find.text('Andromeda Galaxy'));
@@ -213,6 +217,112 @@ void main() {
     // A 44 px row, not an inline line of text: a cold hand at the telescope still hits it.
     expect(tester.getSize(find.byKey(const Key('album-art-credit'))).height, greaterThanOrEqualTo(44));
   });
+
+  testWidgets('pulling the collection down runs the same fetch the open runs', (tester) async {
+    var fetches = 0;
+    await _pump(tester, frames: _m31Frames, fetcher: (baseUrl, {since}) async {
+      fetches++;
+      return const AlbumFramesPage(totalLights: 0, frames: []);
+    });
+    expect(fetches, 1, reason: 'the open');
+    await tester.fling(find.byType(CustomScrollView).first, const Offset(0, 400), 1000);
+    await tester.pumpAndSettle();
+    expect(fetches, 2);
+  });
+
+  group('context menu (iOS and iPadOS)', () {
+    // Held past the menu's lift (about a second), so the release is a long press, not a tap.
+    Future<void> hold(WidgetTester tester, Finder target) async {
+      final g = await tester.startGesture(tester.getCenter(target));
+      for (var i = 0; i < 60; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await g.up();
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('a long press lists the Card action and runs it', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      final picked = <String>[];
+      await _pump(tester, frames: _m31Frames, onImageTarget: (d, _) => picked.add(d.id));
+      await hold(tester, find.text('Andromeda Galaxy'));
+      expect(find.byType(AlbumCardBack), findsNothing, reason: 'a long press does not flip');
+      expect(find.text('Add more time'), findsOneWidget);
+      await tester.tap(find.text('Add more time'));
+      await tester.pumpAndSettle();
+      expect(picked, ['NGC0224']);
+    });
+
+    testWidgets('a tap still flips the Card', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      await _pump(tester, frames: _m31Frames);
+      await tester.tap(find.text('Andromeda Galaxy'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlbumCardBack), findsOneWidget);
+    });
+
+    testWidgets('a missing Card offers Image this target', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      await _pump(tester, frames: _m31Frames);
+      await hold(tester, find.text('Crab Nebula'));
+      expect(find.text('Image this target'), findsOneWidget);
+    });
+
+    testWidgets('under Reduce Motion the actions come as a sheet, with no zoom', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(reduceMotion: true);
+      addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+      final picked = <String>[];
+      await _pump(tester, frames: _m31Frames, onImageTarget: (d, _) => picked.add(d.id));
+      await hold(tester, find.text('Andromeda Galaxy'));
+      expect(find.byType(CupertinoActionSheet), findsOneWidget);
+      expect(find.text('Add more time'), findsOneWidget);
+      // A labelled way out: Cancel closes the sheet and runs no action.
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoActionSheet), findsNothing);
+      expect(find.byType(AlbumCardBack), findsNothing);
+      expect(picked, isEmpty);
+    });
+
+    testWidgets('other platforms get no menu', variant: TargetPlatformVariant.only(TargetPlatform.android), (tester) async {
+      await _pump(tester, frames: _m31Frames);
+      await hold(tester, find.text('Andromeda Galaxy'));
+      expect(find.byType(CupertinoContextMenu), findsNothing);
+      expect(find.byType(CupertinoActionSheet), findsNothing);
+    });
+  });
+
+  testWidgets('the Art credit is announced as a link', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, frames: _m31Frames, manifest: const {
+      'M31': AlbumArt(asset: 'assets/album/art/m031.webp', credit: 'ESO', licence: 'CC BY 2.0'),
+    });
+    await tester.tap(find.text('Andromeda Galaxy'));
+    await tester.pumpAndSettle();
+    expect(
+        tester.getSemantics(find.byKey(const Key('album-art-credit'))),
+        matchesSemantics(
+            isLink: true, isFocusable: true, hasTapAction: true, hasFocusAction: true,
+            label: 'Art (cropped): ESO · CC BY 2.0'));
+    handle.dispose();
+  });
+
+  for (final (name, launcher) in [
+    ('refuses', () => _FakeUrlLauncher(result: false)),
+    ('throws', () => _FakeUrlLauncher(throws: true)),
+  ]) {
+    testWidgets('a licence link the browser $name says so', (tester) async {
+      final original = UrlLauncherPlatform.instance;
+      addTearDown(() => UrlLauncherPlatform.instance = original);
+      UrlLauncherPlatform.instance = launcher();
+      await _pump(tester, frames: _m31Frames, manifest: const {
+        'M31': AlbumArt(asset: 'assets/album/art/m031.webp', credit: 'ESO', licence: 'CC BY 2.0'),
+      });
+      await tester.tap(find.text('Andromeda Galaxy'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('album-art-credit')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text("Couldn't open the license page"), findsOneWidget);
+    });
+  }
 
   testWidgets('a card front: the Placeholder without Art, dimmed Art while missing, colour when collected',
       (tester) async {
@@ -336,6 +446,39 @@ void main() {
     expect(find.text('Caldwell · 0'), findsOneWidget);
   });
 
+  testWidgets('the Book switch has three segments: Messier, Caldwell, RCW (#1629)', (tester) async {
+    await _pump(tester, frames: _m31Frames);
+    expect(find.byType(FilterChip), findsNWidgets(3));
+    expect(find.text('RCW · 0'), findsOneWidget);
+  });
+
+  testWidgets('an object in two Books counts in both chips and shows once, as its first Book\'s Card (#1629)',
+      (tester) async {
+    final m8 = _dso('NGC6523', 'Lagoon Nebula', m: 8, aliases: ['RCW 146']);
+    final m8Frames = [
+      AlbumFrame(frameId: 'l', targetName: 'M 8', exposureSeconds: 600, capturedUtc: DateTime(2026, 3, 2, 22).toUtc()),
+    ];
+    const art = AlbumArt(asset: 'assets/album/art/m008.webp', credit: 'ESO', licence: 'CC BY 4.0');
+    await _pump(tester, frames: m8Frames, catalog: [m8, _m42], tonight: [m8, _m42], manifest: const {'M8': art});
+    Finder inGrid(String t) => find.descendant(of: find.byType(SliverGrid), matching: find.text(t));
+    expect(find.text('Messier · 1'), findsOneWidget);
+    expect(find.text('RCW · 1'), findsOneWidget);
+    expect(inGrid('Lagoon Nebula'), findsOneWidget, reason: 'every catalog shown: no duplicate Card');
+    expect(inGrid('M 8'), findsOneWidget);
+    expect(find.text('1 / 2 collected'), findsOneWidget);
+
+    await tester.tap(find.text('RCW · 1'));
+    await tester.pumpAndSettle();
+    expect(inGrid('RCW 146'), findsOneWidget);
+    expect(find.text('1 / 1 collected'), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.ancestor(of: inGrid('RCW 146'), matching: find.byType(AlbumCardFront)),
+            matching: find.byKey(const Key('album-art'))),
+        findsOneWidget,
+        reason: 'the RCW Card carries the Messier Art');
+  });
+
   testWidgets('with no catalog selected every catalog shows, Messier first', (tester) async {
     await _pump(tester, frames: _m31Frames);
     Finder inGrid(String t) => find.descendant(of: find.byType(SliverGrid), matching: find.text(t));
@@ -369,7 +512,7 @@ void main() {
 
   testWidgets('a shelf card fires the same callback, in ranker order', (tester) async {
     PlanningDso? picked;
-    await _pump(tester, frames: _m31Frames, tonight: [_m42, _c14, _m1], onImageTarget: (d) => picked = d);
+    await _pump(tester, frames: _m31Frames, tonight: [_m42, _c14, _m1], onImageTarget: (d, _) => picked = d);
     expect(tester.getTopLeft(_onShelf('Orion Nebula')).dx, lessThan(tester.getTopLeft(_onShelf('Crab Nebula')).dx));
 
     await tester.tap(_onShelf('Orion Nebula'));
@@ -646,7 +789,7 @@ void main() {
   for (final scale in [1.0, 1.3, 2.0]) {
     testWidgets('a flipped back with every part fits a landscape phone at text ${scale}x', (tester) async {
       PlanningDso? picked;
-      await _pump(tester, frames: _m31Frames, size: const Size(800, 400), textScale: scale, onImageTarget: (d) => picked = d, manifest: const {
+      await _pump(tester, frames: _m31Frames, size: const Size(800, 400), textScale: scale, onImageTarget: (d, _) => picked = d, manifest: const {
         'M31': AlbumArt(asset: 'assets/album/art/m031.webp', credit: 'NASA, ESA, and the Hubble Heritage Team',
             licence: 'Public domain', distance: '2.5 million ly',
             trivia: 'The nearest large galaxy to the Milky Way, it is approaching us at about 110 km/s.'),
@@ -737,11 +880,15 @@ void main() {
 }
 
 class _FakeUrlLauncher extends Fake with MockPlatformInterfaceMixin implements UrlLauncherPlatform {
+  _FakeUrlLauncher({this.result = true, this.throws = false});
+  final bool result;
+  final bool throws;
   String? launched;
 
   @override
   Future<bool> launchUrl(String url, LaunchOptions options) async {
     launched = url;
-    return true;
+    if (throws) throw Exception('no browser');
+    return result;
   }
 }

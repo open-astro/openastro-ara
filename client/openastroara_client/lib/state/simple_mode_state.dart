@@ -1,3 +1,7 @@
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform;
+import 'package:flutter/widgets.dart'
+    show WidgetsBindingObserver, WidgetsFlutterBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/profile_api.dart';
@@ -64,12 +68,52 @@ final simpleModeFeatureProvider =
       SimpleModeFeatureController.new,
     );
 
-/// Whether the Simple Mode shell shows: the feature is on AND the client
-/// chose Simple Mode.
+/// The platform Companion Mode reads; overridden in tests.
+final companionPlatformProvider = Provider<TargetPlatform>(
+  (ref) => defaultTargetPlatform,
+);
+
+/// The view's shortest side in logical px; overridden in tests. Recomputed
+/// whenever the view metrics change (split-screen, foldables, Slide Over). A
+/// view that is missing or reports a zero size (Android and iOS can before the
+/// first frame) is "unknown" and reads as infinity, so a tablet is never taken
+/// for a phone.
+final companionShortestSideProvider = Provider<double>((ref) {
+  final binding = WidgetsFlutterBinding.ensureInitialized();
+  final observer = _MetricsObserver(ref.invalidateSelf);
+  binding.addObserver(observer);
+  ref.onDispose(() => binding.removeObserver(observer));
+  final view = binding.platformDispatcher.views.firstOrNull;
+  if (view == null) return double.infinity;
+  final logical = view.physicalSize / view.devicePixelRatio;
+  final shortest = logical.shortestSide;
+  return shortest > 0 ? shortest : double.infinity;
+});
+
+class _MetricsObserver with WidgetsBindingObserver {
+  _MetricsObserver(this._onChange);
+  final void Function() _onChange;
+  @override
+  void didChangeMetrics() => _onChange();
+}
+
+/// Companion Mode: a phone (iOS or Android, shortest side under 600 logical
+/// px). Simple Mode is forced on and every way into the full UI is gone. It
+/// reads no preference and writes none.
+final companionModeProvider = Provider<bool>((ref) {
+  final platform = ref.watch(companionPlatformProvider);
+  final phone =
+      platform == TargetPlatform.iOS || platform == TargetPlatform.android;
+  return phone && ref.watch(companionShortestSideProvider) < 600;
+});
+
+/// Whether the Simple Mode shell shows: Companion Mode, or the feature is on
+/// AND the client chose Simple Mode.
 final simpleModeActiveProvider = Provider<bool>(
   (ref) =>
-      (ref.watch(simpleModeFeatureProvider).value ?? false) &&
-      (ref.watch(simpleModeProvider).value ?? false),
+      ref.watch(companionModeProvider) ||
+      ((ref.watch(simpleModeFeatureProvider).value ?? false) &&
+          (ref.watch(simpleModeProvider).value ?? false)),
 );
 
 /// The prefs file backing [simplePermanentPierProvider]; overridden in tests.

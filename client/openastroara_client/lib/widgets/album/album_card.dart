@@ -17,6 +17,7 @@ import '../../state/album/album_matching.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/reduce_motion.dart';
+import '../platform_context_menu.dart';
 
 /// Cards are trading-card shaped: 2.5 wide by 3.5 tall.
 const double albumCardAspect = 2.5 / 3.5;
@@ -234,6 +235,14 @@ class AlbumCardFront extends StatelessWidget {
   }
 }
 
+/// Opens the licence deed; a browser that cannot be reached (false or thrown) says so.
+Future<void> _openLicence(BuildContext context, String url) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  final failed = context.l10n.albumArtCreditOpenFailed;
+  final opened = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication).catchError((_) => false);
+  if (!opened) messenger?.showSnackBar(SnackBar(content: Text(failed)));
+}
+
 /// The card back, a baseball-card back: name banner in the Tier colour, bio
 /// line, the latest Nights and a totals row, the "Did you know?" line, the one
 /// action and the Art credit.
@@ -361,12 +370,13 @@ class AlbumCardBack extends StatelessWidget {
         ),
         if (art != null && art.creditLine != null) ...[
           // The licence name links its deed, as CC BY asks; the whole 44 px row is the tap target.
-          InkWell(
+          Semantics(
+            link: art.licenceUrl != null,
+            child: InkWell(
             key: const Key('album-art-credit'),
             onTap: switch (art.licenceUrl) {
               null => null,
-              final url => () => unawaited(launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication)
-                  .catchError((_) => false)),
+              final url => () => unawaited(_openLicence(context, url)),
             },
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 44),
@@ -387,6 +397,7 @@ class AlbumCardBack extends StatelessWidget {
                   style: _backText,
                 ),
               ),
+            ),
             ),
           ),
         ],
@@ -436,7 +447,19 @@ class AlbumCard extends StatelessWidget {
   final VoidCallback onAction;
 
   @override
-  Widget build(BuildContext context) => Semantics(
+  Widget build(BuildContext context) => PlatformContextMenu(
+        // The back's action from a long press on iOS and iPadOS; a tap still flips.
+        items: [
+          ContextMenuItem(
+            card.stats == null ? context.l10n.albumImageThis : context.l10n.albumAddTime,
+            card.stats == null ? Icons.photo_camera_outlined : Icons.add_circle_outline,
+            onAction,
+          ),
+        ],
+        child: _flipTarget(context),
+      );
+
+  Widget _flipTarget(BuildContext context) => Semantics(
         button: true,
         // The tier is a border colour on screen; say it too. The front's own texts stay
         // out, or the label and name are read twice.

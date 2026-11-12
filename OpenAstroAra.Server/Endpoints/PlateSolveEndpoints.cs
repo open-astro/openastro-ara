@@ -18,6 +18,7 @@ using Microsoft.AspNetCore.Routing;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -63,6 +64,7 @@ public static class PlateSolveEndpoints {
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("VerifyMountPosition")
+            .WithDescription("409 problem details carry a stable `reason`: `no-camera` (nothing connected to look with), `camera-busy` (another exposure holds the camera; check again once it has read out) or `gate-stuck` (the in-flight gate leaked; a daemon restart clears it).")
             .WithSummary("§57.4 Verify-Position: a quick snapshot plate-solved and compared with the mount's reported and intended positions.");
 
         // #1121 — read-only: is there a star database where the solver will look? A fresh install
@@ -97,14 +99,20 @@ public static class PlateSolveEndpoints {
             // restart clears. (A gate merely HELD by a long exposure is CameraBusyException below, thrown
             // before any wait — this branch is the stuck case, and no interactive client waits it out.)
             return Results.Problem("The camera's in-flight gate is stuck — check the daemon log; a restart clears it.",
-                statusCode: StatusCodes.Status409Conflict);
+                statusCode: StatusCodes.Status409Conflict, extensions: Reason("gate-stuck"));
+        } catch (CameraBusyException ex) {
+            // The gate is held by another exposure: fail fast, check again once it has read out (#1786).
+            // Caught before InvalidOperationException, which it derives from.
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, extensions: Reason("camera-busy"));
         } catch (InvalidOperationException ex) {
-            // CameraBusyException (the gate is held by another exposure: fail fast, tap again later), the
-            // imaging mediator's "no camera connected", and a capture that lost the device mid-exposure:
+            // The imaging mediator's "no camera connected", and a capture that lost the device mid-exposure:
             // nothing to look with right now; the message says which.
-            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, extensions: Reason("no-camera"));
         }
     }
+
+    // The 409's stable cause (`no-camera` | `camera-busy` | `gate-stuck`): a client picks its action from it.
+    private static Dictionary<string, object?> Reason(string reason) => new() { ["reason"] = reason };
 
     // Extracted (not an inline lambda) so the wiring is unit-testable with a real store.
     public static IResult GetDatabaseStatus(IProfileStore store) =>

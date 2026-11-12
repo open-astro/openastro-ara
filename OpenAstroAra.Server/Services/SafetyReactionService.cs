@@ -50,6 +50,8 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
     private readonly ITelescopeService? _telescope;
     private readonly INotificationService? _notifications;
     private readonly IWsBroadcaster? _ws;
+    // #1689 — an unsafe reaction wins over following the mount.
+    private readonly Func<DomeFollower?>? _domeFollower;
     private readonly ILogger<SafetyReactionService> _logger;
 
     private readonly object _lock = new();
@@ -113,7 +115,9 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
             IWsBroadcaster? ws = null,
             ILogger<SafetyReactionService>? logger = null,
             Func<ICenteringService?>? centeringResolver = null,
-            TargetRecenter? recenter = null) {
+            TargetRecenter? recenter = null,
+            Func<DomeFollower?>? domeFollower = null) {
+        _domeFollower = domeFollower;
         _safetyMonitor = safetyMonitor;
         _weather = weather;
         _profiles = profiles;
@@ -352,6 +356,7 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
         var guidingStopped = false;
         var parkRequested = false;
         if (action is not UnsafeAction.Ignore) {
+            _domeFollower?.Invoke()?.TurnOff("conditions are unsafe");
             guidingStopped = await StopGuidingQuietlyAsync().ConfigureAwait(false);
             parkRequested = await ParkQuietlyAsync().ConfigureAwait(false);
         }

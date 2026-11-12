@@ -13,6 +13,7 @@ import '../state/saved_server_state.dart';
 import '../state/server_state.dart';
 import '../util/friendly_error.dart';
 import '../l10n/l10n.dart';
+import '../widgets/adaptive_refresh.dart';
 import '../widgets/plan_offline_button.dart';
 
 /// Phase 11 first-run screen — server discovery + selection + handshake.
@@ -128,28 +129,26 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
             Expanded(
               // Pull down to rescan, the same as ⟳ (the list must always
               // scroll for the gesture to work when it is empty or short).
-              child: RefreshIndicator(
+              child: AdaptiveRefresh(
                 onRefresh: () async {
                   _rescan();
                   await Future<void>.delayed(const Duration(seconds: 1));
                 },
-                child: _discovered.isEmpty
-                  ? ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      children: const [
-                        Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Text(
-                            'Looking for servers… rescanning every few seconds.\n'
-                            'If yours doesn’t appear, pull down, tap ⟳ (top right) '
-                            'or add it manually below.',
-                            textAlign: TextAlign.center,
-                          ),
+                slivers: [
+                  if (_discovered.isEmpty)
+                    const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'Looking for servers… rescanning every few seconds.\n'
+                          'If yours doesn’t appear, pull down, tap ⟳ (top right) '
+                          'or add it manually below.',
+                          textAlign: TextAlign.center,
                         ),
-                      ],
+                      ),
                     )
-                  : ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
+                  else
+                    SliverList.list(
                       children: _discovered
                           .map(
                             (s) => ListTile(
@@ -166,6 +165,7 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
                           )
                           .toList(),
                     ),
+                ],
               ),
             ),
             const Divider(),

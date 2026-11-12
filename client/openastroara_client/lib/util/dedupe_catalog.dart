@@ -26,6 +26,7 @@ const double positionToleranceArcmin = 0.5;
 String catalogFamily(String id) {
   if (id.startsWith('NGC') || id.startsWith('IC')) return 'openngc';
   if (id.startsWith('Sh2-')) return 'sharpless';
+  if (id.startsWith('RCW ')) return 'rcw';
   if (id.startsWith('LDN ')) return 'ldn';
   if (id.startsWith('vdB ')) return 'vdb';
   if (id.startsWith('Abell ')) return 'abell';
@@ -275,10 +276,22 @@ List<PlanningDso> mergeDuplicates(
       }
     }
 
+    // A row with no common name of its own takes the first one a folded row carries
+    // (RCW 127's "Cat's Paw Nebula" on NGC 6334); a catalog name is never replaced.
+    var name = primary.name;
+    if (designationKey(name) == designationKey(primary.id)) {
+      for (final m in members) {
+        if (m != best && designationKey(rows[m].name) != designationKey(rows[m].id)) {
+          name = rows[m].name;
+          break;
+        }
+      }
+    }
+
     out.add(
       PlanningDso(
         id: primary.id,
-        name: primary.name,
+        name: name,
         type: primary.type,
         magnitude: primary.magnitude,
         raDeg: primary.raDeg,

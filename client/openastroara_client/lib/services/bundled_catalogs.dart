@@ -3,13 +3,14 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 
+import '../util/common_names.dart';
 import '../util/dedupe_catalog.dart';
 import '../util/imaging_regions.dart';
 import 'dso_catalog_service.dart';
 
 /// Offline-first sky catalogs, BUNDLED with the client.
 ///
-/// Every deep-sky catalog the app knows (OpenNGC, Sharpless, LDN, Barnard,
+/// Every deep-sky catalog the app knows (OpenNGC, Sharpless, RCW, LDN, Barnard,
 /// vdB, Abell PN, Arp, Wolf-Rayet) ships as an asset in the OpenNGC column
 /// layout from open-astro/sky-data, parsed here with the same rules the
 /// daemon's SkyCatalogService applies. The daemon is no longer needed for
@@ -19,6 +20,7 @@ import 'dso_catalog_service.dart';
 const List<String> bundledCatalogAssets = [
   'assets/catalogs/NGC.csv',
   'assets/catalogs/sh2.csv',
+  'assets/catalogs/rcw.csv',
   'assets/catalogs/ldn.csv',
   'assets/catalogs/barnard.csv',
   'assets/catalogs/vdb.csv',
@@ -38,13 +40,15 @@ Future<List<PlanningDso>> loadBundledCatalogs() async {
       debugPrint('[catalogs] bundled asset $a unreadable: $e');
     }
   }
-  return compute(_parseAll, texts);
+  return compute(parseBundledCatalogs, texts);
 }
 
-List<PlanningDso> _parseAll(List<String> texts) => mergeDuplicates(
+/// The bundle as the app sees it: every catalog parsed, one row per object, the
+/// curated common names laid over it.
+List<PlanningDso> parseBundledCatalogs(List<String> texts) => applyCommonNames(mergeDuplicates(
       [for (final t in texts) ...parseOpenNgcCsv(t)],
       links: catalogTwinLinks,
-    );
+    ));
 
 /// The NGC/IC-keyed Sharpless anchors as merge links (#1267 item 4): the
 /// curated layer already knew those pairs are one object (it hid the
@@ -278,6 +282,7 @@ final List<CatalogOverlay> catalogOverlays = [
   (id: 'ngc', name: 'NGC', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('NGC'), prefix: 'NGC'),
   (id: 'ic', name: 'IC', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('IC'), prefix: 'IC'),
   (id: 'sharpless', name: 'Sharpless (Sh2)', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('Sh2-'), prefix: 'Sh2-'),
+  (id: 'rcw', name: 'RCW', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('RCW '), prefix: 'RCW '),
   (id: 'barnard', name: 'Barnard dark nebulae', group: 'Catalogs',
       match: (r) => r.hasBarnardDesignation, prefix: null),
   (id: 'ldn', name: 'Lynds dark nebulae (LDN)', group: 'Catalogs', match: (r) => r.hasDesignationPrefix('LDN '), prefix: 'LDN '),
