@@ -22,7 +22,7 @@ namespace OpenAstroAra.Server.Services;
 // for the "guider is wedged and I want to kick it myself" case the §63.12 table planned. Deliberately NOT
 // gated on a connected guider: a manual restart is most useful precisely when the daemon is hung or the
 // RPC connection is down. Recovery/auto-reconnect then proceeds through the existing §63.3 machinery
-// (guider.state WS events report the outcome), so this is fire-and-forget with an immediate 202.
+// (the guider connection status reports the outcome), so this is fire-and-forget with an immediate 202.
 public sealed partial class GuiderService {
 
     /// <summary>§63.17 — request a systemd restart of the guider unit (idempotent per §60.5: repeating the

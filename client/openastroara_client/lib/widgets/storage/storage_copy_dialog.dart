@@ -142,7 +142,7 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
       if (mounted) setState(() => _error = copyFailureMessage(context.l10n, e.code, e.detail));
     } catch (e) {
       if (mounted) {
-        setState(() => _error = friendlyError(context.l10n, e, action: 'start the copy'));
+        setState(() => _error = friendlyError(context.l10n, e, action: context.l10n.actionStartCopy));
       }
     } finally {
       api.close();
@@ -158,7 +158,7 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
       await api.cancel();
     } catch (e) {
       if (mounted) {
-        setState(() => _error = friendlyError(context.l10n, e, action: 'cancel the copy'));
+        setState(() => _error = friendlyError(context.l10n, e, action: context.l10n.actionCancelCopy));
       }
     } finally {
       api.close();
@@ -216,7 +216,7 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
       error: (e, _) => SizedBox(
         height: 140,
         child: Center(
-            child: Text(friendlyError(context.l10n, e, action: "read the server's disks"),
+            child: Text(friendlyError(context.l10n, e, action: context.l10n.actionReadServerDisks),
                 textAlign: TextAlign.center)),
       ),
       data: (all) {
@@ -424,7 +424,7 @@ class _FolderChecklistState extends ConsumerState<_FolderChecklist> {
       });
     } catch (e) {
       if (mounted) {
-        setState(() => _error = friendlyError(context.l10n, e, action: 'list the folders'));
+        setState(() => _error = friendlyError(context.l10n, e, action: context.l10n.actionListFolders));
       }
     } finally {
       api.close();

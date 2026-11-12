@@ -27,8 +27,8 @@ The two buckets are not symmetrical, on purpose:
           top-level project directories, the solution, Directory.Build.props,
           vendored C sources and the packaging tree, and a new one must not
           have to be registered here before CI notices it.
-  client  CLOSED over DIRECTORIES. Every step of `client-test` and
-          `client-build` runs with `working-directory:
+  client  CLOSED over DIRECTORIES. Every step of `client-test-desktop-shard`
+          and `client-build` runs with `working-directory:
           client/openastroara_client`, and the single file they read outside
           it -- `.flutter-version` -- is under `client/` too. So a change in
           any other top-level directory cannot affect a Flutter analyze,
@@ -61,7 +61,7 @@ NONE: frozenset = frozenset()
 # `claude-review.yml` runs unconditionally, and §19.1's gate on a rulebook
 # change is the review, not the build matrix. Skipping the two job-gated
 # required contexts (server-build, registry-gate), the Linux client test
-# shards and the steps of the macOS and Windows client-test legs on a
+# shards and the macOS and Windows client test shards on a
 # SKILL.md-only PR loses nothing that CI ever checked.
 #
 # codeql.yml's `paths-ignore:` mirrors this tuple; the same test pins it.
@@ -139,6 +139,8 @@ SCRIPT_RULES = {
     "scripts/changelog-fragments.py": NONE,
     # Run by merge-queue.yml on a merge group only.
     "scripts/merge-gate.sh": NONE,
+    # Run by auto-queue.yml after a review run only.
+    "scripts/auto-queue.sh": NONE,
 }
 
 # .github/ is mixed the same way. An explicit list, not a suffix rule: a
@@ -157,6 +159,7 @@ GITHUB_RULES = {
     ".github/workflows/pr-body.yml": NONE,
     ".github/workflows/label-trusted-authors.yml": NONE,
     ".github/workflows/merge-queue.yml": NONE,
+    ".github/workflows/auto-queue.yml": NONE,
     ".github/dependabot.yml": NONE,
     ".github/FUNDING.yml": NONE,
     ".github/pull_request_template.md": NONE,

@@ -177,7 +177,7 @@ jobs:
   changes:
     name: Changed paths
     runs-on: ubuntu-latest
-    timeout-minutes: 5  # gates the jobs below at job level, plus client-test's steps; a wedged fetch must not hold the matrix to the 6h default
+    timeout-minutes: 5  # gates the jobs below at job level; a wedged fetch must not hold the matrix to the 6h default
     # A red `Changed paths` is never useful (#1024): every consumer below
     # already fails safe on an empty output (`!= 'false'`, `!= 'true'`), so a
     # checkout flake or a wedged fetch — neither of which the script's ERR
@@ -203,12 +203,13 @@ jobs:
     # forever and the PR could never merge. A job skipped by `if:` reports a
     # `skipped` conclusion, which GitHub counts as satisfying a required check.
     # That holds for NON-MATRIX jobs only. A matrix job skipped at job level
-    # never expands, so its per-leg contexts are never reported at all — which
-    # is why `client-test` (the macOS and Windows contexts) is gated at step
-    # level instead (#1025). The Linux context is `client-test-linux`, a
-    # non-matrix job that always runs and reports the `client-test-shard`
-    # result; the shards are a matrix skipped at job level, which is safe
-    # because their contexts are not required.
+    # never expands, so its per-leg contexts are never reported at all (#1025).
+    # So no required context comes from a gated matrix. The Linux context is
+    # `client-test-linux`, a non-matrix job that always runs and reports the
+    # `client-test-shard` result. The macOS and Windows contexts are
+    # `client-test`, a matrix with no gate that always runs and reports the
+    # `client-test-desktop-shard` result. Both shard jobs are matrices skipped
+    # at job level, which is safe because their contexts are not required.
     outputs:
       docs_only: ${{ steps.classify.outputs.docs_only }}
       # Finer-grained than docs_only, and consumed ONLY by jobs that are not
@@ -1120,18 +1121,21 @@ jobs:
       - name: Run help-registry check
         run: node scripts/check-help-registry.mjs
 
-  # The client suite runs as three jobs.
+  # The client suite runs as four jobs.
   #   client-test-shard  the suite on Linux, split over three runners (about
   #                      10 minutes on one). Shard 1 also runs the checks that
   #                      need one pass only: analyze, the l10n freshness check
   #                      and the page-logic tests.
   #   client-test-linux  the required `ubuntu-latest` context: passes only when
   #                      every shard passed.
+  #   client-test-desktop-shard
+  #                      the suite on macOS and Windows, each split over three
+  #                      runners. Unsplit it takes 13 minutes on Windows and 22
+  #                      on macOS, so these shards run in the merge queue and
+  #                      on master, not on a pull request: a failure on one of
+  #                      those systems only stops the PR in the queue.
   #   client-test        the required `macos-latest` and `windows-latest`
-  #                      contexts. The suite takes 13 minutes on Windows and 22
-  #                      on macOS, so those legs do their work in the merge
-  #                      queue and on master, not on a pull request: a failure
-  #                      on one of those systems only stops the PR in the queue.
+  #                      contexts: passes only when every desktop shard passed.
   client-test-shard:
     # Matrix + job-level gate, safe because these are not required contexts
     # (see client-build). The gate is `docs_only` and not the finer `client`
@@ -1245,88 +1249,42 @@ jobs:
           echo "::error::A client test shard did not pass (result: ${SHARDS}, docs_only: ${DOCS_ONLY:-unset}); see the shard jobs."
           exit 1
 
-  client-test:
-    name: Client (analyze + test) — ${{ matrix.os }}
+  client-test-desktop-shard:
+    # §14.3 cross-platform client tests. Linux is the canonical development
+    # target (client-test-shard above); macOS + Windows verify Dart code stays
+    # portable since the client ships to all three platforms. Split three ways
+    # like the Linux shards: unsplit, the macOS leg took 19-20 minutes in
+    # `flutter test` alone (merge queue and master runs, 2026-11-12) and set
+    # the length of every merge-queue run.
+    # Matrix + job-level gate, safe because these are not required contexts:
+    # client-test below reports them. A pull request does not run them at all.
+    name: Client (analyze + test) — ${{ matrix.os }}, shard ${{ matrix.shard }}/3
     needs: changes
-    # `!cancelled()` and nothing else, deliberately — see #1025.
-    # The two legs of this matrix are REQUIRED contexts. A matrix job skipped
-    # at job level never expands, so GitHub publishes ONE check named
-    # "Client (analyze + test) — ${{ matrix.os }}" (literally, unexpanded) and
-    # the required contexts are never reported at all. The PR then sits
-    # on "Expected — Waiting for status to be reported" forever — the exact
-    # deadlock the `changes` job comment says job-level `if:` avoids. That is
-    # true for non-matrix jobs; it is false for matrix jobs.
-    # So this job always runs and its STEPS are guarded instead: the matrix
-    # expands, both contexts report `success`, and a docs-only PR or a pull
-    # request run pays only two Linux runner spin-ups.
-    # The guard must NOT be omitted entirely. With no `if:` the implicit
-    # condition is success() over `needs: changes`, so a failed `changes`
-    # would skip this job at job level and reproduce the deadlock. Since
-    # #1024 `changes` cannot fail short of its outer 5-minute job timeout
-    # (its steps are `continue-on-error`), so the
-    # implicit condition would in practice hold too -- but that is a property
-    # of another job's steps, and an edit there must not be able to silently
-    # re-open this deadlock. The explicit `!cancelled()` states the intent
-    # where it is enforced. (A cancelled run skips this job under either
-    # form; that is fine, a cancelled run reports nothing anyway.)
-    if: ${{ !cancelled() }}
-    # §14.3 cross-platform client-test matrix. Linux is the canonical
-    # development target (client-test-shard above); macOS + Windows verify
-    # Dart code stays portable since the WILMA client ships to all three
-    # platforms. `fail-fast: false` so a flake on one OS doesn't mask a real
-    # regression on another.
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' && github.event_name != 'pull_request' }}
+    # Every shard runs to the end, so a flake on one OS or shard doesn't mask a
+    # real regression on another.
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest, windows-latest]
-    # A leg with no work to do (a docs-only change, or any pull request) only
-    # has to report its context, so it does not wait for a macOS or Windows runner.
-    runs-on: ${{ (needs.changes.outputs.docs_only == 'true' || github.event_name == 'pull_request') && 'ubuntu-latest' || matrix.os }}
-    # Cap a hung analyze/test run well below the 6h Actions default; the
-    # slowest leg (macOS) took 24 minutes on 2026-11-12.
+        shard: [1, 2, 3]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     defaults:
       run:
-        # Use bash on all three platforms so the version-reading + cd
-        # steps don't need OS-specific variants. Windows runners ship
-        # with Git Bash, which honors `set -euo pipefail` + POSIX
-        # parameter expansion exactly like Linux/macOS.
+        # Use bash on both platforms so the version-reading + cd steps don't
+        # need OS-specific variants. Windows runners ship with Git Bash, which
+        # honors `set -euo pipefail` + POSIX parameter expansion exactly like
+        # Linux/macOS.
         shell: bash
     steps:
-      # Always runs: with the work gated at step level, a misclassified
-      # docs-only PR would otherwise show green required contexts and no
-      # trace of why. This puts the classifier's answer in the job summary.
-      - name: Record path-gate decision
-        run: |
-          # `unset`, not `<unset>`: the summary is rendered as markdown, so an
-          # angle-bracketed word is parsed as an HTML tag and disappears from
-          # exactly the case a reader most needs to see.
-          echo "docs_only=${DOCS_ONLY:-unset} event=${EVENT_NAME} (work steps run only when docs_only is not 'true' and the event is not 'pull_request')" >> "$GITHUB_STEP_SUMMARY"
-          # ::notice:: surfaces in the checks UI; the summary alone is only
-          # visible by opening the run, which `gh pr checks` never shows. Fire
-          # it only for the two cases worth an annotation: a docs-only
-          # classification (green contexts with no analyze/test behind them) and
-          # a missing output (the `changes` job failed, and the fail-open path
-          # ran the work anyway). A pull request never does the work here, by
-          # design, so it gets the summary line and no annotation.
-          if [ "$DOCS_ONLY" = "true" ]; then
-            echo "::notice title=Path gate::docs_only=true -- work steps skipped, contexts reported green by design"
-          elif [ -z "$DOCS_ONLY" ]; then
-            echo "::notice title=Path gate::docs_only=unset -- the changes job did not report; running the full work (fail-open)"
-          fi
-        env:
-          DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
-          EVENT_NAME: ${{ github.event_name }}
-
       - name: Checkout (no LFS)
-        if: ${{ needs.changes.outputs.docs_only != 'true' && github.event_name != 'pull_request' }}
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v4.x pinned per zizmor + CodeRabbit security policy
         with:
           lfs: false
           persist-credentials: false
 
       - name: Read pinned Flutter version
-        if: ${{ needs.changes.outputs.docs_only != 'true' && github.event_name != 'pull_request' }}
         id: flutter-version
         run: |
           set -euo pipefail
@@ -1338,7 +1296,6 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Setup Flutter
-        if: ${{ needs.changes.outputs.docs_only != 'true' && github.event_name != 'pull_request' }}
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2.x pinned per zizmor immutable-ref policy
         with:
           flutter-version: ${{ steps.flutter-version.outputs.version }}
@@ -1346,19 +1303,27 @@ jobs:
           cache: true
 
       - name: pub get
-        if: ${{ needs.changes.outputs.docs_only != 'true' && github.event_name != 'pull_request' }}
         working-directory: client/openastroara_client
         run: flutter pub get
 
       - name: flutter analyze
-        if: ${{ needs.changes.outputs.docs_only != 'true' && github.event_name != 'pull_request' }}
+        if: matrix.shard == 1
         working-directory: client/openastroara_client
         run: flutter analyze
 
+      # Every third test file, the same split as client-test-shard (see the
+      # comment there for why not `flutter test --total-shards`).
       - name: flutter test
-        if: ${{ needs.changes.outputs.docs_only != 'true' && github.event_name != 'pull_request' }}
         working-directory: client/openastroara_client
-        run: flutter test
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          # Not mapfile: macos-latest's bash is 3.2, which lacks it.
+          files=()
+          while IFS= read -r f; do files+=("$f"); done < <(find test -name '*_test.dart' | sort | awk -v n=3 -v s="$SHARD" 'NR % n == s - 1')
+          echo "shard ${SHARD}: ${#files[@]} test files"
+          flutter test "${files[@]}"
 
       # #1278 — the planetarium page's pure logic (GoTo outcome polling,
       # coordinate parsing) under node's built-in runner, no browser and
@@ -1366,19 +1331,63 @@ jobs:
       # directory: Node 22/24 treat the argument as a pattern and fail on a
       # bare directory (the first run of this step did, on ubuntu-latest).
       - name: planetarium page logic (node --test)
-        if: ${{ needs.changes.outputs.docs_only != 'true' && github.event_name != 'pull_request' }}
+        if: matrix.shard == 1
         working-directory: client/openastroara_client
         run: node --test tool/page_logic/*.test.js
+
+  client-test:
+    name: Client (analyze + test) — ${{ matrix.os }}
+    needs: [changes, client-test-desktop-shard]
+    # `!cancelled()` and nothing else, deliberately — see #1025.
+    # The two legs of this matrix are REQUIRED contexts. A matrix job skipped
+    # at job level never expands, so GitHub publishes ONE check named
+    # "Client (analyze + test) — ${{ matrix.os }}" (literally, unexpanded) and
+    # the required contexts are never reported at all. The PR then sits on
+    # "Expected — Waiting for status to be reported" forever. So this job
+    # always runs, and with the implicit success() a failed shard would skip
+    # it, and a skipped required context counts as passed.
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    # Only reports the shards' result, so no macOS or Windows runner.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # needs.<job>.result covers every shard of both OSes: a red Windows shard
+      # also turns the macOS context red. The shard jobs name the one that failed.
+      - name: Require every shard to pass
+        env:
+          SHARDS: ${{ needs.client-test-desktop-shard.result }}
+          DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [ "$SHARDS" = success ]; then
+            exit 0
+          fi
+          # The shards skip a docs-only change and every pull request at job level;
+          # those are the skips that pass. A pull request never ran this work here.
+          if [ "$SHARDS" = skipped ] && { [ "$DOCS_ONLY" = true ] || [ "$EVENT_NAME" = pull_request ]; }; then
+            if [ "$DOCS_ONLY" = true ]; then
+              echo "::notice title=Path gate::docs_only=true -- the test shards were skipped, context reported green by design"
+            fi
+            exit 0
+          fi
+          echo "::error::A client test shard did not pass (result: ${SHARDS}, docs_only: ${DOCS_ONLY:-unset}, event: ${EVENT_NAME}); see the shard jobs."
+          exit 1
 
   client-build:
     # Matrix + job-level gate. Safe ONLY because these are not required
     # contexts: skipped at job level the matrix never expands, so this reports
     # one check under the literal name below rather than three per-target ones.
     # If it is ever added to the ruleset's required checks, it reproduces the
-    # #1025 deadlock verbatim — gate it at step level like client-test instead.
+    # #1025 deadlock verbatim — report it through an always-running job like client-test instead.
     name: Client (native build) — ${{ matrix.target }}
     needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.client != 'false' }}
+    # Not in the merge queue: merge-gate.sh requires these green on the PR head, and the queue's
+    # copies only held macOS runners while every group waited.
+    if: ${{ !cancelled() && github.event_name != 'merge_group' && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.client != 'false' }}
     # Native compile gate (desktop + Android + iOS). `client-test` only runs analyze + test —
     # it never compiles the platform Runner, which is how PR #599 shipped a
     # macOS client that didn't link through a green gate (see PORT_TODO
@@ -1452,6 +1461,35 @@ jobs:
           flutter-version: ${{ steps.flutter-version.outputs.version }}
           channel: stable
           cache: true
+
+      # The runner image lacks the NDK that Flutter pins (flutter.ndkVersion) and the CMake a
+      # plugin's native build asks for, so each Android build downloaded about 1 GB of them.
+      # The key carries the NDK version read from the pinned Flutter SDK: a Flutter bump that
+      # moves the NDK is a new cache entry.
+      - name: Read the Android NDK and CMake paths
+        if: matrix.target == 'android'
+        id: android-sdk
+        run: |
+          set -euo pipefail
+          NDK="$(sed -n 's/.*val ndkVersion: String = "\(.*\)".*/\1/p' "$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt")"
+          if [[ -z "$NDK" ]]; then
+            echo "::error::flutter.ndkVersion not found in the Flutter SDK"
+            exit 1
+          fi
+          {
+            echo "ndk=$NDK"
+            echo "ndk-path=$ANDROID_HOME/ndk/$NDK"
+            echo "cmake-path=$ANDROID_HOME/cmake/3.22.1"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Cache Android NDK and CMake
+        if: matrix.target == 'android'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ${{ steps.android-sdk.outputs.ndk-path }}
+            ${{ steps.android-sdk.outputs.cmake-path }}
+          key: android-ndk-${{ steps.android-sdk.outputs.ndk }}-cmake-3.22.1
 
       - name: pub get
         working-directory: client/openastroara_client
