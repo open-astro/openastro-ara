@@ -126,6 +126,7 @@ import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/guider/guider_build_activity_state.dart';
 import 'package:openastroara/state/simple_calibration_state.dart';
 import 'package:openastroara/screens/simple/simple_message_pills.dart';
+import 'package:openastroara/screens/simple/simple_status_card.dart';
 import 'package:openastroara/widgets/emergency_stop_button.dart';
 import 'package:openastroara/services/monitor_device_service.dart';
 import 'package:openastroara/widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
@@ -919,6 +920,10 @@ Future<void> _startPreflight(WidgetTester tester) async {
 
 Rect _panelOf(WidgetTester tester, Finder f) =>
     tester.getRect(find.ancestor(of: f, matching: find.byType(SimplePanel)).first);
+
+/// A status line of the status card (the lines are no longer panels of their own).
+Rect _lineOf(WidgetTester tester, Finder f) =>
+    tester.getRect(find.ancestor(of: f, matching: find.byKey(const Key('simple-status-pill'))).first);
 
 /// What the settings chip should read for the current exposure parameters.
 String _summary(ProviderContainer c) {
@@ -1837,8 +1842,8 @@ void main() {
   });
 
   for (final size in const [Size(1024, 768), Size(768, 1024), Size(507, 768)]) {
-    testWidgets('at $size: message pills sit top-left, beside the status pill, above the left rail, '
-        'clear of the status pills', (tester) async {
+    testWidgets('at $size: the status card sits top-left, status line first, messages under it, above the left rail',
+        (tester) async {
       final container = await _pump(tester, size);
       await _frame(tester, container);
       container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
@@ -1849,14 +1854,132 @@ void main() {
       // The rail is measured after the first frame; the row narrows for the status pill after that.
       await tester.pump(const Duration(milliseconds: 300));
       await tester.pump(const Duration(milliseconds: 300));
-      final pills = tester.getRect(find.byType(SimpleMessagePills));
-      final status = _panelOf(tester, find.textContaining('Taking a frame'));
+      final card = tester.getRect(find.byType(SimpleStatusCard));
+      final status = _lineOf(tester, find.textContaining('Taking a frame'));
       final rail = _panelOf(tester, find.text('Library'));
-      expect(pills.left, kSimpleInset, reason: 'the top-left corner');
-      expect(pills.right, lessThanOrEqualTo(status.left), reason: 'beside the status pill, never under it');
-      expect(pills.bottom, lessThanOrEqualTo(rail.top), reason: 'above the left rail');
+      final beside = card.left > kSimpleInset; // short windows move it beside the left rail
+      expect(card.left, beside ? greaterThanOrEqualTo(kSimpleInset * 2 + kSimpleRailWidth) : kSimpleInset,
+          reason: 'the top-left corner');
+      expect(card.width, lessThanOrEqualTo(kSimpleMessagesMaxWidth), reason: 'at most 420 px');
+      expect(status.top, card.top, reason: 'the status line is first');
+      expect(tester.getRect(find.textContaining('Message 5')).top, greaterThanOrEqualTo(status.bottom),
+          reason: 'the messages are under it, in the same card');
+      if (!beside) expect(card.bottom, lessThanOrEqualTo(rail.top), reason: 'above the left rail');
       expect(find.byKey(const Key('simple-messages-more')), findsOneWidget, reason: 'six don\'t fit: the rest fold');
       container.read(captureProgressProvider.notifier).reset();
+      await tester.pump(const Duration(seconds: 1));
+    });
+  }
+
+  // #1782: one card; its width follows its widest line, 420 px with a question's actions, the row on a phone.
+  testWidgets('the status card draws nothing while there is no line and no message', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    await tester.pump();
+    expect(tester.getSize(find.byType(SimpleStatusCard)), Size.zero);
+  });
+
+  testWidgets('the status card is 420 px with a question\'s actions and hugs a short message otherwise', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    await tester.pump();
+    final messages = c.read(simpleMessagesProvider.notifier);
+    messages.show(SimpleMessageKind.error, 'Short');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.getSize(find.byType(SimpleStatusCard)).width, lessThan(kSimpleMessagesMaxWidth));
+    messages.show(SimpleMessageKind.question, 'Slew?', actions: [SimpleMessageAction('Slew', () {})]);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.getSize(find.byType(SimpleStatusCard)).width, kSimpleMessagesMaxWidth);
+  });
+
+  testWidgets('at 507x768, a card too tall for the room above the left rail moves beside it and stays clear of the '
+      'right rail and the screen edge', (tester) async {
+    const size = Size(507, 768);
+    final c = await _pump(tester, size);
+    c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+    final messages = c.read(simpleMessagesProvider.notifier);
+    messages.show(SimpleMessageKind.error, 'Message');
+    messages.show(SimpleMessageKind.question, 'Keep the edits?',
+        actions: [SimpleMessageAction('Send', () {}), SimpleMessageAction('Discard', () {})]);
+    for (var i = 0; i < 4; i++) {
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    final card = tester.getRect(find.byType(SimpleStatusCard));
+    expect(card.left, greaterThanOrEqualTo(kSimpleInset * 2 + kSimpleRailWidth),
+        reason: 'precondition: the card moved beside the left rail');
+    expect(card.right, lessThanOrEqualTo(size.width - kSimpleInset), reason: 'inside the screen, card $card');
+    for (final k in ['simple-mode', 'simple-settings', 'simple-shutter']) {
+      final rail = tester.getRect(find.byKey(Key(k)));
+      expect(card.overlaps(rail), isFalse, reason: 'clear of the right rail\'s $k: card $card, $k $rail');
+    }
+    for (final label in ['Send', 'Discard']) {
+      expect(tester.getRect(find.text(label)).right, lessThanOrEqualTo(size.width - kSimpleInset),
+          reason: '$label can be pressed');
+    }
+    c.read(captureProgressProvider.notifier).reset();
+    await tester.pump(const Duration(seconds: 1));
+  });
+
+  testWidgets('with Preflight showing, the status card starts under the step strip', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    await _startPreflight(tester);
+    c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, 'Message');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final strip = tester.getRect(find.byKey(const Key('preflight-strip')));
+    final card = tester.getRect(find.byType(SimpleStatusCard));
+    expect(card.left, kSimpleInset, reason: 'top left');
+    expect(card.top, greaterThanOrEqualTo(strip.bottom), reason: 'strip $strip, card $card');
+  });
+
+  testWidgets('in the immersive view the status card stays, in the top-left corner', (tester) async {
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true);
+    await _frame(tester, c);
+    c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, 'Message');
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-frame')));
+    for (var i = 0; i < 3; i++) {
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    expect(find.byKey(const Key('simple-mode')).hitTestable(), findsNothing, reason: 'precondition: immersive');
+    expect(tester.getTopLeft(find.byType(SimpleStatusCard)), const Offset(kSimpleInset, kSimpleInset));
+    expect(find.text('Message'), findsOneWidget);
+  });
+
+  for (final scale in [1.0, 2.0]) {
+    testWidgets('on a phone (390x844, text ${scale}x) the status card takes the row between the insets', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final c = await _pump(tester, const Size(390, 844));
+      c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+      c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, 'Message');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      final card = tester.getRect(find.byType(SimpleStatusCard));
+      expect(card.left, kSimpleInset);
+      expect(card.right, scale == 1 ? 390 - kSimpleInset : lessThanOrEqualTo(390 - kSimpleInset),
+          reason: 'at large text the card goes over the rail and loses its width');
+      c.read(captureProgressProvider.notifier).reset();
+      await tester.pump(const Duration(seconds: 1));
+    });
+  }
+
+  for (final scale in [1.0, 1.5, 2.0]) {
+    testWidgets('on a phone in pt_BR (text ${scale}x) the status card keeps a long message whole, inside the screen', (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      final c = await _pump(tester, const Size(390, 844), locale: const Locale('pt', 'BR'));
+      c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
+      const words = 'A câmera está fazendo outra captura. Verifique de novo quando terminar.';
+      c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, words);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(tester.takeException(), isNull);
+      expect(find.text(words), findsOneWidget, reason: 'wrapped whole, never cut');
+      final card = tester.getRect(find.byType(SimpleStatusCard));
+      expect(card.left, greaterThanOrEqualTo(kSimpleInset));
+      expect(card.right, lessThanOrEqualTo(390 - kSimpleInset));
+      c.read(captureProgressProvider.notifier).reset();
       await tester.pump(const Duration(seconds: 1));
     });
   }
@@ -3677,6 +3800,8 @@ void main() {
     expect(window, findsNothing, reason: 'Search closes the window');
     expect(search, findsOneWidget, reason: 'Search closes the window');
     await tap('simple-ara-mark');
+    await tap('simple-ara-mark');
+    expect(sheet, findsNothing, reason: 'the Ara mark again closes the sheet, which covered the status card');
     rotator.report('moving');
     await tester.pump();
     await tester.tap(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Rotator')));
@@ -4127,17 +4252,17 @@ void main() {
     await _frame(tester, container);
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await tester.pump();
-    final status = _panelOf(tester, find.textContaining('Taking a frame'));
-    expect(status.topRight, const Offset(1024 - kSimpleInset, kSimpleInset * 2 + kSimpleBarHeight),
-        reason: 'top-right, under the strip (messages have the top-left)');
+    final status = _lineOf(tester, find.textContaining('Taking a frame'));
+    expect(status.topLeft, const Offset(kSimpleInset, kSimpleInset * 2 + kSimpleBarHeight),
+        reason: 'top-left, under the strip, in the status card');
 
     await tester.tapAt(const Offset(400, 400));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.byType(EmergencyStopButton).hitTestable(), findsNothing);
     expect(find.byKey(const Key('simple-shutter')).hitTestable(), findsNothing);
-    final corner = _panelOf(tester, find.textContaining('Taking a frame'));
-    expect(corner.topRight, const Offset(1024 - kSimpleInset, kSimpleInset));
+    final corner = _lineOf(tester, find.textContaining('Taking a frame'));
+    expect(corner.topLeft, const Offset(kSimpleInset, kSimpleInset));
 
     await tester.tapAt(const Offset(400, 400));
     await tester.pump(const Duration(milliseconds: 300));
@@ -4250,8 +4375,8 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 
-  testWidgets('past three pills, the "+n" fold: 44 pt tall, read as how many more, and Tab + Enter opens it '
-      '(impeccable audit, 2026-11-04)', (tester) async {
+  testWidgets('every status line shows, none folded; each is 44 pt tall and the last still opens its panel (#1782)',
+      (tester) async {
     final mount = _ParkingMount();
     final c = await _pump(tester, const Size(1024, 768), gear: [
       mountProvider.overrideWith(() => mount),
@@ -4262,22 +4387,15 @@ void main() {
     c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
     await c.read(simpleMountMotionProvider.notifier).park(true);
     await tester.pump();
-    final fold = find.text('+1');
-    expect(fold, findsOneWidget, reason: 'frame, park, polar align shown; the guider folded');
-    final box = find.ancestor(of: fold, matching: find.byType(SimplePanel)).first;
-    expect(tester.getSize(box).height, greaterThanOrEqualTo(44), reason: 'DESIGN.md: 44 pt targets');
-    expect(tester.getSemantics(fold), matchesSemantics(label: '1 more status', isButton: true, hasTapAction: true,
-        isFocusable: true, hasFocusAction: true));
-    FocusManager.instance.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
-    addTearDown(() => FocusManager.instance.highlightStrategy = FocusHighlightStrategy.automatic);
-    Focus.of(tester.element(fold)).requestFocus();
+    final lines = find.byKey(const Key('simple-status-pill'));
+    expect(lines, findsNWidgets(4), reason: 'frame, park, polar align and the guider: all four, no "+1"');
+    expect(find.text('+1'), findsNothing);
+    for (final line in lines.evaluate()) {
+      expect(tester.getSize(find.byWidget(line.widget)).height, greaterThanOrEqualTo(44), reason: 'DESIGN.md: 44 pt targets');
+    }
+    await tester.tap(lines.last);
     await tester.pump();
-    expect(find.ancestor(of: fold, matching: find.byWidgetPredicate((w) =>
-        w is DecoratedBox && (w.decoration as BoxDecoration).border?.top.color == AraColors.accentInfo)), findsOneWidget,
-        reason: 'a visible focus ring');
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-    await tester.pump();
-    expect(find.byType(SimpleGuidePanel), findsOneWidget, reason: 'the first one folded: the guider');
+    expect(find.byType(SimpleGuidePanel), findsOneWidget, reason: 'the last line: the guider');
     c.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 1));
   });
@@ -4336,19 +4454,19 @@ void main() {
 
   testWidgets("the status pill keeps its width while its numbers change (ALP-4937)", (tester) async {
     // On the iPad (2026-11-03) the pill jittered narrower as '10 s left' became '9 s left'. The test font's
-    // glyphs are a full em wide, so at 1x the pill sits at its 300 pt cap; at half size it hugs its words.
+    // glyphs are a full em wide, so at 1x the line fills the card's 420 pt cap; at half size it hugs its words.
     tester.platformDispatcher.textScaleFactorTestValue = 0.5;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     final container = await _pump(tester, const Size(1024, 768));
     container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 12));
     await tester.pump();
     await tester.pump();
-    double width() => tester.getSize(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(SimplePanel))).width;
+    double width() => tester.getSize(find.byKey(const Key('simple-status-pill'))).width;
     final wide = width();
     await tester.pump(const Duration(seconds: 3)); // 12 s left → 9 s left: one digit fewer
     await tester.pump();
     expect(find.textContaining('9 s left'), findsOneWidget, reason: 'precondition: one digit');
-    expect(width(), lessThan(kSimpleStatusMaxWidth), reason: 'precondition: below the cap');
+    expect(width(), lessThan(kSimpleMessagesMaxWidth), reason: 'precondition: below the cap');
     expect(width(), wide, reason: 'it never narrows within a state');
     container.read(captureProgressProvider.notifier).reset();
     await tester.pump(const Duration(seconds: 1));
@@ -4560,7 +4678,7 @@ void main() {
     final bar = find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(LinearProgressIndicator));
     expect(bar, findsOneWidget);
     expect(tester.widget<LinearProgressIndicator>(bar).value, 0.4);
-    final pill = tester.getRect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(SimplePanel)));
+    final pill = tester.getRect(find.byKey(const Key('simple-status-pill')));
     expect(pill.height, kSimpleStatusHeight, reason: 'the bar sits inside the pill, which keeps its height');
     expect(tester.getRect(bar).bottom, lessThanOrEqualTo(pill.bottom));
     expect(tester.getRect(bar).top, greaterThan(pill.center.dy), reason: 'along its foot');
@@ -4968,6 +5086,8 @@ void main() {
       final d = _Diagnostics({'dew_formation'});
       final c = await _pump(tester, const Size(390, 844), plan: _queuedM31, gear: [diagnosticsStateProvider.overrideWith(() => d)]);
       await _frame(tester, c);
+      // A status line above the warning pushes it down behind the sheet (the card no longer reserves a row for it).
+      c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
       await _openEditOfM31(tester);
       for (var i = 0; i < 4; i++) {
         await tester.pump(const Duration(milliseconds: 300));
@@ -4977,6 +5097,8 @@ void main() {
       final hit = HitTestResult();
       tester.binding.hitTestInView(hit, overlap.center, tester.view.viewId);
       expect(hit.path.map((e) => e.target), isNot(contains(tester.renderObject(pill))));
+      c.read(captureProgressProvider.notifier).reset();
+      await tester.pump(const Duration(seconds: 1));
     });
 
     testWidgets('on a phone a pill arriving and leaving keeps the widgets around it', (tester) async {
@@ -5066,15 +5188,15 @@ void main() {
       ]);
       c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
       await settle(tester);
-      final status = _panelOf(tester, find.textContaining('Taking a frame'));
+      final status = _lineOf(tester, find.textContaining('Taking a frame'));
       final pills = pillsRect(tester);
       expect(pills.width, greaterThanOrEqualTo(240), reason: 'beside the rail at worst, never half the row');
-      expect(pills.top, greaterThanOrEqualTo(status.bottom));
+      expect(tester.getTopLeft(pill).dy, greaterThanOrEqualTo(status.bottom), reason: 'the warning is under the status line');
       c.read(captureProgressProvider.notifier).reset();
       await tester.pump(const Duration(seconds: 1));
     });
 
-    testWidgets('a status pill arriving leaves the warning where it is', (tester) async {
+    testWidgets('a status line arriving goes above the warning; the card keeps its corner', (tester) async {
       final c = await _pump(tester, const Size(390, 844), gear: [
         diagnosticsStateProvider.overrideWith(() => _Diagnostics({'dew_formation'})),
       ]);
@@ -5083,7 +5205,8 @@ void main() {
       c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
       await settle(tester);
       expect(find.textContaining('Taking a frame'), findsOneWidget);
-      expect(pillsRect(tester), before);
+      expect(pillsRect(tester).topLeft, before.topLeft);
+      expect(tester.getTopLeft(pill).dy, greaterThan(before.top), reason: 'the warning moved down under the line');
       c.read(captureProgressProvider.notifier).reset();
       await tester.pump(const Duration(seconds: 1));
     });
@@ -5199,7 +5322,7 @@ void main() {
       await tester.pump(const Duration(seconds: 2));
     });
 
-    testWidgets('a pill staying on counts towards the three shown and the +n', (tester) async {
+    testWidgets('a pill staying on stays among all the lines shown, none folded into a +n', (tester) async {
       final guider = _GuiderAt('guiding');
       final wheel = _FilterWheel(EquipmentConnectionState.connected, slots: 3);
       final (c, rotator) = await rig(tester, gear: [
@@ -5210,33 +5333,13 @@ void main() {
       rotator.report('moving');
       wheel.report({'state': 'moving', 'current_slot': -1});
       await tester.pump();
-      expect(find.byKey(const Key('simple-status-pill')), findsNWidgets(3));
-      expect(text('+1'), findsOneWidget);
+      final lines = find.byKey(const Key('simple-status-pill'));
+      final shown = tester.widgetList(lines).length;
+      expect(shown, greaterThan(3), reason: 'precondition: more than three lines');
+      expect(text('+1'), findsNothing, reason: 'status lines never fold');
       c.read(captureProgressProvider.notifier).reset();
       await tester.pump(const Duration(milliseconds: 500));
-      expect(find.byKey(const Key('simple-status-pill')), findsNWidgets(3));
-      expect(text('+1'), findsOneWidget);
-      await tester.pump(const Duration(seconds: 2));
-    });
-
-    testWidgets('a pill that ends past the third goes at once, and the +n with it', (tester) async {
-      final guider = _GuiderAt('guiding');
-      final wheel = _FilterWheel(EquipmentConnectionState.connected, slots: 3);
-      final (c, rotator) = await rig(tester, gear: [
-        guiderStatusProvider.overrideWith(() => guider),
-        filterWheelProvider.overrideWith(() => wheel),
-      ]);
-      c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
-      rotator.report('moving');
-      wheel.report({'state': 'moving', 'current_slot': -1});
-      await tester.pump();
-      expect(text('+1'), findsOneWidget, reason: 'precondition: the guider is folded');
-      guider.at('stopped');
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 2));
-      expect(text('+1'), findsNothing);
-      expect(find.byKey(const Key('simple-status-pill')), findsNWidgets(3));
-      c.read(captureProgressProvider.notifier).reset();
+      expect(lines, findsNWidgets(shown), reason: 'the frame line stays its minimum');
       await tester.pump(const Duration(seconds: 2));
     });
 
@@ -5747,7 +5850,7 @@ void main() {
     expect(find.descendant(of: pill, matching: find.textContaining('Light warming up…')), findsOneWidget);
   });
 
-  testWidgets('with four or more pills up, the safety monitor\'s Unsafe is among the three shown (#1668)', (tester) async {
+  testWidgets('with four or more pills up, the safety monitor\'s Unsafe shows with the rest (#1668)', (tester) async {
     final rotator = _Rotator(EquipmentConnectionState.connected);
     final flat = _FlatPanel(EquipmentConnectionState.connected);
     final dome = _Dome(EquipmentConnectionState.connected);
@@ -5766,8 +5869,8 @@ void main() {
     await tester.pump();
     final pill = find.byType(SimpleStatusPill);
     expect(find.descendant(of: pill, matching: find.textContaining('Unsafe since 02:14')), findsOneWidget);
-    expect(find.descendant(of: pill, matching: find.text('+1')), findsOneWidget,
-        reason: 'four up: three shown, one folded, and it isn\'t the Unsafe');
+    expect(find.byKey(const Key('simple-status-pill')), findsNWidgets(4), reason: 'four up: all four show');
+    expect(find.text('+1'), findsNothing, reason: 'status lines never fold');
   });
 
   testWidgets('a scheduled plan waiting on the rig: the pill says when it starts', (tester) async {

@@ -42,6 +42,18 @@ This file captures the *reasoning* behind each contract decision — DTO shapes,
 
 ---
 
+## 2026-11-11 — #1786 Verify Position's 409 names its cause
+
+**Endpoint(s) or area:** `POST /api/v1/platesolve/verify-position` (409).
+
+**Decision:** the 409 problem details carry a stable `reason`: `no-camera` (nothing connected to look with, or the device was lost mid-exposure), `camera-busy` (another exposure holds the camera; the sentence says to try again once it has read out) or `gate-stuck` (the capture gate's wait expired; only a daemon restart clears it). `detail` is unchanged. The 422 causes carry no reason.
+
+**Reasoning:** the three causes need three different actions (open Camera settings, wait and Check again, restart the daemon), and a client cannot tell them apart reliably from the sentence. A client that sees a 409 without a `reason` (an older daemon) treats it as `no-camera`.
+
+**Spec ref:** `Endpoints/PlateSolveEndpoints.cs` (`VerifyPositionAsync`); `openapi.yaml` (`VerifyMountPosition`). Tests `VerifyPositionServiceTest`.
+
+---
+
 ## 2026-11-11 — #1649/#1650 a leased MoveAxis, the mount's tracking rate, and the solve's angle in Verify Position
 
 **Endpoint(s) or area:** `POST /api/v1/equipment/telescope/moveaxis` (optional `lease_ms`); new `POST /api/v1/equipment/telescope/trackingrate`; `GET /api/v1/equipment/telescope` (`runtime.tracking_rate`); `POST /api/v1/platesolve/verify-position` (`position_angle_degrees`, `rotator_synced_degrees`, and a rotator sync).

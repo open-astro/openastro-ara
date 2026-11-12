@@ -123,12 +123,6 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 more message} other{{count} more messages}}'**
   String pillsMoreSemantics(int count);
 
-  /// Simple Mode status pills: screen reader label for the +N fold past three pills; a tap opens the first one folded
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{1 more status} other{{count} more statuses}}'**
-  String statusMoreSemantics(int count);
-
   /// Simple Mode message pills: tooltip of the close button on an error message
   ///
   /// In en, this message translates to:
@@ -6566,6 +6560,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Camera settings'**
   String get pointingOpenCamera;
+
+  /// Mount window Check failure: the main camera is busy with an exposure; no settings fix it, so no button
+  ///
+  /// In en, this message translates to:
+  /// **'The camera is taking another frame. Check again once it finishes.'**
+  String get pointingCameraBusy;
 
   /// Mount window: asked when Home is tapped while a plan runs
   ///
