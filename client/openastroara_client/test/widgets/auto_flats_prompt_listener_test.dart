@@ -90,6 +90,7 @@ void main() {
   Future<(_FakeConnector, _RecordingClient)> pumpListener(
     WidgetTester tester, {
     bool simple = false,
+    bool companion = false,
   }) async {
     final conn = _FakeConnector();
     final client = _RecordingClient();
@@ -109,6 +110,10 @@ void main() {
           sequenceApiProvider.overrideWith((ref) => client),
           simpleModePrefsProvider.overrideWithValue(_Prefs(simple)),
           simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(simple)),
+          companionPlatformProvider.overrideWithValue(TargetPlatform.android),
+          companionShortestSideProvider.overrideWithValue(
+            companion ? 390 : 800,
+          ),
         ],
         child: const MaterialApp(
           home: Scaffold(
@@ -173,6 +178,23 @@ void main() {
       expect(client.lastChoice, 'panel_at_end');
       expect(client.lastRemember, isFalse, reason: 'this plan only');
       expect(c.read(simpleMessagesProvider), isEmpty);
+    });
+
+    // Falsified by: auto_flats_prompt_listener.dart build, drop the companionModeProvider term.
+    testWidgets('#1774 Companion Mode with both prefs off sends the Plan choice, with no popup', (tester) async {
+      final (conn, client) = await pumpListener(tester, companion: true);
+      await tester.pump();
+      final c = ProviderScope.containerOf(tester.element(find.byType(AutoFlatsPromptListener)));
+      c.read(simpleFlatsChoiceProvider.notifier).set('panel_at_end');
+
+      emitPrompt(conn);
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.text('Capture calibration frames tonight?'), findsNothing);
+      expect(client.lastId, 'seq-1');
+      expect(client.lastChoice, 'panel_at_end');
+      expect(client.lastRemember, isFalse);
     });
 
     testWidgets('Simple Mode says not tonight when nothing was picked', (tester) async {
