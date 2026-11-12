@@ -12,6 +12,7 @@ import 'settings/camera_electronics_state.dart';
 import 'settings/cooling_fan_state.dart';
 import 'settings/custom_horizon_state.dart';
 import 'settings/diagnostics_mode_state.dart';
+import 'settings/dome_settings_state.dart';
 import 'settings/equipment_connection_state.dart';
 import 'settings/filenames_settings_state.dart';
 import 'settings/filter_set_state.dart';
@@ -75,6 +76,7 @@ final Map<String, _Hydrate> _hydrators = {
     await c.read(filterWheelLabelsProvider.notifier).hydrateFromServer(api);
   },
   'cooling-fan': (c, _) async => c.invalidate(coolingFanProvider),
+  'dome': (c, _) async => c.invalidate(domeSettingsProvider),
   'polar-align': (c, _) async => c.invalidate(polarAlignSettingsProvider),
   'camera-electronics': (c, api) =>
       c.read(cameraElectronicsProvider.notifier).hydrateFromServer(api),

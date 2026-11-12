@@ -16,6 +16,7 @@ import 'package:openastroara/state/profile_cache_state.dart';
 import 'package:openastroara/state/profile_live_sync.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/cooling_fan_state.dart';
+import 'package:openastroara/state/settings/dome_settings_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 
@@ -251,6 +252,18 @@ void main() {
     await applyProfileUpdated(c, 'cooling-fan');
 
     expect((await c.read(coolingFanProvider.future)).portId, 3);
+  });
+
+  test('profile.updated for dome reads the dome geometry again', () async {
+    const dome = '/api/v1/profile/dome';
+    final rig = _Rig()..stored[dome] = {'dome_radius_mm': 1000};
+    final c = _container(rig);
+    expect((await c.read(domeSettingsProvider.future)).domeRadiusMm, 1000);
+    rig.stored[dome] = {'dome_radius_mm': 1500};
+
+    await applyProfileUpdated(c, 'dome');
+
+    expect((await c.read(domeSettingsProvider.future)).domeRadiusMm, 1500);
   });
 
   test(
