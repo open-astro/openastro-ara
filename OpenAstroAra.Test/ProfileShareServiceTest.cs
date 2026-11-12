@@ -457,6 +457,8 @@ public class ProfileShareServiceTest {
                 settings.GetProperty("phd2").GetProperty("guide_focal_length").GetInt32() == 0),
             ("Cooling fan", () =>
                 settings.GetProperty("cooling_fan").ValueKind == JsonValueKind.Null),
+            ("Dome geometry", () =>
+                settings.GetProperty("dome").ValueKind == JsonValueKind.Null),
             ("Tracking calibration", () =>
                 settings.GetProperty("tracking_calibration").ValueKind == JsonValueKind.Null),
             ("Sky-model calibration", () =>

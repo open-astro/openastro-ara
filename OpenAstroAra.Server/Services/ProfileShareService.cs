@@ -271,6 +271,7 @@ public sealed class ProfileShareService : IProfileShareService {
         "Sky-model calibration — fitted to the donor's optics, camera and sky",
         "Guider calibration state (dark library / defect map stamps) — rebuild on your rig",
         "Cooling fan — choose your own in the camera settings",
+        "Dome geometry and Follow the mount — set your own in the Dome settings",
     };
 
     // Returns Task.FromException (never throws synchronously) so every exit — including
