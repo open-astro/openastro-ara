@@ -34,17 +34,6 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String statusMoreSemantics(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: '$count more statuses',
-      one: '1 more status',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get pillsDismiss => 'Dismiss';
 
   @override
@@ -97,6 +86,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get deviceCouldntSaveTarget => 'Couldn\'t save the target';
+
+  @override
+  String get deviceDewHeater => 'Dew heater';
 
   @override
   String get deviceCouldntChangeCooler => 'Couldn\'t change the cooler';
@@ -194,11 +186,6 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String deviceSlot(int position) {
     return 'Slot $position';
-  }
-
-  @override
-  String deviceFilterInSlot(String filter, int position) {
-    return '$filter (slot $position)';
   }
 
   @override
@@ -3023,6 +3010,9 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get albumArtCreditOpenFailed => 'Couldn\'t open the license page';
+
+  @override
   String get shellAlbum => 'Sky Album';
 
   @override
@@ -3949,6 +3939,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get pointingOpenCamera => 'Camera settings';
+
+  @override
+  String get pointingCameraBusy =>
+      'The camera is taking another frame. Check again once it finishes.';
 
   @override
   String get devicePlanRunningHomeAnyway =>
@@ -5075,17 +5069,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String statusMoreSemantics(int count) {
-    String _temp0 = intl.Intl.pluralLogic(
-      count,
-      locale: localeName,
-      other: 'Mais $count status',
-      one: 'Mais 1 status',
-    );
-    return '$_temp0';
-  }
-
-  @override
   String get pillsDismiss => 'Dispensar';
 
   @override
@@ -5138,6 +5121,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get deviceCouldntSaveTarget => 'Não foi possível salvar o alvo';
+
+  @override
+  String get deviceDewHeater => 'Aquecedor anti-orvalho';
 
   @override
   String get deviceCouldntChangeCooler =>
@@ -5237,11 +5223,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String deviceSlot(int position) {
     return 'Posição $position';
-  }
-
-  @override
-  String deviceFilterInSlot(String filter, int position) {
-    return '$filter (posição $position)';
   }
 
   @override
@@ -8094,6 +8075,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
+  String get albumArtCreditOpenFailed =>
+      'Não foi possível abrir a página da licença';
+
+  @override
   String get shellAlbum => 'Álbum do Céu';
 
   @override
@@ -9025,6 +9010,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get pointingOpenCamera => 'Configurações da câmera';
+
+  @override
+  String get pointingCameraBusy =>
+      'A câmera está fazendo outra captura. Verifique de novo quando terminar.';
 
   @override
   String get devicePlanRunningHomeAnyway =>

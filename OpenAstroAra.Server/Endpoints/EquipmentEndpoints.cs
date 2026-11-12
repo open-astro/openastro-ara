@@ -12,11 +12,7 @@
 
 #endregion "copyright"
 
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Routing;
-using Microsoft.Extensions.DependencyInjection;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
@@ -100,6 +96,23 @@ public static partial class EquipmentEndpoints {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status400BadRequest);
         } catch (InvalidOperationException ex) when (ex is not ObjectDisposedException) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
+    }
+
+    /// <summary>#1663 — GET /equipment/camera: the camera status with the heater paired by serial
+    /// (<see cref="DewHeaterPairing"/>). A switch-list failure leaves the field null; it never fails the status.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The heater is an optional extra on the camera status; a switch-list read failure must never turn the status into a 500. Log-and-recover boundary.")]
+    internal static async Task<CameraDto?> GetCameraWithHeaterAsync(ICameraService camera, ISwitchService switches, CancellationToken ct) {
+        var dto = await camera.GetAsync(ct).ConfigureAwait(false);
+        if (dto is not { State: EquipmentConnectionState.Connected }) {
+            return dto;
+        }
+        try {
+            var heater = DewHeaterPairing.Find(dto.DeviceId, await switches.GetAllAsync(ct).ConfigureAwait(false));
+            return heater is { } h ? dto with { DewHeater = new DewHeaterDto(h.Device.DeviceId, h.Port.Id) } : dto;
+        } catch (Exception) when (!ct.IsCancellationRequested) {
+            return dto;
         }
     }
 
@@ -213,8 +226,8 @@ public static partial class EquipmentEndpoints {
 
         // ─── Camera ───
         var camera = equipment.MapGroup("/camera");
-        camera.MapGet("", async (ICameraService svc, CancellationToken ct) => {
-            var dto = await svc.GetAsync(ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
+        camera.MapGet("", async (ICameraService svc, ISwitchService switches, CancellationToken ct) => {
+            var dto = await GetCameraWithHeaterAsync(svc, switches, ct); return dto is null ? Results.NotFound() : Results.Ok(dto);
         });
         // The guider's camera is refused as the main camera while the guider is connected (409
         // `guide_camera_in_use`): two clients on one sensor break guiding. `?force=true` overrides for the

@@ -31,15 +31,6 @@
       }
     }
   },
-  "statusMoreSemantics": "{count, plural, =1{1 more status} other{{count} more statuses}}",
-  "@statusMoreSemantics": {
-    "description": "Simple Mode status pills: screen reader label for the +N fold past three pills; a tap opens the first one folded",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "pillsDismiss": "Dismiss",
   "@pillsDismiss": {
     "description": "Simple Mode message pills: tooltip of the close button on an error message"
@@ -111,6 +102,10 @@
   "deviceCouldntSaveTarget": "Couldn't save the target",
   "@deviceCouldntSaveTarget": {
     "description": "Error message when the cooler target could not be saved to the profile"
+  },
+  "deviceDewHeater": "Dew heater",
+  "@deviceDewHeater": {
+    "description": "Camera window: the row that switches the camera's own anti-dew heater; also the name in its error pill and for a screen reader"
   },
   "deviceCouldntChangeCooler": "Couldn't change the cooler",
   "@deviceCouldntChangeCooler": {
@@ -236,18 +231,6 @@
   "@deviceSlot": {
     "description": "Filter wheel window: a slot the wheel gives no name, by its number",
     "placeholders": {
-      "position": {
-        "type": "int"
-      }
-    }
-  },
-  "deviceFilterInSlot": "{filter} (slot {position})",
-  "@deviceFilterInSlot": {
-    "description": "Filter wheel window, Filter row: the filter in place and its slot number, as the full UI shows it",
-    "placeholders": {
-      "filter": {
-        "type": "String"
-      },
       "position": {
         "type": "int"
       }
@@ -4057,6 +4040,10 @@
       }
     }
   },
+  "albumArtCreditOpenFailed": "Couldn't open the license page",
+  "@albumArtCreditOpenFailed": {
+    "description": "Sky Album card back: snackbar when the Art credit's licence link cannot be opened in a browser"
+  },
   "shellAlbum": "Sky Album",
   "@shellAlbum": {
     "description": "Simple Mode left rail: opens the Sky Album"
@@ -5015,6 +5002,8 @@
   "@pointingOpenOptics": {"description": "Mount window button after an optics error"},
   "pointingOpenCamera": "Camera settings",
   "@pointingOpenCamera": {"description": "Mount window button when no camera can take the frame"},
+  "pointingCameraBusy": "The camera is taking another frame. Check again once it finishes.",
+  "@pointingCameraBusy": {"description": "Mount window Check failure: the main camera is busy with an exposure; no settings fix it, so no button"},
   "devicePlanRunningHomeAnyway": "A plan is running. Send the mount home anyway?",
   "@devicePlanRunningHomeAnyway": {"description": "Mount window: asked when Home is tapped while a plan runs"},
   "deviceHomeAnyway": "Home anyway",

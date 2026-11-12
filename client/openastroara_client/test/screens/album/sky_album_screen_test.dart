@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
+import 'package:flutter/cupertino.dart' show CupertinoActionSheet, CupertinoContextMenu;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -216,6 +217,112 @@ void main() {
     // A 44 px row, not an inline line of text: a cold hand at the telescope still hits it.
     expect(tester.getSize(find.byKey(const Key('album-art-credit'))).height, greaterThanOrEqualTo(44));
   });
+
+  testWidgets('pulling the collection down runs the same fetch the open runs', (tester) async {
+    var fetches = 0;
+    await _pump(tester, frames: _m31Frames, fetcher: (baseUrl, {since}) async {
+      fetches++;
+      return const AlbumFramesPage(totalLights: 0, frames: []);
+    });
+    expect(fetches, 1, reason: 'the open');
+    await tester.fling(find.byType(CustomScrollView).first, const Offset(0, 400), 1000);
+    await tester.pumpAndSettle();
+    expect(fetches, 2);
+  });
+
+  group('context menu (iOS and iPadOS)', () {
+    // Held past the menu's lift (about a second), so the release is a long press, not a tap.
+    Future<void> hold(WidgetTester tester, Finder target) async {
+      final g = await tester.startGesture(tester.getCenter(target));
+      for (var i = 0; i < 60; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await g.up();
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('a long press lists the Card action and runs it', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      final picked = <String>[];
+      await _pump(tester, frames: _m31Frames, onImageTarget: (d, _) => picked.add(d.id));
+      await hold(tester, find.text('Andromeda Galaxy'));
+      expect(find.byType(AlbumCardBack), findsNothing, reason: 'a long press does not flip');
+      expect(find.text('Add more time'), findsOneWidget);
+      await tester.tap(find.text('Add more time'));
+      await tester.pumpAndSettle();
+      expect(picked, ['NGC0224']);
+    });
+
+    testWidgets('a tap still flips the Card', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      await _pump(tester, frames: _m31Frames);
+      await tester.tap(find.text('Andromeda Galaxy'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlbumCardBack), findsOneWidget);
+    });
+
+    testWidgets('a missing Card offers Image this target', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      await _pump(tester, frames: _m31Frames);
+      await hold(tester, find.text('Crab Nebula'));
+      expect(find.text('Image this target'), findsOneWidget);
+    });
+
+    testWidgets('under Reduce Motion the actions come as a sheet, with no zoom', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(reduceMotion: true);
+      addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+      final picked = <String>[];
+      await _pump(tester, frames: _m31Frames, onImageTarget: (d, _) => picked.add(d.id));
+      await hold(tester, find.text('Andromeda Galaxy'));
+      expect(find.byType(CupertinoActionSheet), findsOneWidget);
+      expect(find.text('Add more time'), findsOneWidget);
+      // A labelled way out: Cancel closes the sheet and runs no action.
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoActionSheet), findsNothing);
+      expect(find.byType(AlbumCardBack), findsNothing);
+      expect(picked, isEmpty);
+    });
+
+    testWidgets('other platforms get no menu', variant: TargetPlatformVariant.only(TargetPlatform.android), (tester) async {
+      await _pump(tester, frames: _m31Frames);
+      await hold(tester, find.text('Andromeda Galaxy'));
+      expect(find.byType(CupertinoContextMenu), findsNothing);
+      expect(find.byType(CupertinoActionSheet), findsNothing);
+    });
+  });
+
+  testWidgets('the Art credit is announced as a link', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, frames: _m31Frames, manifest: const {
+      'M31': AlbumArt(asset: 'assets/album/art/m031.webp', credit: 'ESO', licence: 'CC BY 2.0'),
+    });
+    await tester.tap(find.text('Andromeda Galaxy'));
+    await tester.pumpAndSettle();
+    expect(
+        tester.getSemantics(find.byKey(const Key('album-art-credit'))),
+        matchesSemantics(
+            isLink: true, isFocusable: true, hasTapAction: true, hasFocusAction: true,
+            label: 'Art (cropped): ESO · CC BY 2.0'));
+    handle.dispose();
+  });
+
+  for (final (name, launcher) in [
+    ('refuses', () => _FakeUrlLauncher(result: false)),
+    ('throws', () => _FakeUrlLauncher(throws: true)),
+  ]) {
+    testWidgets('a licence link the browser $name says so', (tester) async {
+      final original = UrlLauncherPlatform.instance;
+      addTearDown(() => UrlLauncherPlatform.instance = original);
+      UrlLauncherPlatform.instance = launcher();
+      await _pump(tester, frames: _m31Frames, manifest: const {
+        'M31': AlbumArt(asset: 'assets/album/art/m031.webp', credit: 'ESO', licence: 'CC BY 2.0'),
+      });
+      await tester.tap(find.text('Andromeda Galaxy'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('album-art-credit')));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text("Couldn't open the license page"), findsOneWidget);
+    });
+  }
 
   testWidgets('a card front: the Placeholder without Art, dimmed Art while missing, colour when collected',
       (tester) async {
@@ -773,11 +880,15 @@ void main() {
 }
 
 class _FakeUrlLauncher extends Fake with MockPlatformInterfaceMixin implements UrlLauncherPlatform {
+  _FakeUrlLauncher({this.result = true, this.throws = false});
+  final bool result;
+  final bool throws;
   String? launched;
 
   @override
   Future<bool> launchUrl(String url, LaunchOptions options) async {
     launched = url;
-    return true;
+    if (throws) throw Exception('no browser');
+    return result;
   }
 }
