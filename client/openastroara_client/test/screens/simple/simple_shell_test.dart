@@ -2551,6 +2551,213 @@ void main() {
     expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('0 / 30')), findsOneWidget);
   });
 
+  // #1789: the plan squares belong to the shell, so every Screen shows them where Queue does.
+  const squaresRun = SimpleRun(
+    sequenceId: 'seq-1',
+    targets: [
+      SimpleTarget(
+        name: 'M31',
+        steps: [
+          FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30),
+        ],
+      ),
+    ],
+  );
+  Future<void> pickMode(WidgetTester tester, String mode) async {
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pump();
+    await tester.ensureVisible(
+      find.byKey(Key('simple-mode-$mode')),
+    ); // a short window scrolls the grid
+    await tester.tap(find.byKey(Key('simple-mode-$mode')));
+    await tester.pump();
+  }
+
+  testWidgets(
+    'the plan squares sit at the Queue rect on Preview, Focus, Polar align, Guide and Calibration',
+    (tester) async {
+      await _pump(tester, const Size(1024, 768), plan: squaresRun);
+      await pickMode(tester, 'plan');
+      await tester.tap(
+        find.byKey(const Key('simple-settings')),
+      ); // puts Plan's sheet away
+      await tester.pump();
+      final queue = tester.getRect(find.byKey(const Key('simple-run-tracker')));
+      for (final mode in const [
+        'preview',
+        'focus',
+        'polarAlign',
+        'guide',
+        'calibration',
+      ]) {
+        await pickMode(tester, mode);
+        expect(
+          find.byKey(const Key('simple-run-tracker')),
+          findsOneWidget,
+          reason: mode,
+        );
+        expect(
+          tester.getRect(find.byKey(const Key('simple-run-tracker'))),
+          queue,
+          reason: mode,
+        );
+      }
+    },
+  );
+
+  // Large text, or a window too short for both: the squares sit beside the right rail, never over its
+  // settings chip.
+  for (final (size, scale) in const [
+    (Size(1024, 768), 2.0),
+    (Size(932, 430), 1.0),
+    (Size(390, 844), 2.0),
+  ]) {
+    testWidgets(
+      'at $size and ${scale}x text the plan squares stay clear of the right rail on every Screen',
+      (tester) async {
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final c = await _pump(tester, size, plan: squaresRun);
+        // Focus and Polar align leave out: their Bahtinov row overflows at 2x on its own.
+        // Picked through the state: on a phone at 2x the mode grid runs past the screen's left edge.
+        for (final mode in const [
+          SimpleModeScreen.preview,
+          SimpleModeScreen.guide,
+          SimpleModeScreen.calibration,
+          SimpleModeScreen.plan,
+        ]) {
+          c.read(simpleShowingProvider.notifier).pick(mode);
+          await tester.pump();
+          // The painted square, not the tracker's box: a box narrower than a
+          // square lets the square paint past it.
+          final square = tester.getRect(
+            find.descendant(
+              of: find.byKey(const Key('simple-run-tracker')),
+              matching: find.byType(InkWell),
+            ),
+          );
+          expect(tester.takeException(), isNull, reason: '$mode: overflow');
+          final rail = _panelOf(
+            tester,
+            find.byKey(const Key('simple-shutter')),
+          );
+          expect(
+            square.overlaps(rail),
+            isFalse,
+            reason: '$mode: square $square, rail $rail',
+          );
+          final stop = tester.getRect(find.byType(EmergencyStopButton));
+          expect(
+            square.bottom,
+            closeTo(stop.top - kSimpleInset, 0.01),
+            reason: '$mode: still just above Stop',
+          );
+        }
+      },
+    );
+  }
+
+  testWidgets("the sky's pick sits above the plan squares, not over them", (
+    tester,
+  ) async {
+    final container = await _pump(
+      tester,
+      const Size(1024, 768),
+      plan: SimpleRun(
+        sequenceId: 'seq-1',
+        targets: [
+          for (var i = 1; i <= 10; i++)
+            SimpleTarget(
+              name: 'M$i',
+              steps: const [
+                FilterPlanStep(
+                  filterName: 'L',
+                  exposureSeconds: 120,
+                  frameCount: 30,
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+    await tester.tap(find.byKey(const Key('simple-sky')));
+    await tester.pump();
+    container
+        .read(planetariumSelectionProvider.notifier)
+        .set(
+          const PlanetariumSelection(
+            name: 'M31',
+            kind: 'Galaxy',
+            raHours: 0.73,
+            decDeg: 41.4,
+            raJ2000Hours: 0.71,
+            decJ2000Deg: 41.27,
+            altDeg: 62.4,
+            maxAltDeg: 74.2,
+          ),
+        );
+    await tester.pump();
+    final pick = _panelOf(
+      tester,
+      find.byKey(const Key('simple-sky-image-this')),
+    );
+    final squares = tester.getRect(find.byKey(const Key('simple-run-tracker')));
+    expect(
+      pick.bottom,
+      lessThanOrEqualTo(squares.top - kSimpleInset),
+      reason: 'pick $pick, squares $squares',
+    );
+  });
+
+  testWidgets('a plan square tapped off Queue opens the queue panel', (
+    tester,
+  ) async {
+    await _pump(tester, const Size(1024, 768), plan: squaresRun);
+    await pickMode(tester, 'focus');
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const Key('simple-run-tracker')),
+        matching: find.text('M31'),
+      ),
+    );
+    await tester.pump();
+    expect(find.byType(SimpleRunPanel), findsOneWidget);
+  });
+
+  testWidgets('no run, no plan squares, on any Screen', (tester) async {
+    await _pump(tester, const Size(1024, 768));
+    expect(find.byKey(const Key('simple-run-tracker')), findsNothing);
+    await pickMode(tester, 'guide');
+    expect(find.byKey(const Key('simple-run-tracker')), findsNothing);
+  });
+
+  testWidgets(
+    'Preflight\'s step panel hides the plan squares and the chip brings them back',
+    (tester) async {
+      final c = await _pump(tester, const Size(1024, 768), plan: squaresRun);
+      await _startPreflight(tester);
+      // To Focus: the plan step's panel is Plan's sheet, which hides them too.
+      c.read(simplePreflightProvider.notifier).next();
+      await tester.pump();
+      final panelUp = find
+          .byKey(const Key('simple-run-tracker'))
+          .evaluate()
+          .isEmpty;
+      await tester.tap(find.byKey(const Key('simple-settings')));
+      await tester.pump();
+      expect(
+        find.byKey(const Key('simple-run-tracker')).evaluate().isEmpty,
+        !panelUp,
+        reason: 'the chip toggles the step panel; the squares are shown exactly when it is away',
+      );
+      await tester.tap(find.byKey(const Key('simple-settings')));
+      await tester.pump();
+      expect(
+        find.byKey(const Key('simple-run-tracker')).evaluate().isEmpty,
+        panelUp,
+      );
+    },
+  );
   for (final size in const [Size(1024, 768), Size(768, 1024)]) {
     testWidgets('at $size: Plan\'s sheet runs from the status pill to the bottom row (the inset while it is empty) while the plan squares '
         'step aside; a plan square opens the queue panel', (tester) async {

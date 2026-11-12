@@ -35,10 +35,6 @@ class SimpleQueueScreen extends SimpleScreen {
   );
 
   @override
-  Widget tracker(SimpleScreenHost host) =>
-      SimpleRunTracker(onTap: host.onTrackerTap ?? () {});
-
-  @override
   Widget get shutter => const SimpleRunShutter();
 
   @override
