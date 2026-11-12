@@ -548,6 +548,17 @@ void main() {
         expect(head.style?.color, AraColors.textSecondary);
       });
 
+      testWidgets('Darks & bias with the camera off says "Connect the camera first." once, with nothing picked and after a hand pick', (tester) async {
+        await _pump(tester, [_session()], camera: false, child: panelView(), overrides: [
+          simpleCalibrationTabProvider.overrideWith(_DarksTab.new),
+        ]);
+        await tester.pumpAndSettle();
+        expect(find.text('Connect the camera first.'), findsOneWidget);
+        await tester.tap(find.byKey(const Key('simple-calibration-bias')));
+        await tester.pumpAndSettle();
+        expect(find.text('Connect the camera first.'), findsOneWidget, reason: 'after a hand pick the button reads Build, so the caption gives the reason');
+      });
+
       testWidgets('the library is the camera the rig names, and a set from before cameras were recorded says so', (tester) async {
         final (c, cal, _, _) = await library(tester, [_dark(300)]);
         cal.library = DarkLibraryState(status: 'idle', totalCombinations: 0, completedCombinations: 0,

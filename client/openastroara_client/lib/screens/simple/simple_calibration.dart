@@ -922,7 +922,10 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
               ),
             ],
           ),
-          ?_cameraOff(context, ref),
+          // With nothing picked by hand the Build button's label already says
+          // "Connect the camera first."; saying it again would be read twice.
+          if (byHand || job.caption != l.calibrationConnectCamera)
+            ?_cameraOff(context, ref),
         ],
       ],
     );
