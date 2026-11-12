@@ -1,0 +1,26 @@
+### Fixed (bug sweep)
+
+- Switching, creating or deleting the active profile now changes the connected devices. Each profile remembers its own devices, the Safety Monitor drops first, and a running plan refuses the switch (#1710).
+- A filter change moves the focuser by the offset difference when "Move the focuser by each filter's offset" is on (#1667).
+- Unattended shutdown no longer starts for a plan's own wait-for-user step, runs once per failure period, tells you the shutdown time, and waits 30 minutes by default for new profiles (#1712).
+- A polar align or guide-camera focus start waits for the guider's earlier capture (#1711). A seed that fails to solve reports the guide focal length the frame implies (#1715).
+- Leaving an off-axis guider no longer keeps the main scope's focal length as the guide focal length, and guider settings warn when the two match (#1715).
+- Emergency Stop's confirmation no longer says it parks the mount, and lists every step (#1737).
+- Simple Mode: Storage and Logs & bug report are inline in Settings › Rig (#1659, #1660); a paused Queue no longer locks the Guide shutter (#1725); the sky map runs a search sent before it was ready (#1713); a rig that can't change filters plans one row, and an unset site gets no altitude (#1737).
+- The setup wizard refuses one camera as both Main and Guide, shows the server's reason at Save, and skips darks when the guider push failed (#1661).
+- Sky Album cards write the Tier, format numbers for the locale, draw the back's action at 44 px, and decode the Art once during a flip (#1637, #1638, #1640, #1641).
+- The bedtime check counts only tonight's unresolved faults and names the device (#1714).
+- A Plan waiting for its start time can now be paused at once, and goes back to waiting on Resume.
+- Night done has one action, New plan; the left rail already opens the Library.
+- Simple Mode has no popups: confirmations and choices are inline, and every notification is a message pill.
+- A profile set to ask about flats now answers on Simple Mode's Plan sheet, in place of the "No flats this run" pill.
+- On a Mac in full screen, changing profile no longer shrinks the app to the profile window's size.
+- The cooling fan is chosen in the profile, by switch and port, on any driver, not found by the device name "Thermal Switch". **Every existing profile has no fan following the cooler until you choose one**; a pill asks once (#1700).
+- The rig list shows one row for a rig that announces several addresses, on the address this device can reach (#1741).
+- Simple Mode: a running guide loop keeps its Stop while the guider status is briefly gone (#1738).
+- Simple Mode: Night Setup is now Preflight (Pré-voo in Portuguese), and the cameras are Camera (Main) and Camera (Guide) (#1709, #1669). Settings › Devices is alphabetical (#1669).
+- Simple Mode: a Full UI button in the status strip replaces the Simple Mode switch in Settings › Rig (#1677). The OpenAstro Ara sheet can change rig and profile, shows its versions at once and links to the open-source licenses (#1655, #1645).
+- Simple Mode: device windows and the Ara sheet sit beside the left rail (#1674). Polar align's arrows and bullseye are bigger (#1721).
+- Simple Mode: status pills stay at least 1 s and fade out, show whole messages on two lines, and name a waiting Preflight step (#1679, #1718, #1482).
+- Simple Mode: hidden controls no longer take taps or get read out, a screen reader can press Change rig and Change profile, Plan's sheet starts under a two-line status pill, long Focus errors show whole, and a failed Stop Mount speaks the app's language.
+- Simple Mode: the Focus window keeps one height during a run (#1717), the running plan panel shows each fact once (#1719), and a failed Space stop says so in a pill (#1556).
