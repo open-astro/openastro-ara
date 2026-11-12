@@ -101,14 +101,19 @@ class PolarAlignCheckResult {
 class PolarAlignLastResult {
   final double errorArcmin;
   final DateTime completedUtc;
-  const PolarAlignLastResult({required this.errorArcmin, required this.completedUtc});
+  const PolarAlignLastResult({
+    required this.errorArcmin,
+    required this.completedUtc,
+  });
 
   static PolarAlignLastResult? tryParse(Object? json) {
     if (json is! Map) return null;
     final e = json['error_arcmin'];
     final t = json['completed_utc'];
     final at = t is String ? DateTime.tryParse(t) : null;
-    return e is num && at != null ? PolarAlignLastResult(errorArcmin: e.toDouble(), completedUtc: at) : null;
+    return e is num && at != null
+        ? PolarAlignLastResult(errorArcmin: e.toDouble(), completedUtc: at)
+        : null;
   }
 }
 

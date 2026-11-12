@@ -84,28 +84,25 @@ class SiteSettings {
     double? softWarningAltitudeDeg,
     String? observerName,
     bool? permanentPier,
-  }) =>
-      SiteSettings(
-        siteName: siteName ?? this.siteName,
-        latitudeDeg: latitudeDeg ?? this.latitudeDeg,
-        longitudeDeg: longitudeDeg ?? this.longitudeDeg,
-        elevationM: elevationM ?? this.elevationM,
-        timeZone: timeZone ?? this.timeZone,
-        useCustomHorizon: useCustomHorizon ?? this.useCustomHorizon,
-        defaultHorizonAltitudeDeg:
-            defaultHorizonAltitudeDeg ?? this.defaultHorizonAltitudeDeg,
-        bortleClass: bortleClass ?? this.bortleClass,
-        sqmMagPerArcsec2: sqmMagPerArcsec2 ?? this.sqmMagPerArcsec2,
-        typicalSeeingArcsec:
-            typicalSeeingArcsec ?? this.typicalSeeingArcsec,
-        twilightDefinition: twilightDefinition ?? this.twilightDefinition,
-        maxSequenceRuntimeMin:
-            maxSequenceRuntimeMin ?? this.maxSequenceRuntimeMin,
-        softWarningAltitudeDeg:
-            softWarningAltitudeDeg ?? this.softWarningAltitudeDeg,
-        observerName: observerName ?? this.observerName,
-        permanentPier: permanentPier ?? this.permanentPier,
-      );
+  }) => SiteSettings(
+    siteName: siteName ?? this.siteName,
+    latitudeDeg: latitudeDeg ?? this.latitudeDeg,
+    longitudeDeg: longitudeDeg ?? this.longitudeDeg,
+    elevationM: elevationM ?? this.elevationM,
+    timeZone: timeZone ?? this.timeZone,
+    useCustomHorizon: useCustomHorizon ?? this.useCustomHorizon,
+    defaultHorizonAltitudeDeg:
+        defaultHorizonAltitudeDeg ?? this.defaultHorizonAltitudeDeg,
+    bortleClass: bortleClass ?? this.bortleClass,
+    sqmMagPerArcsec2: sqmMagPerArcsec2 ?? this.sqmMagPerArcsec2,
+    typicalSeeingArcsec: typicalSeeingArcsec ?? this.typicalSeeingArcsec,
+    twilightDefinition: twilightDefinition ?? this.twilightDefinition,
+    maxSequenceRuntimeMin: maxSequenceRuntimeMin ?? this.maxSequenceRuntimeMin,
+    softWarningAltitudeDeg:
+        softWarningAltitudeDeg ?? this.softWarningAltitudeDeg,
+    observerName: observerName ?? this.observerName,
+    permanentPier: permanentPier ?? this.permanentPier,
+  );
 }
 
 class SiteSettingsNotifier extends Notifier<SiteSettings>

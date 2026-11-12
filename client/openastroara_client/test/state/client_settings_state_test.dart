@@ -57,8 +57,14 @@ class _FakeClientSettingsClient implements ClientSettingsClient {
     patch.forEach((k, v) => v == null ? next.remove(k) : next[k] = v);
     stored = next;
     return ClientSettings(
-        settings: Map<String, dynamic>.unmodifiable(next),
-        updatedUtc: DateTime.utc(2026, 6, 14, 12).add(Duration(seconds: ++_clock)));
+      settings: Map<String, dynamic>.unmodifiable(next),
+      updatedUtc: DateTime.utc(
+        2026,
+        6,
+        14,
+        12,
+      ).add(Duration(seconds: ++_clock)),
+    );
   }
 
   @override
@@ -107,27 +113,46 @@ void main() {
       expect(c.read(clientSettingsProvider).value!.settings['zoom'], 2);
     });
 
-    test('merge sends only the patch to the rig and lands the stored view', () async {
-      final api = _FakeClientSettingsClient(const {'theme': 'dark', 'zoom': 1});
-      final c = _container(const [_server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(clientSettingsProvider.future);
+    test(
+      'merge sends only the patch to the rig and lands the stored view',
+      () async {
+        final api = _FakeClientSettingsClient(const {
+          'theme': 'dark',
+          'zoom': 1,
+        });
+        final c = _container(const [_server], api);
+        await c.read(savedServersProvider.future);
+        await c.read(clientSettingsProvider.future);
 
-      final merged = await c.read(clientSettingsProvider.notifier).merge({'zoom': 3, 'theme': null});
-      expect(api.lastMerged, {'zoom': 3, 'theme': null}, reason: 'only the patch goes over the wire');
-      expect(api.lastReplaced, isNull, reason: 'no whole-blob replace');
-      expect(merged!.settings, {'zoom': 3});
-      expect(c.read(clientSettingsProvider).value!.settings, {'zoom': 3});
-    });
+        final merged = await c.read(clientSettingsProvider.notifier).merge({
+          'zoom': 3,
+          'theme': null,
+        });
+        expect(api.lastMerged, {
+          'zoom': 3,
+          'theme': null,
+        }, reason: 'only the patch goes over the wire');
+        expect(api.lastReplaced, isNull, reason: 'no whole-blob replace');
+        expect(merged!.settings, {'zoom': 3});
+        expect(c.read(clientSettingsProvider).value!.settings, {'zoom': 3});
+      },
+    );
 
     test('merge works before the first fetch has landed (the rig merges, not the client)', () async {
-      final api = _FakeClientSettingsClient(const {'theme': 'dark'})..throwOnFetch = true;
+      final api = _FakeClientSettingsClient(const {'theme': 'dark'})
+        ..throwOnFetch = true;
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
-      await expectLater(c.read(clientSettingsProvider.future), throwsA(isA<StateError>()));
+      await expectLater(
+        c.read(clientSettingsProvider.future),
+        throwsA(isA<StateError>()),
+      );
 
       await c.read(clientSettingsProvider.notifier).merge({'zoom': 3});
-      expect(api.stored, {'theme': 'dark', 'zoom': 3}, reason: 'the rig kept the keys the patch did not name');
+      expect(api.stored, {
+        'theme': 'dark',
+        'zoom': 3,
+      }, reason: 'the rig kept the keys the patch did not name');
     });
 
     test('a client_settings.updated event refetches', () async {
@@ -137,7 +162,9 @@ void main() {
       await c.read(clientSettingsProvider.future);
 
       api.stored = {'theme': 'light'}; // another device saved
-      await c.read(clientSettingsProvider.notifier).onUpdatedEvent(DateTime.utc(2030));
+      await c
+          .read(clientSettingsProvider.notifier)
+          .onUpdatedEvent(DateTime.utc(2030));
       expect(api.fetches, 2);
       expect(c.read(clientSettingsProvider).value!.settings['theme'], 'light');
     });
@@ -148,9 +175,17 @@ void main() {
       await c.read(savedServersProvider.future);
       await c.read(clientSettingsProvider.future);
 
-      final mine = await c.read(clientSettingsProvider.notifier).merge({'a': 1});
-      await c.read(clientSettingsProvider.notifier).onUpdatedEvent(mine!.updatedUtc);
-      expect(api.fetches, 1, reason: 'initial fetch only: the saver keeps its own screen');
+      final mine = await c.read(clientSettingsProvider.notifier).merge({
+        'a': 1,
+      });
+      await c
+          .read(clientSettingsProvider.notifier)
+          .onUpdatedEvent(mine!.updatedUtc);
+      expect(
+        api.fetches,
+        1,
+        reason: 'initial fetch only: the saver keeps its own screen',
+      );
     });
 
     test('a failed refetch keeps the held settings', () async {

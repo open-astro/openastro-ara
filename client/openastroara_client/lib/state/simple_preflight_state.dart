@@ -147,7 +147,8 @@ final polarAlignLastResultProvider = FutureProvider<PolarAlignLastResult?>((
 /// earlier tonight. (The clock is read when a dependency changes, which is
 /// often enough for a step that only flips at the 12 h line.)
 final nightFocusStateProvider = Provider<SetupStepState>(
-  (ref) => focusStepState(ref.watch(autofocusLiveProvider), now: DateTime.now()),
+  (ref) =>
+      focusStepState(ref.watch(autofocusLiveProvider), now: DateTime.now()),
 );
 
 /// Night Setup's polar step: the shared readiness plus the rig's last routine.

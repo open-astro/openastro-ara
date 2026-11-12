@@ -64,16 +64,18 @@ class _Live extends PolarAlignLiveNotifier {
 }
 
 Future<ProviderContainer> _container() async {
-  final c = ProviderContainer(overrides: [
-    polarAlignLiveProvider.overrideWith(_Live.new),
-    nightFocusStateProvider.overrideWith((ref) => ref.watch(_focus)),
-    nightPolarAlignStateProvider.overrideWith((ref) => ref.watch(_aligned)),
-    polarAlignApiProvider.overrideWithValue(_PolarApi()),
-    simplePermanentPierPrefsProvider.overrideWithValue(_Prefs(false)),
-    simpleModePrefsProvider.overrideWithValue(_Prefs(true)),
-    simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(true)),
-    simpleRunProvider.overrideWith(_Plan.new),
-  ]);
+  final c = ProviderContainer(
+    overrides: [
+      polarAlignLiveProvider.overrideWith(_Live.new),
+      nightFocusStateProvider.overrideWith((ref) => ref.watch(_focus)),
+      nightPolarAlignStateProvider.overrideWith((ref) => ref.watch(_aligned)),
+      polarAlignApiProvider.overrideWithValue(_PolarApi()),
+      simplePermanentPierPrefsProvider.overrideWithValue(_Prefs(false)),
+      simpleModePrefsProvider.overrideWithValue(_Prefs(true)),
+      simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(true)),
+      simpleRunProvider.overrideWith(_Plan.new),
+    ],
+  );
   addTearDown(c.dispose);
   await c.read(simplePermanentPierProvider.future);
   c.listen(simplePreflightProvider, (_, _) {});

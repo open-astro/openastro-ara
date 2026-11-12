@@ -107,16 +107,19 @@ class _Run extends SequenceRunStateNotifier {
 Future<(ProviderContainer, _PolarApi)> _container(
     {bool permanent = false, _Guider? guider, SequenceRunState? queue}) async {
   final api = _PolarApi();
-  final c = ProviderContainer(overrides: [
-    if (guider != null) guiderStatusProvider.overrideWith(() => guider),
-    polarAlignLiveProvider.overrideWith(_Live.new),
-    nightFocusStateProvider.overrideWith((ref) => ref.watch(_focus)),
-    nightPolarAlignStateProvider.overrideWith((ref) => ref.watch(_aligned)),
-    polarAlignApiProvider.overrideWithValue(api),
-    simplePermanentPierPrefsProvider.overrideWithValue(_Prefs(permanent)),
-    simpleRunProvider.overrideWith(_Plan.new),
-    if (queue != null) sequenceRunStateProvider.overrideWith(() => _Run(queue)),
-  ]);
+  final c = ProviderContainer(
+    overrides: [
+      if (guider != null) guiderStatusProvider.overrideWith(() => guider),
+      polarAlignLiveProvider.overrideWith(_Live.new),
+      nightFocusStateProvider.overrideWith((ref) => ref.watch(_focus)),
+      nightPolarAlignStateProvider.overrideWith((ref) => ref.watch(_aligned)),
+      polarAlignApiProvider.overrideWithValue(api),
+      simplePermanentPierPrefsProvider.overrideWithValue(_Prefs(permanent)),
+      simpleRunProvider.overrideWith(_Plan.new),
+      if (queue != null)
+        sequenceRunStateProvider.overrideWith(() => _Run(queue)),
+    ],
+  );
   addTearDown(c.dispose);
   if (queue != null) await c.read(sequenceRunStateProvider.future);
   await c.read(simplePermanentPierProvider.future);

@@ -96,7 +96,9 @@ SetupStepState polarAlignStepState(
 SetupStepState focusStepState(AutofocusLive live, {DateTime? now}) {
   if (live.run.isRunning) return SetupStepState.inProgress;
   if (live.focusedThisSession) return SetupStepState.done;
-  if (now != null && live.run.isComplete && isTonight(live.run.completedUtc, now)) {
+  if (now != null &&
+      live.run.isComplete &&
+      isTonight(live.run.completedUtc, now)) {
     return SetupStepState.done;
   }
   if (live.run.state == AutofocusRunStates.failed) return SetupStepState.problem;
