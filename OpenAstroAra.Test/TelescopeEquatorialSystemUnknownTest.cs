@@ -207,7 +207,7 @@ namespace OpenAstroAra.Test {
             await using var box = ScriptedAlpacaDevice.Start(path => {
                 if (path.EndsWith("/equatorialsystem", StringComparison.Ordinal)) {
                     if (Volatile.Read(ref slow) == 1) {
-                        Thread.Sleep(1500); // a mount that answers the system read late (kept short: it outlives the test)
+                        Thread.Sleep(2500); // a mount that answers the system read late (kept short: it outlives the test)
                     }
                     return EquatorialSystemUnreadable; // and never usefully: the system stays unknown
                 }
@@ -220,7 +220,8 @@ namespace OpenAstroAra.Test {
 
             await Assert.ThatAsync(() => ((ITelescopeMediator)svc).Sync(J2000Target(), cts.Token), Throws.InstanceOf<OperationCanceledException>());
 
-            Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(1)), "the cancel must not wait out the slow read");
+            // 2 s sits between the 300 ms cancel and the 2.5 s read: a loaded CI runner took 1.07 s to cancel (#1820 merge group).
+            Assert.That(sw.Elapsed, Is.LessThan(TimeSpan.FromSeconds(2)), "the cancel must not wait out the slow read");
         }
     }
 }
