@@ -60,8 +60,9 @@ NONE: frozenset = frozenset()
 # tests pin the recipes), which run on every PR regardless of this list;
 # `claude-review.yml` runs unconditionally, and §19.1's gate on a rulebook
 # change is the review, not the build matrix. Skipping the two job-gated
-# required contexts (server-build, registry-gate) and the three client-test
-# legs' steps on a SKILL.md-only PR loses nothing that CI ever checked.
+# required contexts (server-build, registry-gate), the Linux client test
+# shards and the steps of the macOS and Windows client-test legs on a
+# SKILL.md-only PR loses nothing that CI ever checked.
 #
 # codeql.yml's `paths-ignore:` mirrors this tuple; the same test pins it.
 INERT_DIRS = (

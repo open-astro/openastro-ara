@@ -355,9 +355,12 @@ All four must hold, per `design/COMMIT-PR-RULES.md` §19.1:
    Client (native build) — ${{ matrix.target }}         <- literally this
    ```
    The last one is not a typo: `client-build` is a matrix skipped at job level, so it never expands
-   and reports **one** context under its raw, uninterpolated name. The three
+   and reports **one** context under its raw, uninterpolated name. The macOS and Windows
    `Client (analyze + test) — *-latest` legs are required **and** matrix-expanded, so they are
    gated at *step* level and report `pass` with their steps skipped, never `skipping` (#1025).
+   The `ubuntu-latest` context is the non-matrix `client-test-linux` job: it always runs and
+   reports `pass` when every `ubuntu-latest, shard N/3` job passed, or when the shards were
+   skipped for a docs-only change; the shard jobs themselves report `skipping` then.
 
    **`docs_only` is no longer the only attributable cause.** The `changes` job also emits `dotnet`
    and `client`, which gate the four NON-required contexts in that list:

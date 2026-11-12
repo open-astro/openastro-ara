@@ -177,7 +177,7 @@ jobs:
   changes:
     name: Changed paths
     runs-on: ubuntu-latest
-    timeout-minutes: 5  # gates six jobs below at job level, plus client-test's steps; a wedged fetch must not hold the matrix to the 6h default
+    timeout-minutes: 5  # gates the jobs below at job level, plus client-test's steps; a wedged fetch must not hold the matrix to the 6h default
     # A red `Changed paths` is never useful (#1024): every consumer below
     # already fails safe on an empty output (`!= 'false'`, `!= 'true'`), so a
     # checkout flake or a wedged fetch — neither of which the script's ERR
@@ -199,12 +199,16 @@ jobs:
     # all, so every required context in the `master protection` ruleset
     # ("Sanity (design docs)", "Server (build + cross-publish + Docker)",
     # "Settings + Help registry gate", the three "Client (analyze + test)"
-    # legs) would sit in "Expected — Waiting for status to be reported"
+    # contexts) would sit in "Expected — Waiting for status to be reported"
     # forever and the PR could never merge. A job skipped by `if:` reports a
     # `skipped` conclusion, which GitHub counts as satisfying a required check.
     # That holds for NON-MATRIX jobs only. A matrix job skipped at job level
     # never expands, so its per-leg contexts are never reported at all — which
-    # is why `client-test` is gated at step level instead (#1025).
+    # is why `client-test` (the macOS and Windows contexts) is gated at step
+    # level instead (#1025). The Linux context is `client-test-linux`, a
+    # non-matrix job that always runs and reports the `client-test-shard`
+    # result; the shards are a matrix skipped at job level, which is safe
+    # because their contexts are not required.
     outputs:
       docs_only: ${{ steps.classify.outputs.docs_only }}
       # Finer-grained than docs_only, and consumed ONLY by jobs that are not
