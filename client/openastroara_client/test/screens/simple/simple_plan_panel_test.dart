@@ -607,6 +607,11 @@ void main() {
     expect(unlisted.decJ2000Deg, 41.27);
     expect(unlisted.maxAltDeg, closeTo(90 - (41.27 + 33.856784), 1e-9));
     expect(unlisted.designations, ['NGC0224', 'M 31']);
+    // Picked as "M 31" (a search row or a Card): that designation leads, once, so the header names it.
+    expect(simpleSelectionOfDso(m31, const [], latitudeDeg: -33.856784, designation: 'M 31').designations,
+        ['M 31', 'NGC0224']);
+    expect(simpleSelectionOfDso(m31, ranked, latitudeDeg: -33.856784, designation: 'M 31').designations, ['M 31'],
+        reason: "the ranker row's M31 is the same designation");
     final southern = PlanningDso(
         id: 'NGC5128', name: 'Centaurus A', type: 'G', magnitude: 6.8, raDeg: 201.37, decDeg: -47.48);
     expect(simpleSelectionOfDso(southern, const [], latitudeDeg: 51.477833).neverRises, isTrue);
@@ -1019,6 +1024,112 @@ void main() {
       expect(c.read(planetariumSearchProvider), isNull, reason: 'nothing to look up');
       expect(showSky, 0, reason: 'the Plan sheet stays up');
       expect(find.byKey(const Key('simple-run-suggestion-0')), findsNothing, reason: 'the list closes on a pick');
+    });
+
+    testWidgets('the Skull Nebula shows as "NGC 246 (Skull Nebula)" in the suggestion row and the plan header', (tester) async {
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          overrides: [
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(id: 'NGC0246', name: 'Skull Nebula', type: 'PN', magnitude: 8, raDeg: 11.76, decDeg: -11.87, aliases: ['C 056']),
+                ]),
+          ]);
+      await tester.enterText(find.byKey(const Key('simple-run-search')), 'skull');
+      await tester.pump();
+      await tester.pump();
+      expect(find.descendant(of: find.byKey(const Key('simple-run-suggestion-0')), matching: find.text('NGC 246 (Skull Nebula)')),
+          findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-run-suggestion-0')));
+      await tester.pump();
+      expect(find.text('NGC 246 (Skull Nebula)'), findsOneWidget, reason: 'the plan header, the list is closed');
+    });
+
+    testWidgets('the plan header keeps the designation the row was picked by: "M 31", not the row id NGC 224',
+        (tester) async {
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          overrides: [
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(id: 'NGC0224', name: 'Andromeda Galaxy', type: 'G', magnitude: 3.4, raDeg: 10.7, decDeg: 41.3, aliases: ['M 31']),
+                  PlanningDso(id: 'NGC6334', name: "Cat's Paw Nebula", type: 'HII', magnitude: null, raDeg: 260.1, decDeg: -35.8, aliases: ['RCW 127']),
+                ]),
+          ]);
+      for (final (query, title) in [('M 31', 'M 31 (Andromeda Galaxy)'), ('RCW 127', "RCW 127 (Cat's Paw Nebula)")]) {
+        await tester.enterText(find.byKey(const Key('simple-run-search')), query);
+        await tester.pump();
+        await tester.pump();
+        expect(find.descendant(of: find.byKey(const Key('simple-run-suggestion-0')), matching: find.text(title)), findsOneWidget);
+        await tester.tap(find.byKey(const Key('simple-run-suggestion-0')));
+        await tester.pump();
+        expect(find.text(title), findsOneWidget, reason: 'the plan header reads as the row did');
+      }
+    });
+
+    testWidgets('an Abell planetary heads the plan as "Abell 21 (Medusa Nebula)", not by its short alias A 21',
+        (tester) async {
+      const medusa = PlanningDso(
+          id: 'Abell 21', name: 'Medusa Nebula', type: 'PN', magnitude: null, raDeg: 112.26, decDeg: 13.24,
+          aliases: ['PN G205.1+14.2', 'A 21', 'PK 205+14 1', 'Sh 2-274']);
+      await _pump(tester, _Seq(), SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: simpleSelectionOfDso(medusa, const [], latitudeDeg: 51.477833));
+      expect(find.text('Abell 21 (Medusa Nebula)'), findsOneWidget);
+    });
+
+    testWidgets('a nickname that matched stays in the row: "NGC 598 (Triangulum Pinwheel)"', (tester) async {
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          overrides: [
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(
+                      id: 'NGC0598', name: 'Triangulum Galaxy', type: 'G', magnitude: 5.7, raDeg: 23.46, decDeg: 30.66,
+                      aliases: ['M 33', 'Triangulum Pinwheel']),
+                ]),
+          ]);
+      await tester.enterText(find.byKey(const Key('simple-run-search')), 'triangulum pinwheel');
+      await tester.pump();
+      await tester.pump();
+      expect(
+          find.descendant(
+              of: find.byKey(const Key('simple-run-suggestion-0')), matching: find.text('NGC 598 (Triangulum Pinwheel)')),
+          findsOneWidget,
+          reason: 'what matched, so the row says why it is listed');
+    });
+
+    testWidgets('at twice the text size a search row and the plan header show their whole designation (name)',
+        (tester) async {
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+          sel: null,
+          overrides: [
+            bundledCatalogProvider.overrideWith((ref) async => const [
+                  PlanningDso(
+                      id: 'NGC0598', name: 'Triangulum Galaxy', type: 'G', magnitude: 5.7, raDeg: 23.46, decDeg: 30.66,
+                      aliases: ['M 33', 'Triangulum Pinwheel']),
+                ]),
+          ]);
+      void whole(String text) =>
+          expect(tester.renderObject<RenderParagraph>(find.text(text)).didExceedMaxLines, isFalse, reason: '"$text" is cut off');
+      await tester.enterText(find.byKey(const Key('simple-run-search')), 'triangulum pinwheel');
+      await tester.pump();
+      await tester.pump();
+      whole('NGC 598 (Triangulum Pinwheel)');
+      whole('mag 5.7');
+      await tester.tap(find.byKey(const Key('simple-run-suggestion-0')));
+      await tester.pump();
+      whole('NGC 598 (Triangulum Galaxy)');
     });
 
     testWidgets('Add to queue creates the run without starting it and keeps the sheet up for the next pick; again it appends',

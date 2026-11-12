@@ -9,15 +9,52 @@ import '../../services/dso_catalog_service.dart';
 import '../../util/dedupe_catalog.dart';
 import 'album_frame.dart';
 
-enum AlbumBook { messier, caldwell }
+/// The Books in display order. An object is a Card in every Book that claims it (RCW
+/// overlaps Messier and Caldwell); with several shown, it shows as its first Book's
+/// Card. A fourth Book is one more value here.
+enum AlbumBook { messier, caldwell, rcw }
 
 enum AlbumTier { bronze, silver, gold }
 
-/// A Book's objects from the full bundled catalog, in catalog-number order.
-List<PlanningDso> bookObjects(List<PlanningDso> catalog, AlbumBook book) {
-  int? numOf(PlanningDso d) => book == AlbumBook.messier ? d.messierNum : d.caldwellNum;
-  return [for (final d in catalog) if (numOf(d) != null) d]..sort((a, b) => numOf(a)!.compareTo(numOf(b)!));
+final RegExp _rcwDesignation = RegExp(r'^RCW (\d+)$');
+
+/// The RCW number of [d]: the lowest `RCW n` among its id and aliases (a nebula that
+/// carries two RCW numbers is one Card, labelled by the first), null without one.
+/// Worked out once per row: until its Books are matched the Album asks it of every
+/// catalog row on each build.
+int? rcwNumOf(PlanningDso d) => (_rcwNums[d] ??= (_scanRcwNum(d),)).$1;
+
+final Expando<(int?,)> _rcwNums = Expando('rcwNum');
+
+int? _scanRcwNum(PlanningDso d) {
+  int? best;
+  for (final s in [d.id, ...d.aliases]) {
+    final n = int.tryParse(_rcwDesignation.firstMatch(s)?.group(1) ?? '');
+    if (n != null && (best == null || n < best)) best = n;
+  }
+  return best;
 }
+
+/// [d]'s catalog number in [book], null when the Book does not claim it.
+int? bookNumberOf(PlanningDso d, AlbumBook book) => switch (book) {
+      AlbumBook.messier => d.messierNum,
+      AlbumBook.caldwell => d.caldwellNum,
+      AlbumBook.rcw => rcwNumOf(d),
+    };
+
+/// The Card label: `M 31`, `C 14`, `RCW 32`.
+String bookLabel(PlanningDso d, AlbumBook book) => switch (book) {
+      AlbumBook.messier => 'M ${d.messierNum}',
+      AlbumBook.caldwell => 'C ${d.caldwellNum}',
+      AlbumBook.rcw => 'RCW ${rcwNumOf(d)}',
+    };
+
+/// A Book's Cards: everything [book] claims in the full bundled catalog, in
+/// catalog-number order, whatever another Book also claims. The grid, the chips and
+/// the aggregates all read this, so their counts agree.
+List<PlanningDso> bookObjects(List<PlanningDso> catalog, AlbumBook book) =>
+    [for (final d in catalog) if (bookNumberOf(d, book) != null) d]
+      ..sort((a, b) => bookNumberOf(a, book)!.compareTo(bookNumberOf(b, book)!));
 
 /// Whether [f] contains [o]: the object lies within the frame's inscribed
 /// circle, half the short side across. Rotation-free, so corners never count.

@@ -111,6 +111,130 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DeviceDriverDto'
+  /api/v1/equipment/alpacabridge/catalog:
+    get:
+      tags:
+        - Equipment
+      summary: 'The built-in drivers of an AlpacaBridge, by device type, with their field schemas as AlpacaBridge sends them.'
+      operationId: GetAlpacaBridgeCatalog
+      parameters:
+        - name: host
+          in: query
+          schema:
+            type: string
+        - name: port
+          in: query
+          schema:
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlpacaBridgeCatalogResponseDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/alpacabridge/cameras:
+    get:
+      tags:
+        - Equipment
+      summary: The cameras plugged in for one vendor; empty for a vendor with no lister.
+      operationId: GetAlpacaBridgeCameras
+      parameters:
+        - name: host
+          in: query
+          schema:
+            type: string
+        - name: port
+          in: query
+          schema:
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+        - name: vendor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlpacaBridgeCamerasResponseDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/alpacabridge/devices:
+    post:
+      tags:
+        - Equipment
+      summary: 'Registers a device on AlpacaBridge: the body goes to configuredevice unchanged.'
+      operationId: AddAlpacaBridgeDevice
+      parameters:
+        - name: host
+          in: query
+          schema:
+            type: string
+        - name: port
+          in: query
+          schema:
+            pattern: '^-?(?:0|[1-9]\d*)$'
+            type:
+              - integer
+              - string
+            format: int32
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JsonElement'
+        required: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlpacaBridgeAddDeviceResponseDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable Entity
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '502':
+          description: Bad Gateway
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/camera:
     get:
       tags:
@@ -7183,6 +7307,63 @@ components:
             - 'null'
             - string
           format: date-time
+    AlpacaBridgeAddDeviceResponseDto:
+      required:
+        - message
+        - warning
+      type: object
+      properties:
+        message:
+          type: string
+        warning:
+          type:
+            - 'null'
+            - string
+    AlpacaBridgeCameraDto:
+      required:
+        - index
+        - name
+        - serial
+      type: object
+      properties:
+        index:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        name:
+          type: string
+        serial:
+          type: string
+    AlpacaBridgeCamerasResponseDto:
+      required:
+        - cameras
+      type: object
+      properties:
+        cameras:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlpacaBridgeCameraDto'
+    AlpacaBridgeCatalogResponseDto:
+      required:
+        - device_types
+      type: object
+      properties:
+        device_types:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlpacaBridgeDeviceTypeDto'
+    AlpacaBridgeDeviceTypeDto:
+      required:
+        - device_type
+        - drivers
+      type: object
+      properties:
+        device_type:
+          type: string
+        drivers:
+          type: array
     AlpacaServerVersionDto:
       required:
         - host

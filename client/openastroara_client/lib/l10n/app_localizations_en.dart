@@ -2815,6 +2815,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get albumBookCaldwell => 'Caldwell';
 
   @override
+  String get albumBookRcw => 'RCW';
+
+  @override
   String get dsoTypeGalaxy => 'Galaxy';
 
   @override
@@ -4902,4 +4905,63 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get calibrationStartQueueNow => 'Start queue';
+
+  @override
+  String get rigSetupTitle => 'Rig setup';
+
+  @override
+  String get rigSetupIntro =>
+      'Before a first night, Ara needs a few facts about this rig.';
+
+  @override
+  String get rigSetupSite => 'Site';
+
+  @override
+  String get rigSetupSiteMissing => 'Latitude and longitude are not set.';
+
+  @override
+  String get rigSetupSiteAction => 'Set site';
+
+  @override
+  String get rigSetupOptics => 'Main camera and telescope';
+
+  @override
+  String get rigSetupOpticsMissing =>
+      'The sensor or the focal length is not set.';
+
+  @override
+  String get rigSetupOpticsAction => 'Set up optics';
+
+  @override
+  String get rigSetupGuideScope => 'Guide scope';
+
+  @override
+  String get rigSetupGuideScopeMissing =>
+      'The guide focal length or the Guide Camera\'s pixel size is not set.';
+
+  @override
+  String get rigSetupGuideScopeAction => 'Set guide scope';
+
+  @override
+  String get rigSetupCalibration => 'Guider calibration';
+
+  @override
+  String get rigSetupCalibrationMissing =>
+      'Not calibrated yet, or Ara says to calibrate again.';
+
+  @override
+  String get rigSetupCalibrationConnect =>
+      'Connect the Guider to check its calibration.';
+
+  @override
+  String get rigSetupCalibrationAction => 'Open Guider mode';
+
+  @override
+  String get rigSetupItemDone => 'Done';
+
+  @override
+  String get rigSetupNotNow => 'Not now';
+
+  @override
+  String get rigSetupDonePill => 'Rig set up';
 }
