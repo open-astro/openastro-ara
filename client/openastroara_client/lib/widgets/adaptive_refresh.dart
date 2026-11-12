@@ -8,7 +8,11 @@ import 'package:flutter/material.dart';
 /// A scroll view of [slivers] that calls [onRefresh] when pulled down. The view always
 /// scrolls, so the gesture works on a list that is empty or short.
 class AdaptiveRefresh extends StatelessWidget {
-  const AdaptiveRefresh({super.key, required this.onRefresh, required this.slivers});
+  const AdaptiveRefresh({
+    super.key,
+    required this.onRefresh,
+    required this.slivers,
+  });
 
   final Future<void> Function() onRefresh;
   final List<Widget> slivers;
@@ -20,13 +24,16 @@ class AdaptiveRefresh extends StatelessWidget {
     // beyond the stock spinner, so Reduce Motion needs no branch of its own.
     return switch (Theme.of(context).platform) {
       TargetPlatform.iOS => CustomScrollView(
-          physics: physics,
-          slivers: [CupertinoSliverRefreshControl(onRefresh: onRefresh), ...slivers],
-        ),
+        physics: physics,
+        slivers: [
+          CupertinoSliverRefreshControl(onRefresh: onRefresh),
+          ...slivers,
+        ],
+      ),
       _ => RefreshIndicator(
-          onRefresh: onRefresh,
-          child: CustomScrollView(physics: physics, slivers: slivers),
-        ),
+        onRefresh: onRefresh,
+        child: CustomScrollView(physics: physics, slivers: slivers),
+      ),
     };
   }
 }

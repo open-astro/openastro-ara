@@ -35,6 +35,19 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Added (Sky Album gestures)
+
+- On iPhone and iPad, pulling the Sky Album down fetches what the rig changed, and pulling the rig list down rescans, with the system's own refresh control (#1634).
+- On iPhone and iPad, a long press on a Sky Album Card or a queued plan target opens the system context menu with the actions it already has: Image this target or Add more time on a Card, Edit and Remove on a target. Other platforms are unchanged (#1635).
+
+### Changed (Sky Album)
+
+- The Sky Album's Night in a Card's table follows the site's longitude (the time at the site), not the device's time zone, so a tablet in another zone no longer splits one night in two (#1627).
+
+### Fixed (Sky Album)
+
+- The Art credit's licence link is announced as a link to screen readers, and a licence page that can't be opened says so instead of doing nothing (#1639).
+
 ### Added (mount by hand)
 
 - Simple Mode's Mount window has a direction pad: eight directions around a center Stop, with Slow, Medium and Fast speeds taken from the mount's own rates. Hold a direction to move and let go to stop. The arrow keys drive it, and Escape stops. The pad is off, saying why, while the mount is parked, the plan is imaging, polar alignment runs or the Guider guides (#1649).

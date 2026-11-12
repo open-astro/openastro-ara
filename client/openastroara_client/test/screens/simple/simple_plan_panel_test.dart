@@ -1601,6 +1601,44 @@ void main() {
       return (c, seq);
     }
 
+    testWidgets('on iOS a long press on a queued target lists Edit and Remove, and Remove removes it',
+        variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      // The queue's own narrow column, as the shell draws it.
+      final seq = _Seq();
+      final c = await _pump(
+          tester,
+          seq,
+          Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 360,
+              child: SingleChildScrollView(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
+                  SimpleRunPanel(onAdd: () {}, onEdit: (_) {}),
+                ]),
+              ),
+            ),
+          ));
+      await create(tester);
+      await pick(tester, c, _m42);
+      await create(tester);
+      await pick(tester, c, _m45);
+      await create(tester);
+      final g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-run-edit-1'))));
+      for (var i = 0; i < 60; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await g.up();
+      await tester.pumpAndSettle();
+      expect(find.text('Edit M42'), findsOneWidget);
+      await tester.tap(find.text('Remove M42 from the queue'));
+      await tester.pumpAndSettle();
+      expect(seq.targets('seq-1'), ['M31', 'M45']);
+      expect(c.read(simpleRunProvider).targets.map((t) => t.name), ['M31', 'M45']);
+      await tester.pump(kSimpleResultLife + const Duration(seconds: 1)); // the Undo pill fades
+    });
+
     testWidgets('a swipe left removes a queued target; Undo puts it back where it was', (tester) async {
       final (c, seq) = await queueOfThree(tester);
       await tester.drag(find.byKey(const Key('simple-run-edit-0')), const Offset(-400, 0));

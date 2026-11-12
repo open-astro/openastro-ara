@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
+import 'package:flutter/cupertino.dart' show CupertinoActionSheet, CupertinoContextMenu;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -224,6 +225,58 @@ void main() {
     await tester.fling(find.byType(CustomScrollView).first, const Offset(0, 400), 1000);
     await tester.pumpAndSettle();
     expect(fetches, 2);
+  });
+
+  group('context menu (iOS and iPadOS)', () {
+    // Held past the menu's lift (about a second), so the release is a long press, not a tap.
+    Future<void> hold(WidgetTester tester, Finder target) async {
+      final g = await tester.startGesture(tester.getCenter(target));
+      for (var i = 0; i < 60; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      await g.up();
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('a long press lists the Card action and runs it', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      final picked = <String>[];
+      await _pump(tester, frames: _m31Frames, onImageTarget: (d) => picked.add(d.id));
+      await hold(tester, find.text('Andromeda Galaxy'));
+      expect(find.byType(AlbumCardBack), findsNothing, reason: 'a long press does not flip');
+      expect(find.text('Add more time'), findsOneWidget);
+      await tester.tap(find.text('Add more time'));
+      await tester.pumpAndSettle();
+      expect(picked, ['NGC0224']);
+    });
+
+    testWidgets('a tap still flips the Card', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      await _pump(tester, frames: _m31Frames);
+      await tester.tap(find.text('Andromeda Galaxy'));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlbumCardBack), findsOneWidget);
+    });
+
+    testWidgets('a missing Card offers Image this target', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      await _pump(tester, frames: _m31Frames);
+      await hold(tester, find.text('Crab Nebula'));
+      expect(find.text('Image this target'), findsOneWidget);
+    });
+
+    testWidgets('under Reduce Motion the actions come as a sheet, with no zoom', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(reduceMotion: true);
+      addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+      await _pump(tester, frames: _m31Frames);
+      await hold(tester, find.text('Andromeda Galaxy'));
+      expect(find.byType(CupertinoActionSheet), findsOneWidget);
+      expect(find.text('Add more time'), findsOneWidget);
+    });
+
+    testWidgets('other platforms get no menu', variant: TargetPlatformVariant.only(TargetPlatform.android), (tester) async {
+      await _pump(tester, frames: _m31Frames);
+      await hold(tester, find.text('Andromeda Galaxy'));
+      expect(find.byType(CupertinoContextMenu), findsNothing);
+      expect(find.byType(CupertinoActionSheet), findsNothing);
+    });
   });
 
   testWidgets('the Art credit is announced as a link', (tester) async {

@@ -39,6 +39,7 @@ import '../../theme/ara_metrics.dart';
 import '../../l10n/l10n.dart';
 import '../../util/tonight_sky_local.dart'
     show altitudeDegAt, darkStart, nightEnd;
+import '../../widgets/platform_context_menu.dart';
 import '../../widgets/sequencer/target_plan_dialog.dart'
     show suggestedSubSeconds;
 import '../../widgets/emergency_stop_button.dart' show kEmergencyStopHold;
@@ -1606,12 +1607,31 @@ class _QueueList extends ConsumerWidget {
           ),
         ],
       );
+      // On iOS and iPadOS a long press lists what the row's tap and × do.
+      final menu = PlatformContextMenu(
+        items: !open(i) || run.busy
+            ? const []
+            : [
+                ContextMenuItem(
+                  context.l10n.planEditTarget(t.name),
+                  Icons.edit_outlined,
+                  () => onEdit(i),
+                ),
+                ContextMenuItem(
+                  context.l10n.planRemoveFromQueue(t.name),
+                  Icons.close,
+                  () => remove(i),
+                  destructive: true,
+                ),
+              ],
+        child: content,
+      );
       // A swipe left removes it too (the × stays for those who don't swipe).
       return Material(
         key: ValueKey('simple-run-row-${t.name}'),
         type: MaterialType.transparency,
         child: !open(i) || run.busy
-            ? content
+            ? menu
             : Dismissible(
                 key: ValueKey('simple-run-swipe-${t.name}'),
                 direction: DismissDirection.endToStart,
@@ -1635,7 +1655,7 @@ class _QueueList extends ConsumerWidget {
                   await remove(i);
                   return false;
                 },
-                child: content,
+                child: menu,
               ),
       );
     }
