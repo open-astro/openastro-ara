@@ -1644,6 +1644,7 @@ namespace OpenAstroAra.Test {
             var factory = HeadlessSequencerFactory.WithDefaults();
             factory.Items.Add(new FailsAfterTheUsersPauseItem());
             FailsAfterTheUsersPauseItem.Paused = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            FailsAfterTheUsersPauseItem.Started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var svc = BuildService(id, BuildBody(c => {
                 var par = new ParallelContainer { Name = "parallel" };
                 var waiting = new SequentialContainer { Name = "waiting" };
@@ -1654,7 +1655,8 @@ namespace OpenAstroAra.Test {
             }, factory), factory: factory);
 
             await svc.StartAsync(id, StartReq, null, CancellationToken.None);
-            await Task.Delay(200);
+            // The parallel container holds its branches at the gate, so pause only once this branch is running.
+            await FailsAfterTheUsersPauseItem.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
             await svc.PauseAsync(id, null, CancellationToken.None);
             await WaitForStateAsync(svc, id, SequenceRunState.Paused);
             FailsAfterTheUsersPauseItem.Paused.SetResult();
@@ -2198,12 +2200,14 @@ namespace OpenAstroAra.Test {
         private sealed class FailsAfterTheUsersPauseItem : OpenAstroAra.Sequencer.SequenceItem.SequenceItem {
 
             internal static TaskCompletionSource Paused = new();
+            internal static TaskCompletionSource Started = new();
 
             public FailsAfterTheUsersPauseItem() { }
 
             private FailsAfterTheUsersPauseItem(FailsAfterTheUsersPauseItem cloneMe) : base(cloneMe) { }
 
             public override async Task Execute(IProgress<OpenAstroAra.Core.Model.ApplicationStatus> progress, CancellationToken token) {
+                Started.TrySetResult();
                 await Paused.Task.WaitAsync(token); // still finishing its frame when the user's pause lands
                 progress.Report(new OpenAstroAra.Core.Model.ApplicationStatus {
                     Status = "Dither failed — check the guider, then press Resume to try again"
