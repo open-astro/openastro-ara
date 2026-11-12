@@ -15,6 +15,7 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -106,9 +107,9 @@ namespace OpenAstroAra.Server.Services {
 
         // §43-2 async create — WS events (best-effort, like the guider calibration builds'): started when the
         // worker claims the slot, complete/failed as the terminal. Payloads carry the operation/snapshot id.
-        public const string CreateStartedEvent = "backup.create.started";
-        public const string CreateCompleteEvent = "backup.create.complete";
-        public const string CreateFailedEvent = "backup.create.failed";
+        public const string CreateStartedEvent = WsEventCatalog.BackupCreateStarted;
+        public const string CreateCompleteEvent = WsEventCatalog.BackupCreateComplete;
+        public const string CreateFailedEvent = WsEventCatalog.BackupCreateFailed;
 
         // Disk-space pre-flight headroom: the archive stores the areas compressed (raw sum is an upper bound)
         // but the temp zip + manifest + hashing scratch coexist briefly; refuse only when clearly short.

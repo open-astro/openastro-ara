@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.IO;
 using System.Text.Json;
@@ -249,7 +250,7 @@ public sealed class PlaceholderSequencerService : ISequencerService {
             }
         } catch (Exception ex) when (ex is IOException or InvalidOperationException or ObjectDisposedException or JsonException) {
             run.State = SequenceRunState.Failed;
-            await EmitAsync("sequence.failed", sequenceId, run);
+            await EmitAsync(WsEventCatalog.SequenceFailed, sequenceId, run);
         } finally {
             // §38j-6 — terminal transition clears active/current.json (a
             // missing file is the canonical "nothing was running" signal
