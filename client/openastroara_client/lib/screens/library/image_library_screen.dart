@@ -22,6 +22,7 @@ import '../../widgets/library/frame_thumbnail.dart';
 import '../../widgets/library/load_more_button.dart';
 import '../calibration/calibration_screen.dart';
 import 'live_frame_viewer_screen.dart';
+import '../../widgets/adaptive_dialog.dart';
 
 const _monthNames = [
   'Jan',
@@ -702,9 +703,9 @@ class _SessionFaultsBadge extends ConsumerWidget {
     // status field, and a fault-log hiccup must not clutter every card.
     if (rows == null || rows.isEmpty) return const SizedBox.shrink();
     return TextButton.icon(
-      onPressed: () => showDialog<void>(
+      onPressed: () => showAdaptiveDialog<void>(
         context: context,
-        builder: (_) => AlertDialog(
+        builder: (_) => adaptiveAlertDialog(
           title: Text('Faults — $targetName'),
           content: SizedBox(
             width: 480,
@@ -715,7 +716,9 @@ class _SessionFaultsBadge extends ConsumerWidget {
             ),
           ),
           actions: [
-            TextButton(
+            adaptiveDialogAction(
+              context,
+              isDefault: true,
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Close'),
             ),

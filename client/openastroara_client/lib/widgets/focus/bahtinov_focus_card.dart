@@ -20,6 +20,7 @@ import '../fit_pane.dart';
 import 'focus_section.dart';
 import 'guide_focus_card.dart' show GuideFocusHint, TurnAdvice, TurnHint;
 import '../../util/friendly_error.dart';
+import '../adaptive_dialog.dart';
 
 /// Setup → Smart Focus → Main telescope with "Bahtinov mask" picked (#1299):
 /// the user fits the mask, points at a bright star and turns the focuser while
@@ -293,17 +294,17 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
 /// Ask the user to take the mask off. True once they say it is off. Shown by
 /// Finish and before switching the card back to Autofocus.
 Future<bool> confirmMaskRemoved(BuildContext context) async {
-  final ok = await showDialog<bool>(
+  final ok = await showAdaptiveDialog<bool>(
     context: context,
-    builder: (context) => AlertDialog(
+    builder: (context) => adaptiveAlertDialog(
       icon: const Icon(Icons.flare, color: AraColors.accentWarning),
       title: const Text('Remove the Bahtinov mask'),
       content: const Text(
           'Take the mask off the front of the telescope before you image. '
           'Left on, it puts spikes on every star and costs light.'),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Not yet')),
-        FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Mask removed')),
+        adaptiveDialogAction(context, onPressed: () => Navigator.of(context).pop(false), child: const Text('Not yet')),
+        adaptiveDialogAction(context, filled: true, isDefault: true, onPressed: () => Navigator.of(context).pop(true), child: const Text('Mask removed')),
       ],
     ),
   );

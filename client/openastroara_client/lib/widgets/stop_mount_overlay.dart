@@ -14,6 +14,7 @@ import '../state/ws/ws_providers.dart';
 import '../util/friendly_error.dart';
 import '../l10n/l10n.dart';
 import '../theme/ara_colors.dart';
+import 'adaptive_dialog.dart';
 
 /// §57.8 telescope slew lifecycle WS tokens (mirrors `WsEventCatalog`).
 abstract final class SlewWsEvents {
@@ -260,7 +261,7 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
 
   void _showStoppedModal({double? haltedRa, double? haltedDec}) {
     unawaited(
-      showDialog<void>(
+      showAdaptiveDialog<void>(
         context: context,
         builder: (dialogContext) => _MountStoppedDialog(
           haltedRa: haltedRa,
@@ -392,7 +393,7 @@ class _MountStoppedDialogState extends State<_MountStoppedDialog> {
               'Dec ${widget.haltedDec! >= 0 ? '+' : ''}${widget.haltedDec!.toStringAsFixed(1)}°'
         : 'unknown';
     final verified = _verified;
-    return AlertDialog(
+    return adaptiveAlertDialog(
       // Scrollable: the verification lines push a 600 px-tall window past its
       // height, and the modal must never clip the Resume / Skip / End choices.
       scrollable: true,
@@ -444,7 +445,8 @@ class _MountStoppedDialogState extends State<_MountStoppedDialog> {
         ],
       ),
       actions: [
-        TextButton(
+        adaptiveDialogAction(
+          context,
           key: const ValueKey('stop_modal_resume'),
           onPressed: () {
             Navigator.of(context).pop();
@@ -452,7 +454,8 @@ class _MountStoppedDialogState extends State<_MountStoppedDialog> {
           },
           child: const Text('Resume sequence'),
         ),
-        TextButton(
+        adaptiveDialogAction(
+          context,
           key: const ValueKey('stop_modal_skip'),
           onPressed: () {
             Navigator.of(context).pop();
@@ -460,7 +463,8 @@ class _MountStoppedDialogState extends State<_MountStoppedDialog> {
           },
           child: const Text('Skip this target'),
         ),
-        TextButton(
+        adaptiveDialogAction(
+          context,
           key: const ValueKey('stop_modal_end'),
           onPressed: () {
             Navigator.of(context).pop();
@@ -468,7 +472,10 @@ class _MountStoppedDialogState extends State<_MountStoppedDialog> {
           },
           child: const Text('End session'),
         ),
-        FilledButton(
+        adaptiveDialogAction(
+          context,
+          filled: true,
+          isDefault: true,
           key: const ValueKey('stop_modal_close'),
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Close'),

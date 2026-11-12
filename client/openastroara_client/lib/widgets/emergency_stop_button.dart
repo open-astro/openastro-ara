@@ -13,6 +13,7 @@ import '../state/saved_server_state.dart';
 import '../util/friendly_error.dart';
 import '../state/simple_messages_state.dart';
 import '../state/ws/client_session_state.dart';
+import 'adaptive_dialog.dart';
 
 /// §35.3 — the persistent big red button, always visible in the bottom
 /// status bar. Press and hold for 2 s ("Hold to confirm", a fill sweeping
@@ -144,9 +145,9 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
 
   Future<void> _confirmAndStop() async {
     final l10n = context.l10n;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAdaptiveDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => adaptiveAlertDialog(
         icon: Icon(
           Icons.warning_amber_rounded,
           color: Theme.of(dialogContext).colorScheme.error,
@@ -155,14 +156,17 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
         title: Text(l10n.estopConfirmTitle),
         content: Text(l10n.estopConfirmBody),
         actions: [
-          TextButton(
+          adaptiveDialogAction(
+            dialogContext,
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: Text(l10n.estopCancel),
           ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(dialogContext).colorScheme.error,
-            ),
+          // Stop stays the default action on both platforms.
+          adaptiveDialogAction(
+            dialogContext,
+            filled: true,
+            isDefault: true,
+            isDestructive: true,
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: Text(l10n.estopConfirm),
           ),

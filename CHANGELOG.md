@@ -35,6 +35,10 @@ at the top. This happens in the same commit that pushes the release tag.
 
 ## [Unreleased]
 
+### Changed (adaptive controls)
+
+- On iPhone and iPad, sliders, progress spinners and checkboxes use the iOS look, and the dialogs Simple Mode opens (Emergency Stop's confirm, the Bahtinov mask question, the post-stop window, image-library actions) are iOS alerts with Stop kept as the default action; Android, Windows and Linux keep the Material look (#1632).
+
 ### Added (mount by hand)
 
 - Simple Mode's Mount window has a direction pad: eight directions around a center Stop, with Slow, Medium and Fast speeds taken from the mount's own rates. Hold a direction to move and let go to stop. The arrow keys drive it, and Escape stops. The pad is off, saying why, while the mount is parked, the plan is imaging, polar alignment runs or the Guider guides (#1649).

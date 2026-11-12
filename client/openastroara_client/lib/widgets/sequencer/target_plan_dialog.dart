@@ -15,6 +15,7 @@ import '../../state/planning/planning_prefs_state.dart';
 import '../../state/planning/sky_model_calibration_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/optimal_sub_local.dart';
+import '../adaptive_dialog.dart';
 
 /// What the user picked in the target-plan chooser: a per-filter plan (or
 /// null for the plain default loop) and whether to guide + dither.
@@ -71,7 +72,7 @@ Future<TargetPlanChoice?> showTargetPlanDialog(
     // no scope, or the store failed: spec-sheet model
   }
   if (!context.mounted) return null;
-  return showDialog<TargetPlanChoice>(
+  return showAdaptiveDialog<TargetPlanChoice>(
     context: context,
     builder: (_) => _TargetPlanDialog(
       targetName: targetName,
@@ -299,7 +300,7 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return adaptiveAlertDialog(
       backgroundColor: AraColors.bgPanel,
       title: Text('Plan for ${widget.targetName}'),
       content: SizedBox(
@@ -367,11 +368,15 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        adaptiveDialogAction(
+          context,
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(
+        adaptiveDialogAction(
+          context,
+          filled: true,
+          isDefault: true,
           onPressed: () => Navigator.of(context).pop(TargetPlanChoice(
             filterPlan: _options[_selected].steps,
             guide: _guide,

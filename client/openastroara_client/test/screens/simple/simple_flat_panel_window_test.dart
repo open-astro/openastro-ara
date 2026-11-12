@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart' show CupertinoAlertDialog, CupertinoDialogAction, CupertinoSlider;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +15,7 @@ import 'package:openastroara/state/equipment/flat_panel_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/widgets/focus/bahtinov_focus_card.dart' show confirmMaskRemoved;
 import 'package:openastroara/widgets/status_indicator.dart' show StatusBlink;
 
 /// A flat panel that records what it was asked to do.
@@ -143,6 +145,7 @@ bool _selected(WidgetTester t, String k) =>
     t.widget<SimpleSegment>(_key(k)).selected;
 
 void main() {
+  adaptiveMain();
   testWidgets('cover and light as segments, and the panel face beside them', (
     tester,
   ) async {
@@ -446,4 +449,70 @@ void main() {
       reason: 'the reserved width fits the text as drawn',
     );
   });
+}
+
+void adaptiveMain() {
+  testWidgets(
+    'the brightness slider is the iOS slider on iOS, with its level as text',
+    (tester) async {
+      final (_, panel) = await _pump(tester, _wire(light: true));
+      expect(find.byType(CupertinoSlider), findsOneWidget);
+      expect(find.text('50 %'), findsOneWidget);
+      await tester.drag(find.byType(CupertinoSlider), const Offset(-400, 0));
+      await tester.pump();
+      expect(panel.calls, ['brightness=0']);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+  );
+
+  testWidgets(
+    'the brightness slider is the Material slider on Android',
+    (tester) async {
+      await _pump(tester, _wire(light: true));
+      expect(find.byType(CupertinoSlider), findsNothing);
+      expect(find.byType(Slider), findsOneWidget);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
+
+  Future<bool?> openMaskDialog(WidgetTester tester) async {
+    bool? answer;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () async => answer = await confirmMaskRemoved(context),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    return answer;
+  }
+
+  testWidgets(
+    'the Bahtinov mask dialog is an iOS alert on iOS and its labelled action runs',
+    (tester) async {
+      await openMaskDialog(tester);
+      expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+      expect(find.byType(CupertinoDialogAction), findsNWidgets(2));
+      await tester.tap(find.text('Mask removed'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CupertinoAlertDialog), findsNothing);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+  );
+
+  testWidgets(
+    'the Bahtinov mask dialog is a Material alert on Android',
+    (tester) async {
+      await openMaskDialog(tester);
+      expect(find.byType(CupertinoAlertDialog), findsNothing);
+      expect(find.text('Remove the Bahtinov mask'), findsOneWidget);
+      expect(find.byType(FilledButton), findsOneWidget);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
+  );
 }

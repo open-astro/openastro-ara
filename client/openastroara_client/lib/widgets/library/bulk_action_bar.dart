@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../state/library/library_selection.dart';
 import '../../state/library/live_library_state.dart';
 import '../../theme/ara_colors.dart';
+import '../adaptive_dialog.dart';
 
 /// §40.8 bulk action bar — slides up from the bottom when selection is
 /// non-empty. All five actions are live against `/api/v1/frames/bulk/*`:
@@ -82,7 +83,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                       onPressed: api == null
                           ? null
                           : () async {
-                              final rating = await showDialog<int>(
+                              final rating = await showAdaptiveDialog<int>(
                                 context: context,
                                 builder: (_) => const _RatePickerDialog(),
                               );
@@ -102,7 +103,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                       onPressed: api == null
                           ? null
                           : () async {
-                              final tags = await showDialog<_TagEdit>(
+                              final tags = await showAdaptiveDialog<_TagEdit>(
                                 context: context,
                                 builder: (_) => const _TagDialog(),
                               );
@@ -122,7 +123,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                       onPressed: api == null
                           ? null
                           : () async {
-                              final target = await showDialog<String>(
+                              final target = await showAdaptiveDialog<String>(
                                 context: context,
                                 builder: (_) => const _SessionPickerDialog(),
                               );
@@ -196,7 +197,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                       onPressed: api == null
                           ? null
                           : () async {
-                              final confirmed = await showDialog<bool>(
+                              final confirmed = await showAdaptiveDialog<bool>(
                                 context: context,
                                 builder: (_) =>
                                     _DeleteConfirmDialog(count: ids.length),
@@ -296,7 +297,7 @@ class _RatePickerDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return adaptiveAlertDialog(
       title: const Text('Rate selected frames'),
       content: Row(
         mainAxisSize: MainAxisSize.min,
@@ -311,11 +312,14 @@ class _RatePickerDialog extends StatelessWidget {
         ],
       ),
       actions: [
-        TextButton(
+        adaptiveDialogAction(
+          context,
           onPressed: () => Navigator.of(context).pop(0),
           child: const Text('Clear rating'),
         ),
-        TextButton(
+        adaptiveDialogAction(
+          context,
+          isDefault: true,
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
@@ -357,7 +361,7 @@ class _TagDialogState extends State<_TagDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return adaptiveAlertDialog(
       title: const Text('Tag selected frames'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -376,11 +380,15 @@ class _TagDialogState extends State<_TagDialog> {
         ],
       ),
       actions: [
-        TextButton(
+        adaptiveDialogAction(
+          context,
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(
+        adaptiveDialogAction(
+          context,
+          filled: true,
+          isDefault: true,
           onPressed: () {
             final add = _split(_add.text);
             final remove = _split(_remove.text);
@@ -406,20 +414,22 @@ class _DeleteConfirmDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return adaptiveAlertDialog(
       title: Text(count == 1
           ? 'Delete this frame?'
           : 'Delete these $count frames?'),
       content: const Text(
           'The FITS files are deleted from the disk for good. This can\'t be undone.'),
       actions: [
-        TextButton(
+        adaptiveDialogAction(
+          context,
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        FilledButton(
-          style:
-              FilledButton.styleFrom(backgroundColor: AraColors.accentError),
+        adaptiveDialogAction(
+          context,
+          filled: true,
+          isDestructive: true,
           onPressed: () => Navigator.of(context).pop(true),
           child: Text(count == 1 ? 'Delete' : 'Delete $count'),
         ),
