@@ -257,7 +257,7 @@ class _WizardShellState extends ConsumerState<WizardShell> {
         // A server refusal carries its own reason; the "when the guider is
         // reachable" advice only fits a guider that gave no answer.
         finishNotes.add(e is DioException && e.response != null
-            ? 'Guider: ${friendlyError(l, e, action: 'push the guider profile')}'
+            ? 'Guider: ${friendlyError(l, e, action: l.actionPushGuiderProfile)}'
             : 'The guider profile push didn\'t complete — push it '
                 'from Settings → OpenAstro Guider (the top-bar Guider button) when the guider is reachable.');
       }

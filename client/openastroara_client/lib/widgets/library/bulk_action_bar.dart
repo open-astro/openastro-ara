@@ -36,7 +36,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
     } on Exception catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: 'apply that to the selected frames'))));
+          .showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionApplyToFrames))));
     }
   }
 
@@ -150,7 +150,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                                 } on Exception catch (e) {
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text(friendlyError(context.l10n, e, action: 'export those frames'))));
+                                        SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionExportFrames))));
                                   }
                                   return (const <int>[], '', 0);
                                 }
@@ -170,7 +170,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
                                           content:
-                                              Text(friendlyError(context.l10n, e, action: 'save that'))));
+                                              Text(friendlyError(context.l10n, e, action: context.l10n.actionSave))));
                                 }
                                 return;
                               }

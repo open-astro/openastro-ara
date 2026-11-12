@@ -69,7 +69,7 @@ class ImageLibraryScreen extends ConsumerWidget {
       body: sessions.when(
         loading: () => const Center(child: AdaptiveProgressIndicator()),
         error: (e, _) => _CenteredNotice(
-          message: friendlyError(context.l10n, e, action: 'load your library'),
+          message: friendlyError(context.l10n, e, action: context.l10n.actionLoadLibrary),
           action: OutlinedButton(
             onPressed: () =>
                 ref.read(liveLibrarySessionsProvider.notifier).refresh(),
@@ -644,7 +644,7 @@ class _SessionHeader extends ConsumerWidget {
           if (!context.mounted) return;
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: 'resume the sequence'))));
+          ).showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionResumeSequence))));
         }
     }
   }
@@ -768,7 +768,7 @@ class _SessionFramesGrid extends ConsumerWidget {
         child: Padding(
           padding: _padding,
           child: Text(
-            friendlyError(context.l10n, e, action: 'load the frames'),
+            friendlyError(context.l10n, e, action: context.l10n.actionLoadFrames),
             style: Theme.of(
               context,
             ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),

@@ -73,7 +73,7 @@ class _SkyPhotoCacheRowState extends ConsumerState<SkyPhotoCacheRow> {
       messenger.showSnackBar(
         SnackBar(
           content: Text(
-            friendlyError(context.l10n, e, action: 'clean the sky photo cache'),
+            friendlyError(context.l10n, e, action: context.l10n.actionCleanSkyPhotoCache),
           ),
         ),
       );

@@ -24,7 +24,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
-/// §14e — eighth real Alpaca-backed device service. Replaces <c>PlaceholderDomeService</c>:
+/// §14e — eighth real Alpaca-backed device service:
 /// connects to a discovered Alpaca Dome, serves its live runtime (state + azimuth + shutter/home/park
 /// flags) over the §6 REST surface, and drives it via four §60.5 202-Accepted background operations —
 /// <see cref="SlewAsync"/>, <see cref="ParkAsync"/>, <see cref="OpenShutterAsync"/>,

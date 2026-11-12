@@ -100,7 +100,7 @@ class _FaultHistoryList extends ConsumerWidget {
                   child: AdaptiveProgressIndicator(strokeWidth: 2)))),
       error: (e, _) => Padding(
         padding: const EdgeInsets.all(12),
-        child: Text(friendlyError(context.l10n, e, action: 'load the fault history'),
+        child: Text(friendlyError(context.l10n, e, action: context.l10n.actionLoadFaults),
             style: Theme.of(context)
                 .textTheme
                 .bodySmall

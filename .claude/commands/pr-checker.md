@@ -356,8 +356,12 @@ All four must hold, per `design/COMMIT-PR-RULES.md` §19.1:
    ```
    The last one is not a typo: `client-build` is a matrix skipped at job level, so it never expands
    and reports **one** context under its raw, uninterpolated name. The macOS and Windows
-   `Client (analyze + test) — *-latest` legs are required **and** matrix-expanded, so they are
-   gated at *step* level and report `pass` with their steps skipped, never `skipping` (#1025).
+   `Client (analyze + test) — *-latest` legs are required **and** matrix-expanded, so they come
+   from `client-test`, a reporting job with no gate over the `client-test-desktop-shard` matrix.
+   It always runs and reports `pass` when every desktop shard passed, or when the shards were
+   skipped for a pull request or a docs-only change, never `skipping` (#1025). The shard matrix
+   then reports **one** `skipping` context under its raw name
+   `Client (analyze + test) — ${{ matrix.os }}, shard ${{ matrix.shard }}/3`.
    The `ubuntu-latest` context is the non-matrix `client-test-linux` job: it always runs and
    reports `pass` when every `ubuntu-latest, shard N/3` job passed, or when the shards were
    skipped for a docs-only change; the shard jobs themselves report `skipping` then.
@@ -435,8 +439,9 @@ Then:
   Merging it untagged silently skips §19.1's phase-boundary gate item. If a `phase/*` or `prep-*` PR cannot be
   placed in the plan, that is ambiguous: **Hard stop** with `Held for human review`.
 
-  Then hand it to the merge queue and wait for it to land. Run this with `run_in_background`, as
-  part of the same chain: the wait can last 90 minutes.
+  Then wait for it to land. The `Auto-queue` workflow already enabled auto-merge when the bot
+  approved the head, so the PR is normally in the queue by now; `gh pr merge <N>` below covers a PR
+  it skipped. Run this with `run_in_background`, as part of the same chain: the wait can last 90 minutes.
   ```bash
   gh pr merge <N> && {
   sleep 15   # the entry takes a moment to show up

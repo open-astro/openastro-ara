@@ -108,7 +108,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _hydrateError = friendlyError(context.l10n, e, action: 'load your saved settings'));
+        setState(() => _hydrateError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings));
       }
     } finally {
       _hydrating = false;

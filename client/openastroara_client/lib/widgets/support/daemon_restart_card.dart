@@ -40,7 +40,7 @@ class _DaemonRestartCardState extends ConsumerState<DaemonRestartCard> {
     } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(friendlyError(context.l10n, e, action: 'restart your rig'))));
+            SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionRestartRig))));
       }
     } finally {
       api.close();

@@ -37,7 +37,7 @@ class FrameViewer extends ConsumerWidget {
         loading: () => const Center(child: AdaptiveProgressIndicator()),
         error: (e, _) => Center(
           child: Text(
-            friendlyError(context.l10n, e, action: 'load the preview'),
+            friendlyError(context.l10n, e, action: context.l10n.actionLoadPreview),
             style: Theme.of(context)
                 .textTheme
                 .bodySmall

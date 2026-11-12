@@ -314,7 +314,7 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text(friendlyError(context.l10n, e, action: 'do that sequence action'))),
+        SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionSequenceAction))),
       );
     }
   }
@@ -380,7 +380,7 @@ class _MountStoppedDialogState extends State<_MountStoppedDialog> {
       setState(() => _verifyError = e.message);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _verifyError = friendlyError(context.l10n, e, action: 'take the verification image'));
+      setState(() => _verifyError = friendlyError(context.l10n, e, action: context.l10n.actionTakeVerification));
     } finally {
       if (mounted) setState(() => _verifying = false);
     }

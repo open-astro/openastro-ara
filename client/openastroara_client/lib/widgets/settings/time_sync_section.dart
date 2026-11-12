@@ -42,7 +42,7 @@ class TimeSyncSection extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                friendlyError(context.l10n, e, action: 'read the server clock state'),
+                friendlyError(context.l10n, e, action: context.l10n.actionReadClock),
                 style: TextStyle(color: theme.colorScheme.error),
               ),
             ),
@@ -150,7 +150,7 @@ class TimeSyncSection extends ConsumerWidget {
       );
     } catch (e) {
       if (!context.mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: 'push the time'))));
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionPushTime))));
     }
     ref.invalidate(timeSyncStatusProvider);
   }
@@ -271,7 +271,7 @@ class _TimeSyncManualDialogState extends State<_TimeSyncManualDialog> {
       if (!mounted) return;
       setState(() {
         _applying = false;
-        _error = friendlyError(context.l10n, e, action: 'push the time');
+        _error = friendlyError(context.l10n, e, action: context.l10n.actionPushTime);
       });
     }
   }

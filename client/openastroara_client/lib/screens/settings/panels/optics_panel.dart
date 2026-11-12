@@ -48,7 +48,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
       if (mounted) {
         setState(
           () =>
-              _lastError = friendlyError(context.l10n, e, action: 'load your saved settings'),
+              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
         );
       }
     }
@@ -78,7 +78,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: 'save that'));
+      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -145,7 +145,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
       }
     } catch (e) {
       // Set the field without its own setState; the finally's setState rebuilds with it.
-      _lastError = friendlyError(l10n, e, action: 'read the camera');
+      _lastError = friendlyError(l10n, e, action: l10n.actionReadCamera);
       if (mounted) messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     } finally {
       if (mounted) setState(() => _refreshing = false);
