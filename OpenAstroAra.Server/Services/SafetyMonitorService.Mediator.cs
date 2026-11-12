@@ -51,13 +51,14 @@ public sealed partial class SafetyMonitorService : ISafetyMonitorMediator {
         lock (_gate) {
             // Single consistent snapshot, served from the cache the background loop maintains
             // (§32.4) — no blocking HTTP read on the sequence thread. Never throws after Dispose
-            // (a running sequence may poll during shutdown): _disposed simply yields "not connected".
-            var connected = !_disposed && _state == EquipmentConnectionState.Connected && _client is not null;
+            // (a running sequence may poll during shutdown): Live is null once disposed, which yields "not connected".
+            var connected = _lifecycle.Live is not null;
+            var device = _lifecycle.Device;
             return new SafetyMonitorInfo {
                 Connected = connected,
                 IsSafe = connected && _cachedSafe,
-                Name = _device?.Name ?? string.Empty,
-                DeviceId = _device?.UniqueId ?? string.Empty,
+                Name = device?.Name ?? string.Empty,
+                DeviceId = device?.UniqueId ?? string.Empty,
             };
         }
     }

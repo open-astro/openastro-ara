@@ -4,7 +4,9 @@
 `assets/stellarium/index.html` (GoTo outcome polling, coordinate parsing)
 without a browser: `load_page.js` cuts named top-level functions out of the
 page and evaluates them in a `node:vm` sandbox with the globals each test
-supplies. CI runs it in the `Client (analyze + test)` job on all three OSes.
+supplies. On a pull request CI runs it on Linux, in shard 1/3 of the
+`Client (analyze + test)` job; macOS and Windows run it in the merge queue
+and on `master`.
 Needs Node 20+; nothing to install. Pass the files, not the directory:
 Node 22/24 treat the argument as a pattern and reject a bare directory.
 

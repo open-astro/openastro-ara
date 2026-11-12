@@ -13,7 +13,6 @@
 #endregion "copyright"
 
 using ASCOM.Alpaca.Clients;
-using ASCOM.Common.Alpaca;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
@@ -26,34 +25,17 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Server.Services;
 
 /// <summary>
-/// §14e — second real Alpaca-backed device service (after SafetyMonitor), replacing
-/// <c>PlaceholderObservingConditionsService</c>. Connects to a discovered Alpaca
-/// ObservingConditions device and serves its live sensor readings over the §6 REST surface.
-///
-/// Follows the SafetyMonitor template exactly: §60.5 202-Accepted connect lifecycle on a
-/// background task; generation-based supersede; and a §32.4 background-refresh cache (a timer
-/// reads every sensor every <see cref="RefreshInterval"/> while Connected) so <see cref="GetAsync"/>
-/// serves the cached readings synchronously without a per-poll burst of blocking HTTP reads.
+/// §14e — second real Alpaca-backed device service (after SafetyMonitor). Connects to a discovered Alpaca
+/// ObservingConditions device and serves its live sensor readings over the §6 REST surface. Its lifecycle
+/// (§60.5 202-Accepted connect, generation supersede, the §32.4 background-refresh cache, the §42.3 probe
+/// and read health) is the shared <see cref="DeviceLifecycle{TDevice}"/> (ADR 0011); the timer reads every
+/// sensor every refresh while Connected so <see cref="GetAsync"/> serves the cached readings synchronously.
 ///
 /// REST-only: unlike SafetyMonitor, no sequence instruction consumes the weather mediator's live
 /// data (<c>IWeatherDataMediator</c> is only a connect/disconnect dependency), so this does not
 /// unify with that mediator — it stays the headless stub.
 /// </summary>
-public sealed partial class ObservingConditionsService : IObservingConditionsService, IRetainedDeviceSource, IDisposable {
-
-    // #1127 — the record the card names. The remembered-selection store and this can diverge
-    // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
-    public DiscoveredDeviceDto? RetainedDevice {
-        get {
-            lock (_gate) {
-                return _disposed ? null : _device;
-            }
-        }
-    }
-
-
-    // §32.4 — how often the background loop refreshes the cached readings while connected.
-    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
+public sealed partial class ObservingConditionsService : IObservingConditionsService, IRetainedDeviceSource, IRecoverableDevice, IDisposable {
 
     // Snapshot of the device's sensors. Each is nullable: an ObservingConditions device only
     // implements the sensors it has, and an unimplemented sensor throws (mapped to null here).
@@ -74,50 +56,55 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
         new(null, null, null, null, null, null, null, null, null, null, null);
 
     private readonly ILogger<ObservingConditionsService> _logger;
-    private readonly EquipmentEventPublisher? _events;
-    private readonly object _gate = new();
-    private readonly Timer _refreshTimer;
-    // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence so a fixture that
-    // needs "several ticks" waits milliseconds, not multiples of the 2 s production interval.
-    // Init-only (object initializer), so it can never re-arm a disposed timer; never used by the daemon.
-    internal TimeSpan RefreshPeriod { init => _refreshTimer.Change(value, value); }
-    private AlpacaObservingConditions? _client;
-    private readonly IEquipmentFaultSink? _faults;
-    // §42.3 — consecutive-failure disconnect detection (the per-sensor reads
-    // swallow failures by design, so without this a dead bridge left the
-    // service claiming Connected with all-null readings forever).
-    private readonly DeviceConnectionProbe _probe = new();
-    private DiscoveredDeviceDto? _device;
-    private EquipmentConnectionState _state = EquipmentConnectionState.Disconnected;
-    private DateTimeOffset _lastTransition = DateTimeOffset.UtcNow;
+    // ADR 0011 — connect, disconnect, forget, refresh, probe, read health and the desired state.
+    private readonly DeviceLifecycle<IObservingConditionsDevice> _lifecycle;
+    private Func<DiscoveredDeviceDto, IObservingConditionsDevice> _createDevice = AlpacaObservingConditionsDevice.Create;
+    // Guarded by the lifecycle's gate, like the connection state.
     private Readings _cached = EmptyReadings;
     private DateTimeOffset _capturedAt = DateTimeOffset.UtcNow;
-    private int _refreshing; // 0 idle, 1 a refresh read is in flight (Interlocked, not under _gate)
-    private long _connectGeneration;
-    private bool _disposed;
 
     public ObservingConditionsService(ILogger<ObservingConditionsService>? logger = null, EquipmentEventPublisher? events = null,
             IEquipmentFaultSink? faults = null) {
         _logger = logger ?? NullLogger<ObservingConditionsService>.Instance;
-        _events = events;
-        _faults = faults;
-        _refreshTimer = new Timer(RefreshTick, state: null, dueTime: RefreshInterval, period: RefreshInterval);
+        _lifecycle = new DeviceLifecycle<IObservingConditionsDevice>(this, DeviceType.ObservingConditions, "weather station",
+            d => _createDevice(d), ReadRuntime, ResetSessionLocked,
+            DeviceHealthTracker.DefaultThreshold, _logger, events, faults);
     }
+
+    private object _gate => _lifecycle.Gate;
+
+    // #1265 — bench-test knob: re-arms the refresh timer at a shorter cadence. Init-only, never used by the daemon.
+    internal TimeSpan RefreshPeriod { init => _lifecycle.RefreshPeriod = value; }
+
+    // Test seam (ADR 0011 rule 4): the adapter the lifecycle builds for a selected device.
+    internal Func<DiscoveredDeviceDto, IObservingConditionsDevice> DeviceFactory { init => _createDevice = value; }
+
+    // #1127 — the record the card names. The remembered-selection store and this can diverge
+    // (a store-only DELETE /remembered keeps the device here), so the reconnector falls back to it.
+    public DiscoveredDeviceDto? RetainedDevice => _lifecycle.RetainedDevice;
+
+    public DesiredConnection? DesiredConnection => _lifecycle.Desired;
+
+    // #1246 — true once a refresh tick since the current connect read the essential read cleanly.
+    internal bool HasCleanReadSinceConnect => _lifecycle.HasCleanReadSinceConnect;
+
+    public bool TryRecover(DiscoveredDeviceDto device) => _lifecycle.TryRecover(device);
 
     // ct is unused by design: the readings are served from the cache the background loop maintains
     // (§32.4), so there is no per-call HTTP read to cancel. Returns a Task to satisfy the async
     // interface without an await.
     public Task<ObservingConditionsDto?> GetAsync(CancellationToken ct) {
         lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_device is null) {
+            ObjectDisposedException.ThrowIf(_lifecycle.IsDisposed, this);
+            var device = _lifecycle.Device;
+            if (device is null) {
                 return Task.FromResult<ObservingConditionsDto?>(null);
             }
-            var state = _state;
+            var state = _lifecycle.State;
             var r = state == EquipmentConnectionState.Connected ? _cached : EmptyReadings;
             var dto = new ObservingConditionsDto(
-                DeviceId: _device.UniqueId,
-                Name: _device.Name,
+                DeviceId: device.UniqueId,
+                Name: device.Name,
                 State: state,
                 TemperatureC: r.TemperatureC,
                 HumidityPct: r.HumidityPct,
@@ -141,147 +128,69 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
     public Task<OperationAcceptedDto> ConnectAsync(ConnectRequestDto request, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(request.Device);
-        var device = request.Device;
-        long generation;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if ((_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected)
-                && _device?.UniqueId == device.UniqueId) {
-                return Task.FromResult(Accepted("observing-conditions.connect", idempotencyKey));
-            }
-            DisposeClientLocked();
-            _device = device;
-            generation = ++_connectGeneration;
-            SetState(EquipmentConnectionState.Connecting);
-        }
-        _ = Task.Run(() => ConnectInBackground(device, generation), CancellationToken.None);
-        return Task.FromResult(Accepted("observing-conditions.connect", idempotencyKey));
+        return _lifecycle.ConnectAsync(request.Device, idempotencyKey);
     }
 
-    public async Task<bool> ForgetAsync(CancellationToken ct) {
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_device is null) {
-                return false;
-            }
-            if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
-                throw new InvalidOperationException("the weather station is connected — disconnect it before removing it");
-            }
-        }
-        // The SAME teardown as a disconnect — bump the connect generation, drop the client and hand
-        // it to SafeDisconnectDispose off-lock, publish Disconnected (the §60.9 transition while the
-        // device is still known to subscribers). An Error reached from Connected (§42.3 trip, a
-        // throwing property read) still holds a live, adopted client, and the card offers no
-        // Disconnect there any more — so Remove must release the driver itself (#1108 review).
-        await DisconnectAsync(null, ct).ConfigureAwait(false);
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (_device is null) {
-                return false;
-            }
-            // A connect that raced in between the two locks is live again — refuse, don't drop.
-            if (_state == EquipmentConnectionState.Connecting || _state == EquipmentConnectionState.Connected) {
-                throw new InvalidOperationException("the weather station is connected — disconnect it before removing it");
-            }
-            var removed = _device;
-            _device = null;
-            // §60.9 — a second open client drops its card on this instead of waiting for its
-            // next poll (#1127); the lock-held publish is the same hand-off SetState makes.
-            _events?.Removed(DeviceType.ObservingConditions, removed.UniqueId, removed.Name);
-            return true;
-        }
+    public Task<bool> ForgetAsync(CancellationToken ct) => _lifecycle.ForgetAsync();
+
+    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) =>
+        _lifecycle.DisconnectAsync(idempotencyKey);
+
+    // Caller holds the gate: a fresh, ended or tripped session forgets the last one's reads
+    // (otherwise GetAsync could serve the PRIOR device's readings under the NEW device's identity).
+    private void ResetSessionLocked() {
+        _cached = EmptyReadings;
+        _capturedAt = DateTimeOffset.UtcNow;
     }
 
-    public Task<OperationAcceptedDto> DisconnectAsync(string? idempotencyKey, CancellationToken ct) {
-        AlpacaObservingConditions? client;
-        lock (_gate) {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            _connectGeneration++;
-            client = _client;
-            _client = null;
-            if (_device is not null) {
-                SetState(EquipmentConnectionState.Disconnected);
-            }
-        }
-        if (client is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(client), CancellationToken.None);
-        }
-        return Task.FromResult(Accepted("observing-conditions.disconnect", idempotencyKey));
+    // The runtime read the lifecycle runs each tick: every sensor once. The essential read is "some sensor
+    // answers": a device that answers Connected while EVERY sensor read fails (other than NotImplemented, which
+    // is how a sensor the device lacks says so) is degraded (§42.3 second channel).
+    private DeviceRead ReadRuntime(IObservingConditionsDevice client) {
+        var outcome = new SensorOutcome();
+        var readings = ReadSensors(client, outcome);
+        var at = DateTimeOffset.UtcNow;
+        var readError = outcome.Answered == 0 ? outcome.FirstError : null;
+        return new DeviceRead(readError, CommitLocked: () => {
+            _cached = readings;
+            _capturedAt = at;
+        });
     }
 
-    private void RefreshTick(object? state) => RefreshCacheOnce();
-
-    // Reads every sensor once and updates the cache. Used by BOTH the background timer and the
-    // connect-time seed; the _refreshing guard makes them mutually exclusive so there is never
-    // more than one concurrent burst of reads on the AlpacaObservingConditions instance.
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Timer-callback boundary: an unhandled exception in a System.Threading.Timer callback crashes the process. The per-sensor reads already absorb device failures; this catch-all is a hard backstop so a refresh tick can never fault the daemon. CA1031's log-and-recover boundary applies.")]
-    private void RefreshCacheOnce() {
-        if (Interlocked.CompareExchange(ref _refreshing, 1, 0) != 0) {
-            return;
-        }
-        try {
-            AlpacaObservingConditions? client;
-            lock (_gate) {
-                if (_disposed || _state != EquipmentConnectionState.Connected) {
-                    return;
-                }
-                client = _client;
-            }
-            if (client is null) {
-                return;
-            }
-            // §42.3 — the ONE deliberate connection probe per tick. The per-sensor reads below
-            // deliberately swallow failures (an unimplemented sensor must stay benign), so this
-            // probe is the only disconnect-detection source: Connected throws on transport death
-            // and reads false on a driver-side disconnect; a consecutive-failure streak (not one
-            // blip) trips the device to Error + publishes the §42.2 fault.
-            if (!ProbeConnected(client)) {
-                if (ObserveProbeIfLive(client, probeSucceeded: false) == ProbeVerdict.Lost) {
-                    TripConnectionLost(client);
-                }
-                return; // the device didn't answer — skip this tick's reads
-            }
-            ObserveProbeIfLive(client, probeSucceeded: true);
-            var readings = ReadSensors(client);
-            var at = DateTimeOffset.UtcNow;
-            lock (_gate) {
-                if (_state == EquipmentConnectionState.Connected && ReferenceEquals(_client, client)) {
-                    _cached = readings;
-                    _capturedAt = at;
-                }
-            }
-        } catch (Exception ex) {
-            LogSensorReadFailed(ex);
-        } finally {
-            Interlocked.Exchange(ref _refreshing, 0);
-        }
+    private sealed class SensorOutcome {
+        public int Answered { get; set; }
+        public string? FirstError { get; set; }
     }
 
     // Reads all eleven sensors, each independently: an ObservingConditions device implements only
     // the sensors it has, and an unimplemented (or transiently failing) sensor yields null rather
     // than failing the whole snapshot. Per-sensor failures do NOT demote the connection — weather
     // sensors are independently optional, unlike SafetyMonitor's single IsSafe.
-    private Readings ReadSensors(AlpacaObservingConditions c) => new(
-        TemperatureC: ReadSensor("Temperature", () => c.Temperature),
-        HumidityPct: ReadSensor("Humidity", () => c.Humidity),
-        DewPointC: ReadSensor("DewPoint", () => c.DewPoint),
-        PressureHpa: ReadSensor("Pressure", () => c.Pressure),
-        CloudCoverPct: ReadSensor("CloudCover", () => c.CloudCover),
-        WindSpeedMs: ReadSensor("WindSpeed", () => c.WindSpeed),
-        WindGustMs: ReadSensor("WindGust", () => c.WindGust),
-        WindDirectionDeg: ReadSensor("WindDirection", () => c.WindDirection),
-        RainRate: ReadSensor("RainRate", () => c.RainRate),
+    private Readings ReadSensors(IObservingConditionsDevice c, SensorOutcome outcome) => new(
+        TemperatureC: ReadSensor(outcome, "Temperature", () => c.Temperature),
+        HumidityPct: ReadSensor(outcome, "Humidity", () => c.Humidity),
+        DewPointC: ReadSensor(outcome, "DewPoint", () => c.DewPoint),
+        PressureHpa: ReadSensor(outcome, "Pressure", () => c.Pressure),
+        CloudCoverPct: ReadSensor(outcome, "CloudCover", () => c.CloudCover),
+        WindSpeedMs: ReadSensor(outcome, "WindSpeed", () => c.WindSpeed),
+        WindGustMs: ReadSensor(outcome, "WindGust", () => c.WindGust),
+        WindDirectionDeg: ReadSensor(outcome, "WindDirection", () => c.WindDirection),
+        RainRate: ReadSensor(outcome, "RainRate", () => c.RainRate),
         // SQM meter (or a WeeWX-fed bridge sensor): sky brightness in mag/arcsec².
-        SkyQualityMagArcsec2: ReadSensor("SkyQuality", () => c.SkyQuality),
-        SkyTemperatureC: ReadSensor("SkyTemperature", () => c.SkyTemperature));
+        SkyQualityMagArcsec2: ReadSensor(outcome, "SkyQuality", () => c.SkyQuality),
+        SkyTemperatureC: ReadSensor(outcome, "SkyTemperature", () => c.SkyTemperature));
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-sensor read boundary: an ObservingConditions sensor that is not implemented throws (ASCOM NotImplementedException) and a transient driver/HTTP error can too; either way the sensor is reported absent (null), never propagated. CA1031's log-and-recover boundary applies.")]
-    private double? ReadSensor(string sensor, Func<double> read) {
+    private double? ReadSensor(SensorOutcome outcome, string sensor, Func<double> read) {
         try {
-            return read();
+            var value = read();
+            outcome.Answered++;
+            return value;
         } catch (Exception ex) {
+            if (ex is not ASCOM.NotImplementedException) {
+                outcome.FirstError ??= ex.Message;
+            }
             // Debug, not Warning: an unimplemented sensor throws every 2s by design, so this must
             // not be noisy — but it's available (with the sensor name) when diagnosing a sensor
             // that flips from working to failing, which a bare null would hide.
@@ -290,187 +199,11 @@ public sealed partial class ObservingConditionsService : IObservingConditionsSer
         }
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Background connect boundary: constructing the Alpaca client and setting Connected can throw arbitrary driver/HTTP/socket exceptions; any escape must surface as the Error state and be contained, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
-        Justification = "Ownership of the AlpacaObservingConditions is managed explicitly: on every non-adopt path SafeDisconnectDispose disposes it; on the adopt path it is stored in _client (local set to null) and disposed later by DisconnectAsync/Dispose. CA2000 cannot follow the transfer through the lock + helper.")]
-    private void ConnectInBackground(DiscoveredDeviceDto device, long generation) {
-        AlpacaObservingConditions? client = null;
-        var adopted = false;
-        try {
-            var host = string.IsNullOrWhiteSpace(device.IpAddress) ? device.HostName : device.IpAddress;
-            if (string.IsNullOrWhiteSpace(host)) {
-                throw new InvalidOperationException(
-                    $"discovered device '{device.Name}' carries neither an IP address nor a host name");
-            }
-            client = new AlpacaObservingConditions(
-                device.UseHttps ? ServiceType.Https : ServiceType.Http,
-                host, device.IpPort, device.AlpacaDeviceNumber, strictCasing: false, logger: null);
-            // Trust the authoritative Connected setter (throws on a real failure); do not re-GET.
-            AlpacaConnect.Connect(client);
-            lock (_gate) {
-                if (!_disposed && _connectGeneration == generation) {
-                    _client = client;
-                    // Clear before going Connected: otherwise GetAsync could serve the PRIOR
-                    // device's readings under the NEW device's identity during the seed window.
-                    _cached = EmptyReadings;
-                    _capturedAt = DateTimeOffset.UtcNow;
-                    _probe.Reset(); // §42.3 — a fresh session starts a fresh streak
-                    SetState(EquipmentConnectionState.Connected);
-                    adopted = true;
-                }
-            }
-            if (!adopted) {
-                SafeDisconnectDispose(client);
-                return;
-            }
-            client = null; // ownership transferred to _client
-            // Seed the readings cache immediately through the same guarded path as the timer.
-            RefreshCacheOnce();
-            bool stillConnected;
-            lock (_gate) {
-                stillConnected = _state == EquipmentConnectionState.Connected;
-                if (stillConnected) {
-                    // The Connected push went out before this seed read; tell clients the
-                    // details are cached so they re-read now.
-                    _events?.DetailsReady(DeviceType.ObservingConditions, _device?.UniqueId, _device?.Name);
-                }
-            }
-            if (stillConnected) {
-                LogConnected(device.Name, host, device.IpPort, device.AlpacaDeviceNumber);
-            }
-        } catch (Exception ex) {
-            if (!adopted) {
-                if (client is not null) {
-                    SafeDisconnectDispose(client);
-                }
-                lock (_gate) {
-                    if (!_disposed && _connectGeneration == generation) {
-                        SetState(EquipmentConnectionState.Error);
-                    }
-                }
-                LogConnectFailed(ex, device.Name);
-            }
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort teardown: Connected = false can throw driver/HTTP exceptions, which must be swallowed so Dispose always runs and cleanup completes. CA1031's log-and-recover boundary applies.")]
-    private void SafeDisconnectDispose(AlpacaObservingConditions client) {
-        try {
-            client.Connected = false;
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
-        }
-        DisposeQuietly(client);
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort teardown: ASCOM/COM-backed clients have been known to throw from Dispose(); the throw must be swallowed (and logged) rather than escape into a fire-and-forget Task.Run as an unobserved exception. CA1031's log-and-recover boundary applies.")]
-    private void DisposeQuietly(AlpacaObservingConditions client) {
-        try {
-            client.Dispose();
-        } catch (Exception ex) {
-            LogTeardownIgnored(ex);
-        }
-    }
-
-    private void DisposeClientLocked() {
-        var c = _client;
-        _client = null;
-        if (c is not null) {
-            _ = Task.Run(() => SafeDisconnectDispose(c), CancellationToken.None);
-        }
-    }
-
-    // Caller must hold _gate (every call site already does), so no inner lock here.
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "The probe's whole job is turning any transport/driver exception into a failed-probe observation. CA1031's log-and-recover boundary applies.")]
-    private static bool ProbeConnected(AlpacaObservingConditions c) {
-        try { return c.Connected; } catch (Exception) { return false; }
-    }
-
-    // The liveness check and the Observe are ONE operation under _gate so a concurrent
-    // reconnect's Reset can't land between them; null = the probed client is stale.
-    private ProbeVerdict? ObserveProbeIfLive(AlpacaObservingConditions client, bool probeSucceeded) {
-        lock (_gate) {
-            return ReferenceEquals(_client, client) ? _probe.Observe(probeSucceeded) : null;
-        }
-    }
-
-    // §42.3 — declare the device lost: Connected → Error (keeps _device remembered so a
-    // reconnect can find it) + publish the §42.2 fault event. Re-checks the probed client's
-    // identity under the gate so a reconnect between probe and trip can't flip the new session.
-    private void TripConnectionLost(AlpacaObservingConditions probed) {
-        DiscoveredDeviceDto? device;
-        lock (_gate) {
-            if (_state != EquipmentConnectionState.Connected || !ReferenceEquals(_client, probed)) {
-                return;
-            }
-            device = _device;
-            SetState(EquipmentConnectionState.Error);
-            _probe.Reset();
-        }
-        LogConnectionLost(device?.Name ?? "?");
-        _faults?.Publish(new EquipmentFaultEvent(DeviceType.ObservingConditions, device?.UniqueId,
-            device?.Name, EquipmentFaultKind.Disconnected,
-            $"stopped answering {DeviceConnectionProbe.DefaultLostThreshold} consecutive connection probes",
-            DateTimeOffset.UtcNow));
-    }
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "ObservingConditions '{Device}' stopped answering — marked Error (§42.3)")]
-    private partial void LogConnectionLost(string device);
-
-    private void SetState(EquipmentConnectionState state) {
-        if (_state == state) {
-            return;
-        }
-        _state = state;
-        _lastTransition = DateTimeOffset.UtcNow;
-        // Callers hold the service lock; the publisher's synchronous part only
-        // serializes a small payload and hands off (see EquipmentEventPublisher).
-        _events?.StateChanged(DeviceType.ObservingConditions, _device?.UniqueId, _device?.Name, state);
-    }
-
-    private static OperationAcceptedDto Accepted(string operationType, string? idempotencyKey) =>
-        new(OperationId: Guid.NewGuid(),
-            OperationType: operationType,
-            AcceptedUtc: DateTimeOffset.UtcNow,
-            IdempotencyKey: idempotencyKey);
-
     public void Dispose() {
-        AlpacaObservingConditions? client;
-        lock (_gate) {
-            if (_disposed) {
-                return;
-            }
-            _disposed = true;
-            client = _client;
-            _client = null;
-        }
-        _refreshTimer.Dispose();
-        // Dispose the client directly (guarded) rather than via SafeDisconnectDispose: the
-        // courtesy "Connected = false" is a blocking HTTP call (up to the ASCOM ~3s
-        // establishConnectionTimeout) that would hang container shutdown if the device is
-        // unreachable. DisposeQuietly releases the HttpClient resources without network I/O.
-        if (client is not null) {
-            DisposeQuietly(client);
-        }
+        _lifecycle.Dispose();
         GC.SuppressFinalize(this);
     }
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "ObservingConditions sensor read failed")]
-    private partial void LogSensorReadFailed(Exception ex);
-
     [LoggerMessage(Level = LogLevel.Debug, Message = "ObservingConditions sensor {Sensor} unavailable (reported as null)")]
     private partial void LogSensorUnavailable(string sensor, Exception ex);
-
-    [LoggerMessage(Level = LogLevel.Information, Message = "ObservingConditions connected: {Name} at {Host}:{Port}/{Device}")]
-    private partial void LogConnected(string name, string host, int port, int device);
-
-    [LoggerMessage(Level = LogLevel.Error, Message = "ObservingConditions connect failed for {Name}")]
-    private partial void LogConnectFailed(Exception ex, string name);
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "ignored error while disconnecting ObservingConditions during teardown")]
-    private partial void LogTeardownIgnored(Exception ex);
 }

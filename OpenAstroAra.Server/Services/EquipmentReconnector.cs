@@ -218,11 +218,12 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
     }
 
     // #1127 — the single-instance service's retained record for the type (null when the service
-    // is a placeholder or holds nothing). Internal for direct unit testing.
+    // is a placeholder or holds nothing; the multi-switch service retains none). Internal for direct unit testing.
     internal DiscoveredDeviceDto? ResolveRetained(DeviceType type) =>
         (ResolveService(type) as IRetainedDeviceSource)?.RetainedDevice;
 
-    // The single-instance service for the type, or null (Switch, Guider, or not registered).
+    // The device service for the type, or null (Guider, or not registered). The switch service holds many
+    // devices: it answers the recovery questions (IRecoverableDevice) but is no IRetainedDeviceSource.
     private object? ResolveService(DeviceType type) =>
         type.Canonical() switch {
             DeviceType.Camera => _services.GetService<ICameraService>(),
@@ -234,6 +235,7 @@ public sealed partial class EquipmentReconnector : IEquipmentReconnector {
             DeviceType.SafetyMonitor => _services.GetService<ISafetyMonitorService>(),
             DeviceType.ObservingConditions => _services.GetService<IObservingConditionsService>(),
             DeviceType.FlatDevice or DeviceType.CoverCalibrator => _services.GetService<IFlatDeviceService>(),
+            DeviceType.Switch => _services.GetService<ISwitchService>(),
             _ => null,
         };
 

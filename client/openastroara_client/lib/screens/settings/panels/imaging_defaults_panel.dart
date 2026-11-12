@@ -54,7 +54,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
           () => _lastError = friendlyError(
             context.l10n,
             e,
-            action: 'load your saved settings',
+            action: context.l10n.actionLoadSettings,
           ),
         );
       }
@@ -82,7 +82,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
     } catch (e) {
       if (!mounted) return;
       setState(
-        () => _lastError = friendlyError(context.l10n, e, action: 'save that'),
+        () => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave),
       );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
@@ -363,7 +363,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(friendlyError(l10n, e, action: 'refit the sky model')),
+          content: Text(friendlyError(l10n, e, action: l10n.actionRefitSkyModel)),
         ),
       );
     } finally {

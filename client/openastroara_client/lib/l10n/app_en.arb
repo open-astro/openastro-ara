@@ -5386,6 +5386,248 @@
   "@monitorLinkLostShort": {
     "description": "Monitor: what a screen reader announces when the link to the rig is lost (no age)"
   },
+  "actionAbortCapture": "abort the capture",
+  "@actionAbortCapture": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionApplyToFrames": "apply that to the selected frames",
+  "@actionApplyToFrames": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionBuildCalibration": "build the calibration",
+  "@actionBuildCalibration": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionCancelCopy": "cancel the copy",
+  "@actionCancelCopy": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionCheckDisk": "check the disk for frames",
+  "@actionCheckDisk": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionCleanPreviewCache": "clean the preview cache",
+  "@actionCleanPreviewCache": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionCleanSkyPhotoCache": "clean the sky photo cache",
+  "@actionCleanSkyPhotoCache": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionClearCeiling": "clear the ceiling",
+  "@actionClearCeiling": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionConfirmFrame": "confirm the frame arrived",
+  "@actionConfirmFrame": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionConnect": "connect",
+  "@actionConnect": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionDownload": "download that",
+  "@actionDownload": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionExportFrames": "export those frames",
+  "@actionExportFrames": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionExportStats": "export the stats",
+  "@actionExportStats": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionGenerateCalibration": "generate the calibration",
+  "@actionGenerateCalibration": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionListFolders": "list the folders",
+  "@actionListFolders": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadDarkLibrary": "load the dark library",
+  "@actionLoadDarkLibrary": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadFaults": "load the fault history",
+  "@actionLoadFaults": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadFrames": "load the frames",
+  "@actionLoadFrames": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadLibrary": "load your library",
+  "@actionLoadLibrary": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadLogs": "load the logs",
+  "@actionLoadLogs": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadNotifications": "load your notifications",
+  "@actionLoadNotifications": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadOlderLogs": "load older logs",
+  "@actionLoadOlderLogs": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadPreview": "load the preview",
+  "@actionLoadPreview": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadSessions": "load the sessions",
+  "@actionLoadSessions": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadSettings": "load your saved settings",
+  "@actionLoadSettings": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLookForEquipment": "look for equipment",
+  "@actionLookForEquipment": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionPushGuiderProfile": "push the guider profile",
+  "@actionPushGuiderProfile": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionPushTime": "push the time",
+  "@actionPushTime": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionRateFrame": "rate the frame",
+  "@actionRateFrame": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionReadCamera": "read the camera",
+  "@actionReadCamera": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionReadClock": "read the server clock state",
+  "@actionReadClock": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionReadServerDisks": "read the server's disks",
+  "@actionReadServerDisks": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionRearmSafety": "re-arm safety",
+  "@actionRearmSafety": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionRefitSkyModel": "refit the sky model",
+  "@actionRefitSkyModel": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionRestartRig": "restart your rig",
+  "@actionRestartRig": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionResumeSequence": "resume the sequence",
+  "@actionResumeSequence": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionSave": "save that",
+  "@actionSave": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionSaveHorizon": "save the horizon skyline",
+  "@actionSaveHorizon": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionSaveSlotLabels": "save the slot labels",
+  "@actionSaveSlotLabels": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionSendCalibrationChoice": "send the calibration choice",
+  "@actionSendCalibrationChoice": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionSequenceAction": "do that sequence action",
+  "@actionSequenceAction": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionSolveFrame": "solve the frame",
+  "@actionSolveFrame": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionStarDatabase": "work out which star database this rig needs",
+  "@actionStarDatabase": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionStartCopy": "start the copy",
+  "@actionStartCopy": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionTakeExposure": "take that exposure",
+  "@actionTakeExposure": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionTakeVerification": "take the verification image",
+  "@actionTakeVerification": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionUpdateTag": "update the tag",
+  "@actionUpdateTag": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionBackUpEntry": "back up that entry",
+  "@actionBackUpEntry": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionKeepBackupGoing": "keep the backup stream going",
+  "@actionKeepBackupGoing": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionPushGpsFix": "push the GPS fix",
+  "@actionPushGpsFix": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionRebuildStats": "rebuild the stats catalog",
+  "@actionRebuildStats": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionStartCopyingFrames": "start copying frames",
+  "@actionStartCopyingFrames": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "backupStreamHiccup": "Backup stream hiccup: {reason}",
+  "@backupStreamHiccup": {
+    "description": "Backup stream panel: transient transport trouble; reason is the already-readable error sentence",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "backupEntryFailing": "Backup of {id} failing: {reason}",
+  "@backupEntryFailing": {
+    "description": "Backup stream panel: one frame keeps failing; id is the frame id, reason the readable cause",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "gpsFixRefused": "Fix read, but the rig refused it: {reason}",
+  "@gpsFixRefused": {
+    "description": "GPS on this computer: the receiver gave a fix but the rig rejected the push; reason is the readable error sentence",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "gpsDaemonTooOld": " — update Ara Server on the rig; this version predates GPS on this computer.",
+  "@gpsDaemonTooOld": {
+    "description": "GPS on this computer: appended to the refused-push message when the rig answers 422 (daemon too old); starts with a dash and a space"
+  },
   "calibrationDarks": "Darks",
   "@calibrationDarks": {
     "description": "Night done / Calibration: dark frames are missing"
