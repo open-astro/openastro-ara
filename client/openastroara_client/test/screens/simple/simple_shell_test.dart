@@ -1908,7 +1908,7 @@ void main() {
       expect(find.text('Números'), findsNothing);
     });
 
-    testWidgets('Stats page title leads with the rail button\'s chart icon, as Sky Album\'s leads with its own',
+    testWidgets('Stats page title leads with the chart icon of the rail button, as the Sky Album title leads with its own',
         (tester) async {
       await _pump(tester, const Size(1024, 768));
       await tester.tap(find.byKey(const Key('simple-stats')));
@@ -7484,7 +7484,7 @@ void main() {
     );
 
     testWidgets(
-      'the Rig page header\'s Set site brings the site rows into view',
+      'Set site in the Rig page header brings the site rows into view',
       (tester) async {
         await pumpSetup(
           tester,
@@ -7513,7 +7513,7 @@ void main() {
     );
 
     testWidgets(
-      'the Rig page header\'s next fix for the optics opens the optics panel',
+      'the Rig page header next fix for the optics opens the optics panel',
       (tester) async {
         final c = (await pumpSetup(
           tester,
@@ -7534,7 +7534,7 @@ void main() {
     );
 
     testWidgets(
-      'the Rig page header\'s next fix for the calibration closes Settings and shows Guider mode',
+      'the Rig page header next fix for the calibration closes Settings and shows Guider mode',
       (tester) async {
         const facts = RigSetupFacts(
           latitudeDeg: -33.856784,
