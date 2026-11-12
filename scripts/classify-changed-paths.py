@@ -61,7 +61,7 @@ NONE: frozenset = frozenset()
 # `claude-review.yml` runs unconditionally, and §19.1's gate on a rulebook
 # change is the review, not the build matrix. Skipping the two job-gated
 # required contexts (server-build, registry-gate), the Linux client test
-# shards and the steps of the macOS and Windows client-test legs on a
+# shards and the macOS and Windows client test shards on a
 # SKILL.md-only PR loses nothing that CI ever checked.
 #
 # codeql.yml's `paths-ignore:` mirrors this tuple; the same test pins it.

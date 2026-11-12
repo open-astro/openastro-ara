@@ -53,11 +53,15 @@ class CiRunTimeTest(unittest.TestCase):
             self.assertNotIn(f"\n  {old}:\n", self.text, f"the {old} job still takes its own runner")
 
     def test_the_test_shards_run_every_test_file_once(self):
-        block = job(self.text, "client-test-shard")
+        for job_id in ("client-test-shard", "client-test-desktop-shard"):
+            with self.subTest(job=job_id):
+                self.assert_every_test_file_runs_once(job(self.text, job_id), job_id)
+
+    def assert_every_test_file_runs_once(self, block, job_id):
         shards = re.search(r"\n        shard: \[([0-9, ]+)\]\n", block)
         split = re.search(r"\| (awk -v n=(\d+) -v s=\"\$SHARD\" '[^']+')\)\n", block)
-        self.assertIsNotNone(shards, "client-test-shard has no shard matrix")
-        self.assertIsNotNone(split, "client-test-shard does not split the test files by shard")
+        self.assertIsNotNone(shards, f"{job_id} has no shard matrix")
+        self.assertIsNotNone(split, f"{job_id} does not split the test files by shard")
         n = int(split[2])
         matrix = [int(s) for s in shards[1].split(",")]
         self.assertEqual(matrix, list(range(1, n + 1)))
@@ -78,8 +82,11 @@ class CiRunTimeTest(unittest.TestCase):
             )
             taken += run.stdout.split()
         self.assertEqual(sorted(taken), files)
+
+    def test_the_ubuntu_shards_skip_only_a_docs_only_change(self):
+        block = job(self.text, "client-test-shard")
         # A required context must not sit on the finer bucket (see WorkflowWiringTest).
-        self.assertIn("if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}", block)
+        self.assertIn("    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}\n", block)
 
     def test_the_ubuntu_context_passes_only_when_every_shard_passed(self):
         block = job(self.text, "client-test-linux")
@@ -109,24 +116,48 @@ class CiRunTimeTest(unittest.TestCase):
                 )
                 self.assertEqual(run.returncode == 0, passes, run.stdout.decode())
 
-    def test_the_macos_and_windows_legs_do_no_work_on_a_pull_request(self):
-        block = job(self.text, "client-test")
+    def test_the_macos_and_windows_shards_take_no_runner_on_a_pull_request(self):
+        block = job(self.text, "client-test-desktop-shard")
         self.assertIn("        os: [macos-latest, windows-latest]\n", block)
-        # No work, so no macOS or Windows runner either.
+        self.assertIn("    runs-on: ${{ matrix.os }}\n", block)
         self.assertIn(
-            "    runs-on: ${{ (needs.changes.outputs.docs_only == 'true' || github.event_name == 'pull_request')"
-            " && 'ubuntu-latest' || matrix.os }}\n",
+            "    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true'"
+            " && github.event_name != 'pull_request' }}\n",
             block,
         )
-        work = steps(block)
-        work.pop("Record path-gate decision")
-        self.assertIn("flutter test", work)
-        for name, body in work.items():
-            with self.subTest(step=name):
-                self.assertIn(
-                    "if: ${{ needs.changes.outputs.docs_only != 'true' && github.event_name != 'pull_request' }}\n",
-                    body,
+
+    def test_the_macos_and_windows_contexts_pass_only_when_every_shard_passed(self):
+        block = job(self.text, "client-test")
+        self.assertIn("    name: Client (analyze + test) — ${{ matrix.os }}\n", block)
+        self.assertIn("        os: [macos-latest, windows-latest]\n", block)
+        self.assertIn("    needs: [changes, client-test-desktop-shard]\n", block)
+        # Without it a failed shard skips this job, and a skipped required context counts as passed.
+        self.assertIn("    if: ${{ !cancelled() }}\n", block)
+        # Only reports a result, so no macOS or Windows runner.
+        self.assertIn("    runs-on: ubuntu-latest\n", block)
+        step = steps(block)["Require every shard to pass"]
+        self.assertIn("SHARDS: ${{ needs.client-test-desktop-shard.result }}", step)
+        self.assertIn("DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}", step)
+        self.assertIn("EVENT_NAME: ${{ github.event_name }}", step)
+        script = textwrap.dedent(step.split("        run: |\n", 1)[1])
+        for shards, docs_only, event, passes in (
+            ("success", "false", "merge_group", True),
+            ("success", "", "push", True),
+            ("skipped", "true", "merge_group", True),
+            ("skipped", "false", "pull_request", True),
+            ("skipped", "false", "merge_group", False),
+            ("skipped", "", "push", False),
+            ("failure", "false", "merge_group", False),
+            ("failure", "true", "pull_request", False),
+            ("cancelled", "true", "merge_group", False),
+        ):
+            with self.subTest(shards=shards, docs_only=docs_only, event=event):
+                run = subprocess.run(
+                    ["bash", "-c", script],
+                    env={"PATH": "/usr/bin:/bin", "SHARDS": shards, "DOCS_ONLY": docs_only, "EVENT_NAME": event},
+                    capture_output=True,
                 )
+                self.assertEqual(run.returncode == 0, passes, run.stdout.decode())
 
     def test_the_astap_build_is_skipped_on_a_cache_hit(self):
         server = steps(job(self.text, "server-build"))
