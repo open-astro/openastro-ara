@@ -85,12 +85,15 @@ class _Inbox extends NotificationInboxNotifier {
   Future<List<AraNotification>?> build() async => items;
 }
 
+/// Like the real file: a read is a fresh copy, a write keeps the newest
+/// [SessionSummaryPrefsService.cap] entries.
 class _MemPrefs extends SessionSummaryPrefsService {
   Set<String> acked = {};
   @override
-  Future<Set<String>> loadAcknowledged() async => acked;
+  Future<Set<String>> loadAcknowledged() async => {...acked};
   @override
-  Future<void> saveAcknowledged(Set<String> ids) async => acked = ids;
+  Future<void> saveAcknowledged(Set<String> ids) async =>
+      acked = SessionSummaryPrefsService.capped(ids).toSet();
 }
 
 const _daemonList = [
@@ -580,4 +583,40 @@ void main() {
       reason: 'completed is a new outcome',
     );
   });
+
+  test(
+    '#1644 two devices over the cap settle on one list of dismissals',
+    () async {
+      final rig = FakeRigSettings();
+      final a = make(rig: rig);
+      final onA = prefs
+        ..acked = {for (var i = 1; i <= 50; i++) 'a$i:completed'};
+      await a.read(sessionSummaryProvider.future);
+      await settle(); // A seeds the rig with its 50
+      final b = make(rig: rig);
+      final onB = prefs..acked = {'b1:completed'};
+      await b.read(sessionSummaryProvider.future);
+      await settle();
+
+      // Each device reads the rig again after the other one wrote, as the
+      // client_settings.updated event makes it do.
+      Future<void> round() async {
+        for (final device in [a, b]) {
+          await device.read(clientSettingsProvider.notifier).refetch();
+          await settle();
+        }
+      }
+
+      await round();
+      final writes = rig.merges;
+      for (var i = 0; i < 3; i++) {
+        await round();
+      }
+      expect(rig.merges, writes, reason: 'no device keeps sending');
+      final kept = (rig.stored['session_dismissals'] as List).cast<String>();
+      expect(kept, hasLength(SessionSummaryPrefsService.cap));
+      expect(onA.acked, kept.toSet());
+      expect(onB.acked, kept.toSet());
+    },
+  );
 }

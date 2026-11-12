@@ -40,7 +40,10 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
   bool _rerun = false;
 
   // #1644 — dismissals follow the user across devices: the union of this
-  // device's and the rig's, capped like the local file.
+  // device's and the rig's, capped like the local file. The cap drops the
+  // oldest first, and only the rig's order is shared: on load, entries only
+  // this device holds count as older than the rig's, so two devices over the
+  // cap agree on what to drop instead of re-sending it to each other.
   SyncedPref<Set<String>> get _synced {
     final svc = ref.read(sessionSummaryPrefsProvider);
     Set<String> union(Set<String> a, Set<String> b) => {...b, ...a};
@@ -54,7 +57,7 @@ class SessionSummaryNotifier extends AsyncNotifier<SessionSummary?> {
       encode: (ids) => SessionSummaryPrefsService.capped(ids),
       decode: (raw) => raw is List ? raw.whereType<String>().toSet() : null,
       pushOver: union,
-      applyOver: union,
+      applyOver: (local, server) => {...local.difference(server), ...server},
     );
   }
 
