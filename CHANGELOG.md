@@ -53,6 +53,10 @@ at the top. This happens in the same commit that pushes the release tag.
 
 - An edited sequence body (a daemon-generated run with a step added) no longer fails to load on the rig: a new collection wrapper writes `$type` before `$values`, as Json.NET needs.
 
+### Added (decision records)
+
+- Four decision records in `docs/adr/` for choices the code already follows: 0017 says the daemon holds no root privilege and root work runs in polkit-scoped helper units, 0018 says a sequence is stored in NINA's JSON format and NINA's engine runs it, 0019 says the planetarium is the Stellarium Web Engine in the platform's native webview, and 0020 says guiding is done by a separate guider service that the daemon drives over the PHD2 protocol.
+
 ### Added (mount by hand)
 
 - Simple Mode's Mount window has a direction pad: eight directions around a center Stop, with Slow, Medium and Fast speeds taken from the mount's own rates. Hold a direction to move and let go to stop. The arrow keys drive it, and Escape stops. The pad is off, saying why, while the mount is parked, the plan is imaging, polar alignment runs or the Guider guides (#1649).
