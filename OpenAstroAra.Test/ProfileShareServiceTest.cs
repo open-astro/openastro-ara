@@ -118,7 +118,7 @@ public class ProfileShareServiceTest {
             PixelScaleArcsec: 1.2, SeeingFwhmArcsec: 2.5, PriorSeconds: null, Source: "measured", Rungs: []),
         // #1700 — names the donor's own switch; must be stripped.
         CoolingFan: new("DONOR-SWITCH-DO-NOT-LEAK", 3),
-        // #1689 — measured on the donor's dome, with the donor's follow flag on; must be stripped.
+        // #1689 — measures the donor's dome; must be stripped.
         Dome: new(FollowMount: true, DomeRadiusMm: 1500, ScopePositionNorthSouthMm: 120));
 
     [Test]

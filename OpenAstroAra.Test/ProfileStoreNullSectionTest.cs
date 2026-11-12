@@ -86,6 +86,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void The_dome_block_follows_the_profile_through_select_and_restart() {
+            // #1689 — the dome geometry and follow flag describe one rig: select must swap them and disk must keep them.
+            var dir = TempDir();
+            try {
+                var store = new FileProfileStore(dir);
+                var dome = new DomeSettingsDto(FollowMount: true, DomeRadiusMm: 1500, MountType: "fork_on_wedge");
+                store.PutDomeSettings(dome);
+                var saved = ProfileStoreSnapshot.Capture(store);
+                Assert.That(saved.Dome, Is.EqualTo(dome), "capture carries the block");
+
+                // Another profile without the block is selected, then this one again.
+                ProfileStoreSnapshot.Apply(store, saved with { Dome = null });
+                Assert.That(store.GetDomeSettings(), Is.EqualTo(DomeSettingsDto.Default), "no inherited geometry or follow flag");
+                ProfileStoreSnapshot.Apply(store, saved);
+                Assert.That(store.GetDomeSettings(), Is.EqualTo(dome));
+
+                Assert.That(new FileProfileStore(dir).GetDomeSettings(), Is.EqualTo(dome), "survives a daemon restart");
+                Assert.That(ProfileSnapshotNormalizer.Normalize(saved with { Dome = null }).Dome,
+                    Is.EqualTo(DomeSettingsDto.Default), "a pre-#1689 file back-fills the defaults");
+            } finally {
+                Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Test]
         public void Put_of_a_null_section_is_coalesced_not_stored() {
             var dir = TempDir();
             try {
