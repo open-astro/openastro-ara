@@ -38,3 +38,12 @@ test('the chart holds the star scale at the crisp-point end at a wide field', ()
   assert.equal(p.stel.core.star_linear_scale, 0.35);
   assert.equal(p.stel.core.star_relative_scale, 0.6);
 });
+
+test('the Full UI keeps the star-map scale at a wide field', () => {
+  const D2R = Math.PI / 180;
+  const p = loadPageFunctions(['updateStarScale'],
+    { CHART: false, D2R, lastStarScale: -1, stel: { core: { fov: 60 * D2R } } });
+  p.updateStarScale();
+  assert.equal(p.stel.core.star_linear_scale, 0.8);
+  assert.equal(p.stel.core.star_relative_scale, 1.1);
+});
