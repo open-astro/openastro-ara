@@ -13,8 +13,9 @@ import 'simple_shell.dart' show SimplePanel, simpleRailScale;
 
 /// #1562 — Simple Mode's first-time Rig setup: the sheet that lists what the
 /// rig still needs before a first night, each line with the button that opens
-/// the setting that fixes it. It lives in the shell's stack, between the rails
-/// and the status strip, so those and Emergency Stop stay visible.
+/// the setting that fixes it. It sits under the status strip and beside the
+/// right rail, so those and Emergency Stop stay visible; on a window too narrow
+/// to clear the left rail too (a phone) it covers that one.
 ///
 /// It opens by itself once per shell mount per rig (the link up, the profile
 /// read, something missing, "Not now" not chosen on this device), closes with
@@ -153,10 +154,7 @@ class _SimpleRigSetupHostState extends ConsumerState<SimpleRigSetupHost> {
               children: [
                 Semantics(
                   header: true,
-                  child: Text(
-                    l10n.rigSetupTitle,
-                    style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
-                  ),
+                  child: Text(l10n.rigSetupTitle, style: kSimpleHeading),
                 ),
                 Text(
                   l10n.rigSetupIntro,
@@ -165,10 +163,14 @@ class _SimpleRigSetupHostState extends ConsumerState<SimpleRigSetupHost> {
                 for (final line in lines) line,
                 Align(
                   alignment: Alignment.centerRight,
-                  child: SimpleWindowButton(
-                    key: const Key('simple-rig-setup-not-now'),
-                    label: l10n.rigSetupNotNow,
-                    onTap: _notNow,
+                  // Its own width, not the panel's: the fixes are the main
+                  // actions.
+                  child: IntrinsicWidth(
+                    child: SimpleWindowButton(
+                      key: const Key('simple-rig-setup-not-now'),
+                      label: l10n.rigSetupNotNow,
+                      onTap: _notNow,
+                    ),
                   ),
                 ),
               ],
@@ -180,7 +182,13 @@ class _SimpleRigSetupHostState extends ConsumerState<SimpleRigSetupHost> {
   }
 }
 
-/// One line: a tick when done, else what is missing and the button for it.
+/// A line narrower than this at 1x text puts its button under its words, so
+/// no word breaks mid-word: about what pt-BR's guide scope label and button
+/// need side by side. It grows with the text, as the sheet does.
+const double _kLineBesideWidth = 400;
+
+/// One line: a tick when done, else what is missing and the button for it,
+/// beside the words, or under them on a narrow sheet (a phone).
 class _Line extends StatelessWidget {
   const _Line({
     required this.id,
@@ -202,42 +210,62 @@ class _Line extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final done = missing == null;
-    return Row(
-      key: Key('simple-rig-setup-$id'),
-      crossAxisAlignment: CrossAxisAlignment.center,
-      spacing: AraSpace.s12,
-      children: [
-        Semantics(
-          label: done ? l10n.rigSetupItemDone : null,
-          child: Icon(
-            done ? Icons.check_circle : Icons.radio_button_unchecked,
-            key: Key('simple-rig-setup-$id-${done ? 'done' : 'missing'}'),
-            color: done ? AraColors.accentConnected : AraColors.textSecondary,
-          ),
-        ),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
-              ),
-              if (missing != null)
-                Text(
-                  missing!,
-                  style: kSimpleText.copyWith(color: AraColors.textSecondary),
-                ),
-            ],
-          ),
-        ),
-        if (!done)
-          SimpleWindowButton(
+    final button = done
+        ? null
+        : SimpleWindowButton(
             key: Key('simple-rig-setup-$id-action'),
             label: action,
             onTap: onTap,
-          ),
-      ],
+          );
+    return LayoutBuilder(
+      builder: (context, box) {
+        final beside =
+            box.maxWidth >= _kLineBesideWidth * simpleRailScale(context);
+        return Row(
+          key: Key('simple-rig-setup-$id'),
+          crossAxisAlignment: beside
+              ? CrossAxisAlignment.center
+              : CrossAxisAlignment.start,
+          spacing: AraSpace.s12,
+          children: [
+            Semantics(
+              label: done ? l10n.rigSetupItemDone : null,
+              child: Icon(
+                done ? Icons.check_circle : Icons.radio_button_unchecked,
+                key: Key('simple-rig-setup-$id-${done ? 'done' : 'missing'}'),
+                color: done
+                    ? AraColors.accentConnected
+                    : AraColors.textSecondary,
+              ),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  if (missing != null)
+                    Text(
+                      missing!,
+                      style: kSimpleText.copyWith(
+                        color: AraColors.textSecondary,
+                      ),
+                    ),
+                  // Under the words, as wide as they may run.
+                  if (button != null && !beside)
+                    Padding(
+                      padding: const EdgeInsets.only(top: AraSpace.s8),
+                      child: button,
+                    ),
+                ],
+              ),
+            ),
+            if (button != null && beside) button,
+          ],
+        );
+      },
     );
   }
 }
