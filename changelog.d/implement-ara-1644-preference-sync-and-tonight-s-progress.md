@@ -1,0 +1,4 @@
+### Added (preference sync and tonight's progress)
+
+- **Preferences follow you across devices** (#1644): planetarium layer and catalog toggles, planning noise tolerance and magnitude floor, the pre-sleep answered nights and the overnight-summary dismissals now sync through the rig. A change made offline is kept on the device and sent on the next start; an older rig keeps them on the device. The rig gains `PATCH /client-settings` (merge by top-level key) and the `profile.updated` and `client_settings.updated` events.
+- **Tonight's progress survives a relaunch** (#1565): Night Setup remembers tonight's focus run (read from the rig) and last polar alignment across an app relaunch, and "permanent pier" is now saved in the site profile so it follows you across devices; the switch is in Settings › Location & sky as well as in Simple Mode.

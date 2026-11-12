@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import '../models/polar_align.dart';
 import '../models/server.dart';
+import 'profile_api.dart';
 
 /// The §45 polar-align operations the state layer depends on. An interface so
 /// tests supply a pure fake; [PolarAlignApi] is the Dio-backed implementation.
@@ -31,12 +32,19 @@ abstract interface class PolarAlignClient {
 class PolarAlignApi implements PolarAlignClient {
   final Dio _dio;
 
-  PolarAlignApi(AraServer server)
-      : _dio = Dio(BaseOptions(
-          baseUrl: server.baseUrl,
-          connectTimeout: const Duration(seconds: 3),
-          receiveTimeout: const Duration(seconds: 5),
-        ));
+  PolarAlignApi(AraServer server, {Dio? dio})
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              baseUrl: server.baseUrl,
+              connectTimeout: const Duration(seconds: 3),
+              receiveTimeout: const Duration(seconds: 5),
+            ),
+          ) {
+    // #1644: its settings save is this device's own profile write too.
+    _dio.interceptors.add(ProfileApi.ownWriteRecorder);
+  }
 
   /// Current routine snapshot, or `null` on a `404` (a server predating §45).
   /// Other HTTP failures throw `DioException` for the caller to surface.

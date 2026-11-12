@@ -19,6 +19,8 @@ import 'package:openastroara/state/focus/filter_offset_calibration_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/screens/simple/simple_preflight.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
+import 'package:openastroara/state/simple_preflight_state.dart'
+    show nightFocusStateProvider, nightPolarAlignStateProvider;
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
@@ -361,79 +363,120 @@ void main() {
     expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-focus-method-manual'))).onTap, isNull);
   });
 
-  testWidgets("Preflight on a permanent pier: focus is the last step, so its Done starts imaging", (tester) async {
-    final f = _Focuser(_focuser());
-    final pilot = _Pilot();
-    _c = ProviderContainer(overrides: [
-      focuserProvider.overrideWith(() => f),
-      autofocusLiveProvider.overrideWith(() => _Live(AutofocusLive(run: weak))),
-      setupFocusStateProvider.overrideWithValue(SetupStepState.done),
-      setupPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
-      simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
-      simplePreflightProvider.overrideWith(() => pilot),
-    ]);
-    addTearDown(_c.dispose);
-    await _c.read(simplePermanentPierProvider.future);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: _c,
-      child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
-    ));
-    await tester.pump();
-    await tester.tap(find.text('Done · Start imaging'));
-    expect(pilot.nexts, 1);
-  });
+  testWidgets(
+    "Preflight on a permanent pier: focus is the last step, so its Done starts imaging",
+    (tester) async {
+      final f = _Focuser(_focuser());
+      final pilot = _Pilot();
+      _c = ProviderContainer(
+        overrides: [
+          focuserProvider.overrideWith(() => f),
+          autofocusLiveProvider.overrideWith(
+            () => _Live(AutofocusLive(run: weak)),
+          ),
+          nightFocusStateProvider.overrideWithValue(SetupStepState.done),
+          nightPolarAlignStateProvider.overrideWithValue(
+            SetupStepState.pending,
+          ),
+          simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
+          simplePreflightProvider.overrideWith(() => pilot),
+        ],
+      );
+      addTearDown(_c.dispose);
+      await _c.read(simplePermanentPierProvider.future);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: _c,
+          child: const MaterialApp(
+            home: Scaffold(body: Center(child: SimpleFocusPanel())),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.text('Done · Start imaging'));
+      expect(pilot.nexts, 1);
+    },
+  );
 
   for (final method in MainFocusMethod.values) {
-    testWidgets('Preflight with focus last: ${method.name} keeps one height when focus finishes', (tester) async {
-      Future<double> height(SetupStepState focus) async {
-        final c = ProviderContainer(overrides: [
-          focuserProvider.overrideWith(() => _Focuser(_focuser())),
-          mainFocusMethodProvider.overrideWith(() => _Pick(method)),
-          setupFocusStateProvider.overrideWithValue(focus),
-          setupPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
-          simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
-          simplePreflightProvider.overrideWith(_Pilot.new),
-        ]);
-        addTearDown(c.dispose);
-        await c.read(simplePermanentPierProvider.future);
-        // Loaded first: a derived provider refreshed after the next pumpWidget
-        // drops this container's tree leaves Riverpod's refresh timer pending.
-        await c.read(focuserProvider.future);
-        await tester.pumpWidget(UncontrolledProviderScope(
-          container: c,
-          child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
-        ));
-        await tester.pump();
-        return tester.getSize(find.byType(SimpleFocusPanel)).height;
-      }
+    testWidgets(
+      'Preflight with focus last: ${method.name} keeps one height when focus finishes',
+      (tester) async {
+        Future<double> height(SetupStepState focus) async {
+          final c = ProviderContainer(
+            overrides: [
+              focuserProvider.overrideWith(() => _Focuser(_focuser())),
+              mainFocusMethodProvider.overrideWith(() => _Pick(method)),
+              nightFocusStateProvider.overrideWithValue(focus),
+              nightPolarAlignStateProvider.overrideWithValue(
+                SetupStepState.pending,
+              ),
+              simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
+              simplePreflightProvider.overrideWith(_Pilot.new),
+            ],
+          );
+          addTearDown(c.dispose);
+          await c.read(simplePermanentPierProvider.future);
+          // Loaded first: a derived provider refreshed after the next pumpWidget
+          // drops this container's tree leaves Riverpod's refresh timer pending.
+          await c.read(focuserProvider.future);
+          await tester.pumpWidget(
+            UncontrolledProviderScope(
+              container: c,
+              child: const MaterialApp(
+                home: Scaffold(body: Center(child: SimpleFocusPanel())),
+              ),
+            ),
+          );
+          await tester.pump();
+          return tester.getSize(find.byType(SimpleFocusPanel)).height;
+        }
 
-      final running = await height(SetupStepState.pending);
-      expect(await height(SetupStepState.done), running);
-    });
+        final running = await height(SetupStepState.pending);
+        expect(await height(SetupStepState.done), running);
+      },
+    );
   }
 
-  testWidgets('Preflight on a permanent pier, focused by hand: Manual has the Done too', (tester) async {
-    // #1486 review: the Done only showed in Auto, so a Bahtinov focus could only Skip.
-    final pilot = _Pilot();
-    _c = ProviderContainer(overrides: [
-      focuserProvider.overrideWith(() => _Focuser(null)),
-      mainFocusMethodProvider.overrideWith(() => _Pick(MainFocusMethod.bahtinov)),
-      setupFocusStateProvider.overrideWithValue(SetupStepState.done),
-      setupPolarAlignStateProvider.overrideWithValue(SetupStepState.pending),
-      simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
-      simplePreflightProvider.overrideWith(() => pilot),
-    ]);
-    addTearDown(_c.dispose);
-    await _c.read(simplePermanentPierProvider.future);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: _c,
-      child: const MaterialApp(home: Scaffold(body: Center(child: SimpleFocusPanel()))),
-    ));
-    await tester.pump();
-    expect(_c.read(mainFocusMethodProvider), MainFocusMethod.bahtinov, reason: 'precondition: Manual');
-    await tester.tap(find.text('Done · Start imaging'));
-    expect(pilot.nexts, 1);
-  });
+  testWidgets(
+    'Preflight on a permanent pier, focused by hand: Manual has the Done too',
+    (tester) async {
+      // #1486 review: the Done only showed in Auto, so a Bahtinov focus could only Skip.
+      final pilot = _Pilot();
+      _c = ProviderContainer(
+        overrides: [
+          focuserProvider.overrideWith(() => _Focuser(null)),
+          mainFocusMethodProvider.overrideWith(
+            () => _Pick(MainFocusMethod.bahtinov),
+          ),
+          nightFocusStateProvider.overrideWithValue(SetupStepState.done),
+          nightPolarAlignStateProvider.overrideWithValue(
+            SetupStepState.pending,
+          ),
+          simplePermanentPierPrefsProvider.overrideWithValue(_PierPrefs()),
+          simplePreflightProvider.overrideWith(() => pilot),
+        ],
+      );
+      addTearDown(_c.dispose);
+      await _c.read(simplePermanentPierProvider.future);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: _c,
+          child: const MaterialApp(
+            home: Scaffold(body: Center(child: SimpleFocusPanel())),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(
+        _c.read(mainFocusMethodProvider),
+        MainFocusMethod.bahtinov,
+        reason: 'precondition: Manual',
+      );
+      await tester.tap(find.text('Done · Start imaging'));
+      expect(pilot.nexts, 1);
+    },
+  );
 
   group('the shutter follows the chip', () {
     Future<_Live> shutter(WidgetTester tester, MainFocusMethod pick,

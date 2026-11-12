@@ -4,7 +4,10 @@ import 'package:flutter/widgets.dart'
     show WidgetsBindingObserver, WidgetsFlutterBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../services/profile_api.dart';
 import '../services/simple_mode_prefs_service.dart';
+import 'profile_management_state.dart' show profileApiProvider;
+import 'settings/site_settings_state.dart';
 
 /// The prefs file backing [simpleModeProvider]; overridden in tests.
 final simpleModePrefsProvider = Provider<SimpleModePrefsService>(
@@ -119,22 +122,75 @@ final simplePermanentPierPrefsProvider = Provider<SimpleModePrefsService>(
 );
 
 /// The mount stays polar aligned (a permanent pier), so Simple Mode's
-/// Preflight skips polar alignment. Off by default.
-// shortcut: saved on this client, not in the rig's profile; move it to the
-// profile once the daemon carries the setting (it belongs to the rig).
+/// Preflight skips polar alignment. Off by default. #1565 — lives in the rig's
+/// site profile, so every device agrees. The old device-local file is carried
+/// over once: while it still says on and the profile says off, it goes to the
+/// profile and is cleared when that write lands (a failed write keeps it, and
+/// the next start retries). The file cannot carry an off: a switch-off the rig
+/// refuses shows what the rig holds again, and [set] throws while that is on,
+/// so the screen can say so. With no rig, the file alone decides.
 class SimplePermanentPierController extends AsyncNotifier<bool> {
-  bool? _pending;
+  bool _writing = false;
 
   @override
   Future<bool> build() async {
-    final loaded = await ref.read(simplePermanentPierPrefsProvider).load();
-    return _pending ?? loaded;
+    final files = ref.read(simplePermanentPierPrefsProvider);
+    final local = await files.load();
+    final api = ref.watch(profileApiProvider);
+    // A change another device made lands through the profile hydrate.
+    ref.listen(siteSettingsProvider.select((s) => s.permanentPier), (_, on) {
+      if (!_writing && state.hasValue) state = AsyncData(on);
+    });
+    if (api == null) return local;
+    final site = ref.read(siteSettingsProvider.notifier);
+    try {
+      await site.hydrateFromServer(api);
+    } catch (_) {
+      return local; // an unreachable rig: the file keeps the answer
+    }
+    final onRig = ref.read(siteSettingsProvider).permanentPier;
+    if (local && !onRig) {
+      try {
+        await _writePier(api, true);
+        await files.save(false);
+      } catch (_) {} // kept on the device; the next start retries
+      return true;
+    }
+    if (local) await files.save(false);
+    return onRig;
   }
 
   Future<void> set(bool on) async {
-    _pending = on;
     state = AsyncData(on);
-    await ref.read(simplePermanentPierPrefsProvider).save(on);
+    final files = ref.read(simplePermanentPierPrefsProvider);
+    final api = ref.read(profileApiProvider);
+    if (api == null) return files.save(on);
+    _writing = true;
+    try {
+      await _writePier(api, on);
+      await files.save(false);
+    } catch (_) {
+      if (!on) {
+        // A refused switch-off shows what the rig holds again. Still on there:
+        // throw, so the screen can say so, and write nothing to the file.
+        final onRig = ref.read(siteSettingsProvider).permanentPier;
+        state = AsyncData(onRig);
+        if (onRig) rethrow;
+      }
+      // An on the rig did not hear waits here for the next start; an off the
+      // rig already holds drops an on still waiting.
+      await files.save(on);
+    } finally {
+      _writing = false;
+    }
+  }
+
+  /// Puts only the pier onto the rig's stored site and into the local copy, so
+  /// a site edit the Full UI panel has not saved yet stays as typed.
+  Future<void> _writePier(ProfileApi api, bool on) async {
+    final stored = await api.getSiteSettings();
+    await api.putSiteSettings(stored.copyWith(permanentPier: on));
+    ref.read(siteSettingsProvider.notifier).setPermanentPier(on);
   }
 }
 

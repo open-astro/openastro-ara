@@ -49,7 +49,52 @@ class ProfileApi {
               connectTimeout: const Duration(seconds: 3),
               receiveTimeout: const Duration(seconds: 5),
             ),
-          );
+          ) {
+    _dio.interceptors.add(ownWriteRecorder);
+  }
+
+  // #1644 — when this device last wrote each profile section. The daemon's
+  // `profile.updated` event for that write comes back to the writer too, and
+  // must not reset the screen the writer is still editing.
+  static final Map<String, DateTime> _ownWrites = {};
+
+  /// Notes each profile-section write as it goes out (the daemon publishes the
+  /// event before its HTTP answer) and drops the note when the daemon refuses
+  /// the write (an error answer, e.g. 409 stale-session): that published
+  /// nothing, and must not hide another device's change to the section. Shared
+  /// with `PolarAlignApi`, whose settings save is a profile write too.
+  static final Interceptor ownWriteRecorder = InterceptorsWrapper(
+    onRequest: (req, handler) {
+      const prefix = '/api/v1/profile/';
+      if (req.method.toUpperCase() != 'GET' && req.path.startsWith(prefix)) {
+        final section = req.path.substring(prefix.length).split('/').first;
+        req.extra[_ownWriteAt] = _ownWrites[section] = DateTime.now();
+      }
+      handler.next(req);
+    },
+    onError: (err, handler) {
+      final at = err.requestOptions.extra[_ownWriteAt];
+      if (at != null && err.response != null) {
+        _ownWrites.removeWhere((_, t) => identical(t, at));
+      }
+      handler.next(err);
+    },
+  );
+
+  static const _ownWriteAt = 'ownWriteAt';
+
+  /// True when this device wrote [section] within [within] of now.
+  static bool wroteRecently(
+    String section, {
+    Duration within = const Duration(seconds: 3),
+  }) {
+    final at = _ownWrites[section];
+    return at != null && DateTime.now().difference(at) < within;
+  }
+
+  /// Process-wide, so tests start each case without the last one's writes.
+  @visibleForTesting
+  static void forgetOwnWrites() => _ownWrites.clear();
 
   /// §37 multi-profile — list the known profiles + which one is active
   /// (`GET /api/v1/profiles`).
@@ -1442,6 +1487,7 @@ class ProfileApi {
         softWarningAltitudeDeg:
             (j['soft_warning_altitude_deg'] as num?)?.toDouble() ?? 30,
         observerName: (j['observer_name'] as String?) ?? '',
+        permanentPier: (j['permanent_pier'] as bool?) ?? false,
       );
 
   static Map<String, dynamic> siteSettingsToJson(SiteSettings v) => {
@@ -1459,6 +1505,7 @@ class ProfileApi {
     'max_sequence_runtime_min': v.maxSequenceRuntimeMin,
     'soft_warning_altitude_deg': v.softWarningAltitudeDeg,
     'observer_name': v.observerName,
+    'permanent_pier': v.permanentPier,
   };
 
   static TwilightDefinition _twilightFromString(String? s) {

@@ -1,4 +1,9 @@
-import 'package:openastroara/models/polar_align.dart' show PolarAlignStages, PolarAlignStates;
+import 'package:openastroara/models/polar_align.dart'
+    show
+        PolarAlignLastResult,
+        PolarAlignStages,
+        PolarAlignStates,
+        PolarAlignStatus;
 import 'package:flutter/foundation.dart' show TargetPlatform;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -72,21 +77,38 @@ class _Live extends PolarAlignLiveNotifier {
   PolarAlignLive build() => const PolarAlignLive();
   void running() => state = PolarAlignLive(phase: PolarAlignStates.adjusting);
   void checked() => state = const PolarAlignLive(phase: PolarAlignStates.checked, stage: PolarAlignStages.check);
+  void stopped({String? zone}) => state = PolarAlignLive(
+    phase: PolarAlignStates.stopped,
+    stage: PolarAlignStages.fine,
+    zone: zone,
+  );
+}
+
+/// The rig's status: only its last polar-align result, which the test moves.
+class _StatusApi implements PolarAlignClient {
+  PolarAlignLastResult? last;
+  @override
+  Future<PolarAlignStatus?> getStatus() async =>
+      PolarAlignStatus(state: PolarAlignStates.idle, lastResult: last);
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 Future<ProviderContainer> _container({bool prefs = true}) async {
-  final c = ProviderContainer(overrides: [
-    polarAlignLiveProvider.overrideWith(_Live.new),
-    setupFocusStateProvider.overrideWith((ref) => ref.watch(_focus)),
-    setupPolarAlignStateProvider.overrideWith((ref) => ref.watch(_aligned)),
-    polarAlignApiProvider.overrideWithValue(_PolarApi()),
-    simplePermanentPierPrefsProvider.overrideWithValue(_Prefs(false)),
-    simpleModePrefsProvider.overrideWithValue(_Prefs(prefs)),
-    simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(prefs)),
-    simpleRunProvider.overrideWith(_Plan.new),
-    companionPlatformProvider.overrideWithValue(TargetPlatform.android),
-    companionShortestSideProvider.overrideWith((ref) => ref.watch(_side)),
-  ]);
+  final c = ProviderContainer(
+    overrides: [
+      polarAlignLiveProvider.overrideWith(_Live.new),
+      nightFocusStateProvider.overrideWith((ref) => ref.watch(_focus)),
+      nightPolarAlignStateProvider.overrideWith((ref) => ref.watch(_aligned)),
+      polarAlignApiProvider.overrideWithValue(_PolarApi()),
+      simplePermanentPierPrefsProvider.overrideWithValue(_Prefs(false)),
+      simpleModePrefsProvider.overrideWithValue(_Prefs(prefs)),
+      simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(prefs)),
+      simpleRunProvider.overrideWith(_Plan.new),
+      companionPlatformProvider.overrideWithValue(TargetPlatform.android),
+      companionShortestSideProvider.overrideWith((ref) => ref.watch(_side)),
+    ],
+  );
   addTearDown(c.dispose);
   await c.read(simplePermanentPierProvider.future);
   c.listen(simplePreflightProvider, (_, _) {});
@@ -264,5 +286,44 @@ void main() {
     await c.read(simpleModeProvider.notifier).set(false);
     expect(c.read(simpleRunProvider).started, isTrue);
     expect(c.read(simplePreflightProvider), isNull);
+  });
+
+  // Falsified by: simple_preflight_state.dart polarAlignLastResultProvider, drop the polarAlignLiveProvider watch.
+  test('a polar routine that ends reads the last result again', () async {
+    final api = _StatusApi()
+      ..last = PolarAlignLastResult(
+        errorArcmin: 4,
+        completedUtc: DateTime.now().toUtc(),
+      );
+    final c = ProviderContainer(
+      overrides: [
+        polarAlignLiveProvider.overrideWith(_Live.new),
+        polarAlignApiProvider.overrideWithValue(api),
+      ],
+    );
+    addTearDown(c.dispose);
+    c.listen(nightPolarAlignStateProvider, (_, _) {});
+    await c.read(polarAlignLastResultProvider.future);
+    expect(c.read(nightPolarAlignStateProvider), SetupStepState.done);
+
+    // A newer routine reads yellow and is stopped: the rig keeps that result.
+    final live = c.read(polarAlignLiveProvider.notifier) as _Live;
+    live.running();
+    api.last = PolarAlignLastResult(
+      errorArcmin: 18,
+      completedUtc: DateTime.now().toUtc(),
+    );
+    live.stopped(zone: 'yellow');
+    expect(c.read(nightPolarAlignStateProvider), SetupStepState.pending);
+    expect(
+      (await c.read(polarAlignLastResultProvider.future))?.errorArcmin,
+      18,
+    );
+
+    // One more, stopped before its first solve: still not aligned.
+    live.running();
+    live.stopped();
+    await c.read(polarAlignLastResultProvider.future);
+    expect(c.read(nightPolarAlignStateProvider), SetupStepState.pending);
   });
 }
