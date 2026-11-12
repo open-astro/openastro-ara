@@ -392,7 +392,8 @@ function renderClock() {
 // Apply a `{layer|cat:id: bool}` map: from the load URL at boot (`boot`: an off
 // catalog needs nothing), or pushed live when another device changed a toggle
 // (an off catalog is switched off; nothing is posted back, the value came from
-// the rig's copy of the same prefs).
+// the rig's copy of the same prefs). A pushed toggle never lights the Simple
+// Mode chart: its preset goes back on top, as after the saved toggles at boot.
 function applyDisplayPrefs(prefs, boot) {
   var core = stel.core;
   Object.keys(prefs).forEach(function (k) {
@@ -401,7 +402,9 @@ function applyDisplayPrefs(prefs, boot) {
     else if (k === 'dsos') { core.dsos.visible = on; core.dsos.hints_visible = on; }
     else setLayer(k, on);
   });
-  if (!boot) renderDisplayPanel();
+  if (boot) return;
+  if (CHART) applyChartPreset(core);
+  renderDisplayPanel();
 }
 function setLayer(name, on) {
   if (!stel) return;
