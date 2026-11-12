@@ -1,0 +1,570 @@
+<title>Ara Companion Phone</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0,0">
+<style>
+  /* Layout: a 390 × 844 phone stage on the left, the decisions beside it; stacks on a narrow screen.
+     Single dark look on purpose: DESIGN.md tokens (lib/theme/ara_colors.dart), as the other design/preview mocks. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --panel: #262626; --panel2: #2E2E2E; --input: #333333; --border: #404040;
+    --text: #E0E0E0; --text2: #A0A0A0; --faint: #606060;
+    --ok: #4CAF50; --warn: #FFB300; --err: #E53935; --err-text: #FF8A80; --info: #42A5F5; --link: #64B5F6;
+    --sel: #1976D2; --btn: #1565C0; --btn2: #424242; --tile: rgba(56,56,56,.55); --scrim: rgba(26,26,26,.90);
+    --alarm: rgba(60,8,8,.88); --stop: #D32F2F;
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys); margin: 0;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
+  .page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  h2 { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
+  p { margin: 0; }
+  p.note { color: var(--text2); max-width: 80ch; }
+  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--warn); color: var(--warn); margin-left: 6px; vertical-align: 3px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  .group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 12px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+  #tapnote { color: var(--text2); font-size: 13px; min-height: 20px; }
+
+  .layout { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+  .holder { flex: none; width: 390px; max-width: 100%; }
+  .notes { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+  .notes ul { margin: 0; padding-left: 18px; color: var(--text2); display: flex; flex-direction: column; gap: 4px; }
+  .notes li b { color: var(--text); font-weight: 600; }
+  .new { color: var(--warn); font-size: 11px; letter-spacing: .5px; text-transform: uppercase; }
+
+  /* The phone */
+  .phone { position: relative; width: 390px; height: 844px; border-radius: 44px; overflow: hidden; background: #000;
+           box-shadow: 0 0 0 10px #111, 0 0 0 11px #2a2a2a; transform-origin: top left; }
+  .phone.night { filter: url(#nightRed); }
+  .phone.ipad { width: 1024px; height: 768px; border-radius: 24px; }
+  .holder.wide { width: 1024px; }
+  canvas.sky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .ms { font-family: 'Material Symbols Outlined'; font-weight: normal; font-style: normal; line-height: 1; letter-spacing: normal; text-transform: none; white-space: nowrap; direction: ltr; -webkit-font-smoothing: antialiased; font-feature-settings: 'liga'; }
+  .sb { position: absolute; top: 0; left: 0; right: 0; height: 47px; display: flex; align-items: center; justify-content: space-between; padding: 6px 30px 0 34px; font: 600 15px var(--sys); color: #fff; z-index: 5; }
+  .notch { position: absolute; top: 11px; left: 50%; width: 120px; height: 34px; margin-left: -60px; background: #000; border-radius: 20px; z-index: 6; }
+  .home { position: absolute; bottom: 8px; left: 50%; width: 134px; height: 5px; margin-left: -67px; border-radius: 3px; background: rgba(255,255,255,.55); z-index: 40; }
+
+  .glass { background: var(--tile); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: inset 0 0 0 1px rgba(64,64,64,.8); border-radius: 10px; }
+  .strip { position: absolute; top: 49px; left: 8px; right: 8px; height: 48px; display: flex; align-items: center; gap: 4px; padding: 0 4px 0 12px; z-index: 10; }
+  .dots { flex: 1; display: flex; gap: 12px; align-items: center; min-width: 0; overflow: hidden; }
+  .dev { display: flex; align-items: center; gap: 3px; color: var(--text2); }
+  .dev .ms { font-size: 20px; }
+  i.d { flex: none; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  i.d.warn { background: var(--warn); } i.d.err { background: var(--err); } i.d.ring { background: none; border: 2px solid var(--info); }
+  .ib { width: 44px; height: 44px; border: 0; background: transparent; color: var(--text2); display: grid; place-items: center; cursor: pointer; border-radius: 10px; flex: none; }
+  .ib .ms { font-size: 24px; }
+  .ib[aria-pressed="true"] { color: var(--info); }
+
+  .pills { position: absolute; top: 103px; left: 8px; right: 8px; display: flex; flex-direction: column; gap: 6px; z-index: 12; }
+  .merged { align-self: flex-start; max-width: 100%; display: flex; flex-direction: column; font-size: 14px; }
+  .merged.wide { align-self: stretch; }
+  .merged > div { display: flex; align-items: center; gap: 8px; padding: 8px 12px; min-height: 44px; }
+  .merged > div + div { border-top: 1px solid var(--border); }
+  .merged .ms { font-size: 20px; }
+  .stat b { color: var(--ok); font-weight: 600; }
+  .msg > .ms { color: var(--ok); }
+  .msg.q { flex-direction: column; align-items: stretch; gap: 8px; padding: 12px; }
+  .msg.q .row { display: flex; gap: 8px; align-items: flex-start; }
+  .msg.q .row .ms { color: var(--info); margin-top: 1px; }
+  .msg.q .acts { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+  .b { height: 44px; padding: 0 16px; border: 0; border-radius: 10px; font: 600 14px var(--sys); cursor: pointer; color: #fff; background: var(--btn); }
+  .b.sec { background: transparent; color: var(--text); box-shadow: inset 0 0 0 1px var(--border); }
+  .b.go { background: var(--ok); color: #000; }
+  .b.red { background: var(--stop); }
+  .b.full { width: 100%; }
+
+  /* Facts and plan squares sit above the graph row in both layouts. */
+  .facts { position: absolute; left: 8px; display: flex; gap: 6px; z-index: 8; }
+  .fact { width: 72px; padding: 6px 8px; display: flex; flex-direction: column; }
+  .fact small { font-size: 11px; color: var(--text2); }
+  .fact b { font-size: 18px; font-weight: 300; font-variant-numeric: tabular-nums; }
+  .squares { position: absolute; right: 8px; display: flex; flex-direction: row-reverse; gap: 6px; z-index: 8; }
+  .sq { width: 72px; height: 100px; padding: 6px 8px; display: flex; flex-direction: column; font-size: 11.5px; color: var(--text2); line-height: 1.35; }
+  .sq b { color: var(--text); font-size: 14px; font-weight: 600; }
+  .sq.cur { box-shadow: inset 0 0 0 1.5px var(--info); }
+  .sq .bar { height: 3px; border-radius: 2px; background: #333; margin: 3px 0; overflow: hidden; }
+  .sq .bar i { display: block; height: 100%; background: var(--info); }
+  .graph { position: absolute; left: 8px; height: 56px; z-index: 8; padding: 4px 8px; display: flex; gap: 8px; }
+  .graph svg { flex: 1; height: 100%; display: block; }
+  .graph small { position: absolute; left: 10px; top: 3px; font-size: 11px; color: var(--text2); }
+
+  .stopb { position: absolute; width: 60px; height: 60px; border: 0; border-radius: 10px; background: var(--stop); color: #fff; font: 700 14px var(--sys); letter-spacing: .5px; cursor: pointer; z-index: 30; display: grid; place-items: center; touch-action: none; }
+  .stopb svg { position: absolute; inset: 4px; width: 52px; height: 52px; transform: rotate(-90deg); pointer-events: none; }
+  .stopb circle { fill: none; stroke: #fff; stroke-width: 3; stroke-dasharray: 151; stroke-dashoffset: 151; }
+  .stopb.holding circle { transition: stroke-dashoffset 2s linear; stroke-dashoffset: 0; }
+
+  .shutter { width: 64px; height: 64px; border-radius: 50%; border: 3px solid #fff; background: transparent; display: grid; place-items: center; cursor: pointer; flex: none; padding: 0; }
+  .shutter i { display: block; width: 50px; height: 50px; border-radius: 50%; background: #fff; }
+  .shutter.run i { width: 22px; height: 22px; border-radius: 4px; background: var(--err); }
+  .shutter.pause i { width: 22px; height: 24px; border-radius: 0; background: none; border-left: 7px solid #fff; border-right: 7px solid #fff; }
+  .shutter.pause { box-shadow: 0 0 0 3px rgba(66,165,245,.35); border-color: var(--info); }
+  .chip { min-width: 60px; height: 44px; padding: 2px 8px; border: 0; color: var(--text); cursor: pointer; font: 12px/1.2 var(--sys); display: flex; flex-direction: column; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+  .chip .ms { font-size: 16px; color: var(--text2); }
+  .rb { width: 56px; min-height: 52px; border: 0; background: transparent; color: var(--text2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font: 11px var(--sys); cursor: pointer; border-radius: 10px; padding: 4px 0; }
+  .rb .ms { font-size: 24px; }
+  .rb[aria-pressed="true"] { color: #fff; background: var(--sel); }
+
+  /* A: today's narrow layout, rails on the edges */
+  .railL, .railR { position: absolute; z-index: 9; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px; }
+  .railL { left: 8px; top: 300px; }
+  .railR { right: 8px; top: 250px; width: 72px; gap: 8px; padding: 8px 4px; }
+  .modename { border: 0; background: transparent; color: var(--text); font: 600 12px var(--sys); cursor: pointer; min-height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .modename .ms { font-size: 16px; color: var(--text2); }
+  .grid5 { position: absolute; z-index: 25; right: 88px; top: 250px; width: 230px; padding: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .grid5 button { min-height: 64px; border: 0; border-radius: 10px; background: rgba(0,0,0,.25); color: var(--text); font: 13px var(--sys); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+  .grid5 button .ms { font-size: 24px; color: var(--text2); }
+  .grid5 button[aria-pressed="true"] { background: var(--sel); color: #fff; } .grid5 button[aria-pressed="true"] .ms { color: #fff; }
+
+  /* B: the rails fold into one deck at the bottom */
+  .deck { position: absolute; left: 8px; right: 8px; bottom: 22px; z-index: 20; padding: 4px 6px 8px; }
+  .modes { display: flex; justify-content: center; gap: 2px; height: 36px; align-items: center; overflow-x: auto; scrollbar-width: none; }
+  .modes button { border: 0; background: transparent; color: var(--text2); font: 600 13px var(--sys); padding: 0 10px; min-height: 36px; cursor: pointer; letter-spacing: .3px; white-space: nowrap; border-radius: 8px; }
+  .modes button[aria-pressed="true"] { color: var(--warn); }
+  .ctl { display: grid; grid-template-columns: auto 1fr auto 1fr auto; align-items: center; gap: 4px; }
+  .ctl .left { display: flex; }
+  .ctl .shut { display: flex; align-items: center; gap: 6px; justify-self: center; }
+  .ctl .stopb { position: relative; }
+  .deck .rb { width: 46px; }
+
+  .panel { position: absolute; left: 8px; right: 8px; z-index: 22; background: var(--scrim); box-shadow: inset 0 0 0 1px var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+  .panel .hd { display: flex; align-items: center; gap: 8px; }
+  .panel .hd h3 { flex: 1; margin: 0; font-size: 16px; font-weight: 600; }
+  .readout { font-size: 30px; font-weight: 300; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .readout small { font-size: 14px; color: var(--text2); margin-left: 4px; }
+  .tiles { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; }
+  .t { background: var(--tile); border-radius: 10px; padding: 8px 10px; box-shadow: inset 0 0 0 1px var(--border); display: flex; flex-direction: column; min-width: 0; }
+  .t small { font-size: 12px; color: var(--text2); }
+  .t b { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .segs { display: flex; border-radius: 10px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--border); }
+  .segs span { flex: 1; text-align: center; padding: 11px 6px; font-size: 14px; color: var(--text); }
+  .segs span + span { border-left: 1px solid var(--border); }
+  .segs span.on { background: var(--sel); color: #fff; }
+  .curve { height: 150px; background: rgba(0,0,0,.25); border-radius: 10px; position: relative; }
+  .curve svg { position: absolute; inset: 8px; width: calc(100% - 16px); height: calc(100% - 16px); }
+  .sec { font-size: 12px; color: var(--text2); letter-spacing: .5px; text-transform: uppercase; margin-top: 4px; }
+  .best { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .best .t { flex: none; width: 118px; }
+  .frow { display: grid; grid-template-columns: 34px 1fr 1fr; gap: 6px; align-items: center; }
+  .frow b { font-size: 14px; }
+  .val { background: var(--tile); border-radius: 10px; min-height: 44px; display: flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; box-shadow: inset 0 0 0 1px var(--border); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chips span { padding: 8px 14px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--border); font-size: 14px; }
+  .chips span.on { background: var(--sel); color: #fff; box-shadow: none; }
+  .search { display: flex; align-items: center; gap: 8px; background: var(--input); border-radius: 10px; min-height: 44px; padding: 0 12px; color: var(--text2); }
+
+  /* Settings page pushed over the shell */
+  .pageover { position: absolute; inset: 0; background: var(--bg); z-index: 26; padding-top: 47px; display: flex; flex-direction: column; }
+  .appbar { height: 52px; display: flex; align-items: center; gap: 4px; padding: 0 8px; border-bottom: 1px solid var(--border); }
+  .appbar h3 { margin: 0; font-size: 16px; font-weight: 600; }
+  .scroll { flex: 1; overflow-y: auto; padding: 12px 12px 120px; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: var(--panel); border-radius: 10px; box-shadow: inset 0 0 0 1px var(--border); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .card h4 { margin: 0; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .card h4 .ms { font-size: 20px; color: var(--text2); }
+  .kv { display: flex; justify-content: space-between; align-items: center; min-height: 44px; gap: 12px; border-top: 1px solid var(--border); font-size: 14px; }
+  .kv span:last-child { color: var(--text2); text-align: right; }
+  .navrow { display: flex; align-items: center; gap: 12px; min-height: 52px; font-size: 15px; border-top: 1px solid var(--border); }
+  .navrow:first-of-type { border-top: 0; }
+  .navrow .ms { color: var(--text2); font-size: 22px; }
+  .navrow span:nth-child(2) { flex: 1; }
+
+  .alarm { position: absolute; inset: 0; background: var(--alarm); z-index: 50; display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 14px; padding: 60px 24px; text-align: center; }
+  .alarm .ms { font-size: 64px; color: var(--err-text); }
+  .alarm h3 { margin: 0; font-size: 24px; font-weight: 600; }
+  .alarm p { color: var(--text); font-size: 15px; }
+  .alarm .vib { font-size: 13px; color: var(--err-text); display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .alarm .vib .ms { font-size: 18px; }
+  .shake { animation: shake .4s linear infinite; }
+  @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
+  @media (prefers-reduced-motion: reduce) { .shake { animation: none; } .stopb.holding circle { transition: none; } }
+
+  .rigbar { position: absolute; left: 8px; z-index: 21; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; }
+  .rigbar span { color: var(--warn); font-weight: 600; flex: 1; }
+
+  .badge { position: absolute; z-index: 60; font-size: 11px; color: #000; background: var(--warn); border-radius: 8px; padding: 1px 6px; pointer-events: none; }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="nightRed" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values=".2126 .7152 .0722 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/></filter></svg>
+
+<div class="page">
+  <h1>Companion Mode on a phone <span class="tag">mock</span></h1>
+  <p class="note">Simple Mode laid out for an iPhone in portrait (390 × 844), for <a href="https://github.com/open-astro/openastro-ara/issues/1772" style="color:var(--link)">#1772</a>. There's no Full UI button and no Experimental toggle. Layout B, the bottom deck, was chosen on 2026-11-11. A stays on the switch for comparison. Tap the rails, the shutter and the chip, and hold STOP for 2 s. All numbers are made-up examples.</p>
+
+  <div class="controls">
+    <div class="group"><span class="lbl">Device</span>
+      <div class="seg" id="deviceSeg"><button data-v="phone" aria-pressed="true">iPhone</button><button data-v="ipad" aria-pressed="false">iPad</button></div></div>
+    <div class="group" id="pillsGroup" hidden><span class="lbl">Pills</span>
+      <div class="seg" id="ipadPillsSeg"><button data-v="two" aria-pressed="false">Today: two pills</button><button data-v="one" aria-pressed="true">One card (chosen)</button></div></div>
+    <div class="group" id="layoutGroup"><span class="lbl">Layout</span>
+      <div class="seg" id="layoutSeg">
+        <button data-v="A" aria-pressed="false">A · Edge rails</button>
+        <button data-v="B" aria-pressed="true">B · Bottom deck (chosen)</button>
+      </div></div>
+    <div class="group"><span class="lbl">Screen</span>
+      <div class="seg" id="sceneSeg">
+        <button data-v="imaging" aria-pressed="true">Imaging</button>
+        <button data-v="focus" aria-pressed="false">Focus</button>
+        <button data-v="plan" aria-pressed="false">Plan</button>
+        <button data-v="settings" aria-pressed="false">Settings</button>
+        <button data-v="gps" aria-pressed="false">Location pill</button>
+        <button data-v="alarm" aria-pressed="false">Safety alarm</button>
+        <button data-v="norig" aria-pressed="false">No rig</button>
+      </div></div>
+    <div class="group"><span class="lbl">Night</span>
+      <div class="seg" id="nightSeg"><button data-v="0" aria-pressed="true">Off</button><button data-v="1" aria-pressed="false">On</button></div></div>
+  </div>
+  <div id="tapnote" aria-live="polite"></div>
+
+  <div class="layout">
+    <div class="holder" id="holder"><div class="phone" id="phone"></div></div>
+    <div class="notes">
+      <div><h2>What's the same as the iPad</h2>
+        <ul>
+          <li>The same sections: Preview, Focus, P.A., Guider and Plan, plus Sky, Info and Library.</li>
+          <li>The same STOP: 60 px, red, a 2 s hold with a filling ring. It's on every screen in both layouts, including Settings and over every panel.</li>
+          <li>Plan squares in the bottom-right corner, fact tiles in the bottom left.</li>
+          <li>No dialogs, sheets or snackbars. Questions are pills, and panels open in place.</li>
+        </ul></div>
+      <div><h2>What's different on a phone</h2>
+        <ul>
+          <li><b>No way into the full UI.</b> The strip has search, Night mode and Settings, and no Full UI button.</li>
+          <li><b>One status card, top left</b> (chosen 2026-11-11): the camera status pill and the message pills merge into one card. The camera status is its first line, and results, errors and questions stack under it. The iPad and desktop get the same card (#1782).</li>
+          <li><b>Panels take the full width</b>, between the strip and the controls, and scroll inside.</li>
+          <li><b>Layout B</b> moves both rails into one deck at the bottom, where your thumb is. Section names sit in a row you can swipe, like a camera app. Sky, Info and Library are on the left, the shutter and chip in the middle, STOP on the right. <b>Layout A</b> is today's narrow layout, with the rails on the screen's edges.</li>
+          <li><b>Location pill</b>: when the rig has no recent time sync, a pill offers this phone's location and time. Not now holds until the next session.</li>
+          <li><b>Safety alarm</b>: sound and vibration on top of today's full-screen alarm.</li>
+          <li>In <b>landscape</b>, today's narrow layout stays as it is (not drawn here).</li>
+        </ul></div>
+      <div><h2>iPad</h2>
+        <ul><li>One card on every device (chosen 2026-11-11, #1782, built after #1771). Switch Device to iPad; Pills keeps today's two pills for comparison.</li></ul></div>
+      <div><h2>Open questions</h2>
+        <ul>
+          <li>Should the screen stay awake while a plan is running?</li>
+          <li>Where Monitor (#1724) opens from on a phone. B could give it a long press on the shutter or its own word in the section row.</li>
+        </ul></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const S = { device: 'phone', ipadPills: 'one', layout: 'B', scene: 'imaging', mode: 'plan', panel: null, grid: false, night: false, run: true, gps: true };
+const MODES = [
+  ['preview', 'Preview', 'photo_camera'], ['focus', 'Focus', 'center_focus_strong'],
+  ['polar', 'P.A.', 'explore'], ['guider', 'Guider', 'my_location'], ['plan', 'Plan', 'event_note'],
+];
+const note = document.getElementById('tapnote');
+const phone = document.getElementById('phone');
+const say = t => { note.textContent = t; };
+const ms = n => `<span class="ms" aria-hidden="true">${n}</span>`;
+
+function sky() {
+  const c = document.createElement('canvas'); c.className = 'sky'; c.width = 780; c.height = 1688;
+  const g = c.getContext('2d');
+  g.fillStyle = '#05060a'; g.fillRect(0, 0, c.width, c.height);
+  const neb = (x, y, r, col) => { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, c.width, c.height); };
+  neb(400, 760, 340, 'rgba(150,60,80,.45)'); neb(330, 690, 200, 'rgba(220,120,140,.35)'); neb(470, 830, 160, 'rgba(90,140,200,.30)'); neb(395, 740, 60, 'rgba(255,230,220,.55)');
+  let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 1400; i++) { const r = rnd() ** 4 * 3 + .4; g.fillStyle = `rgba(255,255,255,${.35 + rnd() * .65})`; g.beginPath(); g.arc(rnd() * c.width, rnd() * c.height, r, 0, 7); g.fill(); }
+  return c;
+}
+const skyCanvas = sky();
+
+const strip = () => `
+  <div class="strip glass">
+    <div class="dots" aria-label="Devices">
+      <span class="dev" title="Camera">${ms('photo_camera')}<i class="d"></i></span>
+      <span class="dev" title="Mount">${ms('explore')}<i class="d"></i></span>
+      <span class="dev" title="Guider">${ms('my_location')}<i class="d"></i></span>
+      <span class="dev" title="Focuser">${ms('center_focus_strong')}<i class="d"></i></span>
+      <span class="dev" title="Filter wheel">${ms('filter_vintage')}<i class="d"></i></span>
+      <span class="dev" title="Weather">${ms('cloud')}<i class="d ${S.scene === 'alarm' ? 'err' : ''}"></i></span>
+    </div>
+    <button class="ib" data-a="search" aria-label="Search">${ms('search')}</button>
+    <button class="ib" data-a="night" aria-label="Night mode" aria-pressed="${S.night}">${ms('bedtime')}</button>
+    <button class="ib" data-a="settings" aria-label="Settings">${ms('settings')}</button>
+  </div>`;
+
+const stopBtn = (style) => `<button class="stopb" style="${style}" aria-label="Emergency Stop, hold for 2 seconds"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/></svg>STOP</button>`;
+
+// Phones: the camera status and the message pills are one card on the left; status first, messages under it.
+function pillParts() {
+  const msgs = [];
+  if (S.scene === 'imaging') msgs.push(`<div class="msg">${ms('check_circle')}<span>Autofocus done: best at 12 840, HFR 2.08.</span></div>`);
+  if (S.scene === 'gps' && S.gps) msgs.push(`
+    <div class="msg q">
+      <div class="row">${ms('my_location')}<span>The rig has no clock or site yet. Send this phone's location and time?</span></div>
+      <div class="acts"><button class="b sec" data-a="gpsno">Not now</button><button class="b" data-a="gpsyes">Send</button></div>
+    </div>`);
+  if (S.scene === 'gps' && !S.gps) msgs.push(`<div class="msg">${ms('check_circle')}<span>Sent: 12.34° S 56.78° E, 21:48 NZDT.</span></div>`);
+  const status = S.scene === 'norig' ? '' : S.run
+    ? `<div class="stat"><b>Exposing</b><span>R · 3 min · 1:12 left</span></div>`
+    : `<div class="stat"><span>Idle</span></div>`;
+  return { msgs, status };
+}
+function pills() {
+  const { msgs, status } = pillParts();
+  if (!status && !msgs.length) return '';
+  return `<div class="pills"><div class="merged glass${msgs.some(m => m.includes('msg q')) ? ' wide' : ''}" role="status">${status}${msgs.join('')}</div></div>`;
+}
+
+function bottomInfo(bottomOfStack) {
+  if (S.scene === 'norig') return '';
+  const gy = bottomOfStack, fy = gy + 62;
+  const rightGap = S.layout === 'A' ? 76 : 8;
+  return `
+    <div class="graph glass" style="bottom:${gy}px;right:${rightGap}px"><small>Guiding · 0.62″</small>
+      <svg viewBox="0 0 200 48" preserveAspectRatio="none"><polyline fill="none" stroke="#42A5F5" stroke-width="1.5" points="0,26 12,22 24,28 36,24 48,30 60,21 72,25 84,27 96,20 108,26 120,29 132,23 144,25 156,22 168,28 180,24 200,25"/><polyline fill="none" stroke="#FF8A80" stroke-width="1.5" stroke-dasharray="4 3" points="0,24 12,27 24,23 36,26 48,22 60,27 72,24 84,21 96,26 108,24 120,22 132,27 144,23 156,26 168,22 180,26 200,24"/></svg>
+      <svg viewBox="0 0 60 48" preserveAspectRatio="none" style="flex:0 0 60px"><path d="M0,48 L8,46 14,40 20,22 24,8 28,4 32,14 38,34 46,44 60,48Z" fill="#A0A0A0" opacity=".6"/></svg>
+    </div>
+    <div class="facts" style="bottom:${fy}px">
+      <div class="fact glass"><small>HFR</small><b>2.14</b></div>
+      <div class="fact glass"><small>Stars</small><b>812</b></div>
+    </div>
+    <div class="squares" style="bottom:${fy}px;right:${rightGap}px">
+      <div class="sq glass cur"><b>M42</b>23 / 60<div class="bar"><i style="width:38%"></i></div>R · 3 min<span>1 h 51 m</span></div>
+      <div class="sq glass"><b>IC 434</b>0 / 40<div class="bar"><i style="width:0"></i></div>Ha · 5 min<span>3 h 20 m</span><span>Parks</span></div>
+    </div>`;
+}
+
+function panelBody(mode) {
+  if (mode === 'focus') return `
+    <div class="hd"><h3>Focus</h3><button class="ib" data-a="close" aria-label="Close">${ms('close')}</button></div>
+    <div class="segs"><span class="on">Main</span><span>Guide</span></div>
+    <div class="segs"><span class="on">Auto</span><span>Manual</span></div>
+    <div>Measuring step 5 of 9</div>
+    <div class="readout">2.31<small>HFR</small></div>
+    <div class="curve"><svg viewBox="0 0 300 130" preserveAspectRatio="none">
+      <line x1="0" y1="129" x2="300" y2="129" stroke="#404040"/>
+      <path d="M10,18 Q150,190 290,22" fill="none" stroke="#606060" stroke-dasharray="4 4"/>
+      ${[[10,20],[45,52],[80,80],[115,98],[150,106]].map(([x,y]) => `<circle cx="${x}" cy="${y}" r="4" fill="#E0E0E0"/>`).join('')}
+    </svg></div>
+    <div class="tiles"><div class="t"><small>Position</small><b>12 840</b></div><div class="t"><small>Temp</small><b>8.4 °C</b></div><div class="t"><small>Filter</small><b>L</b></div></div>`;
+  if (mode === 'plan') return `
+    <div class="hd"><h3>Plan</h3><button class="ib" data-a="close" aria-label="Close">${ms('close')}</button></div>
+    <div class="sec">Tonight's best</div>
+    <div class="best">
+      <div class="t"><b>M42</b><small>Nebula · up 62°</small></div>
+      <div class="t"><b>IC 434</b><small>Nebula · up 58°</small></div>
+      <div class="t"><b>NGC 2070</b><small>Nebula · up 71°</small></div>
+    </div>
+    <div class="search">${ms('search')}<span>Search the sky</span></div>
+    <div><b style="font-size:16px">M42</b> <span style="color:var(--text2)">62° up · max 74°</span></div>
+    <div class="chips"><span class="on">R</span><span class="on">G</span><span class="on">B</span><span>L</span><span>Ha</span></div>
+    <div class="frow"><b>R</b><span class="val">3 min</span><span class="val">20 frames</span></div>
+    <div class="frow"><b>G</b><span class="val">3 min</span><span class="val">20 frames</span></div>
+    <div class="frow"><b>B</b><span class="val">3 min</span><span class="val">20 frames</span></div>
+    <div style="color:var(--text2)">60 frames · 3 h 00 m</div>
+    <button class="b full">Add to queue</button>`;
+  if (mode === 'polar') return `
+    <div class="hd"><h3>Polar align</h3><button class="ib" data-a="close" aria-label="Close">${ms('close')}</button></div>
+    <div class="segs"><span class="on">Loop</span><span>Single</span></div>
+    <div class="tiles"><div class="t"><small>Exposure</small><b>3 s</b></div><div class="t"><small>Altitude</small><b>Lower 3.2′</b></div><div class="t"><small>Azimuth</small><b>West 14.1′</b></div></div>
+    <div style="color:var(--text2)">The shutter starts the routine; its red square stops it.</div>`;
+  if (mode === 'guider') return `
+    <div class="hd"><h3>Guider</h3><button class="ib" data-a="close" aria-label="Close">${ms('close')}</button></div>
+    <div style="color:var(--ok);font-weight:600">Guiding</div>
+    <div class="readout">0.62″<small>RMS</small></div>
+    <div class="segs"><span class="on">Guide</span><span>Tuning</span><span>Tools</span></div>
+    <div class="tiles"><div class="t"><small>RA</small><b>0.41″</b></div><div class="t"><small>Dec</small><b>0.47″</b></div><div class="t"><small>Exposure</small><b>2 s</b></div></div>`;
+  return `
+    <div class="hd"><h3>Preview</h3><button class="ib" data-a="close" aria-label="Close">${ms('close')}</button></div>
+    <div class="tiles"><div class="t"><small>Exposure</small><b>5 s</b></div><div class="t"><small>Gain</small><b>100</b></div><div class="t"><small>Filter</small><b>L</b></div></div>
+    <div class="segs"><span class="on">Loop</span><span>Single</span></div>`;
+}
+
+const chipText = { preview: ['5 s', '100'], focus: ['Auto', 'Main'], polar: ['3 s', 'Loop'], guider: ['0.62″', 'RMS'], plan: ['M42', '23/60'] };
+const shutterClass = () => S.mode === 'plan' ? (S.run ? 'pause' : '') : (S.run ? 'run' : '');
+const leftRail = () => [['sky', 'Sky Map', 'map'], ['info', 'Info', 'info'], ['library', 'Library', 'photo_library']]
+  .map(([k, l, i]) => `<button class="rb" data-a="${k}" aria-pressed="${k === 'info'}">${ms(i)}${l}</button>`).join('');
+
+function layoutA() {
+  const m = MODES.find(x => x[0] === S.mode);
+  const [c1, c2] = chipText[S.mode];
+  let h = `
+    <div class="railL glass">${leftRail()}</div>
+    <div class="railR glass">
+      <button class="modename" data-a="grid">${ms(m[2])}${m[1]}</button>
+      <button class="shutter ${shutterClass()}" data-a="shutter" aria-label="Shutter"><i></i></button>
+      <button class="chip glass" data-a="chip">${ms('tune')}<span>${c1}</span><span style="color:var(--text2)">${c2}</span></button>
+    </div>
+    ${stopBtn('right:8px;bottom:30px')}
+    ${bottomInfo(30)}`;
+  if (S.grid) h += `<div class="grid5 glass">${MODES.map(([k, l, i]) => `<button data-mode="${k}" aria-pressed="${k === S.mode}">${ms(i)}${l}</button>`).join('')}</div>`;
+  if (S.panel) h += `<div class="panel" style="top:103px;bottom:100px;right:88px">${panelBody(S.panel)}</div>`;
+  return h;
+}
+
+function layoutB() {
+  const [c1, c2] = chipText[S.mode];
+  let h = `
+    <div class="deck glass">
+      <div class="modes" role="tablist">${MODES.map(([k, l]) => `<button data-mode="${k}" aria-pressed="${k === S.mode}">${l.toUpperCase()}</button>`).join('')}</div>
+      <div class="ctl">
+        <div class="left">${leftRail()}</div><span></span>
+        <div class="shut">
+          <button class="shutter ${shutterClass()}" data-a="shutter" aria-label="Shutter"><i></i></button>
+          <button class="chip" data-a="chip">${ms('tune')}<span>${c1}</span><span style="color:var(--text2)">${c2}</span></button>
+        </div><span></span>
+        ${stopBtn('')}
+      </div>
+    </div>
+    ${bottomInfo(160)}`;
+  if (S.panel) h += `<div class="panel" style="top:103px;bottom:160px">${panelBody(S.panel)}</div>`;
+  return h;
+}
+
+function settingsPage() {
+  return `
+    <div class="pageover">
+      <div class="appbar"><button class="ib" data-a="back" aria-label="Back">${ms('arrow_back')}</button><h3>Settings</h3></div>
+      <div class="scroll">
+        <div class="card">
+          <div class="navrow">${ms('settings_input_component')}<span>Rig</span>${ms('chevron_right')}</div>
+          <div class="navrow">${ms('public')}<span>Site and time</span>${ms('chevron_right')}</div>
+          <div class="navrow">${ms('photo_camera')}<span>Camera</span>${ms('chevron_right')}</div>
+          <div class="navrow">${ms('my_location')}<span>Guider</span>${ms('chevron_right')}</div>
+        </div>
+      </div>
+      ${stopBtn('right:16px;bottom:30px')}
+    </div>`;
+}
+
+// iPad (1024 × 768): today's two pills or the one card, on the Pills switch.
+function ipadPills() {
+  const { msgs, status } = pillParts();
+  const q = msgs.some(m => m.includes('msg q'));
+  if (S.ipadPills === 'one') return (status || msgs.length)
+    ? `<div class="pills" style="top:84px;right:auto;width:420px"><div class="merged glass${q ? ' wide' : ''}" role="status">${status}${msgs.join('')}</div></div>` : '';
+  let h = msgs.length ? `<div class="pills" style="top:84px;right:auto;width:420px">${msgs.map(m => `<div class="merged glass${m.includes('msg q') ? ' wide' : ''}">${m}</div>`).join('')}</div>` : '';
+  if (status) h += `<div class="pills" style="top:84px;left:auto;right:8px;width:300px"><div class="merged glass" style="align-self:flex-end">${status}</div></div>`;
+  return h;
+}
+function renderIpad() {
+  const m = MODES.find(x => x[0] === S.mode);
+  const [c1, c2] = chipText[S.mode];
+  let h = `<div class="sb" style="height:26px;padding:4px 20px 0;font-size:13px"><span>21:48  Tue 11 Nov</span><span style="display:flex;gap:6px;align-items:center">${ms('wifi')}${ms('battery_5_bar')}</span></div>`;
+  h += strip().replace('class="strip glass"', 'class="strip glass" style="top:28px"') + ipadPills();
+  h += `
+    <div class="railL glass" style="top:290px">${leftRail()}</div>
+    <div class="railR glass" style="top:260px">
+      <button class="modename" data-a="grid">${ms(m[2])}${m[1]}</button>
+      <button class="shutter ${shutterClass()}" data-a="shutter" aria-label="Shutter"><i></i></button>
+      <button class="chip glass" data-a="chip">${ms('tune')}<span>${c1}</span><span style="color:var(--text2)">${c2}</span></button>
+    </div>
+    ${stopBtn('right:8px;bottom:12px')}
+    ${bottomInfoIpad()}`;
+  if (S.scene === 'norig') h += `<div class="rigbar glass" style="bottom:12px;right:76px;left:auto;width:340px"><span>Rig not connected</span><button class="b" data-a="connect">Connect</button></div>`;
+  if (S.scene === 'alarm') h += alarmHtml();
+  phone.innerHTML = h;
+  phone.prepend(skyCanvas);
+  phone.classList.toggle('night', S.night);
+  wireStop();
+}
+function bottomInfoIpad() {
+  const saved = S.layout; S.layout = 'A';
+  const h = bottomInfo(12).replace('right:76px', 'right:76px;width:420px;left:8px');
+  S.layout = saved; return h;
+}
+function alarmHtml() {
+  return `
+    <div class="alarm" role="alertdialog" aria-label="Safety alarm">
+      <span class="ms shake" aria-hidden="true">warning</span>
+      <h3>Unsafe: rain</h3>
+      <p>The safety monitor reports rain. The plan is paused and the mount is still tracking.</p>
+      <div class="vib">${ms('vibration')}Vibrating and sounding until you answer</div>
+      <button class="b red full" data-a="abort" style="height:56px;font-size:16px">Emergency Abort</button>
+      <button class="b sec full" data-a="override">Override for 10 min</button>
+    </div>`;
+}
+
+function render() {
+  phone.classList.toggle('ipad', S.device === 'ipad');
+  document.getElementById('holder').classList.toggle('wide', S.device === 'ipad');
+  document.getElementById('pillsGroup').hidden = S.device !== 'ipad';
+  document.getElementById('layoutGroup').hidden = S.device === 'ipad';
+  fit();
+  if (S.device === 'ipad') return renderIpad();
+  let h = `<div class="sb"><span>21:48</span><span style="display:flex;gap:6px;align-items:center">${ms('signal_cellular_alt')}${ms('wifi')}${ms('battery_5_bar')}</span></div><div class="notch"></div>`;
+  h += strip() + pills();
+  h += S.layout === 'A' ? layoutA() : layoutB();
+  if (S.scene === 'norig') {
+    const bottom = S.layout === 'A' ? 30 : 162;
+    const right = S.layout === 'A' ? 76 : 8;
+    h += `<div class="rigbar glass" style="bottom:${bottom}px;right:${right}px"><span>Rig not connected</span><button class="b" data-a="connect">Connect</button></div>`;
+  }
+  if (S.scene === 'settings') h += settingsPage();
+  if (S.scene === 'alarm') h += alarmHtml();
+  h += '<div class="home"></div>';
+  phone.innerHTML = h;
+  phone.prepend(skyCanvas);
+  phone.classList.toggle('night', S.night);
+  wireStop();
+}
+
+function wireStop() {
+  phone.querySelectorAll('.stopb').forEach(b => {
+  let t;
+  const cancel = () => { clearTimeout(t); b.classList.remove('holding'); };
+  b.addEventListener('pointerdown', e => { e.preventDefault(); b.classList.add('holding'); say('Hold to stop…');
+    t = setTimeout(() => { b.classList.remove('holding'); S.run = false; S.scene = S.scene === 'imaging' ? 'idle' : S.scene; render(); say('Emergency Stop fired. In this mock nothing moves.'); }, 2000); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, cancel));
+  });
+}
+
+function setScene(v) {
+  S.scene = v; S.grid = false; S.gps = true;
+  S.panel = v === 'focus' ? 'focus' : v === 'plan' ? 'plan' : null;
+  S.mode = v === 'focus' ? 'focus' : 'plan';
+  S.run = v !== 'norig' && v !== 'focus' && v !== 'plan';
+  syncSeg('sceneSeg', v); render(); say('');
+}
+function syncSeg(id, v) { document.querySelectorAll(`#${id} button`).forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v)); }
+
+phone.addEventListener('click', e => {
+  const m = e.target.closest('[data-mode]');
+  if (m) { const k = m.dataset.mode; S.grid = false; S.panel = (S.mode === k && S.panel) ? null : (k === 'preview' ? null : k); S.mode = k; render(); return; }
+  const a = e.target.closest('[data-a]'); if (!a) return;
+  switch (a.dataset.a) {
+    case 'night': S.night = !S.night; syncSeg('nightSeg', S.night ? '1' : '0'); break;
+    case 'settings': setScene('settings'); return;
+    case 'back': setScene('idle'); return;
+    case 'close': S.panel = null; break;
+    case 'grid': S.grid = !S.grid; break;
+    case 'chip': S.panel = S.panel ? null : S.mode; break;
+    case 'shutter': S.run = !S.run; say(S.mode === 'plan' ? (S.run ? 'Plan resumed.' : 'Pauses after the frame in hand. Hold 2 s to stop the run.') : (S.run ? 'Started.' : 'Stopped.')); break;
+    case 'gpsno': S.scene = 'idle'; syncSeg('sceneSeg', ''); say('Not now: asks again next session.'); break;
+    case 'gpsyes': S.gps = false; say('Sent this phone\'s location and time to the rig.'); break;
+    case 'abort': S.scene = 'idle'; S.run = false; say('Emergency Abort: the plan stopped and the mount parked (mock).'); syncSeg('sceneSeg', ''); break;
+    case 'override': S.scene = 'imaging'; say('Overridden for 10 minutes; the alarm returns if it\'s still unsafe.'); syncSeg('sceneSeg', 'imaging'); break;
+    case 'connect': say('Opens the Connect to your rig card over the rails.'); return;
+    case 'search': say('Simple search: sky objects, settings, modes, imaged targets.'); return;
+    case 'sky': say('Sky Map: the Sky Atlas with Tonight\'s Sky.'); return;
+    case 'library': say('Library: tonight\'s frames, pinch to zoom.'); return;
+    case 'info': say('Info: the last frame\'s facts, bottom left.'); return;
+  }
+  render();
+});
+
+document.getElementById('layoutSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.layout = b.dataset.v; S.grid = false; syncSeg('layoutSeg', S.layout); render(); });
+document.getElementById('sceneSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setScene(b.dataset.v); });
+document.getElementById('deviceSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.device = b.dataset.v; S.panel = null; S.grid = false; syncSeg('deviceSeg', S.device); render(); say(S.device === 'ipad' ? 'iPad: Imaging, Location pill, Safety alarm and No rig are drawn; panels and Settings are not.' : ''); });
+document.getElementById('ipadPillsSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.ipadPills = b.dataset.v; syncSeg('ipadPillsSeg', S.ipadPills); render(); });
+document.getElementById('nightSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.night = b.dataset.v === '1'; syncSeg('nightSeg', b.dataset.v); render(); });
+
+function fit() {
+  const holder = document.getElementById('holder');
+  const [w, hh] = S.device === 'ipad' ? [1024, 768] : [390, 844];
+  const scale = Math.min(1, holder.clientWidth / w);
+  phone.style.transform = scale < 1 ? `scale(${scale})` : '';
+  holder.style.height = (hh * scale) + 'px';
+}
+window.addEventListener('resize', fit);
+render(); fit();
+</script>
+

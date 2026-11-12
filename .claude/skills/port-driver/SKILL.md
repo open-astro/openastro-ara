@@ -333,11 +333,12 @@ these. Waiting on a review that can never arrive would spin forever — see step
      level, so it never expands: it reports **one** context under its raw,
      uninterpolated name — not three per-target ones. Expect that exact string.
 
-     The three `Client (analyze + test) — *-latest` legs are **required and
-     matrix-expanded**, so they are gated at *step* level and report `pass`
-     with their steps skipped, never `skipping` (#1025: a matrix job skipped at
-     job level never expands, so its required contexts are never reported and
-     the PR blocks forever). Expect `pass` there, not `skipping`. Confirm that is why, don't assume it: `gh pr checks`
+     The three `Client (analyze + test) — *-latest` contexts are **required**
+     and come from always-running reporting jobs (`client-test-linux`,
+     `client-test`) over the job-level-gated shard matrices, so they report
+     `pass`, never `skipping` (#1025: a matrix job skipped at job level never
+     expands, so its required contexts are never reported and the PR blocks
+     forever). Expect `pass` there, not `skipping`. Confirm that is why, don't assume it: `gh pr checks`
      shows the skip but not its cause, and GitHub counts *any* skipped required
      context as satisfied.
 

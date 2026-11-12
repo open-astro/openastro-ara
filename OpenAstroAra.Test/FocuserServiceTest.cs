@@ -114,7 +114,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task ConnectAsync_to_an_unreachable_device_ends_in_Error() {
-            using var svc = new FocuserService();
+            using var svc = new FocuserService { DeviceFactory = _ => throw new InvalidOperationException("connection refused") };
             var dead = new DiscoveredDeviceDto(
                 "unit-test-uid", "Unreachable Focuser", DeviceType.Focuser,
                 "127.0.0.1", "127.0.0.1", 1, 0, false);
@@ -129,7 +129,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task DisconnectAsync_after_a_failed_connect_returns_to_Disconnected() {
-            using var svc = new FocuserService();
+            using var svc = new FocuserService { DeviceFactory = _ => throw new InvalidOperationException("connection refused") };
             var dead = new DiscoveredDeviceDto(
                 "uid", "Unreachable", DeviceType.Focuser, "127.0.0.1", "127.0.0.1", 1, 0, false);
 

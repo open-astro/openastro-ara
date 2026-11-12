@@ -55,6 +55,9 @@ namespace OpenAstroAra.Server;
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 [JsonSerializable(typeof(AlpacaDeviceNamesResponseDto))]
+[JsonSerializable(typeof(AlpacaBridgeCatalogResponseDto))]
+[JsonSerializable(typeof(AlpacaBridgeCamerasResponseDto))]
+[JsonSerializable(typeof(AlpacaBridgeAddDeviceResponseDto))]
 [JsonSerializable(typeof(ApiSurfaceVersionDto))]
 [JsonSerializable(typeof(ApiVersionsDto))]
 [JsonSerializable(typeof(DeviceDriverDto))]

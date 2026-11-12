@@ -124,7 +124,7 @@ Future<String?> _connect(
     );
     return null;
   } on DioException catch (e) {
-    return '$label: ${friendlyError(l, e, action: 'connect')}';
+    return '$label: ${friendlyError(l, e, action: l.actionConnect)}';
   }
 }
 

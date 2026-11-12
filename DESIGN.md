@@ -339,12 +339,12 @@ The shell (reference: PR #1474, merged 2026-11-02) follows NINA's arrangement:
 - **Centre:** the active tab.
 - **Bottom status bar (40 px):** the connection indicator, then Emergency Stop, the backup-stream pulse, and the launchers right-anchored.
 
-Below 600 px of window width (a phone in portrait) the same shell folds:
+Below 600 px of window width (a narrowed desktop window; phones get Simple Mode, not this shell (target, #1772)) the same shell folds:
 - the tabs move to a bottom navigation bar, under the status bar;
 - the device buttons stand in a column down the left edge;
 - the top bar shrinks to 48 px and keeps search, Night mode and the gear.
 
-Wherever the eleven named device buttons don't fit (shortest side under 600 px, an iPad in portrait, a narrowed window) they show icons only, with the name as a tooltip, so none is pushed off screen. Safe-area margins (notch, status bar, home indicator) take the Panel Grey of the bars instead of black.
+Wherever the eleven named device buttons don't fit (an iPad in portrait, a narrowed window) they show icons only, with the name as a tooltip, so none is pushed off screen. Safe-area margins (notch, status bar, home indicator) take the Panel Grey of the bars instead of black.
 
 Spacing uses one scale: 4 / 8 / 12 / 16 / 24 px.
 
@@ -353,7 +353,7 @@ Responsive behaviour is keyed to the window, not the device:
 - Instrument panes sit side by side (picture | readout) from 760 px of pane width, and stack below that.
 - In a short window they stay side by side down to 600 px, because stacking would scroll.
 
-Phones run Companion Mode (see PRODUCT.md). PR #1474's narrow layout is the shell phones get today.
+Phones run Companion Mode (target, #1772; see PRODUCT.md): Simple Mode, never this shell. Its arrangement is "Simple Mode on a phone" under Components.
 
 ### Named Rules
 **The Two Densities Rule.** The full UI is dense: 11–15 px type and 4–8 px corners. Simple Mode is roomy and image-first: the frame fills the window, controls float on translucent overlays, every interactive target is at least 44 px tall, corners are 10 px, and body text is 14 px. Both densities share the same colours, the same named rules and the same Emergency Stop hold; both densities' Stop fills with `emergency-stop` (#D32F2F) so its label reads at 4.5:1. Phones run Companion Mode, which builds on Simple Mode, so phones always get the roomy density. Simple Mode ships on master behind an experimental toggle (Settings → System → Experimental); this is its target.
@@ -475,6 +475,20 @@ Targets are at least 44 px tall (the settings segments and icon buttons too), wi
 ### No-Frame Wallpaper (Simple Mode)
 - **Look:** the Ara Navy gradient and three layers of white stars from fixed seeds: far ones many and faint (260, 0.5 px), near ones few and bright (28, 1.6 px). No mark on it (dropped 2026-11-06). The "Tap the shutter to take a frame" hint stays centred over it.
 - **Motion:** on iPad and iPhone the layers shift 6, 14 and 26 px at full tilt (about 20°), eased over 150 ms, on the screen's axes in either orientation. The centre drifts back to how the device is held, and a dead band of about 1 px ignores sensor noise. With Reduce Motion (iOS) or Remove animations (Android), or on desktop, it is still and the sensor isn't read.
+
+### Simple Mode on a phone (Companion Mode, #1772)
+Companion Mode is Simple Mode on an iPhone or Android phone (shortest side under 600 logical px, PORT_PLAYBOOK §41), with no Full UI behind it. It is the same code with one switch, not a second shell: same sections, same Stop hold, same pills, same night colours. Tablets keep Simple Mode with the full UI behind it. The approved mock is `design/preview/companion-phone-mock.html` (portrait 390 × 844; Layout B, the bottom deck, chosen 2026-11-11; Layout A, today's narrow layout with the rails on the edges, stays on the mock's switch for comparison only).
+- **Bottom deck (portrait):** both rails fold into one translucent deck at the bottom, where the thumb is, with the panel look of every Simple Mode panel. Its top row holds the section names (Preview, Focus, P.A., Guider, Plan) as a swipeable row like a camera app, the current one lit. Its second row holds Sky Map, Info and Library on the left, the shutter and the settings chip in the middle, and the 60 px STOP on the right.
+- **Above the deck:** the graph row, the fact tiles (bottom left) and the plan squares (bottom right). A panel opens at the full width between the strip and the deck and scrolls inside, so the deck and STOP stay visible. The frame fills the screen.
+- **Stop:** the same 60 px red square and 2 s hold with a filling ring, on every screen including Settings and over every panel.
+- **Strip:** search, Night mode and Settings. No Full UI button, no Experimental toggle, no path to the full UI.
+- **One status card, top left, on every device (decided 2026-11-11, #1782):** the camera status pill and the message pills merge into one card. The camera status is its first line; results, errors and questions stack under it. This is built for Simple Mode on all devices, and phones get it from there.
+- **Location pill:** with no recent time sync on the rig, a question pill (Not now, Send) offers the phone's location and time; Not now holds until the next session. It is a pill, never a dialog.
+- **Safety alarm:** the existing full-screen alarm adds sound and vibration on a phone.
+- **No popups, targets of at least 44 px, text from 1x to 2x:** unchanged from Simple Mode.
+- **No plate-solve or autofocus settings** on the phone (the mock dropped them with #1779); the phone uses the profile's settings.
+- **Landscape:** the narrow layout Simple Mode has today, not the deck; the phone stays in Companion Mode.
+- **Still open, not decided:** whether the screen stays awake while a plan runs; where Monitor (#1724) opens from on a phone (the mock suggests a long press on the shutter or its own word in the section row).
 
 ### Monitor (Simple Mode, #1724)
 A full-screen, read-only view of the Session, opened from the left rail's Monitor item (offered from 900 pt wide); Back at the top left returns to where it was opened (the Back Rule). The top line says whether all is well, or names the single most important thing (link lost, a profile device dropped, Unsafe, a question with its answers, guide star lost, low disk, the cooler off its target, a flip or a wait), with the reason under it, the clock (24 h, local) and, on a device with a battery, its charge (amber at 20 % or under). Under it, tiles: Now (the task, a frame countdown, Up next, frames per filter), Target (with its altitude over the night, a dashed 30° line and its span shaded), Meridian flip, a 56 px Safety strip, Weather, Guider (RA solid, Dec dashed) and Last frame (HFR, Stars, Sky background, Clipped stars, each with tonight's trend), then tonight's timeline beside a 108 pt Emergency Stop in the corner. The two right columns are 244 pt; extra width goes to the left two. Fixed sizes: the Meridian flip tile 150 pt tall, the Guider and Last frame row 170 pt, Now's Up next column 190 pt, the Guider tile's readings column 220 pt, Weather icons 22 pt, and the large Emergency Stop's label 22 pt with a 32 pt icon. Tiles exist only for gear in the rig's profile; profile gear that drops stays, in red. When the link is lost every tile reads "Last known" with a grey dot and countdowns stop; nothing dims, which would take the last known values under 3:1. A question shows whole on the top line, its answers under it, and no message pill draws over Monitor: Emergency Stop's outcome and errors take the top line instead (above a question), with Dismiss for a sticky one. The top line grows with the text up to half the screen; past that its words scroll and a question's answers (or Dismiss) stay fixed under them, on screen. A failed Stop (a rung failed, or it never reached the rig) leads, even while the link is lost; a Stop that went through and a passing error wait behind link lost, a dropped device and Unsafe, so a summary left up all night never hides them. The grid keeps a least height of 560 pt and scrolls below it. Weather readings carry the Weather window's icons. A tile's content scrolls inside it when larger text no longer fits. Tapping a tile closes Monitor and opens the window or panel that owns it. The screen stays awake only while Monitor shows.

@@ -47,6 +47,8 @@ import 'package:openastroara/state/focus/filter_offset_calibration_state.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
 import 'package:openastroara/widgets/inline_choices.dart';
 import 'package:openastroara/widgets/support/bug_report_card.dart';
+import 'package:openastroara/state/rig_setup_state.dart';
+import 'package:openastroara/state/ws/ws_providers.dart' show serverLinkUpProvider;
 
 class _MemPrefs extends SimpleModePrefsService {
   bool value = true;
@@ -568,6 +570,57 @@ void main() {
       for (final p in lines) {
         expect(p.didExceedMaxLines, isFalse, reason: '"${p.text.toPlainText()}" is cut off');
       }
+    });
+  }
+
+  // #1562: on a phone the Rig setup sheet puts each fix's button under its
+  // words (beside them, pt-BR's "Luneta de guiagem" went one letter per line),
+  // and Not now keeps its own width (measured with real Roboto).
+  for (final locale in const [Locale('en'), Locale('pt', 'BR')]) {
+    testWidgets('${locale.toLanguageTag()} at 390x844 the Rig setup sheet puts each button under its words, every label on one line',
+        skip: !hasFonts, (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final c = ProviderContainer(overrides: [
+        simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
+        selectedTabIndexProvider.overrideWith(_StartOnLive.new),
+        discoveredServersProvider.overrideWith((ref) => const Stream<AraServer>.empty()),
+        serverLinkUpProvider.overrideWithValue(true),
+        // The site, the guide scope and its calibration missing (the Guider not connected).
+        rigSetupFactsProvider.overrideWith(
+            (ref) => const RigSetupFacts(latitudeDeg: 0, longitudeDeg: 0, opticsConfigured: true, hasGuider: true)),
+      ]);
+      addTearDown(c.dispose);
+      await c.read(simpleModeProvider.future);
+      c.read(rigSetupSheetProvider.notifier).set(true);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: MaterialApp(
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: ThemeData(fontFamily: 'Roboto'),
+          home: const SimpleShell(planetarium: SizedBox()),
+        ),
+      ));
+      await tester.pump();
+      final l = lookupAppLocalizations(locale);
+      final sheet = find.byKey(const Key('simple-rig-setup'));
+      Finder inSheet(String text) => find.descendant(of: sheet, matching: find.text(text));
+      final oneLine = tester.getSize(inSheet(l.rigSetupSite)).height;
+      for (final (id, label, missing) in [
+        ('site', l.rigSetupSite, l.rigSetupSiteMissing),
+        ('guide-scope', l.rigSetupGuideScope, l.rigSetupGuideScopeMissing),
+        ('calibration', l.rigSetupCalibration, l.rigSetupCalibrationConnect),
+      ]) {
+        expect(tester.getTopLeft(find.byKey(Key('simple-rig-setup-$id-action'))).dy,
+            greaterThanOrEqualTo(tester.getBottomLeft(inSheet(missing)).dy), reason: 'the button under "$label"');
+        expect(tester.getSize(inSheet(label)).height, oneLine, reason: '"$label" on one line, no word broken');
+      }
+      expect(tester.getSize(find.byKey(const Key('simple-rig-setup-not-now'))).width,
+          lessThan(tester.getSize(sheet).width / 2), reason: 'Not now keeps its own width: the fixes are the main actions');
+      expect(tester.takeException(), isNull);
     });
   }
 }

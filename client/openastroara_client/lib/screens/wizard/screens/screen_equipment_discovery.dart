@@ -192,7 +192,7 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
       if (!mounted) return;
       setState(() {
         _ok = false;
-        _result = friendlyError(context.l10n, e, action: 'look for equipment');
+        _result = friendlyError(context.l10n, e, action: context.l10n.actionLookForEquipment);
       });
       _setValid(_skipped);
     } finally {
