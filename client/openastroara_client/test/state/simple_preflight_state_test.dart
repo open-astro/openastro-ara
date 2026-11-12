@@ -1,4 +1,5 @@
 import 'package:openastroara/models/polar_align.dart' show PolarAlignStages, PolarAlignStates;
+import 'package:flutter/foundation.dart' show TargetPlatform;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/simple_run_state.dart';
@@ -20,6 +21,16 @@ class _Step extends Notifier<SetupStepState> {
 
 final _focus = NotifierProvider<_Step, SetupStepState>(() => _Step(SetupStepState.pending));
 final _aligned = NotifierProvider<_Step, SetupStepState>(() => _Step(SetupStepState.pending));
+
+/// The view's shortest side, set by the test: 800 is a tablet, under 600 a
+/// phone (Companion Mode on Android).
+class _Side extends Notifier<double> {
+  @override
+  double build() => 800;
+  void set(double v) => state = v;
+}
+
+final _side = NotifierProvider<_Side, double>(_Side.new);
 
 class _PolarApi implements PolarAlignClient {
   final calls = <String>[];
@@ -63,16 +74,18 @@ class _Live extends PolarAlignLiveNotifier {
   void checked() => state = const PolarAlignLive(phase: PolarAlignStates.checked, stage: PolarAlignStages.check);
 }
 
-Future<ProviderContainer> _container() async {
+Future<ProviderContainer> _container({bool prefs = true}) async {
   final c = ProviderContainer(overrides: [
     polarAlignLiveProvider.overrideWith(_Live.new),
     setupFocusStateProvider.overrideWith((ref) => ref.watch(_focus)),
     setupPolarAlignStateProvider.overrideWith((ref) => ref.watch(_aligned)),
     polarAlignApiProvider.overrideWithValue(_PolarApi()),
     simplePermanentPierPrefsProvider.overrideWithValue(_Prefs(false)),
-    simpleModePrefsProvider.overrideWithValue(_Prefs(true)),
-    simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(true)),
+    simpleModePrefsProvider.overrideWithValue(_Prefs(prefs)),
+    simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(prefs)),
     simpleRunProvider.overrideWith(_Plan.new),
+    companionPlatformProvider.overrideWithValue(TargetPlatform.android),
+    companionShortestSideProvider.overrideWith((ref) => ref.watch(_side)),
   ]);
   addTearDown(c.dispose);
   await c.read(simplePermanentPierProvider.future);
@@ -167,6 +180,36 @@ void main() {
       expect((c.read(polarAlignApiProvider) as _PolarApi).calls, isEmpty);
     });
   }
+
+  // Falsified by: simple_preflight_state.dart SimplePreflightNotifier.build, drop the companionModeProvider close listen (#1513).
+  test('#1774 Companion Mode ending (a split-screen tablet widened past 600) ends Preflight: a focus finished in the full UI starts no polar routine', () async {
+    final c = await _container(prefs: false);
+    await c.read(simpleModeProvider.future);
+    await c.read(simpleModeFeatureProvider.future);
+    c.read(_side.notifier).set(390);
+    expect(c.read(simpleModeActiveProvider), isTrue);
+    c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preflight);
+    c.read(simplePreflightProvider.notifier).next();
+    expect(c.read(simplePreflightProvider), SimplePreflightStep.focus);
+    c.read(_side.notifier).set(800);
+    expect(c.read(simpleModeActiveProvider), isFalse);
+    expect(c.read(simplePreflightProvider), isNull);
+    c.read(_focus.notifier).set(SetupStepState.done);
+    expect(c.read(simplePreflightProvider), isNull);
+    expect((c.read(polarAlignApiProvider) as _PolarApi).calls, isEmpty);
+  });
+
+  // Falsified by: simple_preflight_state.dart SimpleShowingNotifier.build, drop the companionModeProvider open listen.
+  test('#1774 Companion Mode starting with both prefs off opens Simple Mode on Preview', () async {
+    final c = await _container(prefs: false);
+    await c.read(simpleModeProvider.future);
+    await c.read(simpleModeFeatureProvider.future);
+    expect(c.read(simpleModeActiveProvider), isFalse);
+    c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.focus);
+    c.read(_side.notifier).set(390);
+    expect(c.read(simpleModeActiveProvider), isTrue);
+    expect(c.read(simpleShowingProvider), SimpleModeScreen.preview);
+  });
 
   Future<ProviderContainer> onPolar() async {
     final c = await _container();
