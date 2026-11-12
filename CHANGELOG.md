@@ -113,6 +113,7 @@ at the top. This happens in the same commit that pushes the release tag.
 ### Changed
 
 - Emergency Stop stops the mount right after aborting runs, ahead of the slower steps, and stops it again if a polar alignment was running. The app now waits long enough for the whole stop to report back (#1739).
+- Simple Mode: the Guider's Tools tab is one row per tool, Calibration and Guiding Assistant, each with what it does, a status line (Calibrated at Dec +12°, Not run yet, Measuring drift…, Done. 2 suggestions to apply., Last run failed: …) and a quiet outlined button. A refusal that covers both tools shows once above the rows. With no calibration the Assistant's Run is off and its row says to calibrate first (#1759).
 - Simple Mode: Preview's Camera settings offer Already in focus when an off-axis Guide shutter is waiting on main focus (#1739).
 
 ### Added (Simple Mode)

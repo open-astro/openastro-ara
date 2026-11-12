@@ -3725,6 +3725,43 @@
     }
   },
   "guideAssistantFailedNoReason": "the guider gave no reason",
+  "guideToolRecalibrate": "Recalibrate",
+  "guideToolCalibration": "Calibration",
+  "guideToolCalibrationWhat": "Measures again how the mount moves the guide star. Redo it after turning the camera or moving far in Dec.",
+  "guideToolCalibratedAt": "Calibrated at Dec {dec}",
+  "@guideToolCalibratedAt": {
+    "placeholders": {
+      "dec": {
+        "type": "String"
+      }
+    }
+  },
+  "guideToolCalibrated": "Calibrated",
+  "guideToolNotCalibrated": "Not calibrated. The next start calibrates first.",
+  "guideToolAssistant": "Guiding Assistant",
+  "guideToolAssistantWhat": "Watches the star drift with guiding off, then suggests settings for this mount and sky.",
+  "guideToolRun": "Run",
+  "guideToolRunAgain": "Run again",
+  "guideToolStop": "Stop",
+  "guideToolNotRun": "Not run yet",
+  "guideToolMeasuring": "Measuring drift…",
+  "guideToolDone": "{count, plural, =0{Done. Nothing to apply.} =1{Done. 1 suggestion to apply.} other{Done. {count} suggestions to apply.}}",
+  "@guideToolDone": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "guideToolFailed": "Last run failed: {reason}",
+  "@guideToolFailed": {
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "guideToolCalibrateFirst": "Calibrate first: it needs a calibration to measure against.",
   "focusNudgeIn": "Nudge in",
   "focusNudgeOut": "Nudge out",
   "focusNudgeStop": "Stop",

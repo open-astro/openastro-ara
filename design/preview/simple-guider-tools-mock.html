@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guider Tools Tab</title>
+<style>
+  /* Single dark look on purpose: DESIGN.md tokens from lib/theme/ara_colors.dart. Scene: the iPad, Mode › Guider panel left of the right rail. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --panel: rgba(30,30,30,.94); --border: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+    --ok: #4CAF50; --busy: #FFB300; --info: #42A5F5; --sel: #1976D2; --go: #2E7D32; --tile: #2C2C2C; --primary: #1565C0;
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  ::selection { background: var(--sel); color: #fff; }
+  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys); margin: 0; padding-block: 32px 64px;
+         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .page { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 72ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; }
+  .lbl { color: var(--text2); font-size: 13px; margin-right: 6px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; vertical-align: middle; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 12px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+
+  .scenes { display: flex; flex-wrap: wrap; gap: 20px; }
+  .scene { flex: 1 1 440px; display: flex; flex-direction: column; gap: 8px; }
+  .scene h2 { font-size: 13px; font-weight: 600; color: var(--text2); margin: 0; }
+  .ipad { height: 640px; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 35% 45%, #2a2f3a 0, #101217 55%, #07080b 100%); }
+  .p { position: absolute; background: var(--panel); border: 1px solid #3a3a3a; border-radius: 12px; }
+  .rail { right: 12px; top: 150px; width: 72px; padding: 10px 6px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+  .rail .name { font-weight: 600; font-size: 13px; }
+  .shutter { width: 56px; height: 56px; border-radius: 50%; border: 3px solid #e8e8e8; display: grid; place-items: center; }
+  .shutter svg { width: 22px; height: 22px; fill: #e8e8e8; margin-left: 3px; }
+  .chip { width: 60px; min-height: 56px; border-radius: 8px; background: #22324a; display: grid; place-items: center; font-size: 12px; text-align: center; }
+  .panel { right: 96px; top: 16px; bottom: 16px; width: min(340px, calc(100% - 108px)); padding: 14px 16px; display: flex; flex-direction: column; }
+  .head { display: flex; align-items: center; gap: 8px; font: 600 17px var(--sys); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--ok); }
+  .dot.amber { background: var(--busy); }
+  .dot.info { background: transparent; box-shadow: inset 0 0 0 2px var(--info); }
+  .dot.blink { animation: blink 1.4s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  @media (prefers-reduced-motion: reduce) { .dot.blink { animation: none; } }
+  .cap { color: var(--text2); font-size: 13px; margin: 4px 0 10px; }
+  .tabs { display: flex; background: var(--tile); border-radius: 8px; overflow: hidden; flex: none; }
+  .tabs span { flex: 1; text-align: center; min-height: 44px; display: grid; place-items: center; color: var(--text2); font-size: 15px; }
+  .tabs span.on { background: var(--sel); color: #fff; border-radius: 8px; }
+
+  /* Before: today's stacked filled buttons. */
+  .old { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+  .old button { min-height: 44px; border: 0; border-radius: 8px; background: var(--primary); color: #fff; font: 600 15px var(--sys); }
+  .old button[disabled] { background: #2a3442; color: #7c8a9c; }
+  .old .why { color: var(--text2); font-size: 12px; }
+
+  /* After: one row per tool. */
+  .tools { margin-top: 14px; display: flex; flex-direction: column; }
+  .notice { display: flex; gap: 8px; align-items: baseline; font-size: 13px; color: var(--text); padding: 0 0 12px; }
+  .notice .dot { transform: translateY(1px); }
+  .tool { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; row-gap: 3px; padding: 12px 0; }
+  .tool + .tool { border-top: 1px solid var(--border); }
+  .tool h3 { margin: 0; font: 600 15px/1.3 var(--sys); align-self: center; }
+  .tool .what { grid-column: 1 / -1; color: var(--text2); font-size: 13px; max-width: 46ch; }
+  .tool .state { grid-column: 1 / -1; display: flex; gap: 8px; align-items: baseline; font-size: 13px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .tool .state .dot { transform: translateY(1px); }
+  .tool .state.amber { color: #FFD180; }
+  .tool .state .clip { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .btn { min-height: 44px; min-width: 104px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--border); background: transparent;
+         color: var(--text); font: 600 14px var(--sys); cursor: pointer; }
+  .btn:hover:not([disabled]) { background: #2a2a2a; }
+  .btn[disabled] { color: #6c6c6c; border-color: #333; cursor: default; }
+  .go { grid-column: 1 / -1; margin-top: 8px; min-height: 44px; border: 0; border-radius: 8px; background: var(--go); color: #fff; font: 600 14px var(--sys); cursor: pointer; }
+  .new { outline: 1.5px dashed var(--busy); outline-offset: 3px; border-radius: 6px; }
+  body:not(.marks) .new { outline: none; }
+</style>
+</head>
+<body class="marks">
+
+<div class="page">
+  <h1>Mode › Guider › Tools: one row per tool</h1>
+  <p class="note">Each tool says what it does, when you'd want it and where it stands now, with a quiet outlined button. That leaves the panel's one blue to the selected tab, and green to Apply when there is something to apply. When a refusal covers both tools, it shows once above them. Dashed amber marks what is new. Values are examples. The panel keeps the Guide tab's height, as today.</p>
+  <div class="controls">
+    <span><span class="lbl">Rig</span><span class="seg" id="state">
+      <button data-v="idle" aria-pressed="true">Idle, calibrated</button>
+      <button data-v="nocal" aria-pressed="false">Not calibrated</button>
+      <button data-v="guiding" aria-pressed="false">Guiding</button>
+      <button data-v="plan" aria-pressed="false">Plan running</button>
+      <button data-v="measuring" aria-pressed="false">Assistant measuring</button>
+      <button data-v="done" aria-pressed="false">Assistant done</button>
+      <button data-v="failed" aria-pressed="false">Assistant failed</button>
+    </span></span>
+    <span><span class="lbl">Marks</span><span class="seg" id="marks"><button data-v="on" aria-pressed="true">Show new</button><button data-v="off" aria-pressed="false">Hide</button></span></span>
+  </div>
+
+  <div class="scenes">
+    <div class="scene">
+      <h2>Today</h2>
+      <div class="ipad">
+        <div class="p panel">
+          <div class="head"><i class="dot" data-head-dot></i><span data-head>Idle</span></div>
+          <div class="cap" data-cap>Tap the shutter to start guiding. It calibrates first when needed.</div>
+          <div class="tabs"><span>Guide</span><span>Tuning</span><span class="on">Tools</span></div>
+          <div class="old">
+            <button id="oldCal">Recalibrate now</button>
+            <div class="why" id="oldWhy" hidden></div>
+            <button id="oldGa">Run Guiding Assistant</button>
+          </div>
+        </div>
+        <div class="p rail" aria-hidden="true"><span class="name">Guider</span><span class="shutter"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></span><span class="chip">Off</span></div>
+      </div>
+    </div>
+
+    <div class="scene">
+      <h2>Proposed</h2>
+      <div class="ipad">
+        <div class="p panel">
+          <div class="head"><i class="dot" data-head-dot></i><span data-head>Idle</span></div>
+          <div class="cap" data-cap>Tap the shutter to start guiding. It calibrates first when needed.</div>
+          <div class="tabs"><span>Guide</span><span>Tuning</span><span class="on">Tools</span></div>
+          <div class="tools">
+            <div class="notice new" id="notice" hidden><i class="dot amber"></i><span id="noticeText"></span></div>
+            <div class="tool">
+              <h3>Calibration</h3>
+              <button class="btn" id="cal">Recalibrate</button>
+              <div class="what new">Measures again how the mount moves the guide star. Redo it after turning the camera or moving far in Dec.</div>
+              <div class="state new" id="calState"><i class="dot"></i><span></span></div>
+            </div>
+            <div class="tool">
+              <h3>Guiding Assistant</h3>
+              <button class="btn" id="ga">Run</button>
+              <div class="what new">Watches the star drift with guiding off, then suggests settings for this mount and sky.</div>
+              <div class="state new" id="gaState"><i class="dot"></i><span class="clip"></span></div>
+              <button class="go" id="apply" hidden>Apply 2 suggestions</button>
+            </div>
+          </div>
+        </div>
+        <div class="p rail" aria-hidden="true"><span class="name">Guider</span><span class="shutter"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></span><span class="chip">Off</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = s => document.querySelector(s);
+  const $$ = s => document.querySelectorAll(s);
+  const seg = (id, on) => $$(`#${id} button`).forEach(b => b.onclick = () => {
+    $$(`#${id} button`).forEach(x => x.setAttribute('aria-pressed', x === b));
+    on(b.dataset.v);
+  });
+  // head, caption, refusal for both tools, calibration line, assistant line, assistant button.
+  const S = {
+    idle:      { head: ['Idle', ''], cap: 'Tap the shutter to start guiding. It calibrates first when needed.', why: null,
+                 cal: ['', 'Calibrated at Dec +12°'], ga: ['info', 'Not run yet'], gaBtn: 'Run' },
+    nocal:     { head: ['Idle', ''], cap: 'Tap the shutter to start guiding. It calibrates first when needed.', why: null,
+                 cal: ['info', 'Not calibrated. The next start calibrates first.'], ga: ['amber', 'Calibrate first: it needs a calibration to measure against.'], gaBtn: 'Run', gaOff: true },
+    guiding:   { head: ['Guiding', 'blink'], cap: 'RMS 0.62″. Tap the square to stop.', why: 'Stop guiding to use these.',
+                 cal: ['', 'Calibrated at Dec +12°'], ga: ['info', 'Not run yet'], gaBtn: 'Run' },
+    plan:      { head: ['Guiding', 'blink'], cap: 'RMS 0.58″. The plan is guiding.', why: 'Stop the plan to use these.',
+                 cal: ['', 'Calibrated at Dec +12°'], ga: ['info', 'Not run yet'], gaBtn: 'Run' },
+    measuring: { head: ['Guiding Assistant', 'blink'], cap: 'Measuring drift. Guiding is off meanwhile.', why: null, calOff: true,
+                 cal: ['', 'Calibrated at Dec +12°'], ga: ['blink', 'Measuring drift…'], gaBtn: 'Stop', gaLive: true },
+    done:      { head: ['Idle', ''], cap: 'Tap the shutter to start guiding. It calibrates first when needed.', why: null,
+                 cal: ['', 'Calibrated at Dec +12°'], ga: ['', 'Done. 2 suggestions to apply.'], gaBtn: 'Run again', apply: true },
+    failed:    { head: ['Idle', ''], cap: 'Tap the shutter to start guiding. It calibrates first when needed.', why: null,
+                 cal: ['', 'Calibrated at Dec +12°'], ga: ['amber', 'Last run failed: the star was lost after 40 s. Pick a brighter star or a longer exposure and run it again.'], gaBtn: 'Run again' },
+  };
+  const line = (el, [kind, text]) => {
+    el.querySelector('.dot').className = 'dot' + (kind === 'blink' ? ' blink' : kind ? ' ' + kind : '');
+    el.querySelector('span').textContent = text;
+    el.classList.toggle('amber', kind === 'amber');
+  };
+  const paint = v => {
+    const s = S[v];
+    $$('[data-head]').forEach(e => e.textContent = s.head[0]);
+    $$('[data-head-dot]').forEach(e => e.className = 'dot' + (s.head[1] ? ' ' + s.head[1] : ''));
+    $$('[data-cap]').forEach(e => e.textContent = s.cap);
+    const off = !!s.why;
+    // Today
+    $('#oldCal').disabled = off || !!s.calOff;
+    $('#oldGa').disabled = off || !!s.gaOff;
+    $('#oldGa').textContent = s.gaLive ? 'Stop Guiding Assistant' : 'Run Guiding Assistant';
+    $('#oldGa').disabled = s.gaLive ? false : $('#oldGa').disabled;
+    $('#oldWhy').hidden = !off; $('#oldWhy').textContent = s.why || '';
+    // Proposed
+    $('#notice').hidden = !off; $('#noticeText').textContent = s.why || '';
+    $('#cal').disabled = off || !!s.calOff;
+    $('#ga').disabled = s.gaLive ? false : off || !!s.gaOff;
+    $('#ga').textContent = s.gaBtn;
+    line($('#calState'), s.cal);
+    line($('#gaState'), s.ga);
+    $('#apply').hidden = !s.apply;
+  };
+  seg('state', paint);
+  seg('marks', v => document.body.classList.toggle('marks', v === 'on'));
+  paint('idle');
+</script>
+</body>
+</html>
+
