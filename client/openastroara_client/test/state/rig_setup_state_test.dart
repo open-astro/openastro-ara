@@ -256,33 +256,30 @@ void main() {
       },
     );
 
-    test(
-      'a calibration made while the Guider stays connected takes the line off the list',
-      () async {
-        final live = _Calibration();
-        late _ConnectedGuider guider;
-        final c = await _trust(
-          _Profile(),
-          guider: () => guider = _ConnectedGuider(),
-          live: live,
-        );
-        expect(c.read(rigSetupGapsProvider), [RigSetupGap.guiderCalibration]);
+    test('a calibration made while the Guider stays connected takes the line off the list', () async {
+      final live = _Calibration();
+      late _ConnectedGuider guider;
+      final c = await _trust(
+        _Profile(),
+        guider: () => guider = _ConnectedGuider(),
+        live: live,
+      );
+      expect(c.read(rigSetupGapsProvider), [RigSetupGap.guiderCalibration]);
 
-        // The user calibrates in Guider mode; the Guider never disconnects.
-        guider.at(GuiderRuntimeState.calibrating);
-        await _settle();
-        live.calibration = const GuiderCalibrationView(
-          connected: true,
-          runState: 'complete',
-          data: GuiderCalibrationData(calibrated: true),
-          verdict: 'good',
-        );
-        guider.at(GuiderRuntimeState.guiding);
-        await _settle();
+      // The user calibrates in Guider mode; the Guider never disconnects.
+      guider.at(GuiderRuntimeState.calibrating);
+      await _settle();
+      live.calibration = const GuiderCalibrationView(
+        connected: true,
+        runState: 'complete',
+        data: GuiderCalibrationData(calibrated: true),
+        verdict: 'good',
+      );
+      guider.at(GuiderRuntimeState.guiding);
+      await _settle();
 
-        expect(c.read(rigSetupGapsProvider), isEmpty);
-      },
-    );
+      expect(c.read(rigSetupGapsProvider), isEmpty);
+    });
   });
 
   group('rigSetupRigKey', () {
