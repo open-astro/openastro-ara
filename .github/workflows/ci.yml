@@ -177,7 +177,7 @@ jobs:
   changes:
     name: Changed paths
     runs-on: ubuntu-latest
-    timeout-minutes: 5  # gates the jobs below at job level, plus client-test's steps; a wedged fetch must not hold the matrix to the 6h default
+    timeout-minutes: 5  # gates the jobs below at job level; a wedged fetch must not hold the matrix to the 6h default
     # A red `Changed paths` is never useful (#1024): every consumer below
     # already fails safe on an empty output (`!= 'false'`, `!= 'true'`), so a
     # checkout flake or a wedged fetch — neither of which the script's ERR
@@ -203,12 +203,13 @@ jobs:
     # forever and the PR could never merge. A job skipped by `if:` reports a
     # `skipped` conclusion, which GitHub counts as satisfying a required check.
     # That holds for NON-MATRIX jobs only. A matrix job skipped at job level
-    # never expands, so its per-leg contexts are never reported at all — which
-    # is why `client-test` (the macOS and Windows contexts) is gated at step
-    # level instead (#1025). The Linux context is `client-test-linux`, a
-    # non-matrix job that always runs and reports the `client-test-shard`
-    # result; the shards are a matrix skipped at job level, which is safe
-    # because their contexts are not required.
+    # never expands, so its per-leg contexts are never reported at all (#1025).
+    # So no required context comes from a gated matrix. The Linux context is
+    # `client-test-linux`, a non-matrix job that always runs and reports the
+    # `client-test-shard` result. The macOS and Windows contexts are
+    # `client-test`, a matrix with no gate that always runs and reports the
+    # `client-test-desktop-shard` result. Both shard jobs are matrices skipped
+    # at job level, which is safe because their contexts are not required.
     outputs:
       docs_only: ${{ steps.classify.outputs.docs_only }}
       # Finer-grained than docs_only, and consumed ONLY by jobs that are not
@@ -1120,18 +1121,21 @@ jobs:
       - name: Run help-registry check
         run: node scripts/check-help-registry.mjs
 
-  # The client suite runs as three jobs.
+  # The client suite runs as four jobs.
   #   client-test-shard  the suite on Linux, split over three runners (about
   #                      10 minutes on one). Shard 1 also runs the checks that
   #                      need one pass only: analyze, the l10n freshness check
   #                      and the page-logic tests.
   #   client-test-linux  the required `ubuntu-latest` context: passes only when
   #                      every shard passed.
+  #   client-test-desktop-shard
+  #                      the suite on macOS and Windows, each split over three
+  #                      runners. Unsplit it takes 13 minutes on Windows and 22
+  #                      on macOS, so these shards run in the merge queue and
+  #                      on master, not on a pull request: a failure on one of
+  #                      those systems only stops the PR in the queue.
   #   client-test        the required `macos-latest` and `windows-latest`
-  #                      contexts. The suite takes 13 minutes on Windows and 22
-  #                      on macOS, so those legs do their work in the merge
-  #                      queue and on master, not on a pull request: a failure
-  #                      on one of those systems only stops the PR in the queue.
+  #                      contexts: passes only when every desktop shard passed.
   client-test-shard:
     # Matrix + job-level gate, safe because these are not required contexts
     # (see client-build). The gate is `docs_only` and not the finer `client`
@@ -1376,7 +1380,7 @@ jobs:
     # contexts: skipped at job level the matrix never expands, so this reports
     # one check under the literal name below rather than three per-target ones.
     # If it is ever added to the ruleset's required checks, it reproduces the
-    # #1025 deadlock verbatim — gate it at step level like client-test instead.
+    # #1025 deadlock verbatim — report it through an always-running job like client-test instead.
     name: Client (native build) — ${{ matrix.target }}
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.client != 'false' }}

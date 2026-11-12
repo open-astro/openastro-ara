@@ -27,8 +27,8 @@ The two buckets are not symmetrical, on purpose:
           top-level project directories, the solution, Directory.Build.props,
           vendored C sources and the packaging tree, and a new one must not
           have to be registered here before CI notices it.
-  client  CLOSED over DIRECTORIES. Every step of `client-test` and
-          `client-build` runs with `working-directory:
+  client  CLOSED over DIRECTORIES. Every step of `client-test-desktop-shard`
+          and `client-build` runs with `working-directory:
           client/openastroara_client`, and the single file they read outside
           it -- `.flutter-version` -- is under `client/` too. So a change in
           any other top-level directory cannot affect a Flutter analyze,
