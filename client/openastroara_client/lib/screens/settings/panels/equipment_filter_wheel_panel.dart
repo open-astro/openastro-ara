@@ -13,6 +13,7 @@ import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/filter_wheel_labels_state.dart';
 import '../../../state/settings/filter_wheel_policy_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../theme/ara_metrics.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/equipment/manual_filter_wheel_body.dart';
 import '../../../widgets/settings/editable_field.dart';
@@ -526,16 +527,25 @@ class _FocusOffsetsSection extends ConsumerWidget {
             Text(cal.reason ?? l.focusOffsetsFailed,
                 style: const TextStyle(color: AraColors.errorText)),
           for (final r in cal.filters)
-            SettingsRow(label: r.name.isEmpty ? 'Slot ${r.position}' : r.name, value: rowValue(r)),
+            SettingsRow(label: r.name.isEmpty ? l.deviceSlot(r.position) : r.name, value: rowValue(r)),
           if (cal.driftWarning && cal.referenceFirstPosition != null && cal.referenceSecondPosition != null)
-            Text(
-              l.focusOffsetsDrift(
-                  (cal.referenceSecondPosition! - cal.referenceFirstPosition!).abs(), cal.cfzSteps ?? 0),
-              style: const TextStyle(color: AraColors.accentWarning),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: AraSpace.s8,
+              children: [
+                const Icon(Icons.warning_amber_rounded, size: 18, color: AraColors.accentWarning),
+                Expanded(
+                  child: Text(
+                    l.focusOffsetsDrift(
+                        (cal.referenceSecondPosition! - cal.referenceFirstPosition!).abs(), cal.cfzSteps ?? 0),
+                    style: const TextStyle(color: AraColors.accentWarning),
+                  ),
+                ),
+              ],
             ),
           if (cal.isComplete && !live.saved)
             Wrap(
-              spacing: 8,
+              spacing: AraSpace.s8,
               children: [
                 FilledButton(
                   key: const Key('settings-offsets-save'),

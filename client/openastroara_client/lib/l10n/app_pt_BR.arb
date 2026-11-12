@@ -1391,7 +1391,7 @@
   "calibrationLibraryEmpty": "Ainda sem darks ou bias para esta câmera",
   "calibrationLibraryEmptyNote": "Monte uma vez numa noite nublada; duram meses.",
   "calibrationLibraryNone": "Nenhum ainda.",
-  "calibrationLibraryAge": "{age} · {frames} quadros",
+  "calibrationLibraryAge": "{age} · {frames, plural, =1{1 quadro} other{{frames} quadros}}",
   "calibrationOld": "Antigo",
   "calibrationLibraryBuildSection": "Montar ou renovar",
   "calibrationLibraryNote": "Com {settings}, do plano. Bias com o mesmo ganho. A sessão pede a tampa da lente antes.",

@@ -1,0 +1,2 @@
+### Fixed (calibration)
+- **Calibration copy and hints** (#1825): the Darks & bias list reads "taken today · 1 frame" or "3 weeks old · 30 frames" instead of "today old · 1 frames"; "no plan queued" is dim, not amber; with the camera off, the Calibration panel says "Connect the camera first." under its buttons; Settings › Filter Wheel › Focus offsets names an unnamed slot in the app language and shows its drift warning with a warning icon.
