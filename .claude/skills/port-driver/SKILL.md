@@ -585,7 +585,7 @@ admin bypass) but because it would bypass the §19.1 gate.)
 
    Non-zero exit = fix + retry once. Twice failing in a row = stop and notify user.
 
-2. **CHANGELOG entry (convention-only enforcement).** If this sub-PR introduces a user-visible change (new feature, behavior change, removal, bug fix, security fix), add a bullet to the `[Unreleased]` section of `CHANGELOG.md` in this same diff under the matching subsection (Added / Changed / Deprecated / Removed / Fixed / Security). Mechanical PRs (pure renames, pure deletes during demolition, doc-only edits to internal `design/` files) are exempt — when in doubt, add one. See `CHANGELOG.md` "How to update this file" for the full rule.
+2. **CHANGELOG entry (convention-only enforcement).** If this sub-PR introduces a user-visible change (new feature, behavior change, removal, bug fix, security fix), add a `changelog.d/<branch-slug>.md` fragment in this same diff under the matching subsection (Added / Changed / Deprecated / Removed / Fixed / Security). Mechanical PRs (pure renames, pure deletes during demolition, doc-only edits to internal `design/` files) are exempt — when in doubt, add one. See `changelog.d/README.md` for the full rule.
 
 3. Push the branch: `git push -u origin <branch-name>`
 

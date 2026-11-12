@@ -126,7 +126,8 @@ Two hard-won conventions worth knowing before a reviewer tells you:
 5. **Run the gates for what you touched** (see "The rules that block merges"): the solution
    build and `dotnet test` for C#, `flutter analyze && flutter test` for the client, the
    registry scripts for settings/help, and `python3 .github/scripts/check-unicode.py` always.
-6. **Add a CHANGELOG line** under `[Unreleased]` if a user would notice the change.
+6. **Add a changelog fragment**, `changelog.d/<branch-slug>.md`, if a user would notice the change
+   (never edit `CHANGELOG.md`; see `changelog.d/README.md`).
 7. **Commit and push** with a conventional prefix (`fix:`, `feat:`, `docs:`, `tests:`) and
    `Closes #<issue>` in the body. Stage the files you changed by path, not `git add -A`.
 8. **Open the PR** against `master` and fill in the template; attach screenshots for UI.
