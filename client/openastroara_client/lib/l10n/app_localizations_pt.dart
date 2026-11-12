@@ -5393,8 +5393,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get domePanelAzimuthTolerance => 'Tolerância de azimute (°)';
 
   @override
-  String get domePanelTurnDuringSlews =>
-      'Girar durante os movimentos da montagem';
+  String get domePanelTurnDuringSlews => 'Girar enquanto a montagem se move';
 
   @override
   String get domePanelTurnDuringSlewsHint =>

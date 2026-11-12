@@ -115,7 +115,7 @@
   "domePanelMountLateralOffset": "Deslocamento lateral da montagem (mm)",
   "domePanelDecAxisOffset": "Deslocamento horizontal do eixo de declinação (mm)",
   "domePanelAzimuthTolerance": "Tolerância de azimute (°)",
-  "domePanelTurnDuringSlews": "Girar durante os movimentos da montagem",
+  "domePanelTurnDuringSlews": "Girar enquanto a montagem se move",
   "domePanelTurnDuringSlewsHint": "Desligado: a cúpula gira quando a montagem termina de se mover",
   "domePanelSlewing": "Girando…",
   "deviceDomeReadFailed": "Falha ao ler a cúpula — verifique o dispositivo.",
