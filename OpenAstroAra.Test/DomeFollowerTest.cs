@@ -607,6 +607,28 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_profile_switch_that_drops_the_connected_dome_keeps_the_new_profiles_follow_setting() {
+            // Profile A follows with this dome; the select has already put profile B's block (another dome,
+            // saved following) in the store when the device switch drops A's dome.
+            _store.PutDomeSettings(_store.GetDomeSettings() with { FollowMount = true, AzimuthToleranceDegrees = 3 });
+            var otherDome = Device with { UniqueId = "uid-b", Name = "Dome B", HostName = "10.0.0.2", IpAddress = "10.0.0.2" };
+            var selections = new Mock<IEquipmentSelectionStore>();
+            selections.Setup(s => s.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new[] { otherDome });
+            var reconnector = new Mock<IEquipmentReconnector>();
+            reconnector.Setup(r => r.GetConnectionStateAsync(OpenAstroAra.Server.Contracts.DeviceType.Dome, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => ((IDomeMediator)_svc).GetInfo().Connected ? EquipmentConnectionState.Connected : EquipmentConnectionState.Disconnected);
+            var services = new Mock<IServiceProvider>();
+            services.Setup(s => s.GetService(typeof(IDomeService))).Returns(_svc);
+            using var deviceSwitch = new ProfileDeviceSwitch(services.Object, selections.Object, reconnector.Object, _store,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<ProfileDeviceSwitch>.Instance);
+
+            await deviceSwitch.ApplyAsync(CancellationToken.None);
+
+            await EventuallyAsync(() => !((IDomeMediator)_svc).GetInfo().Connected, "the switch's disconnect");
+            Assert.That(_store.GetDomeSettings().FollowMount, Is.True, "profile B's saved Follow the mount survives the switch");
+        }
+
+        [Test]
         public void A_scope_outside_the_dome_is_refused_with_a_reason() {
             var outside = new DomeSettingsDto(DomeRadiusMm: 1000, ScopePositionNorthSouthMm: 900, ScopePositionEastWestMm: 900);
             Assert.That(DomeSettingsValidator.Error(outside), Does.Contain("outside the dome"));

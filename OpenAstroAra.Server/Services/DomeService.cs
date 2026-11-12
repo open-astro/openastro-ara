@@ -132,6 +132,11 @@ public sealed partial class DomeService : IDomeService, IRetainedDeviceSource, I
         return _lifecycle.DisconnectAsync(idempotencyKey);
     }
 
+    public Task<OperationAcceptedDto> DisconnectForProfileSwitchAsync(CancellationToken ct) {
+        _follower?.CancelMove();
+        return _lifecycle.DisconnectAsync(null);
+    }
+
     // Caller holds the gate: a fresh, ended or tripped session forgets the last one's reads.
     private void ResetSessionLocked() {
         _runtime = IdleRuntime;                  // don't serve a prior device's runtime

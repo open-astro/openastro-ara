@@ -134,6 +134,14 @@ public sealed partial class DomeFollower : IDomeFollower, IHostedService, IDispo
         if (!current.FollowMount) {
             return;
         }
+        CancelMove();
+        _store.PutDomeSettings(current with { FollowMount = false });
+        LogStopped(reason);
+        RaiseChanged();
+    }
+
+    /// <summary>Drop a move in flight and leave the setting alone (a profile switch disconnecting the old dome).</summary>
+    internal void CancelMove() {
         CancellationTokenSource old;
         lock (_lock) {
             old = _followCts;
@@ -141,9 +149,6 @@ public sealed partial class DomeFollower : IDomeFollower, IHostedService, IDispo
         }
         old.Cancel();
         old.Dispose();
-        _store.PutDomeSettings(current with { FollowMount = false });
-        LogStopped(reason);
-        RaiseChanged();
     }
 
     /// <summary>One look at the mount and the dome; sends at most one dome slew.</summary>
