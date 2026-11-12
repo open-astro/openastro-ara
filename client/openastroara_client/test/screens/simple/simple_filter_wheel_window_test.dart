@@ -11,6 +11,7 @@ import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 
 /// A filter wheel that records what it was asked to do.
@@ -89,7 +90,8 @@ Future<(ProviderContainer, _Wheel)> _pump(WidgetTester tester, Map<String, dynam
     bool planRunning = false,
     double? width,
     bool alsoPicker = false,
-    bool reduceMotion = false}) async {
+    bool reduceMotion = false,
+    double textScale = 1}) async {
   await tester.pumpWidget(const SizedBox());
   await tester.pump();
   final wheel = _Wheel(wire);
@@ -104,7 +106,8 @@ Future<(ProviderContainer, _Wheel)> _pump(WidgetTester tester, Map<String, dynam
     container: c,
     child: MaterialApp(
       builder: (context, child) => MediaQuery(
-        data: MediaQuery.of(context).copyWith(disableAnimations: reduceMotion),
+        data: MediaQuery.of(context)
+            .copyWith(disableAnimations: reduceMotion, textScaler: TextScaler.linear(textScale)),
         child: child!,
       ),
       home: Scaffold(
@@ -427,6 +430,17 @@ void main() {
       expect(size.width, greaterThanOrEqualTo(44), reason: 'slot $p');
       expect(size.height, greaterThanOrEqualTo(44), reason: 'slot $p');
     }
+  });
+
+  testWidgets('a large wheel engraves its slot numbers in Text Secondary, growing with the text', (tester) async {
+    // Slot 5's cell reads "F5", so the wheel's only "5" is the engraved number.
+    Finder five() => find.descendant(of: find.byType(SimpleFilterWheel), matching: find.text('5'));
+    await _pump(tester, _wire(extra: 9), width: 360); // 12 slots
+    expect(tester.widget<Text>(five()).style?.color, AraColors.textSecondary, reason: '4.5:1 on the wheel face');
+    final atOne = tester.getSize(five()).height;
+    await _pump(tester, _wire(extra: 9), width: 360, textScale: 2);
+    expect(tester.getSize(five()).height, greaterThan(atOne), reason: 'grows with the wheel');
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('the wheel turns to bring a slot under the mark, and jumps with reduced motion', (tester) async {

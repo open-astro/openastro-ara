@@ -231,25 +231,26 @@ class _SimpleFilterWheelState extends State<SimpleFilterWheel>
                       for (var i = 0; i < n; i++)
                         Builder(
                           builder: (context) {
-                            // The slot number engraved toward the hub.
+                            // The slot number engraved toward the hub. It grows
+                            // with the wheel, which already scales with the text.
                             final a = i * _step * math.pi / 180 + rot;
                             final r = ring - cell / 2 - 9 * k;
                             return Positioned(
-                              left: centre + math.sin(a) * r - 12,
-                              top: centre - math.cos(a) * r - 8,
-                              width: 24,
-                              height: 16,
+                              left: centre + math.sin(a) * r - 12 * k,
+                              top: centre - math.cos(a) * r - 8 * k,
+                              width: 24 * k,
+                              height: 16 * k,
                               child: ExcludeSemantics(
                                 child: Center(
                                   child: Text(
                                     '${widget.slots[i].position}',
                                     maxLines: 1,
                                     textScaler: TextScaler.noScaling,
-                                    style: const TextStyle(
-                                      fontSize: 10,
+                                    style: TextStyle(
+                                      fontSize: 10 * k,
                                       fontWeight: FontWeight.w600,
-                                      color: AraColors.textDisabled,
-                                      fontFeatures: [
+                                      color: AraColors.textSecondary,
+                                      fontFeatures: const [
                                         FontFeature.tabularFigures(),
                                       ],
                                     ),
