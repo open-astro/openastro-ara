@@ -117,7 +117,9 @@ public class ProfileShareServiceTest {
         TrackingCalibration: new(CeilingSeconds: 45, MeasuredUtc: DateTimeOffset.UtcNow, PolarAlignErrorArcmin: 3,
             PixelScaleArcsec: 1.2, SeeingFwhmArcsec: 2.5, PriorSeconds: null, Source: "measured", Rungs: []),
         // #1700 — names the donor's own switch; must be stripped.
-        CoolingFan: new("DONOR-SWITCH-DO-NOT-LEAK", 3));
+        CoolingFan: new("DONOR-SWITCH-DO-NOT-LEAK", 3),
+        // #1689 — measures the donor's dome; must be stripped.
+        Dome: new(FollowMount: true, DomeRadiusMm: 1500, ScopePositionNorthSouthMm: 120));
 
     [Test]
     public async Task Export_strips_the_donors_tracking_calibration() {
@@ -133,6 +135,13 @@ public class ProfileShareServiceTest {
         using var repo = new FakeRepo(DonorSnapshot());
         var share = await new ProfileShareService(repo).ExportAsync(ProfileId, CancellationToken.None);
         share!.Manifest.GetProperty("settings").GetProperty("cooling_fan").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    [Test]
+    public async Task Export_strips_the_donors_dome_block() {
+        using var repo = new FakeRepo(DonorSnapshot());
+        var share = await new ProfileShareService(repo).ExportAsync(ProfileId, CancellationToken.None);
+        share!.Manifest.GetProperty("settings").GetProperty("dome").ValueKind.Should().Be(JsonValueKind.Null);
     }
 
     [Test]
