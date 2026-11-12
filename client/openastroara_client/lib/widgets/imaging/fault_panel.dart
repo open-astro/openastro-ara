@@ -118,12 +118,13 @@ class _FaultHistoryList extends ConsumerWidget {
                     ?.copyWith(color: AraColors.textSecondary)),
           );
         }
+        final groups = groupFaultRows(rows);
         final hasMore = notifier.hasMore;
         return ListView.builder(
           shrinkWrap: true,
-          itemCount: rows.length + (hasMore ? 1 : 0),
+          itemCount: groups.length + (hasMore ? 1 : 0),
           itemBuilder: (context, i) {
-            if (i == rows.length) {
+            if (i == groups.length) {
               return ListTile(
                 dense: true,
                 title: Text('Load more…',
@@ -135,12 +136,127 @@ class _FaultHistoryList extends ConsumerWidget {
                 onTap: notifier.loadMore,
               );
             }
-            return FaultHistoryTile(row: rows[i]);
+            return FaultGroupTile(group: groups[i]);
           },
         );
       },
     );
   }
+}
+
+/// #1767 — consecutive rows (newest first) for one device and fault type shown as one entry.
+/// Presentation only: every row stays in the feed and in [rows].
+class FaultGroup {
+  final List<FaultRow> rows;
+  const FaultGroup(this.rows);
+  int get count => rows.length;
+  DateTime get lastUtc => rows.first.detectedUtc;
+  DateTime get firstUtc => rows.last.detectedUtc;
+}
+
+/// A fault row carries no episode id, so an episode is: same session, device and fault type,
+/// each row within [faultEpisodeGap] of the next. A longer quiet gap starts a new episode.
+const faultEpisodeGap = Duration(minutes: 10);
+
+List<FaultGroup> groupFaultRows(List<FaultRow> rows) {
+  String key(FaultRow r) =>
+      '${r.sessionId}|${r.equipmentType}|${r.equipmentId ?? r.equipmentName}|${r.faultType}';
+  final groups = <List<FaultRow>>[];
+  for (final r in rows) {
+    // Newest first: the previous row of the group is the later one.
+    if (groups.isNotEmpty &&
+        key(groups.last.last) == key(r) &&
+        groups.last.last.detectedUtc.difference(r.detectedUtc) <=
+            faultEpisodeGap) {
+      groups.last.add(r);
+    } else {
+      groups.add([r]);
+    }
+  }
+  return [for (final g in groups) FaultGroup(g)];
+}
+
+/// A group of one is a plain [FaultHistoryTile]; a longer one is a collapsed row with the
+/// count and first / last time, its raw rows behind a tap.
+class FaultGroupTile extends StatelessWidget {
+  final FaultGroup group;
+  const FaultGroupTile({super.key, required this.group});
+
+  @override
+  Widget build(BuildContext context) {
+    if (group.count == 1) return FaultHistoryTile(row: group.rows.first);
+    final r = group.rows.first;
+    final l10n = context.l10n;
+    final unresolved = group.rows.where((x) => !x.resolved).length;
+    final span = l10n.faultGroupSpan(
+      FaultHistoryTile.formatTime(group.firstUtc.toLocal()),
+      FaultHistoryTile.formatTime(group.lastUtc.toLocal()),
+    );
+    // Once every row is resolved, the newest says how the run of faults ended.
+    final o = unresolved > 0 ? FaultOutcome.unresolved : FaultOutcome.of(r);
+    // The outcome in words too: night mode's red filter makes the dot colours look alike.
+    final outcome = switch (o) {
+      FaultOutcome.unresolved => l10n.faultGroupUnresolved(unresolved),
+      FaultOutcome.recovered => l10n.faultGroupRecovered,
+      FaultOutcome.released => l10n.faultGroupReleased,
+    };
+    // A single row's 8 px leading slot, so group and row titles line up.
+    return ListTileTheme.merge(
+      minLeadingWidth: 8,
+      child: ExpansionTile(
+        // The oldest row is the group's: an open group stays open when the feed refreshes.
+        key: PageStorageKey('fault-group-${group.rows.last.id}'),
+        dense: true,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: StatusDot.of(o.level(r.faultType), size: 8),
+        title: Text(
+          // Count first, so an ellipsis never cuts the number; three lines, as a
+          // single row, so the narrow iOS alert keeps the fault type.
+          '${l10n.faultGroupCount(group.count)} · '
+          '${r.equipmentName ?? r.equipmentType} — ${r.faultType.replaceAll('_', ' ')}',
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        subtitle: Text(
+          '$span · $outcome',
+          // Tabular, as the rows' times: a new drop changes "last" without a shift.
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: AraColors.textSecondary,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+        // Indented, so an open group's rows read as its own and not as the next entries.
+        childrenPadding: const EdgeInsetsDirectional.only(start: 16),
+        children: [for (final row in group.rows) FaultHistoryTile(row: row)],
+      ),
+    );
+  }
+}
+
+/// How a fault row ended. A row resolved because the user disconnected the device
+/// mid-recovery (#1307) is released, not recovered. A row's dot and words read this,
+/// and so do a group's.
+enum FaultOutcome {
+  unresolved,
+  recovered,
+  released;
+
+  static FaultOutcome of(FaultRow row) => !row.resolved
+      ? unresolved
+      : (row.actionTaken?.startsWith('released') ?? false)
+      ? released
+      : recovered;
+
+  /// The dot: an open fault by its kind; released is grey, the device is off
+  /// (DESIGN.md status rule), not the recovered green.
+  StatusLevel level(String faultType) => switch (this) {
+    FaultOutcome.unresolved => faultKindLevel(faultType),
+    FaultOutcome.recovered => StatusLevel.connected,
+    FaultOutcome.released => StatusLevel.disconnected,
+  };
 }
 
 /// One fault-history row: severity/resolution dot, device + kind, details,
@@ -152,26 +268,21 @@ class FaultHistoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dot = row.resolved
-        ? StatusLevel.connected
-        : faultKindLevel(row.faultType);
+    final o = FaultOutcome.of(row);
+    final dot = o.level(row.faultType);
     final device = row.equipmentName ?? row.equipmentType;
     // A row resolved because the user disconnected the device mid-recovery
     // (#1307) is not "recovered": say what happened.
-    final outcome = row.resolved
-        ? (row.actionTaken?.startsWith('released') ?? false)
-            ? 'released — disconnected by hand'
-            : 'recovered'
-        : row.actionTaken ?? 'unresolved';
+    final outcome = switch (o) {
+      FaultOutcome.unresolved => row.actionTaken ?? 'unresolved',
+      FaultOutcome.recovered => 'recovered',
+      FaultOutcome.released => 'released — disconnected by hand',
+    };
     return ListTile(
       dense: true,
       // The 8 px dot needs no 40 px leading slot; the title gets the room.
       minLeadingWidth: 8,
-      leading: Container(
-        width: 8,
-        height: 8,
-        decoration: BoxDecoration(color: dot.color, shape: BoxShape.circle),
-      ),
+      leading: StatusDot.of(dot, size: 8),
       title: Text(
         '$device — ${row.faultType.replaceAll('_', ' ')}'
         '${row.details == null ? '' : ' (${row.details})'}',
@@ -186,18 +297,18 @@ class FaultHistoryTile extends StatelessWidget {
         style: Theme.of(context)
             .textTheme
             .labelSmall
-            ?.copyWith(color: AraColors.textDisabled),
+            ?.copyWith(color: AraColors.textSecondary),
       ),
       trailing: Text(
-        _formatTime(row.detectedUtc.toLocal()),
-        style: Theme.of(context)
-            .textTheme
-            .labelSmall
-            ?.copyWith(color: AraColors.textDisabled),
+        formatTime(row.detectedUtc.toLocal()),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: AraColors.textSecondary,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
       ),
     );
   }
 
-  static String _formatTime(DateTime t) =>
+  static String formatTime(DateTime t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:${t.second.toString().padLeft(2, '0')}';
 }

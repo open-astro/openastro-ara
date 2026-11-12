@@ -843,11 +843,22 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Progress_frames_carry_the_flip_and_stop_after_frame() {
             var ws = new RecordingWsBroadcaster();
-            var (svc, id, _, frame) = ExposingRun(ws, exposureSeconds: 3600, flipTelescope: TelescopeWithFlipIn(2));
+            var (svc, id, imaging, frame) = ExposingRun(ws, exposureSeconds: 3600, flipTelescope: TelescopeWithFlipIn(2));
             await svc.StartAsync(id, StartReq, null, CancellationToken.None);
             await WaitForInstructionInFlightAsync(svc, id, 0);
 
             await svc.StopAfterFrameAsync(id, null, CancellationToken.None);
+            // A camera reports while it exposes, and that report carries the armed stop. Land the frame only once
+            // its progress frame is out: a report posted after the frame can reach the pool after the run seals its
+            // progress (#648) and is dropped, and then no frame carries the flag.
+            for (var i = 0; i < 500 && !imaging.Invocations.Any(v => v.Method.Name == "CaptureImage"); i++) {
+                await Task.Delay(10);
+            }
+            var camera = (IProgress<ApplicationStatus>)imaging.Invocations.Last(v => v.Method.Name == "CaptureImage").Arguments[2]!;
+            camera.Report(new ApplicationStatus { Status = "Exposing" });
+            for (var i = 0; i < 500 && !ws.Records.Any(e => e.Type == "sequence.progress" && e.Payload.GetProperty("stop_after_frame").GetBoolean()); i++) {
+                await Task.Delay(10);
+            }
             frame.SetResult(new Mock<OpenAstroAra.Image.Interfaces.IExposureData>().Object);
             await WaitForTerminalAsync(svc, id);
 
@@ -1539,12 +1550,15 @@ namespace OpenAstroAra.Test {
             // The client re-reads the run state only on lifecycle events, and the wait starts mid-run.
             var ws = new RecordingWsBroadcaster();
             var flipping = new TaskCompletionSource();
+            var flipFrameSeen = new TaskCompletionSource();
             var (svc, id) = FlipRun(async (p, _) => {
                 p.Report(new MeridianFlipExecutor.WaitStatus {
                     Source = MeridianFlipExecutor.WaitSource, Status = "Passing meridian — 00:04:32", SecondsLeft = 272,
                 });
                 await flipping.Task;
                 p.Report(new OpenAstroAra.Core.Model.ApplicationStatus { Source = "MeridianFlip", Status = "Flipping scope" });
+                // Progress<T> posts to the pool: hold the flip until the frame is out, or the run can end first.
+                await flipFrameSeen.Task;
                 return true;
             }, ws);
 
@@ -1552,6 +1566,11 @@ namespace OpenAstroAra.Test {
             await PollUntil(svc, id, s => s?.ReasonCode is not null);
             await Task.Delay(100);
             flipping.SetResult();
+            for (var i = 0; i < 500 && !ws.Records.Any(e => e.Type == "sequence.progress"
+                    && e.Payload.TryGetProperty("current_instruction_description", out var d) && d.GetString() == "Flipping scope"); i++) {
+                await Task.Delay(10);
+            }
+            flipFrameSeen.SetResult();
             await WaitForTerminalAsync(svc, id);
 
             var progress = ws.Records.Where(e => e.Type == "sequence.progress").Select(e => e.Payload).ToList();
@@ -1561,6 +1580,102 @@ namespace OpenAstroAra.Test {
             var flip = progress.Last(p => p.TryGetProperty("current_instruction_description", out var d) && d.GetString() == "Flipping scope");
             Assert.That(flip.GetProperty("reason_code").ValueKind, Is.EqualTo(JsonValueKind.Null), "the flip proper clears the wait");
             Assert.That(flip.GetProperty("meridian_wait_seconds_left").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        }
+
+        [Test]
+        public async Task Entering_Paused_replaces_the_last_steps_countdown_text() {
+            // #1784 — a pause that lands right after a step (here the flip's settle countdown) must not keep that
+            // step's last text as the run's description.
+            SequencerService? holder = null;
+            var id = Guid.Empty;
+            var (svc, runId) = FlipRun(async (p, _) => {
+                p.Report(new OpenAstroAra.Core.Model.ApplicationStatus { Source = "MeridianFlip", Status = "Settling — 00:00:05" });
+                await holder!.PauseAsync(id, null, CancellationToken.None);
+                return true;
+            });
+            holder = svc;
+            id = runId;
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Paused);
+
+            var state = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(state!.CurrentInstructionDescription, Is.EqualTo(SequencerService.PausedDescription));
+
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+            state = await svc.GetRunStateAsync(id, CancellationToken.None);
+            Assert.That(state!.CurrentInstructionDescription, Is.EqualTo(SequencerService.ResumedDescription),
+                "Resume replaces \"Paused\" at once");
+
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
+        public async Task A_plans_wait_for_user_prompt_stays_the_description_while_paused_awaiting_the_user() {
+            // #1784 must not eat the instruction: the step's own text ("... press Resume") is what tells the user what to do.
+            const string prompt = "Put the lens cap on the scope, then press Resume";
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForUser { Text = prompt });
+                c.Items.Add(new Annotation { Name = "after" });
+            }));
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.PausedAwaitingUser);
+            var state = await PollUntil(svc, id, s => s?.CurrentInstructionDescription == prompt);
+
+            Assert.That(state.CurrentInstructionDescription, Is.EqualTo(prompt));
+            await svc.ResumeAsync(id, null, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
+        public async Task A_step_failure_pause_awaiting_the_user_keeps_the_text_the_step_reported() {
+            // The StartGuiding / Dither shape: report the failure and the fix, then pause for the user.
+            const string failure = "Guiding did not start (no star) — check the guider, then press Resume to try again";
+            var id = Guid.NewGuid();
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            factory.Items.Add(new ReportsThenAwaitsUserItem());
+            var svc = BuildService(id, BuildBody(c => c.Items.Add(new ReportsThenAwaitsUserItem()), factory), factory: factory);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.PausedAwaitingUser);
+            var state = await PollUntil(svc, id, s => s?.CurrentInstructionDescription == failure);
+
+            Assert.That(state.CurrentInstructionDescription, Is.EqualTo(failure));
+            await svc.AbortAsync(id, null, CancellationToken.None);
+        }
+
+        [Test]
+        public async Task A_parallel_branchs_press_resume_text_shows_when_it_escalates_a_users_pause() {
+            // #1784 review: the user pauses a parallel run; another branch, still finishing, fails and asks for the
+            // user. Its "... press Resume" report lands while the run is still Paused and must survive the escalation.
+            const string failure = "Dither failed — check the guider, then press Resume to try again";
+            var id = Guid.NewGuid();
+            var factory = HeadlessSequencerFactory.WithDefaults();
+            factory.Items.Add(new FailsAfterTheUsersPauseItem());
+            FailsAfterTheUsersPauseItem.Paused = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            FailsAfterTheUsersPauseItem.Started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var svc = BuildService(id, BuildBody(c => {
+                var par = new ParallelContainer { Name = "parallel" };
+                var waiting = new SequentialContainer { Name = "waiting" };
+                waiting.Add(new WaitForTimeSpan { Time = 30 });
+                par.Add(waiting);
+                par.Add(new FailsAfterTheUsersPauseItem());
+                c.Items.Add(par);
+            }, factory), factory: factory);
+
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            // The parallel container holds its branches at the gate, so pause only once this branch is running.
+            await FailsAfterTheUsersPauseItem.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await svc.PauseAsync(id, null, CancellationToken.None);
+            await WaitForStateAsync(svc, id, SequenceRunState.Paused);
+            FailsAfterTheUsersPauseItem.Paused.SetResult();
+            await WaitForStateAsync(svc, id, SequenceRunState.PausedAwaitingUser);
+            var state = await PollUntil(svc, id, s => s?.CurrentInstructionDescription == failure);
+
+            Assert.That(state.CurrentInstructionDescription, Is.EqualTo(failure));
+            await svc.AbortAsync(id, null, CancellationToken.None);
         }
 
         [Test]
@@ -2071,6 +2186,50 @@ namespace OpenAstroAra.Test {
             }
 
             public override object Clone() => new FailsDuringThePromptItem(this);
+        }
+
+        [Newtonsoft.Json.JsonObject(Newtonsoft.Json.MemberSerialization.OptIn)]
+        private sealed class ReportsThenAwaitsUserItem : OpenAstroAra.Sequencer.SequenceItem.SequenceItem {
+
+            public ReportsThenAwaitsUserItem() { }
+
+            private ReportsThenAwaitsUserItem(ReportsThenAwaitsUserItem cloneMe) : base(cloneMe) { }
+
+            public override async Task Execute(IProgress<OpenAstroAra.Core.Model.ApplicationStatus> progress, CancellationToken token) {
+                progress.Report(new OpenAstroAra.Core.Model.ApplicationStatus {
+                    Status = "Guiding did not start (no star) — check the guider, then press Resume to try again"
+                });
+                var gate = OpenAstroAra.Sequencer.Utility.ItemUtility.GetPauseGate(Parent)!;
+                gate.RequestPause(OpenAstroAra.Sequencer.Utility.PauseKind.AwaitingUser);
+                await gate.WaitWhilePausedAsync(token);
+            }
+
+            public override object Clone() => new ReportsThenAwaitsUserItem(this);
+        }
+
+        [Newtonsoft.Json.JsonObject(Newtonsoft.Json.MemberSerialization.OptIn)]
+        private sealed class FailsAfterTheUsersPauseItem : OpenAstroAra.Sequencer.SequenceItem.SequenceItem {
+
+            internal static TaskCompletionSource Paused = new();
+            internal static TaskCompletionSource Started = new();
+
+            public FailsAfterTheUsersPauseItem() { }
+
+            private FailsAfterTheUsersPauseItem(FailsAfterTheUsersPauseItem cloneMe) : base(cloneMe) { }
+
+            public override async Task Execute(IProgress<OpenAstroAra.Core.Model.ApplicationStatus> progress, CancellationToken token) {
+                Started.TrySetResult();
+                await Paused.Task.WaitAsync(token); // still finishing its frame when the user's pause lands
+                progress.Report(new OpenAstroAra.Core.Model.ApplicationStatus {
+                    Status = "Dither failed — check the guider, then press Resume to try again"
+                });
+                await Task.Delay(300, token); // the pool-posted report lands while the run is still Paused
+                var gate = OpenAstroAra.Sequencer.Utility.ItemUtility.GetPauseGate(Parent)!;
+                gate.RequestPause(OpenAstroAra.Sequencer.Utility.PauseKind.AwaitingUser);
+                await gate.WaitWhilePausedAsync(token);
+            }
+
+            public override object Clone() => new FailsAfterTheUsersPauseItem(this);
         }
 
         private sealed class AlwaysThrowingItem : OpenAstroAra.Sequencer.SequenceItem.SequenceItem {

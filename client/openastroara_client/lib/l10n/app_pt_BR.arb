@@ -1430,5 +1430,10 @@
   "rigSetupCalibrationAction": "Abrir modo Guiagem",
   "rigSetupItemDone": "Pronto",
   "rigSetupNotNow": "Agora não",
-  "rigSetupDonePill": "Setup configurado"
+  "rigSetupDonePill": "Setup configurado",
+  "faultGroupCount": "{count} vezes",
+  "faultGroupSpan": "Primeira {first} · última {last}",
+  "faultGroupUnresolved": "{count} sem solução",
+  "faultGroupRecovered": "recuperado",
+  "faultGroupReleased": "liberado — desconectado à mão"
 }

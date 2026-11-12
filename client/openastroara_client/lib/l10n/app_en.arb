@@ -442,7 +442,7 @@
   },
   "deviceStoppedFollowingMount": "The dome no longer follows the mount",
   "@deviceStoppedFollowingMount": {
-    "description": "Message pill: a dial turn, Park or Home turned following the mount off"
+    "description": "Message pill: a dial turn, Park, Home or Stop turned following the mount off"
   },
   "deviceCouldntFollowMount": "Couldn't change whether the dome follows the mount",
   "@deviceCouldntFollowMount": {
@@ -6556,5 +6556,28 @@
   "rigSetupDonePill": "Rig set up",
   "@rigSetupDonePill": {
     "description": "Simple Mode result pill when the last Rig setup item is done"
+  },
+  "faultGroupCount": "{count} times",
+  "@faultGroupCount": {
+    "description": "Fault log: how many times one device dropped within one run of faults, shown on the collapsed row",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "faultGroupSpan": "First {first} · last {last}",
+  "@faultGroupSpan": {
+    "description": "Fault log: first and last time (clock strings) of the collapsed row",
+    "placeholders": { "first": { "type": "String" }, "last": { "type": "String" } }
+  },
+  "faultGroupUnresolved": "{count} unresolved",
+  "@faultGroupUnresolved": {
+    "description": "Fault log: how many rows of the collapsed row are not resolved yet",
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "faultGroupRecovered": "recovered",
+  "@faultGroupRecovered": {
+    "description": "Fault log: every row of the collapsed row is resolved and the newest one recovered"
+  },
+  "faultGroupReleased": "released — disconnected by hand",
+  "@faultGroupReleased": {
+    "description": "Fault log: every row of the collapsed row is resolved and the newest one was released because the user disconnected the device by hand, so it is not recovered"
   }
 }

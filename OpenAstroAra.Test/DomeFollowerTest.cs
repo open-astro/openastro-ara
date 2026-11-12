@@ -606,11 +606,9 @@ namespace OpenAstroAra.Test {
             Assert.That(_store.GetDomeSettings().FollowMount, Is.True, "nor off");
         }
 
-        [Test]
-        public async Task A_profile_switch_that_drops_the_connected_dome_keeps_the_new_profiles_follow_setting() {
-            // Profile A follows with this dome; the select has already put profile B's block (another dome,
-            // saved following) in the store when the device switch drops A's dome.
-            _store.PutDomeSettings(_store.GetDomeSettings() with { FollowMount = true, AzimuthToleranceDegrees = 3 });
+        // The device switch after a profile select: the new profile (profile B) remembers another dome, so the
+        // switch drops this one, the dome of profile A.
+        private ProfileDeviceSwitch ASwitchThatDropsTheDome() {
             var otherDome = Device with { UniqueId = "uid-b", Name = "Dome B", HostName = "10.0.0.2", IpAddress = "10.0.0.2" };
             var selections = new Mock<IEquipmentSelectionStore>();
             selections.Setup(s => s.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new[] { otherDome });
@@ -619,13 +617,41 @@ namespace OpenAstroAra.Test {
                 .ReturnsAsync(() => ((IDomeMediator)_svc).GetInfo().Connected ? EquipmentConnectionState.Connected : EquipmentConnectionState.Disconnected);
             var services = new Mock<IServiceProvider>();
             services.Setup(s => s.GetService(typeof(IDomeService))).Returns(_svc);
-            using var deviceSwitch = new ProfileDeviceSwitch(services.Object, selections.Object, reconnector.Object, _store,
+            return new ProfileDeviceSwitch(services.Object, selections.Object, reconnector.Object, _store,
                 Microsoft.Extensions.Logging.Abstractions.NullLogger<ProfileDeviceSwitch>.Instance);
+        }
+
+        [Test]
+        public async Task A_profile_switch_that_drops_the_connected_dome_keeps_the_new_profiles_follow_setting() {
+            // Profile A follows with this dome; the select has already put profile B's block (another dome,
+            // saved following) in the store when the device switch drops A's dome.
+            _store.PutDomeSettings(_store.GetDomeSettings() with { FollowMount = true, AzimuthToleranceDegrees = 3 });
+            using var deviceSwitch = ASwitchThatDropsTheDome();
 
             await deviceSwitch.ApplyAsync(CancellationToken.None);
 
             await EventuallyAsync(() => !((IDomeMediator)_svc).GetInfo().Connected, "the switch's disconnect");
             Assert.That(_store.GetDomeSettings().FollowMount, Is.True, "profile B's saved Follow the mount survives the switch");
+        }
+
+        [Test]
+        public async Task A_profile_switch_during_a_follow_slew_drops_the_move_without_an_error_pill() {
+            var sink = new RecordingSink();
+            Notifier.Use(sink);
+            await PlaceDomeAtAsync(Target() + 30);
+            using var hold = new ManualResetEventSlim(false);
+            _dome.Hold = hold;
+            var tick = _follower.TickAsync();
+            await EventuallyAsync(() => Volatile.Read(ref _dome.SlewCalls) == 1, "the follow slew");
+            using var deviceSwitch = ASwitchThatDropsTheDome();
+
+            await deviceSwitch.ApplyAsync(CancellationToken.None);
+            await EventuallyAsync(() => !((IDomeMediator)_svc).GetInfo().Connected, "the switch's disconnect");
+            // The old dome's driver returns only after it is gone: a move still waiting for it would fail.
+            hold.Set();
+
+            await tick.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.That(sink.Seen.Where(s => s.IsError), Is.Empty, "the switch dropped the move, so it did not fail");
         }
 
         [Test]

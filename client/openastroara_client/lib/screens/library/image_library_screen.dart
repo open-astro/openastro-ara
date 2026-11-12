@@ -14,7 +14,8 @@ import '../../state/library/library_state.dart';
 import '../../state/library/live_library_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../state/backup/backup_stream_state.dart';
-import '../../widgets/imaging/fault_panel.dart' show FaultHistoryTile;
+import '../../widgets/imaging/fault_panel.dart'
+    show FaultGroupTile, groupFaultRows;
 import '../../widgets/imaging/polar_error_rating.dart';
 import '../../widgets/library/bulk_action_bar.dart';
 import '../../widgets/library/mosaics_section.dart';
@@ -703,6 +704,7 @@ class _SessionFaultsBadge extends ConsumerWidget {
     // Loading/error/none all render nothing — the badge is an alert, not a
     // status field, and a fault-log hiccup must not clutter every card.
     if (rows == null || rows.isEmpty) return const SizedBox.shrink();
+    final groups = groupFaultRows(rows);
     return TextButton.icon(
       onPressed: () => showAdaptiveAlert<void>(
         context: context,
@@ -715,7 +717,9 @@ class _SessionFaultsBadge extends ConsumerWidget {
             width: 480,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: [for (final row in rows) FaultHistoryTile(row: row)],
+              children: [
+                for (final group in groups) FaultGroupTile(group: group),
+              ],
             ),
           ),
           actions: [

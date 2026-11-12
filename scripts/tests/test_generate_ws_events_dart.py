@@ -10,8 +10,13 @@ SPEC.loader.exec_module(mod)
 
 class Render(unittest.TestCase):
     def test_names_become_lower_camel_constants(self):
-        text = mod.render('{"events":[{"name":"GuiderDarkLibraryInvalidated","type":"guider.dark_library.invalidated"}]}')
-        self.assertIn("static const String guiderDarkLibraryInvalidated = 'guider.dark_library.invalidated';", text)
+        text = mod.render('{"events":[{"name":"GuiderStep","type":"guider.step"}]}')
+        self.assertIn("static const String guiderStep = 'guider.step';", text)
+
+
+    def test_a_declaration_past_80_columns_wraps_like_dart_format(self):
+        text = mod.render('{"events":[{"name":"FilterWheelManualSwap","type":"equipment.filter_wheel.manual_swap"}]}')
+        self.assertIn("static const String filterWheelManualSwap =\n      'equipment.filter_wheel.manual_swap';", text)
 
 
 class Drift(unittest.TestCase):
