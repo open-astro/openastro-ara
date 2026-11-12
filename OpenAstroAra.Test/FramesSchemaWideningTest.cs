@@ -266,5 +266,48 @@ namespace OpenAstroAra.Test {
             var again = new SqliteAraDatabase(_dir, logger: null);
             await Assert.DoesNotThrowAsync(() => again.InitializeAsync(CancellationToken.None));
         }
+
+        [Test]
+        public async Task An_older_database_gains_the_camera_columns_with_old_rows_null_and_new_frames_carry_the_camera() {
+            // #1757 — a catalog from before the camera columns: today's frames DDL without them, one row in it.
+            var dbPath = Path.Combine(_dir, "openastroara.db");
+            var old = Guid.NewGuid();
+            await using (var conn = new SqliteConnection($"Data Source={dbPath}")) {
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = """
+                    CREATE TABLE sessions (id TEXT PRIMARY KEY NOT NULL, profile_id TEXT, sequence_json TEXT,
+                        started_at TEXT NOT NULL, ended_at TEXT, recovery_needed INTEGER NOT NULL DEFAULT 0,
+                        last_completed_instruction_id TEXT, current_target_id TEXT, frame_count INTEGER NOT NULL DEFAULT 0);
+                    CREATE TABLE frames (id TEXT PRIMARY KEY NOT NULL, session_id TEXT NOT NULL, target_name TEXT NOT NULL,
+                        frame_type TEXT NOT NULL, filter_name TEXT, exposure_seconds REAL NOT NULL, gain INTEGER,
+                        "offset" INTEGER, temperature_c REAL, captured_utc TEXT NOT NULL, file_path TEXT NOT NULL,
+                        file_size_bytes INTEGER NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL,
+                        bit_depth INTEGER NOT NULL, hfr REAL, star_count INTEGER, eccentricity REAL,
+                        guiding_rms_arcsec REAL, snr_estimate REAL, quality_score_json TEXT,
+                        rating INTEGER NOT NULL DEFAULT 0, tags_json TEXT NOT NULL DEFAULT '[]', focuser_position INTEGER,
+                        FOREIGN KEY (session_id) REFERENCES sessions(id));
+                    INSERT INTO sessions (id, started_at) VALUES ($sid, '2026-01-01T00:00:00.0000000+00:00');
+                    INSERT INTO frames (id, session_id, target_name, frame_type, exposure_seconds, captured_utc, file_path,
+                        file_size_bytes, width, height, bit_depth)
+                    VALUES ($old, $sid, 'DARK', 'dark', 300, '2026-01-01T00:00:00.0000000+00:00', '/tmp/old.fits', 1, 16, 16, 16);
+                    """;
+                cmd.Parameters.AddWithValue("$sid", Session.ToString());
+                cmd.Parameters.AddWithValue("$old", old.ToString());
+                await cmd.ExecuteNonQueryAsync();
+            }
+            SqliteConnection.ClearAllPools();
+
+            var db = new SqliteAraDatabase(_dir, logger: null);
+            await db.InitializeAsync(CancellationToken.None);
+            var repo = new SqliteFrameRepository(db, new InMemoryProfileStore());
+            var oldRow = await repo.GetAsync(old, CancellationToken.None);
+            Assert.That((oldRow!.CameraName, oldRow.CameraId), Is.EqualTo(((string?)null, (string?)null)), "an old row stays NULL");
+
+            var id = Guid.NewGuid();
+            await repo.InsertAsync(Frame(id, 60, 100) with { CameraName = "ZWO ASI2600MM Pro", CameraId = "cam-1" }, CancellationToken.None);
+            var got = await repo.GetAsync(id, CancellationToken.None);
+            Assert.That((got!.CameraName, got.CameraId), Is.EqualTo(("ZWO ASI2600MM Pro", "cam-1")));
+        }
     }
 }

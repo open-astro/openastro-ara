@@ -36,6 +36,7 @@ on:
       - 'docs/**'
       - '.claude/**'
       - '.github/ISSUE_TEMPLATE/**'
+      - 'changelog.d/**'
       - '**.md'
   schedule:
     # Weekly catch-all so advisories published after a quiet period still surface.
@@ -60,12 +61,12 @@ jobs:
           persist-credentials: false
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@1fc58d04a4d4374f921bdac573c3811c240f9c26  # v4.39.2
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066  # v4.39.3
         with:
           languages: csharp
           build-mode: none
 
       - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@1fc58d04a4d4374f921bdac573c3811c240f9c26  # v4.39.2
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066  # v4.39.3
         with:
           category: "/language:csharp"

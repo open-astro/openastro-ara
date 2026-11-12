@@ -66,10 +66,14 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
     /// <param name="sequences">The §38 store the generated dark-matrix sequence is persisted
     /// into. Null (test/bootstrap contexts only — Program.cs always wires the real store)
     /// degrades the build to plan-only: state is tracked but no sequence is written.</param>
-    public SqliteDarkLibraryService(IAraDatabase db, ISequenceService? sequences = null) {
+    /// <param name="camera">#1757 — the main camera service, for the connected camera's library (null: no default camera).</param>
+    public SqliteDarkLibraryService(IAraDatabase db, ISequenceService? sequences = null, ICameraService? camera = null) {
         _db = db;
         _sequences = sequences;
+        _camera = camera;
     }
+
+    private readonly ICameraService? _camera;
 
     public async Task<OperationAcceptedDto> StartBuildAsync(DarkLibraryBuildRequestDto request, string? idempotencyKey, CancellationToken ct) {
         var exposures = (request.ExposureSecondsList ?? Array.Empty<double>())
@@ -133,7 +137,7 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
             // opt-in reuse path any-temperature matching is the user's stated intent
             // ("I don't regulate — existing darks of this exposure/gain are fine").
             await using var conn = _db.OpenConnection();
-            var counts = await CoveredCountsAsync(conn, capturedAtOrAfter: null, ct).ConfigureAwait(false);
+            var counts = await CoveredCountsAsync(conn, capturedAtOrAfter: null, await ConnectedCameraAsync(ct).ConfigureAwait(false), ct).ConfigureAwait(false);
             toCapture = combos.Where(combo => CoveredCount(counts, combo) < frames).ToList();
         }
 
@@ -172,9 +176,14 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
             IdempotencyKey: idempotencyKey);
     }
 
-    public async Task<DarkLibraryStateDto> GetStatusAsync(CancellationToken ct) {
-        var entries = await ListEntriesAsync(ct);
-        var biasEntries = await ListBiasEntriesAsync(ct);
+    public Task<DarkLibraryStateDto> GetStatusAsync(CancellationToken ct) => GetStatusAsync(null, ct);
+
+    public async Task<DarkLibraryStateDto> GetStatusAsync(string? camera, CancellationToken ct) {
+        // #1757 — one camera's library: its own groups and the legacy ones (frames catalogued before the camera
+        // was recorded count for any camera, so an existing library is not lost). No camera known: every group.
+        camera ??= await ConnectedCameraAsync(ct);
+        var entries = (await ListEntriesAsync(ct)).Where(e => camera is null || e.Camera is null || e.Camera == camera).ToList();
+        var biasEntries = (await ListBiasEntriesAsync(ct)).Where(e => camera is null || e.Camera is null || e.Camera == camera).ToList();
 
         BuildRecord? build;
         lock (_gate) {
@@ -193,7 +202,8 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
                 FailureReason: null,
                 Entries: entries,
                 GeneratedSequenceId: null,
-                BiasEntries: biasEntries);
+                BiasEntries: biasEntries,
+                Camera: camera);
         }
 
         var completed = 0;
@@ -207,7 +217,7 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
             var since = build.ReuseExisting ? (DateTimeOffset?)null : build.StartedUtc;
             // One grouped query for every combination (#1185): the status endpoint is polled
             // while the build runs, and a 3 × 4 × 3 request used to cost 36 COUNT(*) scans per poll.
-            var counts = await CoveredCountsAsync(conn, since, ct).ConfigureAwait(false);
+            var counts = await CoveredCountsAsync(conn, since, camera, ct).ConfigureAwait(false);
             completed = build.Combinations.Count(combo => CoveredCount(counts, combo) >= build.FramesPerCombination);
         }
 
@@ -238,8 +248,14 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
             FailureReason: null,
             Entries: entries,
             GeneratedSequenceId: build.GeneratedSequenceId,
-            BiasEntries: biasEntries);
+            BiasEntries: biasEntries,
+            Camera: camera);
     }
+
+    // The connected main camera's name (the value frames record), or null when none is connected.
+    private async Task<string?> ConnectedCameraAsync(CancellationToken ct) =>
+        _camera is not null && await _camera.GetAsync(ct).ConfigureAwait(false) is { State: EquipmentConnectionState.Connected } c
+            && !string.IsNullOrWhiteSpace(c.Name) ? c.Name : null;
 
     public async Task<IReadOnlyList<DarkLibraryEntryDto>> ListEntriesAsync(CancellationToken ct) {
         var entries = new List<DarkLibraryEntryDto>();
@@ -264,26 +280,30 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
                        AND f2.exposure_seconds = f.exposure_seconds
                        AND (f2.gain = f.gain OR (f2.gain IS NULL AND f.gain IS NULL))
                        AND ROUND(COALESCE(f2.temperature_c, 0), 0) = ROUND(COALESCE(f.temperature_c, 0), 0)
-                     ORDER BY f2.captured_utc DESC LIMIT 1) AS newest_path
+                       AND f2.camera_name IS f.camera_name
+                     ORDER BY f2.captured_utc DESC LIMIT 1) AS newest_path,
+                   camera_name
             FROM frames f
             WHERE frame_type = 'dark'
-            GROUP BY exposure_seconds, gain, temp_bucket
-            ORDER BY exposure_seconds, gain, temp_bucket;
+            GROUP BY exposure_seconds, gain, temp_bucket, camera_name
+            ORDER BY exposure_seconds, gain, temp_bucket, camera_name;
             """;
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct)) {
             var exposure = reader.GetDouble(0);
             var gain = await reader.IsDBNullAsync(1, ct) ? (int?)null : reader.GetInt32(1);
             var temp = reader.GetDouble(2);
+            var camera = await reader.IsDBNullAsync(7, ct) ? null : reader.GetString(7);
             entries.Add(new DarkLibraryEntryDto(
-                Id: StableEntryId(exposure, gain, temp),
+                Id: StableEntryId(exposure, gain, temp, camera),
                 ExposureSeconds: exposure,
                 Gain: gain,
                 TemperatureC: temp,
                 FrameCount: reader.GetInt32(3),
                 CapturedUtc: ParseUtc(reader.GetString(4)),
                 FilePath: await reader.IsDBNullAsync(6, ct) ? string.Empty : reader.GetString(6),
-                FileSizeBytes: reader.GetInt64(5)));
+                FileSizeBytes: reader.GetInt64(5),
+                Camera: camera));
         }
         return entries;
     }
@@ -296,18 +316,20 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
         await using var conn = _db.OpenConnection();
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
-            SELECT gain, "offset", COALESCE(bin, 1) AS b, COUNT(*), MAX(captured_utc), SUM(file_size_bytes)
+            SELECT gain, "offset", COALESCE(bin, 1) AS b, COUNT(*), MAX(captured_utc), SUM(file_size_bytes), camera_name
             FROM frames
             WHERE frame_type = 'bias'
-            GROUP BY gain, "offset", b
-            ORDER BY gain, "offset", b;
+            GROUP BY gain, "offset", b, camera_name
+            ORDER BY gain, "offset", b, camera_name;
             """;
         await using var reader = await cmd.ExecuteReaderAsync(ct);
         while (await reader.ReadAsync(ct)) {
             var gain = await reader.IsDBNullAsync(0, ct) ? (int?)null : reader.GetInt32(0);
             var offset = await reader.IsDBNullAsync(1, ct) ? (int?)null : reader.GetInt32(1);
             var bin = reader.GetInt32(2);
-            var key = string.Create(CultureInfo.InvariantCulture, $"bias|{gain?.ToString(CultureInfo.InvariantCulture) ?? "null"}|{offset?.ToString(CultureInfo.InvariantCulture) ?? "null"}|{bin}");
+            var camera = await reader.IsDBNullAsync(6, ct) ? null : reader.GetString(6);
+            var key = string.Create(CultureInfo.InvariantCulture, $"bias|{gain?.ToString(CultureInfo.InvariantCulture) ?? "null"}|{offset?.ToString(CultureInfo.InvariantCulture) ?? "null"}|{bin}")
+                + (camera is null ? "" : "|" + camera); // a legacy group keeps its old id
             entries.Add(new BiasLibraryEntryDto(
                 Id: new Guid(SHA256.HashData(Encoding.UTF8.GetBytes(key)).AsSpan(0, 16)),
                 Gain: gain,
@@ -315,7 +337,8 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
                 Bin: bin,
                 FrameCount: reader.GetInt32(3),
                 CapturedUtc: ParseUtc(reader.GetString(4)),
-                FileSizeBytes: await reader.IsDBNullAsync(5, ct) ? 0 : reader.GetInt64(5)));
+                FileSizeBytes: await reader.IsDBNullAsync(5, ct) ? 0 : reader.GetInt64(5),
+                Camera: camera));
         }
         return entries;
     }
@@ -327,6 +350,7 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
     private static async Task<Dictionary<(double ExposureSeconds, int? Gain, double TempBucket), int>> CoveredCountsAsync(
             SqliteConnection conn,
             DateTimeOffset? capturedAtOrAfter,
+            string? camera,
             CancellationToken ct) {
         await using var cmd = conn.CreateCommand();
         // The same whole-degree bucket the §39 matching rules and ListEntriesAsync use.
@@ -338,8 +362,10 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
             FROM frames
             WHERE frame_type = 'dark'
               AND ($since IS NULL OR captured_utc >= $since)
+              AND ($camera IS NULL OR camera_name IS NULL OR camera_name = $camera)
             GROUP BY exposure_seconds, gain, temp_bucket;
             """;
+        cmd.Parameters.AddWithValue("$camera", (object?)camera ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$since", capturedAtOrAfter is DateTimeOffset since
             ? since.ToString("O", CultureInfo.InvariantCulture)
             : DBNull.Value);
@@ -368,9 +394,10 @@ public sealed class SqliteDarkLibraryService : IDarkLibraryService, IDisposable 
 
     // A stable id per (exposure, gain, temp-bucket) group so clients can diff/select entries
     // across polls: same group ⇒ same Guid, no persistence needed.
-    private static Guid StableEntryId(double exposureSeconds, int? gain, double tempBucket) {
+    private static Guid StableEntryId(double exposureSeconds, int? gain, double tempBucket, string? camera) {
         var key = string.Create(CultureInfo.InvariantCulture,
-            $"dark|{exposureSeconds:R}|{(gain is int g ? g.ToString(CultureInfo.InvariantCulture) : "null")}|{tempBucket:R}");
+            $"dark|{exposureSeconds:R}|{(gain is int g ? g.ToString(CultureInfo.InvariantCulture) : "null")}|{tempBucket:R}")
+            + (camera is null ? "" : "|" + camera); // a legacy group keeps its old id
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(key));
         return new Guid(hash.AsSpan(0, 16));
     }

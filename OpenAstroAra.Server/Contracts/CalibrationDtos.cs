@@ -21,7 +21,9 @@ namespace OpenAstroAra.Server.Contracts;
 /// <summary>One imaging session that may need calibration frames. Per §39.
 /// <c>CoolerSetpointC</c> is the set-point most of the session's lights were taken at with the
 /// cooler on (null = taken warm, or before the catalog recorded it) — what matching flats cool to.
-/// <c>MatchingBiasAvailable</c>: every (gain, offset, binning) the lights used has bias frames.</summary>
+/// <c>MatchingBiasAvailable</c>: every (gain, offset, binning) the lights used has bias frames.
+/// <c>ManualCapture</c>: every light is a Take One frame (target <c>CameraService.ManualCaptureTarget</c>), the
+/// shared manual-capture session rather than a plan's.</summary>
 public sealed record CalibrationSessionDto(
     Guid Id,
     string TargetName,
@@ -33,7 +35,9 @@ public sealed record CalibrationSessionDto(
     bool MatchingDarksAvailable,
     string? ProfileId,
     double? CoolerSetpointC = null,
-    bool MatchingBiasAvailable = false);
+    bool MatchingBiasAvailable = false,
+    bool ManualCapture = false,
+    string? Camera = null);
 
 /// <summary>Per-filter summary inside a calibration session. <c>MatchingFlatFrames</c> counts the
 /// catalogued flats that calibrate this filter's lights — same filter, taken at the same rotator
@@ -139,7 +143,8 @@ public sealed record DarkLibraryStateDto(
     string? FailureReason,
     IReadOnlyList<DarkLibraryEntryDto> Entries,
     Guid? GeneratedSequenceId,
-    IReadOnlyList<BiasLibraryEntryDto>? BiasEntries = null);
+    IReadOnlyList<BiasLibraryEntryDto>? BiasEntries = null,
+    string? Camera = null);
 
 /// <summary>One entry in the dark library: a distinct (exposure, gain, whole-degree temperature)
 /// group of catalogued DARK frames. <c>Id</c> is a stable hash of that key (same group ⇒ same id
@@ -153,7 +158,8 @@ public sealed record DarkLibraryEntryDto(
     int FrameCount,
     DateTimeOffset CapturedUtc,
     string FilePath,
-    long FileSizeBytes);
+    long FileSizeBytes,
+    string? Camera = null);
 
 /// <summary>One group of catalogued BIAS frames: a distinct (gain, offset, binning) — the key bias
 /// frames match lights by. <c>Id</c> is a stable hash of that key; <c>FileSizeBytes</c> is the
@@ -165,4 +171,5 @@ public sealed record BiasLibraryEntryDto(
     int Bin,
     int FrameCount,
     DateTimeOffset CapturedUtc,
-    long FileSizeBytes);
+    long FileSizeBytes,
+    string? Camera = null);

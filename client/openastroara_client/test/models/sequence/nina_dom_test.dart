@@ -440,4 +440,14 @@ void main() {
           throwsArgumentError); // into descendant
     });
   });
+
+  test('a fresh collection wrapper writes the type before the values: Json.NET reads type metadata first (rig 2026-11-11)', () {
+    // A daemon-generated body keeps plain-array collections; an edit that
+    // wrapped them with \$values first failed on the rig with "Unexpected
+    // token when deserializing object: String. Path 'Items.\$type'".
+    final node = <String, dynamic>{'Items': <dynamic>[], 'Conditions': <dynamic>[], 'Triggers': <dynamic>[]};
+    expect(withChildren(node, const [])['Items'].keys.first, r'$type');
+    expect(withConditions(node, const [])['Conditions'].keys.first, r'$type');
+    expect(withTriggers(node, const [])['Triggers'].keys.first, r'$type');
+  });
 }

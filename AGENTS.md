@@ -14,6 +14,10 @@ Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-
 
 Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root, created lazily. See `docs/agents/domain.md`.
 
+## Changelog
+
+A user-visible change adds `changelog.d/<branch-slug>.md`; never edit `CHANGELOG.md` (only the release step writes it). Format and commands: `changelog.d/README.md`; CI runs `scripts/changelog-fragments.py --check`.
+
 ## Pull request body
 
 The PR body follows `.github/pull_request_template.md`. The `PR body` workflow checks it when a PR is opened, edited or pushed (three jobs, optional until branch protection requires them):
