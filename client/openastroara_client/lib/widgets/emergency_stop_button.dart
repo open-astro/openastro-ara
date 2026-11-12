@@ -189,7 +189,7 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
           .read(serverApiFactoryProvider)(server)
           .emergencyStop();
       // The cooler toggle polls every 15 s; show the stop's cooler-off now.
-      if (ref.exists(cameraStatusProvider)) {
+      if (ref.read(cameraStatusProvider.exists)) {
         unawaited(ref.read(cameraStatusProvider.notifier).refresh());
       }
       // A rung that failed keeps its pill up until it is read.

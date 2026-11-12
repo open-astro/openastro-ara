@@ -138,6 +138,9 @@ public interface IProfileStore {
     CoolingFanDto GetCoolingFan();
     void PutCoolingFan(CoolingFanDto value);
 
+    // #1675 — the per-slot focus offsets the offset calibration saved.
+    FilterFocusOffsetsDto GetFilterFocusOffsets();
+    void PutFilterFocusOffsets(FilterFocusOffsetsDto value);
     // #1689 — the dome's geometry and follow-the-mount setting.
     DomeSettingsDto GetDomeSettings();
     void PutDomeSettings(DomeSettingsDto value);

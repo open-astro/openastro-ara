@@ -1261,6 +1261,9 @@ public partial class Program {
                     : sp.GetRequiredService<ActiveRunSessionRegistry>().HasAny ? "a sequence is running"
                     : null,
                 sp.GetRequiredService<ILogger<BahtinovFocusService>>()));
+        // #1675 — the per-filter focus offset calibration (POST /equipment/filterwheel/offsets/calibrate): a
+        // background job of autofocus runs, refused while another focus routine or a plan runs.
+        builder.Services.AddSingleton<FilterOffsetCalibrationService>();
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 
         var app = builder.Build();

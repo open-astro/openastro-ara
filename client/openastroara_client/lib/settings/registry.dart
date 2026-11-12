@@ -2073,6 +2073,8 @@ const List<Setting> settingsRegistry = [
       'offset',
       'parfocal',
       'focuser',
+      // The panel's Focus offsets section measures them (#1675).
+      'calibrate focus offsets',
     ],
     path: ['Settings', 'Equipment', 'Filter Wheel'],
     type: SettingType.bool(),

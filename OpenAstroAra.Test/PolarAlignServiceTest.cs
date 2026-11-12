@@ -1639,6 +1639,11 @@ namespace OpenAstroAra.Test {
 
             Assert.That(failure.GetProperty("reason").GetString(), Is.EqualTo("tracking_off"));
             // Handed back even so: a mount that reports late must not stay tracking when the user had it off.
+            // The error event goes out before the run's finally hands tracking back.
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            while (calls.Count < 2) {
+                await Task.Delay(25, cts.Token).ConfigureAwait(false);
+            }
             Assert.That(string.Join(", ", calls), Is.EqualTo("tracking True, tracking False"), "no slew, the user's off put back");
         }
 

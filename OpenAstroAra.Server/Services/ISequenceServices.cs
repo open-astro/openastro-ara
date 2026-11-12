@@ -228,6 +228,9 @@ public interface ICalibrationService {
 public interface IDarkLibraryService {
     Task<OperationAcceptedDto> StartBuildAsync(DarkLibraryBuildRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<DarkLibraryStateDto> GetStatusAsync(CancellationToken ct);
+    /// <summary>#1757 — the library of one camera: its own groups plus the legacy (camera-less) ones. Null
+    /// <paramref name="camera"/> means the connected main camera; with none connected, every group.</summary>
+    Task<DarkLibraryStateDto> GetStatusAsync(string? camera, CancellationToken ct);
     Task<IReadOnlyList<DarkLibraryEntryDto>> ListEntriesAsync(CancellationToken ct);
 }
 
