@@ -243,7 +243,7 @@ void main() {
 
     testWidgets('a long press lists the Card action and runs it', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
       final picked = <String>[];
-      await _pump(tester, frames: _m31Frames, onImageTarget: (d) => picked.add(d.id));
+      await _pump(tester, frames: _m31Frames, onImageTarget: (d, _) => picked.add(d.id));
       await hold(tester, find.text('Andromeda Galaxy'));
       expect(find.byType(AlbumCardBack), findsNothing, reason: 'a long press does not flip');
       expect(find.text('Add more time'), findsOneWidget);
@@ -269,7 +269,7 @@ void main() {
       tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(reduceMotion: true);
       addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
       final picked = <String>[];
-      await _pump(tester, frames: _m31Frames, onImageTarget: (d) => picked.add(d.id));
+      await _pump(tester, frames: _m31Frames, onImageTarget: (d, _) => picked.add(d.id));
       await hold(tester, find.text('Andromeda Galaxy'));
       expect(find.byType(CupertinoActionSheet), findsOneWidget);
       expect(find.text('Add more time'), findsOneWidget);
