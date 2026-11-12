@@ -53,7 +53,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
       if (mounted) {
         setState(
           () =>
-              _lastError = friendlyError(context.l10n, e, action: 'load your saved settings'),
+              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
         );
       }
     }
@@ -88,7 +88,7 @@ class _StoragePanelState extends ConsumerState<StoragePanel>
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: 'save that'));
+      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -795,7 +795,7 @@ class _RescanButtonState extends ConsumerState<_RescanButton> {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(friendlyError(context.l10n, e, action: 'check the disk for frames')),
+          content: Text(friendlyError(context.l10n, e, action: context.l10n.actionCheckDisk)),
         ),
       );
     } finally {
@@ -873,7 +873,7 @@ class _PreviewCacheRowState extends ConsumerState<_PreviewCacheRow> {
       if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(
-          content: Text(friendlyError(context.l10n, e, action: 'clean the preview cache')),
+          content: Text(friendlyError(context.l10n, e, action: context.l10n.actionCleanPreviewCache)),
         ),
       );
     } finally {

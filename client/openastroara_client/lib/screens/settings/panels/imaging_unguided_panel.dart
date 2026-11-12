@@ -53,7 +53,7 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
       await ref.read(unguidedSettingsProvider.notifier).hydrateFromServer(api);
     } catch (e) {
       if (mounted) {
-        setState(() => _lastError = friendlyError(context.l10n, e, action: 'load your saved settings'));
+        setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings));
       }
     }
   }
@@ -76,7 +76,7 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
       messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: 'save that'));
+      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -94,7 +94,7 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text(friendlyError(l10n, e, action: 'clear the ceiling'))),
+        SnackBar(content: Text(friendlyError(l10n, e, action: l10n.actionClearCeiling))),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
