@@ -128,6 +128,15 @@ class CiRunTimeTest(unittest.TestCase):
                     body,
                 )
 
+    def test_the_native_builds_skip_the_merge_queue(self):
+        # merge-gate.sh already requires them green on the PR head; in the queue they only held macOS runners.
+        block = job(self.text, "client-build")
+        self.assertIn(
+            "    if: ${{ !cancelled() && github.event_name != 'merge_group'"
+            " && needs.changes.outputs.docs_only != 'true' && needs.changes.outputs.client != 'false' }}\n",
+            block,
+        )
+
     def test_the_astap_build_is_skipped_on_a_cache_hit(self):
         server = steps(job(self.text, "server-build"))
         cache = server["Cache astap_cli (linux-arm64)"]
