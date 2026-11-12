@@ -8,7 +8,7 @@ import 'guider_state.dart';
 /// §63.18 live guiding panel — rolling RMS history for the Imaging tab.
 ///
 /// The daemon exposes the live RMS only on the REST `GuiderStateDto` (the
-/// `guider.state` WS event is catalogued server-side but not yet published, and
+/// `guider.state` WS event no longer exists, and
 /// the §50.7 `/stats/guiding` series is a per-session aggregate, not a rolling
 /// live window). So the panel keeps a client-local ring buffer fed from
 /// [guiderStatusProvider] snapshots, with a poll timer that re-reads status
