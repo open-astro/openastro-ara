@@ -177,18 +177,27 @@ void main() {
     ];
     bool template(SettingsSearchEntry e) =>
         e.actionId?.startsWith(templateActionPrefix) ?? false;
-    final phone = buildSearchIndex(companion: true, templateNames: ['T']);
+    bool goto(SettingsSearchEntry e) =>
+        e.actionId?.startsWith(gotoActionPrefix) ?? false;
+    const targets = [('m31', 'Andromeda', 'Galaxy')];
+    final phone = buildSearchIndex(
+      companion: true,
+      templateNames: ['T'],
+      targets: targets,
+    );
     final ids = phone.map((e) => e.actionId).toSet();
     for (final id in fullUi) {
       expect(ids, isNot(contains(id)));
     }
     expect(phone.where(template), isEmpty);
+    expect(phone.where(goto), isEmpty);
     expect(phone.where((e) => e.tabIndex != null), isEmpty);
     expect(ids, containsAll(['action.wizard', 'action.mount.park']));
 
-    final desktop = buildSearchIndex(templateNames: ['T']);
+    final desktop = buildSearchIndex(templateNames: ['T'], targets: targets);
     expect(desktop.map((e) => e.actionId), containsAll(fullUi));
     expect(desktop.where(template), isNotEmpty);
+    expect(desktop.where(goto), isNotEmpty);
     expect(desktop.where((e) => e.tabIndex != null), isNotEmpty);
   });
 }

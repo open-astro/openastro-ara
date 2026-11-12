@@ -472,8 +472,12 @@ List<SettingsSearchEntry> buildSearchIndex({
   );
   entries.addAll(_equipmentActionEntries);
   // #1170 — what the daemon offers right now: templates and tonight's targets.
-  if (!companion) entries.addAll(templateEntries(templateNames));
-  entries.addAll(targetEntries(targets));
+  // #1774 — Companion Mode drops both: a template opens the Run tab and a
+  // goto only reaches the full UI's Planning tab sky view.
+  if (!companion) {
+    entries.addAll(templateEntries(templateNames));
+    entries.addAll(targetEntries(targets));
+  }
   // 1. Index panels.
   for (final group in settingsTree) {
     for (final panel in group.panels) {
