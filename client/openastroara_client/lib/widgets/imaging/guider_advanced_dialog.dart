@@ -9,6 +9,7 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
+import '../adaptive_controls.dart';
 
 /// Builds a [GuiderAdvancedClient] for a server. Overridable in tests.
 final guiderAdvancedApiFactoryProvider =
@@ -383,7 +384,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
           const SizedBox(height: 8),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: AdaptiveProgressIndicator())
                 : ListView(
                     children: [
                       if (_guider.notApplied.isNotEmpty)
@@ -456,7 +457,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
                     ? const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: AdaptiveProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.send, size: 18),
                 label: const Text('Apply'),

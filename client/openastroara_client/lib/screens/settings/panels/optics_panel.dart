@@ -10,6 +10,7 @@ import '../../../state/settings/optics_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/adaptive_controls.dart';
 
 /// §36/§25.5 Optics panel — the imaging-train geometry (focal length,
 /// reducer/barlow, sensor size + pixel pitch) that drives the Planning tab's
@@ -239,7 +240,7 @@ class _OpticsPanelState extends ConsumerState<OpticsPanel>
                 ? const SizedBox(
                     width: 14,
                     height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: AdaptiveProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.camera_alt_outlined, size: 16),
             label: Text(

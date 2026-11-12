@@ -5690,13 +5690,13 @@ Multi-select frames via Shift+Click (desktop) or long-press + tap (mobile):
 | **Setup wizard** | Same wizard as desktop (§37), laid out for phone screens, so a new rig can be set up from the phone alone |
 | **Location and time push** | When the rig reports no recent time sync, a question pill (Not now, Send) offers the phone's location and time (§31, §41.5). Not now holds until the next session |
 | **Sky Atlas + Tonight's Sky + Simple search** | The embedded Stellarium Web Engine planetarium (§36); Simple search finds sky objects, Simple Settings, modes and imaged targets |
-| **Every Simple Mode section** | Preview, Focus, Guide, Polar and Plan, and the device windows, reachable on the phone |
+| **Every Simple Mode section** | Preview, Focus, P.A., Guider and Plan (the deck's words), and the device windows, reachable on the phone: the device icons in the strip swipe, each a 44 px target |
 | **Preflight and Autopilot** | Preflight runs step by step; Autopilot (Image this) starts the night from the phone |
-| **Checking a running night** | The plan square, the latest frame, the pills and pause/stop on one portrait screen; Monitor (#1724) as the read-only view |
+| **Checking a running night** | The plan square, the latest frame, the pills and pause/stop on one portrait screen; Monitor (#1724) as the read-only view, opened by a sixth word, Monitor, at the end of the section row (board pick, 2026-11-12). The screen stays awake only while Monitor shows |
 | **Frame viewing** | Pinch to zoom the latest frame; HFR, star count and temperature as Simple Mode shows them |
-| **Emergency Stop** | Visible and holdable (2 s) from every section and over every open panel; same flow as desktop (§35.3) |
-| **Safety alarm** | Simple Mode's alarm (`safety.unsafe`, §35.5) with sound and vibration on a phone; Emergency Abort or Override |
-| **Ara sheet and Simple Settings** | Change rig and profile, versions; Storage and Logs & bug report under Settings › Rig |
+| **Emergency Stop** | The 60 px STOP, visible and holdable (2 s) from every section, including Monitor (108 pt is the iPad's), and over every open panel; same flow as desktop (§35.3). Only on first run, before any rig has ever been connected, it is drawn disabled in the same place, next to the "Rig not connected" banner (board pick, 2026-11-12). After a dropped link, or while planning offline, it stays enabled and answers a press as under DESIGN.md "No rig connected" |
+| **Safety alarm** | Simple Mode's alarm (`safety.unsafe`, §35.5) with sound and vibration on a phone; Emergency Abort (a 2 s hold with the same fill as STOP, board pick 2026-11-12) or Override (a tap) |
+| **Ara sheet and Simple Settings** | Change rig and profile, versions (the Ara button in the strip); Storage and Logs & bug report under Settings › Rig |
 | **Plate-solve and autofocus** | No settings of their own on the phone (decided 2026-11-11, #1779 closed as not planned). The phone uses the profile's plate-solve and autofocus settings and the Focuser window's Autofocus controls |
 
 ### 41.2 What the phone does not do
@@ -5707,7 +5707,7 @@ The sequence editor and sequence templates are absent, not blocked: Simple Mode 
 
 - **One switch.** `companionModeProvider` is true when the platform is iOS or Android and the view's shortest side is under 600 logical px. The shortest side is used so rotation never flips it. When it is true, "Simple Mode is showing" is true whatever the experimental toggle or the saved mode preference says, and neither is written. Tests override the provider.
 - **Tablets are unchanged.** An iPad or Android tablet (shortest side 600 px or more) keeps Simple Mode with the full UI behind it. There is no tablet Companion Mode.
-- **Portrait arrangement** (DESIGN.md "Simple Mode on a phone"): the frame fills the screen and Stop stays in reach. Landscape uses the narrow layout Simple Mode has today, and the phone stays in Companion Mode.
+- **Portrait arrangement** (DESIGN.md "Simple Mode on a phone"): the frame fills the screen and Stop stays in reach. Landscape uses the narrow layout (an icon-only left rail whose labels are the accessible names, a right rail with the section name, shutter and chip, STOP floating below it), and the phone stays in Companion Mode.
 - **No popups.** Simple Mode's no-popups rule applies unchanged: questions and results are message pills, confirmations sit inline in the block that owns them, combo boxes open in place. This replaces full-screen modals.
 - **Targets** are at least 44 px tall; text follows the user's size from 1x to 2x with nothing cut short, in English and Brazilian Portuguese.
 - **Background caveat.** iOS suspends backgrounded apps harder than Android. On return to the foreground the app refreshes the rig state from the REST snapshot before showing live values, so nothing stale is shown.

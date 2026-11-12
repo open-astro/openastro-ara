@@ -13,12 +13,15 @@ import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/filter_wheel_labels_state.dart';
 import '../../../state/settings/filter_wheel_policy_state.dart';
 import '../../../theme/ara_colors.dart';
+import '../../../theme/ara_metrics.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/equipment/manual_filter_wheel_body.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
+import '../../simple/simple_device_windows.dart' show simpleSigned;
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
+import '../../../widgets/adaptive_controls.dart';
 
 /// §37.4 Filter Wheel panel. Shows the connected wheel's live slots (the device's
 /// own names + focus offsets) with a per-slot select, via the shared connection
@@ -284,7 +287,7 @@ class _FilterWheelBodyState extends ConsumerState<_FilterWheelBody> {
                 child: SizedBox(
                   width: 14,
                   height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: AdaptiveProgressIndicator(strokeWidth: 2),
                 ),
               ),
             Text(currentText),
@@ -415,7 +418,7 @@ class _SlotRow extends StatelessWidget {
                 const SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: AdaptiveProgressIndicator(strokeWidth: 2),
                 )
               else if (isCurrent)
                 const Icon(Icons.check_circle,
@@ -479,8 +482,8 @@ class _FocusOffsetsSection extends ConsumerWidget {
     final theme = Theme.of(context).textTheme;
     final dim = theme.bodySmall?.copyWith(color: AraColors.textSecondary);
     String rowValue(FilterOffsetRow r) => r.isMeasured
-        ? '${r.offset! >= 0 ? '+' : ''}${r.offset} · R² ${r.rSquared?.toStringAsFixed(2) ?? '–'}'
-            ' · ${l.focusOffsetsColPrevious} ${r.previousOffset}'
+        ? '${simpleSigned(r.offset!)} · ${l.focusFitR2} ${r.rSquared?.toStringAsFixed(2) ?? '–'}'
+            ' · ${l.focusOffsetsColPrevious} ${simpleSigned(r.previousOffset)}'
         : r.isFailed
             ? '${l.focusOffsetsRowFailed}${r.failureReason == null ? '' : ': ${r.failureReason}'}'
             : running
@@ -526,16 +529,25 @@ class _FocusOffsetsSection extends ConsumerWidget {
             Text(cal.reason ?? l.focusOffsetsFailed,
                 style: const TextStyle(color: AraColors.errorText)),
           for (final r in cal.filters)
-            SettingsRow(label: r.name.isEmpty ? 'Slot ${r.position}' : r.name, value: rowValue(r)),
+            SettingsRow(label: r.name.isEmpty ? l.deviceSlot(r.position) : r.name, value: rowValue(r)),
           if (cal.driftWarning && cal.referenceFirstPosition != null && cal.referenceSecondPosition != null)
-            Text(
-              l.focusOffsetsDrift(
-                  (cal.referenceSecondPosition! - cal.referenceFirstPosition!).abs(), cal.cfzSteps ?? 0),
-              style: const TextStyle(color: AraColors.accentWarning),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: AraSpace.s8,
+              children: [
+                const Icon(Icons.warning_amber_rounded, size: 18, color: AraColors.accentWarning),
+                Expanded(
+                  child: Text(
+                    l.focusOffsetsDrift(
+                        (cal.referenceSecondPosition! - cal.referenceFirstPosition!).abs(), cal.cfzSteps ?? 0),
+                    style: const TextStyle(color: AraColors.accentWarning),
+                  ),
+                ),
+              ],
             ),
           if (cal.isComplete && !live.saved)
             Wrap(
-              spacing: 8,
+              spacing: AraSpace.s8,
               children: [
                 FilledButton(
                   key: const Key('settings-offsets-save'),

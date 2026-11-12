@@ -23,6 +23,7 @@ import '../../../widgets/profile/profile_import_flow.dart'
     show friendlyDaemonError;
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
+import '../../../widgets/adaptive_controls.dart';
 
 /// The guider Profile picker's entries: Automatic first, naming the profile the
 /// guider is on when nothing is pinned, then the guider's own profiles. A pinned
@@ -692,7 +693,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
                 ? const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: AdaptiveProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.refresh, size: 18),
             label: const Text('Refresh choices'),
@@ -705,7 +706,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
                 ? const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: AdaptiveProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.travel_explore, size: 18),
             label: const Text('Discover Alpaca'),
@@ -889,7 +890,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
                   ? const SizedBox(
                       width: 16,
                       height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: AdaptiveProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.send, size: 18),
               label: const Text('Apply to guider'),

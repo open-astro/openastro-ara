@@ -14,6 +14,7 @@ import '../../../util/gps_site_fill.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../widgets/settings/time_sync_section.dart';
+import '../../../widgets/adaptive_controls.dart';
 
 /// §37.12 Site preferences — editable. Phase 12h.6e added the daemon
 /// round-trip — values hydrate from the active server on mount and
@@ -211,7 +212,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
                     ? const SizedBox(
                         width: 16,
                         height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: AdaptiveProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.gps_fixed, size: 18),
                 label: const Text('Fill from GPS'),

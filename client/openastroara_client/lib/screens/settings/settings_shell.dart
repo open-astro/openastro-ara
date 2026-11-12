@@ -39,6 +39,7 @@ import 'panels/sky_data_panel.dart';
 import '../tabs/support_tab.dart';
 import 'panels/session_stats_panel.dart';
 import 'panels/storage_panel.dart';
+import '../../widgets/adaptive_controls.dart';
 
 /// Settings shell per §25.5.5 — tree on the left, selected panel on the
 /// right. Replaces the Phase 12a OptionsTab placeholder. Phase 12h.1 ships
@@ -217,7 +218,7 @@ class _PanelHeaderState extends ConsumerState<_PanelHeader> {
                   ? const SizedBox(
                       width: 14,
                       height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: AdaptiveProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.save, size: 16),
               label: Text(_saving ? 'Saving…' : 'Save'),

@@ -36,6 +36,7 @@ import 'simple_preview_panel.dart'
         formatExposure,
         kSimpleText;
 import 'simple_shell.dart' show SimplePanel, SimpleSegments, kSimpleGoStyle;
+import '../../widgets/adaptive_controls.dart';
 
 /// Guide mode: the guider's routine (loop, pick a star, calibrate when
 /// needed, settle, guide) runs from the shutter; its red square stops it.
@@ -245,9 +246,13 @@ class SimpleGuidePanel extends ConsumerWidget {
                 child: Text(l10n.preflightDoneStartImaging),
               ),
             _SimpleGuiderTabs(selected: tab),
-            // Guide stays laid out, so the panel keeps one height across tabs.
+            // Guide stays laid out, so the panel keeps one height across tabs;
+            // Tools lies over it and scrolls inside when its suggestion list runs longer.
+            Stack(
+              fit: StackFit.passthrough,
+              children: [
             IndexedStack(
-              index: tab,
+              index: tab == 2 ? null : tab,
               sizing: StackFit.loose,
               children: [
                 Column(
@@ -316,12 +321,7 @@ class SimpleGuidePanel extends ConsumerWidget {
               label: l10n.guideDecMode,
               value: phd2.decGuideMode,
               options: const ['auto', 'north', 'south', 'off'],
-              format: (m) => switch (m) {
-                'north' => l10n.guideDecNorth,
-                'south' => l10n.guideDecSouth,
-                'off' => l10n.deviceOff,
-                _ => l10n.guideDecAuto,
-              },
+              format: (m) => _decModeName(l10n, m) ?? l10n.guideDecAuto,
               onSelected: (m) => simpleSaveGuider(
                 context,
                 ref,
@@ -345,7 +345,12 @@ class SimpleGuidePanel extends ConsumerWidget {
                   ],
                 ),
                 tab == 1 ? const _SimpleGuiderTuning() : const SizedBox.shrink(),
-                tab == 2 ? const _SimpleGuiderTools() : const SizedBox.shrink(),
+              ],
+            ),
+                if (tab == 2)
+                  const Positioned.fill(
+                    child: SingleChildScrollView(child: _SimpleGuiderTools()),
+                  ),
               ],
             ),
           ],
@@ -525,6 +530,8 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
   // Forgetting a calibration or picking a star takes seconds, before the
   // guider's own state shows anything: a second tap must wait.
   bool _preparing = false;
+  // The waiting suggestions the user unticked; a new run ticks them all again.
+  final Set<String> _unticked = {};
 
   Future<void> _recalibrate() async {
     final notify = userNotifier(context, origin: SimpleStatusOrigin.guide);
@@ -583,6 +590,9 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     ref.listen(guidingAssistantProvider, (previous, next) {
+      if (next.status.isRunning || (next.status.isDone && previous?.status.isDone != true)) {
+        _unticked.clear();
+      }
       // A run failing now, not the last run's result found on opening this tab.
       final runFailed = previous != null && previous.status.isRunning && next.status.isFailed;
       final problem = next.error != null && next.error != previous?.error
@@ -609,7 +619,11 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
     final suggestions = [
       if (status.isDone)
         for (final s in status.recommendations?.suggestions ?? const <GuidingAssistantSuggestion>[])
-          if (!done.contains(s.key)) s.key,
+          if (!done.contains(s.key)) s,
+    ];
+    final ticked = [
+      for (final s in suggestions)
+        if (!_unticked.contains(s.key)) s.key,
     ];
     final calibration = ref.watch(
       guiderLiveProvider.select((s) => s.calibration.data),
@@ -633,8 +647,9 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
         ? l10n.guideToolNotCalibrated
         : dec == null
         ? l10n.guideToolCalibrated
+        // Sign from the rounded value, so -0.4 reads 0°, not -0°.
         : l10n.guideToolCalibratedAt(
-            '${dec < 0 ? '-' : '+'}${dec.abs().round()}°',
+            '${dec.round() > 0 ? '+' : ''}${dec.round()}°',
           );
     final waiting = suggestions.length;
     final failed = status.isFailed;
@@ -730,12 +745,42 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
           ),
           extra: waiting == 0
               ? null
-              : FilledButton(
-                  style: kSimpleGoStyle,
-                  onPressed: assistant.busy
-                      ? null
-                      : () => notifier.apply(suggestions),
-                  child: Text(l10n.guideAssistantApply(waiting)),
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final s in suggestions)
+                      // Its own ink layer: the panel paints a background over the nearest Material.
+                      Material(
+                        type: MaterialType.transparency,
+                        child: CheckboxListTile(
+                          key: Key('ga-suggest-${s.key}'),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          contentPadding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact,
+                          activeColor: AraColors.accentConnected,
+                          checkColor: AraColors.bgPrimary,
+                          value: !_unticked.contains(s.key),
+                          onChanged: assistant.busy
+                              ? null
+                              : (v) => setState(() {
+                                  if (v == true) {
+                                    _unticked.remove(s.key);
+                                  } else {
+                                    _unticked.add(s.key);
+                                  }
+                                }),
+                          title: Text(_suggestionName(l10n, s), style: kSimpleText),
+                          secondary: Text(_suggestionValue(l10n, s), style: kSimpleText),
+                        ),
+                      ),
+                    FilledButton(
+                      style: kSimpleGoStyle,
+                      onPressed: assistant.busy || ticked.isEmpty
+                          ? null
+                          : () => notifier.apply(ticked),
+                      child: Text(l10n.guideAssistantApply(ticked.length)),
+                    ),
+                  ],
                 ),
         ),
       ],
@@ -743,8 +788,34 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
   }
 }
 
+/// A suggestion's setting name in the user's language; the model's names are English.
+String _suggestionName(AppLocalizations l10n, GuidingAssistantSuggestion s) => switch (s.key) {
+  'exposure' => l10n.guideSuggestExposure,
+  'min_move_ra' => l10n.guideSuggestMinMoveRa,
+  'min_move_dec' => l10n.guideSuggestMinMoveDec,
+  'dec_backlash' => l10n.guideSuggestDecBacklash,
+  'dec_guide_mode' => l10n.guideDecMode,
+  'dec_algorithm' => l10n.guideSuggestDecAlgorithm,
+  _ => s.label,
+};
+
+/// A suggestion's value; the guider names its Dec guide mode in English ("North").
+String _suggestionValue(AppLocalizations l10n, GuidingAssistantSuggestion s) => switch (s.key) {
+  'dec_guide_mode' => _decModeName(l10n, s.value.toLowerCase()) ?? s.value,
+  _ => s.value,
+};
+
+/// A Dec guide mode (auto, north, south, off) in the user's language; null for any other word.
+String? _decModeName(AppLocalizations l10n, String mode) => switch (mode) {
+  'north' => l10n.guideDecNorth,
+  'south' => l10n.guideDecSouth,
+  'off' => l10n.deviceOff,
+  'auto' => l10n.guideDecAuto,
+  _ => null,
+};
+
 /// One tool: its name and quiet button, what it does, where it stands (and
-/// anything extra under it, such as a refusal or Apply).
+/// anything extra under it, such as a refusal, or the suggestions and Apply).
 class _ToolRow extends StatelessWidget {
   const _ToolRow({
     required this.title,
@@ -923,7 +994,7 @@ class _SimpleAggressivenessState extends ConsumerState<_SimpleAggressiveness> {
       MergeSemantics(
         child: Semantics(
           label: widget.label,
-          child: Slider(
+          child: AdaptiveSlider(
             key: Key('simple-guide-aggressiveness-${widget.id}'),
             min: 0,
             max: 1,

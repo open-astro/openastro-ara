@@ -10,6 +10,7 @@ import '../../theme/ara_colors.dart';
 import '../../util/apparent_place.dart';
 import '../../util/coord_format.dart';
 import '../../util/coord_parse.dart';
+import '../adaptive_controls.dart';
 
 /// Plan screen → "Target by coordinates" (#1267 item 1, plus the epoch
 /// choice). Type or paste an RA/Dec from SIMBAD, Gaia, a planetarium or a
@@ -426,7 +427,7 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
               ? const SizedBox(
                   width: 14,
                   height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: AdaptiveProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.playlist_add, size: 16),
           label: const Text('Add to plan'),

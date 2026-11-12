@@ -2858,6 +2858,21 @@ class AppLocalizationsEn extends AppLocalizations {
       'Calibrate first: it needs a calibration to measure against.';
 
   @override
+  String get guideSuggestExposure => 'Guide exposure';
+
+  @override
+  String get guideSuggestMinMoveRa => 'RA minimum move';
+
+  @override
+  String get guideSuggestMinMoveDec => 'Dec minimum move';
+
+  @override
+  String get guideSuggestDecBacklash => 'Dec backlash compensation';
+
+  @override
+  String get guideSuggestDecAlgorithm => 'Dec algorithm';
+
+  @override
   String get focusNudgeIn => 'Nudge in';
 
   @override
@@ -4921,9 +4936,9 @@ class AppLocalizationsEn extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count days',
-      one: '1 day',
-      zero: 'today',
+      other: '$count days old',
+      one: '1 day old',
+      zero: 'taken today',
     );
     return '$_temp0';
   }
@@ -4933,8 +4948,8 @@ class AppLocalizationsEn extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count weeks',
-      one: '1 week',
+      other: '$count weeks old',
+      one: '1 week old',
     );
     return '$_temp0';
   }
@@ -4944,8 +4959,8 @@ class AppLocalizationsEn extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count months',
-      one: '1 month',
+      other: '$count months old',
+      one: '1 month old',
     );
     return '$_temp0';
   }
@@ -4994,7 +5009,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String calibrationLibraryAge(String age, int frames) {
-    return '$age old · $frames frames';
+    String _temp0 = intl.Intl.pluralLogic(
+      frames,
+      locale: localeName,
+      other: '$frames frames',
+      one: '1 frame',
+    );
+    return '$age · $_temp0';
   }
 
   @override
@@ -5035,6 +5056,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get calibrationStartQueueNow => 'Start queue';
+
+  @override
+  String imagingMosaicHelp(int min, int max) {
+    return 'Ranks Tonight\'s Sky framing for a mosaic of this many tiles ($min–$max each way). 1×1 is a single frame.';
+  }
+
+  @override
+  String get imagingMosaicTilesAcross => 'Tonight\'s Sky mosaic tiles across';
+
+  @override
+  String get imagingMosaicTilesDown => 'Tonight\'s Sky mosaic tiles down';
+
+  @override
+  String tonightSkyMosaicFraming(int across, int down) {
+    return 'Framing for a $across×$down mosaic';
+  }
+
+  @override
+  String get libraryTagsCommaSeparated => 'Comma-separated';
 
   @override
   String get rigSetupTitle => 'Rig setup';

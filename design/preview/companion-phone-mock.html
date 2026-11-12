@@ -1,570 +1,672 @@
-<title>Ara Companion Phone</title>
-<meta name="claude:viewport-fit-sides" content="cover">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..24,400,0,0">
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ara Companion Mode on a phone (mock)</title>
 <style>
-  /* Layout: a 390 × 844 phone stage on the left, the decisions beside it; stacks on a narrow screen.
-     Single dark look on purpose: DESIGN.md tokens (lib/theme/ara_colors.dart), as the other design/preview mocks. */
+  /* One self-contained file: no network, no web fonts, icons are inline SVG. Colours are the DESIGN.md tokens
+     (lib/theme/ara_colors.dart) the other design/preview mocks use. Night mode is brightness alone (a luminance filter). */
   :root {
     color-scheme: dark;
-    --page: #0E0E0E; --bg: #1A1A1A; --panel: #262626; --panel2: #2E2E2E; --input: #333333; --border: #404040;
-    --text: #E0E0E0; --text2: #A0A0A0; --faint: #606060;
-    --ok: #4CAF50; --warn: #FFB300; --err: #E53935; --err-text: #FF8A80; --info: #42A5F5; --link: #64B5F6;
-    --sel: #1976D2; --btn: #1565C0; --btn2: #424242; --tile: rgba(56,56,56,.55); --scrim: rgba(26,26,26,.90);
-    --alarm: rgba(60,8,8,.88); --stop: #D32F2F;
-    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --page:#0E0E0E; --bg:#1A1A1A; --panel:#262626; --input:#333333; --border:#404040;
+    --text:#E0E0E0; --text2:#A8A8A8; --ok:#4CAF50; --warn:#FFB300; --err:#E53935; --err-text:#FF8A80; --info:#42A5F5; --link:#64B5F6;
+    --sel:#1976D2; --btn:#1565C0; --tile:rgba(48,48,48,.62); --scrim:rgba(26,26,26,.92); --alarm:rgba(54,6,6,.97); --stop:#D32F2F;
+    --sys:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --ts:1;
   }
-  * { box-sizing: border-box; }
-  body { background: var(--page); color: var(--text); font: 14px/1.45 var(--sys); margin: 0;
-         padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; }
-  .page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
-  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
-  h2 { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
-  p { margin: 0; }
-  p.note { color: var(--text2); max-width: 80ch; }
-  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--warn); color: var(--warn); margin-left: 6px; vertical-align: 3px; }
-  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
-  .group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .lbl { color: var(--text2); font-size: 13px; }
-  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 12px; font: 13px var(--sys); cursor: pointer; }
-  .seg button + button { border-left: 1px solid var(--border); }
-  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
-  button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
-  #tapnote { color: var(--text2); font-size: 13px; min-height: 20px; }
+  *{box-sizing:border-box}
+  body{background:var(--page);color:var(--text);font:14px/1.45 var(--sys);margin:0;padding:24px max(16px,env(safe-area-inset-right,0px)) 64px max(16px,env(safe-area-inset-left,0px))}
+  .page{max-width:1120px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+  h1{font-size:22px;font-weight:600;margin:0;text-wrap:balance}
+  h2{font-size:15px;font-weight:600;margin:0 0 6px}
+  p{margin:0} .note{color:var(--text2);max-width:80ch}
+  .tag{font-size:11px;letter-spacing:.5px;text-transform:uppercase;padding:1px 7px;border-radius:10px;border:1px solid var(--warn);color:var(--warn);margin-left:6px;vertical-align:3px}
+  .controls{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+  .group{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .lbl{color:var(--text2);font-size:13px}
+  .seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .seg button{background:transparent;color:var(--text);border:0;padding:10px 12px;min-height:44px;font:13px var(--sys);cursor:pointer}
+  .seg button+button{border-left:1px solid var(--border)}
+  .seg button[aria-pressed="true"]{background:var(--sel);color:#fff}
+  select{background:var(--input);color:var(--text);border:1px solid var(--border);border-radius:8px;min-height:44px;padding:0 10px;font:13px var(--sys)}
+  .ghost{background:transparent;color:var(--text);border:1px solid var(--border);border-radius:8px;min-height:44px;padding:0 12px;font:13px var(--sys);cursor:pointer}
+  :focus-visible{outline:2px solid var(--info);outline-offset:2px}
+  #tapnote{color:var(--text2);font-size:13px;min-height:20px}
+  .bare h1,.bare .note,.bare .controls,.bare #tapnote,.bare #audit,.bare .side{display:none}
+  .bare{padding:0}
+  .layout{display:flex;gap:28px;align-items:flex-start;flex-wrap:wrap}
+  .holder{flex:none;max-width:100%}
+  .side{flex:1 1 340px;min-width:0;display:flex;flex-direction:column;gap:16px}
+  .side ul{margin:0;padding-left:18px;color:var(--text2);display:flex;flex-direction:column;gap:4px}
+  .side li b{color:var(--text);font-weight:600}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  td,th{border-top:1px solid var(--border);padding:6px 8px;text-align:left;vertical-align:top}
+  th{color:var(--text2);font-weight:600;border-top:0}
+  td button{background:transparent;color:var(--link);border:0;padding:0 4px;min-height:28px;font:13px var(--sys);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+  #audit{font-size:13px;color:var(--text2)} #audit b{color:var(--ok)} #audit b.bad{color:var(--err-text)}
 
-  .layout { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
-  .holder { flex: none; width: 390px; max-width: 100%; }
-  .notes { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
-  .notes ul { margin: 0; padding-left: 18px; color: var(--text2); display: flex; flex-direction: column; gap: 4px; }
-  .notes li b { color: var(--text); font-weight: 600; }
-  .new { color: var(--warn); font-size: 11px; letter-spacing: .5px; text-transform: uppercase; }
-
-  /* The phone */
-  .phone { position: relative; width: 390px; height: 844px; border-radius: 44px; overflow: hidden; background: #000;
-           box-shadow: 0 0 0 10px #111, 0 0 0 11px #2a2a2a; transform-origin: top left; }
-  .phone.night { filter: url(#nightRed); }
-  .phone.ipad { width: 1024px; height: 768px; border-radius: 24px; }
-  .holder.wide { width: 1024px; }
-  canvas.sky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-  .ms { font-family: 'Material Symbols Outlined'; font-weight: normal; font-style: normal; line-height: 1; letter-spacing: normal; text-transform: none; white-space: nowrap; direction: ltr; -webkit-font-smoothing: antialiased; font-feature-settings: 'liga'; }
-  .sb { position: absolute; top: 0; left: 0; right: 0; height: 47px; display: flex; align-items: center; justify-content: space-between; padding: 6px 30px 0 34px; font: 600 15px var(--sys); color: #fff; z-index: 5; }
-  .notch { position: absolute; top: 11px; left: 50%; width: 120px; height: 34px; margin-left: -60px; background: #000; border-radius: 20px; z-index: 6; }
-  .home { position: absolute; bottom: 8px; left: 50%; width: 134px; height: 5px; margin-left: -67px; border-radius: 3px; background: rgba(255,255,255,.55); z-index: 40; }
-
-  .glass { background: var(--tile); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); box-shadow: inset 0 0 0 1px rgba(64,64,64,.8); border-radius: 10px; }
-  .strip { position: absolute; top: 49px; left: 8px; right: 8px; height: 48px; display: flex; align-items: center; gap: 4px; padding: 0 4px 0 12px; z-index: 10; }
-  .dots { flex: 1; display: flex; gap: 12px; align-items: center; min-width: 0; overflow: hidden; }
-  .dev { display: flex; align-items: center; gap: 3px; color: var(--text2); }
-  .dev .ms { font-size: 20px; }
-  i.d { flex: none; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
-  i.d.warn { background: var(--warn); } i.d.err { background: var(--err); } i.d.ring { background: none; border: 2px solid var(--info); }
-  .ib { width: 44px; height: 44px; border: 0; background: transparent; color: var(--text2); display: grid; place-items: center; cursor: pointer; border-radius: 10px; flex: none; }
-  .ib .ms { font-size: 24px; }
-  .ib[aria-pressed="true"] { color: var(--info); }
-
-  .pills { position: absolute; top: 103px; left: 8px; right: 8px; display: flex; flex-direction: column; gap: 6px; z-index: 12; }
-  .merged { align-self: flex-start; max-width: 100%; display: flex; flex-direction: column; font-size: 14px; }
-  .merged.wide { align-self: stretch; }
-  .merged > div { display: flex; align-items: center; gap: 8px; padding: 8px 12px; min-height: 44px; }
-  .merged > div + div { border-top: 1px solid var(--border); }
-  .merged .ms { font-size: 20px; }
-  .stat b { color: var(--ok); font-weight: 600; }
-  .msg > .ms { color: var(--ok); }
-  .msg.q { flex-direction: column; align-items: stretch; gap: 8px; padding: 12px; }
-  .msg.q .row { display: flex; gap: 8px; align-items: flex-start; }
-  .msg.q .row .ms { color: var(--info); margin-top: 1px; }
-  .msg.q .acts { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
-  .b { height: 44px; padding: 0 16px; border: 0; border-radius: 10px; font: 600 14px var(--sys); cursor: pointer; color: #fff; background: var(--btn); }
-  .b.sec { background: transparent; color: var(--text); box-shadow: inset 0 0 0 1px var(--border); }
-  .b.go { background: var(--ok); color: #000; }
-  .b.red { background: var(--stop); }
-  .b.full { width: 100%; }
-
-  /* Facts and plan squares sit above the graph row in both layouts. */
-  .facts { position: absolute; left: 8px; display: flex; gap: 6px; z-index: 8; }
-  .fact { width: 72px; padding: 6px 8px; display: flex; flex-direction: column; }
-  .fact small { font-size: 11px; color: var(--text2); }
-  .fact b { font-size: 18px; font-weight: 300; font-variant-numeric: tabular-nums; }
-  .squares { position: absolute; right: 8px; display: flex; flex-direction: row-reverse; gap: 6px; z-index: 8; }
-  .sq { width: 72px; height: 100px; padding: 6px 8px; display: flex; flex-direction: column; font-size: 11.5px; color: var(--text2); line-height: 1.35; }
-  .sq b { color: var(--text); font-size: 14px; font-weight: 600; }
-  .sq.cur { box-shadow: inset 0 0 0 1.5px var(--info); }
-  .sq .bar { height: 3px; border-radius: 2px; background: #333; margin: 3px 0; overflow: hidden; }
-  .sq .bar i { display: block; height: 100%; background: var(--info); }
-  .graph { position: absolute; left: 8px; height: 56px; z-index: 8; padding: 4px 8px; display: flex; gap: 8px; }
-  .graph svg { flex: 1; height: 100%; display: block; }
-  .graph small { position: absolute; left: 10px; top: 3px; font-size: 11px; color: var(--text2); }
-
-  .stopb { position: absolute; width: 60px; height: 60px; border: 0; border-radius: 10px; background: var(--stop); color: #fff; font: 700 14px var(--sys); letter-spacing: .5px; cursor: pointer; z-index: 30; display: grid; place-items: center; touch-action: none; }
-  .stopb svg { position: absolute; inset: 4px; width: 52px; height: 52px; transform: rotate(-90deg); pointer-events: none; }
-  .stopb circle { fill: none; stroke: #fff; stroke-width: 3; stroke-dasharray: 151; stroke-dashoffset: 151; }
-  .stopb.holding circle { transition: stroke-dashoffset 2s linear; stroke-dashoffset: 0; }
-
-  .shutter { width: 64px; height: 64px; border-radius: 50%; border: 3px solid #fff; background: transparent; display: grid; place-items: center; cursor: pointer; flex: none; padding: 0; }
-  .shutter i { display: block; width: 50px; height: 50px; border-radius: 50%; background: #fff; }
-  .shutter.run i { width: 22px; height: 22px; border-radius: 4px; background: var(--err); }
-  .shutter.pause i { width: 22px; height: 24px; border-radius: 0; background: none; border-left: 7px solid #fff; border-right: 7px solid #fff; }
-  .shutter.pause { box-shadow: 0 0 0 3px rgba(66,165,245,.35); border-color: var(--info); }
-  .chip { min-width: 60px; height: 44px; padding: 2px 8px; border: 0; color: var(--text); cursor: pointer; font: 12px/1.2 var(--sys); display: flex; flex-direction: column; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
-  .chip .ms { font-size: 16px; color: var(--text2); }
-  .rb { width: 56px; min-height: 52px; border: 0; background: transparent; color: var(--text2); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font: 11px var(--sys); cursor: pointer; border-radius: 10px; padding: 4px 0; }
-  .rb .ms { font-size: 24px; }
-  .rb[aria-pressed="true"] { color: #fff; background: var(--sel); }
-
-  /* A: today's narrow layout, rails on the edges */
-  .railL, .railR { position: absolute; z-index: 9; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px; }
-  .railL { left: 8px; top: 300px; }
-  .railR { right: 8px; top: 250px; width: 72px; gap: 8px; padding: 8px 4px; }
-  .modename { border: 0; background: transparent; color: var(--text); font: 600 12px var(--sys); cursor: pointer; min-height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  .modename .ms { font-size: 16px; color: var(--text2); }
-  .grid5 { position: absolute; z-index: 25; right: 88px; top: 250px; width: 230px; padding: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-  .grid5 button { min-height: 64px; border: 0; border-radius: 10px; background: rgba(0,0,0,.25); color: var(--text); font: 13px var(--sys); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
-  .grid5 button .ms { font-size: 24px; color: var(--text2); }
-  .grid5 button[aria-pressed="true"] { background: var(--sel); color: #fff; } .grid5 button[aria-pressed="true"] .ms { color: #fff; }
-
-  /* B: the rails fold into one deck at the bottom */
-  .deck { position: absolute; left: 8px; right: 8px; bottom: 22px; z-index: 20; padding: 4px 6px 8px; }
-  .modes { display: flex; justify-content: center; gap: 2px; height: 36px; align-items: center; overflow-x: auto; scrollbar-width: none; }
-  .modes button { border: 0; background: transparent; color: var(--text2); font: 600 13px var(--sys); padding: 0 10px; min-height: 36px; cursor: pointer; letter-spacing: .3px; white-space: nowrap; border-radius: 8px; }
-  .modes button[aria-pressed="true"] { color: var(--warn); }
-  .ctl { display: grid; grid-template-columns: auto 1fr auto 1fr auto; align-items: center; gap: 4px; }
-  .ctl .left { display: flex; }
-  .ctl .shut { display: flex; align-items: center; gap: 6px; justify-self: center; }
-  .ctl .stopb { position: relative; }
-  .deck .rb { width: 46px; }
-
-  .panel { position: absolute; left: 8px; right: 8px; z-index: 22; background: var(--scrim); box-shadow: inset 0 0 0 1px var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
-  .panel .hd { display: flex; align-items: center; gap: 8px; }
-  .panel .hd h3 { flex: 1; margin: 0; font-size: 16px; font-weight: 600; }
-  .readout { font-size: 30px; font-weight: 300; font-variant-numeric: tabular-nums; line-height: 1.1; }
-  .readout small { font-size: 14px; color: var(--text2); margin-left: 4px; }
-  .tiles { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; }
-  .t { background: var(--tile); border-radius: 10px; padding: 8px 10px; box-shadow: inset 0 0 0 1px var(--border); display: flex; flex-direction: column; min-width: 0; }
-  .t small { font-size: 12px; color: var(--text2); }
-  .t b { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .segs { display: flex; border-radius: 10px; overflow: hidden; box-shadow: inset 0 0 0 1px var(--border); }
-  .segs span { flex: 1; text-align: center; padding: 11px 6px; font-size: 14px; color: var(--text); }
-  .segs span + span { border-left: 1px solid var(--border); }
-  .segs span.on { background: var(--sel); color: #fff; }
-  .curve { height: 150px; background: rgba(0,0,0,.25); border-radius: 10px; position: relative; }
-  .curve svg { position: absolute; inset: 8px; width: calc(100% - 16px); height: calc(100% - 16px); }
-  .sec { font-size: 12px; color: var(--text2); letter-spacing: .5px; text-transform: uppercase; margin-top: 4px; }
-  .best { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
-  .best .t { flex: none; width: 118px; }
-  .frow { display: grid; grid-template-columns: 34px 1fr 1fr; gap: 6px; align-items: center; }
-  .frow b { font-size: 14px; }
-  .val { background: var(--tile); border-radius: 10px; min-height: 44px; display: flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; box-shadow: inset 0 0 0 1px var(--border); }
-  .chips { display: flex; gap: 6px; flex-wrap: wrap; }
-  .chips span { padding: 8px 14px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--border); font-size: 14px; }
-  .chips span.on { background: var(--sel); color: #fff; box-shadow: none; }
-  .search { display: flex; align-items: center; gap: 8px; background: var(--input); border-radius: 10px; min-height: 44px; padding: 0 12px; color: var(--text2); }
-
-  /* Settings page pushed over the shell */
-  .pageover { position: absolute; inset: 0; background: var(--bg); z-index: 26; padding-top: 47px; display: flex; flex-direction: column; }
-  .appbar { height: 52px; display: flex; align-items: center; gap: 4px; padding: 0 8px; border-bottom: 1px solid var(--border); }
-  .appbar h3 { margin: 0; font-size: 16px; font-weight: 600; }
-  .scroll { flex: 1; overflow-y: auto; padding: 12px 12px 120px; display: flex; flex-direction: column; gap: 10px; }
-  .card { background: var(--panel); border-radius: 10px; box-shadow: inset 0 0 0 1px var(--border); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-  .card h4 { margin: 0; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
-  .card h4 .ms { font-size: 20px; color: var(--text2); }
-  .kv { display: flex; justify-content: space-between; align-items: center; min-height: 44px; gap: 12px; border-top: 1px solid var(--border); font-size: 14px; }
-  .kv span:last-child { color: var(--text2); text-align: right; }
-  .navrow { display: flex; align-items: center; gap: 12px; min-height: 52px; font-size: 15px; border-top: 1px solid var(--border); }
-  .navrow:first-of-type { border-top: 0; }
-  .navrow .ms { color: var(--text2); font-size: 22px; }
-  .navrow span:nth-child(2) { flex: 1; }
-
-  .alarm { position: absolute; inset: 0; background: var(--alarm); z-index: 50; display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 14px; padding: 60px 24px; text-align: center; }
-  .alarm .ms { font-size: 64px; color: var(--err-text); }
-  .alarm h3 { margin: 0; font-size: 24px; font-weight: 600; }
-  .alarm p { color: var(--text); font-size: 15px; }
-  .alarm .vib { font-size: 13px; color: var(--err-text); display: flex; align-items: center; justify-content: center; gap: 6px; }
-  .alarm .vib .ms { font-size: 18px; }
-  .shake { animation: shake .4s linear infinite; }
-  @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } }
-  @media (prefers-reduced-motion: reduce) { .shake { animation: none; } .stopb.holding circle { transition: none; } }
-
-  .rigbar { position: absolute; left: 8px; z-index: 21; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; }
-  .rigbar span { color: var(--warn); font-weight: 600; flex: 1; }
-
-  .badge { position: absolute; z-index: 60; font-size: 11px; color: #000; background: var(--warn); border-radius: 8px; padding: 1px 6px; pointer-events: none; }
+  /* ---- the phone. Everything inside scales with --ts (text size); targets only grow ---- */
+  .phone{position:relative;overflow:hidden;background:#000;border-radius:44px;box-shadow:0 0 0 10px #111,0 0 0 11px #2a2a2a;
+    transform-origin:top left;display:flex;flex-direction:column;font-size:calc(14px*var(--ts));line-height:1.3}
+  .phone.p{width:390px;height:844px} .phone.l{width:844px;height:390px;border-radius:36px}
+  .phone.night{filter:url(#nightRed)}
+  .phone button,.phone input{font-family:var(--sys);color:inherit;font-size:inherit}
+  canvas.sky{object-fit:cover;position:absolute;inset:0;width:100%;height:100%;display:block}
+  .ic{width:1.4em;height:1.4em;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .sb{position:absolute;top:0;left:0;right:0;height:47px;display:flex;align-items:center;justify-content:space-between;padding:6px 30px 0 34px;font:600 15px var(--sys);color:#fff;z-index:5;pointer-events:none}
+  .l .sb,.l .notch,.l .home{display:none}
+  .notch{position:absolute;top:11px;left:50%;width:120px;height:34px;margin-left:-60px;background:#000;border-radius:20px;z-index:6}
+  .home{position:absolute;bottom:8px;left:50%;width:134px;height:5px;margin-left:-67px;border-radius:3px;background:rgba(255,255,255,.55);z-index:40}
+  .glass{background:var(--tile);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:inset 0 0 0 1px rgba(64,64,64,.85);border-radius:10px}
+  .stage{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
+  .strip{position:absolute;top:49px;left:8px;right:8px;min-height:48px;display:flex;align-items:center;gap:2px;padding:0 4px;z-index:10}
+  .l .strip{top:8px;left:72px;right:92px}
+  .ara{border:0;background:transparent;font-weight:700;letter-spacing:.3px;min-width:44px;min-height:44px;padding:0 8px;cursor:pointer;border-radius:10px;color:var(--text)}
+  .dots{flex:1;display:flex;gap:0;align-items:center;min-width:0;overflow-x:auto;scrollbar-width:none}
+  .strip .norig{flex:1;min-width:0;min-height:44px;border:0;background:transparent;color:var(--warn);font-weight:600;text-align:left;padding:0 8px;cursor:pointer;border-radius:10px}
+  .dev{flex:none;border:0;background:transparent;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;gap:3px;color:var(--text2);cursor:pointer;border-radius:10px}
+  i.d{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok)} i.d.err{background:var(--err)}
+  .ib{width:44px;height:44px;border:0;background:transparent;color:var(--text2);display:grid;place-items:center;cursor:pointer;border-radius:10px;flex:none}
+  .ib[aria-pressed="true"]{color:var(--info)}
+  .col{position:absolute;inset:0;padding:101px 8px 8px;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+  .l .col{padding:60px 92px 8px 72px}
+  .col>*{pointer-events:auto}
+  .card{align-self:flex-start;max-width:100%;display:flex;flex-direction:column;max-height:46%;overflow-y:auto;z-index:12}
+  .card.wide{align-self:stretch}
+  .card>div{display:flex;align-items:center;gap:8px;padding:6px 12px;min-height:44px}
+  .card>div+div{border-top:1px solid var(--border)}
+  .stat b{color:var(--ok)} .stat.paused b{color:var(--info)} .stat.bad b{color:var(--err-text)}
+  .msg .ic{color:var(--ok)} .msg.q{flex-direction:column;align-items:stretch;gap:8px;padding:12px}
+  .msg.q .row{display:flex;gap:8px;align-items:flex-start} .msg.q .row .ic{color:var(--info);margin-top:1px}
+  .acts{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+  .b{min-height:44px;padding:6px 16px;border:0;border-radius:10px;font:600 1em var(--sys);cursor:pointer;color:#fff;background:var(--btn)}
+  .b.sec{background:transparent;color:var(--text);box-shadow:inset 0 0 0 1px var(--border)}
+  .abortb{position:relative;overflow:hidden;touch-action:none;user-select:none} .abortb .fill{position:absolute;inset:0 auto 0 0;width:0;background:rgba(255,255,255,.35)} .abortb span{position:relative}
+  .abortb.holding .fill{transition:width 2s linear;width:100%}
+  @media (prefers-reduced-motion:reduce){.abortb.holding .fill{transition:none}}
+  .b.red{background:var(--stop)} .b.full{width:100%}
+  .mid{flex:1;position:relative;min-height:0}
+  .info{position:absolute;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:6px}
+  .row2{display:flex;justify-content:space-between;align-items:flex-end;gap:6px;overflow-x:auto;scrollbar-width:none}
+  .facts,.squares{display:flex;gap:6px;flex:none}
+  .squares{flex-direction:row-reverse;margin-left:auto}
+  .fact{min-width:72px;padding:6px 8px;display:flex;flex-direction:column}
+  .fact small,.sq,.t small{font-size:.82em;color:var(--text2)} .fact b{font-size:1.3em;font-weight:300;font-variant-numeric:tabular-nums}
+  .sq{min-width:76px;min-height:100px;padding:6px 8px;display:flex;flex-direction:column;border:0;text-align:left;cursor:pointer;line-height:1.35}
+  .sq b{color:var(--text);font-size:1.05em} .sq.cur{box-shadow:inset 0 0 0 1.5px var(--info)}
+  .bar{height:3px;border-radius:2px;background:#444;margin:3px 0;overflow:hidden} .bar i{display:block;height:100%;background:var(--info)}
+  .graph{height:56px;padding:4px 8px;display:flex;gap:8px;position:relative}
+  .graph svg{flex:1;height:100%;min-width:0} .graph small{position:absolute;left:10px;top:2px;font-size:.8em;color:var(--text2)}
+  .stopb{position:relative;width:60px;height:60px;flex:none;border:0;border-radius:10px;background:var(--stop);color:#fff;font:700 14px var(--sys);letter-spacing:.5px;cursor:pointer;display:grid;place-items:center;touch-action:none;user-select:none}
+  .phone .stopb{font-size:14px}
+  .stopb:disabled{opacity:.35;cursor:not-allowed}
+  .stopb svg{position:absolute;inset:4px;width:52px;height:52px;transform:rotate(-90deg);pointer-events:none}
+  .stopb circle{fill:none;stroke:#fff;stroke-width:3;stroke-dasharray:151;stroke-dashoffset:151}
+  .stopb.holding circle{transition:stroke-dashoffset 2s linear;stroke-dashoffset:0}
+  .floatstop{position:absolute;right:8px;bottom:22px;z-index:30} .l .floatstop{bottom:8px}
+  .shutter{width:64px;height:64px;border-radius:50%;border:3px solid #fff;background:transparent;display:grid;place-items:center;cursor:pointer;flex:none;padding:0;touch-action:none}
+  .shutter i{display:block;width:50px;height:50px;border-radius:50%;background:#fff}
+  .shutter.run i{width:22px;height:22px;border-radius:4px;background:var(--err)}
+  .shutter.pause i{width:22px;height:24px;border-radius:0;background:none;border-left:7px solid #fff;border-right:7px solid #fff}
+  .shutter.paused i{width:0;height:0;border-radius:0;background:none;border-left:20px solid #fff;border-top:12px solid transparent;border-bottom:12px solid transparent;margin-left:6px}
+  .chip{background:var(--tile);box-shadow:inset 0 0 0 1px rgba(64,64,64,.85);border-radius:10px;color:var(--text);min-width:60px;min-height:44px;padding:2px 8px;border:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.85em;line-height:1.2;font-variant-numeric:tabular-nums}
+  .chip span:last-child{color:var(--text2)}
+  .rb{min-width:48px;min-height:52px;border:0;background:transparent;color:var(--text2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:.8em;cursor:pointer;border-radius:10px;padding:4px 2px;overflow-wrap:break-word;hyphens:auto;line-height:1.15}
+  .rb[aria-pressed="true"]{color:#fff;background:var(--sel)}
+  .deck{margin:0 8px 22px;padding:2px 6px 8px;z-index:20;flex:none}
+  .modes{display:flex;gap:2px;min-height:44px;align-items:center;overflow-x:auto;scrollbar-width:none;scroll-snap-type:x proximity}
+  .modes button{flex:none;border:0;background:transparent;color:var(--text2);font-weight:600;padding:0 12px;min-height:44px;cursor:pointer;letter-spacing:.3px;white-space:nowrap;border-radius:8px;scroll-snap-align:center;text-transform:uppercase}
+  .modes button[aria-pressed="true"]{color:var(--warn)}
+  .ctl{display:flex;align-items:center;justify-content:space-between;gap:4px;flex-wrap:wrap}
+  .ctl .left{display:flex;flex:1 1 auto;min-width:0} .ctl .shut{display:flex;align-items:center;gap:6px}
+  .big .ctl .left{order:5;flex:1 0 100%;justify-content:space-around;margin-top:4px}
+  .railL,.railR{position:absolute;z-index:9;display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 4px}
+  .railL{left:8px;top:100px} .railR{right:8px;top:62px;bottom:76px;width:78px;gap:6px;overflow-y:auto;scrollbar-width:none;justify-content:flex-start}
+  .railR>*{flex:none}
+  .railR .chip{min-width:0;width:100%;white-space:nowrap}
+  .big.l .railR{width:108px}.big.l .col{padding-right:122px}.big.l .strip{right:122px}.big.l .grid5{right:126px}
+  .railR .modename{border:0;background:transparent;font-weight:600;min-height:44px;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;font-size:.85em;overflow-wrap:anywhere}
+  .railR .modename .ic{color:var(--text2)}
+  .grid5{position:absolute;z-index:25;right:96px;top:62px;width:230px;padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .grid5 button{min-height:64px;border:0;border-radius:10px;background:rgba(0,0,0,.25);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:.9em}
+  .grid5 button[aria-pressed="true"]{background:var(--sel);color:#fff}
+  .panel{position:absolute;inset:0;z-index:22;background:var(--scrim);box-shadow:inset 0 0 0 1px var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px;overflow-y:auto}
+  .hd{display:flex;align-items:center;gap:8px} .hd h3{flex:1;margin:0;font-size:1.15em;font-weight:600}
+  .readout{font-size:2.1em;font-weight:300;font-variant-numeric:tabular-nums;line-height:1.1} .readout small{font-size:.45em;color:var(--text2);margin-left:4px}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(5.6em,1fr));gap:6px}
+  .t{background:var(--tile);border-radius:10px;padding:8px 10px;box-shadow:inset 0 0 0 1px var(--border);display:flex;flex-direction:column;min-width:0;border:0;text-align:left;overflow-wrap:break-word}
+  button.t{cursor:pointer;min-height:44px} .t b{font-weight:600;font-variant-numeric:tabular-nums}
+  .segs{display:flex;border-radius:10px;overflow:hidden;box-shadow:inset 0 0 0 1px var(--border);flex:none}
+  .segs button{flex:1;min-height:44px;border:0;background:transparent;padding:6px;cursor:pointer}
+  .segs button+button{border-left:1px solid var(--border)} .segs button.on{background:var(--sel);color:#fff}
+  .curve{height:140px;background:rgba(0,0,0,.25);border-radius:10px;position:relative;flex:none} .curve svg{position:absolute;inset:8px;width:calc(100% - 16px);height:calc(100% - 16px)}
+  .sech{font-size:.85em;color:var(--text2);letter-spacing:.5px;text-transform:uppercase;margin-top:4px}
+  .best{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;flex:none} .best .t{flex:none;width:9.5em}
+  .frow{display:grid;grid-template-columns:2em 1fr 1fr;gap:6px;align-items:center}
+  .val{background:var(--tile);border-radius:10px;min-height:44px;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px var(--border);font-variant-numeric:tabular-nums;text-align:center;padding:2px 6px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap} .chips button{min-height:44px;min-width:44px;padding:4px 14px;border-radius:10px;border:0;background:transparent;box-shadow:inset 0 0 0 1px var(--border);cursor:pointer}
+  .chips button.on{background:var(--sel);color:#fff;box-shadow:none}
+  .search{display:flex;align-items:center;gap:8px;background:var(--input);border-radius:10px;min-height:44px;padding:0 12px;color:var(--text)}
+  .search input{flex:1;min-width:0;background:transparent;border:0;color:var(--text);font:inherit;min-height:44px}
+  .search input:focus-visible{outline:none} .search:focus-within{outline:2px solid var(--info)}
+  .res{display:flex;align-items:center;gap:10px;min-height:44px;width:100%;border:0;background:transparent;text-align:left;cursor:pointer;border-top:1px solid var(--border)} .res small{color:var(--text2);margin-left:auto}
+  .zoomwrap{position:relative;flex:1;min-height:180px;border-radius:10px;overflow:hidden;background:#000;touch-action:none}
+  .zoomwrap img{position:absolute;left:50%;top:50%;width:100%;transform:translate(-50%,-50%) scale(1);transform-origin:center;user-select:none;-webkit-user-drag:none}
+  .zoomctl{position:absolute;right:6px;bottom:6px;display:flex;gap:6px;z-index:2}
+  .zoomhint{position:absolute;left:8px;top:8px;font-size:.8em;color:var(--text2);z-index:2;padding:2px 8px;border-radius:8px;background:rgba(0,0,0,.55)}
+  .pageover{position:absolute;inset:0;background:var(--bg);z-index:26;display:flex;flex-direction:column;padding-top:47px}
+  .l .pageover{padding-top:0}
+  .appbar{min-height:52px;display:flex;align-items:center;gap:4px;padding:0 8px;border-bottom:1px solid var(--border);flex:none} .appbar h3{margin:0;font-size:1.15em;font-weight:600}
+  .scroll{flex:1;overflow-y:auto;padding:12px 12px 100px;display:flex;flex-direction:column;gap:10px}
+  .box{background:var(--panel);border-radius:10px;box-shadow:inset 0 0 0 1px var(--border);padding:12px;display:flex;flex-direction:column;gap:8px}
+  .navrow{display:flex;align-items:center;gap:12px;min-height:52px;width:100%;border:0;border-top:1px solid var(--border);background:transparent;text-align:left;cursor:pointer;padding:0}
+  .navrow:first-child{border-top:0} .navrow .ic{color:var(--text2)} .navrow .grow{flex:1;min-width:0}
+  .kv{display:flex;justify-content:space-between;align-items:center;min-height:44px;gap:12px;border-top:1px solid var(--border)} .kv span:last-child{color:var(--text2);text-align:right}
+  .meter{height:10px;border-radius:5px;background:#444;overflow:hidden} .meter i{display:block;height:100%;background:var(--info)}
+  .logs{font:.85em/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--text2);background:rgba(0,0,0,.3);border-radius:10px;padding:8px 10px;overflow-wrap:anywhere}
+  .step{display:flex;align-items:center;gap:10px;min-height:48px;border-top:1px solid var(--border)} .step:first-child{border-top:0}
+  .step .dot{width:1.4em;height:1.4em;flex:none;display:grid;place-items:center;color:var(--text2)} .step.done .dot{color:var(--ok)} .step.now{color:var(--warn);font-weight:600}
+  .alarm{position:absolute;inset:0;background:var(--alarm);z-index:50;display:flex;flex-direction:column;justify-content:center;gap:14px;padding:60px 24px;text-align:center;overflow-y:auto}
+  .l .alarm{padding:16px 120px}
+  .alarm .ic{width:3.5em;height:3.5em;color:var(--err-text);align-self:center}
+  .alarm h3{margin:0;font-size:1.7em;font-weight:600} .alarm .vib{color:var(--err-text);display:flex;align-items:center;justify-content:center;gap:6px;font-size:.9em}
+  .shake{animation:shake .4s linear infinite} @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+  @media (prefers-reduced-motion:reduce){.shake{animation:none}.stopb.holding circle{transition:none}}
+  .banner{position:absolute;left:8px;right:8px;z-index:21;display:flex;align-items:center;gap:10px;padding:8px 8px 8px 12px;bottom:170px}
+  .banner span{color:var(--warn);font-weight:600;flex:1}
+  .mon-top{display:flex;flex-direction:column;gap:2px} .mon-top .big1{font-size:1.5em;font-weight:600;color:var(--ok)}
+  .awake{display:flex;align-items:center;gap:8px;color:var(--text2);font-size:.9em}
 </style>
-
+</head>
+<body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="nightRed" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values=".2126 .7152 .0722 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/></filter></svg>
 
 <div class="page">
   <h1>Companion Mode on a phone <span class="tag">mock</span></h1>
-  <p class="note">Simple Mode laid out for an iPhone in portrait (390 × 844), for <a href="https://github.com/open-astro/openastro-ara/issues/1772" style="color:var(--link)">#1772</a>. There's no Full UI button and no Experimental toggle. Layout B, the bottom deck, was chosen on 2026-11-11. A stays on the switch for comparison. Tap the rails, the shutter and the chip, and hold STOP for 2 s. All numbers are made-up examples.</p>
+  <p class="note">Simple Mode laid out for a phone, for issue #1772. Portrait is Layout B, the bottom deck (decided 2026-11-11); landscape keeps today's narrow layout. There is no Full UI button, no Experimental toggle and no mention of sequences or templates. Tap anything; hold STOP for 2 s; while a plan runs, a tap on the shutter pauses it. All numbers are made-up examples.</p>
 
   <div class="controls">
-    <div class="group"><span class="lbl">Device</span>
-      <div class="seg" id="deviceSeg"><button data-v="phone" aria-pressed="true">iPhone</button><button data-v="ipad" aria-pressed="false">iPad</button></div></div>
-    <div class="group" id="pillsGroup" hidden><span class="lbl">Pills</span>
-      <div class="seg" id="ipadPillsSeg"><button data-v="two" aria-pressed="false">Today: two pills</button><button data-v="one" aria-pressed="true">One card (chosen)</button></div></div>
-    <div class="group" id="layoutGroup"><span class="lbl">Layout</span>
-      <div class="seg" id="layoutSeg">
-        <button data-v="A" aria-pressed="false">A · Edge rails</button>
-        <button data-v="B" aria-pressed="true">B · Bottom deck (chosen)</button>
-      </div></div>
-    <div class="group"><span class="lbl">Screen</span>
-      <div class="seg" id="sceneSeg">
-        <button data-v="imaging" aria-pressed="true">Imaging</button>
-        <button data-v="focus" aria-pressed="false">Focus</button>
-        <button data-v="plan" aria-pressed="false">Plan</button>
-        <button data-v="settings" aria-pressed="false">Settings</button>
-        <button data-v="gps" aria-pressed="false">Location pill</button>
-        <button data-v="alarm" aria-pressed="false">Safety alarm</button>
-        <button data-v="norig" aria-pressed="false">No rig</button>
-      </div></div>
-    <div class="group"><span class="lbl">Night</span>
-      <div class="seg" id="nightSeg"><button data-v="0" aria-pressed="true">Off</button><button data-v="1" aria-pressed="false">On</button></div></div>
+    <div class="group"><span class="lbl">Orientation</span><div class="seg" id="oSeg"><button data-v="p">Portrait 390 × 844</button><button data-v="l">Landscape 844 × 390</button></div></div>
+    <div class="group"><span class="lbl">Brightness</span><div class="seg" id="nSeg"><button data-v="0">Day</button><button data-v="1">Night</button></div></div>
+    <div class="group"><span class="lbl">Text size</span><div class="seg" id="tSeg"><button data-v="1">1x</button><button data-v="2">2x</button></div></div>
+    <div class="group"><span class="lbl">Language</span><div class="seg" id="lSeg"><button data-v="en">EN</button><button data-v="pt">pt-BR</button></div></div>
+  </div>
+  <div class="controls">
+    <div class="group"><label class="lbl" for="go">Jump to a state</label><select id="go"></select></div>
+    <button class="ghost" id="bResume">Return from background</button>
+    <button class="ghost" id="bSession">Next session</button>
+    <div class="group"><span class="lbl">Screen stays awake</span><div class="seg" id="aSeg"><button data-v="monitor">Only in Monitor</button><button data-v="run">Whole run</button><button data-v="never">Never</button></div></div>
+    <div class="group"><span class="lbl">Monitor opens from</span><div class="seg" id="mSeg"><button data-v="hold">Hold the shutter</button><button data-v="row">Section row</button><button data-v="ara">Ara sheet</button></div></div>
   </div>
   <div id="tapnote" aria-live="polite"></div>
+  <div id="audit"></div>
 
   <div class="layout">
-    <div class="holder" id="holder"><div class="phone" id="phone"></div></div>
-    <div class="notes">
-      <div><h2>What's the same as the iPad</h2>
+    <div class="holder" id="holder"><div class="phone p" id="phone"></div></div>
+    <div class="side">
+      <div><h2>Board picks (decided 2026-11-12)</h2>
         <ul>
-          <li>The same sections: Preview, Focus, P.A., Guider and Plan, plus Sky, Info and Library.</li>
-          <li>The same STOP: 60 px, red, a 2 s hold with a filling ring. It's on every screen in both layouts, including Settings and over every panel.</li>
-          <li>Plan squares in the bottom-right corner, fact tiles in the bottom left.</li>
-          <li>No dialogs, sheets or snackbars. Questions are pills, and panels open in place.</li>
+          <li><b>Screen awake</b>: only while Monitor shows. The other two choices above are for comparison.</li>
+          <li><b>Monitor opens from</b>: a sixth word, Monitor, in the section row. The other two are for comparison.</li>
+          <li><b>STOP before a rig</b> (first run, no rig yet): disabled, in its usual place; after a dropped link it stays enabled (DESIGN.md "No rig connected"). <b>Emergency Abort</b>: hold 2 s, like STOP.</li>
         </ul></div>
-      <div><h2>What's different on a phone</h2>
-        <ul>
-          <li><b>No way into the full UI.</b> The strip has search, Night mode and Settings, and no Full UI button.</li>
-          <li><b>One status card, top left</b> (chosen 2026-11-11): the camera status pill and the message pills merge into one card. The camera status is its first line, and results, errors and questions stack under it. The iPad and desktop get the same card (#1782).</li>
-          <li><b>Panels take the full width</b>, between the strip and the controls, and scroll inside.</li>
-          <li><b>Layout B</b> moves both rails into one deck at the bottom, where your thumb is. Section names sit in a row you can swipe, like a camera app. Sky, Info and Library are on the left, the shutter and chip in the middle, STOP on the right. <b>Layout A</b> is today's narrow layout, with the rails on the screen's edges.</li>
-          <li><b>Location pill</b>: when the rig has no recent time sync, a pill offers this phone's location and time. Not now holds until the next session.</li>
-          <li><b>Safety alarm</b>: sound and vibration on top of today's full-screen alarm.</li>
-          <li>In <b>landscape</b>, today's narrow layout stays as it is (not drawn here).</li>
-        </ul></div>
-      <div><h2>iPad</h2>
-        <ul><li>One card on every device (chosen 2026-11-11, #1782, built after #1771). Switch Device to iPad; Pills keeps today's two pills for comparison.</li></ul></div>
-      <div><h2>Open questions</h2>
-        <ul>
-          <li>Should the screen stay awake while a plan is running?</li>
-          <li>Where Monitor (#1724) opens from on a phone. B could give it a long press on the shutter or its own word in the section row.</li>
-        </ul></div>
+      <div><h2>Story to state</h2>
+        <table id="map"><thead><tr><th>Story</th><th>Where to see it</th></tr></thead><tbody></tbody></table></div>
     </div>
   </div>
 </div>
 
 <script>
-const S = { device: 'phone', ipadPills: 'one', layout: 'B', scene: 'imaging', mode: 'plan', panel: null, grid: false, night: false, run: true, gps: true };
-const MODES = [
-  ['preview', 'Preview', 'photo_camera'], ['focus', 'Focus', 'center_focus_strong'],
-  ['polar', 'P.A.', 'explore'], ['guider', 'Guider', 'my_location'], ['plan', 'Plan', 'event_note'],
-];
-const note = document.getElementById('tapnote');
-const phone = document.getElementById('phone');
-const say = t => { note.textContent = t; };
-const ms = n => `<span class="ms" aria-hidden="true">${n}</span>`;
+/* ---------- strings. key: [English, Brazilian Portuguese]. Keys starting n_ are new for the phone. ---------- */
+const D = {
+  preview:["Preview","Prévia"], focus:["Focus","Foco"], polar:["P.A.","A.P."], guider:["Guider","Guiagem"], plan:["Plan","Plano"],
+  sky:["Sky Map","Mapa do céu"], info:["Info","Info"], library:["Library","Biblioteca"], search:["Search","Buscar"], night:["Night mode","Modo noturno"],
+  settings:["Settings","Ajustes"], close:["Close","Fechar"], back:["Back","Voltar"], next:["Next","Avançar"], cancel:["Cancel","Cancelar"],
+  stop:["STOP","PARAR"], stopAria:["Emergency Stop, hold for 2 seconds","Parada de emergência, segure por 2 segundos"],
+  shutter:["Shutter","Obturador"], devices:["Devices","Equipamentos"],
+  exposing:["Exposing","Exposição"], exposingDetail:["R · 3 min · 1:12 left","R · 3 min · faltam 1:12"], idle:["Idle","Parado"], paused:["Paused","Em pausa"],
+  afDone:["Autofocus done: best at 12 840, HFR 2.08.","Autofoco concluído: melhor em 12 840, HFR 2,08."],
+  hfr:["HFR","HFR"], stars:["Stars","Estrelas"], guiding:["Guiding","Guiagem"],
+  tonightBest:["Tonight's best","Melhores de hoje"], searchSky:["Search the sky","Buscar no céu"], preflight:["Preflight","Pré-voo"],
+  imageThis:["Image this","Fotografar isto"], frames:["frames","quadros"], upAt:["up","a"],
+  loop:["Loop","Repetir"], single:["Single","Único"], main:["Main","Principal"], guide:["Guide","Guia"], auto:["Auto","Auto"], manual:["Manual","Manual"],
+  exposure:["Exposure","Exposição"], gain:["Gain","Ganho"], filter:["Filter","Filtro"], position:["Position","Posição"], temp:["Temp","Temp."],
+  altitude:["Altitude","Altitude"], azimuth:["Azimuth","Azimute"], tuning:["Tuning","Ajuste"], tools:["Tools","Ferramentas"],
+  polarName:["Polar align","Alinhamento polar"], measuring:["Measuring step 5 of 9","Medindo etapa 5 de 9"],
+  polarHint:["The shutter starts the routine; its red square stops it.","O obturador inicia a rotina; o quadrado vermelho a interrompe."],
+  camera:["Camera","Câmera"], mount:["Mount","Montagem"], focuser:["Focuser","Focalizador"], fw:["Filter wheel","Roda de filtros"], weather:["Weather","Clima"],
+  siteTime:["Site and time","Local e hora"], rig:["Rig","Equipamento"], storage:["Storage","Armazenamento"], logs:["Logs & bug report","Registros e relatório de erro"],
+  tonightsSky:["Tonight's Sky","Céu de hoje"], skyAtlas:["Sky Atlas","Atlas do céu"], nebula:["Nebula","Nebulosa"],
+  frameOfNight:["Last frame","Último quadro"], frameFacts:["Last frame facts","Dados do último quadro"], bkg:["Sky background","Fundo do céu"], clipped:["Clipped stars","Estrelas saturadas"],
+  imaged:["Imaged","Já fotografado"], modeWord:["Mode","Modo"], settingWord:["Setting","Ajuste"], skyObject:["Sky object","Objeto do céu"],
+  unsafeTitle:["Unsafe: rain","Inseguro: chuva"], unsafeBody:["The safety monitor reports rain. The plan is paused and the mount is still tracking.","O monitor de segurança indica chuva. O plano está em pausa e a montagem continua rastreando."],
+  abort:["Emergency Abort","Abortar em emergência"], override:["Override for 10 min","Ignorar por 10 min"],
+  ok:["All is well","Tudo certo"], safe:["Safe","Seguro"], target:["Target","Alvo"], now:["Now","Agora"], upNext:["Up next","A seguir"], lastFrame:["Last frame","Último quadro"],
+  /* ---- new for the phone (n_) ---- */
+  n_locQ:["The rig has no clock or site yet. Send this phone's location and time?","O equipamento ainda não tem hora nem local. Enviar a localização e a hora deste celular?"],
+  n_notNow:["Not now","Agora não"], n_send:["Send","Enviar"],
+  n_locSent:["Sent: 51.4778° N, 0.0015° W, 21:48.","Enviado: 51,4778° N, 0,0015° O, 21:48."],
+  n_held:["Not now: it asks again next session.","Agora não: pergunto de novo na próxima sessão."],
+  n_vib:["Vibrating and sounding until you answer","Vibrando e tocando até você responder"],
+  n_aboutAra:["About Ara","Sobre o Ara"], n_changeRig:["Change rig and profile","Trocar equipamento e perfil"],
+  n_versions:["Versions","Versões"], n_client:["Ara app","App Ara"], n_server:["Rig server","Servidor do equipamento"], n_bridge:["Device bridge","Ponte de dispositivos"],
+  n_findRig:["Find your rig","Encontre seu equipamento"], n_scanning:["Looking on your network…","Procurando na sua rede…"], n_foundRigs:["Rigs found on this network","Equipamentos nesta rede"],
+  n_pickProfile:["Pick a profile","Escolha um perfil"], n_useProfile:["Use this profile","Usar este perfil"], n_noRigYet:["No devices set up yet?","Ainda sem equipamentos configurados?"],
+  n_startWizard:["Set up a new rig","Configurar um novo equipamento"], n_rescan:["Look again","Procurar de novo"],
+  n_wizTitle:["Set up your rig","Configure seu equipamento"], n_wizStep:["Step","Etapa"], n_of:["of","de"],
+  n_wiz1:["Find devices","Encontrar equipamentos"], n_wiz2:["Camera","Câmera"], n_wiz3:["Mount","Montagem"], n_wiz4:["Site and time","Local e hora"],
+  n_wiz1b:["Ara looks for the cameras, mounts and other gear on your rig.","O Ara procura câmeras, montagens e outros itens no seu equipamento."],
+  n_wiz2b:["Choose the camera to use for imaging.","Escolha a câmera para fotografar."], n_wiz3b:["Choose the mount and check it can slew.","Escolha a montagem e confira se ela se move."],
+  n_wiz4b:["Use this phone's location and time for the rig.","Usar a localização e a hora deste celular no equipamento."], n_finish:["Finish","Concluir"],
+  n_confirmStart:["Start imaging M42 tonight? 60 frames, about 3 h 00 m. Preflight runs first.","Fotografar M42 hoje? 60 quadros, cerca de 3 h 00 min. O pré-voo roda antes."],
+  n_start:["Start","Iniciar"], n_pfTitle:["Preflight","Pré-voo"], n_pf1:["Rig on and connected","Equipamento ligado e conectado"], n_pf2:["Time and site set","Hora e local definidos"],
+  n_pf3:["Camera cooled to -10 °C","Câmera resfriada a -10 °C"], n_pf4:["Polar alignment checked","Alinhamento polar conferido"], n_pf5:["Focus checked","Foco conferido"], n_pf6:["Slew and centre on M42","Apontar e centralizar em M42"],
+  n_runStep:["Run this step","Executar esta etapa"], n_pfReady:["Ready. Start imaging M42.","Pronto. Iniciar M42."], n_imaging:["Start imaging","Iniciar a imagem"],
+  n_started:["Imaging started: M42.","Imagem iniciada: M42."],
+  n_stopped:["Stopped. The plan halted and the mount is still tracking.","Parado. O plano parou e a montagem continua rastreando."],
+  n_holdStop:["Keep holding to stop…","Continue segurando para parar…"],
+  n_refreshing:["Back in the app. Reading the rig's state…","De volta ao app. Lendo o estado do equipamento…"], n_fresh:["Up to date with the rig.","Atualizado com o equipamento."],
+  n_pause:["Pause","Pausar"], n_resume:["Resume","Retomar"], n_pausedMsg:["Pauses after the frame in hand.","Pausa após o quadro em andamento."],
+  n_monitor:["Monitor","Monitor"], n_monitorOpen:["Open Monitor","Abrir Monitor"], n_readOnly:["Read-only view of the session","Visão somente leitura da sessão"],
+  n_awakeMonitor:["Screen stays awake while Monitor shows","A tela fica acesa enquanto o Monitor aparece"], n_awakeRun:["Screen stays awake for the whole run","A tela fica acesa durante toda a execução"], n_awakeNever:["Screen follows the phone's own lock time","A tela segue o tempo de bloqueio do celular"],
+  n_clock:["21:48 local","21:48 local"], n_battery:["Battery 78%","Bateria 78%"],
+  n_diskUsed:["212 GB used of 512 GB","212 GB usados de 512 GB"], n_framesTonight:["Tonight's frames","Quadros de hoje"], n_free:["Free space","Espaço livre"],
+  n_sendReport:["Send bug report","Enviar relatório de erro"], n_confirmReport:["Send the last 24 hours of logs from the rig and this phone?","Enviar as últimas 24 horas de registros do equipamento e deste celular?"],
+  n_reportSent:["Bug report sent.","Relatório de erro enviado."], n_logLines:["Last log lines","Últimas linhas do registro"],
+  n_zoomIn:["Zoom in","Aproximar"], n_zoomOut:["Zoom out","Afastar"], n_pinch:["Pinch to zoom","Pince para ampliar"],
+  n_notConnected:["Rig not connected","Equipamento não conectado"], n_connect:["Connect","Conectar"],
+  n_searchHint:["Sky objects, settings, modes, imaged targets","Objetos do céu, ajustes, modos, alvos já fotografados"],
+  n_devWindow:["Device window","Janela do equipamento"], n_connected:["Connected","Conectado"],
+  n_siteHint:["Site and time come from this phone or the rig.","Local e hora vêm deste celular ou do equipamento."],
+  n_rigWord:["Rig","Equipamento"], n_profile:["Profile","Perfil"], n_connectedTo:["Connected to","Conectado a"],
+  n_planFrames:["60 frames · 3 h 00 m","60 quadros · 3 h 00 min"], n_cooler:["Cooler","Resfriador"], n_onTarget:["on target","na meta"],
+  n_noRigStop:["STOP is disabled until the first rig is connected.","PARAR fica desativado até o primeiro equipamento ser conectado."],
+  n_nextRow:["Next: Settings","A seguir: Ajustes"],
+};
+const T = () => (document.documentElement.lang === 'pt-BR' ? 1 : 0);
+const t = k => (D[k] || [k, k])[T()];
 
-function sky() {
+/* ---------- inline icons: one stroke, one weight ---------- */
+const P = {
+  preview:'<path d="M4 8h3l2-2h6l2 2h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>', focus:'<circle cx="12" cy="12" r="3"/><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  polar:'<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>', guider:'<circle cx="12" cy="12" r="6"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/>',
+  plan:'<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/>', sky:'<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2zM9 4v14M15 6v14"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>', library:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M21 16l-5-5-8 8"/>',
+  search:'<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>', night:'<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>',
+  settings:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>',
+  close:'<path d="M6 6l12 12M18 6L6 18"/>', back:'<path d="M15 5l-7 7 7 7"/>', chev:'<path d="M9 5l7 7-7 7"/>',
+  check:'<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>', tick:'<path d="M5 12l4 4 10-10"/>', tune:'<path d="M4 7h8M18 7h2M4 17h2M12 17h8"/><circle cx="15" cy="7" r="2.5"/><circle cx="9" cy="17" r="2.5"/>',
+  warn:'<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/>', vib:'<rect x="9" y="4" width="6" height="16" rx="1"/><path d="M5 8v8M2 10v4M19 8v8M22 10v4"/>',
+  pin:'<path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>', cloud:'<path d="M7 18a4 4 0 0 1 0-8 5 5 0 0 1 9.5-1A4.5 4.5 0 0 1 17 18z"/>',
+  fw:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/>', plus:'<path d="M12 6v12M6 12h12"/>', minus:'<path d="M6 12h12"/>',
+  monitor:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>', eye:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  storage:'<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+  bug:'<rect x="8" y="8" width="8" height="11" rx="4"/><path d="M12 8V5M5 12h3M16 12h3M6 18l2-2M18 18l-2-2M6 7l2 2M18 7l-2 2"/>',
+  rig:'<rect x="3" y="4" width="18" height="6" rx="1"/><rect x="3" y="14" width="18" height="6" rx="1"/><path d="M7 7h.01M7 17h.01"/>', globe:'<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+  refresh:'<path d="M20 12a8 8 0 1 1-2.5-5.8M20 4v5h-5"/>',
+};
+const ic = n => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${P[n]}</svg>`;
+const MODES = [['preview','preview'],['focus','focus'],['polar','polar'],['guider','guider'],['plan','plan']];
+const DEVS = [['camera','preview'],['mount','polar'],['guider','guider'],['focuser','focus'],['fw','fw'],['weather','cloud']];
+
+/* ---------- state ---------- */
+const S = { o:'p', night:false, ts:1, mode:'plan', panel:null, page:null, run:true, paused:false, gps:'ask', alarm:false, rig:true,
+  confirm:null, report:null, sel:'M42', skyTab:'atlas', zoom:1, resume:null, awake:'monitor', monitorFrom:'row', stopMsg:null, started:null,
+  wizStep:1, pfStep:0, frStep:'find', dev:null, planConfirm:false, procSearch:'' };
+const phone = document.getElementById('phone'), note = document.getElementById('tapnote');
+const say = s => { note.textContent = s; };
+
+/* ---------- the frame (last image): drawn once, from fixed seeds ---------- */
+function skyCanvas() {
   const c = document.createElement('canvas'); c.className = 'sky'; c.width = 780; c.height = 1688;
-  const g = c.getContext('2d');
-  g.fillStyle = '#05060a'; g.fillRect(0, 0, c.width, c.height);
-  const neb = (x, y, r, col) => { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, c.width, c.height); };
-  neb(400, 760, 340, 'rgba(150,60,80,.45)'); neb(330, 690, 200, 'rgba(220,120,140,.35)'); neb(470, 830, 160, 'rgba(90,140,200,.30)'); neb(395, 740, 60, 'rgba(255,230,220,.55)');
-  let s = 7; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-  for (let i = 0; i < 1400; i++) { const r = rnd() ** 4 * 3 + .4; g.fillStyle = `rgba(255,255,255,${.35 + rnd() * .65})`; g.beginPath(); g.arc(rnd() * c.width, rnd() * c.height, r, 0, 7); g.fill(); }
+  const g = c.getContext('2d'); g.fillStyle = '#05060a'; g.fillRect(0, 0, c.width, c.height);
+  const neb = (x,y,r,col) => { const gr = g.createRadialGradient(x,y,0,x,y,r); gr.addColorStop(0,col); gr.addColorStop(1,'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0,0,c.width,c.height); };
+  neb(400,760,340,'rgba(150,60,80,.45)'); neb(330,690,200,'rgba(220,120,140,.35)'); neb(470,830,160,'rgba(90,140,200,.30)'); neb(395,740,60,'rgba(255,230,220,.55)');
+  let s = 7; const rnd = () => (s = (s*16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 1400; i++) { const r = rnd()**4*3+.4; g.fillStyle = `rgba(255,255,255,${.35+rnd()*.65})`; g.beginPath(); g.arc(rnd()*c.width, rnd()*c.height, r, 0, 7); g.fill(); }
   return c;
 }
-const skyCanvas = sky();
+const FRAME = skyCanvas(), FRAME_URL = FRAME.toDataURL('image/jpeg', .7);
+const frameCanvas = () => { const c = skyCanvas(); c.getContext('2d').drawImage(FRAME, 0, 0); return c; };
 
-const strip = () => `
-  <div class="strip glass">
-    <div class="dots" aria-label="Devices">
-      <span class="dev" title="Camera">${ms('photo_camera')}<i class="d"></i></span>
-      <span class="dev" title="Mount">${ms('explore')}<i class="d"></i></span>
-      <span class="dev" title="Guider">${ms('my_location')}<i class="d"></i></span>
-      <span class="dev" title="Focuser">${ms('center_focus_strong')}<i class="d"></i></span>
-      <span class="dev" title="Filter wheel">${ms('filter_vintage')}<i class="d"></i></span>
-      <span class="dev" title="Weather">${ms('cloud')}<i class="d ${S.scene === 'alarm' ? 'err' : ''}"></i></span>
-    </div>
-    <button class="ib" data-a="search" aria-label="Search">${ms('search')}</button>
-    <button class="ib" data-a="night" aria-label="Night mode" aria-pressed="${S.night}">${ms('bedtime')}</button>
-    <button class="ib" data-a="settings" aria-label="Settings">${ms('settings')}</button>
-  </div>`;
-
-const stopBtn = (style) => `<button class="stopb" style="${style}" aria-label="Emergency Stop, hold for 2 seconds"><svg viewBox="0 0 52 52"><circle cx="26" cy="26" r="24"/></svg>STOP</button>`;
-
-// Phones: the camera status and the message pills are one card on the left; status first, messages under it.
-function pillParts() {
-  const msgs = [];
-  if (S.scene === 'imaging') msgs.push(`<div class="msg">${ms('check_circle')}<span>Autofocus done: best at 12 840, HFR 2.08.</span></div>`);
-  if (S.scene === 'gps' && S.gps) msgs.push(`
-    <div class="msg q">
-      <div class="row">${ms('my_location')}<span>The rig has no clock or site yet. Send this phone's location and time?</span></div>
-      <div class="acts"><button class="b sec" data-a="gpsno">Not now</button><button class="b" data-a="gpsyes">Send</button></div>
-    </div>`);
-  if (S.scene === 'gps' && !S.gps) msgs.push(`<div class="msg">${ms('check_circle')}<span>Sent: 12.34° S 56.78° E, 21:48 NZDT.</span></div>`);
-  const status = S.scene === 'norig' ? '' : S.run
-    ? `<div class="stat"><b>Exposing</b><span>R · 3 min · 1:12 left</span></div>`
-    : `<div class="stat"><span>Idle</span></div>`;
-  return { msgs, status };
+/* ---------- pieces ---------- */
+const stopBtn = cls => `<button class="stopb ${cls||''}" ${S.rig ? '' : 'disabled'} aria-label="${t('stopAria')}"><svg viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="24"/></svg>${t('stop')}</button>`;
+function cardHtml() {
+  if (!S.rig) return '';
+  const rows = [];
+  rows.push(`<div class="stat ${S.paused ? 'paused' : ''}">${S.run ? `<b>${S.paused ? t('paused') : t('exposing')}</b><span>${t('exposingDetail')}</span>` : `<span>${t('idle')}</span>`}</div>`);
+  const m = (txt) => rows.push(`<div class="msg">${ic('check')}<span>${txt}</span></div>`);
+  if (S.stopMsg) m(S.stopMsg);
+  if (S.resume === 'refreshing') rows.push(`<div class="msg">${ic('refresh')}<span>${t('n_refreshing')}</span></div>`);
+  if (S.resume === 'fresh') m(t('n_fresh'));
+  if (S.started) m(t('n_started'));
+  if (S.run && !S.stopMsg && !S.started && S.page === null && !S.panel && S.gps !== 'ask') m(t('afDone'));
+  if (S.gps === 'ask') rows.push(`<div class="msg q"><div class="row">${ic('pin')}<span>${t('n_locQ')}</span></div><div class="acts"><button class="b sec" data-a="gpsno">${t('n_notNow')}</button><button class="b" data-a="gpsyes">${t('n_send')}</button></div></div>`);
+  if (S.gps === 'sent') m(t('n_locSent'));
+  if (S.gps === 'held') m(t('n_held'));
+  if (S.paused) m(t('n_pausedMsg'));
+  const wide = S.gps === 'ask';
+  return `<div class="card glass${wide ? ' wide' : ''}" role="status">${rows.join('')}</div>`;
 }
-function pills() {
-  const { msgs, status } = pillParts();
-  if (!status && !msgs.length) return '';
-  return `<div class="pills"><div class="merged glass${msgs.some(m => m.includes('msg q')) ? ' wide' : ''}" role="status">${status}${msgs.join('')}</div></div>`;
+function infoStack() {
+  if (!S.rig || S.panel) return '';
+  return `<div class="info">
+    <div class="row2">
+      <div class="facts"><div class="fact glass"><small>${t('hfr')}</small><b>2.14</b></div><div class="fact glass"><small>${t('stars')}</small><b>812</b></div></div>
+      <div class="squares">
+        <button class="sq glass cur" data-mode="plan"><b>M42</b>23 / 60<div class="bar"><i style="width:38%"></i></div>R · 3 min<span>1 h 51 m</span></button>
+        <button class="sq glass" data-mode="plan"><b>IC 434</b>0 / 40<div class="bar"><i style="width:0"></i></div>Ha · 5 min<span>3 h 20 m</span></button>
+      </div></div>
+    <div class="graph glass"><small>${t('guiding')} · 0.62″</small>
+      <svg viewBox="0 0 200 48" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="#42A5F5" stroke-width="1.5" points="0,26 12,22 24,28 36,24 48,30 60,21 72,25 84,27 96,20 108,26 120,29 132,23 144,25 156,22 168,28 180,24 200,25"/><polyline fill="none" stroke="#FF8A80" stroke-width="1.5" stroke-dasharray="4 3" points="0,24 12,27 24,23 36,26 48,22 60,27 72,24 84,21 96,26 108,24 120,22 132,27 144,23 156,26 168,22 180,26 200,24"/></svg>
+    </div></div>`;
 }
+const chipText = { preview:['5 s','100'], focus:['Auto','Main'], polar:['3 s','Loop'], guider:['0.62″','RMS'], plan:['M42','23/60'] };
+const shutCls = () => S.mode === 'plan' ? (S.run ? (S.paused ? 'paused' : 'pause') : '') : (S.run ? 'run' : '');
+const leftBtns = (lbl) => [['sky','sky'],['info','info'],['library','library']].map(([k,i]) =>
+  `<button class="rb" data-a="${k}" aria-label="${t(k)}" aria-pressed="${S.panel === k}">${ic(i)}${lbl ? t(k) : ''}</button>`).join('');
+const closeBtn = `<button class="ib" data-a="close" aria-label="${t('close')}">${ic('close')}</button>`;
+const head = (k) => `<div class="hd"><h3>${t(k)}</h3>${closeBtn}</div>`;
+const seg = (items, on) => `<div class="segs">${items.map((x,i) => `<button class="${i===on?'on':''}" data-a="seg">${t(x)}</button>`).join('')}</div>`;
 
-function bottomInfo(bottomOfStack) {
-  if (S.scene === 'norig') return '';
-  const gy = bottomOfStack, fy = gy + 62;
-  const rightGap = S.layout === 'A' ? 76 : 8;
-  return `
-    <div class="graph glass" style="bottom:${gy}px;right:${rightGap}px"><small>Guiding · 0.62″</small>
-      <svg viewBox="0 0 200 48" preserveAspectRatio="none"><polyline fill="none" stroke="#42A5F5" stroke-width="1.5" points="0,26 12,22 24,28 36,24 48,30 60,21 72,25 84,27 96,20 108,26 120,29 132,23 144,25 156,22 168,28 180,24 200,25"/><polyline fill="none" stroke="#FF8A80" stroke-width="1.5" stroke-dasharray="4 3" points="0,24 12,27 24,23 36,26 48,22 60,27 72,24 84,21 96,26 108,24 120,22 132,27 144,23 156,26 168,22 180,26 200,24"/></svg>
-      <svg viewBox="0 0 60 48" preserveAspectRatio="none" style="flex:0 0 60px"><path d="M0,48 L8,46 14,40 20,22 24,8 28,4 32,14 38,34 46,44 60,48Z" fill="#A0A0A0" opacity=".6"/></svg>
-    </div>
-    <div class="facts" style="bottom:${fy}px">
-      <div class="fact glass"><small>HFR</small><b>2.14</b></div>
-      <div class="fact glass"><small>Stars</small><b>812</b></div>
-    </div>
-    <div class="squares" style="bottom:${fy}px;right:${rightGap}px">
-      <div class="sq glass cur"><b>M42</b>23 / 60<div class="bar"><i style="width:38%"></i></div>R · 3 min<span>1 h 51 m</span></div>
-      <div class="sq glass"><b>IC 434</b>0 / 40<div class="bar"><i style="width:0"></i></div>Ha · 5 min<span>3 h 20 m</span><span>Parks</span></div>
-    </div>`;
+function panelBody() {
+  const p = S.panel;
+  if (p === 'preview') return head('preview') + `<div class="tiles"><div class="t"><small>${t('exposure')}</small><b>5 s</b></div><div class="t"><small>${t('gain')}</small><b>100</b></div><div class="t"><small>${t('filter')}</small><b>L</b></div></div>` + seg(['loop','single'],0);
+  if (p === 'focus') return head('focus') + seg(['main','guide'],0) + seg(['auto','manual'],0) + `<div>${t('measuring')}</div><div class="readout">2.31<small>${t('hfr')}</small></div>
+    <div class="curve"><svg viewBox="0 0 300 130" preserveAspectRatio="none" aria-hidden="true"><line x1="0" y1="129" x2="300" y2="129" stroke="#404040"/><path d="M10,18 Q150,190 290,22" fill="none" stroke="#707070" stroke-dasharray="4 4"/>${[[10,20],[45,52],[80,80],[115,98],[150,106]].map(([x,y]) => `<circle cx="${x}" cy="${y}" r="4" fill="#E0E0E0"/>`).join('')}</svg></div>
+    <div class="tiles"><div class="t"><small>${t('position')}</small><b>12 840</b></div><div class="t"><small>${t('temp')}</small><b>8.4 °C</b></div><div class="t"><small>${t('filter')}</small><b>L</b></div></div>`;
+  if (p === 'polar') return head('polarName') + seg(['loop','single'],0) + `<div class="tiles"><div class="t"><small>${t('exposure')}</small><b>3 s</b></div><div class="t"><small>${t('altitude')}</small><b>3.2′</b></div><div class="t"><small>${t('azimuth')}</small><b>14.1′</b></div></div><div style="color:var(--text2)">${t('polarHint')}</div>`;
+  if (p === 'guider') return head('guider') + `<div style="color:var(--ok);font-weight:600">${t('guiding')}</div><div class="readout">0.62″<small>RMS</small></div>` + seg(['guide','tuning','tools'],0) + `<div class="tiles"><div class="t"><small>RA</small><b>0.41″</b></div><div class="t"><small>Dec</small><b>0.47″</b></div><div class="t"><small>${t('exposure')}</small><b>2 s</b></div></div>`;
+  if (p === 'plan') return head('plan') + `<div class="sech">${t('tonightBest')}</div>
+    <div class="best">${[['M42',62],['IC 434',58],['NGC 2070',71]].map(([n,a]) => `<button class="t" data-a="pick" data-v="${n}"><b>${n}</b><small>${t('nebula')} · ${t('upAt')} ${a}°</small></button>`).join('')}</div>
+    <button class="search" data-a="search" style="border:0;font:inherit;text-align:left;cursor:pointer;color:var(--text2)">${ic('search')}<span>${t('searchSky')}</span></button>
+    <div><b style="font-size:1.1em">M42</b> <span style="color:var(--text2)">62° · max 74°</span></div>
+    <div class="chips"><button class="on">R</button><button class="on">G</button><button class="on">B</button><button>L</button><button>Ha</button></div>
+    ${['R','G','B'].map(f => `<div class="frow"><b>${f}</b><span class="val">3 min</span><span class="val">20 ${t('frames')}</span></div>`).join('')}
+    <div style="color:var(--text2)">${t('n_planFrames')}</div>
+    ${imageBlock()}
+    <button class="b sec full" data-a="preflight">${t('n_pfTitle')}</button>`;
+  if (p === 'sky') return head('sky') + seg(['skyAtlas','tonightsSky'], S.skyTab === 'atlas' ? 0 : 1).replace(/data-a="seg"/g, (m, i) => m) + skyBody();
+  if (p === 'info') return head('frameFacts') + `<div class="tiles"><div class="t"><small>${t('hfr')}</small><b>2.14</b></div><div class="t"><small>${t('stars')}</small><b>812</b></div><div class="t"><small>${t('bkg')}</small><b>8.1%</b></div><div class="t"><small>${t('clipped')}</small><b>0</b></div><div class="t"><small>${t('temp')}</small><b>-10.0 °C</b></div><div class="t"><small>${t('n_cooler')}</small><b>${t('n_onTarget')}</b></div></div>`;
+  if (p === 'library') return head('library') + `<div class="zoomwrap" id="zoom"><img id="zimg" alt="${t('frameOfNight')}" src="${FRAME_URL}" style="transform:translate(-50%,-50%) scale(${S.zoom})"><span class="zoomhint">${t('n_pinch')} · ${Math.round(S.zoom*100)}%</span>
+    <div class="zoomctl"><button class="ib glass" data-a="zout" aria-label="${t('n_zoomOut')}">${ic('minus')}</button><button class="ib glass" data-a="zin" aria-label="${t('n_zoomIn')}">${ic('plus')}</button></div></div>
+    <div class="sech">${t('n_framesTonight')}</div><div class="tiles"><div class="t"><b>M42 R 24</b><small>HFR 2.14</small></div><div class="t"><b>M42 R 23</b><small>HFR 2.11</small></div><div class="t"><b>M42 R 22</b><small>HFR 2.20</small></div></div>`;
+  if (p === 'search') {
+    return head('search') + `<label class="search">${ic('search')}<input id="q" type="search" value="${S.procSearch}" placeholder="${t('n_searchHint')}" aria-label="${t('search')}"></label><div id="results">${results(S.procSearch)}</div>`;
+  }
+  if (p === 'ara') return head('n_aboutAra') + `<button class="navrow" data-a="change">${ic('rig')}<span class="grow">${t('n_changeRig')}</span>${ic('chev')}</button>
+    <div class="box"><b>${t('n_versions')}</b><div class="kv"><span>${t('n_client')}</span><span>1.4.0</span></div><div class="kv"><span>${t('n_server')}</span><span>1.4.0</span></div><div class="kv"><span>${t('n_bridge')}</span><span>6.0.2</span></div></div>`
+    + (S.monitorFrom === 'ara' ? `<button class="b full" data-a="monitor">${ic('monitor')} ${t('n_monitorOpen')}</button>` : '');
+  if (p === 'dev') return head('n_devWindow') + `<div class="box"><b>${t(S.dev || 'camera')}</b><div class="kv"><span>${t('n_connected')}</span><span>192.0.2.10</span></div></div>`;
+  return '';
 }
-
-function panelBody(mode) {
-  if (mode === 'focus') return `
-    <div class="hd"><h3>Focus</h3><button class="ib" data-a="close" aria-label="Close">${ms('close')}</button></div>
-    <div class="segs"><span class="on">Main</span><span>Guide</span></div>
-    <div class="segs"><span class="on">Auto</span><span>Manual</span></div>
-    <div>Measuring step 5 of 9</div>
-    <div class="readout">2.31<small>HFR</small></div>
-    <div class="curve"><svg viewBox="0 0 300 130" preserveAspectRatio="none">
-      <line x1="0" y1="129" x2="300" y2="129" stroke="#404040"/>
-      <path d="M10,18 Q150,190 290,22" fill="none" stroke="#606060" stroke-dasharray="4 4"/>
-      ${[[10,20],[45,52],[80,80],[115,98],[150,106]].map(([x,y]) => `<circle cx="${x}" cy="${y}" r="4" fill="#E0E0E0"/>`).join('')}
-    </svg></div>
-    <div class="tiles"><div class="t"><small>Position</small><b>12 840</b></div><div class="t"><small>Temp</small><b>8.4 °C</b></div><div class="t"><small>Filter</small><b>L</b></div></div>`;
-  if (mode === 'plan') return `
-    <div class="hd"><h3>Plan</h3><button class="ib" data-a="close" aria-label="Close">${ms('close')}</button></div>
-    <div class="sec">Tonight's best</div>
-    <div class="best">
-      <div class="t"><b>M42</b><small>Nebula · up 62°</small></div>
-      <div class="t"><b>IC 434</b><small>Nebula · up 58°</small></div>
-      <div class="t"><b>NGC 2070</b><small>Nebula · up 71°</small></div>
-    </div>
-    <div class="search">${ms('search')}<span>Search the sky</span></div>
-    <div><b style="font-size:16px">M42</b> <span style="color:var(--text2)">62° up · max 74°</span></div>
-    <div class="chips"><span class="on">R</span><span class="on">G</span><span class="on">B</span><span>L</span><span>Ha</span></div>
-    <div class="frow"><b>R</b><span class="val">3 min</span><span class="val">20 frames</span></div>
-    <div class="frow"><b>G</b><span class="val">3 min</span><span class="val">20 frames</span></div>
-    <div class="frow"><b>B</b><span class="val">3 min</span><span class="val">20 frames</span></div>
-    <div style="color:var(--text2)">60 frames · 3 h 00 m</div>
-    <button class="b full">Add to queue</button>`;
-  if (mode === 'polar') return `
-    <div class="hd"><h3>Polar align</h3><button class="ib" data-a="close" aria-label="Close">${ms('close')}</button></div>
-    <div class="segs"><span class="on">Loop</span><span>Single</span></div>
-    <div class="tiles"><div class="t"><small>Exposure</small><b>3 s</b></div><div class="t"><small>Altitude</small><b>Lower 3.2′</b></div><div class="t"><small>Azimuth</small><b>West 14.1′</b></div></div>
-    <div style="color:var(--text2)">The shutter starts the routine; its red square stops it.</div>`;
-  if (mode === 'guider') return `
-    <div class="hd"><h3>Guider</h3><button class="ib" data-a="close" aria-label="Close">${ms('close')}</button></div>
-    <div style="color:var(--ok);font-weight:600">Guiding</div>
-    <div class="readout">0.62″<small>RMS</small></div>
-    <div class="segs"><span class="on">Guide</span><span>Tuning</span><span>Tools</span></div>
-    <div class="tiles"><div class="t"><small>RA</small><b>0.41″</b></div><div class="t"><small>Dec</small><b>0.47″</b></div><div class="t"><small>Exposure</small><b>2 s</b></div></div>`;
-  return `
-    <div class="hd"><h3>Preview</h3><button class="ib" data-a="close" aria-label="Close">${ms('close')}</button></div>
-    <div class="tiles"><div class="t"><small>Exposure</small><b>5 s</b></div><div class="t"><small>Gain</small><b>100</b></div><div class="t"><small>Filter</small><b>L</b></div></div>
-    <div class="segs"><span class="on">Loop</span><span>Single</span></div>`;
+function imageBlock() {
+  if (S.planConfirm) return `<div class="box"><div>${t('n_confirmStart')}</div><div class="acts"><button class="b sec" data-a="pcancel">${t('cancel')}</button><button class="b" data-a="pstart">${t('n_start')}</button></div></div>`;
+  return `<button class="b full" data-a="imagethis">${t('imageThis')}</button>`;
+}
+const OBJS = [['M42',{x:150,y:118},'Nebula'],['IC 434',{x:98,y:70},'Nebula'],['NGC 2070',{x:205,y:176},'Nebula'],['M45',{x:70,y:150},'Cluster']];
+function skyBody() {
+  const o = OBJS.find(x => x[0] === S.sel) || OBJS[0];
+  const picked = `<div class="box"><b>${o[0]}</b><span style="color:var(--text2)">${t('nebula')} · ${t('upAt')} 62°</span>${S.confirm === o[0]
+    ? `<div>${t('n_confirmStart')}</div><div class="acts"><button class="b sec" data-a="ccancel">${t('cancel')}</button><button class="b" data-a="cstart">${t('n_start')}</button></div>`
+    : `<button class="b full" data-a="cask">${t('imageThis')}</button>`}</div>`;
+  if (S.skyTab === 'atlas') {
+    let s = 3; const r = () => (s = (s*16807) % 2147483647) / 2147483647;
+    const stars = Array.from({length:60}, () => `<circle cx="${(r()*280).toFixed(0)}" cy="${(r()*230).toFixed(0)}" r="${(r()*1.4+.4).toFixed(1)}" fill="#ddd"/>`).join('');
+    return `<div class="curve" style="height:200px"><svg viewBox="0 0 280 230" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${stars}${OBJS.map(([n,p]) => `<circle cx="${p.x}" cy="${p.y}" r="6" fill="none" stroke="${n===S.sel?'#FFB300':'#42A5F5'}" stroke-width="1.5"/><text x="${p.x+9}" y="${p.y+4}" fill="#E0E0E0" font-size="11">${n}</text>`).join('')}</svg></div>
+      <div class="chips">${OBJS.map(([n]) => `<button class="${n===S.sel?'on':''}" data-a="pick" data-v="${n}">${n}</button>`).join('')}</div>${picked}`;
+  }
+  return `<div class="sech">${t('tonightBest')}</div>${OBJS.map(([n,,k],i) => `<button class="res" data-a="pick" data-v="${n}"><b>${n}</b><span style="color:var(--text2)">${k==='Nebula'?t('nebula'):'Cluster'}</span><small>${t('upAt')} ${70-i*4}°</small></button>`).join('')}${picked}`;
+}
+function results(q) {
+  const all = [['skyObject','M42','Nebula'],['skyObject','M45','Cluster'],['settingWord',t('n_cooler')+' -10 °C',t('camera')],['modeWord',t('polarName'),t('polar')],['imaged','IC 434','2026-11-02']];
+  const f = all.filter(r => !q || (r[1] + t(r[0])).toLowerCase().includes(q.toLowerCase()));
+  return f.length ? f.map(r => `<button class="res" data-a="${r[0]==='modeWord'?'gopolar':'pick'}" data-v="${r[1]}"><b>${r[1]}</b><small>${t(r[0])}</small></button>`).join('') : `<div style="color:var(--text2);min-height:44px;display:flex;align-items:center">–</div>`;
 }
 
-const chipText = { preview: ['5 s', '100'], focus: ['Auto', 'Main'], polar: ['3 s', 'Loop'], guider: ['0.62″', 'RMS'], plan: ['M42', '23/60'] };
-const shutterClass = () => S.mode === 'plan' ? (S.run ? 'pause' : '') : (S.run ? 'run' : '');
-const leftRail = () => [['sky', 'Sky Map', 'map'], ['info', 'Info', 'info'], ['library', 'Library', 'photo_library']]
-  .map(([k, l, i]) => `<button class="rb" data-a="${k}" aria-pressed="${k === 'info'}">${ms(i)}${l}</button>`).join('');
-
-function layoutA() {
+/* ---------- layouts ---------- */
+function portraitDeck() {
+  const [c1,c2] = chipText[S.mode];
+  const modes = MODES.map(([k]) => `<button data-mode="${k}" aria-pressed="${k===S.mode}">${t(k)}</button>`).join('') + (S.monitorFrom === 'row' ? `<button data-a="monitor">${t('n_monitor')}</button>` : '');
+  return `<div class="deck glass"><div class="modes" role="group" aria-label="${t('n_rigWord')}">${modes}</div>
+    <div class="ctl"><div class="left">${leftBtns(true)}</div>
+      <div class="shut"><button class="shutter ${shutCls()}" data-a="shutter" aria-label="${t('shutter')}"><i></i></button>
+      <button class="chip" data-a="chip" aria-label="${t(S.mode)}">${ic('tune')}<span>${c1}</span><span>${c2}</span></button></div>
+      ${stopBtn()}</div></div>`;
+}
+function landscapeRails() {
+  const [c1,c2] = chipText[S.mode];
   const m = MODES.find(x => x[0] === S.mode);
-  const [c1, c2] = chipText[S.mode];
-  let h = `
-    <div class="railL glass">${leftRail()}</div>
-    <div class="railR glass">
-      <button class="modename" data-a="grid">${ms(m[2])}${m[1]}</button>
-      <button class="shutter ${shutterClass()}" data-a="shutter" aria-label="Shutter"><i></i></button>
-      <button class="chip glass" data-a="chip">${ms('tune')}<span>${c1}</span><span style="color:var(--text2)">${c2}</span></button>
-    </div>
-    ${stopBtn('right:8px;bottom:30px')}
-    ${bottomInfo(30)}`;
-  if (S.grid) h += `<div class="grid5 glass">${MODES.map(([k, l, i]) => `<button data-mode="${k}" aria-pressed="${k === S.mode}">${ms(i)}${l}</button>`).join('')}</div>`;
-  if (S.panel) h += `<div class="panel" style="top:103px;bottom:100px;right:88px">${panelBody(S.panel)}</div>`;
-  return h;
+  return `<div class="railL glass">${leftBtns(false)}</div>
+    <div class="railR glass"><button class="modename" data-a="grid" aria-label="${t(m[0])}">${ic(m[1])}${t(m[0])}</button>
+      <button class="shutter ${shutCls()}" data-a="shutter" aria-label="${t('shutter')}"><i></i></button>
+      <button class="chip glass" data-a="chip" aria-label="${t(S.mode)}"><span>${c1}</span><span>${c2}</span></button></div>${stopBtn('floatstop')}
+    ${S.grid ? `<div class="grid5 glass">${MODES.map(([k,i]) => `<button data-mode="${k}" aria-pressed="${k===S.mode}">${ic(i)}${t(k)}</button>`).join('')}${S.monitorFrom === 'row' ? `<button data-a="monitor">${ic('monitor')}${t('n_monitor')}</button>` : ''}</div>` : ''}`;
 }
-
-function layoutB() {
-  const [c1, c2] = chipText[S.mode];
-  let h = `
-    <div class="deck glass">
-      <div class="modes" role="tablist">${MODES.map(([k, l]) => `<button data-mode="${k}" aria-pressed="${k === S.mode}">${l.toUpperCase()}</button>`).join('')}</div>
-      <div class="ctl">
-        <div class="left">${leftRail()}</div><span></span>
-        <div class="shut">
-          <button class="shutter ${shutterClass()}" data-a="shutter" aria-label="Shutter"><i></i></button>
-          <button class="chip" data-a="chip">${ms('tune')}<span>${c1}</span><span style="color:var(--text2)">${c2}</span></button>
-        </div><span></span>
-        ${stopBtn('')}
-      </div>
-    </div>
-    ${bottomInfo(160)}`;
-  if (S.panel) h += `<div class="panel" style="top:103px;bottom:160px">${panelBody(S.panel)}</div>`;
-  return h;
+function strip() {
+  return `<div class="strip glass"><button class="ara" data-a="ara" aria-label="${t('n_aboutAra')}">Ara</button>
+    ${S.rig ? `<div class="dots" role="group" aria-label="${t('devices')}">${DEVS.map(([k,i]) => `<button class="dev" data-a="dev" data-v="${k}" aria-label="${t(k)}">${ic(i)}<i class="d ${k==='weather' && S.alarm ? 'err' : ''}"></i></button>`).join('')}</div>` : `<button class="norig" data-a="settings">${t('n_notConnected')}</button>`}
+    <button class="ib" data-a="search" aria-label="${t('search')}">${ic('search')}</button>
+    <button class="ib" data-a="night" aria-label="${t('night')}" aria-pressed="${S.night}">${ic('night')}</button>
+    <button class="ib" data-a="settings" aria-label="${t('settings')}">${ic('settings')}</button></div>`;
 }
-
-function settingsPage() {
-  return `
-    <div class="pageover">
-      <div class="appbar"><button class="ib" data-a="back" aria-label="Back">${ms('arrow_back')}</button><h3>Settings</h3></div>
-      <div class="scroll">
-        <div class="card">
-          <div class="navrow">${ms('settings_input_component')}<span>Rig</span>${ms('chevron_right')}</div>
-          <div class="navrow">${ms('public')}<span>Site and time</span>${ms('chevron_right')}</div>
-          <div class="navrow">${ms('photo_camera')}<span>Camera</span>${ms('chevron_right')}</div>
-          <div class="navrow">${ms('my_location')}<span>Guider</span>${ms('chevron_right')}</div>
-        </div>
-      </div>
-      ${stopBtn('right:16px;bottom:30px')}
-    </div>`;
-}
-
-// iPad (1024 × 768): today's two pills or the one card, on the Pills switch.
-function ipadPills() {
-  const { msgs, status } = pillParts();
-  const q = msgs.some(m => m.includes('msg q'));
-  if (S.ipadPills === 'one') return (status || msgs.length)
-    ? `<div class="pills" style="top:84px;right:auto;width:420px"><div class="merged glass${q ? ' wide' : ''}" role="status">${status}${msgs.join('')}</div></div>` : '';
-  let h = msgs.length ? `<div class="pills" style="top:84px;right:auto;width:420px">${msgs.map(m => `<div class="merged glass${m.includes('msg q') ? ' wide' : ''}">${m}</div>`).join('')}</div>` : '';
-  if (status) h += `<div class="pills" style="top:84px;left:auto;right:8px;width:300px"><div class="merged glass" style="align-self:flex-end">${status}</div></div>`;
-  return h;
-}
-function renderIpad() {
-  const m = MODES.find(x => x[0] === S.mode);
-  const [c1, c2] = chipText[S.mode];
-  let h = `<div class="sb" style="height:26px;padding:4px 20px 0;font-size:13px"><span>21:48  Tue 11 Nov</span><span style="display:flex;gap:6px;align-items:center">${ms('wifi')}${ms('battery_5_bar')}</span></div>`;
-  h += strip().replace('class="strip glass"', 'class="strip glass" style="top:28px"') + ipadPills();
-  h += `
-    <div class="railL glass" style="top:290px">${leftRail()}</div>
-    <div class="railR glass" style="top:260px">
-      <button class="modename" data-a="grid">${ms(m[2])}${m[1]}</button>
-      <button class="shutter ${shutterClass()}" data-a="shutter" aria-label="Shutter"><i></i></button>
-      <button class="chip glass" data-a="chip">${ms('tune')}<span>${c1}</span><span style="color:var(--text2)">${c2}</span></button>
-    </div>
-    ${stopBtn('right:8px;bottom:12px')}
-    ${bottomInfoIpad()}`;
-  if (S.scene === 'norig') h += `<div class="rigbar glass" style="bottom:12px;right:76px;left:auto;width:340px"><span>Rig not connected</span><button class="b" data-a="connect">Connect</button></div>`;
-  if (S.scene === 'alarm') h += alarmHtml();
-  phone.innerHTML = h;
-  phone.prepend(skyCanvas);
-  phone.classList.toggle('night', S.night);
-  wireStop();
-}
-function bottomInfoIpad() {
-  const saved = S.layout; S.layout = 'A';
-  const h = bottomInfo(12).replace('right:76px', 'right:76px;width:420px;left:8px');
-  S.layout = saved; return h;
+const back = (to, title) => `<div class="appbar"><button class="ib" data-a="${to}" aria-label="${t('back')}">${ic('back')}</button><h3>${title}</h3></div>`;
+const nav = (a, i, label) => `<button class="navrow" data-a="${a}">${ic(i)}<span class="grow">${label}</span>${ic('chev')}</button>`;
+function pageHtml() {
+  const pg = S.page; if (!pg) return '';
+  const fs = stopBtn('floatstop');
+  if (pg === 'settings') return `<div class="pageover">${back('closepage', t('settings'))}<div class="scroll"><div class="box">${nav('rigpage','rig',t('rig'))}${nav('x','globe',t('siteTime'))}${nav('x','preview',t('camera'))}${nav('x','guider',t('guider'))}</div></div>${fs}</div>`;
+  if (pg === 'rig') return `<div class="pageover">${back('settings', t('rig'))}<div class="scroll"><div class="box">${nav('storage','storage',t('storage'))}${nav('logs','bug',t('logs'))}</div></div>${fs}</div>`;
+  if (pg === 'storage') return `<div class="pageover">${back('rigpage', t('storage'))}<div class="scroll"><div class="box"><b>${t('n_diskUsed')}</b><div class="meter"><i style="width:41%"></i></div><div class="kv"><span>${t('n_free')}</span><span>300 GB</span></div><div class="kv"><span>${t('n_framesTonight')}</span><span>24 · 1.1 GB</span></div></div></div>${fs}</div>`;
+  if (pg === 'logs') return `<div class="pageover">${back('rigpage', t('logs'))}<div class="scroll"><div class="box"><b>${t('n_logLines')}</b><div class="logs">21:47:12 Exposure started, R, 180 s<br>21:47:10 Guiding RMS 0.62 arcsec<br>21:44:09 Autofocus done, HFR 2.08</div>
+    ${S.report === 'sent' ? `<div class="msg" style="display:flex;gap:8px;align-items:center;color:var(--ok)">${ic('check')}<span>${t('n_reportSent')}</span></div>`
+      : S.report === 'ask' ? `<div>${t('n_confirmReport')}</div><div class="acts"><button class="b sec" data-a="rcancel">${t('cancel')}</button><button class="b" data-a="rsend">${t('n_send')}</button></div>`
+      : `<button class="b full" data-a="rask">${t('n_sendReport')}</button>`}</div></div>${fs}</div>`;
+  if (pg === 'firstrun') {
+    const body = S.frStep === 'find'
+      ? `<div class="box"><b>${t('n_foundRigs')}</b>${S.scan ? `<div class="msg" style="display:flex;gap:8px;align-items:center;color:var(--text2)">${ic('refresh')}<span>${t('n_scanning')}</span></div>` : `<button class="navrow" data-a="pickrig">${ic('rig')}<span class="grow">Backyard rig<br><small style="color:var(--text2)">192.0.2.10</small></span>${ic('chev')}</button>`}</div>
+         <button class="b sec full" data-a="rescan">${ic('refresh')} ${t('n_rescan')}</button>
+         <div class="box"><b>${t('n_noRigYet')}</b><button class="b full" data-a="wizard">${t('n_startWizard')}</button></div>`
+      : `<div class="box"><b>${t('n_pickProfile')}</b>${['Main imaging','Wide field'].map(n => `<button class="navrow" data-a="pickprofile"><span class="grow">${n}</span>${ic('chev')}</button>`).join('')}</div>`;
+    return `<div class="pageover"><div class="appbar"><h3 style="padding-left:12px">${t(S.frStep === 'find' ? 'n_findRig' : 'n_pickProfile')}</h3></div><div class="scroll">${body}</div>${fs}</div>`;
+  }
+  if (pg === 'wizard') {
+    const n = S.wizStep, rows = ['n_wiz1','n_wiz2','n_wiz3','n_wiz4'];
+    return `<div class="pageover">${back('closepage', t('n_wizTitle'))}<div class="scroll"><div style="color:var(--text2)">${t('n_wizStep')} ${n} ${t('n_of')} 4</div>
+      <div class="box"><b>${t(rows[n-1])}</b><div>${t('n_wiz'+n+'b')}</div></div>
+      <div class="box">${rows.map((k,i) => `<div class="step ${i+1<n?'done':''} ${i+1===n?'now':''}"><span class="dot">${i+1<n?ic('tick'):(i+1)}</span>${t(k)}</div>`).join('')}</div>
+      <div class="acts">${n>1?`<button class="b sec" data-a="wback">${t('back')}</button>`:''}<button class="b" data-a="wnext">${t(n<4?'next':'n_finish')}</button></div></div>${fs}</div>`;
+  }
+  if (pg === 'preflight') {
+    const steps = ['n_pf1','n_pf2','n_pf3','n_pf4','n_pf5','n_pf6'], n = S.pfStep;
+    return `<div class="pageover">${back('closepage', t('n_pfTitle'))}<div class="scroll"><div class="box">${steps.map((k,i) => `<div class="step ${i<n?'done':''} ${i===n?'now':''}"><span class="dot">${i<n?ic('tick'):(i+1)}</span>${t(k)}</div>`).join('')}</div>
+      ${n<6 ? `<button class="b full" data-a="pfnext">${t('n_runStep')}</button>` : `<div>${t('n_pfReady')}</div><button class="b full" data-a="pfgo">${t('n_imaging')}</button>`}</div>${fs}</div>`;
+  }
+  if (pg === 'monitor') {
+    const aw = { monitor:'n_awakeMonitor', run:'n_awakeRun', never:'n_awakeNever' }[S.awake];
+    return `<div class="pageover">${back('closepage', t('n_monitor'))}<div class="scroll">
+      <div class="mon-top"><span class="big1">${t('ok')}</span><span style="color:var(--text2)">M42 · 24 / 60 · ${t('exposingDetail')}</span><span style="color:var(--text2)">${t('n_clock')} · ${t('n_battery')}</span></div>
+      <div class="awake">${ic('eye')}<span>${t(aw)}</span></div>
+      <div class="tiles"><div class="t"><small>${t('now')}</small><b>${t('exposing')} R</b><small>${t('upNext')}: R</small></div><div class="t"><small>${t('target')}</small><b>M42 · 62°</b></div><div class="t"><small>${t('weather')}</small><b>${t('safe')}</b></div></div>
+      <div class="tiles"><div class="t"><small>${t('guider')}</small><b>0.62″</b></div><div class="t"><small>${t('hfr')}</small><b>2.14</b></div><div class="t"><small>${t('stars')}</small><b>812</b></div></div>
+      <div class="curve" style="height:110px"><svg viewBox="0 0 300 100" preserveAspectRatio="none" aria-hidden="true"><path d="M0,90 Q150,-30 300,90" fill="none" stroke="#42A5F5" stroke-width="2"/><line x1="0" y1="70" x2="300" y2="70" stroke="#707070" stroke-dasharray="4 4"/></svg></div>
+      <div style="color:var(--text2)">${t('n_readOnly')}</div></div>${fs}</div>`;
+  }
+  return '';
 }
 function alarmHtml() {
-  return `
-    <div class="alarm" role="alertdialog" aria-label="Safety alarm">
-      <span class="ms shake" aria-hidden="true">warning</span>
-      <h3>Unsafe: rain</h3>
-      <p>The safety monitor reports rain. The plan is paused and the mount is still tracking.</p>
-      <div class="vib">${ms('vibration')}Vibrating and sounding until you answer</div>
-      <button class="b red full" data-a="abort" style="height:56px;font-size:16px">Emergency Abort</button>
-      <button class="b sec full" data-a="override">Override for 10 min</button>
-    </div>`;
+  return `<div class="alarm" role="alertdialog" aria-label="${t('unsafeTitle')}">${ic('warn').replace('class="ic"', 'class="ic shake"')}<h3>${t('unsafeTitle')}</h3><p>${t('unsafeBody')}</p>
+    <div class="vib">${ic('vib')}<span>${t('n_vib')}</span></div>
+    <button class="b red full abortb" data-hold="abort" style="min-height:56px"><i class="fill"></i><span>${t('abort')}</span></button><button class="b sec full" data-a="override">${t('override')}</button></div>`;
 }
 
 function render() {
-  phone.classList.toggle('ipad', S.device === 'ipad');
-  document.getElementById('holder').classList.toggle('wide', S.device === 'ipad');
-  document.getElementById('pillsGroup').hidden = S.device !== 'ipad';
-  document.getElementById('layoutGroup').hidden = S.device === 'ipad';
-  fit();
-  if (S.device === 'ipad') return renderIpad();
-  let h = `<div class="sb"><span>21:48</span><span style="display:flex;gap:6px;align-items:center">${ms('signal_cellular_alt')}${ms('wifi')}${ms('battery_5_bar')}</span></div><div class="notch"></div>`;
-  h += strip() + pills();
-  h += S.layout === 'A' ? layoutA() : layoutB();
-  if (S.scene === 'norig') {
-    const bottom = S.layout === 'A' ? 30 : 162;
-    const right = S.layout === 'A' ? 76 : 8;
-    h += `<div class="rigbar glass" style="bottom:${bottom}px;right:${right}px"><span>Rig not connected</span><button class="b" data-a="connect">Connect</button></div>`;
-  }
-  if (S.scene === 'settings') h += settingsPage();
-  if (S.scene === 'alarm') h += alarmHtml();
+  document.documentElement.style.setProperty('--ts', S.ts);
+  phone.className = `phone ${S.o} ${S.night ? 'night' : ''} ${S.ts > 1.3 ? 'big' : ''}`;
+  const L = S.o === 'l';
+  let h = `<div class="sb"><span>21:48</span><span>5G · 78%</span></div><div class="notch"></div>`;
+  h += `<div class="stage">${strip()}<div class="col">${cardHtml()}<div class="mid">${infoStack()}${S.panel ? `<div class="panel" role="region" aria-label="${t(S.panel==='dev'?'n_devWindow':S.panel)}">${panelBody()}</div>` : ''}</div></div>
+    ${!S.rig ? `<div class="banner glass" style="bottom:${L?12:170}px;${L?'right:90px':''}"><span>${t('n_notConnected')}</span><button class="b" data-a="connect">${t('n_connect')}</button></div>` : ''}
+    ${L ? landscapeRails() : ''}</div>`;
+  if (!L) h += portraitDeck();
+  h += pageHtml();
+  if (S.alarm) h += alarmHtml();
   h += '<div class="home"></div>';
-  phone.innerHTML = h;
-  phone.prepend(skyCanvas);
-  phone.classList.toggle('night', S.night);
-  wireStop();
+  phone.innerHTML = h; phone.prepend(frameCanvas());
+  const am = phone.querySelector('.modes [aria-pressed="true"]'); if (am) { const r = am.parentElement; r.scrollLeft = am.offsetLeft - (r.clientWidth - am.offsetWidth) / 2; }
+  wire(); fit(); syncUi(); audit();
 }
 
-function wireStop() {
+/* ---------- holds: STOP and Emergency Abort 2 s; shutter 0.6 s opens Monitor (the "Hold the shutter" comparison only) ---------- */
+function wire() {
   phone.querySelectorAll('.stopb').forEach(b => {
-  let t;
-  const cancel = () => { clearTimeout(t); b.classList.remove('holding'); };
-  b.addEventListener('pointerdown', e => { e.preventDefault(); b.classList.add('holding'); say('Hold to stop…');
-    t = setTimeout(() => { b.classList.remove('holding'); S.run = false; S.scene = S.scene === 'imaging' ? 'idle' : S.scene; render(); say('Emergency Stop fired. In this mock nothing moves.'); }, 2000); });
-  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, cancel));
+    let tm; const cancel = () => { clearTimeout(tm); b.classList.remove('holding'); };
+    b.addEventListener('pointerdown', e => { e.preventDefault(); b.classList.add('holding'); say(t('n_holdStop'));
+      tm = setTimeout(() => { b.classList.remove('holding'); S.run = false; S.paused = false; S.stopMsg = t('n_stopped'); render(); say('Emergency Stop fired. In this mock nothing moves.'); }, 2000); });
+    ['pointerup','pointerleave','pointercancel'].forEach(ev => b.addEventListener(ev, cancel));
   });
+  phone.querySelectorAll('[data-hold="abort"]').forEach(b => {
+    let tm; const cancel = () => { clearTimeout(tm); b.classList.remove('holding'); };
+    b.addEventListener('pointerdown', e => { e.preventDefault(); b.classList.add('holding'); say(t('n_holdStop'));
+      tm = setTimeout(() => { S.alarm = false; S.run = false; S.stopMsg = t('n_stopped'); render(); say('Emergency Abort fired. In this mock nothing moves.'); }, 2000); });
+    ['pointerup','pointerleave','pointercancel'].forEach(ev => b.addEventListener(ev, cancel));
+  });
+  const sh = phone.querySelector('.shutter');
+  if (sh) { let tm, fired = false;
+    sh.addEventListener('pointerdown', () => { fired = false; if (S.monitorFrom === 'hold' && S.run) tm = setTimeout(() => { fired = true; openMonitor(); }, 600); });
+    ['pointerup','pointerleave','pointercancel'].forEach(ev => sh.addEventListener(ev, () => clearTimeout(tm)));
+    sh.addEventListener('click', e => { if (fired) { e.stopImmediatePropagation(); e.preventDefault(); fired = false; } }, true); }
+  const z = phone.querySelector('#zoom');
+  if (z) { const pts = new Map(); let d0 = 0, z0 = 1;
+    const dist = () => { const [a,b] = [...pts.values()]; return Math.hypot(a.x-b.x, a.y-b.y); };
+    const set = v => { S.zoom = Math.min(6, Math.max(1, v)); const im = phone.querySelector('#zimg'); im.style.transform = `translate(-50%,-50%) scale(${S.zoom})`; z.querySelector('.zoomhint').textContent = `${t('n_pinch')} · ${Math.round(S.zoom*100)}%`; };
+    z.addEventListener('pointerdown', e => { pts.set(e.pointerId, {x:e.clientX, y:e.clientY}); if (pts.size === 2) { d0 = dist(); z0 = S.zoom; } });
+    z.addEventListener('pointermove', e => { if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, {x:e.clientX, y:e.clientY}); if (pts.size === 2 && d0) set(z0 * dist() / d0); });
+    ['pointerup','pointercancel'].forEach(ev => z.addEventListener(ev, e => { pts.delete(e.pointerId); d0 = 0; }));
+    z.addEventListener('wheel', e => { e.preventDefault(); set(S.zoom * (e.deltaY < 0 ? 1.1 : 1/1.1)); }, { passive:false });
+    z.addEventListener('dblclick', () => set(S.zoom > 1 ? 1 : 3)); }
+  const q = phone.querySelector('#q');
+  if (q) q.addEventListener('input', () => { S.procSearch = q.value; phone.querySelector('#results').innerHTML = results(q.value); });
 }
+function openMonitor() { S.panel = null; S.page = 'monitor'; render(); say('Monitor: a read-only view. STOP stays in reach.'); }
 
-function setScene(v) {
-  S.scene = v; S.grid = false; S.gps = true;
-  S.panel = v === 'focus' ? 'focus' : v === 'plan' ? 'plan' : null;
-  S.mode = v === 'focus' ? 'focus' : 'plan';
-  S.run = v !== 'norig' && v !== 'focus' && v !== 'plan';
-  syncSeg('sceneSeg', v); render(); say('');
-}
-function syncSeg(id, v) { document.querySelectorAll(`#${id} button`).forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v)); }
-
+/* ---------- actions ---------- */
+function openPanel(k) { S.panel = S.panel === k ? null : k; S.page = null; S.grid = false; }
 phone.addEventListener('click', e => {
   const m = e.target.closest('[data-mode]');
-  if (m) { const k = m.dataset.mode; S.grid = false; S.panel = (S.mode === k && S.panel) ? null : (k === 'preview' ? null : k); S.mode = k; render(); return; }
-  const a = e.target.closest('[data-a]'); if (!a) return;
+  if (m) { const k = m.dataset.mode; S.page = null; S.grid = false; S.panel = (S.mode === k && S.panel) ? null : (k === 'preview' && false ? null : k); S.mode = k; render(); return; }
+  const a = e.target.closest('[data-a]'); if (!a) return; const v = a.dataset.v;
   switch (a.dataset.a) {
-    case 'night': S.night = !S.night; syncSeg('nightSeg', S.night ? '1' : '0'); break;
-    case 'settings': setScene('settings'); return;
-    case 'back': setScene('idle'); return;
+    case 'night': S.night = !S.night; break;
+    case 'settings': S.page = 'settings'; S.panel = null; break;
+    case 'rigpage': S.page = 'rig'; break; case 'storage': S.page = 'storage'; break; case 'logs': S.page = 'logs'; break;
+    case 'closepage': S.page = null; S.report = null; break;
     case 'close': S.panel = null; break;
     case 'grid': S.grid = !S.grid; break;
     case 'chip': S.panel = S.panel ? null : S.mode; break;
-    case 'shutter': S.run = !S.run; say(S.mode === 'plan' ? (S.run ? 'Plan resumed.' : 'Pauses after the frame in hand. Hold 2 s to stop the run.') : (S.run ? 'Started.' : 'Stopped.')); break;
-    case 'gpsno': S.scene = 'idle'; syncSeg('sceneSeg', ''); say('Not now: asks again next session.'); break;
-    case 'gpsyes': S.gps = false; say('Sent this phone\'s location and time to the rig.'); break;
-    case 'abort': S.scene = 'idle'; S.run = false; say('Emergency Abort: the plan stopped and the mount parked (mock).'); syncSeg('sceneSeg', ''); break;
-    case 'override': S.scene = 'imaging'; say('Overridden for 10 minutes; the alarm returns if it\'s still unsafe.'); syncSeg('sceneSeg', 'imaging'); break;
-    case 'connect': say('Opens the Connect to your rig card over the rails.'); return;
-    case 'search': say('Simple search: sky objects, settings, modes, imaged targets.'); return;
-    case 'sky': say('Sky Map: the Sky Atlas with Tonight\'s Sky.'); return;
-    case 'library': say('Library: tonight\'s frames, pinch to zoom.'); return;
-    case 'info': say('Info: the last frame\'s facts, bottom left.'); return;
+    case 'sky': case 'info': case 'library': case 'search': case 'ara': openPanel(a.dataset.a); if (a.dataset.a === 'library') S.zoom = 1; break;
+    case 'dev': S.dev = v; S.panel = 'dev'; S.page = null; break;
+    case 'pick': S.sel = v; S.confirm = null; if (S.panel !== 'sky') { S.panel = 'sky'; S.skyTab = 'atlas'; } break;
+    case 'cask': S.confirm = S.sel; break; case 'ccancel': S.confirm = null; break;
+    case 'cstart': S.confirm = null; S.panel = null; S.page = 'preflight'; S.pfStep = 0; break;
+    case 'imagethis': S.planConfirm = true; break; case 'pcancel': S.planConfirm = false; break;
+    case 'pstart': S.planConfirm = false; S.panel = null; S.page = 'preflight'; S.pfStep = 0; break;
+    case 'preflight': S.page = 'preflight'; S.panel = null; S.pfStep = 0; break;
+    case 'pfnext': S.pfStep++; break;
+    case 'pfgo': S.page = null; S.run = true; S.paused = false; S.stopMsg = null; S.started = true; S.mode = 'plan'; break;
+    case 'gopolar': S.mode = 'polar'; S.panel = 'polar'; break;
+    case 'zin': S.zoom = Math.min(6, S.zoom * 1.5); break; case 'zout': S.zoom = Math.max(1, S.zoom / 1.5); break;
+    case 'shutter':
+      if (S.mode === 'plan' && S.run) { S.paused = !S.paused; say(S.paused ? t('n_pausedMsg') : t('n_resume')); }
+      else { S.run = !S.run; S.stopMsg = null; say(S.run ? 'Started.' : 'Stopped.'); } break;
+    case 'gpsno': S.gps = 'held'; break; case 'gpsyes': S.gps = 'sent'; break;
+    case 'override': S.alarm = false; say('Overridden for 10 minutes; the alarm returns if it is still unsafe.'); break;
+    case 'rask': S.report = 'ask'; break; case 'rcancel': S.report = null; break; case 'rsend': S.report = 'sent'; break;
+    case 'change': S.panel = null; S.page = 'firstrun'; S.frStep = 'find'; S.scan = false; break;
+    case 'rescan': S.scan = true; setTimeout(() => { S.scan = false; render(); }, 900); break;
+    case 'pickrig': S.frStep = 'profile'; break;
+    case 'pickprofile': S.page = null; S.rig = true; break;
+    case 'wizard': S.page = 'wizard'; S.wizStep = 1; break;
+    case 'wnext': if (S.wizStep < 4) S.wizStep++; else { S.page = 'firstrun'; S.frStep = 'profile'; } break;
+    case 'wback': S.wizStep--; break;
+    case 'monitor': openMonitor(); return;
+    case 'connect': S.page = 'firstrun'; S.frStep = 'find'; break;
+    case 'seg': {
+      if (S.panel === 'sky') S.skyTab = S.skyTab === 'atlas' ? 'tonight' : 'atlas';
+      else { a.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('on')); a.classList.add('on'); return; } break; }
+    case 'x': return;
   }
   render();
 });
 
-document.getElementById('layoutSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.layout = b.dataset.v; S.grid = false; syncSeg('layoutSeg', S.layout); render(); });
-document.getElementById('sceneSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setScene(b.dataset.v); });
-document.getElementById('deviceSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.device = b.dataset.v; S.panel = null; S.grid = false; syncSeg('deviceSeg', S.device); render(); say(S.device === 'ipad' ? 'iPad: Imaging, Location pill, Safety alarm and No rig are drawn; panels and Settings are not.' : ''); });
-document.getElementById('ipadPillsSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.ipadPills = b.dataset.v; syncSeg('ipadPillsSeg', S.ipadPills); render(); });
-document.getElementById('nightSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.night = b.dataset.v === '1'; syncSeg('nightSeg', b.dataset.v); render(); });
-
-function fit() {
-  const holder = document.getElementById('holder');
-  const [w, hh] = S.device === 'ipad' ? [1024, 768] : [390, 844];
-  const scale = Math.min(1, holder.clientWidth / w);
-  phone.style.transform = scale < 1 ? `scale(${scale})` : '';
-  holder.style.height = (hh * scale) + 'px';
+/* ---------- page controls ---------- */
+const seg$ = (id, fn) => document.getElementById(id).addEventListener('click', e => { const b = e.target.closest('button'); if (b) { fn(b.dataset.v); render(); } });
+seg$('oSeg', v => S.o = v); seg$('nSeg', v => S.night = v === '1'); seg$('tSeg', v => S.ts = +v);
+seg$('lSeg', v => { document.documentElement.lang = v === 'pt' ? 'pt-BR' : 'en'; buildGo(); buildMap(); });
+seg$('aSeg', v => S.awake = v); seg$('mSeg', v => S.monitorFrom = v);
+document.getElementById('bResume').onclick = () => { S.resume = 'refreshing'; render(); setTimeout(() => { S.resume = 'fresh'; render(); setTimeout(() => { S.resume = null; render(); }, 3000); }, 1200); };
+document.getElementById('bSession').onclick = () => { S.gps = 'ask'; render(); say('New session: the location question is back.'); };
+function syncUi() {
+  const mark = (id, v) => document.querySelectorAll(`#${id} button`).forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === String(v))));
+  mark('oSeg', S.o); mark('nSeg', S.night ? '1' : '0'); mark('tSeg', S.ts); mark('lSeg', T() ? 'pt' : 'en'); mark('aSeg', S.awake); mark('mSeg', S.monitorFrom);
 }
-window.addEventListener('resize', fit);
-render(); fit();
-</script>
 
+/* ---------- jump list and the story map ---------- */
+function reset() { Object.assign(S, { panel:null, page:null, run:true, paused:false, alarm:false, rig:true, confirm:null, planConfirm:false, report:null, resume:null, stopMsg:null, started:null, grid:false, mode:'plan', gps:'none', skyTab:'atlas' }); }
+const GO = {
+  glance:['Running night (glance)', () => {}],
+  preview:['Preview panel', () => { S.mode='preview'; S.panel='preview'; }], focus:['Focus panel', () => { S.mode='focus'; S.panel='focus'; }],
+  polar:['P.A. panel', () => { S.mode='polar'; S.panel='polar'; }], guider:['Guider panel', () => { S.mode='guider'; S.panel='guider'; }], plan:['Plan panel', () => { S.panel='plan'; }],
+  devwin:['Device window (from the strip)', () => { S.dev='camera'; S.panel='dev'; }],
+  sky:['Sky Atlas', () => { S.panel='sky'; }], tonight:['Tonight\'s Sky', () => { S.panel='sky'; S.skyTab='tonight'; }], confirm:['Image this, inline confirmation', () => { S.panel='sky'; S.confirm='M42'; }],
+  preflight:['Preflight step', () => { S.page='preflight'; S.pfStep=2; }], library:['Library with pinch zoom', () => { S.panel='library'; }], info:['Info (last frame facts)', () => { S.panel='info'; }],
+  search:['Simple search', () => { S.panel='search'; S.procSearch='m'; }], ara:['Ara sheet', () => { S.panel='ara'; }],
+  settings:['Simple Settings', () => { S.page='settings'; }], rig:['Settings, Rig', () => { S.page='rig'; }], storage:['Rig Storage', () => { S.page='storage'; }], logs:['Logs & bug report, inline confirm', () => { S.page='logs'; S.report='ask'; }],
+  firstrun:['First run: find the rig', () => { S.rig=false; S.page='firstrun'; S.frStep='find'; }], profile:['First run: pick a profile', () => { S.rig=false; S.page='firstrun'; S.frStep='profile'; }],
+  wizard:['Setup wizard', () => { S.page='wizard'; S.wizStep=2; }], locq:['Location and time question', () => { S.gps='ask'; }],
+  monitor:['Monitor', () => { S.page='monitor'; }], alarm:['Safety alarm', () => { S.alarm=true; }], norig:['First run, no rig yet', () => { S.rig=false; S.run=false; S.mode='preview'; }],
+};
+function go(k) { reset(); GO[k][1](); render(); document.getElementById('go').value = k; say(''); }
+function buildGo() { const sel = document.getElementById('go'); const cur = sel.value; sel.innerHTML = Object.entries(GO).map(([k,[l]]) => `<option value="${k}">${l}</option>`).join(''); sel.value = cur || 'glance'; }
+document.getElementById('go').onchange = e => go(e.target.value);
+const MAP = [
+  ['1','glance','Opens straight into Simple Mode; Settings has no Experimental toggle'], ['2','settings','No Full UI button on the strip or anywhere'], ['3','plan','No sequence editor or template mention on any screen'],
+  ['4',null,'No screen: iPad and desktop are unchanged'], ['5','glance','Switch Orientation: still Companion Mode'], ['6','firstrun','Find the rig, then pick a profile'],
+  ['7','wizard','Setup wizard from the first-run card'], ['8','locq','Question pill: Not now, Send'], ['9','locq','Not now, then Next session brings it back'],
+  ['10','glance','Frame fills the screen, controls on translucent overlays'], ['11','settings','STOP on the deck and over every page and panel'], ['12','glance','Hold STOP 2 s, ring fills'],
+  ['13','focus','All five sections in the deck row, device windows from the strip'], ['14','focus','Panel full width between card and deck'], ['15',null,'Audit line above: targets under 44 px'],
+  ['16','preflight','Preflight step by step'], ['17','confirm','Image this, then Preflight, then imaging'], ['18','glance','Plan square, last frame, pills, pause and stop'],
+  ['19','monitor','Monitor view, with the screen-awake pick'], ['20','library','Pinch, wheel, double tap or the buttons'], ['21','search','Search sky objects, settings, modes, imaged targets'],
+  ['22','sky','Sky Atlas and Tonight\'s Sky'], ['23, 24',null,'No stories with these numbers in the issue'], ['25','ara','Change rig and profile; versions'], ['26','settings','Simple Settings at phone width'],
+  ['27','storage','Rig Storage; Logs & bug report'], ['27a','glance','One card: camera status, then messages'], ['28','locq','Pills, never dialogs'], ['29','confirm','Inline confirmation in the owning block'],
+  ['30, 31','alarm','Takeover with sound and vibration note; Abort or Override'], ['32','glance','Button Return from background'], ['33','glance','Brightness: Night'], ['34','glance','Text size: 2x'],
+  ['35','glance','Language: pt-BR'], ['36',null,'Every control has an accessible name; DOM order is card, strip, panel, deck'], ['37, 38, 39, 40, 41, 42',null,'No screen (discovery rules, rig state, code layout, docs)'],
+];
+function buildMap() {
+  document.querySelector('#map tbody').innerHTML = MAP.map(([n,k,txt]) => `<tr><td>${n}</td><td>${k ? `<button data-go="${k}">${GO[k][0]}</button> ` : ''}${txt}</td></tr>`).join('');
+}
+document.getElementById('map').addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (b) go(b.dataset.go); });
+
+/* ---------- targets audit: every visible control at least 44 px both ways ---------- */
+function audit() {
+  const sc = parseFloat(phone.style.transform.replace(/[^0-9.]/g, '')) || 1, bad = [];
+  const els = [...phone.querySelectorAll('button, input, [data-a]')].filter(el => el.offsetParent !== null || el.getClientRects().length);
+  els.forEach(el => { const r = el.getBoundingClientRect(); if (r.width / sc < 43.5 || r.height / sc < 43.5) bad.push(`${el.getAttribute('aria-label') || el.textContent.trim().slice(0,14) || el.className} ${Math.round(r.width/sc)}x${Math.round(r.height/sc)}`); });
+  document.getElementById('audit').innerHTML = `Targets under 44 px on this screen: <b class="${bad.length ? 'bad' : ''}">${bad.length}</b> of ${els.length}${bad.length ? ' (' + bad.join('; ') + ')' : ''}`;
+}
+function fit() {
+  const holder = document.getElementById('holder'), [w,h] = S.o === 'p' ? [390,844] : [844,390];
+  const sc = Math.min(1, (document.body.clientWidth - 40) / (w + 24)); phone.style.transform = sc < 1 ? `scale(${sc})` : '';
+  holder.style.width = (w * sc + 24) + 'px'; holder.style.height = (h * sc + 24) + 'px'; holder.style.padding = '12px';
+}
+window.addEventListener('resize', () => { fit(); audit(); });
+
+/* url hash for sharing a state, e.g. #s=alarm&ts=2&lang=pt&night=1&o=l */
+const H = new URLSearchParams(location.hash.slice(1));
+if (H.get('lang') === 'pt') document.documentElement.lang = 'pt-BR';
+if (H.get('ts')) S.ts = +H.get('ts'); if (H.get('night')) S.night = H.get('night') === '1'; if (H.get('o')) S.o = H.get('o');
+if (H.get('bare')) document.body.classList.add('bare');
+buildGo(); buildMap(); go(GO[H.get('s')] ? H.get('s') : 'glance');
+</script>
+</body>
+</html>

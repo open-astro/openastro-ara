@@ -2858,6 +2858,21 @@ class AppLocalizationsPt extends AppLocalizations {
       'Calibrate first: it needs a calibration to measure against.';
 
   @override
+  String get guideSuggestExposure => 'Guide exposure';
+
+  @override
+  String get guideSuggestMinMoveRa => 'RA minimum move';
+
+  @override
+  String get guideSuggestMinMoveDec => 'Dec minimum move';
+
+  @override
+  String get guideSuggestDecBacklash => 'Dec backlash compensation';
+
+  @override
+  String get guideSuggestDecAlgorithm => 'Dec algorithm';
+
+  @override
   String get focusNudgeIn => 'Nudge in';
 
   @override
@@ -4921,9 +4936,9 @@ class AppLocalizationsPt extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count days',
-      one: '1 day',
-      zero: 'today',
+      other: '$count days old',
+      one: '1 day old',
+      zero: 'taken today',
     );
     return '$_temp0';
   }
@@ -4933,8 +4948,8 @@ class AppLocalizationsPt extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count weeks',
-      one: '1 week',
+      other: '$count weeks old',
+      one: '1 week old',
     );
     return '$_temp0';
   }
@@ -4944,8 +4959,8 @@ class AppLocalizationsPt extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count months',
-      one: '1 month',
+      other: '$count months old',
+      one: '1 month old',
     );
     return '$_temp0';
   }
@@ -4994,7 +5009,13 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String calibrationLibraryAge(String age, int frames) {
-    return '$age old · $frames frames';
+    String _temp0 = intl.Intl.pluralLogic(
+      frames,
+      locale: localeName,
+      other: '$frames frames',
+      one: '1 frame',
+    );
+    return '$age · $_temp0';
   }
 
   @override
@@ -5035,6 +5056,25 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get calibrationStartQueueNow => 'Start queue';
+
+  @override
+  String imagingMosaicHelp(int min, int max) {
+    return 'Ranks Tonight\'s Sky framing for a mosaic of this many tiles ($min–$max each way). 1×1 is a single frame.';
+  }
+
+  @override
+  String get imagingMosaicTilesAcross => 'Tonight\'s Sky mosaic tiles across';
+
+  @override
+  String get imagingMosaicTilesDown => 'Tonight\'s Sky mosaic tiles down';
+
+  @override
+  String tonightSkyMosaicFraming(int across, int down) {
+    return 'Framing for a $across×$down mosaic';
+  }
+
+  @override
+  String get libraryTagsCommaSeparated => 'Comma-separated';
 
   @override
   String get rigSetupTitle => 'Rig setup';
@@ -7979,6 +8019,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Calibre primeiro: ele precisa de uma calibração como referência.';
 
   @override
+  String get guideSuggestExposure => 'Exposição de guiagem';
+
+  @override
+  String get guideSuggestMinMoveRa => 'Movimento mínimo em AR';
+
+  @override
+  String get guideSuggestMinMoveDec => 'Movimento mínimo em Dec';
+
+  @override
+  String get guideSuggestDecBacklash => 'Compensação de folga em Dec';
+
+  @override
+  String get guideSuggestDecAlgorithm => 'Algoritmo de Dec';
+
+  @override
   String get focusNudgeIn => 'Mover para dentro';
 
   @override
@@ -10122,7 +10177,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String calibrationLibraryAge(String age, int frames) {
-    return '$age · $frames quadros';
+    String _temp0 = intl.Intl.pluralLogic(
+      frames,
+      locale: localeName,
+      other: '$frames quadros',
+      one: '1 quadro',
+    );
+    return '$age · $_temp0';
   }
 
   @override
@@ -10163,6 +10224,27 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get calibrationStartQueueNow => 'Iniciar fila';
+
+  @override
+  String imagingMosaicHelp(int min, int max) {
+    return 'Classifica o enquadramento do Céu desta noite para um mosaico com esta quantidade de painéis ($min–$max em cada direção). 1×1 é um único quadro.';
+  }
+
+  @override
+  String get imagingMosaicTilesAcross =>
+      'Painéis do mosaico na horizontal (Céu desta noite)';
+
+  @override
+  String get imagingMosaicTilesDown =>
+      'Painéis do mosaico na vertical (Céu desta noite)';
+
+  @override
+  String tonightSkyMosaicFraming(int across, int down) {
+    return 'Enquadramento para um mosaico $across×$down';
+  }
+
+  @override
+  String get libraryTagsCommaSeparated => 'Separadas por vírgula';
 
   @override
   String get rigSetupTitle => 'Configuração do setup';

@@ -11,6 +11,7 @@ import '../../theme/ara_colors.dart';
 import 'guide_camera_panel.dart' show GuideCameraView;
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
+import '../adaptive_controls.dart';
 
 Future<void> showGuidingAssistantDialog(BuildContext context) =>
     showDialog<void>(
@@ -225,7 +226,7 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Checkbox(
+                    AdaptiveCheckbox(
                       key: const Key('guiding-assistant-backlash'),
                       value: _measureBacklash,
                       visualDensity: VisualDensity.compact,

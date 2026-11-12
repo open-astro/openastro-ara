@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../state/sequencer/sequence_list_state.dart';
 import '../../theme/ara_colors.dart';
+import '../adaptive_controls.dart';
 
 /// §38.7 "New sequence" picker. Lists the active daemon's starting-point
 /// templates (from [sequenceTemplatesProvider]); the user picks one, names the
@@ -87,7 +88,7 @@ class _SequenceNewDialogState extends ConsumerState<SequenceNewDialog> {
         child: async.when(
           loading: () => const SizedBox(
             height: 120,
-            child: Center(child: CircularProgressIndicator()),
+            child: Center(child: AdaptiveProgressIndicator()),
           ),
           error: (e, st) {
             debugPrint('[sequencer] template list load failed: $e\n$st');
@@ -168,7 +169,7 @@ class _SequenceNewDialogState extends ConsumerState<SequenceNewDialog> {
               ? const SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2))
+                  child: AdaptiveProgressIndicator(strokeWidth: 2))
               : const Text('Create'),
         ),
       ],

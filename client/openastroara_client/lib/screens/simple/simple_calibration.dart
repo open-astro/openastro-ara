@@ -359,7 +359,7 @@ class SimpleCalibrationShutter extends ConsumerWidget {
     final running = simpleCalibrationProgress(ref) != null;
     return Column(
       mainAxisSize: MainAxisSize.min,
-      spacing: 4,
+      spacing: AraSpace.s4,
       children: [
         SimpleShutterButton(
           start: true,
@@ -569,6 +569,17 @@ bool _canShoot(WidgetRef ref) =>
     (ref.watch(cameraStatusProvider).value?.isConnected ?? false) &&
     simpleCalibrationProgress(ref) == null;
 
+/// Why the panel's buttons are off, in words (a dimmed button alone tells a
+/// screen reader nothing): the camera is not connected.
+Widget? _cameraOff(BuildContext context, WidgetRef ref) =>
+    (ref.watch(cameraStatusProvider).value?.isConnected ?? false)
+    ? null
+    : Text(
+        context.l10n.calibrationConnectCamera,
+        key: const Key('simple-calibration-camera-off'),
+        style: _dim,
+      );
+
 class _FlatsTab extends ConsumerWidget {
   const _FlatsTab();
 
@@ -645,6 +656,7 @@ class _FlatsTab extends ConsumerWidget {
           ),
           Text(l.calibrationReshootAllNote, style: _dim),
         ],
+        ?_cameraOff(context, ref),
       ],
     );
   }
@@ -718,8 +730,8 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
       for (final d in darks)
         if (now.difference(d.capturedUtc) > kSimpleLibraryOldAfter) d,
     };
-    final (String head, String? detail, bool ok) = switch (cover) {
-      null => (l.calibrationLibraryNoPlan, null, false),
+    final (String head, String? detail, bool? ok) = switch (cover) {
+      null => (l.calibrationLibraryNoPlan, null, null),
       _ when darks.isEmpty && bias.isEmpty => (
         l.calibrationLibraryEmpty,
         l.calibrationLibraryEmptyNote,
@@ -788,7 +800,11 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
                 head,
                 style: kSimpleText.copyWith(
                   fontWeight: FontWeight.w600,
-                  color: ok ? AraColors.accentConnected : AraColors.accentBusy,
+                  color: switch (ok) {
+                    null => AraColors.textSecondary,
+                    true => AraColors.accentConnected,
+                    false => AraColors.accentBusy,
+                  },
                 ),
               ),
               if (detail != null) Text(detail, style: _dim),
@@ -906,6 +922,10 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
               ),
             ],
           ),
+          // With nothing picked by hand the Build button's label already says
+          // "Connect the camera first."; saying it again would be read twice.
+          if (byHand || job.caption != l.calibrationConnectCamera)
+            ?_cameraOff(context, ref),
         ],
       ],
     );

@@ -4947,6 +4947,36 @@ abstract class AppLocalizations {
   /// **'Calibrate first: it needs a calibration to measure against.'**
   String get guideToolCalibrateFirst;
 
+  /// No description provided for @guideSuggestExposure.
+  ///
+  /// In en, this message translates to:
+  /// **'Guide exposure'**
+  String get guideSuggestExposure;
+
+  /// No description provided for @guideSuggestMinMoveRa.
+  ///
+  /// In en, this message translates to:
+  /// **'RA minimum move'**
+  String get guideSuggestMinMoveRa;
+
+  /// No description provided for @guideSuggestMinMoveDec.
+  ///
+  /// In en, this message translates to:
+  /// **'Dec minimum move'**
+  String get guideSuggestMinMoveDec;
+
+  /// No description provided for @guideSuggestDecBacklash.
+  ///
+  /// In en, this message translates to:
+  /// **'Dec backlash compensation'**
+  String get guideSuggestDecBacklash;
+
+  /// No description provided for @guideSuggestDecAlgorithm.
+  ///
+  /// In en, this message translates to:
+  /// **'Dec algorithm'**
+  String get guideSuggestDecAlgorithm;
+
   /// No description provided for @focusNudgeIn.
   ///
   /// In en, this message translates to:
@@ -8367,22 +8397,22 @@ abstract class AppLocalizations {
   /// **'Reshoot all keeps what you have and shoots every filter again.'**
   String get calibrationReshootAllNote;
 
-  /// Calibration library: how old a set is, in days (followed by 'old')
+  /// Calibration library: how old a set is, in days, with 'old' (or 'taken today')
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, =0{today} =1{1 day} other{{count} days}}'**
+  /// **'{count, plural, =0{taken today} =1{1 day old} other{{count} days old}}'**
   String calibrationAgeDays(int count);
 
   /// Calibration library: how old a set is, in weeks
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, =1{1 week} other{{count} weeks}}'**
+  /// **'{count, plural, =1{1 week old} other{{count} weeks old}}'**
   String calibrationAgeWeeks(int count);
 
   /// Calibration library: how old a set is, in months
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, =1{1 month} other{{count} months}}'**
+  /// **'{count, plural, =1{1 month old} other{{count} months old}}'**
   String calibrationAgeMonths(int count);
 
   /// Calibration library: a set's camera gain
@@ -8448,7 +8478,7 @@ abstract class AppLocalizations {
   /// Calibration library row: how old the set is and how many frames it holds
   ///
   /// In en, this message translates to:
-  /// **'{age} old · {frames} frames'**
+  /// **'{age} · {frames, plural, =1{1 frame} other{{frames} frames}}'**
   String calibrationLibraryAge(String age, int frames);
 
   /// Calibration library: the outlined pill of a dark set older than six months
@@ -8516,6 +8546,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Start queue'**
   String get calibrationStartQueueNow;
+
+  /// Settings, Imaging defaults: caption above the two Tonight's Sky mosaic size rows; min and max are the allowed tiles per side
+  ///
+  /// In en, this message translates to:
+  /// **'Ranks Tonight\'s Sky framing for a mosaic of this many tiles ({min}–{max} each way). 1×1 is a single frame.'**
+  String imagingMosaicHelp(int min, int max);
+
+  /// Settings, Imaging defaults: row label, how many mosaic tiles wide Tonight's Sky ranks the framing for
+  ///
+  /// In en, this message translates to:
+  /// **'Tonight\'s Sky mosaic tiles across'**
+  String get imagingMosaicTilesAcross;
+
+  /// Settings, Imaging defaults: row label, how many mosaic tiles tall Tonight's Sky ranks the framing for
+  ///
+  /// In en, this message translates to:
+  /// **'Tonight\'s Sky mosaic tiles down'**
+  String get imagingMosaicTilesDown;
+
+  /// Tonight's Sky panel: line under the header when the ranking assumes a mosaic, e.g. Framing for a 2×3 mosaic
+  ///
+  /// In en, this message translates to:
+  /// **'Framing for a {across}×{down} mosaic'**
+  String tonightSkyMosaicFraming(int across, int down);
+
+  /// Image library, Tag selected frames dialog: helper text under the Add tags and Remove tags fields (type several tags separated by commas)
+  ///
+  /// In en, this message translates to:
+  /// **'Comma-separated'**
+  String get libraryTagsCommaSeparated;
 
   /// Simple Mode: title of the first-time Rig setup sheet and of its Settings menu row
   ///

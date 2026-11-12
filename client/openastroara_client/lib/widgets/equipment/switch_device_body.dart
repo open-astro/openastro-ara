@@ -6,6 +6,7 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../help_icon.dart';
 import 'switch_port_layout.dart';
+import '../adaptive_controls.dart';
 
 /// Writes [value] to [port]. Resolves **true** only when the write actually
 /// committed; false when it was refused (safety interlock), rejected by the
@@ -619,7 +620,7 @@ class _LevelCardState extends State<_LevelCard> {
                         thumbShape:
                             const RoundSliderThumbShape(enabledThumbRadius: 7),
                       ),
-                      child: Slider(
+                      child: AdaptiveSlider(
                         min: port.min,
                         max: port.max,
                         // Snap to the device's step, or to whole steps when the

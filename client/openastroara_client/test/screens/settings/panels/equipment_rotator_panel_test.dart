@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -111,6 +112,13 @@ void main() {
         isTrue,
         reason: api.calls.toString());
   });
+
+  testWidgets('the sky angle checkbox is the iOS checkbox on iOS and Material on macOS', (tester) async {
+    await _pump(tester, _status());
+    final ios = Theme.of(tester.element(find.byType(EquipmentRotatorPanel))).platform == TargetPlatform.iOS;
+    expect(find.byType(CupertinoCheckbox), ios ? findsOneWidget : findsNothing);
+    expect(find.byType(Checkbox), findsOneWidget);
+  }, variant: TargetPlatformVariant({TargetPlatform.iOS, TargetPlatform.macOS}));
 
   testWidgets('Sync sends sky_angle_deg', (tester) async {
     final api = await _pump(tester, _status());

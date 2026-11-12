@@ -33,6 +33,7 @@ import 'theme/ara_theme.dart';
 import 'widgets/night_filter.dart';
 import 'widgets/night_hotkey.dart';
 import 'widgets/sky_atlas/linux_planetarium_overlay.dart';
+import 'widgets/adaptive_controls.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -186,7 +187,7 @@ class _RootRouter extends ConsumerWidget {
           ? shell
           : const LaunchProfileScreen(),
       loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
+          const Scaffold(body: Center(child: AdaptiveProgressIndicator())),
       error: (e, st) {
         // Log internal details for debug; UI shows a generic message so
         // exception text can't leak into the user-facing surface.

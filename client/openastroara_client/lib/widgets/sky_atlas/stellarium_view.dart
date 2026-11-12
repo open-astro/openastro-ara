@@ -40,6 +40,7 @@ import 'planetarium_search_listener.dart';
 import 'rotation_assist_panel.dart';
 import 'tonight_sky_panel.dart';
 import '../../state/simple_messages_state.dart';
+import '../adaptive_controls.dart';
 
 /// §36 Planetarium — the embedded Stellarium Web Engine (AGPL; see
 /// `assets/stellarium/LICENSE-AGPL-3.0.txt`), rendered in the platform's **native
@@ -873,7 +874,7 @@ class _Loading extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const ColoredBox(
     color: AraColors.bgPrimary,
-    child: Center(child: CircularProgressIndicator()),
+    child: Center(child: AdaptiveProgressIndicator()),
   );
 }
 
