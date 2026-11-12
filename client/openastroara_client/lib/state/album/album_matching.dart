@@ -90,7 +90,8 @@ class CardStats {
 /// Per-object stats for a Book, keyed by object id; an object no frame
 /// contains has no entry. A frame with pointing and scale credits every object
 /// it contains; one without falls back to its target name.
-Map<String, CardStats> aggregateBook(Iterable<AlbumFrame> frames, List<PlanningDso> book) {
+Map<String, CardStats> aggregateBook(Iterable<AlbumFrame> frames, List<PlanningDso> book,
+    {double? siteLongitudeDeg}) {
   final epoch = DateTime.utc(0);
   final ordered = frames.toList()
     // frameId breaks capture-time ties so the order doesn't depend on the reply's.
@@ -107,11 +108,11 @@ Map<String, CardStats> aggregateBook(Iterable<AlbumFrame> frames, List<PlanningD
     }
   }
   return {
-    for (final MapEntry(key: id, value: fs) in hits.entries) id: _stats(fs),
+    for (final MapEntry(key: id, value: fs) in hits.entries) id: _stats(fs, siteLongitudeDeg),
   };
 }
 
-CardStats _stats(List<AlbumFrame> fs) {
+CardStats _stats(List<AlbumFrame> fs, double? siteLongitudeDeg) {
   final filters = <String>[];
   for (final f in fs) {
     final name = f.filterName;
@@ -122,19 +123,24 @@ CardStats _stats(List<AlbumFrame> fs) {
     integrationHours: fs.fold(0.0, (h, f) => h + f.exposureSeconds) / 3600,
     firstCaptureUtc: fs.map((f) => f.capturedUtc).nonNulls.firstOrNull,
     filters: filters,
-    nights: albumNights(fs),
+    nights: albumNights(fs, siteLongitudeDeg: siteLongitudeDeg),
   );
 }
 
-/// [frames] grouped by Night (the `preflightNightKey` noon rule on the
-/// device's local time), newest first.
-// shortcut: device time zone, not the site's; the client has no zone database. Upgrade if a
-// remote device in another zone splits Nights wrongly.
-List<AlbumNight> albumNights(Iterable<AlbumFrame> frames) {
+/// [frames] grouped by Night (the `preflightNightKey` noon rule), newest first.
+///
+/// The clock the rule reads is the site's: with [siteLongitudeDeg] (from the profile's site) it is
+/// UTC plus the solar offset, longitude / 15 h. The client has no zone database (the profile's
+/// IANA zone name cannot be turned into an offset here), so the longitude wins; without a site
+/// the device's local time stands in.
+List<AlbumNight> albumNights(Iterable<AlbumFrame> frames, {double? siteLongitudeDeg}) {
+  DateTime siteClock(DateTime utc) => siteLongitudeDeg == null
+      ? utc.toLocal()
+      : utc.add(Duration(minutes: (siteLongitudeDeg * 4).round())).copyWith(isUtc: false);
   final byNight = <String, List<AlbumFrame>>{};
   for (final f in frames) {
     final t = f.capturedUtc;
-    if (t != null) byNight.putIfAbsent(preflightNightKey(t.toLocal()), () => []).add(f);
+    if (t != null) byNight.putIfAbsent(preflightNightKey(siteClock(t)), () => []).add(f);
   }
   final keys = byNight.keys.toList()..sort((a, b) => b.compareTo(a));
   return [

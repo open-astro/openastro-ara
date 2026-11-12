@@ -13,6 +13,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../services/dso_catalog_service.dart';
 import '../sky_atlas/dso_catalog_state.dart';
+import '../sky_atlas/site_location_state.dart';
 import 'album_frame.dart';
 import 'album_matching.dart';
 
@@ -164,5 +165,7 @@ class AlbumBookView {
 final albumBookProvider = FutureProvider.family<AlbumBookView, AlbumBook>((ref, book) async {
   final objects = bookObjects(await ref.watch(bundledCatalogProvider.future), book);
   final collection = await ref.watch(albumFramesProvider.future);
-  return AlbumBookView(objects: objects, stats: aggregateBook(collection.frames.values, objects));
+  // The site's longitude dates the Nights; no site (offline, none set) falls back to the device.
+  final site = await ref.watch(siteLocationProvider.future).then<SiteLocation?>((s) => s, onError: (_) => null);
+  return AlbumBookView(objects: objects, stats: aggregateBook(collection.frames.values, objects, siteLongitudeDeg: site?.longitudeDeg));
 });

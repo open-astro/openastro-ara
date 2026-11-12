@@ -98,7 +98,7 @@ The collection cache is decided in [ADR 0001](../adr/0001-collection-cache-is-a-
 | frame count | lights that contain the object |
 | integration hours | sum of `exposure_seconds` of those lights ([#1498](https://github.com/open-astro/openastro-ara/issues/1498): all lights, any filter, any rating) |
 | first capture | min `captured_utc` |
-| nights | lights grouped by Night: `captured_utc` in the device's local time zone (the client has no zone database), anything before local noon belongs to the previous evening, the `preflightNightKey` rule. Limit: a device in another zone than the site can split one observing night into two Nights. Per Night: light count, the most common `exposure_seconds` (the "sub"), hours |
+| nights | lights grouped by Night: `captured_utc` on the site's clock, anything before local noon belongs to the previous evening, the `preflightNightKey` rule. The client has no zone database, so the site's clock is UTC plus the solar offset of the profile's site longitude (longitude / 15 h; the longitude wins over the profile's zone name); with no site read, the device's local time. Limit: a site whose civil zone differs from its solar offset can place a late light on the wrong side of noon. Per Night: light count, the most common `exposure_seconds` (the "sub"), hours |
 | filters used | distinct `filter_name`, in first-seen order |
 | tier | none below 1 light; bronze at 1 light; silver at 1 h; gold at 5 h. Derived, never stored, never drops (the cache keeps every light) |
 
