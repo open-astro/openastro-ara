@@ -8367,22 +8367,22 @@ abstract class AppLocalizations {
   /// **'Reshoot all keeps what you have and shoots every filter again.'**
   String get calibrationReshootAllNote;
 
-  /// Calibration library: how old a set is, in days (followed by 'old')
+  /// Calibration library: how old a set is, in days, with 'old' (or 'taken today')
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, =0{today} =1{1 day} other{{count} days}}'**
+  /// **'{count, plural, =0{taken today} =1{1 day old} other{{count} days old}}'**
   String calibrationAgeDays(int count);
 
   /// Calibration library: how old a set is, in weeks
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, =1{1 week} other{{count} weeks}}'**
+  /// **'{count, plural, =1{1 week old} other{{count} weeks old}}'**
   String calibrationAgeWeeks(int count);
 
   /// Calibration library: how old a set is, in months
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, =1{1 month} other{{count} months}}'**
+  /// **'{count, plural, =1{1 month old} other{{count} months old}}'**
   String calibrationAgeMonths(int count);
 
   /// Calibration library: a set's camera gain
@@ -8448,7 +8448,7 @@ abstract class AppLocalizations {
   /// Calibration library row: how old the set is and how many frames it holds
   ///
   /// In en, this message translates to:
-  /// **'{age} old · {frames} frames'**
+  /// **'{age} · {frames, plural, =1{1 frame} other{{frames} frames}}'**
   String calibrationLibraryAge(String age, int frames);
 
   /// Calibration library: the outlined pill of a dark set older than six months

@@ -193,13 +193,43 @@ void main() {
       ],
     })));
     await _pump(tester, _status(), offsets: offsets);
-    expect(find.text('+41 · R² 0.93 · Before 12'), findsOneWidget);
+    expect(find.text('+41 · Fit R² 0.93 · Before +12'), findsOneWidget);
     final save = find.byKey(const Key('settings-offsets-save'));
     await tester.ensureVisible(save);
     await tester.tap(save);
     await tester.pump();
     expect(offsets.calls, ['save']);
     expect(find.byKey(const Key('settings-offsets-discard')), findsOneWidget);
+  });
+
+  testWidgets('an unnamed slot and a focus drift warning read from the catalogue, the warning with its icon', (tester) async {
+    final offsets = _Offsets(FilterOffsetLive(
+        calibration: FilterOffsetCalibration.fromJson(const {
+      'state': 'complete', 'reference_position': 0, 'reference_name': 'L', 'run_index': 2, 'run_count': 2,
+      'drift_warning': true, 'reference_first_position': 100, 'reference_second_position': 140, 'cfz_steps': 20,
+      'filters': [
+        {'position': 0, 'name': 'L', 'status': 'measured', 'offset': 0, 'r_squared': 0.98, 'previous_offset': 0},
+        {'position': 3, 'name': '', 'status': 'measured', 'offset': 5, 'r_squared': 0.9, 'previous_offset': 1},
+      ],
+    })));
+    await _pump(tester, _status(), offsets: offsets);
+    expect(find.text('Slot 3'), findsOneWidget);
+    final warning = find.byIcon(Icons.warning_amber_rounded);
+    await tester.ensureVisible(warning);
+    expect(warning, findsOneWidget);
+  });
+
+  testWidgets('a negative focus offset reads with the real minus sign, both now and before', (tester) async {
+    final offsets = _Offsets(FilterOffsetLive(
+        calibration: FilterOffsetCalibration.fromJson(const {
+      'state': 'complete', 'reference_position': 0, 'reference_name': 'L', 'run_index': 2, 'run_count': 2,
+      'filters': [
+        {'position': 0, 'name': 'L', 'status': 'measured', 'offset': 0, 'r_squared': 0.98, 'previous_offset': 0},
+        {'position': 1, 'name': 'Hα', 'status': 'measured', 'offset': -41, 'r_squared': 0.93, 'previous_offset': -12},
+      ],
+    })));
+    await _pump(tester, _status(), offsets: offsets);
+    expect(find.text('−41 · Fit R² 0.93 · Before −12'), findsOneWidget);
   });
 
   testWidgets('the first-connect home policy toggle is shown and flips the setting (#1075)',

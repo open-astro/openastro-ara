@@ -375,7 +375,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     });
     ref.listenManual(sequenceRunStateProvider, (_, _) => syncAwaiting(),
         fireImmediately: true);
-    // The calibration run is never the selected sequence: its own poll.
+    // A calibration run started outside the queue is polled on its own too (it is not always the selected sequence).
     ref.listenManual(simpleCalibrationRunStateProvider, (_, _) => syncAwaiting());
     // #1756 — a Guider start that failed after calibration began: the pill a quick failure shows.
     ref.listenManual(guideStartLateFailureProvider, (_, failed) {

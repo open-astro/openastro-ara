@@ -4921,9 +4921,9 @@ class AppLocalizationsEn extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count days',
-      one: '1 day',
-      zero: 'today',
+      other: '$count days old',
+      one: '1 day old',
+      zero: 'taken today',
     );
     return '$_temp0';
   }
@@ -4933,8 +4933,8 @@ class AppLocalizationsEn extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count weeks',
-      one: '1 week',
+      other: '$count weeks old',
+      one: '1 week old',
     );
     return '$_temp0';
   }
@@ -4944,8 +4944,8 @@ class AppLocalizationsEn extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '$count months',
-      one: '1 month',
+      other: '$count months old',
+      one: '1 month old',
     );
     return '$_temp0';
   }
@@ -4994,7 +4994,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String calibrationLibraryAge(String age, int frames) {
-    return '$age old · $frames frames';
+    String _temp0 = intl.Intl.pluralLogic(
+      frames,
+      locale: localeName,
+      other: '$frames frames',
+      one: '1 frame',
+    );
+    return '$age · $_temp0';
   }
 
   @override

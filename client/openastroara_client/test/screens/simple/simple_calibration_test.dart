@@ -473,6 +473,12 @@ void main() {
       expect(button(tester).whyOff, 'Connect the camera first.');
     });
 
+    testWidgets('a disconnected camera: the panel says why its buttons are off, in words', (tester) async {
+      await _pump(tester, [_session()], camera: false, panel: true, child: panelView());
+      expect(find.byKey(const Key('simple-calibration-camera-off')), findsOneWidget);
+      expect(find.text('Connect the camera first.'), findsWidgets);
+    });
+
     testWidgets('while the Plan images, the shutter puts the flats in its queue after the targets', (tester) async {
       final (c, cal, seq, run) = await _pump(tester, [_session()], panel: true, plan: _queued(), child: shutter());
       seq.bodies['queue-1'] = _container('Queue', [_container('NGC 7000')]);
@@ -519,6 +525,38 @@ void main() {
         expect(find.text('Covers your plan'), findsOneWidget);
         expect(find.textContaining('3 weeks old · 30 frames'), findsWidgets);
         expect(find.textContaining('ASI2600MM'), findsOneWidget, reason: 'the library belongs to the camera');
+      });
+
+      testWidgets('a set built today reads "taken today", and one frame is not "1 frames"', (tester) async {
+        await library(tester, [
+          DarkLibraryEntry(id: 'n', exposureSeconds: 300, gain: 100, temperatureC: -10, frameCount: 1,
+              capturedUtc: DateTime.now().toUtc(), fileSizeBytes: 1),
+        ]);
+        expect(find.textContaining('taken today · 1 frame'), findsOneWidget);
+        expect(find.textContaining('today old'), findsNothing);
+      });
+
+      testWidgets('no plan queued is not a problem: the head is dim, not amber', (tester) async {
+        final (c, _, _, _) = await _pump(tester, [_session()], child: panelView(), overrides: [
+          simpleCalibrationTabProvider.overrideWith(_DarksTab.new),
+        ]);
+        c.read(simpleRunPlanProvider.notifier).load(const []);
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('simple-calibration-library-cover')), findsOneWidget);
+        final head = tester.widget<Text>(find.descendant(
+            of: find.byKey(const Key('simple-calibration-library-cover')), matching: find.byType(Text)).first);
+        expect(head.style?.color, AraColors.textSecondary);
+      });
+
+      testWidgets('Darks & bias with the camera off says "Connect the camera first." once, with nothing picked and after a hand pick', (tester) async {
+        await _pump(tester, [_session()], camera: false, child: panelView(), overrides: [
+          simpleCalibrationTabProvider.overrideWith(_DarksTab.new),
+        ]);
+        await tester.pumpAndSettle();
+        expect(find.text('Connect the camera first.'), findsOneWidget);
+        await tester.tap(find.byKey(const Key('simple-calibration-bias')));
+        await tester.pumpAndSettle();
+        expect(find.text('Connect the camera first.'), findsOneWidget, reason: 'after a hand pick the button reads Build, so the caption gives the reason');
       });
 
       testWidgets('the library is the camera the rig names, and a set from before cameras were recorded says so', (tester) async {
