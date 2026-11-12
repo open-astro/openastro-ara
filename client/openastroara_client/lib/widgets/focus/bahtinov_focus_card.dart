@@ -303,8 +303,18 @@ Future<bool> confirmMaskRemoved(BuildContext context) async {
           'Take the mask off the front of the telescope before you image. '
           'Left on, it puts spikes on every star and costs light.'),
       actions: [
-        adaptiveDialogAction(context, onPressed: () => Navigator.of(context).pop(false), child: const Text('Not yet')),
-        adaptiveDialogAction(context, filled: true, isDefault: true, onPressed: () => Navigator.of(context).pop(true), child: const Text('Mask removed')),
+        adaptiveDialogAction(
+          context,
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Not yet'),
+        ),
+        adaptiveDialogAction(
+          context,
+          filled: true,
+          isDefault: true,
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Mask removed'),
+        ),
       ],
     ),
   );
