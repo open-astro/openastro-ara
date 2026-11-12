@@ -220,7 +220,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         } catch (Exception ex) {
             LogRunFailed(ex, id);
             run.State = SequenceRunState.Failed;
-            await EmitAsync("sequence.failed", id, run);
+            await EmitAsync(WsEventCatalog.SequenceFailed, id, run);
             return;
         }
 
@@ -228,7 +228,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             // No body / undeserializable: fail rather than spin over nothing. The
             // §38.5 validator normally enforces body validity at persist time.
             run.State = SequenceRunState.Failed;
-            await EmitAsync("sequence.failed", id, run);
+            await EmitAsync(WsEventCatalog.SequenceFailed, id, run);
             return;
         }
 
@@ -1095,7 +1095,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
             }
             run.SetReason(null, null);
             run.State = SequenceRunState.Failed;
-            await EmitAsync("sequence.failed", sequenceId, run);
+            await EmitAsync(WsEventCatalog.SequenceFailed, sequenceId, run);
         } finally {
             if (captureSession is Guid endSid) {
                 // Scope off first (a late fire-and-forget register outside the

@@ -15,6 +15,7 @@
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
@@ -34,10 +35,10 @@ namespace OpenAstroAra.Server.Services;
 // the daemon can only run a single calibration capture at a time (one camera, "no active capture" precondition).
 public sealed partial class GuiderService {
 
-    public const string DarkLibraryStartedEvent = "guider.dark_library.started";
-    public const string DarkLibraryProgressEvent = "guider.dark_library.progress";
-    public const string DarkLibraryCompleteEvent = "guider.dark_library.complete";
-    public const string DarkLibraryFailedEvent = "guider.dark_library.failed";
+    public const string DarkLibraryStartedEvent = WsEventCatalog.GuiderDarkLibraryStarted;
+    public const string DarkLibraryProgressEvent = WsEventCatalog.GuiderDarkLibraryProgress;
+    public const string DarkLibraryCompleteEvent = WsEventCatalog.GuiderDarkLibraryComplete;
+    public const string DarkLibraryFailedEvent = WsEventCatalog.GuiderDarkLibraryFailed;
 
     // §63.8 progress poll cadence — 1 s is plenty for a multi-minute build's progress bar and keeps the poll
     // load trivial (one short-lived RPC connection per tick).
@@ -375,10 +376,10 @@ public sealed partial class GuiderService {
     // ── §63.6 guider-e-4c-b-2: defect-map (bad-pixel) build — mirrors the dark-library build above, sharing the
     // single calibration-build gate + the calibration WS-emit helper. ──
 
-    public const string DefectMapStartedEvent = "guider.defect_map.started";
-    public const string DefectMapProgressEvent = "guider.defect_map.progress";
-    public const string DefectMapCompleteEvent = "guider.defect_map.complete";
-    public const string DefectMapFailedEvent = "guider.defect_map.failed";
+    public const string DefectMapStartedEvent = WsEventCatalog.GuiderDefectMapStarted;
+    public const string DefectMapProgressEvent = WsEventCatalog.GuiderDefectMapProgress;
+    public const string DefectMapCompleteEvent = WsEventCatalog.GuiderDefectMapComplete;
+    public const string DefectMapFailedEvent = WsEventCatalog.GuiderDefectMapFailed;
 
     public Task<OperationAcceptedDto> BuildDefectMapDarksAsync(
             BuildDefectMapDarksRequestDto request, string? idempotencyKey, CancellationToken ct) {

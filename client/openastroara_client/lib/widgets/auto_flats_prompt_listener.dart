@@ -37,8 +37,9 @@ class _AutoFlatsPromptListenerState
   @override
   Widget build(BuildContext context) {
     final simple =
-        (ref.watch(simpleModeProvider).value ?? false) &&
-        (ref.watch(simpleModeFeatureProvider).value ?? false);
+        ref.watch(companionModeProvider) ||
+        ((ref.watch(simpleModeProvider).value ?? false) &&
+            (ref.watch(simpleModeFeatureProvider).value ?? false));
     ref.listen(wsEventsProvider, (previous, next) {
       final event = next.asData?.value;
       if (event == null || event.type != 'sequence.auto_flats_prompt') return;
@@ -69,7 +70,7 @@ class _AutoFlatsPromptListenerState
       if (!mounted) return;
       ref.read(simpleMessagesProvider.notifier).show(
         SimpleMessageKind.error,
-        friendlyError(context.l10n, e, action: 'send the calibration choice'),
+        friendlyError(context.l10n, e, action: context.l10n.actionSendCalibrationChoice),
       );
     }
   }
@@ -100,7 +101,7 @@ class _AutoFlatsPromptListenerState
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                   content:
-                      Text(friendlyError(context.l10n, e, action: 'send the calibration choice'))));
+                      Text(friendlyError(context.l10n, e, action: context.l10n.actionSendCalibrationChoice))));
             }
           },
         ),

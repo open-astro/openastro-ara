@@ -94,7 +94,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task ConnectAsync_to_an_unreachable_device_ends_in_Error() {
-            using var svc = new FilterWheelService();
+            using var svc = new FilterWheelService { DeviceFactory = _ => throw new InvalidOperationException("connection refused") };
             var dead = new DiscoveredDeviceDto(
                 "unit-test-uid", "Unreachable FW", DeviceType.FilterWheel, "127.0.0.1", "127.0.0.1", 1, 0, false);
             await svc.ConnectAsync(new ConnectRequestDto(dead), null, CancellationToken.None);
@@ -106,7 +106,7 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task DisconnectAsync_after_a_failed_connect_returns_to_Disconnected() {
-            using var svc = new FilterWheelService();
+            using var svc = new FilterWheelService { DeviceFactory = _ => throw new InvalidOperationException("connection refused") };
             var dead = new DiscoveredDeviceDto("uid", "U", DeviceType.FilterWheel, "127.0.0.1", "127.0.0.1", 1, 0, false);
             await svc.ConnectAsync(new ConnectRequestDto(dead), null, CancellationToken.None);
             await PollUntilNotConnectingAsync(svc);

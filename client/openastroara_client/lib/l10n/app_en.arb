@@ -31,15 +31,6 @@
       }
     }
   },
-  "statusMoreSemantics": "{count, plural, =1{1 more status} other{{count} more statuses}}",
-  "@statusMoreSemantics": {
-    "description": "Simple Mode status pills: screen reader label for the +N fold past three pills; a tap opens the first one folded",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "pillsDismiss": "Dismiss",
   "@pillsDismiss": {
     "description": "Simple Mode message pills: tooltip of the close button on an error message"
@@ -111,6 +102,10 @@
   "deviceCouldntSaveTarget": "Couldn't save the target",
   "@deviceCouldntSaveTarget": {
     "description": "Error message when the cooler target could not be saved to the profile"
+  },
+  "deviceDewHeater": "Dew heater",
+  "@deviceDewHeater": {
+    "description": "Camera window: the row that switches the camera's own anti-dew heater; also the name in its error pill and for a screen reader"
   },
   "deviceCouldntChangeCooler": "Couldn't change the cooler",
   "@deviceCouldntChangeCooler": {
@@ -236,18 +231,6 @@
   "@deviceSlot": {
     "description": "Filter wheel window: a slot the wheel gives no name, by its number",
     "placeholders": {
-      "position": {
-        "type": "int"
-      }
-    }
-  },
-  "deviceFilterInSlot": "{filter} (slot {position})",
-  "@deviceFilterInSlot": {
-    "description": "Filter wheel window, Filter row: the filter in place and its slot number, as the full UI shows it",
-    "placeholders": {
-      "filter": {
-        "type": "String"
-      },
       "position": {
         "type": "int"
       }
@@ -448,6 +431,106 @@
   "deviceCouldntStopDome": "Couldn't stop the dome",
   "@deviceCouldntStopDome": {
     "description": "Error message when the dome refused Stop"
+  },
+  "deviceFollowsMount": "Follows the mount",
+  "@deviceFollowsMount": {
+    "description": "Dome window: the On / Off row that makes the dome keep its slit in front of the telescope"
+  },
+  "deviceFollowingMount": "Following the mount…",
+  "@deviceFollowingMount": {
+    "description": "Dome window: the moving line while the dome turns to follow the mount"
+  },
+  "deviceStoppedFollowingMount": "The dome no longer follows the mount",
+  "@deviceStoppedFollowingMount": {
+    "description": "Message pill: a dial turn, Park or Home turned following the mount off"
+  },
+  "deviceCouldntFollowMount": "Couldn't change whether the dome follows the mount",
+  "@deviceCouldntFollowMount": {
+    "description": "Error message when the daemon refused the Follows the mount On / Off"
+  },
+  "domePanelFollowingHeader": "Following the mount",
+  "@domePanelFollowingHeader": {
+    "description": "Full UI Dome panel: the section header above the Follow the mount switch and its note"
+  },
+  "domePanelReadingSettings": "Reading…",
+  "@domePanelReadingSettings": {
+    "description": "Full UI Dome panel: shown while the dome settings load"
+  },
+  "domePanelCouldntSave": "Couldn't save the dome",
+  "@domePanelCouldntSave": {
+    "description": "Full UI Dome panel: error lead when the daemon refused a geometry change (the reason follows after a colon)"
+  },
+  "domePanelFollowNote": "With this on, Ara turns the dome so its slit stays in front of the telescope: after a mount slew, after a meridian flip, and while tracking whenever the slit falls behind by more than the tolerance. Turning the dome by hand, parking it, sending it home, stopping it or disconnecting it turns this off, and so do an emergency stop, an unsafe-weather reaction and a geometry that puts the telescope outside the dome. The dome must be able to turn to an azimuth.",
+  "@domePanelFollowNote": {
+    "description": "Full UI Dome panel: the note under Following the mount; names what turns the dome and what turns following off"
+  },
+  "domePanelFollowMount": "Follow the mount",
+  "@domePanelFollowMount": {
+    "description": "Full UI Dome panel: the switch that makes the dome keep its slit in front of the telescope"
+  },
+  "domePanelFollowNeedsAzimuth": "Connect a dome that can turn to an azimuth first",
+  "@domePanelFollowNeedsAzimuth": {
+    "description": "Full UI Dome panel: hint under Follow the mount when the connected dome cannot turn to an azimuth"
+  },
+  "domePanelGeometryHeader": "Geometry",
+  "@domePanelGeometryHeader": {
+    "description": "Full UI Dome panel: the section header above the dome and mount measurements"
+  },
+  "domePanelMountType": "Mount type",
+  "@domePanelMountType": {
+    "description": "Full UI Dome panel: the mount type picker in the dome geometry"
+  },
+  "domePanelMountGermanEquatorial": "German equatorial",
+  "@domePanelMountGermanEquatorial": {
+    "description": "Full UI Dome panel: mount type choice; a German equatorial mount adds its axis offsets to the slit math"
+  },
+  "domePanelMountForkOnWedge": "Fork or alt-az (on a wedge)",
+  "@domePanelMountForkOnWedge": {
+    "description": "Full UI Dome panel: mount type choice for a fork or alt-az mount on an equatorial wedge"
+  },
+  "domePanelDomeRadius": "Dome radius (mm)",
+  "@domePanelDomeRadius": {
+    "description": "Full UI Dome panel: dome geometry field, in millimeters"
+  },
+  "domePanelScopeNorth": "Scope north of dome center (mm)",
+  "@domePanelScopeNorth": {
+    "description": "Full UI Dome panel: dome geometry field, in millimeters; negative is south"
+  },
+  "domePanelScopeEast": "Scope east of dome center (mm)",
+  "@domePanelScopeEast": {
+    "description": "Full UI Dome panel: dome geometry field, in millimeters; negative is west"
+  },
+  "domePanelScopeAbove": "Scope above dome center (mm)",
+  "@domePanelScopeAbove": {
+    "description": "Full UI Dome panel: dome geometry field, in millimeters; negative is below"
+  },
+  "domePanelMountAxisLength": "Mount axis length (mm)",
+  "@domePanelMountAxisLength": {
+    "description": "Full UI Dome panel: German equatorial mount geometry field, in millimeters"
+  },
+  "domePanelMountLateralOffset": "Mount lateral offset (mm)",
+  "@domePanelMountLateralOffset": {
+    "description": "Full UI Dome panel: German equatorial mount geometry field, in millimeters"
+  },
+  "domePanelDecAxisOffset": "Dec axis horizontal offset (mm)",
+  "@domePanelDecAxisOffset": {
+    "description": "Full UI Dome panel: German equatorial mount geometry field, in millimeters"
+  },
+  "domePanelAzimuthTolerance": "Azimuth tolerance (°)",
+  "@domePanelAzimuthTolerance": {
+    "description": "Full UI Dome panel: how far the slit may fall behind before the dome turns again, in degrees"
+  },
+  "domePanelTurnDuringSlews": "Turn during mount slews",
+  "@domePanelTurnDuringSlews": {
+    "description": "Full UI Dome panel: switch; the dome starts turning while the mount is still slewing"
+  },
+  "domePanelTurnDuringSlewsHint": "Off: the dome turns when the mount has finished slewing",
+  "@domePanelTurnDuringSlewsHint": {
+    "description": "Full UI Dome panel: hint under Turn during mount slews"
+  },
+  "domePanelSlewing": "Slewing…",
+  "@domePanelSlewing": {
+    "description": "Full UI Dome panel: the moving line while the dome turns on its own (not following the mount)"
   },
   "deviceDomeReadFailed": "Dome read failed — check the device.",
   "@deviceDomeReadFailed": {
@@ -1735,9 +1818,13 @@
   "@shellSettings": {
     "description": "Simple Mode top bar: Settings button tooltip; title of the Settings page"
   },
-  "shellSky": "Sky",
+  "shellSky": "Sky Map",
   "@shellSky": {
     "description": "Simple Mode left rail button: show the sky (planetarium)"
+  },
+  "shellStats": "Stats",
+  "@shellStats": {
+    "description": "Simple Mode left rail button: open the Stats page"
   },
   "shellInfo": "Info",
   "@shellInfo": {
@@ -3807,6 +3894,10 @@
   "@albumBookCaldwell": {
     "description": "Sky Album: Book switch segment for the Caldwell catalog"
   },
+  "albumBookRcw": "RCW",
+  "@albumBookRcw": {
+    "description": "Sky Album: Book switch segment for the RCW catalog of southern emission nebulae (Rodgers, Campbell and Whiteoak); the abbreviation is the name in every language"
+  },
   "dsoTypeGalaxy": "Galaxy",
   "@dsoTypeGalaxy": {
     "description": "Deep-sky object type on a Sky Album card back's bio line"
@@ -3981,6 +4072,10 @@
         "type": "String"
       }
     }
+  },
+  "albumArtCreditOpenFailed": "Couldn't open the license page",
+  "@albumArtCreditOpenFailed": {
+    "description": "Sky Album card back: snackbar when the Art credit's licence link cannot be opened in a browser"
   },
   "shellAlbum": "Sky Album",
   "@shellAlbum": {
@@ -4940,6 +5035,8 @@
   "@pointingOpenOptics": {"description": "Mount window button after an optics error"},
   "pointingOpenCamera": "Camera settings",
   "@pointingOpenCamera": {"description": "Mount window button when no camera can take the frame"},
+  "pointingCameraBusy": "The camera is taking another frame. Check again once it finishes.",
+  "@pointingCameraBusy": {"description": "Mount window Check failure: the main camera is busy with an exposure; no settings fix it, so no button"},
   "devicePlanRunningHomeAnyway": "A plan is running. Send the mount home anyway?",
   "@devicePlanRunningHomeAnyway": {"description": "Mount window: asked when Home is tapped while a plan runs"},
   "deviceHomeAnyway": "Home anyway",
@@ -5414,6 +5511,248 @@
   "monitorLinkLostShort": "Lost contact with the rig",
   "@monitorLinkLostShort": {
     "description": "Monitor: what a screen reader announces when the link to the rig is lost (no age)"
+  },
+  "actionAbortCapture": "abort the capture",
+  "@actionAbortCapture": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionApplyToFrames": "apply that to the selected frames",
+  "@actionApplyToFrames": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionBuildCalibration": "build the calibration",
+  "@actionBuildCalibration": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionCancelCopy": "cancel the copy",
+  "@actionCancelCopy": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionCheckDisk": "check the disk for frames",
+  "@actionCheckDisk": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionCleanPreviewCache": "clean the preview cache",
+  "@actionCleanPreviewCache": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionCleanSkyPhotoCache": "clean the sky photo cache",
+  "@actionCleanSkyPhotoCache": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionClearCeiling": "clear the ceiling",
+  "@actionClearCeiling": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionConfirmFrame": "confirm the frame arrived",
+  "@actionConfirmFrame": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionConnect": "connect",
+  "@actionConnect": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionDownload": "download that",
+  "@actionDownload": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionExportFrames": "export those frames",
+  "@actionExportFrames": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionExportStats": "export the stats",
+  "@actionExportStats": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionGenerateCalibration": "generate the calibration",
+  "@actionGenerateCalibration": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionListFolders": "list the folders",
+  "@actionListFolders": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadDarkLibrary": "load the dark library",
+  "@actionLoadDarkLibrary": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadFaults": "load the fault history",
+  "@actionLoadFaults": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadFrames": "load the frames",
+  "@actionLoadFrames": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadLibrary": "load your library",
+  "@actionLoadLibrary": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadLogs": "load the logs",
+  "@actionLoadLogs": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadNotifications": "load your notifications",
+  "@actionLoadNotifications": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadOlderLogs": "load older logs",
+  "@actionLoadOlderLogs": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadPreview": "load the preview",
+  "@actionLoadPreview": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadSessions": "load the sessions",
+  "@actionLoadSessions": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLoadSettings": "load your saved settings",
+  "@actionLoadSettings": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionLookForEquipment": "look for equipment",
+  "@actionLookForEquipment": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionPushGuiderProfile": "push the guider profile",
+  "@actionPushGuiderProfile": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionPushTime": "push the time",
+  "@actionPushTime": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionRateFrame": "rate the frame",
+  "@actionRateFrame": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionReadCamera": "read the camera",
+  "@actionReadCamera": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionReadClock": "read the server clock state",
+  "@actionReadClock": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionReadServerDisks": "read the server's disks",
+  "@actionReadServerDisks": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionRearmSafety": "re-arm safety",
+  "@actionRearmSafety": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionRefitSkyModel": "refit the sky model",
+  "@actionRefitSkyModel": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionRestartRig": "restart your rig",
+  "@actionRestartRig": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionResumeSequence": "resume the sequence",
+  "@actionResumeSequence": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionSave": "save that",
+  "@actionSave": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionSaveHorizon": "save the horizon skyline",
+  "@actionSaveHorizon": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionSaveSlotLabels": "save the slot labels",
+  "@actionSaveSlotLabels": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionSendCalibrationChoice": "send the calibration choice",
+  "@actionSendCalibrationChoice": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionSequenceAction": "do that sequence action",
+  "@actionSequenceAction": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionSolveFrame": "solve the frame",
+  "@actionSolveFrame": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionStarDatabase": "work out which star database this rig needs",
+  "@actionStarDatabase": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionStartCopy": "start the copy",
+  "@actionStartCopy": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionTakeExposure": "take that exposure",
+  "@actionTakeExposure": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionTakeVerification": "take the verification image",
+  "@actionTakeVerification": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionUpdateTag": "update the tag",
+  "@actionUpdateTag": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionBackUpEntry": "back up that entry",
+  "@actionBackUpEntry": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionKeepBackupGoing": "keep the backup stream going",
+  "@actionKeepBackupGoing": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionPushGpsFix": "push the GPS fix",
+  "@actionPushGpsFix": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionRebuildStats": "rebuild the stats catalog",
+  "@actionRebuildStats": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "actionStartCopyingFrames": "start copying frames",
+  "@actionStartCopyingFrames": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "backupStreamHiccup": "Backup stream hiccup: {reason}",
+  "@backupStreamHiccup": {
+    "description": "Backup stream panel: transient transport trouble; reason is the already-readable error sentence",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "backupEntryFailing": "Backup of {id} failing: {reason}",
+  "@backupEntryFailing": {
+    "description": "Backup stream panel: one frame keeps failing; id is the frame id, reason the readable cause",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "gpsFixRefused": "Fix read, but the rig refused it: {reason}",
+  "@gpsFixRefused": {
+    "description": "GPS on this computer: the receiver gave a fix but the rig rejected the push; reason is the readable error sentence",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "gpsDaemonTooOld": " — update Ara Server on the rig; this version predates GPS on this computer.",
+  "@gpsDaemonTooOld": {
+    "description": "GPS on this computer: appended to the refused-push message when the rig answers 422 (daemon too old); starts with a dash and a space"
   },
   "calibrationDarks": "Darks",
   "@calibrationDarks": {
@@ -6109,5 +6448,77 @@
   "calibrationStartQueueNow": "Start queue",
   "@calibrationStartQueueNow": {
     "description": "Question pill action: start the queue (targets first, then the calibration frames)"
+  },
+  "rigSetupTitle": "Rig setup",
+  "@rigSetupTitle": {
+    "description": "Simple Mode: title of the first-time Rig setup sheet and of its Settings menu row"
+  },
+  "rigSetupIntro": "Before a first night, Ara needs a few facts about this rig.",
+  "@rigSetupIntro": {
+    "description": "Simple Mode: one line under the Rig setup title"
+  },
+  "rigSetupSite": "Site",
+  "@rigSetupSite": {
+    "description": "Rig setup line: where the rig stands"
+  },
+  "rigSetupSiteMissing": "Latitude and longitude are not set.",
+  "@rigSetupSiteMissing": {
+    "description": "Rig setup line: what is missing for the site"
+  },
+  "rigSetupSiteAction": "Set site",
+  "@rigSetupSiteAction": {
+    "description": "Rig setup: button that opens the place where latitude and longitude are set"
+  },
+  "rigSetupOptics": "Main camera and telescope",
+  "@rigSetupOptics": {
+    "description": "Rig setup line: the sensor and the focal length"
+  },
+  "rigSetupOpticsMissing": "The sensor or the focal length is not set.",
+  "@rigSetupOpticsMissing": {
+    "description": "Rig setup line: what is missing for the main camera and telescope"
+  },
+  "rigSetupOpticsAction": "Set up optics",
+  "@rigSetupOpticsAction": {
+    "description": "Rig setup: button that opens the optics panel"
+  },
+  "rigSetupGuideScope": "Guide scope",
+  "@rigSetupGuideScope": {
+    "description": "Rig setup line: the guide focal length and the Guide Camera's pixel size"
+  },
+  "rigSetupGuideScopeMissing": "The guide focal length or the Guide Camera's pixel size is not set.",
+  "@rigSetupGuideScopeMissing": {
+    "description": "Rig setup line: what is missing for the guide scope"
+  },
+  "rigSetupGuideScopeAction": "Set guide scope",
+  "@rigSetupGuideScopeAction": {
+    "description": "Rig setup: button that opens the guide focal length and pixel size"
+  },
+  "rigSetupCalibration": "Guider calibration",
+  "@rigSetupCalibration": {
+    "description": "Rig setup line: the Guider's calibration"
+  },
+  "rigSetupCalibrationMissing": "Not calibrated yet, or Ara says to calibrate again.",
+  "@rigSetupCalibrationMissing": {
+    "description": "Rig setup line: what is missing for the Guider calibration"
+  },
+  "rigSetupCalibrationConnect": "Connect the Guider to check its calibration.",
+  "@rigSetupCalibrationConnect": {
+    "description": "Rig setup line: the Guider is not connected, so its calibration cannot be checked"
+  },
+  "rigSetupCalibrationAction": "Open Guider mode",
+  "@rigSetupCalibrationAction": {
+    "description": "Rig setup: button that closes the sheet and shows Guider mode"
+  },
+  "rigSetupItemDone": "Done",
+  "@rigSetupItemDone": {
+    "description": "Rig setup: what a screen reader says for a line with a tick"
+  },
+  "rigSetupNotNow": "Not now",
+  "@rigSetupNotNow": {
+    "description": "Rig setup: closes the sheet and keeps it closed for this rig on this device"
+  },
+  "rigSetupDonePill": "Rig set up",
+  "@rigSetupDonePill": {
+    "description": "Simple Mode result pill when the last Rig setup item is done"
   }
 }

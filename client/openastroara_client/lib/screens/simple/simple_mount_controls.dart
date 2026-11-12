@@ -761,13 +761,19 @@ class SimplePointingNotifier extends Notifier<SimplePointing> {
           : SimplePointing(phase: SimplePointingPhase.result, result: r);
     } on PlateSolveException catch (e) {
       if (!ref.mounted) return;
-      // 409 is the camera; a 422 names the optics or the solver (#1650).
+      // A 409 is the camera, and its reason says what fixes it: only a missing
+      // camera is fixed in Camera settings; a busy one is waited out and a
+      // stuck gate needs a restart (#1786). A 422 names the optics or the
+      // solver (#1650).
       final m = e.message.toLowerCase();
+      final busy = e.statusCode == 409 && e.reason == 'camera-busy';
       state = SimplePointing(
         phase: SimplePointingPhase.error,
-        error: e.message,
+        error: busy ? l10n.pointingCameraBusy : e.message,
         fix: e.statusCode == 409
-            ? ('eq.camera', l10n.pointingOpenCamera)
+            ? (e.reason == 'camera-busy' || e.reason == 'gate-stuck'
+                  ? null
+                  : ('eq.camera', l10n.pointingOpenCamera))
             : m.contains('focal') || m.contains('pixel') || m.contains('optic')
             ? ('img.optics', l10n.pointingOpenOptics)
             : ('img.platesolve', l10n.pointingOpenPlateSolving),
