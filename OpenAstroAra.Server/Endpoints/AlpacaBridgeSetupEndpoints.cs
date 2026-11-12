@@ -62,7 +62,7 @@ public static partial class AlpacaBridgeSetupEndpoints {
                 await AddDeviceAsync(host, port, body, alpaca, ct))
             .Produces<AlpacaBridgeAddDeviceResponseDto>(StatusCodes.Status200OK)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status409Conflict) // a stale session, refused by SessionGuard's middleware
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status502BadGateway)
             .WithName("AddAlpacaBridgeDevice")

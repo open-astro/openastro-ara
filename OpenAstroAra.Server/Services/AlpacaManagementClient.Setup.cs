@@ -163,6 +163,7 @@ public sealed partial class AlpacaManagementClient {
 
     // shortcut: top-level string values under a secret-sounding key only; nested secrets (a record list) are not
     // searched. Upgrade when AlpacaBridge gets a driver whose secret sits in a nested record.
+    // Every length is blanked: a one-letter value garbles the text, but a minimum would let a short secret through.
     private static string Redact(string text, JsonElement request) {
         if (request.ValueKind != JsonValueKind.Object) {
             return text;
