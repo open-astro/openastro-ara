@@ -2166,37 +2166,45 @@ void main() {
   for (final (size, scale) in const [
     (Size(1024, 768), 2.0),
     (Size(932, 430), 1.0),
+    (Size(390, 844), 2.0),
   ]) {
     testWidgets(
       'at $size and ${scale}x text the plan squares stay clear of the right rail on every Screen',
       (tester) async {
         tester.platformDispatcher.textScaleFactorTestValue = scale;
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-        await _pump(tester, size, plan: squaresRun);
+        final c = await _pump(tester, size, plan: squaresRun);
         // Focus and Polar align leave out: their Bahtinov row overflows at 2x on its own.
-        for (final mode in const ['preview', 'guide', 'calibration', 'plan']) {
-          await pickMode(tester, mode);
-          if (mode == 'plan') {
-            await tester.tap(
-              find.byKey(const Key('simple-settings')),
-            ); // puts Plan's sheet away
-            await tester.pump();
-          }
-          final squares = tester.getRect(
-            find.byKey(const Key('simple-run-tracker')),
+        // Picked through the state: on a phone at 2x the mode grid runs past the screen's left edge.
+        for (final mode in const [
+          SimpleModeScreen.preview,
+          SimpleModeScreen.guide,
+          SimpleModeScreen.calibration,
+          SimpleModeScreen.plan,
+        ]) {
+          c.read(simpleShowingProvider.notifier).pick(mode);
+          await tester.pump();
+          // The painted square, not the tracker's box: a box narrower than a
+          // square lets the square paint past it.
+          final square = tester.getRect(
+            find.descendant(
+              of: find.byKey(const Key('simple-run-tracker')),
+              matching: find.byType(InkWell),
+            ),
           );
+          expect(tester.takeException(), isNull, reason: '$mode: overflow');
           final rail = _panelOf(
             tester,
             find.byKey(const Key('simple-shutter')),
           );
           expect(
-            squares.overlaps(rail),
+            square.overlaps(rail),
             isFalse,
-            reason: '$mode: squares $squares, rail $rail',
+            reason: '$mode: square $square, rail $rail',
           );
           final stop = tester.getRect(find.byType(EmergencyStopButton));
           expect(
-            squares.bottom,
+            square.bottom,
             closeTo(stop.top - kSimpleInset, 0.01),
             reason: '$mode: still just above Stop',
           );

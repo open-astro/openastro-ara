@@ -1138,6 +1138,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final squaresBesideRail =
         rightRailTop + _rightRailHeight + AraSpace.s8 >
         height - aboveStop - kSimplePlanSquareHeight * simpleRailScale(context);
+    // Beside it they still hold one square (a rail wide): a phone at 2x text.
+    final squaresLeft = squaresBesideRail
+        ? math.min(width / 2, width - kSimpleInset * 2 - railWidth * 2)
+        : width / 2;
     final queuePanel = SimpleScreen.of(SimpleModeScreen.plan).panel(screenHost);
     final runSheet =
         sheet != null &&
@@ -1534,14 +1538,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // The plan squares hug the bottom-right corner, just
                               // above the bottom row, growing left over the right
                               // half (the Info tiles have the left); beside the
-                              // rail when it reaches down that far. Not before the
-                              // rail is measured, so they never slide there.
+                              // rail when it reaches down that far, one square wide
+                              // at least. Not before the rail is measured, so they
+                              // never slide there.
                               if (!runSheet &&
                                   !preflightPanel &&
                                   _rightRailHeight > 0)
                                 AnimatedPositioned(
                                   key: const ValueKey('plan-squares'),
-                                  left: width / 2,
+                                  left: squaresLeft,
                                   right: squaresBesideRail
                                       ? kSimpleInset * 2 + railWidth
                                       : kSimpleInset,
