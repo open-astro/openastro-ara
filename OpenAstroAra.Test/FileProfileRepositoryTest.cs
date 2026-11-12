@@ -290,6 +290,8 @@ public class FileProfileRepositoryTest {
         stored.Settings.DiagnosticsMode.Should().NotBeNull();
         stored.Settings.Phd2.Should().NotBeNull();
         stored.Settings.EquipmentConnection.Should().NotBeNull();
+        // #1689 — a profile saved before the dome block: the defaults, not following.
+        stored.Settings.Dome.Should().Be(DomeSettingsDto.Default);
     }
 
     [Test]
