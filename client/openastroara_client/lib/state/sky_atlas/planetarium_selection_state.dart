@@ -22,7 +22,8 @@ class PlanetariumSelection {
   final DateTime? rise;
 
   /// Its catalog designations ("M 42", "NGC 1976", "NAME Orion Nebula"), for
-  /// the plan square's tag.
+  /// the plan square's tag and the plan header, which names the first catalog
+  /// one: the designation a search row or Card picked it by.
   final List<String> designations;
 
   const PlanetariumSelection({

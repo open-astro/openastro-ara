@@ -799,6 +799,25 @@ public sealed record AlpacaDeviceNamesResponseDto(
     // entries the server reports no UniqueID for are left out. Additive; older clients ignore it.
     IReadOnlyDictionary<string, string>? UniqueIds = null);
 
+/// <summary>#1580 — AlpacaBridge's device catalog as the wizard shows it: the drivers that are built in
+/// (<c>available</c> true), grouped by device type. Each driver (and so each field schema) is AlpacaBridge's own
+/// JSON, passed through unchanged (its keys are AlpacaBridge's camelCase, not Ara's snake_case). Empty when the
+/// server is not an AlpacaBridge with a catalog, or does not answer: the client then offers no Add.</summary>
+public sealed record AlpacaBridgeCatalogResponseDto(IReadOnlyList<AlpacaBridgeDeviceTypeDto> DeviceTypes);
+
+/// <summary>#1580 — the drivers of one device type (lowercase token, e.g. <c>camera</c>).</summary>
+public sealed record AlpacaBridgeDeviceTypeDto(string DeviceType, IReadOnlyList<System.Text.Json.JsonElement> Drivers);
+
+/// <summary>#1580 — the cameras plugged in for one vendor; empty for a vendor with no lister.</summary>
+public sealed record AlpacaBridgeCamerasResponseDto(IReadOnlyList<AlpacaBridgeCameraDto> Cameras);
+
+/// <summary>#1580 — one attached camera: AlpacaBridge's enumeration index, model name and serial.</summary>
+public sealed record AlpacaBridgeCameraDto(int Index, string Name, string Serial);
+
+/// <summary>#1580 — a device was added. <c>Message</c> is AlpacaBridge's own text; <c>Warning</c> is its warning
+/// when it registered the device with one, else null.</summary>
+public sealed record AlpacaBridgeAddDeviceResponseDto(string Message, string? Warning);
+
 /// <summary>Per-slot device-name lists as the guider daemon offers them (its own equipment-dialog strings).
 /// Values are passed back verbatim to the §63.17 apply path; empty lists mean the daemon offers nothing for
 /// that slot (e.g. no rotator support compiled in).</summary>

@@ -113,6 +113,8 @@ import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
+import 'package:openastroara/state/settings/settings_search.dart'
+    show buildSearchIndex;
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/theme/ara_metrics.dart' show AraBlur, AraSpace;
 import 'package:openastroara/widgets/imaging/frame_viewer.dart' show FrameViewer;
@@ -123,6 +125,7 @@ import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/services/night_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
+import 'package:openastroara/state/rig_setup_state.dart';
 import 'package:openastroara/state/guider/guider_build_activity_state.dart';
 import 'package:openastroara/state/simple_calibration_state.dart';
 import 'package:openastroara/screens/simple/simple_message_pills.dart';
@@ -148,6 +151,16 @@ class _MemPrefs extends SimpleModePrefsService {
   Future<bool> load() async => value;
   @override
   Future<void> save(bool enabled) async => value = enabled;
+}
+
+/// Both prefs off; records every save.
+class _SavingPrefs extends SimpleModePrefsService {
+  _SavingPrefs(this.saved);
+  final List<bool> saved;
+  @override
+  Future<bool> load() async => false;
+  @override
+  Future<void> save(bool enabled) async => saved.add(enabled);
 }
 
 /// Simple Mode is entered from the full UI's Live tab (the switch button
@@ -186,17 +199,22 @@ final _someSteps = [
 
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
-    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases, Locale? locale}) async {
+    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases, Locale? locale, SimpleModePrefsService? modePrefs, TargetPlatform platform = TargetPlatform.linux}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final container = ProviderContainer(overrides: [
-    simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
+    // flutter_test runs as Android: not a phone unless a test says so.
+    companionPlatformProvider.overrideWithValue(platform),
+    simpleModePrefsProvider.overrideWithValue(modePrefs ?? _MemPrefs()),
     if (feature) simpleModeFeaturePrefsProvider.overrideWithValue(_MemPrefs()),
     if (pier) simplePermanentPierPrefsProvider.overrideWithValue(_MemPrefs()..value = false),
     if (linkUp) serverLinkUpProvider.overrideWithValue(true),
     // The Connect to your rig card scans while the link is down: no network in a test.
     discoveredServersProvider.overrideWith((ref) => const Stream<AraServer>.empty()),
+    // The Rig setup reads the profile once the link is up: no network either. The #1562
+    // group sets the facts itself; rig_setup_state_test covers the reads.
+    rigSetupHydratedProvider.overrideWith((ref) async => false),
     ...gear,
     if (versions != null) daemonVersionsProvider.overrideWith((ref) async => versions),
     if (starDatabases != null)
@@ -1521,7 +1539,7 @@ void main() {
     const m31 = PlanningDso(
         id: 'NGC0224', name: 'Andromeda Galaxy', type: 'G', magnitude: 3.4, raDeg: 10.68, decDeg: 41.27,
         messierNum: 31, aliases: ['M 31']);
-    tester.widget<SkyAlbumScreen>(find.byType(SkyAlbumScreen)).onImageTarget(m31);
+    tester.widget<SkyAlbumScreen>(find.byType(SkyAlbumScreen)).onImageTarget(m31, 'M 31');
     await tester.pumpAndSettle();
 
     expect(find.byType(SkyAlbumScreen), findsNothing, reason: 'the album hands over and closes');
@@ -1530,6 +1548,7 @@ void main() {
     final sel = container.read(planetariumSelectionProvider)!;
     expect(sel.name, 'Andromeda Galaxy');
     expect(sel.decJ2000Deg, 41.27);
+    expect(find.text('M 31 (Andromeda Galaxy)'), findsOneWidget, reason: "the plan names the card's label, not NGC 224");
     expect(container.read(simpleRunProvider).targets, isEmpty, reason: 'nothing queued');
   });
 
@@ -2496,6 +2515,8 @@ void main() {
     await tester.pump();
     expect(c.read(planetariumSearchProvider), 'M 31');
     expect(c.read(planetariumSelectionProvider), isNotNull, reason: "the hit is Plan's target at once");
+    expect(c.read(planetariumSelectionProvider)!.designations.first, 'M 31',
+        reason: "the row's designation leads, so Plan's header names it as the row did");
     expect(find.byKey(const Key('simple-planetarium')), findsOneWidget, reason: 'the sky, pointed at it');
   });
 
@@ -2729,6 +2750,79 @@ void main() {
     await tester.tap(button);
     await tester.pump();
     expect(c.read(simpleModeProvider).value, isFalse);
+  });
+
+  group('Companion Mode (phone): no way into the full UI', () {
+    final phone = <Override>[
+      companionShortestSideProvider.overrideWithValue(390),
+    ];
+
+    testWidgets('390x844 with both prefs off: Simple shell, no Full UI, '
+        'no Experimental, nothing saved', (tester) async {
+      final saved = <bool>[];
+      final prefs = _SavingPrefs(saved);
+      final c = await _pump(tester, const Size(390, 844),
+          feature: true, modePrefs: prefs, gear: phone,
+          platform: TargetPlatform.iOS);
+      await c.read(simpleModeFeatureProvider.notifier).set(false);
+      await tester.pump();
+      expect(c.read(simpleModeProvider).value, isFalse);
+      expect(c.read(simpleModeActiveProvider), isTrue);
+      expect(find.byType(SimpleShell), findsOneWidget);
+      expect(find.byKey(const Key('simple-full-ui-button')), findsNothing);
+      expect(find.byTooltip('Full UI'), findsNothing);
+      // A jump to another full-UI tab stays here and writes nothing.
+      c.read(selectedTabIndexProvider.notifier).select(kPlanningTabIndex);
+      await tester.pump();
+      expect(find.byType(SimpleShell), findsOneWidget);
+      // Settings: the System group has no Experimental row.
+      c.read(selectedSettingsPanelProvider.notifier).select('app.experimental');
+      tester.view.physicalSize = const Size(1280, 2400);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(home: Scaffold(body: SettingsShell())),
+      ));
+      await tester.pump();
+      expect(find.text('Experimental'), findsNothing);
+      expect(find.text('About'), findsWidgets);
+      expect(
+        buildSearchIndex(companion: c.read(companionModeProvider))
+            .any((e) => e.panelId == 'app.experimental'),
+        isFalse,
+      );
+      expect(saved, isEmpty, reason: 'the mode pref is never written');
+    });
+
+    testWidgets('a tablet-size screen keeps today: Full UI button leaves '
+        'for the full UI', (tester) async {
+      final c = await _pump(tester, const Size(1024, 768), gear: [
+        companionShortestSideProvider.overrideWithValue(768),
+      ], platform: TargetPlatform.iOS);
+      expect(c.read(companionModeProvider), isFalse);
+      await tester.tap(find.byKey(const Key('simple-full-ui-button')));
+      await tester.pump();
+      expect(c.read(simpleModeProvider).value, isFalse);
+    });
+
+    testWidgets('a desktop keeps today: the Experimental row shows',
+        (tester) async {
+      final c = await _pump(tester, const Size(1280, 800), gear: [
+        companionShortestSideProvider.overrideWithValue(390),
+      ], platform: TargetPlatform.macOS);
+      expect(c.read(companionModeProvider), isFalse);
+      expect(find.byKey(const Key('simple-full-ui-button')), findsOneWidget);
+      tester.view.physicalSize = const Size(1280, 2400);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: c,
+        child: const MaterialApp(home: Scaffold(body: SettingsShell())),
+      ));
+      await tester.pump();
+      expect(find.text('Experimental'), findsWidgets);
+      expect(
+        buildSearchIndex().any((e) => e.panelId == 'app.experimental'),
+        isTrue,
+      );
+    });
   });
 
   group('the OpenAstro Ara sheet: Change and licenses', () {
@@ -6505,12 +6599,337 @@ void main() {
     }
     expect(find.textContaining('cooling fan'), findsNothing);
   });
+  group('#1562 first-time Rig setup', () {
+    const rig = AraServer(hostname: '192.0.2.10', port: 5555, uuid: 'rig-a');
+    const size = Size(1024, 768);
+
+    late ProviderContainer container;
+
+    /// The polls the shell starts against a made-up rig end with the tree.
+    Future<void> end(WidgetTester tester) async {
+      await tester.pumpWidget(const SizedBox());
+      container.dispose();
+      await tester.pump(const Duration(seconds: 5));
+    }
+
+    Future<(ProviderContainer, _MemPrefs, List<String>)> pumpSetup(
+      WidgetTester tester,
+      RigSetupFacts? facts, {
+      bool dismissed = false,
+      Size screen = size,
+      List<Override> gear = const [],
+    }) async {
+      final prefs = _MemPrefs()..value = dismissed;
+      final keys = <String>[];
+      final c = await _pump(
+        tester,
+        screen,
+        server: rig,
+        gear: [
+          _factsHolder.overrideWith(() => _FactsHolder(facts)),
+          rigSetupFactsProvider.overrideWith((ref) => ref.watch(_factsHolder)),
+          rigSetupDismissedPrefsProvider.overrideWith((ref, key) {
+            keys.add(key);
+            return prefs;
+          }),
+          ...gear,
+        ],
+      );
+      container = c;
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      return (c, prefs, keys);
+    }
+
+    const noSite = RigSetupFacts(
+      latitudeDeg: 0,
+      longitudeDeg: 0,
+      opticsConfigured: true,
+    );
+    const done = RigSetupFacts(
+      latitudeDeg: -33.856784,
+      longitudeDeg: 151.215297,
+      opticsConfigured: true,
+    );
+    // With a Guider: the site, the guide scope and its calibration missing.
+    const noSiteGuider = RigSetupFacts(
+      latitudeDeg: 0,
+      longitudeDeg: 0,
+      opticsConfigured: true,
+      hasGuider: true,
+    );
+
+    testWidgets(
+      'gaps and not dismissed: the sheet opens by itself, with the rails and Stop still up',
+      (tester) async {
+        await pumpSetup(tester, noSite);
+        expect(find.byKey(const Key('simple-rig-setup')), findsOneWidget);
+        expect(
+          find.byKey(const Key('simple-rig-setup-site-missing')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('simple-rig-setup-optics-done')),
+          findsOneWidget,
+          reason: 'a fixed line shows a tick',
+        );
+        expect(
+          find.byKey(const Key('simple-rig-setup-guide-scope')),
+          findsNothing,
+          reason: 'no Guider, no guiding lines',
+        );
+        expect(
+          find.byKey(const Key('simple-rig-setup-calibration')),
+          findsNothing,
+        );
+        expect(find.byType(EmergencyStopButton), findsOneWidget);
+        await end(tester);
+      },
+    );
+
+    testWidgets('a set-up rig never shows the sheet or the row', (
+      tester,
+    ) async {
+      await pumpSetup(tester, done);
+      expect(find.byKey(const Key('simple-rig-setup')), findsNothing);
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pump();
+      expect(find.byKey(const Key('simple-menu-nav-RigSetup')), findsNothing);
+      await end(tester);
+    });
+
+    testWidgets('facts that are not trusted yet (null) open nothing', (
+      tester,
+    ) async {
+      final (c, _, _) = await pumpSetup(tester, null);
+      expect(find.byKey(const Key('simple-rig-setup')), findsNothing);
+      expect(c.read(rigSetupSheetProvider), isFalse, reason: 'no auto-open');
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pump();
+      expect(find.byKey(const Key('simple-menu-nav-RigSetup')), findsNothing);
+      await end(tester);
+    });
+
+    testWidgets(
+      'dismissed on this rig: no sheet, and Settings has the Rig setup row that opens it',
+      (tester) async {
+        final (c, _, _) = await pumpSetup(tester, noSite, dismissed: true);
+        expect(find.byKey(const Key('simple-rig-setup')), findsNothing);
+        await tester.tap(find.byTooltip('Settings'));
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('simple-menu-nav-RigSetup')));
+        await tester.pump();
+        expect(find.byKey(const Key('simple-rig-setup')), findsOneWidget);
+        expect(
+          find.byKey(const Key('simple-menu')),
+          findsNothing,
+          reason: 'the row closes Settings',
+        );
+        expect(c.read(rigSetupSheetProvider), isTrue);
+        await end(tester);
+      },
+    );
+
+    testWidgets(
+      'Not now writes the dismissed flag for this rig through the prefs service and closes the sheet',
+      (tester) async {
+        final (_, prefs, keys) = await pumpSetup(tester, noSite);
+        expect(prefs.value, isFalse);
+        await tester.tap(find.byKey(const Key('simple-rig-setup-not-now')));
+        await tester.pump();
+        await tester.pump();
+        expect(prefs.value, isTrue);
+        expect(
+          keys,
+          everyElement('rig-a'),
+          reason: 'keyed by the selected rig',
+        );
+        expect(find.byKey(const Key('simple-rig-setup')), findsNothing);
+        // Still missing, so the row stays to come back to.
+        await tester.tap(find.byTooltip('Settings'));
+        await tester.pump();
+        expect(
+          find.byKey(const Key('simple-menu-nav-RigSetup')),
+          findsOneWidget,
+        );
+        await end(tester);
+      },
+    );
+
+    testWidgets(
+      'fixing the last gap closes the sheet with the Rig set up pill',
+      (tester) async {
+        final (c, _, _) = await pumpSetup(tester, noSite);
+        expect(find.byKey(const Key('simple-rig-setup')), findsOneWidget);
+        c.read(_factsHolder.notifier).set(done);
+        await tester.pump();
+        await tester.pump();
+        expect(find.byKey(const Key('simple-rig-setup')), findsNothing);
+        expect(find.text('Rig set up'), findsOneWidget);
+        await end(tester);
+      },
+    );
+
+    testWidgets(
+      'the Site line opens Settings at the Rig page and the sheet stays up behind it',
+      (tester) async {
+        await pumpSetup(tester, noSite);
+        await tester.tap(find.byKey(const Key('simple-rig-setup-site-action')));
+        await tester.pump();
+        expect(find.byKey(const Key('simple-menu')), findsOneWidget);
+        expect(find.byKey(const Key('simple-rig-setup')), findsOneWidget);
+        await end(tester);
+      },
+    );
+
+    testWidgets(
+      'the Main camera and telescope line opens the optics panel over Simple Mode',
+      (tester) async {
+        final c = (await pumpSetup(
+          tester,
+          const RigSetupFacts(
+            latitudeDeg: -33.856784,
+            longitudeDeg: 151.215297,
+            opticsConfigured: false,
+          ),
+        )).$1;
+        await tester.tap(
+          find.byKey(const Key('simple-rig-setup-optics-action')),
+        );
+        await tester.pump();
+        expect(c.read(selectedSettingsPanelProvider), 'img.optics');
+        await end(tester);
+      },
+    );
+
+    testWidgets(
+      'the Guider calibration line closes the sheet and shows Guider mode',
+      (tester) async {
+        const facts = RigSetupFacts(
+          latitudeDeg: -33.856784,
+          longitudeDeg: 151.215297,
+          opticsConfigured: true,
+          hasGuider: true,
+          guideFocalLengthMm: 240,
+          guidePixelSizeUm: 3.75,
+          guiderConnected: true,
+        );
+        final (c, _, _) = await pumpSetup(tester, facts);
+        expect(
+          find.byKey(const Key('simple-rig-setup-calibration-missing')),
+          findsOneWidget,
+        );
+        await tester.tap(
+          find.byKey(const Key('simple-rig-setup-calibration-action')),
+        );
+        await tester.pump();
+        await tester.pump();
+        expect(find.byKey(const Key('simple-rig-setup')), findsNothing);
+        expect(c.read(simpleShowingProvider), SimpleModeScreen.guide);
+        await end(tester);
+      },
+    );
+
+    testWidgets(
+      'a Guider that is not connected reads connect to check, not missing',
+      (tester) async {
+        const facts = RigSetupFacts(
+          latitudeDeg: -33.856784,
+          longitudeDeg: 151.215297,
+          opticsConfigured: true,
+          hasGuider: true,
+          guideFocalLengthMm: 240,
+          guidePixelSizeUm: 3.75,
+        );
+        await pumpSetup(tester, facts);
+        expect(
+          find.text('Connect the Guider to check its calibration.'),
+          findsOneWidget,
+        );
+        expect(
+          find.text('Not calibrated yet, or Ara says to calibrate again.'),
+          findsNothing,
+        );
+        await end(tester);
+      },
+    );
+
+    testWidgets(
+      'on a phone, the Camera window and Search open over the sheet and take the taps where they overlap it',
+      (tester) async {
+        final (c, _, _) = await pumpSetup(
+          tester,
+          noSiteGuider,
+          screen: const Size(390, 844),
+          gear: [
+            cameraStatusProvider.overrideWith(
+              () => _Camera(EquipmentConnectionState.connected),
+            ),
+          ],
+        );
+        Finder panelOf(Key key) => find
+            .ancestor(of: find.byKey(key), matching: find.byType(SimplePanel))
+            .first;
+        final sheet = panelOf(const Key('simple-rig-setup'));
+        // A tap where the two overlap reaches the one on top, and only it.
+        void onTop(Finder panel, String what) {
+          final both = tester.getRect(panel).intersect(tester.getRect(sheet));
+          expect(both.isEmpty, isFalse, reason: '$what overlaps the sheet');
+          final path = tester
+              .hitTestOnBinding(both.center)
+              .path
+              .map((e) => e.target)
+              .toList();
+          expect(
+            path,
+            contains(tester.renderObject(panel)),
+            reason: '$what is above the sheet',
+          );
+          expect(path, isNot(contains(tester.renderObject(sheet))));
+        }
+
+        // What the top bar's camera chip does.
+        c.read(selectedSettingsPanelProvider.notifier).select('eq.camera');
+        c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+        await tester.pump();
+        onTop(panelOf(const Key('simple-device-camera')), 'the Camera window');
+        await tester.tap(find.byKey(const Key('simple-search-button')));
+        await tester.pump();
+        await tester.enterText(
+          find.byKey(const Key('simple-search-field')),
+          'Guide',
+        );
+        await tester.pump();
+        onTop(find.byKey(const Key('simple-search')), 'Search');
+        expect(
+          find.byKey(const Key('simple-rig-setup')),
+          findsOneWidget,
+          reason: 'the sheet stays up under them',
+        );
+        await end(tester);
+      },
+    );
+  });
 }
 
 class _NoFan extends CoolingFanNotifier {
   @override
   Future<CoolingFan> build() async => CoolingFan.none;
 }
+
+/// The Rig setup facts a test sets and changes.
+class _FactsHolder extends Notifier<RigSetupFacts?> {
+  _FactsHolder(this.first);
+  final RigSetupFacts? first;
+  @override
+  RigSetupFacts? build() => first;
+  void set(RigSetupFacts? facts) => state = facts;
+}
+
+final _factsHolder = NotifierProvider<_FactsHolder, RigSetupFacts?>(
+  () => throw UnimplementedError('override it'),
+);
 
 /// An offset calibration on its 4th autofocus run of 7, measuring OIII.
 class _OffsetsRunning extends FilterOffsetCalibrationNotifier {

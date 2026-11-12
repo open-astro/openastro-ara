@@ -4,6 +4,7 @@ import 'simple_monitor_screen.dart';
 import 'simple_queue_screen.dart' show simpleQueueSheetProvider;
 import 'simple_screen.dart';
 import 'simple_search.dart';
+import 'simple_rig_setup_sheet.dart';
 import 'simple_focus_panel.dart' show simpleOpenFocusOffsets;
 
 import 'package:flutter/cupertino.dart';
@@ -28,6 +29,7 @@ import '../../state/settings/equipment_connection_state.dart'
     show EquipmentDeviceType;
 import '../../widgets/equipment/alpaca_chooser_dialog.dart';
 import '../../services/equipment_driver_api.dart';
+import '../../services/dso_catalog_service.dart' show suggestionDesignation;
 import '../../state/app_shell_state.dart';
 import '../../state/launch_gate_state.dart';
 import '../../state/profile_management_state.dart';
@@ -49,6 +51,7 @@ import '../../state/simple_mode_state.dart';
 import '../../state/simple_monitor_state.dart';
 import '../../util/app_licenses.dart';
 import '../../state/simple_preflight_state.dart';
+import '../../state/rig_setup_state.dart';
 export '../../state/simple_preflight_state.dart' show SimpleModeScreen, SimpleModeScreenLabels;
 
 import 'dart:ui' show ImageFilter;
@@ -743,6 +746,19 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     _toggle(_Popover.menu);
   }
 
+  /// #1562 — the rigs the Rig setup sheet already opened for, in this shell mount.
+  final _rigSetupOpened = <String>{};
+
+  /// #1562 — Settings at the Rig page, from the Rig setup sheet: opens it and
+  /// never closes one that is already up.
+  void _showRigPage() {
+    if (_popover == _Popover.menu) {
+      setState(() => _menuSection = 'Rig');
+    } else {
+      _openMenu();
+    }
+  }
+
   /// A search hit, opened where it lives in Simple Mode.
   void _openHit(SimpleSearchHit hit) {
     setState(() => _popover = _Popover.none);
@@ -752,7 +768,13 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         setState(() => _sky = true);
         ref
             .read(planetariumSelectionProvider.notifier)
-            .set(simplePickDso(ref, suggestion.dso));
+            .set(
+              simplePickDso(
+                ref,
+                suggestion.dso,
+                designation: suggestionDesignation(suggestion),
+              ),
+            );
         ref.read(planetariumSearchProvider.notifier).search(suggestion.label);
       case SimpleSettingHit(section: 'Guide'):
         _pickMode(SimpleModeScreen.guide);
@@ -772,15 +794,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   }
 
   /// The Sky Album; a card's action closes it and opens Plan's sheet with
-  /// the card's object picked, as Image this does from the sky. Nothing is
-  /// queued.
+  /// the card's object picked, as Image this does from the sky, named by the
+  /// card's label. Nothing is queued.
   void _openAlbum() => unawaited(
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (albumContext) => SkyAlbumScreen(
-          onImageTarget: (d) {
+          onImageTarget: (d, label) {
             // Read while the album still watches the ranker (it auto-disposes).
-            final sel = simplePickDso(ref, d);
+            final sel = simplePickDso(ref, d, designation: label);
             Navigator.of(albumContext).pop();
             ref.read(planetariumSelectionProvider.notifier).set(sel);
             _imagePick();
@@ -854,6 +876,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     if (!discarded && _askDiscard(() => _leaveForFullUi(discarded: true))) {
       return;
     }
+    // #1774: the Full UI button is hidden in Companion Mode; this guard keeps
+    // any later caller from writing the pref there.
+    if (ref.read(companionModeProvider)) return;
     ref.read(simpleModeProvider.notifier).set(false);
   }
 
@@ -954,6 +979,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         }
         return;
       }
+      // Companion Mode has no full UI to leave for: stay here.
+      if (ref.read(companionModeProvider)) return;
       ref.read(simpleModeProvider.notifier).set(false);
     });
     // Fetched once per rig, so the Ara sheet has its versions on its first frame.
@@ -1450,6 +1477,21 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               ),
+                              // #1562 — the first-time Rig setup sheet, where Plan's
+                              // sheet sits: each window and popover after it here
+                              // draws over it, and it stays up under Settings so
+                              // its ticks follow the edits.
+                              Positioned(
+                                left: kSimpleInset,
+                                right: kSimpleInset * 2 + railWidth,
+                                top: popoverTop,
+                                bottom: betweenBottom,
+                                child: SimpleRigSetupHost(
+                                  autoOpened: _rigSetupOpened,
+                                  onOpenRig: _showRigPage,
+                                  onOpenGuider: () => _openFromPill(SimpleStatusOrigin.guide),
+                                ),
+                              ),
                               // Plan's sheet and Night done: beside the rail;
                               // while imaging, its panel sits there like any
                               // mode's.
@@ -1666,6 +1708,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                         )),
                                         section: _menuSection,
                                         revealStorage: _revealStoragePending,
+                                        onRigSetup: () => setState(() {
+                                          _popover = _Popover.none;
+                                          ref.read(rigSetupSheetProvider.notifier).set(true);
+                                        }),
                                         onClose: () => setState(
                                           () => _popover = _Popover.none,
                                         ),
@@ -1975,16 +2021,17 @@ class _StatusStrip extends ConsumerWidget {
                 : context.l10n.shellNightMode,
             onPressed: () => ref.read(nightModeProvider.notifier).set(!night),
           ),
-          IconButton(
-            key: const Key('simple-full-ui-button'),
-            icon: const Icon(
-              Icons.fit_screen,
-              size: 22,
-              color: AraColors.accentInfo,
+          if (!ref.watch(companionModeProvider))
+            IconButton(
+              key: const Key('simple-full-ui-button'),
+              icon: const Icon(
+                Icons.fit_screen,
+                size: 22,
+                color: AraColors.accentInfo,
+              ),
+              tooltip: context.l10n.shellFullUi,
+              onPressed: onFullUi,
             ),
-            tooltip: context.l10n.shellFullUi,
-            onPressed: onFullUi,
-          ),
           IconButton(
             icon: const Icon(Icons.settings_outlined, size: 22),
             tooltip: context.l10n.shellSettings,
@@ -2795,11 +2842,15 @@ class _SettingsSheet extends ConsumerStatefulWidget {
     this.section = 'Rig',
     required this.onClose,
     this.revealStorage = false,
+    this.onRigSetup,
   });
 
   /// The section it opens on.
   final String section;
   final VoidCallback onClose;
+
+  /// #1562 — the Rig setup row: closes Settings and shows the Rig setup sheet.
+  final VoidCallback? onRigSetup;
 
   /// Rig opens scrolled to its Storage block (Plan's Open Storage).
   final bool revealStorage;
@@ -2821,6 +2872,9 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
     // Only a device appearing or going rebuilds this, not each 1 s reading.
     // The id picks the section (and a search hit names it); the label shows.
     final sections = <(String, String, Widget Function(Color), bool)>[
+      // #1562 — while the rig still lacks a fact the first night needs.
+      if (widget.onRigSetup != null && ref.watch(rigSetupGapsProvider).isNotEmpty)
+        ('RigSetup', l10n.rigSetupTitle, (c) => glyph(Icons.checklist, c), false),
       ('Rig', l10n.shellSectionRig, (c) => glyph(Icons.memory, c), false),
       (
         'Devices',
@@ -2929,7 +2983,9 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                       child: InkWell(
                         key: Key('simple-menu-nav-$name'),
                         borderRadius: BorderRadius.circular(AraRadius.container),
-                        onTap: () => setState(() => _section = name),
+                        onTap: () => name == 'RigSetup'
+                            ? widget.onRigSetup?.call()
+                            : setState(() => _section = name),
                         child: Semantics(
                           selected: _section == name,
                           label: narrow ? title : null,

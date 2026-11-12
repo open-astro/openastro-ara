@@ -51,6 +51,23 @@ public interface IAlpacaManagementClient {
     /// when it doesn't answer. Best-effort like the names.</summary>
     Task<string?> GetDriverVersionAsync(string host, int port, string type, int number, CancellationToken ct) =>
         Task.FromResult<string?>(null);
+
+    /// <summary>#1580 — AlpacaBridge's <c>devicecatalog</c> descriptors, each as the server sent it, for the drivers
+    /// whose <c>available</c> is true. Best-effort like the names: any failure (a server that is not AlpacaBridge, an
+    /// older one without the catalog) yields an empty list, which is how the wizard learns not to offer Add.</summary>
+    Task<IReadOnlyList<JsonElement>> GetDeviceCatalogAsync(string host, int port, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<JsonElement>>(Array.Empty<JsonElement>());
+
+    /// <summary>#1580 — the cameras a vendor's lister finds plugged in (<c>attachedcameras?vendor=</c>). A vendor
+    /// with no lister, or any failure, yields an empty list.</summary>
+    Task<IReadOnlyList<AlpacaAttachedCamera>> GetAttachedCamerasAsync(string host, int port, string vendor, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<AlpacaAttachedCamera>>(Array.Empty<AlpacaAttachedCamera>());
+
+    /// <summary>#1580 — registers a device: <paramref name="body"/> goes to <c>configuredevice</c> unchanged. Unlike
+    /// every read above this one is loud: the result says whether the device was added, refused, or may or may not
+    /// have been added (no answer).</summary>
+    Task<AlpacaAddResult> AddDeviceAsync(string host, int port, JsonElement body, CancellationToken ct) =>
+        Task.FromResult(new AlpacaAddResult(AlpacaAddOutcome.Unconfirmed, string.Empty, null));
 }
 
 /// <summary>An Alpaca server's <c>description</c>: <c>ServerName</c>, <c>Manufacturer</c>, <c>ManufacturerVersion</c>.</summary>
@@ -64,6 +81,11 @@ public sealed record AlpacaConfiguredDevice(string Name, string UniqueId, string
 
 public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, IDisposable {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(3);
+    // #1580 — registering a device can open the vendor SDK, so Add waits ten times as long as a read. Basis:
+    // 10x the read cap, well under a client's own request limit; no rig run measured the SDK open yet.
+    // rig check pending with the board: time a ZWO camera add on the Pi's real AlpacaBridge.
+    internal static readonly TimeSpan AddTimeout = TimeSpan.FromSeconds(30);
+    private readonly HttpClient _addHttp;
     private readonly HttpClient _http;
     private readonly ILogger<AlpacaManagementClient> _logger;
 
@@ -73,10 +95,16 @@ public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, ID
         _logger = logger ?? NullLogger<AlpacaManagementClient>.Instance;
         // Plain http against a trusted-LAN (§52/§67) surface; only the JSON body is ever parsed, and
         // only names come out of it. Same handler-injection seam as PushChannelService (tests).
-        _http = new HttpClient(handler ?? LanHandler(), disposeHandler: true) {
+        var shared = handler ?? LanHandler();
+        _http = new HttpClient(shared, disposeHandler: true) {
             Timeout = RequestTimeout,
             // A configureddevices envelope is a few KB; never buffer whatever a broken or hostile
             // host at that address streams inside the 3 s window (default cap is 2 GB).
+            MaxResponseContentBufferSize = 1 << 20,
+        };
+        // #1580 — Add shares the handler (the one that _http disposes) and keeps the response cap.
+        _addHttp = new HttpClient(shared, disposeHandler: false) {
+            Timeout = AddTimeout,
             MaxResponseContentBufferSize = 1 << 20,
         };
     }
@@ -267,5 +295,8 @@ public sealed partial class AlpacaManagementClient : IAlpacaManagementClient, ID
         Message = "Alpaca management lookup at {Host}:{Port} failed; generic device labels stay.")]
     private static partial void LogLookupThrew(ILogger logger, string host, int port, Exception ex);
 
-    public void Dispose() => _http.Dispose();
+    public void Dispose() {
+        _addHttp.Dispose();
+        _http.Dispose();
+    }
 }

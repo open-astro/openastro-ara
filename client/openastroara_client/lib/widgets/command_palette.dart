@@ -11,6 +11,7 @@ import '../screens/library/image_library_screen.dart';
 import '../screens/stats/stats_dashboard_screen.dart';
 import '../screens/wizard/wizard_shell.dart';
 import '../state/app_shell_state.dart';
+import '../state/simple_mode_state.dart';
 import '../state/equipment/camera_state.dart';
 import '../state/equipment/mount_state.dart';
 import '../state/sequencer/sequence_list_state.dart';
@@ -73,6 +74,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     _index = buildSearchIndex(
       templateNames: templates.map((t) => t.name),
       targets: targets.map((o) => (o.id, o.name, o.type)),
+      companion: ref.read(companionModeProvider),
     );
     _results = searchSettings(_index, _controller.text);
     _selectedIndex = _selectedIndex.clamp(0, _results.isEmpty ? 0 : _results.length - 1);
