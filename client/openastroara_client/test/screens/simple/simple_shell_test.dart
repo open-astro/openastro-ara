@@ -6526,12 +6526,14 @@ void main() {
       WidgetTester tester,
       RigSetupFacts? facts, {
       bool dismissed = false,
+      Size screen = size,
+      List<Override> gear = const [],
     }) async {
       final prefs = _MemPrefs()..value = dismissed;
       final keys = <String>[];
       final c = await _pump(
         tester,
-        size,
+        screen,
         server: rig,
         gear: [
           _factsHolder.overrideWith(() => _FactsHolder(facts)),
@@ -6540,6 +6542,7 @@ void main() {
             keys.add(key);
             return prefs;
           }),
+          ...gear,
         ],
       );
       container = c;
@@ -6558,6 +6561,13 @@ void main() {
       latitudeDeg: -33.856784,
       longitudeDeg: 151.215297,
       opticsConfigured: true,
+    );
+    // With a Guider: the site, the guide scope and its calibration missing.
+    const noSiteGuider = RigSetupFacts(
+      latitudeDeg: 0,
+      longitudeDeg: 0,
+      opticsConfigured: true,
+      hasGuider: true,
     );
 
     testWidgets(
@@ -6750,6 +6760,62 @@ void main() {
         expect(
           find.text('Not calibrated yet, or Ara says to calibrate again.'),
           findsNothing,
+        );
+        await end(tester);
+      },
+    );
+
+    testWidgets(
+      'on a phone, the Camera window and Search open over the sheet and take the taps where they overlap it',
+      (tester) async {
+        final (c, _, _) = await pumpSetup(
+          tester,
+          noSiteGuider,
+          screen: const Size(390, 844),
+          gear: [
+            cameraStatusProvider.overrideWith(
+              () => _Camera(EquipmentConnectionState.connected),
+            ),
+          ],
+        );
+        Finder panelOf(Key key) => find
+            .ancestor(of: find.byKey(key), matching: find.byType(SimplePanel))
+            .first;
+        final sheet = panelOf(const Key('simple-rig-setup'));
+        // A tap where the two overlap reaches the one on top, and only it.
+        void onTop(Finder panel, String what) {
+          final both = tester.getRect(panel).intersect(tester.getRect(sheet));
+          expect(both.isEmpty, isFalse, reason: '$what overlaps the sheet');
+          final path = tester
+              .hitTestOnBinding(both.center)
+              .path
+              .map((e) => e.target)
+              .toList();
+          expect(
+            path,
+            contains(tester.renderObject(panel)),
+            reason: '$what is above the sheet',
+          );
+          expect(path, isNot(contains(tester.renderObject(sheet))));
+        }
+
+        // What the top bar's camera chip does.
+        c.read(selectedSettingsPanelProvider.notifier).select('eq.camera');
+        c.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex);
+        await tester.pump();
+        onTop(panelOf(const Key('simple-device-camera')), 'the Camera window');
+        await tester.tap(find.byKey(const Key('simple-search-button')));
+        await tester.pump();
+        await tester.enterText(
+          find.byKey(const Key('simple-search-field')),
+          'Guide',
+        );
+        await tester.pump();
+        onTop(find.byKey(const Key('simple-search')), 'Search');
+        expect(
+          find.byKey(const Key('simple-rig-setup')),
+          findsOneWidget,
+          reason: 'the sheet stays up under them',
         );
         await end(tester);
       },

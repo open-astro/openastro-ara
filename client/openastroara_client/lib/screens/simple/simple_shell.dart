@@ -1465,6 +1465,21 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               ),
+                              // #1562 — the first-time Rig setup sheet, where Plan's
+                              // sheet sits: each window and popover after it here
+                              // draws over it, and it stays up under Settings so
+                              // its ticks follow the edits.
+                              Positioned(
+                                left: kSimpleInset,
+                                right: kSimpleInset * 2 + railWidth,
+                                top: popoverTop,
+                                bottom: betweenBottom,
+                                child: SimpleRigSetupHost(
+                                  autoOpened: _rigSetupOpened,
+                                  onOpenRig: _showRigPage,
+                                  onOpenGuider: () => _openFromPill(SimpleStatusOrigin.guide),
+                                ),
+                              ),
                               // Plan's sheet and Night done: beside the rail;
                               // while imaging, its panel sits there like any
                               // mode's.
@@ -1638,19 +1653,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                     ),
                                   ),
                                 ),
-                              // #1562 — the first-time Rig setup sheet, under Settings
-                              // (so its ticks follow the edits) and beside the rails.
-                              Positioned(
-                                left: kSimpleInset,
-                                right: kSimpleInset * 2 + railWidth,
-                                top: popoverTop,
-                                bottom: betweenBottom,
-                                child: SimpleRigSetupHost(
-                                  autoOpened: _rigSetupOpened,
-                                  onOpenRig: _showRigPage,
-                                  onOpenGuider: () => _openFromPill(SimpleStatusOrigin.guide),
-                                ),
-                              ),
                               if (_popover == _Popover.menu) ...[
                                 // Under the strip, which stays live (its
                                 // gear closes Settings, the rest still work).
