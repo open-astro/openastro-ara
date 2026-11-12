@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using Microsoft.Data.Sqlite;
+using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Sequencer.Conditions;
 using OpenAstroAra.Sequencer.Container;
@@ -107,6 +108,70 @@ namespace OpenAstroAra.Test {
             var first = (await svc.ListEntriesAsync(CancellationToken.None)).Single().Id;
             var second = (await svc.ListEntriesAsync(CancellationToken.None)).Single().Id;
             Assert.That(second, Is.EqualTo(first), "same (exposure, gain, temp) group ⇒ same id");
+        }
+
+        // ── #1757 one library per camera ───────────────────────────────────────
+
+        private static readonly string?[] CamerasAThenBThenLegacy = ["A", "B", null];
+        private static readonly string?[] CameraAAndLegacy = ["A", null];
+        private static readonly string?[] CameraBAndLegacy = ["B", null];
+
+        [Test]
+        public async Task Dark_and_bias_groups_split_by_camera_and_legacy_frames_stay_camera_less() {
+            foreach (var camera in CamerasAThenBThenLegacy) {
+                await InsertDarkAsync(300, 100, -10, camera: camera);
+                await InsertBiasAsync(100, 50, bin: 1, sizeBytes: 100, camera: camera);
+            }
+            using var svc = new SqliteDarkLibraryService(_db);
+
+            var darks = await svc.ListEntriesAsync(CancellationToken.None);
+            var bias = (await svc.GetStatusAsync(CancellationToken.None)).BiasEntries!;
+
+            Assert.That(darks.Select(d => d.Camera), Is.EquivalentTo(CamerasAThenBThenLegacy), "one dark group per camera");
+            Assert.That(darks.Select(d => d.Id).Distinct().Count(), Is.EqualTo(3));
+            Assert.That(darks.All(d => d.FrameCount == 1), Is.True);
+            Assert.That(bias.Select(b => b.Camera), Is.EquivalentTo(CamerasAThenBThenLegacy), "one bias group per camera");
+            Assert.That(bias.Select(b => b.Id).Distinct().Count(), Is.EqualTo(3));
+        }
+
+        [Test]
+        public async Task Status_shows_one_cameras_library_with_the_legacy_groups_defaulting_to_the_connected_camera() {
+            foreach (var camera in CamerasAThenBThenLegacy) {
+                await InsertDarkAsync(300, 100, -10, camera: camera);
+                await InsertBiasAsync(100, 50, bin: 1, sizeBytes: 100, camera: camera);
+            }
+            var connected = new Mock<ICameraService>();
+            connected.Setup(c => c.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(new CameraDto(
+                "cam-b", "B", EquipmentConnectionState.Connected, null, new CameraStateDto("idle", null, null, false, null)));
+
+            using var svc = new SqliteDarkLibraryService(_db, camera: connected.Object);
+            var forA = await svc.GetStatusAsync("A", CancellationToken.None);
+            var forConnected = await svc.GetStatusAsync(null, CancellationToken.None);
+            using var noCamera = new SqliteDarkLibraryService(_db);
+            var unfiltered = await noCamera.GetStatusAsync(null, CancellationToken.None);
+
+            Assert.That(forA.Camera, Is.EqualTo("A"));
+            Assert.That(forA.Entries.Select(e => e.Camera), Is.EquivalentTo(CameraAAndLegacy));
+            Assert.That(forA.BiasEntries!.Select(e => e.Camera), Is.EquivalentTo(CameraAAndLegacy));
+            Assert.That(forConnected.Camera, Is.EqualTo("B"), "no camera asked: the connected main camera");
+            Assert.That(forConnected.Entries.Select(e => e.Camera), Is.EquivalentTo(CameraBAndLegacy));
+            Assert.That(unfiltered.Camera, Is.Null);
+            Assert.That(unfiltered.Entries, Has.Count.EqualTo(3), "no camera known: every group");
+        }
+
+        [Test]
+        public async Task Build_progress_counts_only_the_cameras_darks_and_the_legacy_ones() {
+            await InsertDarkAsync(300, 100, -10, camera: "B");
+            using var svc = new SqliteDarkLibraryService(_db, new FileSequenceService(_dir));
+            await svc.StartBuildAsync(new DarkLibraryBuildRequestDto(
+                ExposureSecondsList: [300], GainList: [100], TargetTemperatureCList: [-10],
+                FramesPerCombination: 1, ReuseExistingFrames: true), idempotencyKey: null, CancellationToken.None);
+
+            Assert.That((await svc.GetStatusAsync("A", CancellationToken.None)).CompletedCombinations, Is.EqualTo(0),
+                "camera B's dark does not complete camera A's library");
+            await InsertDarkAsync(300, 100, -10, camera: null);
+            Assert.That((await svc.GetStatusAsync("A", CancellationToken.None)).CompletedCombinations, Is.EqualTo(1),
+                "a legacy dark counts for any camera");
         }
 
         // ── build (generated runnable sequence) ────────────────────────────────
@@ -410,16 +475,17 @@ namespace OpenAstroAra.Test {
             await cmd.ExecuteNonQueryAsync(CancellationToken.None);
         }
 
-        private async Task InsertBiasAsync(int gain, int offset, int? bin, long sizeBytes) {
+        private async Task InsertBiasAsync(int gain, int offset, int? bin, long sizeBytes, string? camera = null) {
             await using var conn = _db.OpenConnection();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = """
                 INSERT INTO frames (id, session_id, target_name, frame_type, filter_name,
                     exposure_seconds, gain, "offset", bin, temperature_c, captured_utc, file_path,
-                    file_size_bytes, width, height, bit_depth)
+                    file_size_bytes, width, height, bit_depth, camera_name)
                 VALUES ($id, $sid, 'BIAS', 'bias', NULL, 0.000032, $gain, $offset, $bin, -10, $utc,
-                    $path, $size, 16, 16, 16);
+                    $path, $size, 16, 16, 16, $camera);
                 """;
+            cmd.Parameters.AddWithValue("$camera", (object?)camera ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
             cmd.Parameters.AddWithValue("$sid", Session.ToString());
             cmd.Parameters.AddWithValue("$gain", gain);
@@ -431,16 +497,17 @@ namespace OpenAstroAra.Test {
             await cmd.ExecuteNonQueryAsync(CancellationToken.None);
         }
 
-        private async Task InsertDarkAsync(double exposureSeconds, int? gain, double temperatureC, long sizeBytes = 1000) {
+        private async Task InsertDarkAsync(double exposureSeconds, int? gain, double temperatureC, long sizeBytes = 1000, string? camera = null) {
             await using var conn = _db.OpenConnection();
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = """
                 INSERT INTO frames (id, session_id, target_name, frame_type, filter_name,
                     exposure_seconds, gain, temperature_c, captured_utc, file_path,
-                    file_size_bytes, width, height, bit_depth)
+                    file_size_bytes, width, height, bit_depth, camera_name)
                 VALUES ($id, $sid, 'DARK', 'dark', NULL, $exp, $gain, $temp, $utc,
-                    $path, $size, 16, 16, 16);
+                    $path, $size, 16, 16, 16, $camera);
                 """;
+            cmd.Parameters.AddWithValue("$camera", (object?)camera ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
             cmd.Parameters.AddWithValue("$sid", Session.ToString());
             cmd.Parameters.AddWithValue("$exp", exposureSeconds);

@@ -109,7 +109,7 @@
 - [ ] I have followed AGENTS.md and CONTRIBUTING.md (build, test and formatting rules)
 - [ ] I have run the targeted tests locally and they pass
 - [ ] I have added or updated tests where applicable
-- [ ] I have added a CHANGELOG.md `Unreleased` entry and updated the relevant documentation
+- [ ] I have added a `changelog.d/` fragment (not a CHANGELOG.md edit) and updated the relevant documentation
 - [ ] Settings registry (section 61.4): N/A, or every new setting has a `lib/settings/registry.dart` entry with a description and at least 3 search keywords
 - [ ] Help registry (section 69.4): N/A, or every new `HelpIcon(helpKey: ...)` has a `Help(...)` entry in `lib/help/registry.dart` with a title and body
 - [ ] I have considered and documented any risks above

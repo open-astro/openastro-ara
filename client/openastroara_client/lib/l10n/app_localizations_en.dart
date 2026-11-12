@@ -3151,12 +3151,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get planFlatsNone => 'None';
 
   @override
-  String get planFlatsSky => 'Sky';
-
-  @override
-  String get planFlatsPanel => 'Panel';
-
-  @override
   String get shellStorageReading => 'Checking the disk…';
 
   @override
@@ -4246,4 +4240,552 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get monitorLinkLostShort => 'Lost contact with the rig';
+
+  @override
+  String get calibrationDarks => 'Darks';
+
+  @override
+  String get calibrationBias => 'Bias';
+
+  @override
+  String get calibrationTakeFlats => 'Take flats';
+
+  @override
+  String get calibrationTakeDarks => 'Take darks';
+
+  @override
+  String calibrationTaking(int done, int total) {
+    return 'Calibration frames · $done of $total';
+  }
+
+  @override
+  String calibrationStopped(int done, int total) {
+    return 'Stopped · $done of $total';
+  }
+
+  @override
+  String get calibrationDone => 'Calibration frames done';
+
+  @override
+  String get calibrationActionShoot => 'start the calibration frames';
+
+  @override
+  String get calibrationActionStop => 'stop the calibration frames';
+
+  @override
+  String get shellModeCalibration => 'Calibration';
+
+  @override
+  String get calibrationTabsGroup => 'Calibration tabs';
+
+  @override
+  String get calibrationTabFlats => 'Flats';
+
+  @override
+  String get calibrationTabDarks => 'Darks & bias';
+
+  @override
+  String get calibrationTabGuide => 'Guide Camera';
+
+  @override
+  String calibrationChipMissing(int count) {
+    return '$count missing';
+  }
+
+  @override
+  String get calibrationChipReady => 'Ready';
+
+  @override
+  String get calibrationChipNoLights => 'No lights';
+
+  @override
+  String get calibrationNoLightsYet =>
+      'No plan lights yet. Build a dark library to reuse for weeks.';
+
+  @override
+  String get calibrationCovered => 'Covered';
+
+  @override
+  String get calibrationMissing => 'Missing';
+
+  @override
+  String calibrationFlatsFrom(String date) {
+    return 'Flats from $date';
+  }
+
+  @override
+  String get calibrationAddToQueue => 'Add to queue';
+
+  @override
+  String get calibrationLensCapPrompt =>
+      'Put the lens cap on the scope, then press Resume to take the darks.';
+
+  @override
+  String get calibrationPlanRunning =>
+      'A plan is running. Calibration would have to wait for it: add the darks and bias to the queue instead?';
+
+  @override
+  String get calibrationPlanRunningNote =>
+      'A plan is running: calibration frames go in the queue.';
+
+  @override
+  String get calibrationNotNow => 'Not now';
+
+  @override
+  String get calibrationConnectCamera => 'Connect the camera first.';
+
+  @override
+  String get calibrationShutterStop => 'Stop calibration';
+
+  @override
+  String get calibrationNothingMissing => 'Nothing missing.';
+
+  @override
+  String get calibrationGuideNoGuider =>
+      'Connect the Guider to build its dark library and bad-pixel map.';
+
+  @override
+  String get calibrationGuideDarks => 'Dark library';
+
+  @override
+  String calibrationGuideCovers(String min, String max) {
+    return 'Covers $min to $max';
+  }
+
+  @override
+  String get calibrationGuideNotBuilt => 'Not built';
+
+  @override
+  String get calibrationGuideUse => 'Use while guiding';
+
+  @override
+  String get calibrationGuideRebuild => 'Rebuild';
+
+  @override
+  String get calibrationGuideDelete => 'Delete';
+
+  @override
+  String get calibrationGuideDeleteDarksTitle => 'Delete the dark library?';
+
+  @override
+  String get calibrationGuideDeleteDefectsTitle => 'Delete the bad-pixel map?';
+
+  @override
+  String get calibrationGuideDeleteBody =>
+      'Building it again takes several minutes of frames with the guide scope covered.';
+
+  @override
+  String get calibrationGuideDefect => 'Bad-pixel map';
+
+  @override
+  String get calibrationGuideCover => 'Cover the guide scope, then build.';
+
+  @override
+  String get calibrationGuideCovered => 'Covered, build';
+
+  @override
+  String get calibrationGuideStopFirst =>
+      'Stop guiding to build: a plan would lose its guide star.';
+
+  @override
+  String get calibrationNoQueue =>
+      'Queue a target first: the darks and bias run after it.';
+
+  @override
+  String get calibrationAlreadyQueued =>
+      'The queue already has its calibration frames.';
+
+  @override
+  String get calibrationActionQueue =>
+      'add the calibration frames to the queue';
+
+  @override
+  String get calibrationActionBuildLibrary => 'build the dark library';
+
+  @override
+  String get calibrationActionGuide => 'change the guide camera\'s calibration';
+
+  @override
+  String get searchCalibrationWords =>
+      'flats darks bias calibration frames dark library';
+
+  @override
+  String get focusOffsets => 'Offsets';
+
+  @override
+  String get focusOffsetsTitle => 'Focus offsets';
+
+  @override
+  String focusOffsetsProgress(String filter, int index, int count) {
+    return '$filter · $index of $count';
+  }
+
+  @override
+  String get focusOffsetsIntro =>
+      'Point at a star field, pick the filters, then Start. Each filter is focused once, the reference before and after.';
+
+  @override
+  String focusOffsetsReference(String filter) {
+    return 'Offsets are measured from $filter, the reference.';
+  }
+
+  @override
+  String focusOffsetsReferenceChip(String filter) {
+    return '$filter · reference';
+  }
+
+  @override
+  String get focusOffsetsPicker => 'Filters to measure';
+
+  @override
+  String get focusOffsetsStart => 'Calibrate focus offsets';
+
+  @override
+  String get focusOffsetsCancel => 'Stop calibrating focus offsets';
+
+  @override
+  String focusOffsetsMeasuring(String filter, int index, int count) {
+    return 'Measuring $filter · $index of $count';
+  }
+
+  @override
+  String get focusOffsetsStarting => 'Starting…';
+
+  @override
+  String get focusOffsetsPlanRunning =>
+      'Wait for the plan to finish: calibrating changes filters and focus.';
+
+  @override
+  String get focusOffsetsFocusBusy =>
+      'Wait for the other focus routine to finish.';
+
+  @override
+  String get focusOffsetsNeedsCamera =>
+      'Connect the camera to calibrate focus offsets.';
+
+  @override
+  String get focusOffsetsNeedsFocuser =>
+      'Connect the focuser to calibrate focus offsets.';
+
+  @override
+  String get focusOffsetsNeedsWheel =>
+      'Connect the filter wheel to calibrate focus offsets.';
+
+  @override
+  String get focusOffsetsNeedsMotorisedWheel =>
+      'Calibrating needs a motorised filter wheel: a manual one can\'t change filters by itself.';
+
+  @override
+  String get focusOffsetsNeedsAbsoluteFocuser =>
+      'Calibrating needs an absolute focuser: a relative one has no positions to compare.';
+
+  @override
+  String get focusOffsetsPickOne =>
+      'Pick at least one filter besides the reference.';
+
+  @override
+  String get focusOffsetsResults => 'Offsets measured';
+
+  @override
+  String get focusOffsetsStopped =>
+      'Stopped. Your saved offsets are unchanged.';
+
+  @override
+  String get focusOffsetsFailed =>
+      'The calibration failed. Your saved offsets are unchanged.';
+
+  @override
+  String get focusOffsetsColFilter => 'Filter';
+
+  @override
+  String get focusOffsetsColOffset => 'Offset';
+
+  @override
+  String get focusOffsetsColPrevious => 'Before';
+
+  @override
+  String get focusOffsetsRowFailed => 'Failed';
+
+  @override
+  String get focusOffsetsRowSkipped => 'Not measured';
+
+  @override
+  String get focusOffsetsRowPending => 'Waiting';
+
+  @override
+  String focusOffsetsWeakFit(String r2) {
+    return 'Weak curve fit (R² $r2): run again if the sky has settled.';
+  }
+
+  @override
+  String focusOffsetsDrift(int steps, int cfz) {
+    return 'The reference moved $steps steps between its two runs, more than its critical focus zone ($cfz steps). Run it again for steadier numbers.';
+  }
+
+  @override
+  String get focusOffsetsDriftNotChecked =>
+      'Drift not checked: the reference\'s second run didn\'t measure.';
+
+  @override
+  String get focusOffsetsSave => 'Save offsets';
+
+  @override
+  String get focusOffsetsDiscard => 'Discard';
+
+  @override
+  String get focusOffsetsSaved =>
+      'Offsets saved. Autofocus after a filter change can now be turned off.';
+
+  @override
+  String deviceFocusOffset(String offset) {
+    return 'Offset $offset steps';
+  }
+
+  @override
+  String get searchFocusOffsetsWords =>
+      'focus offsets filter offsets calibrate';
+
+  @override
+  String get calibrationLightGroup => 'Light';
+
+  @override
+  String get calibrationLightFront => 'Panel or screen';
+
+  @override
+  String get calibrationLightSky => 'Twilight sky';
+
+  @override
+  String get calibrationLightPanelNote => 'The flat panel lights itself.';
+
+  @override
+  String get calibrationLightScreenNote =>
+      'No flat panel connected: the run asks you to put a screen or light box over the scope first.';
+
+  @override
+  String get calibrationLightSkyNote =>
+      'The flats wait for twilight and use the sky.';
+
+  @override
+  String get calibrationLightPrompt =>
+      'Put the screen or light box over the scope, then press Resume to take the flats.';
+
+  @override
+  String calibrationPillProgress(int done, int total) {
+    return '$done of $total';
+  }
+
+  @override
+  String get calibrationGuideBuilding => 'Building…';
+
+  @override
+  String calibrationGuideBuildProgress(int done, int total) {
+    return 'Building · $done of $total';
+  }
+
+  @override
+  String calibrationGuideBuildFailed(String what) {
+    return '$what wasn\'t built';
+  }
+
+  @override
+  String calibrationGuideBuilt(String what) {
+    return '$what built';
+  }
+
+  @override
+  String calibrationFlatsForSession(String target) {
+    return 'Tonight\'s filters · $target';
+  }
+
+  @override
+  String get calibrationOnFileTag => 'On file';
+
+  @override
+  String get calibrationGuideBuildDarks => 'Build dark library';
+
+  @override
+  String get calibrationGuideBuildDefects => 'Build bad-pixel map';
+
+  @override
+  String get calibrationGuideCoverNote =>
+      'Building asks you to cover the guide scope first.';
+
+  @override
+  String get calibrationGuideReady => 'Built';
+
+  @override
+  String get calibrationFlatsMissing => 'Flats missing';
+
+  @override
+  String get calibrationFlatsOnFile => 'Flats on file';
+
+  @override
+  String get calibrationDarksMissingFromLibrary =>
+      'Darks missing from the library';
+
+  @override
+  String get calibrationChipNoPlan => 'No plan';
+
+  @override
+  String calibrationChipOld(int count) {
+    return '$count old';
+  }
+
+  @override
+  String get calibrationChipNoGuider => 'No guider';
+
+  @override
+  String get calibrationCapShootFlats => 'Shoot flats';
+
+  @override
+  String calibrationCapBuild(String what) {
+    return 'Build $what';
+  }
+
+  @override
+  String calibrationCapRefresh(String what) {
+    return 'Refresh $what';
+  }
+
+  @override
+  String get calibrationLibraryNoPlan =>
+      'Queue a target to see which darks its plan needs.';
+
+  @override
+  String calibrationShootMissingFlats(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Shoot $count missing flat sets',
+      one: 'Shoot 1 missing flat set',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get calibrationReshootAll => 'Reshoot all';
+
+  @override
+  String get calibrationReshootAllNote =>
+      'Reshoot all keeps what you have and shoots every filter again.';
+
+  @override
+  String calibrationAgeDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count days',
+      one: '1 day',
+      zero: 'today',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calibrationAgeWeeks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count weeks',
+      one: '1 week',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calibrationAgeMonths(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count months',
+      one: '1 month',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String calibrationGain(int gain) {
+    return 'gain $gain';
+  }
+
+  @override
+  String calibrationOffset(int offset) {
+    return 'offset $offset';
+  }
+
+  @override
+  String calibrationLibraryCamera(String camera) {
+    return '$camera · reused for months';
+  }
+
+  @override
+  String get calibrationLibraryCovers => 'Covers your plan';
+
+  @override
+  String calibrationLibraryNeeds(String what) {
+    return 'Your plan needs $what';
+  }
+
+  @override
+  String calibrationLibraryOld(String what) {
+    return 'Covers your plan, but the $what darks are old';
+  }
+
+  @override
+  String get calibrationLibraryOldNote =>
+      'Darks drift as a sensor ages. Refresh them when you can.';
+
+  @override
+  String get calibrationLibraryEmpty => 'No darks or bias for this camera yet';
+
+  @override
+  String get calibrationLibraryEmptyNote =>
+      'Build them once on a cloudy night; they last months.';
+
+  @override
+  String get calibrationLibraryNone => 'None yet.';
+
+  @override
+  String calibrationLibraryAge(String age, int frames) {
+    return '$age old · $frames frames';
+  }
+
+  @override
+  String get calibrationOld => 'Old';
+
+  @override
+  String get calibrationLibraryBuildSection => 'Build or refresh';
+
+  @override
+  String calibrationLibraryNote(String settings) {
+    return 'At $settings, from the plan. Bias at the same gain. The run asks for the lens cap first.';
+  }
+
+  @override
+  String get calibrationBuildPicked => 'Build picked';
+
+  @override
+  String planFlatsFor(String filters) {
+    return 'For $filters';
+  }
+
+  @override
+  String get planFlatsAfterTarget => 'After target';
+
+  @override
+  String get planFlatsEndOfNight => 'End of night';
+
+  @override
+  String get planFlatsHint =>
+      'After target: right after its last frame, at its rotator angle. End of night: after the last target. With no panel the run asks for a screen first.';
+
+  @override
+  String get calibrationLibraryNoCamera => 'camera not recorded';
+
+  @override
+  String get calibrationStartQueue =>
+      'The calibration frames are in the queue after your targets. Start the queue now?';
+
+  @override
+  String get calibrationStartQueueNow => 'Start queue';
 }
