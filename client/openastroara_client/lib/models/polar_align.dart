@@ -95,9 +95,9 @@ class PolarAlignCheckResult {
       );
 }
 
-/// The last routine to end with an error reading (`last_result` on the status):
-/// the daemon keeps it for its boot, so a relaunched client can tell whether
-/// the mount was aligned tonight.
+/// The last routine to end with an error reading outside the rough stage
+/// (`last_result` on the status): the daemon keeps it for its boot, so a
+/// relaunched client can tell whether the mount was aligned tonight.
 class PolarAlignLastResult {
   final double errorArcmin;
   final DateTime completedUtc;

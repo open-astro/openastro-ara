@@ -57,9 +57,9 @@ SetupStepState connectStepState(MountStatus? mount, CameraStatus? camera) {
 /// else pending. This is a THIS-SESSION signal by design: alignment is
 /// physical and per-setup, so a fresh app session starts unaligned. Simple
 /// Mode's Night Setup (#1565) passes [last] and [now] to also count the rig's
-/// last routine: done when it ended in tonight's observing night inside the
-/// green zone, unless a newer routine stopped here outside it. The Full UI
-/// passes neither.
+/// last routine past the rough stage: done when it ended in tonight's observing
+/// night inside the green zone, unless a newer routine stopped here outside it.
+/// The Full UI passes neither.
 SetupStepState polarAlignStepState(
   PolarAlignLive live, {
   PolarAlignLastResult? last,

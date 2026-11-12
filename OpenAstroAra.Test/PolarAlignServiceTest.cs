@@ -1928,6 +1928,23 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_Stop_in_the_coarse_stage_records_no_last_result() {
+            // The rough readout is not an alignment (Done is refused there), so Night Setup must not count it.
+            var paCalls = new ConcurrentQueue<bool>();
+            await using var fake = StartFake(paCalls);
+            using var guider = await ConnectGuiderAsync(fake).ConfigureAwait(false);
+            using var svc = NewService(guider, new HintFollowingSolver(), NewHomeMount(canFindHome: true), store: NewHomeStore(), log: new RecordingLog(), mainCamera: new FakeMainCamera());
+
+            await svc.StartAsync(PolarAlignStages.Coarse, null, CancellationToken.None).ConfigureAwait(false);
+            var coarse = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            Assert.That(coarse.Stage, Is.EqualTo(PolarAlignStages.Coarse));
+            Assert.That(coarse.CurrentErrorArcmin, Is.Not.Null, "the rough step has a reading");
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).LastResult, Is.Null);
+        }
+
+        [Test]
         public async Task A_failed_routine_logs_a_failed_row_and_stop_does_not_add_another() {
             var paCalls = new ConcurrentQueue<bool>();
             await using var fake = StartFake(paCalls);

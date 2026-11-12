@@ -215,8 +215,9 @@ namespace OpenAstroAra.Server.Services {
         }
 
         // Caller holds _gate. Records the run's final error when it has one (a stop before the first solve has none).
+        // A Stop in the rough stage records nothing: its readout is not an alignment (CompleteAsync refuses Done there).
         private void RecordLastResultLocked() {
-            if (_altErrorArcmin is double alt && _azErrorArcmin is double az) {
+            if (_stage != PolarAlignStages.Coarse && _altErrorArcmin is double alt && _azErrorArcmin is double az) {
                 _lastResult = new PolarAlignLastResultDto(Math.Sqrt(alt * alt + az * az), DateTimeOffset.UtcNow);
             }
         }

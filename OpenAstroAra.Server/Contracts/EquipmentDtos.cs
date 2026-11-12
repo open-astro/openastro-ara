@@ -907,12 +907,14 @@ public sealed record PolarAlignStateDto(
     // Check stage: solves done so far (0–3).
     int CheckSolvesDone = 0,
     PolarAlignCheckResultDto? CheckResult = null,
-    // #1565 — the last routine to stop or finish with an error reading, kept in memory per daemon boot (like the
-    // autofocus run tracker); null until one has. A new run does not clear it: it describes the last finished one.
+    // #1565 — the last routine to stop or finish with an error reading outside the rough stage, kept in memory per
+    // daemon boot (like the autofocus run tracker); null until one has. A new run does not clear it: it describes
+    // the last finished one.
     PolarAlignLastResultDto? LastResult = null);
 
-/// <summary>#1565 the last polar-align routine's final error (total, arcmin) and when it ended. Simple Mode's Night
-/// Setup counts polar alignment as done tonight when this is under the green zone and ended in tonight's observing night.</summary>
+/// <summary>#1565 the last polar-align routine's final error (total, arcmin) and when it ended; a Stop in the rough
+/// stage records none. Simple Mode's Night Setup counts polar alignment as done tonight when this is under the green
+/// zone and ended in tonight's observing night.</summary>
 public sealed record PolarAlignLastResultDto(double ErrorArcmin, DateTimeOffset CompletedUtc);
 
 /// <summary>§45 the most recent polar-align frame: its exposure, how long the capture (exposure +
